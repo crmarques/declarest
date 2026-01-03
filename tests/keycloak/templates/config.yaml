@@ -1,0 +1,13 @@
+managed_server:
+  http:
+    base_url: "__KEYCLOAK_URL__"
+__SERVER_AUTH_BLOCK__
+    tls:
+      insecure_skip_verify: true
+
+__REPOSITORY_BLOCK__
+
+secret_manager:
+  file:
+    path: __SECRETS_FILE__
+    passphrase: __SECRETS_PASSPHRASE__

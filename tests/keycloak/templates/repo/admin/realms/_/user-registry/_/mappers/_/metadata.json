@@ -1,0 +1,12 @@
+{
+    "resourceInfo": {
+        "idFromAttribute": "id",
+        "aliasFromAttribute": "name",
+        "collectionPath": "/admin/realms/{{.realm}}/components"
+    },
+    "operationInfo": {
+        "listCollection": {
+            "jqFilter": "[ .[] | select(.parentId == \"{{../../.id}}\") ]"
+        }
+    }
+}

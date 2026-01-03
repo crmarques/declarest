@@ -1,0 +1,99 @@
+{
+  "config": {
+    "allowKerberosAuthentication": [
+      "false"
+    ],
+    "authType": [
+      "simple"
+    ],
+    "bindCredential": [
+      "{{secret .}}"
+    ],
+    "bindDn": [
+      "dn=test,ou=users,dc=example,dc=com"
+    ],
+    "cachePolicy": [
+      "DEFAULT"
+    ],
+    "changedSyncPeriod": [
+      "-1"
+    ],
+    "connectionPooling": [
+      "true"
+    ],
+    "connectionTrace": [
+      "false"
+    ],
+    "connectionUrl": [
+      "ldap.test.com:389"
+    ],
+    "editMode": [
+      "READ_ONLY"
+    ],
+    "enabled": [
+      "true"
+    ],
+    "fullSyncPeriod": [
+      "-1"
+    ],
+    "importEnabled": [
+      "true"
+    ],
+    "krbPrincipalAttribute": [
+      "userPrincipalName"
+    ],
+    "pagination": [
+      "true"
+    ],
+    "rdnLDAPAttribute": [
+      "cn"
+    ],
+    "removeInvalidUsersEnabled": [
+      "true"
+    ],
+    "searchScope": [
+      "1"
+    ],
+    "startTls": [
+      "false"
+    ],
+    "syncRegistrations": [
+      "true"
+    ],
+    "trustEmail": [
+      "false"
+    ],
+    "useKerberosForPasswordAuthentication": [
+      "false"
+    ],
+    "usePasswordModifyExtendedOp": [
+      "false"
+    ],
+    "useTruststoreSpi": [
+      "always"
+    ],
+    "userObjectClasses": [
+      "person, organizationalPerson, user"
+    ],
+    "usernameLDAPAttribute": [
+      "cn"
+    ],
+    "usersDn": [
+      "ou=users,dc=example,dc=com"
+    ],
+    "uuidLDAPAttribute": [
+      "objectGUID"
+    ],
+    "validatePasswordPolicy": [
+      "false"
+    ],
+    "vendor": [
+      "ad"
+    ]
+  },
+  "id": "ldlOe2kYR2G5PSnSqDz9cg",
+  "name": "ldap-test",
+  "parentId": "e1c505ce-193a-4e60-8e71-5525c84227c5",
+  "providerId": "ldap",
+  "providerType": "org.keycloak.storage.UserStorageProvider"
+}

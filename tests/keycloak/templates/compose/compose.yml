@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  keycloak-declarest-test:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.2.5}
+    container_name: ${KEYCLOAK_CONTAINER_NAME:-keycloak-declarest-test}
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASS:-admin}
+      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_RELATIVE_PATH: /
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: ${KEYCLOAK_HTTP_PORT:-18080}
+      KC_HOSTNAME_URL: http://localhost:${KEYCLOAK_HTTP_PORT:-18080}
+      KC_HOSTNAME_ADMIN_URL: http://localhost:${KEYCLOAK_HTTP_PORT:-18080}
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  nginx:
+    image: docker.io/library/nginx:1.27-alpine
+    depends_on:
+      - keycloak-declarest-test
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-18080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro,Z
+      - ./nginx-logs:/var/log/nginx:Z
+    restart: unless-stopped
+
+  gitlab:
+    image: ${GITLAB_IMAGE:-docker.io/gitlab/gitlab-ce:18.7.0-ce.0}
+    hostname: ${GITLAB_HOSTNAME:-gitlab}
+    profiles:
+      - gitlab
+    environment:
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD:-Dcl9T7pR2X5mZ}
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url "http://localhost:${GITLAB_HTTP_PORT:-18081}"
+        gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2222}
+        gitlab_rails['initial_root_password'] = "${GITLAB_ROOT_PASSWORD:-Dcl9T7pR2X5mZ}"
+        gitlab_rails['signup_enabled'] = false
+        gitlab_rails['usage_ping_enabled'] = false
+        gitlab_rails['lfs_enabled'] = false
+        gitlab_rails['registry_enabled'] = false
+        registry['enable'] = false
+        gitlab_pages['enable'] = false
+        pages_nginx['enable'] = false
+        mattermost['enable'] = false
+        gitlab_kas['enable'] = false
+        sidekiq['concurrency'] = 5
+        puma['worker_processes'] = 1
+        prometheus['enable'] = false
+        alertmanager['enable'] = false
+        grafana['enable'] = false
+        node_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+    ports:
+      - "${GITLAB_HTTP_PORT:-18081}:${GITLAB_HTTP_PORT:-18081}"
+      - "${GITLAB_SSH_PORT:-2222}:22"
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    shm_size: "256m"
+    restart: unless-stopped
+
+  gitea:
+    image: ${GITEA_IMAGE:-docker.io/gitea/gitea:1.25.3-rootless}
+    hostname: ${GITEA_HOSTNAME:-gitea}
+    profiles:
+      - gitea
+    environment:
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__mailer__ENABLED: "false"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__DOMAIN: localhost
+      GITEA__server__ROOT_URL: "http://localhost:${GITEA_HTTP_PORT:-18082}/"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__SSH_DOMAIN: localhost
+      GITEA__server__SSH_LISTEN_PORT: "${GITEA_SSH_PORT:-2223}"
+      GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:-2223}
+      GITEA__server__START_SSH_SERVER: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      USER_UID: "1000"
+      USER_GID: "1000"
+    ports:
+      - "${GITEA_HTTP_PORT:-18082}:3000"
+      - "${GITEA_SSH_PORT:-2223}:${GITEA_SSH_PORT:-2223}"
+    volumes:
+      - gitea-data:/data
+    shm_size: "256m"
+    restart: unless-stopped
+
+volumes:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+  gitea-data:

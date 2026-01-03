@@ -1,0 +1,29 @@
+package cmd
+
+import (
+	"errors"
+
+	"declarest/internal/reconciler"
+	"declarest/internal/resource"
+)
+
+func secretPathsFor(recon *reconciler.DefaultReconciler, path string) ([]string, error) {
+	if recon == nil {
+		return nil, nil
+	}
+	return recon.SecretPathsFor(path)
+}
+
+func saveLocalResourceWithSecrets(recon *reconciler.DefaultReconciler, path string, res resource.Resource, storeSecrets bool) error {
+	if recon == nil {
+		return errors.New("reconciler is not configured")
+	}
+	return recon.SaveLocalResourceWithSecrets(path, res, storeSecrets)
+}
+
+func saveLocalCollectionItemsWithSecrets(recon *reconciler.DefaultReconciler, path string, items []resource.Resource, storeSecrets bool) error {
+	if recon == nil {
+		return errors.New("reconciler is not configured")
+	}
+	return recon.SaveLocalCollectionItemsWithSecrets(path, items, storeSecrets)
+}

@@ -1,0 +1,62 @@
+{
+  "access": {
+    "configure": true,
+    "manage": true,
+    "view": true
+  },
+  "adminUrl": "",
+  "alwaysDisplayInConsole": false,
+  "attributes": {
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "backchannel.logout.session.required": "true",
+    "client.secret.creation.time": "1764156555",
+    "oauth2.device.authorization.grant.enabled": "false",
+    "oidc.ciba.grant.enabled": "false",
+    "realm_client": "false",
+    "standard.token.exchange.enabled": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "baseUrl": "",
+  "bearerOnly": false,
+  "clientAuthenticatorType": "client-secret",
+  "clientId": "testB",
+  "consentRequired": false,
+  "defaultClientScopes": [
+    "web-origins",
+    "acr",
+    "roles",
+    "profile",
+    "basic",
+    "email"
+  ],
+  "description": "",
+  "directAccessGrantsEnabled": false,
+  "enabled": true,
+  "frontchannelLogout": true,
+  "fullScopeAllowed": true,
+  "id": "59e641c2-7e9c-417d-9a9c-cdc955119253",
+  "implicitFlowEnabled": false,
+  "name": "eeeee",
+  "nodeReRegistrationTimeout": -1,
+  "notBefore": 0,
+  "optionalClientScopes": [
+    "address",
+    "phone",
+    "offline_access",
+    "organization",
+    "microprofile-jwt"
+  ],
+  "protocol": "openid-connect",
+  "publicClient": false,
+  "redirectUris": [
+    "/*"
+  ],
+  "rootUrl": "",
+  "secret": "{{secret .}}",
+  "serviceAccountsEnabled": false,
+  "standardFlowEnabled": true,
+  "surrogateAuthRequired": false,
+  "webOrigins": [
+    "/*"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "config": {},
+  "id": "e3df3251-5aa4-4925-82c8-c0a9ecfc1541",
+  "name": "Kerberos principal attribute mapper",
+  "parentId": "ldlOe2kYR2G5PSnSqDz9cg",
+  "providerId": "kerberos-principal-attribute-mapper",
+  "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+}

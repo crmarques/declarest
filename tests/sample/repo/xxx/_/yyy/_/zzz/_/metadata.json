@@ -1,0 +1,7 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "blu",
+    "aliasFromAttribute": "blua",
+    "collectionPath": "/xxx/{{.ble}}/yyy/{{.blu}}/zzz/"
+  }
+}

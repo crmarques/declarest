@@ -1,0 +1,37 @@
+site_name: DeclaREST
+site_description: Declarative resource sync between Git and REST APIs
+repo_url: https://github.com/crmarques/declarest
+repo_name: crmarques/declarest
+
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.png
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting started:
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+  - Concepts:
+    - Overview: concepts/overview.md
+    - Resource Paths: concepts/resource-paths.md
+    - Repository: concepts/repository.md
+    - Metadata: concepts/metadata.md
+    - Secrets: concepts/secrets.md
+  - Workflows:
+    - Syncing resources: workflows/sync.md
+    - Repository operations: workflows/repository.md
+  - Reference:
+    - Configuration: reference/configuration.md
+    - CLI: reference/cli.md
+  - Contributing: contributing.md
