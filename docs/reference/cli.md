@@ -57,9 +57,9 @@ Manage metadata definitions.
 
 ## secret
 
-Manage secrets stored in the secrets manager.
+Manage secrets stored in the secret store.
 
-- `secret init`: initialize the secrets store.
+- `secret init`: initialize the secret store.
 - `secret add`: create or update a secret value.
 - `secret get`: read a secret value.
 - `secret delete`: remove a secret.

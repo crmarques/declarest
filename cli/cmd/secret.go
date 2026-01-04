@@ -12,7 +12,7 @@ func newSecretCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "secret",
 		GroupID: groupUserFacing,
-		Short:   "Manage secrets stored in the configured secrets manager",
+		Short:   "Manage secrets stored in the configured secret store",
 	}
 
 	cmd.AddCommand(newSecretInitCommand())
@@ -28,7 +28,7 @@ func newSecretCommand() *cobra.Command {
 func newSecretInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialise the configured secrets manager",
+		Short: "Initialise the configured secret store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			recon, cleanup, err := loadDefaultReconcilerSkippingRepoSync()
 			if cleanup != nil {
@@ -42,7 +42,7 @@ func newSecretInitCommand() *cobra.Command {
 				return err
 			}
 
-			successf(cmd, "initialised secrets manager")
+			successf(cmd, "initialised secret store")
 			return nil
 		},
 	}
@@ -56,7 +56,7 @@ func newSecretGetCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "get <path> <key>",
-		Short: "Fetch a secret value from the secrets manager",
+		Short: "Fetch a secret value from the secret store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 2 {
 				return usageError(cmd, "expected <path> <key>")
@@ -255,7 +255,7 @@ func newSecretDeleteCommand() *cobra.Command {
 				return usageError(cmd, "key is required")
 			}
 
-			message := fmt.Sprintf("Delete secret %s for %s from the configured secrets store. %s Continue?", key, resourcePath, impactSummary(false, false))
+			message := fmt.Sprintf("Delete secret %s for %s from the configured secret store. %s Continue?", key, resourcePath, impactSummary(false, false))
 			if err := confirmAction(cmd, yes, message); err != nil {
 				return err
 			}

@@ -189,7 +189,7 @@ func newResourceGetCommand(verbose bool) *cobra.Command {
 	cmd.Flags().BoolVar(&fromRepo, "from-repo", false, "Read the resource from the resource repository")
 	cmd.Flags().BoolVar(&save, "save", false, "Persist the remote resource into the resource repository (collection paths save items by default)")
 	cmd.Flags().BoolVar(&saveAsOne, "save-as-one-resource", false, "Save a fetched collection as a single resource repository entry")
-	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secrets manager)")
+	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
 	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets into the resource repository")
 
 	return cmd

@@ -22,6 +22,13 @@ SECRET_CLIENT_KEY="secret"
 SECRET_LDAP_KEY="config.bindCredential[0]"
 SECRET_PLACEHOLDER="{{secret .}}"
 
+secret_store_type="${DECLAREST_SECRET_STORE_TYPE:-file}"
+secret_store_type="${secret_store_type,,}"
+secrets_enabled=1
+if [[ "$secret_store_type" == "none" ]]; then
+    secrets_enabled=0
+fi
+
 require_jq() {
     if ! command -v jq >/dev/null 2>&1; then
         log_line "jq is required for secret tests"
@@ -202,8 +209,12 @@ diff_all() {
 
 log_line "Declarest workflow starting (context: $CONTEXT)"
 
-phase "Seeding secrets via CLI"
-seed_secrets_via_cli
+if [[ $secrets_enabled -eq 1 ]]; then
+    phase "Seeding secrets via CLI"
+    seed_secrets_via_cli
+else
+    log_line "Secret store disabled; skipping secret seed"
+fi
 
 phase "Discovering repository resources"
 local_output=$(capture_cli "list repository resources" resource list --repo)
@@ -309,101 +320,107 @@ for coll in "${collections[@]}"; do
 done
 log_line "Collections saved"
 
-phase "Restoring secrets for diff"
-for secret_path in "$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH"; do
-    if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource get --path "$secret_path" --save --with-secrets --force --print=false; then
-        log_line "Secret restore failed for $secret_path"
-        exit 1
-    fi
-done
+if [[ $secrets_enabled -eq 1 ]]; then
+    phase "Restoring secrets for diff"
+    for secret_path in "$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH"; do
+        if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource get --path "$secret_path" --save --with-secrets --force --print=false; then
+            log_line "Secret restore failed for $secret_path"
+            exit 1
+        fi
+    done
+fi
 
 phase "Final diff of all resources"
 diff_all "final"
 log_line "Resources are synced after final diff"
 
-phase "Secret management checks"
-require_jq
+if [[ $secrets_enabled -eq 1 ]]; then
+    phase "Secret management checks"
+    require_jq
 
-client_with_secrets=$(capture_cli "get client secret with secrets" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-client_secret_value=$(jq -r '.secret // empty' <<<"$client_with_secrets")
-if [[ -z "$client_secret_value" || "$client_secret_value" == "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: missing client secret"
-    echo "Expected client secret in remote payload" >&2
-    exit 1
-fi
+    client_with_secrets=$(capture_cli "get client secret with secrets" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+    client_secret_value=$(jq -r '.secret // empty' <<<"$client_with_secrets")
+    if [[ -z "$client_secret_value" || "$client_secret_value" == "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: missing client secret"
+        echo "Expected client secret in remote payload" >&2
+        exit 1
+    fi
 
-run_cli "save client secret (no with-secrets)" resource get --path "$SECRET_CLIENT_PATH" --save --print=false
-if [[ ! -s "$DECLAREST_SECRETS_FILE" ]]; then
-    log_line "Secret check failed: secrets file missing at $DECLAREST_SECRETS_FILE"
-    echo "Expected secrets file at $DECLAREST_SECRETS_FILE" >&2
-    exit 1
-fi
+    run_cli "save client secret (no with-secrets)" resource get --path "$SECRET_CLIENT_PATH" --save --print=false
+    if [[ "${DECLAREST_SECRET_STORE_TYPE:-file}" == "file" ]]; then
+        if [[ ! -s "$DECLAREST_SECRETS_FILE" ]]; then
+            log_line "Secret check failed: secrets file missing at $DECLAREST_SECRETS_FILE"
+            echo "Expected secrets file at $DECLAREST_SECRETS_FILE" >&2
+            exit 1
+        fi
+    fi
 
-client_file="$(resource_file_for_path "$SECRET_CLIENT_PATH")"
-client_local_secret=$(jq -r '.secret // empty' "$client_file")
-if [[ "$client_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: client secret not masked in repo"
-    echo "Expected placeholder in $client_file" >&2
-    exit 1
-fi
+    client_file="$(resource_file_for_path "$SECRET_CLIENT_PATH")"
+    client_local_secret=$(jq -r '.secret // empty' "$client_file")
+    if [[ "$client_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: client secret not masked in repo"
+        echo "Expected placeholder in $client_file" >&2
+        exit 1
+    fi
 
-run_cli "save ldap bind credential (no with-secrets)" resource get --path "$SECRET_LDAP_PATH" --save --print=false
-ldap_file="$(resource_file_for_path "$SECRET_LDAP_PATH")"
-ldap_local_secret=$(jq -r '.config.bindCredential[0] // empty' "$ldap_file")
-if [[ "$ldap_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: bindCredential not masked in repo"
-    echo "Expected placeholder in $ldap_file" >&2
-    exit 1
-fi
+    run_cli "save ldap bind credential (no with-secrets)" resource get --path "$SECRET_LDAP_PATH" --save --print=false
+    ldap_file="$(resource_file_for_path "$SECRET_LDAP_PATH")"
+    ldap_local_secret=$(jq -r '.config.bindCredential[0] // empty' "$ldap_file")
+    if [[ "$ldap_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: bindCredential not masked in repo"
+        echo "Expected placeholder in $ldap_file" >&2
+        exit 1
+    fi
 
-client_masked_output=$(capture_cli "get client secret masked" --no-status resource get --path "$SECRET_CLIENT_PATH")
-client_masked_value=$(jq -r '.secret // empty' <<<"$client_masked_output")
-if [[ "$client_masked_value" != "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: masked get returned unexpected value"
-    echo "Expected placeholder in masked output" >&2
-    exit 1
-fi
+    client_masked_output=$(capture_cli "get client secret masked" --no-status resource get --path "$SECRET_CLIENT_PATH")
+    client_masked_value=$(jq -r '.secret // empty' <<<"$client_masked_output")
+    if [[ "$client_masked_value" != "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: masked get returned unexpected value"
+        echo "Expected placeholder in masked output" >&2
+        exit 1
+    fi
 
-client_with_secrets_again=$(capture_cli "get client secret after save" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-client_secret_again=$(jq -r '.secret // empty' <<<"$client_with_secrets_again")
-if [[ -z "$client_secret_again" || "$client_secret_again" == "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: with-secrets missing client secret"
-    echo "Expected client secret in with-secrets output" >&2
-    exit 1
-fi
+    client_with_secrets_again=$(capture_cli "get client secret after save" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+    client_secret_again=$(jq -r '.secret // empty' <<<"$client_with_secrets_again")
+    if [[ -z "$client_secret_again" || "$client_secret_again" == "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: with-secrets missing client secret"
+        echo "Expected client secret in with-secrets output" >&2
+        exit 1
+    fi
 
-set +e
-save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource get --path "$SECRET_CLIENT_PATH" --save --with-secrets --print=false)
-save_with_secrets_status=$?
-set -e
-if [[ $save_with_secrets_status -eq 0 ]]; then
-    log_line "Secret check failed: save with-secrets unexpectedly succeeded"
-    echo "Expected save with-secrets to fail without --force" >&2
-    exit 1
-fi
-if ! grep -q "refusing to save plaintext secrets" <<<"$save_with_secrets_output"; then
-    log_line "Secret check failed: missing refusal message"
-    echo "Expected refusal message when saving with --with-secrets" >&2
-    exit 1
-fi
+    set +e
+    save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource get --path "$SECRET_CLIENT_PATH" --save --with-secrets --print=false)
+    save_with_secrets_status=$?
+    set -e
+    if [[ $save_with_secrets_status -eq 0 ]]; then
+        log_line "Secret check failed: save with-secrets unexpectedly succeeded"
+        echo "Expected save with-secrets to fail without --force" >&2
+        exit 1
+    fi
+    if ! grep -q "refusing to save plaintext secrets" <<<"$save_with_secrets_output"; then
+        log_line "Secret check failed: missing refusal message"
+        echo "Expected refusal message when saving with --with-secrets" >&2
+        exit 1
+    fi
 
-if ! run_cli_retry_transient "apply client with secrets" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource apply --path "$SECRET_CLIENT_PATH" --sync; then
-    log_line "Apply failed for $SECRET_CLIENT_PATH after secret masking"
-    exit 1
-fi
+    if ! run_cli_retry_transient "apply client with secrets" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource apply --path "$SECRET_CLIENT_PATH" --sync; then
+        log_line "Apply failed for $SECRET_CLIENT_PATH after secret masking"
+        exit 1
+    fi
 
-client_after_apply=$(capture_cli "get client secret after apply" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-client_secret_after_apply=$(jq -r '.secret // empty' <<<"$client_after_apply")
-if [[ -z "$client_secret_after_apply" || "$client_secret_after_apply" == "$SECRET_PLACEHOLDER" ]]; then
-    log_line "Secret check failed: with-secrets missing client secret after apply"
-    echo "Expected client secret after apply" >&2
-    exit 1
-fi
-if [[ "$client_secret_after_apply" != "$client_secret_again" ]]; then
-    log_line "Secret check failed: client secret changed after apply"
-    echo "Client secret changed after apply" >&2
-    exit 1
-fi
+    client_after_apply=$(capture_cli "get client secret after apply" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+    client_secret_after_apply=$(jq -r '.secret // empty' <<<"$client_after_apply")
+    if [[ -z "$client_secret_after_apply" || "$client_secret_after_apply" == "$SECRET_PLACEHOLDER" ]]; then
+        log_line "Secret check failed: with-secrets missing client secret after apply"
+        echo "Expected client secret after apply" >&2
+        exit 1
+    fi
+    if [[ "$client_secret_after_apply" != "$client_secret_again" ]]; then
+        log_line "Secret check failed: client secret changed after apply"
+        echo "Client secret changed after apply" >&2
+        exit 1
+    fi
 
-log_line "Secret management checks completed"
+    log_line "Secret management checks completed"
+fi
 log_line "Declarest resource run completed successfully"

@@ -11,7 +11,7 @@ repository:
 managed_server:
   http:
     base_url: https://example.com/api
-secret_manager:
+secret_store:
   file:
     path: /path/to/secrets.json
     passphrase: change-me
@@ -84,12 +84,12 @@ Auth options for `managed_server.http.auth`:
 - `basic_auth`: username, password
 - `bearer_token`: token
 
-## Secrets manager configuration
+## Secret store configuration
 
-File-backed secrets manager:
+File-backed secret store:
 
 ```yaml
-secret_manager:
+secret_store:
   file:
     path: /path/to/secrets.json
     passphrase: change-me
@@ -109,7 +109,42 @@ Notes:
 - When using a passphrase, keys are derived using Argon2id by default.
 - Secrets files are stored with restrictive permissions.
 
+Vault-backed secret store (KV v1/v2):
+
+```yaml
+secret_store:
+  vault:
+    address: https://vault.example.com
+    mount: secret
+    path_prefix: declarest
+    kv_version: 2
+    auth:
+      token: s.xxxx
+      # password:
+      #   username: vault-user
+      #   password: vault-pass
+      #   mount: userpass
+      # approle:
+      #   role_id: role-id
+      #   secret_id: secret-id
+      #   mount: approle
+    tls:
+      ca_cert_file: /path/to/ca.pem
+      client_cert_file: /path/to/client.pem
+      client_key_file: /path/to/client-key.pem
+      insecure_skip_verify: false
+```
+
+Notes:
+
+- `kv_version` defaults to 2; set to 1 to use KV v1 endpoints.
+- `mount` defaults to `secret` when omitted.
+- `path_prefix` scopes secrets within the mount.
+- Provide exactly one auth method: `token`, `password`, or `approle`.
+- mTLS is optional; it is enabled when client cert/key files are provided (CA is optional if the server cert is already trusted).
+
 ## Context store location
 
 Contexts are stored in `~/.declarest/config` by default.
+
 Use `declarest config list` and `declarest config use` to manage the active context.

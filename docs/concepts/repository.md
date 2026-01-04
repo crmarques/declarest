@@ -18,34 +18,22 @@ The repository base directory is defined in your active context config (see `dec
 
 - Every **resource** lives in its own directory at `<logical-path>/`.
 - The desired payload for that resource is stored as `<logical-path>/resource.json`.
-- A **collection** is any directory path (for example `/notes/` or `/teams/platform/members/`).
-- Collections can optionally be saved as a single `resource.json` file too (for example saving `/notes/` as `notes/resource.json`).
+- A **collection** is any directory path (for example `/teams/` or `/teams/platform/users/`).
+- Collections can optionally be saved as a single `resource.json` file too (for example saving `/teams/platform/users/` as `teams/platform/users/resource.json`).
 
 ### Layout examples
 
-Notes / tags:
-
-```
-/notes/
-  _/metadata.json
-  n-1001/
-    resource.json
-    tags/
-      _/metadata.json
-      meeting/
-        resource.json
-```
-
-Teams → members → roles:
+Teams → users → permissions:
 
 ```
 /teams/
   _/metadata.json
   platform/
-    members/
+    users/
       _/metadata.json
-      xxx/
-        roles/
+      alice/
+        resource.json
+        permissions/
           _/metadata.json
           admin/
             resource.json
@@ -58,7 +46,7 @@ Teams → members → roles:
 - `_/metadata.json` applies to an entire collection subtree.
 - `_` is a reserved directory name used for metadata folders and wildcard matching.
 
-See [Resource paths](resource-paths.md) for path rules, and [Metadata](metadata.md) for how DeclaREST merges and applies metadata.
+See [Resource](resource.md) for path rules, and [Metadata](metadata.md) for how DeclaREST merges and applies metadata.
 
 ## Repository commands (git-backed repos)
 

@@ -157,7 +157,7 @@ func writeContextConfigWithSecrets(t *testing.T, path, repoDir, secretsPath, pas
 	t.Helper()
 	var b strings.Builder
 	fmt.Fprintf(&b, "repository:\n  filesystem:\n    base_dir: %s\n", repoDir)
-	fmt.Fprintf(&b, "secret_manager:\n  file:\n    path: %s\n    passphrase: %s\n", secretsPath, passphrase)
+	fmt.Fprintf(&b, "secret_store:\n  file:\n    path: %s\n    passphrase: %s\n", secretsPath, passphrase)
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
 		t.Fatalf("write context config: %v", err)
 	}

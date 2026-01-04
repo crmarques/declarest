@@ -13,16 +13,16 @@ DeclaREST syncs resources between a Git-backed repository and a target server, l
 - Promote changes safely across environments using named contexts.
 - Keep secrets out of repository files while still templating them.
 
-## How it works
-
 <p align="center">
     <img src="assets/architecture.png" alt="Logo" width="500">
 </p>
 
-1. *Resources* live in the repository keeping the same structure used in *managed server* (`/a/b/c`).
-2. `declarest resource get --save` pulls a *resource* from the *REST API server* into *Git repository*.
-3. `declarest resource apply` pushes *resource* state from repository back to the *API REST server*.
-4. `declarest resource diff` shows the state differences for a *resource* between the *Git repository* (*desired state*) and the *managed server* (*actual state*).
+## How it works
+
+1. *Resources* live in the repository (`/teams/platform/users/alice`) keeping the same structure used in *managed server* (`https://<hostname>/teams/platform/users/alice`).
+2. You can pull a *resource* from the *REST API server* into *Git repository*: `declarest resource get --path /teams/platform/users/alice --save`.
+3. You can update *resource* state in repository and push it back to the *API REST server*: `declarest resource apply --path /teams/platform/users/alice`.
+4. If needed, you can verify state differences for a *resource* between the *Git repository* (*desired state*) and the *managed server* (*actual state*): `declarest resource diff --path /teams/platform/users/alice`.
 5. *Metadata* can define how a *resource* maps to its REST API endpoint (useful when the target API drifts from REST conventions) and can also mark sensitive attributes as *secrets* so they’re stored and managed in a secure *secret store* (outside Git repo).
 
 ## When to use DeclaREST
@@ -31,7 +31,7 @@ Use DeclaREST when you want a declarative workflow for REST-managed resources an
 
 - Deterministic mapping between repo paths and API endpoints.
 - Repeatable reconciliation that you can automate or review.
-- A clear separation between configuration and secrets.
+- Handle REST API services with GitOps the same way you manage your infrastructure.
 
 ## Quick links
 

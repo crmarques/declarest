@@ -9,7 +9,7 @@ import (
 type ContextConfig struct {
 	ManagedServer *ManagedServerConfig          `mapstructure:"managed_server" yaml:"managed_server,omitempty" json:"managed_server,omitempty"`
 	Repository    *RepositoryConfig             `mapstructure:"repository" yaml:"repository,omitempty" json:"repository,omitempty"`
-	SecretManager *secrets.SecretsManagerConfig `mapstructure:"secret_manager" yaml:"secret_manager,omitempty" json:"secret_manager,omitempty"`
+	SecretManager *secrets.SecretsManagerConfig `mapstructure:"secret_store" yaml:"secret_store,omitempty" json:"secret_store,omitempty"`
 }
 
 type ManagedServerConfig struct {

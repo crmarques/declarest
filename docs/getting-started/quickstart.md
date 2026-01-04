@@ -2,49 +2,49 @@
 
 This walkthrough sets up a context, initializes a repository, and syncs a resource.
 
-## 1) Set up a *context* to define the *target server* connection and the Git-backed repository to use
+## 1) Set up a *Context*
 
 a) Interactive setup:
 
 ```bash
-./bin/declarest config init
+declarest config init
 ```
 
 b) Or generate a full config file:
 
 ```bash
-./bin/declarest config print-template > ./contexts/staging.yaml
+declarest config print-template > /tmp/staging.yaml
 ```
 
-Edit the file, replace the placeholders, then run:
+Edit the `/tmp/staging.yaml` replacing the placeholders, then run:
 
 ```bash
-./bin/declarest config add staging ./contexts/staging.yaml
-./bin/declarest config use staging
+declarest config add staging /tmp/staging.yaml
+declarest config use staging
 ```
 
 ## 2) Check configuration
 
 ```bash
-./bin/declarest config check
+declarest config check
 ```
 
 ## 3) Init repository
 
 ```bash
-./bin/declarest repo init
+declarest repo init
 ```
 
-## 4) Pull a remote resource into Git
+## 4) Pull a resource from your managed server into Git repository
 
 ```bash
-./bin/declarest resource get --path /projects/example --save
+declarest resource get --path /teams/platform/users/alice --save
 ```
 
 This creates a `resource.json` under the repository base directory at:
 
 ```
-/projects/example/resource.json
+<repo_base_dir>/teams/platform/users/alice/resource.json
 ```
 
 ## 5) Apply changes back to the API
@@ -52,8 +52,13 @@ This creates a `resource.json` under the repository base directory at:
 Edit the local `resource.json`, then:
 
 ```bash
-./bin/declarest resource diff --path /projects/example
-./bin/declarest resource apply --path /projects/example
+declarest resource diff --path /teams/platform/users/alice
+declarest resource apply --path /teams/platform/users/alice
 ```
 
+## Next
+
 For more details, see [Concepts](../concepts/overview.md) and [Configuration](../reference/configuration.md).
+
+For a complete, real example (Keycloak + GitLab + Vault), see [Syncing resources](../workflows/sync.md).
+

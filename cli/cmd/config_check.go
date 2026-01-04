@@ -69,12 +69,12 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 			}
 
 			if recon.SecretsManager == nil {
-				reportCheck(cmd, "Secrets manager not configured", nil)
+				reportCheck(cmd, "Secret store not configured", nil)
 			} else if err := recon.SecretsManager.Init(); err != nil {
 				failed = true
-				reportCheck(cmd, "Secrets manager access", err)
+				reportCheck(cmd, "Secret store access", err)
 			} else {
-				reportCheck(cmd, "Secrets manager access", nil)
+				reportCheck(cmd, "Secret store access", nil)
 			}
 
 			if failed {

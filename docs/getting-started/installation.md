@@ -4,13 +4,6 @@ DeclaREST is a Go-based CLI.
 
 The easiest way to install it is to download a release binary (**Option 1**).
 
-## Requirements
-
-- Network access to GitHub releases (for Option 1).
-- Network access to the managed REST API for `resource` operations.
-- Go toolchain (only for Option 2).
-- Git is optional; DeclaREST uses go-git. Install Git only if you want to run Git commands yourself.
-
 ## **Option 1:** Download from GitHub releases (recommended)
 
 1) Download the binary for your OS and architecture from:

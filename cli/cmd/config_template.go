@@ -59,8 +59,8 @@ managed_server:
 #   tls:
 #     insecure_skip_verify: false
 
-secret_manager:
-# ### Choose exactly one: file or vault (to be implemented).
+secret_store:
+# ### Choose exactly one: file or vault.
   file:
     path: /path/to/secrets.json
 #   ### Choose exactly one of: key, key_file, passphrase, passphrase_file.
@@ -73,7 +73,26 @@ secret_manager:
 #      memory: 65536
 #      threads: 4
 # vault:
-#    ### to be implemented
+#   address: https://vault.example.com
+#   mount: secret
+#   path_prefix: declarest
+#   kv_version: 2
+#   auth:
+#     token: s.xxxx
+#     # password:
+#     #   username: vault-user
+#     #   password: vault-pass
+#     #   mount: userpass
+#     # approle:
+#     #   role_id: role-id
+#     #   secret_id: secret-id
+#     #   mount: approle
+#   # mTLS is optional; enabled when client cert/key files are provided.
+#   tls:
+#     ca_cert_file: /path/to/ca.pem
+#     client_cert_file: /path/to/client.pem
+#     client_key_file: /path/to/client-key.pem
+#     insecure_skip_verify: false
 `
 
 func newConfigPrintTemplateCommand() *cobra.Command {

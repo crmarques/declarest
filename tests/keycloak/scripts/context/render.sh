@@ -45,10 +45,10 @@ if [[ -z "$server_auth_type" ]]; then
 fi
 
 case "$server_auth_type" in
-    oauth2|basic)
+    oauth2|basic|bearer|bearer-token|bearer_token)
         ;;
     *)
-        die "Unsupported server auth type: ${server_auth_type} (expected oauth2 or basic)"
+        die "Unsupported server auth type: ${server_auth_type} (expected oauth2, basic, or bearer)"
         ;;
 esac
 
@@ -172,8 +172,6 @@ esac
 
 keycloak_url="http://localhost:${KEYCLOAK_HTTP_PORT}"
 keycloak_url_escaped="$(sed_escape "$keycloak_url")"
-secrets_file_escaped="$(sed_escape "$DECLAREST_SECRETS_FILE")"
-secrets_passphrase_escaped="$(sed_escape "$DECLAREST_SECRETS_PASSPHRASE")"
 server_auth_block=""
 
 case "$server_auth_type" in
@@ -184,17 +182,131 @@ case "$server_auth_type" in
     basic)
         server_auth_block=$'    auth:\n      basic_auth:\n        username: '"$(yaml_quote "$KEYCLOAK_ADMIN_USER")"$'\n        password: '"$(yaml_quote "$KEYCLOAK_ADMIN_PASS")"
         ;;
+    bearer|bearer-token|bearer_token)
+        if [[ -z "${DECLAREST_SERVER_BEARER_TOKEN:-}" ]]; then
+            die "Server bearer auth requires DECLAREST_SERVER_BEARER_TOKEN"
+        fi
+        server_auth_block=$'    auth:\n      bearer_token:\n        token: '"$(yaml_quote "$DECLAREST_SERVER_BEARER_TOKEN")"
+        ;;
+esac
+
+secret_store_type="${DECLAREST_SECRET_STORE_TYPE:-file}"
+secret_store_type="${secret_store_type,,}"
+secret_store_block=""
+
+case "$secret_store_type" in
+    none)
+        secret_store_block=""
+        ;;
+    file)
+        if [[ -z "${DECLAREST_SECRETS_FILE:-}" || -z "${DECLAREST_SECRETS_PASSPHRASE:-}" ]]; then
+            die "File secret store requires DECLAREST_SECRETS_FILE and DECLAREST_SECRETS_PASSPHRASE"
+        fi
+        secret_store_block=$'secret_store:\n  file:\n    path: '"$(yaml_quote "$DECLAREST_SECRETS_FILE")"$'\n    passphrase: '"$(yaml_quote "$DECLAREST_SECRETS_PASSPHRASE")"
+        ;;
+    vault)
+        vault_addr="${DECLAREST_VAULT_ADDR:-}"
+        if [[ -z "$vault_addr" ]]; then
+            die "Vault secret store requires DECLAREST_VAULT_ADDR"
+        fi
+        vault_mount="${DECLAREST_VAULT_MOUNT:-secret}"
+        vault_path_prefix="${DECLAREST_VAULT_PATH_PREFIX:-declarest}"
+        vault_kv_version="${DECLAREST_VAULT_KV_VERSION:-2}"
+        if [[ "$vault_kv_version" != "1" && "$vault_kv_version" != "2" ]]; then
+            die "Vault KV version must be 1 or 2 (got ${vault_kv_version})"
+        fi
+
+        auth_block=""
+        vault_auth_type="${DECLAREST_VAULT_AUTH_TYPE:-token}"
+        vault_auth_type="${vault_auth_type,,}"
+        case "$vault_auth_type" in
+            token)
+                if [[ -z "${DECLAREST_VAULT_TOKEN:-}" ]]; then
+                    die "Vault token auth requires DECLAREST_VAULT_TOKEN"
+                fi
+                auth_block=$'    auth:\n      token: '"$(yaml_quote "$DECLAREST_VAULT_TOKEN")"
+                ;;
+            password)
+                if [[ -z "${DECLAREST_VAULT_USERNAME:-}" || -z "${DECLAREST_VAULT_PASSWORD:-}" ]]; then
+                    die "Vault password auth requires DECLAREST_VAULT_USERNAME and DECLAREST_VAULT_PASSWORD"
+                fi
+                auth_block=$'    auth:\n      password:\n        username: '"$(yaml_quote "$DECLAREST_VAULT_USERNAME")"$'\n        password: '"$(yaml_quote "$DECLAREST_VAULT_PASSWORD")"
+                if [[ -n "${DECLAREST_VAULT_USERPASS_MOUNT:-}" ]]; then
+                    auth_block+=$'\n        mount: '"$(yaml_quote "$DECLAREST_VAULT_USERPASS_MOUNT")"
+                fi
+                ;;
+            approle)
+                if [[ -z "${DECLAREST_VAULT_ROLE_ID:-}" || -z "${DECLAREST_VAULT_SECRET_ID:-}" ]]; then
+                    die "Vault AppRole auth requires DECLAREST_VAULT_ROLE_ID and DECLAREST_VAULT_SECRET_ID"
+                fi
+                auth_block=$'    auth:\n      approle:\n        role_id: '"$(yaml_quote "$DECLAREST_VAULT_ROLE_ID")"$'\n        secret_id: '"$(yaml_quote "$DECLAREST_VAULT_SECRET_ID")"
+                if [[ -n "${DECLAREST_VAULT_APPROLE_MOUNT:-}" ]]; then
+                    auth_block+=$'\n        mount: '"$(yaml_quote "$DECLAREST_VAULT_APPROLE_MOUNT")"
+                fi
+                ;;
+            *)
+                die "Unsupported vault auth type: ${vault_auth_type} (expected token, password, or approle)"
+                ;;
+        esac
+
+        tls_block=""
+        tls_has_values=0
+        if [[ -n "${DECLAREST_VAULT_CA_CERT_FILE:-}" || -n "${DECLAREST_VAULT_CLIENT_CERT_FILE:-}" || -n "${DECLAREST_VAULT_CLIENT_KEY_FILE:-}" || -n "${DECLAREST_VAULT_INSECURE_SKIP_VERIFY:-}" ]]; then
+            tls_has_values=1
+            if [[ -n "${DECLAREST_VAULT_CLIENT_CERT_FILE:-}" && -z "${DECLAREST_VAULT_CLIENT_KEY_FILE:-}" ]]; then
+                die "Vault TLS requires DECLAREST_VAULT_CLIENT_KEY_FILE when providing a client cert"
+            fi
+            if [[ -n "${DECLAREST_VAULT_CLIENT_KEY_FILE:-}" && -z "${DECLAREST_VAULT_CLIENT_CERT_FILE:-}" ]]; then
+                die "Vault TLS requires DECLAREST_VAULT_CLIENT_CERT_FILE when providing a client key"
+            fi
+            tls_block=$'    tls:\n'
+            if [[ -n "${DECLAREST_VAULT_CA_CERT_FILE:-}" ]]; then
+                tls_block+=$'      ca_cert_file: '"$(yaml_quote "$DECLAREST_VAULT_CA_CERT_FILE")"$'\n'
+            fi
+            if [[ -n "${DECLAREST_VAULT_CLIENT_CERT_FILE:-}" ]]; then
+                tls_block+=$'      client_cert_file: '"$(yaml_quote "$DECLAREST_VAULT_CLIENT_CERT_FILE")"$'\n'
+            fi
+            if [[ -n "${DECLAREST_VAULT_CLIENT_KEY_FILE:-}" ]]; then
+                tls_block+=$'      client_key_file: '"$(yaml_quote "$DECLAREST_VAULT_CLIENT_KEY_FILE")"$'\n'
+            fi
+            if [[ -n "${DECLAREST_VAULT_INSECURE_SKIP_VERIFY:-}" ]]; then
+                case "${DECLAREST_VAULT_INSECURE_SKIP_VERIFY,,}" in
+                    1|true|yes|y)
+                        tls_block+=$'      insecure_skip_verify: true\n'
+                        ;;
+                    0|false|no|n)
+                        tls_block+=$'      insecure_skip_verify: false\n'
+                        ;;
+                    *)
+                        die "Unsupported DECLAREST_VAULT_INSECURE_SKIP_VERIFY value: ${DECLAREST_VAULT_INSECURE_SKIP_VERIFY}"
+                        ;;
+                esac
+            fi
+            tls_block="${tls_block%$'\n'}"
+        fi
+
+        secret_store_block=$'secret_store:\n  vault:\n    address: '"$(yaml_quote "$vault_addr")"$'\n    mount: '"$(yaml_quote "$vault_mount")"$'\n    path_prefix: '"$(yaml_quote "$vault_path_prefix")"$'\n    kv_version: '"${vault_kv_version}"
+        if [[ -n "$auth_block" ]]; then
+            secret_store_block+=$'\n'"$auth_block"
+        fi
+        if [[ $tls_has_values -eq 1 ]]; then
+            secret_store_block+=$'\n'"$tls_block"
+        fi
+        ;;
+    *)
+        die "Unsupported secret store type: ${secret_store_type} (expected none, file, or vault)"
+        ;;
 esac
 
 sed \
     -e "s#__KEYCLOAK_URL__#${keycloak_url_escaped}#g" \
-    -e "s#__SECRETS_FILE__#${secrets_file_escaped}#g" \
-    -e "s#__SECRETS_PASSPHRASE__#${secrets_passphrase_escaped}#g" \
     "$tpl_config" | while IFS= read -r line; do
         if [[ "$line" == "__REPOSITORY_BLOCK__" ]]; then
             printf "%s\n" "$repo_block"
         elif [[ "$line" == "__SERVER_AUTH_BLOCK__" ]]; then
             printf "%s\n" "$server_auth_block"
+        elif [[ "$line" == "__SECRET_STORE_BLOCK__" ]]; then
+            printf "%s\n" "$secret_store_block"
         else
             printf "%s\n" "$line"
         fi

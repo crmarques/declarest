@@ -34,11 +34,14 @@ fi
 
 run_logged "remove container ${KEYCLOAK_CONTAINER_NAME}" "$CONTAINER_RUNTIME" rm -f "$KEYCLOAK_CONTAINER_NAME" || true
 run_logged "remove container nginx" "$CONTAINER_RUNTIME" rm -f "nginx" || true
+run_logged "remove container ${VAULT_CONTAINER_NAME}" "$CONTAINER_RUNTIME" rm -f "$VAULT_CONTAINER_NAME" || true
 if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
     gitlab_container="${COMPOSE_PROJECT_NAME}_gitlab_1"
     run_logged "remove container ${gitlab_container}" "$CONTAINER_RUNTIME" rm -f "$gitlab_container" || true
     gitea_container="${COMPOSE_PROJECT_NAME}_gitea_1"
     run_logged "remove container ${gitea_container}" "$CONTAINER_RUNTIME" rm -f "$gitea_container" || true
+    vault_container="${COMPOSE_PROJECT_NAME}_vault_1"
+    run_logged "remove container ${vault_container}" "$CONTAINER_RUNTIME" rm -f "$vault_container" || true
 fi
 
 log_line "Keycloak stack stopped"

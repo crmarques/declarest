@@ -24,7 +24,7 @@ nav:
     - Quickstart: getting-started/quickstart.md
   - Concepts:
     - Overview: concepts/overview.md
-    - Resource Paths: concepts/resource-paths.md
+    - Resource: concepts/resource.md
     - Repository: concepts/repository.md
     - Metadata: concepts/metadata.md
     - Secrets: concepts/secrets.md

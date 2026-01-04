@@ -349,7 +349,7 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 - Fetch the resource from the remote server (default) or from the repo with `--from-repo`.
 - `--print` writes the payload to stdout; `--save` persists the remote payload in the resource repository.
 - When the logical path is a collection, `--save` writes each item as a separate resource; use `--save-as-one-resource` to save the collection payload as a single resource.
-- Secrets are masked unless `--with-secrets`. When reading from the repo, `--with-secrets` resolves placeholders using the secrets manager. Saving plaintext secrets requires `--force`.
+- Secrets are masked unless `--with-secrets`. When reading from the repo, `--with-secrets` resolves placeholders using the secret store. Saving plaintext secrets requires `--force`.
 
 ### 5.2 `resource list [--path <collection-logical-path>]`
 - Lists logical paths within a collection from the repo (default) or remote with `--remote`.
@@ -414,8 +414,8 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 
 ### 5.8 `secret check [--path <logical-path>] [--fix]`
 - Scans local resources for likely secret fields that are not mapped in `resourceInfo.secretInAttributes`.
-- When `--fix` is set, DeclaREST adds missing secret paths to metadata and rewrites resources with `{{secret .}}` placeholders, storing values in the configured secrets manager.
-- If no secrets manager is configured, `--fix` aborts with a guidance message.
+- When `--fix` is set, DeclaREST adds missing secret paths to metadata and rewrites resources with `{{secret .}}` placeholders, storing values in the configured secret store.
+- If no secret store is configured, `--fix` aborts with a guidance message.
 
 ---
 

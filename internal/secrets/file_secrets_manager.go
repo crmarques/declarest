@@ -85,14 +85,14 @@ func NewFileSecretsManager(cfg *FileSecretsManagerConfig) *FileSecretsManager {
 
 func (m *FileSecretsManager) Init() error {
 	if m == nil {
-		return errors.New("file secrets manager is nil")
+		return errors.New("file secret store is nil")
 	}
 	if m.cfg == nil {
-		return errors.New("file secrets manager config is required")
+		return errors.New("file secret store config is required")
 	}
 	trimmed := strings.TrimSpace(m.cfg.Path)
 	if trimmed == "" {
-		return errors.New("file secrets manager path is required")
+		return errors.New("file secret store path is required")
 	}
 	abs, err := filepath.Abs(trimmed)
 	if err != nil {
@@ -286,10 +286,10 @@ func (m *FileSecretsManager) EnsureFile() error {
 
 func (m *FileSecretsManager) ensureInit() error {
 	if m == nil {
-		return errors.New("file secrets manager is nil")
+		return errors.New("file secret store is nil")
 	}
 	if !m.initialized {
-		return errors.New("file secrets manager is not initialized")
+		return errors.New("file secret store is not initialized")
 	}
 	return nil
 }

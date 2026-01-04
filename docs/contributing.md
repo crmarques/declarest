@@ -30,7 +30,11 @@ An optional Keycloak harness is available under `tests/keycloak`.
 It provisions a temporary stack and runs a full lifecycle against the CLI.
 
 ```bash
-./tests/keycloak/run-e2e.sh --repo-type fs
+# Automated end-to-end flow
+./tests/keycloak/run-e2e.sh
+
+# check options:
+./tests/keycloak/run-e2e.sh --help
 ```
 
 See `tests/keycloak/README.md` for prerequisites and options.
@@ -40,7 +44,7 @@ See `tests/keycloak/README.md` for prerequisites and options.
 Docs are built with MkDocs and published to GitHub Pages.
 
 ```bash
-pip install mkdocs
+pip install mkdocs mkdocs-material
 mkdocs serve
 ```
 

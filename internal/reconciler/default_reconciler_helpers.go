@@ -378,14 +378,14 @@ func collectionPathFromResource(path string) string {
 
 func (r *DefaultReconciler) InitSecrets() error {
 	if r == nil || r.SecretsManager == nil {
-		return errors.New("secrets manager is not configured")
+		return errors.New("secret store is not configured")
 	}
 	return r.SecretsManager.Init()
 }
 
 func (r *DefaultReconciler) EnsureSecretsFile() error {
 	if r == nil || r.SecretsManager == nil {
-		return errors.New("secrets manager is not configured")
+		return errors.New("secret store is not configured")
 	}
 	if initializer, ok := r.SecretsManager.(interface{ EnsureFile() error }); ok {
 		return initializer.EnsureFile()
@@ -395,7 +395,7 @@ func (r *DefaultReconciler) EnsureSecretsFile() error {
 
 func (r *DefaultReconciler) GetSecret(resourcePath string, key string) (string, error) {
 	if r == nil || r.SecretsManager == nil {
-		return "", errors.New("secrets manager is not configured")
+		return "", errors.New("secret store is not configured")
 	}
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return "", err
@@ -405,7 +405,7 @@ func (r *DefaultReconciler) GetSecret(resourcePath string, key string) (string, 
 
 func (r *DefaultReconciler) SetSecret(resourcePath string, key string, value string) error {
 	if r == nil || r.SecretsManager == nil {
-		return errors.New("secrets manager is not configured")
+		return errors.New("secret store is not configured")
 	}
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return err
@@ -415,7 +415,7 @@ func (r *DefaultReconciler) SetSecret(resourcePath string, key string, value str
 
 func (r *DefaultReconciler) DeleteSecret(resourcePath string, key string) error {
 	if r == nil || r.SecretsManager == nil {
-		return errors.New("secrets manager is not configured")
+		return errors.New("secret store is not configured")
 	}
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return err
@@ -425,7 +425,7 @@ func (r *DefaultReconciler) DeleteSecret(resourcePath string, key string) error 
 
 func (r *DefaultReconciler) ListSecretKeys(resourcePath string) ([]string, error) {
 	if r == nil || r.SecretsManager == nil {
-		return nil, errors.New("secrets manager is not configured")
+		return nil, errors.New("secret store is not configured")
 	}
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return nil, err
@@ -435,7 +435,7 @@ func (r *DefaultReconciler) ListSecretKeys(resourcePath string) ([]string, error
 
 func (r *DefaultReconciler) ListSecretResources() ([]string, error) {
 	if r == nil || r.SecretsManager == nil {
-		return nil, errors.New("secrets manager is not configured")
+		return nil, errors.New("secret store is not configured")
 	}
 	return r.SecretsManager.ListResources()
 }

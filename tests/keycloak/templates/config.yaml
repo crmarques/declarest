@@ -7,7 +7,4 @@ __SERVER_AUTH_BLOCK__
 
 __REPOSITORY_BLOCK__
 
-secret_manager:
-  file:
-    path: __SECRETS_FILE__
-    passphrase: __SECRETS_PASSPHRASE__
+__SECRET_STORE_BLOCK__

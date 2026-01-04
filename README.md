@@ -1,6 +1,8 @@
 # DeclaREST
 
-<img src="docs/assets/logo-transparent.png" alt="DeclaREST logo" width="240" />
+<p align="center">
+    <img src="docs/assets/logo.png" alt="Logo" width="200">
+</p>
 
 DeclaREST is a Go CLI that keeps a Git-backed resource repository (desired state) in sync with remote REST APIs (actual state).
 
@@ -24,7 +26,7 @@ DeclaREST is a Go CLI that keeps a Git-backed resource repository (desired state
 - Logical path: `/a/b/c` maps to a repo directory and a remote collection endpoint.
 - Metadata: `metadata.json` files describe API paths, IDs, filters, and secrets.
 - Context: named configuration for repository + managed server settings.
-- Secrets manager: file-backed store for secrets referenced by repo files.
+- Secret store: file-backed store for secrets referenced by repo files.
 
 ## Prerequisites
 
@@ -66,14 +68,14 @@ Or generate a full config file:
 
 ```bash
 ./bin/declarest repo init
-./bin/declarest resource get --path /projects/example --save
+./bin/declarest resource get --path /teams/platform/users/alice --save
 ```
 
 4) Edit repo files and reconcile back:
 
 ```bash
-./bin/declarest resource diff --path /projects/example
-./bin/declarest resource apply --path /projects/example
+./bin/declarest resource diff --path /teams/platform/users/alice
+./bin/declarest resource apply --path /teams/platform/users/alice
 ```
 
 ## Repository layout
@@ -82,17 +84,17 @@ Or generate a full config file:
 /teams/
   _/metadata.json
   platform/
-    members/
+    users/
       _/metadata.json
-      xxx/
-        roles/
+      alice/
+        resource.json
+        permissions/
           _/metadata.json
           admin/
             resource.json
-            metadata.json
 ```
 
-Other example logical paths: `/notes/n-1001`, `/notes/n-1001/tags/meeting`, `/tags/meeting/notes/n-1001`.
+Other example logical paths: `/teams/platform/users/alice/permissions/admin`, `/teams/platform/permissions/admin`.
 
 ## Key commands
 
@@ -104,5 +106,8 @@ Other example logical paths: `/notes/n-1001`, `/notes/n-1001/tags/meeting`, `/ta
 
 ## Learn more
 
+- Documentation (MkDocs): `docs/index.md`
+- Getting started: `docs/getting-started/quickstart.md`
+- Workflows (real example): `docs/workflows/sync.md`
 - Detailed design and behavior: `specs/specs.md`
 - Optional Keycloak e2e harness: `tests/keycloak/README.md`

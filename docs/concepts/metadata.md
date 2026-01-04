@@ -41,33 +41,33 @@ Merge behavior:
 Metadata paths can include `_` as a wildcard segment (resource paths cannot).
 This lets you define one set of rules that applies to many IDs.
 
-For example, to apply the same metadata to every member under `/teams/platform/members/<id>/roles/`,
+For example, to apply the same metadata to every permission assignment under `/teams/platform/users/<id>/permissions/`,
 store a collection metadata file at:
 
-- `teams/platform/members/_/roles/_/metadata.json`
+- `teams/platform/users/_/permissions/_/metadata.json`
 
 When multiple metadata files match, the most specific ones (deeper paths, fewer wildcards) win.
 
-## Minimal example (notes)
+## Minimal example (users)
 
-For a note at logical path `/notes/n-1001`, a typical REST layout is:
+For a user at logical path `/teams/platform/users/alice`, a typical REST layout is:
 
-- Collection endpoint: `/api/v1/notes`
-- Resource endpoint: `GET /api/v1/notes/n-1001`
+- Collection endpoint: `/api/v1/teams/platform/users`
+- Resource endpoint: `GET /api/v1/teams/platform/users/alice`
 
 Collection metadata could start as:
 
 ```json
 {
   "resourceInfo": {
-    "collectionPath": "/api/v1/notes",
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "id"
+    "collectionPath": "/api/v1/teams/platform/users",
+    "idFromAttribute": "username",
+    "aliasFromAttribute": "username"
   }
 }
 ```
 
-Save this as `notes/_/metadata.json` to apply it to the whole `/notes/` subtree.
+Save this as `teams/platform/users/_/metadata.json` to apply it to the whole `/teams/platform/users/` subtree.
 
 DeclaREST provides defaults for common CRUD operations, and you can override them under `operationInfo` as needed.
 
@@ -78,8 +78,8 @@ DeclaREST provides defaults for common CRUD operations, and you can override the
   "resourceInfo": {
     "idFromAttribute": "id",
     "aliasFromAttribute": "id",
-    "collectionPath": "/api/v1/notes",
-    "secretInAttributes": ["secret", "config.bindCredential[0]"]
+    "collectionPath": "/api/v1/teams/platform/users",
+    "secretInAttributes": ["credentials.password", "sshKeys[0]"]
   },
   "operationInfo": {
     "getResource": {
@@ -132,7 +132,7 @@ Template placeholders use Go template syntax (for example `{{.id}}`).
 
 - `{{.id}}` is derived from `resourceInfo.idFromAttribute` when present, otherwise it falls back to the last logical path segment.
 - `{{.alias}}` follows the same rule using `resourceInfo.aliasFromAttribute`.
-- The template context also includes the merged JSON attributes from the current resource and its ancestors, so you can reference fields like `{{.realm}}` if they exist in your resource data.
+- The template context also includes the merged JSON attributes from the current resource and its ancestors, so you can reference fields like `{{.team}}` if they exist in your resource data.
 
 For nested APIs, you can also reference ancestor resource attributes via relative placeholders like `{{../../id}}` (go up two segments, then read the `id` attribute from that ancestor resource).
 

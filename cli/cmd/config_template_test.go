@@ -35,6 +35,6 @@ func TestConfigPrintTemplateIncludesSections(t *testing.T) {
 		t.Fatalf("expected oauth2 auth config, got %#v", cfg.ManagedServer.HTTP.Auth)
 	}
 	if cfg.SecretManager == nil || cfg.SecretManager.File == nil {
-		t.Fatalf("expected secrets manager config, got %#v", cfg.SecretManager)
+		t.Fatalf("expected secret store config, got %#v", cfg.SecretManager)
 	}
 }

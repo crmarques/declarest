@@ -54,10 +54,17 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 
 	var secretsManager secrets.SecretsManager
 	if cfg.SecretManager != nil {
-		if cfg.SecretManager.File == nil {
-			return nil, errors.New("secret manager configuration is required")
+		if cfg.SecretManager.File != nil && cfg.SecretManager.Vault != nil {
+			return nil, errors.New("secret store configuration must define either file or vault, not both")
 		}
-		secretsManager = secrets.NewFileSecretsManager(cfg.SecretManager.File)
+		switch {
+		case cfg.SecretManager.File != nil:
+			secretsManager = secrets.NewFileSecretsManager(cfg.SecretManager.File)
+		case cfg.SecretManager.Vault != nil:
+			secretsManager = secrets.NewVaultSecretsManager(cfg.SecretManager.Vault)
+		default:
+			return nil, errors.New("secret store configuration is required")
+		}
 	}
 
 	recon := &reconciler.DefaultReconciler{

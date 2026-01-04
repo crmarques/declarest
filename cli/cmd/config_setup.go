@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -383,7 +384,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 }
 
 func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error) {
-	configure, err := prompt.confirm("Configure secrets manager?", false)
+	configure, err := prompt.confirm("Configure secret store?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -391,6 +392,30 @@ func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error
 		return nil, nil
 	}
 
+	storeType, err := prompt.choice("Secret store type (file/vault): ", normalizeSecretStoreType)
+	if err != nil {
+		return nil, err
+	}
+
+	switch storeType {
+	case "file":
+		fileCfg, err := promptFileSecretsConfig(prompt)
+		if err != nil {
+			return nil, err
+		}
+		return &secrets.SecretsManagerConfig{File: fileCfg}, nil
+	case "vault":
+		vaultCfg, err := promptVaultSecretsConfig(prompt)
+		if err != nil {
+			return nil, err
+		}
+		return &secrets.SecretsManagerConfig{Vault: vaultCfg}, nil
+	default:
+		return nil, fmt.Errorf("unsupported secret store type %q", storeType)
+	}
+}
+
+func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfig, error) {
 	path, err := prompt.required("Secrets file path: ")
 	if err != nil {
 		return nil, err
@@ -460,7 +485,150 @@ func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error
 		}
 	}
 
-	return &secrets.SecretsManagerConfig{File: fileCfg}, nil
+	return fileCfg, nil
+}
+
+func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerConfig, error) {
+	address, err := prompt.required("Vault address (https://vault.example.com): ")
+	if err != nil {
+		return nil, err
+	}
+	mount, err := prompt.optional("Vault mount (default: secret): ")
+	if err != nil {
+		return nil, err
+	}
+	pathPrefix, err := prompt.optional("Vault path prefix (optional): ")
+	if err != nil {
+		return nil, err
+	}
+	kvVersion := 2
+	if raw, err := prompt.optional("Vault KV version (1 or 2, default 2): "); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(raw) != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err != nil || (parsed != 1 && parsed != 2) {
+			return nil, fmt.Errorf("invalid KV version %q", raw)
+		}
+		kvVersion = parsed
+	}
+
+	authType, err := prompt.choice("Vault auth type (token/password/approle): ", normalizeVaultAuthType)
+	if err != nil {
+		return nil, err
+	}
+	authCfg := &secrets.VaultSecretsManagerAuthConfig{}
+	switch authType {
+	case "token":
+		token, err := prompt.required("Vault token: ")
+		if err != nil {
+			return nil, err
+		}
+		authCfg.Token = token
+	case "password":
+		username, err := prompt.required("Vault username: ")
+		if err != nil {
+			return nil, err
+		}
+		password, err := prompt.required("Vault password: ")
+		if err != nil {
+			return nil, err
+		}
+		authMount, err := prompt.optional("Vault password auth mount (default: userpass): ")
+		if err != nil {
+			return nil, err
+		}
+		authCfg.Password = &secrets.VaultSecretsManagerPasswordAuthConfig{
+			Username: username,
+			Password: password,
+			Mount:    authMount,
+		}
+	case "approle":
+		roleID, err := prompt.required("Vault AppRole role_id: ")
+		if err != nil {
+			return nil, err
+		}
+		secretID, err := prompt.required("Vault AppRole secret_id: ")
+		if err != nil {
+			return nil, err
+		}
+		authMount, err := prompt.optional("Vault AppRole auth mount (default: approle): ")
+		if err != nil {
+			return nil, err
+		}
+		authCfg.AppRole = &secrets.VaultSecretsManagerAppRoleAuthConfig{
+			RoleID:   roleID,
+			SecretID: secretID,
+			Mount:    authMount,
+		}
+	default:
+		return nil, fmt.Errorf("unsupported vault auth type %q", authType)
+	}
+
+	var tlsCfg *secrets.VaultSecretsManagerTLSConfig
+	configureTLS, err := prompt.confirm("Configure mTLS for Vault?", false)
+	if err != nil {
+		return nil, err
+	}
+	if configureTLS {
+		caCert, err := prompt.optional("Vault CA cert file (leave blank to skip): ")
+		if err != nil {
+			return nil, err
+		}
+		clientCert, err := prompt.optional("Vault client cert file (leave blank to skip): ")
+		if err != nil {
+			return nil, err
+		}
+		clientKey := ""
+		if strings.TrimSpace(clientCert) != "" {
+			clientKey, err = prompt.required("Vault client key file: ")
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			clientKey, err = prompt.optional("Vault client key file (leave blank to skip): ")
+			if err != nil {
+				return nil, err
+			}
+		}
+		insecureTLS := false
+		if isHTTPSURL(address) {
+			insecureTLS, err = prompt.confirm("Skip TLS verification for Vault?", false)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if strings.TrimSpace(clientCert) != "" && strings.TrimSpace(clientKey) == "" {
+			return nil, errors.New("vault client key file is required when providing a client certificate")
+		}
+		if strings.TrimSpace(clientKey) != "" && strings.TrimSpace(clientCert) == "" {
+			return nil, errors.New("vault client cert file is required when providing a client key")
+		}
+		tlsCfg = &secrets.VaultSecretsManagerTLSConfig{
+			CACertFile:         caCert,
+			ClientCertFile:     clientCert,
+			ClientKeyFile:      clientKey,
+			InsecureSkipVerify: insecureTLS,
+		}
+	} else if isHTTPSURL(address) {
+		insecureTLS, err := prompt.confirm("Skip TLS verification for Vault?", false)
+		if err != nil {
+			return nil, err
+		}
+		if insecureTLS {
+			tlsCfg = &secrets.VaultSecretsManagerTLSConfig{
+				InsecureSkipVerify: true,
+			}
+		}
+	}
+
+	return &secrets.VaultSecretsManagerConfig{
+		Address:    address,
+		Mount:      mount,
+		PathPrefix: pathPrefix,
+		KVVersion:  kvVersion,
+		Auth:       authCfg,
+		TLS:        tlsCfg,
+	}, nil
 }
 
 func promptHeaders(prompt *prompter) (map[string]string, error) {
@@ -602,6 +770,30 @@ func normalizeKeySource(raw string) (string, bool) {
 		return "passphrase", true
 	case "passphrase-file", "passphrasefile", "passfile":
 		return "passphrase-file", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeSecretStoreType(raw string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "file", "fs":
+		return "file", true
+	case "vault", "hashicorp", "hashicorp-vault":
+		return "vault", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeVaultAuthType(raw string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "token", "bearer":
+		return "token", true
+	case "password", "userpass", "user-pass":
+		return "password", true
+	case "approle", "app-role", "app_role":
+		return "approle", true
 	default:
 		return "", false
 	}

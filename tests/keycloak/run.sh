@@ -12,7 +12,7 @@ Usage: ./tests/keycloak/run.sh [setup|sync|stop|clean|reset|cli] [options] [-- <
 
 Options:
   --sync           Sync the template repository to Keycloak after setup.
-  --seed-secrets   Seed sample secrets in the secrets manager during setup.
+  --seed-secrets   Seed sample secrets in the secret store during setup.
   --work-dir PATH  Use an existing work directory for stop/clean/sync/cli.
   --all            With clean, remove all work directories and container artifacts.
   -h, --help       Show this help message.
@@ -127,6 +127,9 @@ write_state() {
         printf 'export DECLAREST_REPO_REMOTE_URL=%q\n' "${DECLAREST_REPO_REMOTE_URL:-}"
         printf 'export DECLAREST_REPO_TYPE=%q\n' "${DECLAREST_REPO_TYPE:-}"
         printf 'export DECLAREST_REPO_PROVIDER=%q\n' "${DECLAREST_REPO_PROVIDER:-}"
+        printf 'export DECLAREST_REMOTE_REPO_PROVIDER=%q\n' "${DECLAREST_REMOTE_REPO_PROVIDER:-}"
+        printf 'export DECLAREST_GITLAB_ENABLE=%q\n' "${DECLAREST_GITLAB_ENABLE:-}"
+        printf 'export DECLAREST_GITEA_ENABLE=%q\n' "${DECLAREST_GITEA_ENABLE:-}"
         printf 'export DECLAREST_REPO_AUTH_TYPE=%q\n' "${DECLAREST_REPO_AUTH_TYPE:-}"
         printf 'export DECLAREST_REPO_AUTH=%q\n' "${DECLAREST_REPO_AUTH:-}"
         printf 'export DECLAREST_REPO_SSH_USER=%q\n' "${DECLAREST_REPO_SSH_USER:-}"
@@ -140,11 +143,23 @@ write_state() {
         printf 'export DECLAREST_COMPOSE_DIR=%q\n' "${DECLAREST_COMPOSE_DIR:-}"
         printf 'export DECLAREST_HOME_DIR=%q\n' "${DECLAREST_HOME_DIR:-}"
         printf 'export DECLAREST_SECRETS_FILE=%q\n' "${DECLAREST_SECRETS_FILE:-}"
+        printf 'export DECLAREST_SECRET_STORE_TYPE=%q\n' "${DECLAREST_SECRET_STORE_TYPE:-}"
         printf 'export DECLAREST_TEMPLATE_REPO_DIR=%q\n' "${DECLAREST_TEMPLATE_REPO_DIR:-}"
         printf 'export DECLAREST_KEEP_WORK=%q\n' "${DECLAREST_KEEP_WORK:-}"
         printf 'export DECLAREST_SECRETS_PASSPHRASE=%q\n' "${DECLAREST_SECRETS_PASSPHRASE:-}"
         printf 'export DECLAREST_TEST_CLIENT_SECRET=%q\n' "${DECLAREST_TEST_CLIENT_SECRET:-}"
         printf 'export DECLAREST_TEST_LDAP_BIND_CREDENTIAL=%q\n' "${DECLAREST_TEST_LDAP_BIND_CREDENTIAL:-}"
+        printf 'export DECLAREST_VAULT_ADDR=%q\n' "${DECLAREST_VAULT_ADDR:-}"
+        printf 'export DECLAREST_VAULT_AUTH_TYPE=%q\n' "${DECLAREST_VAULT_AUTH_TYPE:-}"
+        printf 'export DECLAREST_VAULT_TOKEN=%q\n' "${DECLAREST_VAULT_TOKEN:-}"
+        printf 'export DECLAREST_VAULT_UNSEAL_KEY=%q\n' "${DECLAREST_VAULT_UNSEAL_KEY:-}"
+        printf 'export DECLAREST_VAULT_USERNAME=%q\n' "${DECLAREST_VAULT_USERNAME:-}"
+        printf 'export DECLAREST_VAULT_PASSWORD=%q\n' "${DECLAREST_VAULT_PASSWORD:-}"
+        printf 'export DECLAREST_VAULT_ROLE_ID=%q\n' "${DECLAREST_VAULT_ROLE_ID:-}"
+        printf 'export DECLAREST_VAULT_SECRET_ID=%q\n' "${DECLAREST_VAULT_SECRET_ID:-}"
+        printf 'export DECLAREST_VAULT_MOUNT=%q\n' "${DECLAREST_VAULT_MOUNT:-}"
+        printf 'export DECLAREST_VAULT_PATH_PREFIX=%q\n' "${DECLAREST_VAULT_PATH_PREFIX:-}"
+        printf 'export DECLAREST_VAULT_KV_VERSION=%q\n' "${DECLAREST_VAULT_KV_VERSION:-}"
         printf 'export CONTAINER_RUNTIME=%q\n' "${CONTAINER_RUNTIME:-}"
         printf 'export COMPOSE_PROJECT_NAME=%q\n' "${COMPOSE_PROJECT_NAME:-}"
         printf 'export KEYCLOAK_CONTAINER_NAME=%q\n' "${KEYCLOAK_CONTAINER_NAME:-}"
@@ -152,6 +167,9 @@ write_state() {
         printf 'export KEYCLOAK_ADMIN_USER=%q\n' "${KEYCLOAK_ADMIN_USER:-}"
         printf 'export KEYCLOAK_ADMIN_PASS=%q\n' "${KEYCLOAK_ADMIN_PASS:-}"
         printf 'export KEYCLOAK_HTTP_PORT=%q\n' "${KEYCLOAK_HTTP_PORT:-}"
+        printf 'export VAULT_HTTP_PORT=%q\n' "${VAULT_HTTP_PORT:-}"
+        printf 'export VAULT_CONTAINER_NAME=%q\n' "${VAULT_CONTAINER_NAME:-}"
+        printf 'export VAULT_IMAGE=%q\n' "${VAULT_IMAGE:-}"
     } >"$state_file"
     mkdir -p "$(dirname "$LAST_RUN_FILE")"
     printf "%s\n" "$state_file" >"$LAST_RUN_FILE"
@@ -228,6 +246,7 @@ case "$command" in
     setup)
         source "$SCRIPTS_DIR/lib/env.sh"
         source "$SCRIPTS_DIR/lib/logging.sh"
+        source "$SCRIPTS_DIR/lib/shell.sh"
         setup_run_log
         trap 'cleanup_on_error' EXIT INT TERM
 
@@ -235,19 +254,127 @@ case "$command" in
         echo "Detailed log: $RUN_LOG"
         log_line "Keycloak manual setup started"
         log_line "Container runtime: $CONTAINER_RUNTIME"
+        secret_store_type="${DECLAREST_SECRET_STORE_TYPE:-file}"
+        secret_store_type="${secret_store_type,,}"
 
         run_step "Preparing workspace" "$SCRIPTS_DIR/workspace/prepare.sh"
+        if [[ "$secret_store_type" == "none" ]]; then
+            template_dest="$DECLAREST_WORK_DIR/templates/repo-no-secrets"
+            run_step "Preparing template (no secrets)" "$SCRIPTS_DIR/repo/strip-secrets.sh" "$DECLAREST_TEST_DIR/templates/repo" "$template_dest"
+            export DECLAREST_TEMPLATE_REPO_DIR="$template_dest"
+        fi
         write_state
         run_step "Building declarest CLI" "$SCRIPTS_DIR/declarest/build.sh"
-        run_step "Starting Keycloak" "$SCRIPTS_DIR/stack/start.sh"
+        run_step "Starting stack" "$SCRIPTS_DIR/stack/start.sh"
         source "$SCRIPTS_DIR/lib/env.sh"
+        write_state
+        repo_type="${DECLAREST_REPO_TYPE:-}"
+        repo_type="${repo_type,,}"
+        if [[ "$repo_type" == "git-remote" ]]; then
+            provider="${DECLAREST_REMOTE_REPO_PROVIDER:-${DECLAREST_REPO_PROVIDER:-}}"
+            provider="${provider,,}"
+            provider_env=""
+            if [[ -z "${DECLAREST_REPO_REMOTE_URL:-}" ]]; then
+                case "$provider" in
+                    gitlab)
+                        run_step "Preparing GitLab" "$SCRIPTS_DIR/providers/gitlab/setup.sh"
+                        provider_env="$DECLAREST_WORK_DIR/gitlab.env"
+                        ;;
+                    gitea)
+                        run_step "Preparing Gitea" "$SCRIPTS_DIR/providers/gitea/setup.sh"
+                        provider_env="$DECLAREST_WORK_DIR/gitea.env"
+                        ;;
+                esac
+                if [[ -n "$provider_env" ]]; then
+                    if [[ ! -f "$provider_env" ]]; then
+                        die "Provider env file missing: $provider_env"
+                    fi
+                    # shellcheck source=/dev/null
+                    source "$provider_env"
+                fi
+            fi
+
+            if [[ "$provider" == "gitlab" || "$provider" == "gitea" ]]; then
+                repo_auth_type="${DECLAREST_REPO_AUTH_TYPE:-pat}"
+                repo_auth_type="${repo_auth_type,,}"
+                export DECLAREST_REPO_AUTH_TYPE="$repo_auth_type"
+                export DECLAREST_REPO_PROVIDER="$provider"
+                export DECLAREST_REMOTE_REPO_PROVIDER="$provider"
+
+                case "$provider" in
+                    gitlab)
+                        provider_pat_url="$DECLAREST_GITLAB_PAT_URL"
+                        provider_pat="$DECLAREST_GITLAB_PAT"
+                        provider_basic_url="$DECLAREST_GITLAB_BASIC_URL"
+                        provider_basic_user="$DECLAREST_GITLAB_USER"
+                        provider_basic_pass="$DECLAREST_GITLAB_PASSWORD"
+                        provider_ssh_url="$DECLAREST_GITLAB_SSH_URL"
+                        provider_ssh_key="$DECLAREST_GITLAB_SSH_KEY_FILE"
+                        provider_known_hosts="$DECLAREST_GITLAB_KNOWN_HOSTS_FILE"
+                        ;;
+                    gitea)
+                        provider_pat_url="$DECLAREST_GITEA_PAT_URL"
+                        provider_pat="$DECLAREST_GITEA_PAT"
+                        provider_basic_url="$DECLAREST_GITEA_BASIC_URL"
+                        provider_basic_user="$DECLAREST_GITEA_USER"
+                        provider_basic_pass="$DECLAREST_GITEA_PASSWORD"
+                        provider_ssh_url="$DECLAREST_GITEA_SSH_URL"
+                        provider_ssh_key="$DECLAREST_GITEA_SSH_KEY_FILE"
+                        provider_known_hosts="$DECLAREST_GITEA_KNOWN_HOSTS_FILE"
+                        ;;
+                esac
+
+                case "$repo_auth_type" in
+                    pat)
+                        if [[ -z "${DECLAREST_REPO_REMOTE_URL:-}" ]]; then
+                            export DECLAREST_REPO_REMOTE_URL="$provider_pat_url"
+                        fi
+                        if [[ -z "${DECLAREST_REPO_AUTH:-}" ]]; then
+                            export DECLAREST_REPO_AUTH="$provider_pat"
+                        fi
+                        ;;
+                    basic)
+                        if [[ -z "${DECLAREST_REPO_REMOTE_URL:-}" ]]; then
+                            export DECLAREST_REPO_REMOTE_URL="$provider_basic_url"
+                        fi
+                        if [[ -z "${DECLAREST_REPO_AUTH:-}" ]]; then
+                            export DECLAREST_REPO_AUTH="${provider_basic_user}:${provider_basic_pass}"
+                        fi
+                        ;;
+                    ssh)
+                        if [[ -z "${DECLAREST_REPO_REMOTE_URL:-}" ]]; then
+                            export DECLAREST_REPO_REMOTE_URL="$provider_ssh_url"
+                        fi
+                        if [[ -z "${DECLAREST_REPO_SSH_USER:-}" ]]; then
+                            export DECLAREST_REPO_SSH_USER="git"
+                        fi
+                        if [[ -z "${DECLAREST_REPO_SSH_KEY_FILE:-}" ]]; then
+                            export DECLAREST_REPO_SSH_KEY_FILE="$provider_ssh_key"
+                        fi
+                        if [[ -z "${DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE:-}" ]]; then
+                            export DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE="$provider_known_hosts"
+                        fi
+                        ;;
+                    *)
+                        die "Unsupported repo auth type: ${repo_auth_type}"
+                        ;;
+                esac
+            fi
+        fi
         write_state
         run_step "Preparing template repo" "$SCRIPTS_DIR/repo/prepare.sh"
         run_step "Configuring declarest context" "$SCRIPTS_DIR/context/render.sh"
         run_step "Registering declarest context" "$SCRIPTS_DIR/context/register.sh"
-        run_step "Initializing secrets manager" init_secrets_manager
-        if [[ $SEED_SECRETS -eq 1 ]]; then
-            run_step "Seeding secrets" seed_secrets
+        if [[ "$secret_store_type" == "none" && "$repo_type" == "git-remote" ]]; then
+            run_step "Sanitizing repository (no secrets)" "$SCRIPTS_DIR/repo/strip-secrets.sh" "$DECLAREST_REPO_DIR"
+        fi
+        if [[ "$secret_store_type" != "none" ]]; then
+            run_step "Initializing secret store" init_secrets_manager
+            if [[ $SEED_SECRETS -eq 1 ]]; then
+                run_step "Seeding secrets" seed_secrets
+            fi
+        elif [[ $SEED_SECRETS -eq 1 ]]; then
+            printf "Secret store disabled; skipping secret seeding.\n"
         fi
 
         if [[ $SYNC_RESOURCE -eq 1 ]]; then
@@ -265,7 +392,8 @@ Use the declarest CLI with the prepared context:
 
 Logs: ${RUN_LOG}
 Repo: ${DECLAREST_REPO_DIR}
-Secrets file: ${DECLAREST_SECRETS_FILE}
+Secret store: ${DECLAREST_SECRET_STORE_TYPE}
+$(if [[ "${DECLAREST_SECRET_STORE_TYPE:-}" == "vault" ]]; then printf 'Vault address: %s\nVault auth: %s\n' "$DECLAREST_VAULT_ADDR" "$DECLAREST_VAULT_AUTH_TYPE"; elif [[ "${DECLAREST_SECRET_STORE_TYPE:-}" == "none" ]]; then printf 'Secrets file: (disabled)\n'; else printf 'Secrets file: %s\n' "$DECLAREST_SECRETS_FILE"; fi)
 
 Stop Keycloak:
   ./tests/keycloak/run.sh stop --work-dir "${DECLAREST_WORK_DIR}"

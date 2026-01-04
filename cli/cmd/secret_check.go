@@ -87,8 +87,8 @@ func newSecretCheckCommand() *cobra.Command {
 				return nil
 			}
 			if recon.SecretsManager == nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Secrets manager is not configured. Configure one and rerun with --fix.")
-				return handledError{msg: "secrets manager is not configured"}
+				fmt.Fprintln(cmd.ErrOrStderr(), "Secret store is not configured. Configure one and rerun with --fix.")
+				return handledError{msg: "secret store is not configured"}
 			}
 
 			fixed := 0
@@ -115,7 +115,7 @@ func newSecretCheckCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to check (optional)")
-	cmd.Flags().BoolVar(&fix, "fix", false, "Map detected secrets into metadata and store values in the secrets manager")
+	cmd.Flags().BoolVar(&fix, "fix", false, "Map detected secrets into metadata and store values in the secret store")
 
 	return cmd
 }

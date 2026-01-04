@@ -86,7 +86,26 @@ remove_work_dir() {
     fi
 
     chmod -R u+w "$work_dir" >/dev/null 2>&1 || true
+
+    # The Vault container may write files owned by subordinate UIDs that are not removable
+    # from the host user namespace. Attempt a regular removal first, then fall back to a
+    # Podman user-namespace removal when available.
+    set +e
     rm -rf "$work_dir"
+    rm_status=$?
+    set -e
+    if [[ $rm_status -ne 0 && runtime_available && "$CONTAINER_RUNTIME" == "podman" ]]; then
+        log_line "Retrying work directory removal via podman unshare: $work_dir"
+        "$CONTAINER_RUNTIME" unshare rm -rf "$work_dir" || true
+        set +e
+        rm -rf "$work_dir"
+        rm_status=$?
+        set -e
+    fi
+    if [[ $rm_status -ne 0 ]]; then
+        printf "Failed to remove work directory: %s\n" "$work_dir" >&2
+        exit 1
+    fi
     log_line "Work directory removed: $work_dir"
 }
 

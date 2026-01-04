@@ -5,8 +5,8 @@ This directory contains an optional end-to-end smoke test that provisions a temp
 ## Prerequisites
 
 - Docker or Podman with Compose support available on your machine (set `CONTAINER_RUNTIME=podman` if needed).
-- `make`, `bash`, and `jq` installed.
-- Network ports 18080 (Keycloak) available. For `--repo-type git-remote`, ports 18081 (GitLab HTTP) and 2222 (GitLab SSH) are also used.
+- `make`, `bash`, `jq`, and `git` installed.
+- Network ports 18080 (Keycloak) available. For `--repo-provider gitlab`, ports 18081 (HTTP) and 2222 (SSH) are used; for `--repo-provider gitea`, ports 18082 (HTTP) and 2223 (SSH) are used; for `--secret-provider vault`, port 18200 is used.
 
 ## Layout
 
@@ -32,20 +32,32 @@ This directory contains an optional end-to-end smoke test that provisions a temp
 
 ```bash
 # From repository root
-./tests/keycloak/run-e2e.sh --repo-type fs
-./tests/keycloak/run-e2e.sh --repo-type git-local
-./tests/keycloak/run-e2e.sh --repo-type git-remote
-CONTAINER_RUNTIME=podman ./tests/keycloak/run-e2e.sh --repo-type fs
+./tests/keycloak/run-e2e.sh --repo-provider file
+./tests/keycloak/run-e2e.sh --repo-provider git
+./tests/keycloak/run-e2e.sh --repo-provider gitlab
+./tests/keycloak/run-e2e.sh --repo-provider gitea
+./tests/keycloak/run-e2e.sh --repo-provider github
+./tests/keycloak/run-e2e.sh --repo-provider git --secret-provider vault
+CONTAINER_RUNTIME=podman ./tests/keycloak/run-e2e.sh --repo-provider file
 ```
 
-Repository modes:
+Repository providers:
 
-- `fs`: use the bundled template repository directly (no Git).
-- `git-local`: seed an empty local Git repo with the template repo, then run the same tests (prints the git log at the end).
-- `git-remote`: bring up a local GitLab service, seed repositories, and run the tests across basic, PAT, and SSH auth.
+- `file`: use the bundled template repository directly (no Git).
+- `git`: seed an empty local Git repo with the template repo, then run the same tests (prints the git log at the end).
+- `gitlab`: bring up a local GitLab service, seed repositories, run the full flow with PAT, then validate basic + SSH auth with read/write checks.
+- `gitea`: bring up a local Gitea service, seed repositories, run the full flow with PAT, then validate basic + SSH auth with read/write checks.
+- `github`: use an existing GitHub repository; the script prompts for HTTPS/PAT and SSH details, runs the full flow with PAT, then validates SSH auth.
 
-Secret-related checks use the encrypted file secrets manager configured in `templates/config.yaml`.
-Override the seeded values if needed:
+Secret providers:
+
+- `none`: strip secret placeholders from the template and skip secret store checks.
+- `file`: use the encrypted file secret store (default).
+- `vault`: start Vault, run the full flow with token auth, then validate password + AppRole auth.
+
+Managed server: `keycloak` (default and only option).
+
+For `file` and `vault`, override the seeded values if needed:
 
 ```bash
 DECLAREST_TEST_CLIENT_SECRET="custom-client-secret" \
@@ -58,8 +70,8 @@ The script will:
 
 1. Build the declarest CLI (placing the binary under `/tmp/declarest-keycloak-<run-id>/bin`).
 2. Launch a disposable Keycloak container with admin `admin/admin` credentials.
-3. Prepare the repository for the selected `--repo-type` and adjust the context file to point at the running Keycloak.
-4. Execute a resource lifecycle (create/update/apply/get/list/delete) and secrets manager checks, syncing remote state into the repository as needed. For `git-remote`, it also verifies `repo check`/`repo push`/`repo refresh`/`repo reset`.
+3. Prepare the repository for the selected `--repo-provider` and adjust the context file to point at the running Keycloak.
+4. Execute a resource lifecycle (create/update/apply/get/list/delete) and secret store checks using the primary auth choices (oauth2/PAT/token), then validate other auth modes with lightweight checks. Remote providers also verify `repo check`/`repo push`/`repo refresh`/`repo reset` on the primary auth.
 5. Tear down the Keycloak container.
 
 By default the work directory is removed at the end of the run.
@@ -68,7 +80,7 @@ Set `DECLAREST_KEEP_WORK=1` to preserve the work directory (including logs), or 
 
 ## Remote Repository
 
-When using `--repo-type git-remote`, the harness provisions a temporary GitLab instance and creates three repositories for basic, PAT, and SSH authentication. The repository URLs and credentials are generated under the work directory and torn down after the run.
+When using `--repo-provider gitlab` or `--repo-provider gitea`, the harness provisions a local service and creates repositories for basic, PAT, and SSH authentication. The primary flow uses PAT, and basic/SSH are validated with lightweight read/write checks. For `--repo-provider github`, provide a repository with write access; the script prompts for HTTPS/PAT and SSH details, uses PAT for the full flow, and validates SSH with read/write checks.
 
 ## Updating Templates
 

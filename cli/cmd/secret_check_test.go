@@ -38,7 +38,7 @@ func TestSecretCheckFindsUnmappedSecrets(t *testing.T) {
 	}
 }
 
-func TestSecretCheckFixRequiresSecretsManager(t *testing.T) {
+func TestSecretCheckFixRequiresSecretStore(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo")
 	contextPath := filepath.Join(home, "context.yaml")
@@ -61,7 +61,7 @@ func TestSecretCheckFixRequiresSecretsManager(t *testing.T) {
 	if err == nil || !cli.IsHandledError(err) {
 		t.Fatalf("expected handled error, got %v", err)
 	}
-	if !strings.Contains(errBuf.String(), "Secrets manager is not configured") {
+	if !strings.Contains(errBuf.String(), "Secret store is not configured") {
 		t.Fatalf("expected configuration guidance, got %q", errBuf.String())
 	}
 }

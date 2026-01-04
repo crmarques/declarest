@@ -6,7 +6,7 @@ These commands manage repository lifecycle and sync.
 ## Initialize
 
 ```bash
-./bin/declarest repo init
+declarest repo init
 ```
 
 This initializes the local repository and, if configured, the remote repository.
@@ -14,7 +14,7 @@ This initializes the local repository and, if configured, the remote repository.
 ## Refresh from remote
 
 ```bash
-./bin/declarest repo refresh
+declarest repo refresh
 ```
 
 This fast-forwards the local repository to match the remote branch.
@@ -22,7 +22,7 @@ This fast-forwards the local repository to match the remote branch.
 ## Push to remote
 
 ```bash
-./bin/declarest repo push
+declarest repo push
 ```
 
 Use `--force` to rewrite remote history (confirmation required).
@@ -30,7 +30,7 @@ Use `--force` to rewrite remote history (confirmation required).
 ## Reset local to remote
 
 ```bash
-./bin/declarest repo reset
+declarest repo reset
 ```
 
 This discards local changes and hard-resets to the remote branch.
@@ -38,7 +38,7 @@ This discards local changes and hard-resets to the remote branch.
 ## Check connectivity
 
 ```bash
-./bin/declarest repo check
+declarest repo check
 ```
 
 ## Auto sync behavior

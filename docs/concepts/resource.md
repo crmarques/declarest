@@ -1,4 +1,7 @@
-# Resource paths
+# Resource
+
+A **resource** is one remote entity (for example a team, user, or permission) represented locally as JSON at
+`<logical-path>/resource.json` and addressed in the CLI by its **logical path**.
 
 DeclaREST identifies everything using a **logical path** (sometimes called a “resource path” in the CLI).
 The same path is used to:
@@ -9,17 +12,17 @@ The same path is used to:
 
 ## Resource vs collection
 
-- **Resource path:** no trailing slash, for a single object (example: `/notes/n-1001`)
-- **Collection path:** trailing slash, for a group of resources (example: `/notes/`)
+- **Resource path:** no trailing slash, for a single object (example: `/teams/platform/users/alice`)
+- **Collection path:** trailing slash, for a group of resources (example: `/teams/platform/users/`)
 
 Examples:
 
 ```bash
 # Single resource
-declarest resource get --path /notes/n-1001 --save
+declarest resource get --path /teams/platform/users/alice --save
 
 # List resources under a collection
-declarest resource list --repo --path /notes/
+declarest resource list --repo --path /teams/platform/users/
 ```
 
 Some commands default to treating paths as collections (for example `declarest metadata ...`).
@@ -42,16 +45,16 @@ Given a repository base directory `<base_repo_dir>`:
 
 Examples:
 
-- `/notes/n-1001` → `notes/n-1001/resource.json`
-- `/notes/` collection metadata → `notes/_/metadata.json`
+- `/teams/platform/users/alice` → `teams/platform/users/alice/resource.json`
+- `/teams/platform/users/` collection metadata → `teams/platform/users/_/metadata.json`
 
 ## Wildcards in metadata paths
 
 Resource paths cannot contain `_`, but metadata paths can.
 Using `_` as a path segment lets you apply the same metadata rules to many paths that differ only by IDs.
 
-For example, to apply the same rules to every member under `/teams/platform/members/<id>/roles/`:
+For example, to apply the same rules to every permission assignment under `/teams/platform/users/<id>/permissions/`:
 
-- Collection metadata file: `teams/platform/members/_/roles/_/metadata.json`
+- Collection metadata file: `teams/platform/users/_/permissions/_/metadata.json`
 
 See [Metadata](metadata.md) for how DeclaREST merges and applies these files.
