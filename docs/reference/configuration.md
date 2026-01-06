@@ -7,6 +7,7 @@ Use `declarest config add` or `declarest config init` to register them.
 
 ```yaml
 repository:
+  resource_format: json # json (default) or yaml
   # filesystem or git config
 managed_server:
   http:
@@ -19,10 +20,14 @@ secret_store:
 
 ## Repository configuration
 
+`repository.resource_format` controls how resource payload files are stored in the repo. Use `json` (default)
+for `resource.json` files or `yaml` for `resource.yaml`.
+
 ### Filesystem
 
 ```yaml
 repository:
+  resource_format: json
   filesystem:
     base_dir: /path/to/repo
 ```
@@ -31,6 +36,7 @@ repository:
 
 ```yaml
 repository:
+  resource_format: json
   git:
     local:
       base_dir: /path/to/repo
@@ -40,6 +46,7 @@ repository:
 
 ```yaml
 repository:
+  resource_format: json
   git:
     local:
       base_dir: /path/to/repo

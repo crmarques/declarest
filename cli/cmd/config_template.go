@@ -7,6 +7,8 @@ import (
 )
 
 const configTemplateYAML = `repository:
+  # Resource file format: json (default) or yaml.
+  resource_format: json
   # Choose exactly one repository type: filesystem or git.
   git:
     local:

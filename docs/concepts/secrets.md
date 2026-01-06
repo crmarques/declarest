@@ -19,7 +19,7 @@ Paths use dot notation and optional list indexes, for example:
 
 ## Placeholders in resource files
 
-When secrets are stored, values are replaced with placeholders in `resource.json`:
+When secrets are stored, values are replaced with placeholders in `resource.json` (or `resource.yaml` when configured):
 
 - `{{secret .}}` uses the default key derived from the attribute path.
 - `{{secret "custom"}}` uses a custom key name.
@@ -42,7 +42,7 @@ If metadata marks an attribute as secret:
 }
 ```
 
-Then `resource.json` stores a placeholder instead of the plaintext password:
+Then `resource.json` (or `resource.yaml`) stores a placeholder instead of the plaintext password:
 
 ```json
 {

@@ -41,7 +41,7 @@ declarest repo init
 declarest resource get --path /teams/platform/users/alice --save
 ```
 
-This creates a `resource.json` under the repository base directory at:
+This creates a `resource.json` (or `resource.yaml` when configured) under the repository base directory at:
 
 ```
 <repo_base_dir>/teams/platform/users/alice/resource.json
@@ -49,7 +49,7 @@ This creates a `resource.json` under the repository base directory at:
 
 ## 5) Apply changes back to the API
 
-Edit the local `resource.json`, then:
+Edit the local `resource.json` (or `resource.yaml` when configured), then:
 
 ```bash
 declarest resource diff --path /teams/platform/users/alice
@@ -61,4 +61,3 @@ declarest resource apply --path /teams/platform/users/alice
 For more details, see [Concepts](../concepts/overview.md) and [Configuration](../reference/configuration.md).
 
 For a complete, real example (Keycloak + GitLab + Vault), see [Syncing resources](../workflows/sync.md).
-

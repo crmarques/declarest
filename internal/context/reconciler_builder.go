@@ -19,6 +19,15 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 		repoManager repository.ResourceRepositoryManager
 	)
 
+	resourceFormat := repository.ResourceFormatJSON
+	if cfg.Repository != nil {
+		parsed, err := repository.ParseResourceFormat(cfg.Repository.ResourceFormat)
+		if err != nil {
+			return nil, err
+		}
+		resourceFormat = parsed
+	}
+
 	if cfg.Repository != nil {
 		if cfg.Repository.Git != nil && cfg.Repository.Filesystem != nil {
 			return nil, errors.New("repository configuration must define either git or filesystem, not both")
@@ -45,6 +54,12 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 		}); ok {
 			setter.SetConfig(cfg.Repository.Git)
 		}
+	}
+
+	if setter, ok := repoManager.(interface {
+		SetResourceFormat(repository.ResourceFormat)
+	}); ok {
+		setter.SetResourceFormat(resourceFormat)
 	}
 
 	var serverManager managedserver.ResourceServerManager
@@ -74,6 +89,7 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 	}
 
 	provider := repository.NewDefaultResourceRecordProvider(baseDir, recon)
+	provider.SetResourceFormat(resourceFormat)
 	recon.ResourceRecordProvider = provider
 
 	return recon, nil

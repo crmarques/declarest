@@ -26,6 +26,15 @@ func TestResourceFileRelPath(t *testing.T) {
 	}
 }
 
+func TestResourceFileRelPathForFormat(t *testing.T) {
+	if got := ResourceFileRelPathForFormat("/", ResourceFormatYAML); got != filepath.Join("resource.yaml") {
+		t.Fatalf("expected resource.yaml for root, got %q", got)
+	}
+	if got := ResourceFileRelPathForFormat("/foo/bar", ResourceFormatYAML); got != filepath.Join("foo", "bar", "resource.yaml") {
+		t.Fatalf("unexpected yaml resource path, got %q", got)
+	}
+}
+
 func TestResourceDirRelPath(t *testing.T) {
 	if got := ResourceDirRelPath("/"); got != "." {
 		t.Fatalf("expected . for root, got %q", got)

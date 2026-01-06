@@ -13,7 +13,7 @@ A common workflow looks like:
 declarest resource get --path /teams/platform/users/alice --save
 
 # you may want to edit that resource with your preferred tool
-vi <base_repo_dir>/teams/platform/users/alice/resource.json
+vi <base_repo_dir>/teams/platform/users/alice/resource.json # or resource.yaml when configured
 
 # check resource states differences between remote server and git repository
 declarest resource diff --path /teams/platform/users/alice
@@ -24,7 +24,7 @@ declarest resource apply --path /teams/platform/users/alice
 
 ## Core terms
 
-- **Resource:** one remote entity represented locally as JSON (`<logical-path>/resource.json`).
+- **Resource:** one remote entity represented locally as JSON (or YAML) at `<logical-path>/resource.json` (or `resource.yaml` when configured).
 - **Path:** info used to localize a resource, both in remote server and in repository.
 - **Logical path:** a normalized, absolute path you use in CLI commands (used specially when API REST drifts from REST standards. Check [Metadata](metadata.md) page for more details).
 - **Collection:** a group of similar resources.

@@ -15,11 +15,29 @@ import (
 )
 
 type FileSystemResourceRepositoryManager struct {
-	BaseDir string
+	BaseDir        string
+	ResourceFormat ResourceFormat
 }
 
 func NewFileSystemResourceRepositoryManager(baseDir string) *FileSystemResourceRepositoryManager {
-	return &FileSystemResourceRepositoryManager{BaseDir: baseDir}
+	return &FileSystemResourceRepositoryManager{
+		BaseDir:        baseDir,
+		ResourceFormat: ResourceFormatJSON,
+	}
+}
+
+func (m *FileSystemResourceRepositoryManager) SetResourceFormat(format ResourceFormat) {
+	if m == nil {
+		return
+	}
+	m.ResourceFormat = normalizeResourceFormat(format)
+}
+
+func (m *FileSystemResourceRepositoryManager) resourceFormat() ResourceFormat {
+	if m == nil {
+		return ResourceFormatJSON
+	}
+	return normalizeResourceFormat(m.ResourceFormat)
 }
 
 func (m *FileSystemResourceRepositoryManager) Init() error {
@@ -56,20 +74,30 @@ func (m *FileSystemResourceRepositoryManager) IsLocalRepositoryInitialized() (bo
 }
 
 func (m *FileSystemResourceRepositoryManager) GetResource(path string) (resource.Resource, error) {
-	filePath, err := m.resourceFile(path)
+	candidates, err := m.resourceFileCandidates(path)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return resource.Resource{}, err
+	var missing error
+	for _, candidate := range candidates {
+		data, err := os.ReadFile(candidate.path)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				missing = err
+				continue
+			}
+			return resource.Resource{}, err
+		}
+		if len(data) == 0 {
+			return resource.NewResource(nil)
+		}
+		return decodeResourcePayload(data, candidate.format)
 	}
-	if len(data) == 0 {
-		return resource.NewResource(nil)
+	if missing != nil {
+		return resource.Resource{}, missing
 	}
-
-	return resource.NewResourceFromJSON(data)
+	return resource.Resource{}, fs.ErrNotExist
 }
 
 func (m *FileSystemResourceRepositoryManager) CreateResource(path string, res resource.Resource) error {
@@ -85,17 +113,21 @@ func (m *FileSystemResourceRepositoryManager) ApplyResource(path string, res res
 }
 
 func (m *FileSystemResourceRepositoryManager) DeleteResource(path string) error {
-	filePath, err := m.resourceFile(path)
+	paths, err := m.resourceFilesForDelete(path)
 	if err != nil {
 		return err
 	}
 
-	if err := os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
+	for _, filePath := range paths {
+		if err := os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
 	}
 
-	dir := filepath.Dir(filePath)
-	_ = os.Remove(dir)
+	dir, err := m.resourceDir(path)
+	if err == nil {
+		_ = os.Remove(dir)
+	}
 
 	return nil
 }
@@ -226,21 +258,38 @@ func (m *FileSystemResourceRepositoryManager) GetResourceCollection(path string)
 		return nil, err
 	}
 
+	basePath := strings.TrimSuffix(resource.NormalizePath(path), "/")
 	var results []resource.Resource
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		filePath := filepath.Join(dirPath, entry.Name(), "resource.json")
-		data, err := os.ReadFile(filePath)
+		childPath := resource.NormalizePath(basePath + "/" + entry.Name())
+		candidates, err := m.resourceFileCandidates(childPath)
 		if err != nil {
 			continue
 		}
-		res, err := resource.NewResourceFromJSON(data)
-		if err != nil {
-			continue
+		for _, candidate := range candidates {
+			data, err := os.ReadFile(candidate.path)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				break
+			}
+			if len(data) == 0 {
+				if res, err := resource.NewResource(nil); err == nil {
+					results = append(results, res)
+				}
+				break
+			}
+			res, err := decodeResourcePayload(data, candidate.format)
+			if err != nil {
+				break
+			}
+			results = append(results, res)
+			break
 		}
-		results = append(results, res)
 	}
 
 	return results, nil
@@ -252,6 +301,7 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 		base = "."
 	}
 
+	seen := make(map[string]struct{})
 	var paths []string
 	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -260,18 +310,24 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 		if d.IsDir() {
 			return nil
 		}
-		if d.Name() != "resource.json" {
+		if !isResourceFileName(d.Name()) {
 			return nil
 		}
 		rel, err := filepath.Rel(base, filepath.Dir(path))
 		if err != nil {
 			return nil
 		}
+		var logical string
 		if rel == "." {
-			paths = append(paths, "/")
+			logical = "/"
 		} else {
-			paths = append(paths, "/"+filepath.ToSlash(rel))
+			logical = "/" + filepath.ToSlash(rel)
 		}
+		if _, ok := seen[logical]; ok {
+			return nil
+		}
+		seen[logical] = struct{}{}
+		paths = append(paths, logical)
 		return nil
 	})
 
@@ -299,21 +355,20 @@ func (m *FileSystemResourceRepositoryManager) writeResource(path string, res res
 		return fmt.Errorf("failed to create directories for %s: %w", path, err)
 	}
 
-	data, err := res.MarshalJSON()
+	data, err := encodeResourcePayload(res, m.resourceFormat())
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, data, "", "  "); err != nil {
-		return fmt.Errorf("failed to format resource payload: %w", err)
-	}
-	buf.WriteByte('\n')
 
-	return os.WriteFile(filePath, buf.Bytes(), 0o644)
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		return err
+	}
+
+	return m.cleanupAlternativeResourceFiles(path, filePath)
 }
 
 func (m *FileSystemResourceRepositoryManager) resourceFile(path string) (string, error) {
-	return m.safeJoin(ResourceFileRelPath(path))
+	return m.safeJoin(ResourceFileRelPathForFormat(path, m.resourceFormat()))
 }
 
 func (m *FileSystemResourceRepositoryManager) resourceDir(path string) (string, error) {
@@ -330,4 +385,55 @@ func (m *FileSystemResourceRepositoryManager) collectionDir(path string) (string
 
 func (m *FileSystemResourceRepositoryManager) safeJoin(rel string) (string, error) {
 	return SafeJoin(m.BaseDir, rel)
+}
+
+type resourceFileCandidatePath struct {
+	path   string
+	format ResourceFormat
+}
+
+func (m *FileSystemResourceRepositoryManager) resourceFileCandidates(path string) ([]resourceFileCandidatePath, error) {
+	candidates := resourceFileRelPathCandidates(path, m.resourceFormat())
+	out := make([]resourceFileCandidatePath, 0, len(candidates))
+	for _, candidate := range candidates {
+		full, err := m.safeJoin(candidate.relPath)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, resourceFileCandidatePath{
+			path:   full,
+			format: candidate.format,
+		})
+	}
+	return out, nil
+}
+
+func (m *FileSystemResourceRepositoryManager) resourceFilesForDelete(path string) ([]string, error) {
+	relPaths := resourceFileRelPathsAll(path)
+	out := make([]string, 0, len(relPaths))
+	for _, rel := range relPaths {
+		full, err := m.safeJoin(rel)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, full)
+	}
+	return out, nil
+}
+
+func (m *FileSystemResourceRepositoryManager) cleanupAlternativeResourceFiles(path, keep string) error {
+	relPaths := resourceFileRelPathsAll(path)
+	for _, rel := range relPaths {
+		full, err := m.safeJoin(rel)
+		if err != nil {
+			return err
+		}
+		if full == keep {
+			continue
+		}
+		if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }

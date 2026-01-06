@@ -26,13 +26,15 @@ import (
 )
 
 type GitResourceRepositoryManager struct {
-	fs     *FileSystemResourceRepositoryManager
-	config *GitResourceRepositoryConfig
+	fs             *FileSystemResourceRepositoryManager
+	config         *GitResourceRepositoryConfig
+	resourceFormat ResourceFormat
 }
 
 func NewGitResourceRepositoryManager(baseDir string) *GitResourceRepositoryManager {
 	return &GitResourceRepositoryManager{
-		fs: NewFileSystemResourceRepositoryManager(baseDir),
+		fs:             NewFileSystemResourceRepositoryManager(baseDir),
+		resourceFormat: ResourceFormatJSON,
 	}
 }
 
@@ -42,6 +44,17 @@ func (m *GitResourceRepositoryManager) SetConfig(cfg *GitResourceRepositoryConfi
 	}
 	m.config = cfg
 	m.applyConfig()
+}
+
+func (m *GitResourceRepositoryManager) SetResourceFormat(format ResourceFormat) {
+	if m == nil {
+		return
+	}
+	m.resourceFormat = normalizeResourceFormat(format)
+	if m.fs == nil {
+		m.fs = NewFileSystemResourceRepositoryManager("")
+	}
+	m.fs.SetResourceFormat(m.resourceFormat)
 }
 
 func (m *GitResourceRepositoryManager) Init() error {
@@ -743,48 +756,65 @@ func (m *GitResourceRepositoryManager) commitResourceChange(path, action string,
 	if err != nil {
 		return err
 	}
-	filePath, err := fs.resourceFile(path)
-	if err != nil {
-		return err
-	}
 
 	repo, repoRoot, err := m.openRepo()
 	if err != nil {
 		return err
 	}
 
-	rel, err := filepath.Rel(repoRoot, filePath)
-	if err != nil {
-		return err
-	}
-	rel = filepath.ToSlash(rel)
-
 	wt, err := repo.Worktree()
 	if err != nil {
 		return err
 	}
 
-	if deleted {
-		if _, err := wt.Remove(rel); err != nil {
-			tracked, trackErr := m.isIndexTracked(repo, rel)
-			if trackErr != nil {
-				return trackErr
-			}
-			if !tracked {
-				return nil
-			}
-			return err
-		}
-	} else {
-		if _, err := wt.Add(rel); err != nil {
-			return err
-		}
-	}
-
-	changed, err := m.hasStagedChanges(wt, rel)
+	filePaths, err := fs.resourceFilesForDelete(path)
 	if err != nil {
 		return err
 	}
+
+	var primaryFile string
+	if !deleted {
+		filePath, err := fs.resourceFile(path)
+		if err != nil {
+			return err
+		}
+		primaryFile = filePath
+	}
+
+	changed := false
+	for _, filePath := range filePaths {
+		rel, err := filepath.Rel(repoRoot, filePath)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+
+		if deleted || (primaryFile != "" && filePath != primaryFile) {
+			if _, err := wt.Remove(rel); err != nil {
+				tracked, trackErr := m.isIndexTracked(repo, rel)
+				if trackErr != nil {
+					return trackErr
+				}
+				if !tracked {
+					continue
+				}
+				return err
+			}
+		} else {
+			if _, err := wt.Add(rel); err != nil {
+				return err
+			}
+		}
+
+		relChanged, err := m.hasStagedChanges(wt, rel)
+		if err != nil {
+			return err
+		}
+		if relChanged {
+			changed = true
+		}
+	}
+
 	if !changed {
 		return nil
 	}
@@ -1185,9 +1215,11 @@ func (m *GitResourceRepositoryManager) applyConfig() {
 	}
 	if m.fs == nil {
 		m.fs = NewFileSystemResourceRepositoryManager(baseDir)
+		m.fs.SetResourceFormat(m.resourceFormat)
 		return
 	}
 	m.fs.BaseDir = baseDir
+	m.fs.SetResourceFormat(m.resourceFormat)
 }
 
 func (m *GitResourceRepositoryManager) wrapRepoSyncError(err error) error {

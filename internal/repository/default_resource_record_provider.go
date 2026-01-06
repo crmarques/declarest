@@ -19,6 +19,7 @@ type DefaultResourceRecordProvider struct {
 	BaseDir        string
 	fileStore      FileStore
 	resourceLoader ResourceLoader
+	resourceFormat ResourceFormat
 	remoteMu       sync.Mutex
 	remoteInFlight map[string]int
 }
@@ -56,6 +57,7 @@ func NewDefaultResourceRecordProvider(baseDir string, loader ResourceLoader) *De
 		BaseDir:        baseDir,
 		fileStore:      NewFileSystemStore(baseDir),
 		resourceLoader: loader,
+		resourceFormat: ResourceFormatJSON,
 	}
 }
 
@@ -66,6 +68,13 @@ func (p *DefaultResourceRecordProvider) SetFileStore(store FileStore) {
 	p.fileStore = store
 }
 
+func (p *DefaultResourceRecordProvider) SetResourceFormat(format ResourceFormat) {
+	if p == nil {
+		return
+	}
+	p.resourceFormat = normalizeResourceFormat(format)
+}
+
 func (p *DefaultResourceRecordProvider) store() FileStore {
 	if p == nil {
 		return nil
@@ -74,6 +83,13 @@ func (p *DefaultResourceRecordProvider) store() FileStore {
 		p.fileStore = NewFileSystemStore(p.BaseDir)
 	}
 	return p.fileStore
+}
+
+func (p *DefaultResourceRecordProvider) format() ResourceFormat {
+	if p == nil {
+		return ResourceFormatJSON
+	}
+	return normalizeResourceFormat(p.resourceFormat)
 }
 
 func (p *DefaultResourceRecordProvider) GetResourceRecord(resourcePath string) (resource.ResourceRecord, error) {
@@ -283,7 +299,7 @@ func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string) (
 		}
 	}
 
-	data, err := p.store().ReadFile(ResourceFileRelPath(path))
+	data, format, err := p.readResourcePayload(path)
 	if err != nil {
 		return p.loadRemoteResourceAttributes(path)
 	}
@@ -291,7 +307,7 @@ func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string) (
 		return p.loadRemoteResourceAttributes(path)
 	}
 
-	res, err := resource.NewResourceFromJSON(data)
+	res, err := decodeResourcePayload(data, format)
 	if err != nil {
 		return p.loadRemoteResourceAttributes(path)
 	}
@@ -302,6 +318,27 @@ func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string) (
 	}
 
 	return obj, true
+}
+
+func (p *DefaultResourceRecordProvider) readResourcePayload(path string) ([]byte, ResourceFormat, error) {
+	store := p.store()
+	candidates := resourceFileRelPathCandidates(path, p.format())
+	var missing error
+	for _, candidate := range candidates {
+		data, err := store.ReadFile(candidate.relPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				missing = err
+				continue
+			}
+			return nil, candidate.format, err
+		}
+		return data, candidate.format, nil
+	}
+	if missing != nil {
+		return nil, p.format(), missing
+	}
+	return nil, p.format(), os.ErrNotExist
 }
 
 func (p *DefaultResourceRecordProvider) loadRemoteResourceAttributes(path string) (map[string]any, bool) {

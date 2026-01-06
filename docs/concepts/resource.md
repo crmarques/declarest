@@ -1,7 +1,8 @@
 # Resource
 
-A **resource** is one remote entity (for example a team, user, or permission) represented locally as JSON at
-`<logical-path>/resource.json` and addressed in the CLI by its **logical path**.
+A **resource** is one remote entity (for example a team, user, or permission) represented locally as JSON (or YAML)
+at `<logical-path>/resource.json` (or `resource.yaml` when `repository.resource_format` is `yaml`) and addressed in
+the CLI by its **logical path**.
 
 DeclaREST identifies everything using a **logical path** (sometimes called a “resource path” in the CLI).
 The same path is used to:
@@ -39,7 +40,7 @@ If you want to edit metadata for a resource directory (not the subtree), use `--
 
 Given a repository base directory `<base_repo_dir>`:
 
-- Resource payload: `<base_repo_dir>/<logical-path>/resource.json`
+- Resource payload: `<base_repo_dir>/<logical-path>/resource.json` (or `resource.yaml` when configured)
 - Resource metadata (overrides for that resource only): `<base_repo_dir>/<logical-path>/metadata.json`
 - Collection subtree metadata (applies to everything under the collection): `<base_repo_dir>/<collection>/_/metadata.json`
 

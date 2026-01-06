@@ -15,6 +15,7 @@ Options:
   --keep-rundeck          Keep the Rundeck container after the run.
   --container-runtime CMD Container runtime to use (default: podman).
   --rundeck-image IMAGE   Override Rundeck image (default: docker.io/rundeck/rundeck:4.14.0).
+  --resource-format TYPE  Resource file format (json or yaml).
   --project NAME          Override the Rundeck project name.
   --job NAME              Override the Rundeck job name.
   -h, --help              Show this help message.
@@ -47,6 +48,11 @@ while [[ $# -gt 0 ]]; do
         --rundeck-image)
             [[ -n "${2:-}" ]] || die "Missing value for --rundeck-image"
             export RUNDECK_IMAGE="$2"
+            shift 2
+            ;;
+        --resource-format)
+            [[ -n "${2:-}" ]] || die "Missing value for --resource-format"
+            export DECLAREST_RESOURCE_FORMAT="$2"
             shift 2
             ;;
         --project)

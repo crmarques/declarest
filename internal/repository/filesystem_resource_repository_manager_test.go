@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,5 +59,50 @@ func TestFileSystemRepositoryRejectsMetadataTraversal(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "escapes base directory") {
 		t.Fatalf("expected traversal error, got %v", err)
+	}
+}
+
+func TestFileSystemRepositoryYAMLFormatWritesYAML(t *testing.T) {
+	dir := t.TempDir()
+	manager := NewFileSystemResourceRepositoryManager(dir)
+	manager.SetResourceFormat(ResourceFormatYAML)
+	if err := manager.Init(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	res, err := resource.NewResource(map[string]any{
+		"id":    "x",
+		"count": 1,
+	})
+	if err != nil {
+		t.Fatalf("NewResource: %v", err)
+	}
+
+	if err := manager.CreateResource("/items/foo", res); err != nil {
+		t.Fatalf("CreateResource: %v", err)
+	}
+
+	yamlPath := filepath.Join(dir, "items", "foo", "resource.yaml")
+	if _, err := os.Stat(yamlPath); err != nil {
+		t.Fatalf("expected resource.yaml to exist: %v", err)
+	}
+	jsonPath := filepath.Join(dir, "items", "foo", "resource.json")
+	if _, err := os.Stat(jsonPath); err == nil {
+		t.Fatalf("expected resource.json to be removed when using yaml format")
+	}
+
+	loaded, err := manager.GetResource("/items/foo")
+	if err != nil {
+		t.Fatalf("GetResource: %v", err)
+	}
+	obj, ok := loaded.AsObject()
+	if !ok {
+		t.Fatalf("expected object, got %#v", loaded.V)
+	}
+	if obj["id"] != "x" {
+		t.Fatalf("expected id to be x, got %#v", obj["id"])
+	}
+	if _, ok := obj["count"].(json.Number); !ok {
+		t.Fatalf("expected count to be json.Number, got %T", obj["count"])
 	}
 }

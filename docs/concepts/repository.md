@@ -1,7 +1,7 @@
 # Repository
 
 The resource repository is the contract between DeclaREST and your API.
-It is your **desired state**: JSON files in a deterministic directory layout that you can review and version.
+It is your **desired state**: JSON or YAML files in a deterministic directory layout that you can review and version.
 
 ## Repository types
 
@@ -17,11 +17,13 @@ The repository base directory is defined in your active context config (see `dec
 ## Repository layout
 
 - Every **resource** lives in its own directory at `<logical-path>/`.
-- The desired payload for that resource is stored as `<logical-path>/resource.json`.
+- The desired payload for that resource is stored as `<logical-path>/resource.json` (or `resource.yaml` when `repository.resource_format` is `yaml`).
 - A **collection** is any directory path (for example `/teams/` or `/teams/platform/users/`).
 - Collections can optionally be saved as a single `resource.json` file too (for example saving `/teams/platform/users/` as `teams/platform/users/resource.json`).
 
 ### Layout examples
+
+Examples below show the default JSON layout.
 
 Teams → users → permissions:
 
@@ -41,7 +43,7 @@ Teams → users → permissions:
 
 ## Key files and folders
 
-- `resource.json` is the desired payload for a resource.
+- `resource.json` (or `resource.yaml`) is the desired payload for a resource.
 - `metadata.json` inside a resource directory overrides metadata for that resource only.
 - `_/metadata.json` applies to an entire collection subtree.
 - `_` is a reserved directory name used for metadata folders and wildcard matching.

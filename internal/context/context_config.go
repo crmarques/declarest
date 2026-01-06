@@ -17,6 +17,7 @@ type ManagedServerConfig struct {
 }
 
 type RepositoryConfig struct {
-	Git        *repository.GitResourceRepositoryConfig        `mapstructure:"git" yaml:"git,omitempty" json:"git,omitempty"`
-	Filesystem *repository.FileSystemResourceRepositoryConfig `mapstructure:"filesystem" yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
+	ResourceFormat string                                         `mapstructure:"resource_format" yaml:"resource_format,omitempty" json:"resource_format,omitempty"`
+	Git            *repository.GitResourceRepositoryConfig        `mapstructure:"git" yaml:"git,omitempty" json:"git,omitempty"`
+	Filesystem     *repository.FileSystemResourceRepositoryConfig `mapstructure:"filesystem" yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
 }

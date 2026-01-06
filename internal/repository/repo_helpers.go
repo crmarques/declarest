@@ -35,11 +35,16 @@ func SafeJoin(baseDir, rel string) (string, error) {
 }
 
 func ResourceFileRelPath(path string) string {
+	return ResourceFileRelPathForFormat(path, ResourceFormatJSON)
+}
+
+func ResourceFileRelPathForFormat(path string, format ResourceFormat) string {
 	trimmed := strings.Trim(path, " /")
+	fileName := resourceFileNameForFormat(format)
 	if trimmed == "" {
-		return filepath.Join("resource.json")
+		return filepath.Join(fileName)
 	}
-	return filepath.Join(filepath.FromSlash(trimmed), "resource.json")
+	return filepath.Join(filepath.FromSlash(trimmed), fileName)
 }
 
 func ResourceDirRelPath(path string) string {
@@ -48,6 +53,79 @@ func ResourceDirRelPath(path string) string {
 		return "."
 	}
 	return filepath.FromSlash(trimmed)
+}
+
+type resourceFileCandidate struct {
+	relPath string
+	format  ResourceFormat
+}
+
+func resourceFileRelPathCandidates(path string, format ResourceFormat) []resourceFileCandidate {
+	trimmed := strings.Trim(path, " /")
+	var base string
+	if trimmed == "" {
+		base = "."
+	} else {
+		base = filepath.FromSlash(trimmed)
+	}
+
+	candidates := make([]resourceFileCandidate, 0, 3)
+	add := func(name string, format ResourceFormat) {
+		if base == "." {
+			candidates = append(candidates, resourceFileCandidate{
+				relPath: filepath.Join(name),
+				format:  format,
+			})
+			return
+		}
+		candidates = append(candidates, resourceFileCandidate{
+			relPath: filepath.Join(base, name),
+			format:  format,
+		})
+	}
+
+	switch normalizeResourceFormat(format) {
+	case ResourceFormatYAML:
+		add(resourceFileYAML, ResourceFormatYAML)
+		add(resourceFileYML, ResourceFormatYAML)
+		add(resourceFileJSON, ResourceFormatJSON)
+	default:
+		add(resourceFileJSON, ResourceFormatJSON)
+		add(resourceFileYAML, ResourceFormatYAML)
+		add(resourceFileYML, ResourceFormatYAML)
+	}
+
+	return candidates
+}
+
+func resourceFileRelPathsAll(path string) []string {
+	trimmed := strings.Trim(path, " /")
+	var base string
+	if trimmed == "" {
+		base = "."
+	} else {
+		base = filepath.FromSlash(trimmed)
+	}
+
+	names := []string{resourceFileJSON, resourceFileYAML, resourceFileYML}
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		if base == "." {
+			paths = append(paths, filepath.Join(name))
+		} else {
+			paths = append(paths, filepath.Join(base, name))
+		}
+	}
+	return paths
+}
+
+func isResourceFileName(name string) bool {
+	switch name {
+	case resourceFileJSON, resourceFileYAML, resourceFileYML:
+		return true
+	default:
+		return false
+	}
 }
 
 func MetadataFileRelPath(path string) string {

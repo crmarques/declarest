@@ -17,6 +17,7 @@ fi
 
 cat > "$DECLAREST_CONTEXT_FILE" <<EOF
 repository:
+  resource_format: "$DECLAREST_RESOURCE_FORMAT"
   filesystem:
     base_dir: "$DECLAREST_REPO_DIR"
 managed_server:
