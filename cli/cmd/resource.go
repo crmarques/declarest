@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"declarest/internal/managedserver"
@@ -197,19 +198,26 @@ func newResourceGetCommand(verbose bool) *cobra.Command {
 
 func newResourceAddCommand() *cobra.Command {
 	var (
-		path     string
-		filePath string
+		path        string
+		fromFile    string
+		fromPath    string
+		legacyFile  string
+		overrides   []string
+		applyRemote bool
+		force       bool
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add <path> <file>",
-		Short: "Add a resource definition to the resource repository from a file",
+		Use:   "add <path>",
+		Short: "Add a resource definition to the resource repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 2 {
-				return usageError(cmd, "expected <path> <file>")
+				return usageError(cmd, "expected <path> [file]")
 			}
 			path = strings.TrimSpace(path)
-			filePath = strings.TrimSpace(filePath)
+			fromFile = strings.TrimSpace(fromFile)
+			fromPath = strings.TrimSpace(fromPath)
+			legacyFile = strings.TrimSpace(legacyFile)
 			if len(args) > 0 {
 				argPath := strings.TrimSpace(args[0])
 				if argPath != "" {
@@ -224,12 +232,26 @@ func newResourceAddCommand() *cobra.Command {
 			if len(args) > 1 {
 				argFile := strings.TrimSpace(args[1])
 				if argFile != "" {
-					if filePath != "" && filePath != argFile {
-						return usageError(cmd, "file specified twice")
+					if fromPath != "" {
+						return usageError(cmd, "from-path specified twice")
 					}
-					if filePath == "" {
-						filePath = argFile
+					if fromFile != "" && fromFile != argFile {
+						return usageError(cmd, "from-file specified twice")
 					}
+					if fromFile == "" {
+						fromFile = argFile
+					}
+				}
+			}
+			if legacyFile != "" {
+				if fromPath != "" {
+					return usageError(cmd, "from-path specified twice")
+				}
+				if fromFile != "" && fromFile != legacyFile {
+					return usageError(cmd, "from-file specified twice")
+				}
+				if fromFile == "" {
+					fromFile = legacyFile
 				}
 			}
 			if path == "" {
@@ -238,18 +260,16 @@ func newResourceAddCommand() *cobra.Command {
 			if err := validateLogicalPath(cmd, path); err != nil {
 				return err
 			}
-
-			if filePath == "" {
-				return usageError(cmd, "file is required")
+			if fromFile != "" && fromPath != "" {
+				return usageError(cmd, "--from-file and --from-path cannot be used together")
 			}
-
-			payload, err := os.ReadFile(filePath)
-			if err != nil {
-				return err
+			if fromFile == "" && fromPath == "" {
+				return usageError(cmd, "either --from-file or --from-path is required")
 			}
-			res, err := resource.NewResourceFromJSON(payload)
-			if err != nil {
-				return err
+			if fromPath != "" {
+				if err := validateLogicalPath(cmd, fromPath); err != nil {
+					return err
+				}
 			}
 
 			recon, cleanup, err := loadDefaultReconciler()
@@ -260,18 +280,363 @@ func newResourceAddCommand() *cobra.Command {
 				return err
 			}
 
+			var res resource.Resource
+			if fromPath != "" {
+				res, err = recon.GetLocalResource(fromPath)
+				if err != nil {
+					return err
+				}
+				res, err = dropResourceID(res)
+				if err != nil {
+					return err
+				}
+			} else {
+				res, err = loadResourceFromFile(fromFile)
+			}
+			if err != nil {
+				return err
+			}
+
+			if len(overrides) > 0 {
+				res, err = applyResourceOverrides(res, overrides)
+				if err != nil {
+					return err
+				}
+			}
+
+			targetPath, err := resolveAddTargetPath(recon, path, res)
+			if err != nil {
+				return err
+			}
+			if !force {
+				exists, err := localResourceExists(recon, targetPath)
+				if err != nil {
+					return err
+				}
+				if exists {
+					if targetPath != path {
+						return fmt.Errorf("resource %s already exists in the repository (resolved from %s); use --force to overwrite", targetPath, path)
+					}
+					return fmt.Errorf("resource %s already exists in the repository; use --force to overwrite", targetPath)
+				}
+			}
+
 			if err := saveLocalResourceWithSecrets(recon, path, res, true); err != nil {
 				return err
 			}
-			successf(cmd, "added resource %s to the resource repository", path)
+
+			if targetPath != path {
+				successf(cmd, "added resource %s to the resource repository (resolved from %s)", targetPath, path)
+			} else {
+				successf(cmd, "added resource %s to the resource repository", targetPath)
+			}
+
+			if applyRemote {
+				verbose := false
+				if cmd.Flags().Lookup("verbose") != nil {
+					if v, err := cmd.Flags().GetBool("verbose"); err == nil {
+						verbose = v
+					}
+				} else if cmd.InheritedFlags().Lookup("verbose") != nil {
+					if v, err := cmd.InheritedFlags().GetBool("verbose"); err == nil {
+						verbose = v
+					}
+				}
+				if err := recon.SaveRemoteResource(targetPath, res); err != nil {
+					return wrapRemoteErrorWithDetails(err, targetPath, verbose)
+				}
+				successf(cmd, "applied remote resource %s", targetPath)
+			}
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to add")
-	cmd.Flags().StringVar(&filePath, "file", "", "Path to a JSON resource payload file")
+	cmd.Flags().StringVar(&fromFile, "from-file", "", "Path to a JSON or YAML resource payload file")
+	cmd.Flags().StringVar(&fromPath, "from-path", "", "Resource path in the repository to copy")
+	cmd.Flags().StringArrayVar(&overrides, "override", nil, "Override resource fields (key=value list, JSON object, or JSON/YAML file)")
+	cmd.Flags().BoolVar(&applyRemote, "apply", false, "Apply the resource to the remote server after saving")
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite the resource in the repository if it already exists")
+	cmd.Flags().StringVar(&legacyFile, "file", "", "Deprecated: use --from-file")
+	_ = cmd.Flags().MarkDeprecated("file", "use --from-file instead")
 
 	return cmd
+}
+
+func loadResourceFromFile(path string) (resource.Resource, error) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return resource.Resource{}, errors.New("resource file path is required")
+	}
+
+	data, err := os.ReadFile(trimmed)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	if format, ok := resourceFileFormat(trimmed); ok {
+		return decodeResourceData(data, format)
+	}
+
+	if res, err := resource.NewResourceFromJSON(data); err == nil {
+		return res, nil
+	}
+	if res, err := resource.NewResourceFromYAML(data); err == nil {
+		return res, nil
+	}
+
+	return resource.Resource{}, fmt.Errorf("resource file %q must be valid JSON or YAML", trimmed)
+}
+
+func decodeResourceData(data []byte, format string) (resource.Resource, error) {
+	switch format {
+	case "yaml":
+		return resource.NewResourceFromYAML(data)
+	default:
+		return resource.NewResourceFromJSON(data)
+	}
+}
+
+func resourceFileFormat(path string) (string, bool) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".yaml", ".yml":
+		return "yaml", true
+	case ".json":
+		return "json", true
+	default:
+		return "", false
+	}
+}
+
+func resolveAddTargetPath(recon *reconciler.DefaultReconciler, path string, res resource.Resource) (string, error) {
+	if recon == nil || recon.ResourceRecordProvider == nil {
+		return "", errors.New("resource record provider is not configured")
+	}
+
+	record, err := recon.ResourceRecordProvider.GetResourceRecord(path)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(record.Path) == "" {
+		record.Path = path
+	}
+
+	payload := record.ReadPayload()
+	processed, err := record.ApplyPayload(res, payload)
+	if err != nil {
+		return "", err
+	}
+
+	return record.AliasPath(processed), nil
+}
+
+func localResourceExists(recon *reconciler.DefaultReconciler, path string) (bool, error) {
+	if recon == nil {
+		return false, errors.New("reconciler is not configured")
+	}
+	_, err := recon.GetLocalResource(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func applyResourceOverrides(res resource.Resource, overrides []string) (resource.Resource, error) {
+	obj, err := ensureResourceObject(res)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	for _, raw := range overrides {
+		override, err := parseOverride(raw)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		mergeOverride(obj, override)
+	}
+
+	return resource.NewResource(obj)
+}
+
+func ensureResourceObject(res resource.Resource) (map[string]any, error) {
+	if res.V == nil {
+		return map[string]any{}, nil
+	}
+	obj, ok := res.AsObject()
+	if !ok {
+		return nil, errors.New("overrides require an object resource")
+	}
+	return obj, nil
+}
+
+func parseOverride(raw string) (map[string]any, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, errors.New("override value is required")
+	}
+
+	if json.Valid([]byte(trimmed)) {
+		res, err := resource.NewResourceFromJSON([]byte(trimmed))
+		if err != nil {
+			return nil, err
+		}
+		obj, ok := res.AsObject()
+		if !ok {
+			return nil, errors.New("override JSON must be an object")
+		}
+		return obj, nil
+	}
+
+	if strings.Contains(trimmed, "=") {
+		pairs := splitCommaList(trimmed)
+		if len(pairs) == 0 {
+			return nil, errors.New("override must include at least one key=value pair")
+		}
+		override, err := parseOverridePairs(pairs)
+		if err != nil {
+			return nil, err
+		}
+		return override, nil
+	}
+
+	if override, ok, err := loadOverrideFile(trimmed); ok {
+		return override, err
+	}
+
+	return nil, errors.New("override must be a JSON object, key=value list, or JSON/YAML file")
+}
+
+func loadOverrideFile(path string) (map[string]any, bool, error) {
+	format, ok := resourceFileFormat(path)
+	if !ok {
+		return nil, false, nil
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, true, fmt.Errorf("override file %q not found", path)
+		}
+		return nil, true, err
+	}
+	if info.IsDir() {
+		return nil, true, fmt.Errorf("override file %q is a directory", path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, true, err
+	}
+
+	res, err := decodeResourceData(data, format)
+	if err != nil {
+		return nil, true, err
+	}
+	obj, ok := res.AsObject()
+	if !ok {
+		return nil, true, fmt.Errorf("override file %q must contain a JSON or YAML object", path)
+	}
+	return obj, true, nil
+}
+
+func parseOverridePairs(pairs []string) (map[string]any, error) {
+	override := make(map[string]any)
+	for _, pair := range pairs {
+		key, rawValue, ok := strings.Cut(pair, "=")
+		if !ok {
+			return nil, fmt.Errorf("override %q must use key=value syntax", pair)
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return nil, errors.New("override key is required")
+		}
+		value, err := parseOverrideValue(strings.TrimSpace(rawValue))
+		if err != nil {
+			return nil, err
+		}
+		if err := setOverridePath(override, key, value); err != nil {
+			return nil, err
+		}
+	}
+	return override, nil
+}
+
+func parseOverrideValue(raw string) (any, error) {
+	if raw == "" {
+		return "", nil
+	}
+	if !json.Valid([]byte(raw)) {
+		return raw, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	var value any
+	if err := dec.Decode(&value); err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func setOverridePath(obj map[string]any, path string, value any) error {
+	segments := strings.Split(path, ".")
+	if len(segments) == 0 {
+		return errors.New("override key is required")
+	}
+	current := obj
+	for idx, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			return fmt.Errorf("invalid override key %q", path)
+		}
+		if idx == len(segments)-1 {
+			current[segment] = value
+			return nil
+		}
+		next, ok := current[segment].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			current[segment] = next
+		}
+		current = next
+	}
+	return nil
+}
+
+func mergeOverride(dst map[string]any, src map[string]any) {
+	for key, value := range src {
+		srcMap, ok := value.(map[string]any)
+		if !ok {
+			dst[key] = value
+			continue
+		}
+		existing, ok := dst[key].(map[string]any)
+		if !ok {
+			dst[key] = srcMap
+			continue
+		}
+		mergeOverride(existing, srcMap)
+	}
+}
+
+func dropResourceID(res resource.Resource) (resource.Resource, error) {
+	obj, ok := res.AsObject()
+	if !ok {
+		return res, nil
+	}
+
+	clone := make(map[string]any, len(obj))
+	for key, value := range obj {
+		clone[key] = value
+	}
+
+	if _, ok := clone["id"]; ok {
+		delete(clone, "id")
+		return resource.NewResource(clone)
+	}
+	return res, nil
 }
 
 func newResourceListCommand() *cobra.Command {

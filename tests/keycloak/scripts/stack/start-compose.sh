@@ -174,6 +174,9 @@ fi
 mkdir -p "$DECLAREST_COMPOSE_DIR"
 cp -R "$DECLAREST_TEST_DIR/templates/compose/." "$DECLAREST_COMPOSE_DIR"/
 mkdir -p "$DECLAREST_COMPOSE_DIR/nginx-logs"
+vault_data_dir="$DECLAREST_COMPOSE_DIR/vault-data"
+mkdir -p "$vault_data_dir"
+chmod 0777 "$vault_data_dir"
 
 log_line "Writing Keycloak compose environment to $DECLAREST_COMPOSE_DIR/.env"
 cat <<ENVFILE > "$DECLAREST_COMPOSE_DIR/.env"
@@ -212,4 +215,3 @@ if [[ $vault_enabled -eq 1 ]]; then
     compose_profiles+=(--profile vault)
 fi
 (cd "$DECLAREST_COMPOSE_DIR" && run_logged "compose up" "$CONTAINER_RUNTIME" compose -p "$COMPOSE_PROJECT_NAME" "${compose_profiles[@]}" up -d)
-

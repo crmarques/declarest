@@ -46,7 +46,7 @@ services:
       - "${VAULT_HTTP_PORT:-18200}:8200"
     volumes:
       - ./vault.hcl:/vault/config/vault.hcl:ro,Z
-      - vault-data:/vault/data:Z
+      - ./vault-data:/vault/data:Z
     restart: unless-stopped
 
   gitlab:
@@ -119,4 +119,3 @@ volumes:
   gitlab-logs:
   gitlab-data:
   gitea-data:
-  vault-data:

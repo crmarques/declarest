@@ -29,6 +29,68 @@ func TestResourceGetRequiresPath(t *testing.T) {
 	}
 }
 
+func TestResourceAddRequiresPath(t *testing.T) {
+	root := newRootCommand()
+	command := findCommand(t, root, "resource", "add")
+	var errBuf bytes.Buffer
+	command.SetOut(io.Discard)
+	command.SetErr(&errBuf)
+
+	err := command.RunE(command, []string{})
+	if err == nil || !cli.IsHandledError(err) {
+		t.Fatalf("expected handled error, got %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Usage:") {
+		t.Fatalf("expected usage output, got %q", errBuf.String())
+	}
+}
+
+func TestResourceAddRequiresSource(t *testing.T) {
+	root := newRootCommand()
+	command := findCommand(t, root, "resource", "add")
+	var errBuf bytes.Buffer
+	command.SetOut(io.Discard)
+	command.SetErr(&errBuf)
+
+	if err := command.Flags().Set("path", "/items/foo"); err != nil {
+		t.Fatalf("set path: %v", err)
+	}
+
+	err := command.RunE(command, []string{})
+	if err == nil || !cli.IsHandledError(err) {
+		t.Fatalf("expected handled error, got %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Usage:") {
+		t.Fatalf("expected usage output, got %q", errBuf.String())
+	}
+}
+
+func TestResourceAddRejectsMultipleSources(t *testing.T) {
+	root := newRootCommand()
+	command := findCommand(t, root, "resource", "add")
+	var errBuf bytes.Buffer
+	command.SetOut(io.Discard)
+	command.SetErr(&errBuf)
+
+	if err := command.Flags().Set("path", "/items/foo"); err != nil {
+		t.Fatalf("set path: %v", err)
+	}
+	if err := command.Flags().Set("from-file", "resource.json"); err != nil {
+		t.Fatalf("set from-file: %v", err)
+	}
+	if err := command.Flags().Set("from-path", "/items/bar"); err != nil {
+		t.Fatalf("set from-path: %v", err)
+	}
+
+	err := command.RunE(command, []string{})
+	if err == nil || !cli.IsHandledError(err) {
+		t.Fatalf("expected handled error, got %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Usage:") {
+		t.Fatalf("expected usage output, got %q", errBuf.String())
+	}
+}
+
 func TestResourceListRejectsRepoAndRemote(t *testing.T) {
 	root := newRootCommand()
 	command := findCommand(t, root, "resource", "list")

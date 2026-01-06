@@ -22,6 +22,12 @@ SECRET_CLIENT_KEY="secret"
 SECRET_LDAP_KEY="config.bindCredential[0]"
 SECRET_PLACEHOLDER="{{secret .}}"
 
+RESOURCE_ADD_SOURCE="/admin/realms/publico"
+RESOURCE_ADD_SUFFIX="${DECLAREST_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+RESOURCE_ADD_TARGET="/admin/realms/publico-copy-${RESOURCE_ADD_SUFFIX}"
+RESOURCE_ADD_OVERRIDE_REALM="realm=publico-copy-${RESOURCE_ADD_SUFFIX}"
+RESOURCE_ADD_OVERRIDE_JSON='{"displayName":"Publico Copy","attributes":{"copiedBy":"resource add command"}}'
+
 secret_store_type="${DECLAREST_SECRET_STORE_TYPE:-file}"
 secret_store_type="${secret_store_type,,}"
 secrets_enabled=1
@@ -35,6 +41,21 @@ require_jq() {
         echo "jq is required for secret tests" >&2
         exit 1
     fi
+}
+
+test_resource_add_command() {
+    local force_args=()
+    local target_file
+    target_file="$(resource_file_for_path "$RESOURCE_ADD_TARGET")"
+    if [[ -f "$target_file" ]]; then
+        force_args+=(--force)
+    fi
+
+    log_line "Testing resource add command by copying $RESOURCE_ADD_SOURCE to $RESOURCE_ADD_TARGET"
+    run_cli "add resource copy" resource add --path "$RESOURCE_ADD_TARGET" --from-path "$RESOURCE_ADD_SOURCE" \
+        --override "$RESOURCE_ADD_OVERRIDE_REALM" \
+        --override "$RESOURCE_ADD_OVERRIDE_JSON" \
+        "${force_args[@]}"
 }
 
 resource_file_for_path() {
@@ -216,14 +237,43 @@ else
     log_line "Secret store disabled; skipping secret seed"
 fi
 
+phase "Testing resource add command"
+test_resource_add_command
+
 phase "Discovering repository resources"
 local_output=$(capture_cli "list repository resources" resource list --repo)
 split_lines_nonempty local_paths "$local_output"
+found_resource_add=0
+for entry in "${local_paths[@]}"; do
+    if [[ "$entry" == "$RESOURCE_ADD_TARGET" ]]; then
+        found_resource_add=1
+        break
+    fi
+done
+if [[ $found_resource_add -ne 1 ]]; then
+    log_line "Resource add command failed to add $RESOURCE_ADD_TARGET"
+    echo "Expected repository to contain $RESOURCE_ADD_TARGET after resource add" >&2
+    exit 1
+fi
 if [[ ${#local_paths[@]} -eq 0 ]]; then
     log_line "No repository resources found; aborting."
     exit 1
 fi
-log_line "Found ${#local_paths[@]} repository resources"
+
+local_paths_total=${#local_paths[@]}
+if [[ $found_resource_add -eq 1 ]]; then
+    filtered_paths=()
+    for entry in "${local_paths[@]}"; do
+        if [[ "$entry" == "$RESOURCE_ADD_TARGET" ]]; then
+            continue
+        fi
+        filtered_paths+=("$entry")
+    done
+    local_paths=("${filtered_paths[@]}")
+    log_line "Found ${#local_paths[@]} repository resources (excluded $RESOURCE_ADD_TARGET from downstream sync; ${local_paths_total} total)"
+else
+    log_line "Found ${#local_paths[@]} repository resources"
+fi
 
 sort_paths_by_depth local_paths local_paths_parent_first asc
 sort_paths_by_depth local_paths local_paths_child_first desc
@@ -298,6 +348,15 @@ for local in "${local_paths_child_first[@]}"; do
     fi
 done
 log_line "Repository resources deleted"
+
+if [[ $found_resource_add -eq 1 ]]; then
+    phase "Cleaning resource add artifact"
+    if ! run_cli "delete added resource" resource delete --path "$RESOURCE_ADD_TARGET" --repo --remote=false --yes; then
+        log_line "Resource add artifact delete failed for $RESOURCE_ADD_TARGET"
+        exit 1
+    fi
+    log_line "Resource add artifact $RESOURCE_ADD_TARGET removed from repository"
+fi
 
 phase "Retrieving resources from Keycloak"
 for path in "${local_paths_parent_first[@]}"; do
