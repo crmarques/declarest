@@ -53,6 +53,27 @@ func TestHTTPResourceServerManagerHonorsInsecureSkipVerify(t *testing.T) {
 	}
 }
 
+func TestIgnoreCheckAccessError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: true},
+		{name: "notFound", err: &HTTPError{StatusCode: http.StatusNotFound}, want: true},
+		{name: "methodNotAllowed", err: &HTTPError{StatusCode: http.StatusMethodNotAllowed}, want: true},
+		{name: "redirect", err: &HTTPError{StatusCode: http.StatusFound}, want: true},
+		{name: "failure", err: &HTTPError{StatusCode: http.StatusBadRequest}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ignoreCheckAccessError(tc.err); got != tc.want {
+				t.Fatalf("ignoreCheckAccessError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestHTTPResourceServerManagerAppliesBearerToken(t *testing.T) {
 	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
 		BaseURL: "https://example.com",

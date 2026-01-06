@@ -103,14 +103,29 @@ func (m *HTTPResourceServerManager) CheckAccess() error {
 	if err == nil {
 		return nil
 	}
-	if IsNotFoundError(err) {
-		return nil
-	}
-	var httpErr *HTTPError
-	if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusMethodNotAllowed {
+	if ignoreCheckAccessError(err) {
 		return nil
 	}
 	return err
+}
+
+func ignoreCheckAccessError(err error) bool {
+	if err == nil {
+		return true
+	}
+	if IsNotFoundError(err) {
+		return true
+	}
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		if httpErr.StatusCode == http.StatusMethodNotAllowed {
+			return true
+		}
+		if httpErr.StatusCode >= http.StatusMultipleChoices && httpErr.StatusCode < http.StatusBadRequest {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *HTTPResourceServerManager) GetResource(custom RequestSpec) (resource.Resource, error) {
