@@ -110,4 +110,4 @@ Other example logical paths: `/teams/platform/users/alice/permissions/admin`, `/
 - Getting started: `docs/getting-started/quickstart.md`
 - Workflows (real example): `docs/workflows/sync.md`
 - Detailed design and behavior: `specs/specs.md`
-- Optional Keycloak e2e harness: `tests/keycloak/README.md`
+- Optional Keycloak e2e harness: `tests/managed-server/keycloak/README.md`

@@ -26,18 +26,26 @@ The CLI source lives in `cli/`. Core logic is under `internal/`.
 
 ## End-to-end tests
 
-An optional Keycloak harness is available under `tests/keycloak`.
-It provisions a temporary stack and runs a full lifecycle against the CLI.
+E2E runs are orchestrated by the generic runner, which dispatches to a managed server harness.
 
 ```bash
 # Automated end-to-end flow
-./tests/keycloak/run-e2e.sh
+./tests/run-tests.sh --e2e --managed-server keycloak --repo-provider git --secret-provider file
 
 # check options:
-./tests/keycloak/run-e2e.sh --help
+./tests/run-tests.sh --help
 ```
 
-See `tests/keycloak/README.md` for prerequisites and options.
+See `tests/managed-server/keycloak/README.md` for Keycloak prerequisites and options.
+
+### Test harness standard
+
+To add a new managed server, follow the bash contract used by `tests/run-tests.sh`:
+
+- Provide `tests/managed-server/<name>/run-e2e.sh` and `tests/managed-server/<name>/run-interactive.sh`.
+- Accept `--managed-server`, `--repo-provider`, and `--secret-provider` (ignore unsupported values with a clear error or warning).
+- Keep managed-server-specific assets under `tests/managed-server/<name>/scripts` and `tests/managed-server/<name>/templates`.
+- Use shared folders for future reuse: `tests/repo-provider/<type>` and `tests/secret-provider/<type>`.
 
 ## Documentation
 

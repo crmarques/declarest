@@ -16,20 +16,20 @@ At the end you will have a working repository, context, and CLI commands you can
 - `bash`, `make`, and `jq`
 
 The harness is self-contained and uses a scratch directory under `/tmp`.
-See `tests/keycloak/README.md` for the full list of prerequisites and options.
+See `tests/managed-server/keycloak/README.md` for the full list of prerequisites and options.
 
 ## 1) Start the environment (Keycloak + GitLab + Vault)
 
 From the repository root:
 
 ```bash
-./tests/keycloak/run-manual.sh --repo-provider gitlab --secret-provider vault
+./tests/run-tests.sh --interactive --managed-server keycloak --repo-provider gitlab --secret-provider vault
 ```
 
 If you use Podman:
 
 ```bash
-CONTAINER_RUNTIME=podman ./tests/keycloak/run-manual.sh --repo-provider gitlab --secret-provider vault
+CONTAINER_RUNTIME=podman ./tests/run-tests.sh --interactive --managed-server keycloak --repo-provider gitlab --secret-provider vault
 ```
 
 When setup completes it prints the work directory path and a few ready-to-run CLI commands.
@@ -110,8 +110,8 @@ declarest secret list --paths-only
 ## 8) Tear down
 
 ```bash
-./tests/keycloak/run.sh clean
+./tests/managed-server/keycloak/run.sh clean
 
 # this will forcefully remove any old kept runs
-./tests/keycloak/run.sh clean --all
+./tests/managed-server/keycloak/run.sh clean --all
 ```

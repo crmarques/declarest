@@ -13,6 +13,7 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 3. **Follow standard workflows.** Prefer `go test ./...` and `gofmt` for Go files, ensure shell scripts pass `shellcheck` when practical, and use `rg` for fast lookups.
 4. **Document behavior.** Add coverage or notes for new features, especially when introducing CLI flags or metadata semantics.
 5. **Escalate blockers.** If you encounter runtime/environment constraints (e.g., Podman permission errors), describe them in the final report rather than rerunning failing commands indefinitely.
+6. **Close the feedback loop on failures.** When an error is reported, analyze the logs, implement the fix, and rerun the requested tests (e.g., the e2e command) until they finish successfully before stopping.
 
 ## Update protocol
 
