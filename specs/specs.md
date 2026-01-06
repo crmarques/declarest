@@ -1,4 +1,4 @@
-# DeclaREST Project Specification (Codex-ready)
+# DeclaREST Project Specification (AI-ready)
 
 ## 1) Purpose (What to build)
 **DeclaREST** is a Go tool that keeps a Git repo (desired state) in sync with remote REST APIs (actual state).
@@ -472,7 +472,7 @@ If the repository already has a context format, **do not invent a new one**. Pre
 
 ---
 
-## 8) CLI rules (Codex should follow exactly)
+## 8) CLI rules (AI should follow exactly)
 - Binary name: `declarest` (outputs refer to tool name as **DeclaREST**)
 - Output: US English, concise, self-explanatory
 - Success messages include action + affected logical paths
@@ -512,7 +512,7 @@ If the repository already has a context format, **do not invent a new one**. Pre
 
 ---
 
-## 11) Implementation checklist (What Codex should do when modifying code)
+## 11) Implementation checklist (What AI should do when modifying code)
 1. Find existing interfaces for: `Reconciler`, `ResourceRepositoryManager`, `ResourceServerManager`, `MetadataProvider`, `ContextManager`
 2. Do **not** change interface signatures
 3. Ensure metadata layering (§4.1) is honored wherever endpoints/IDs/compare rules are used
