@@ -336,6 +336,7 @@ if [[ "$repo_type" == "git-remote" ]]; then
 fi
 
 heavy_steps=4
+heavy_steps=$((heavy_steps + 1))
 if [[ "$repo_type" == "git-remote" ]]; then
     heavy_steps=$((heavy_steps + 1))
 fi
@@ -439,6 +440,7 @@ set_context "primary"
 run_step "Preparing repo (primary)" "$SCRIPTS_DIR/repo/prepare.sh"
 run_step "Configuring declarest context (primary)" "$SCRIPTS_DIR/context/render.sh"
 run_step "Registering declarest context (primary)" "$SCRIPTS_DIR/context/register.sh"
+run_step "Validating OpenAPI defaults (primary)" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
 if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
     run_step "Sanitizing repository (primary)" "$SCRIPTS_DIR/repo/strip-secrets.sh" "$DECLAREST_REPO_DIR"
 fi

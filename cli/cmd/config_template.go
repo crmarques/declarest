@@ -40,6 +40,7 @@ const configTemplateYAML = `repository:
 managed_server:
   http:
     base_url: https://example.com/api
+#   openapi: /path/to/openapi.yaml
 #   default_headers:
 #     X-Example: value
     auth:

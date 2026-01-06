@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"declarest/internal/metadata"
+	"declarest/internal/openapi"
 	"declarest/internal/resource"
 )
 
@@ -22,6 +23,7 @@ type DefaultResourceRecordProvider struct {
 	resourceFormat ResourceFormat
 	remoteMu       sync.Mutex
 	remoteInFlight map[string]int
+	openapiSpec    *openapi.Spec
 }
 
 type ResourceLoader interface {
@@ -73,6 +75,13 @@ func (p *DefaultResourceRecordProvider) SetResourceFormat(format ResourceFormat)
 		return
 	}
 	p.resourceFormat = normalizeResourceFormat(format)
+}
+
+func (p *DefaultResourceRecordProvider) SetOpenAPISpec(spec *openapi.Spec) {
+	if p == nil {
+		return
+	}
+	p.openapiSpec = spec
 }
 
 func (p *DefaultResourceRecordProvider) store() FileStore {
@@ -131,6 +140,9 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	}
 
 	result := metadata.DefaultMetadata(collectionSegments)
+	if p.openapiSpec != nil {
+		result = openapi.ApplyDefaults(result, trimmed, isCollection, p.openapiSpec)
+	}
 
 	files := metadataRelPaths(segments, collectionSegments, isCollection)
 	store := p.store()

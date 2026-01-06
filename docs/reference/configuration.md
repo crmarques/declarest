@@ -12,6 +12,7 @@ repository:
 managed_server:
   http:
     base_url: https://example.com/api
+    openapi: /path/to/openapi.yaml
 secret_store:
   file:
     path: /path/to/secrets.json
@@ -76,6 +77,7 @@ Currently DeclaREST supports HTTP-based servers.
 managed_server:
   http:
     base_url: https://api.example.com
+    openapi: /path/to/openapi.yaml
     default_headers:
       Accept: application/json
     auth:
@@ -91,6 +93,9 @@ Auth options for `managed_server.http.auth`:
 - `basic_auth`: username, password
 - `bearer_token`: token
 - `custom_header`: header, token
+
+When `managed_server.http.openapi` is set, DeclaREST loads the OpenAPI spec (URL or file)
+to pick smarter default HTTP methods and content types when metadata does not override them.
 
 ## Secret store configuration
 

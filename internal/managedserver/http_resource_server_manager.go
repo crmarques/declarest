@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -577,6 +578,53 @@ func (m *HTTPResourceServerManager) fetchOAuthToken(ctx context.Context, cfg *HT
 		TokenType:   parsed.TokenType,
 		Expiry:      expiry,
 	}, nil
+}
+
+func (m *HTTPResourceServerManager) LoadOpenAPISpec(source string) ([]byte, error) {
+	trimmed := strings.TrimSpace(source)
+	if trimmed == "" {
+		return nil, errors.New("openapi source is required")
+	}
+
+	if isHTTPURL(trimmed) {
+		if err := m.Init(); err != nil {
+			return nil, err
+		}
+		return m.fetchSpecURL(trimmed)
+	}
+
+	if data, err := os.ReadFile(trimmed); err == nil {
+		return data, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to read openapi file %q: %w", trimmed, err)
+	}
+
+	if err := m.Init(); err != nil {
+		return nil, err
+	}
+
+	fullURL, err := m.buildURL(trimmed, nil)
+	if err != nil {
+		return nil, err
+	}
+	return m.fetchSpecURL(fullURL)
+}
+
+func (m *HTTPResourceServerManager) fetchSpecURL(fullURL string) ([]byte, error) {
+	spec := &HTTPRequestSpec{
+		Method: http.MethodGet,
+		Path:   fullURL,
+		Accept: "application/json, application/yaml, application/x-yaml, text/yaml, */*",
+	}
+	resp, err := m.executeRequest(spec, defaultRequestTimeout, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}
+
+func isHTTPURL(raw string) bool {
+	return strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://")
 }
 
 type oauthToken struct {

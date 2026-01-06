@@ -1,0 +1,25 @@
+openapi: 3.0.0
+info:
+  title: DeclaREST Rundeck Test Spec
+  version: 0.0.1
+paths:
+  /openapi-test/items:
+    post:
+      requestBody:
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: created
+          content:
+            application/json: {}
+  /openapi-test/items/{id}:
+    patch:
+      requestBody:
+        content:
+          application/merge-patch+json: {}
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json: {}

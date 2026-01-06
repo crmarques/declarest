@@ -2,6 +2,7 @@ package managedserver
 
 type HTTPResourceServerConfig struct {
 	BaseURL        string                        `mapstructure:"base_url" yaml:"base_url,omitempty" json:"base_url,omitempty"`
+	OpenAPI        string                        `mapstructure:"openapi" yaml:"openapi,omitempty" json:"openapi,omitempty"`
 	DefaultHeaders map[string]string             `mapstructure:"default_headers" yaml:"default_headers,omitempty" json:"default_headers,omitempty"`
 	Auth           *HTTPResourceServerAuthConfig `mapstructure:"auth" yaml:"auth,omitempty" json:"auth,omitempty"`
 	TLS            *HTTPResourceServerTLSConfig  `mapstructure:"tls" yaml:"tls,omitempty" json:"tls,omitempty"`

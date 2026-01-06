@@ -2,8 +2,11 @@ package context
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"declarest/internal/managedserver"
+	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
 	"declarest/internal/repository"
 	"declarest/internal/secrets"
@@ -67,6 +70,26 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 		serverManager = managedserver.NewHTTPResourceServerManager(cfg.ManagedServer.HTTP)
 	}
 
+	var openapiSpec *openapi.Spec
+	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
+		openapiSource := strings.TrimSpace(cfg.ManagedServer.HTTP.OpenAPI)
+		if openapiSource != "" {
+			httpManager, ok := serverManager.(*managedserver.HTTPResourceServerManager)
+			if !ok || httpManager == nil {
+				return nil, errors.New("openapi configuration requires an http managed server")
+			}
+			data, err := httpManager.LoadOpenAPISpec(openapiSource)
+			if err != nil {
+				return nil, err
+			}
+			spec, err := openapi.ParseSpec(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse openapi spec %q: %w", openapiSource, err)
+			}
+			openapiSpec = spec
+		}
+	}
+
 	var secretsManager secrets.SecretsManager
 	if cfg.SecretManager != nil {
 		if cfg.SecretManager.File != nil && cfg.SecretManager.Vault != nil {
@@ -90,6 +113,9 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 
 	provider := repository.NewDefaultResourceRecordProvider(baseDir, recon)
 	provider.SetResourceFormat(resourceFormat)
+	if openapiSpec != nil {
+		provider.SetOpenAPISpec(openapiSpec)
+	}
 	recon.ResourceRecordProvider = provider
 
 	return recon, nil

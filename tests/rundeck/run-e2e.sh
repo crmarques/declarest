@@ -176,7 +176,7 @@ run_step() {
 }
 
 current_step=0
-TOTAL_STEPS=8
+TOTAL_STEPS=9
 
 echo "Starting Rundeck E2E run"
 echo "Detailed log: $RUN_LOG"
@@ -196,6 +196,7 @@ fi
 run_step "Preparing repository" "$SCRIPTS_DIR/repo/prepare.sh"
 run_step "Rendering context" "$SCRIPTS_DIR/context/render.sh"
 run_step "Registering context" "$SCRIPTS_DIR/context/register.sh"
+run_step "Validating OpenAPI defaults" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
 run_step "Running declarest workflow" "$SCRIPTS_DIR/declarest/run.sh"
 
 print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""

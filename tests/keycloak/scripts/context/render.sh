@@ -151,6 +151,11 @@ if [[ "$repo_type" == "git-remote" ]]; then
     esac
 fi
 
+openapi_block=""
+if [[ -n "${DECLAREST_OPENAPI_SPEC:-}" ]]; then
+    openapi_block=$'    openapi: '"$(yaml_quote "$DECLAREST_OPENAPI_SPEC")"
+fi
+
 repo_block=""
 case "$repo_type" in
     fs)
@@ -303,6 +308,8 @@ sed \
     "$tpl_config" | while IFS= read -r line; do
         if [[ "$line" == "__REPOSITORY_BLOCK__" ]]; then
             printf "%s\n" "$repo_block"
+        elif [[ "$line" == "__OPENAPI_BLOCK__" ]]; then
+            printf "%s\n" "$openapi_block"
         elif [[ "$line" == "__SERVER_AUTH_BLOCK__" ]]; then
             printf "%s\n" "$server_auth_block"
         elif [[ "$line" == "__SECRET_STORE_BLOCK__" ]]; then

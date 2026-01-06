@@ -271,6 +271,14 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		BaseURL: baseURL,
 	}
 
+	openapiSource, err := prompt.optional("OpenAPI spec URL or file (leave blank to skip): ")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(openapiSource) != "" {
+		httpCfg.OpenAPI = strings.TrimSpace(openapiSource)
+	}
+
 	authType, err := prompt.choice("Managed server auth (none/basic/bearer/oauth2/custom-header): ", normalizeManagedAuthType)
 	if err != nil {
 		return nil, err

@@ -8,8 +8,59 @@ import (
 	"strings"
 	"testing"
 
+	"declarest/internal/openapi"
 	"declarest/internal/resource"
 )
+
+const openapiSpecSample = `{
+  "openapi": "3.0.0",
+  "paths": {
+    "/items": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {}
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/items/{id}": {
+      "patch": {
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}`
 
 func TestMetadataFilesIncludeWildcardSegments(t *testing.T) {
 	dir := t.TempDir()
@@ -215,6 +266,34 @@ func TestHTTPHeadersAcceptsObjectForm(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected httpHeaders to include X-Test: 1, got %#v", record.Meta.OperationInfo.GetResource.HTTPHeaders)
+	}
+}
+
+func TestOpenAPIDefaultsAdjustMethods(t *testing.T) {
+	dir := t.TempDir()
+
+	spec, err := openapi.ParseSpec([]byte(openapiSpecSample))
+	if err != nil {
+		t.Fatalf("ParseSpec: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, nil)
+	provider.SetOpenAPISpec(spec)
+
+	record, err := provider.GetResourceRecord("/items/foo")
+	if err != nil {
+		t.Fatalf("GetResourceRecord: %v", err)
+	}
+	if record.Meta.OperationInfo == nil || record.Meta.OperationInfo.UpdateResource == nil {
+		t.Fatalf("expected updateResource metadata")
+	}
+	if record.Meta.OperationInfo.UpdateResource.HTTPMethod != "PATCH" {
+		t.Fatalf("expected update method PATCH, got %q", record.Meta.OperationInfo.UpdateResource.HTTPMethod)
+	}
+
+	headers := resource.HeaderMap(record.Meta.OperationInfo.UpdateResource.HTTPHeaders)
+	if got := strings.Join(headers["Content-Type"], ", "); got != "application/merge-patch+json" {
+		t.Fatalf("expected Content-Type application/merge-patch+json, got %q", got)
 	}
 }
 

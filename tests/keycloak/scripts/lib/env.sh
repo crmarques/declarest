@@ -29,6 +29,7 @@ export DECLAREST_HOME_DIR="$DECLAREST_WORK_DIR/home"
 export DECLAREST_SECRETS_FILE="$DECLAREST_WORK_DIR/secrets.json"
 export DECLAREST_SECRET_STORE_TYPE="${DECLAREST_SECRET_STORE_TYPE:-file}"
 export DECLAREST_TEMPLATE_REPO_DIR="$(cd "$DECLAREST_TEST_DIR/templates/repo" && pwd)"
+export DECLAREST_OPENAPI_SPEC="${DECLAREST_OPENAPI_SPEC:-$DECLAREST_TEST_DIR/templates/openapi.yaml}"
 if [[ -z "${DECLAREST_REPO_REMOTE_URL+x}" ]]; then
     export DECLAREST_REPO_REMOTE_URL="https://github.com/crmarques/declarest-keycloak.git"
 else
