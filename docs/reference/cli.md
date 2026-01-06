@@ -11,14 +11,14 @@ This page highlights the main commands and what they do.
 
 Manage contexts and configuration files.
 
-- `config add`: register a context file. When run without a config path the command switches into the interactive flow that prints section headings, hides secret input, requires a managed server block, and surfaces numbered defaults so less typing is needed.
+- `config add`: register a context file. Use `--force` to override an existing context; when run without a config path the command switches into the interactive flow that prints section headings, hides secret input, requires a managed server block, and surfaces numbered defaults so less typing is needed.
 - `config update`: update an existing context.
 - `config use`: set the default context.
 - `config list`: list all contexts.
 - `config current`: show the current context.
 - `config rename`: rename a context.
 - `config delete`: remove a context.
-- `config check`: validate configuration and connectivity.
+- `config check`: validate configuration and connectivity (does not validate authentication).
 - `config print-template`: print a full config file.
 
 ## repo

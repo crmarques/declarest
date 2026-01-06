@@ -77,6 +77,8 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				reportCheck(cmd, "Secret store access", nil)
 			}
 
+			reportCheckStatus(cmd, "Authentication validation", checkStatusSkipped, errors.New("config check does not validate authentication"))
+
 			if failed {
 				return handledError{msg: "configuration check failed"}
 			}

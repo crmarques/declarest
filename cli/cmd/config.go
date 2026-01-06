@@ -49,6 +49,7 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	var (
 		name   string
 		config string
+		force  bool
 	)
 
 	cmd := &cobra.Command{
@@ -71,15 +72,25 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				if err := validateContextName(name); err != nil {
 					return usageError(cmd, err.Error())
 				}
+				if force {
+					exists, err := contextExists(manager, name)
+					if err != nil {
+						return err
+					}
+					if exists {
+						return manager.UpdateContext(name, config)
+					}
+				}
 				return manager.AddContext(name, config)
 			}
 			prompt := newPrompter(cmd.InOrStdin(), cmd.ErrOrStderr())
-			return runInteractiveContextSetup(manager, prompt, name)
+			return runInteractiveContextSetup(manager, prompt, name, force)
 		},
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to register")
 	cmd.Flags().StringVar(&config, "config", "", "Path to the context configuration file")
+	cmd.Flags().BoolVar(&force, "force", false, "Override an existing context definition")
 
 	return cmd
 }
@@ -164,7 +175,7 @@ func newConfigDeleteCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				return usageError(cmd, err.Error())
 			}
 
-			message := fmt.Sprintf("Delete context %s from %s. %s Continue?", name, configStoreLabel(manager), impactSummary(false, false))
+			message := fmt.Sprintf("Delete context %q from %s?", name, configStoreLabel(manager))
 			if err := confirmAction(cmd, yes, message); err != nil {
 				return err
 			}
@@ -404,4 +415,23 @@ func configStoreLabel(manager *ctx.DefaultContextManager) string {
 		return "the local config store"
 	}
 	return fmt.Sprintf("config store %s", path)
+}
+
+func contextExists(manager *ctx.DefaultContextManager, name string) (bool, error) {
+	if manager == nil {
+		return false, errors.New("context manager is not configured")
+	}
+	if strings.TrimSpace(name) == "" {
+		return false, errors.New("context name is required")
+	}
+	contexts, err := manager.ListContexts()
+	if err != nil {
+		return false, err
+	}
+	for _, existing := range contexts {
+		if existing == name {
+			return true, nil
+		}
+	}
+	return false, nil
 }

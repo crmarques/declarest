@@ -219,6 +219,54 @@ func TestConfigAddContextCreatesStoreAndSetsCurrent(t *testing.T) {
 	}
 }
 
+func TestConfigAddForceOverwritesContext(t *testing.T) {
+	home := setTempHome(t)
+
+	repoDir1 := filepath.Join(home, "repo1")
+	repoDir2 := filepath.Join(home, "repo2")
+	contextPath1 := filepath.Join(home, "context1.yaml")
+	contextPath2 := filepath.Join(home, "context2.yaml")
+	writeContextConfig(t, contextPath1, repoDir1, "")
+	writeContextConfig(t, contextPath2, repoDir2, "https://example.com/api")
+
+	root := newRootCommand()
+	addCmd := findCommand(t, root, "config", "add")
+	addCmd.SetOut(io.Discard)
+	addCmd.SetErr(io.Discard)
+
+	if err := addCmd.RunE(addCmd, []string{"test", contextPath1}); err != nil {
+		t.Fatalf("initial add RunE: %v", err)
+	}
+	forceRoot := newRootCommand()
+	forceCmd := findCommand(t, forceRoot, "config", "add")
+	forceCmd.SetOut(io.Discard)
+	forceCmd.SetErr(io.Discard)
+	if err := forceCmd.Flags().Set("force", "true"); err != nil {
+		t.Fatalf("set force flag: %v", err)
+	}
+	if err := forceCmd.RunE(forceCmd, []string{"test", contextPath2}); err != nil {
+		t.Fatalf("force add RunE: %v", err)
+	}
+
+	store := readConfigSetupStore(t, home)
+	if len(store.Contexts) != 1 {
+		t.Fatalf("expected one context after force add, got %d", len(store.Contexts))
+	}
+	cfg := store.Contexts[0].Context
+	if cfg.Repository == nil || cfg.Repository.Filesystem == nil {
+		t.Fatalf("expected filesystem repo in replaced context, got %#v", cfg)
+	}
+	if cfg.Repository.Filesystem.BaseDir != repoDir2 {
+		t.Fatalf("expected repo base %q, got %q", repoDir2, cfg.Repository.Filesystem.BaseDir)
+	}
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed server config after force add, got %#v", cfg.ManagedServer)
+	}
+	if cfg.ManagedServer.HTTP.BaseURL != "https://example.com/api" {
+		t.Fatalf("expected managed server base URL %q, got %q", "https://example.com/api", cfg.ManagedServer.HTTP.BaseURL)
+	}
+}
+
 func TestRepoInitUsesFilesystemContext(t *testing.T) {
 	home := setTempHome(t)
 

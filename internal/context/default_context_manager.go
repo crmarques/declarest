@@ -92,6 +92,31 @@ func (m *DefaultContextManager) AddContextConfig(name string, cfg *ContextConfig
 	return m.saveStore(store)
 }
 
+func (m *DefaultContextManager) ReplaceContextConfig(name string, cfg *ContextConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("context name is required")
+	}
+	if cfg == nil {
+		return errors.New("context configuration is required")
+	}
+
+	store, err := m.loadStore()
+	if err != nil {
+		return err
+	}
+
+	store.replace(name, cfg)
+	if store.CurrentContext == "" {
+		store.CurrentContext = name
+	}
+
+	return m.saveStore(store)
+}
+
 func (m *DefaultContextManager) UpdateContext(name string, file string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

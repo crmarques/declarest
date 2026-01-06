@@ -13,7 +13,7 @@ import (
 	"declarest/internal/secrets"
 )
 
-func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prompter, initialName string) error {
+func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prompter, initialName string, force bool) error {
 	name := strings.TrimSpace(initialName)
 	var err error
 	if name == "" {
@@ -28,14 +28,12 @@ func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prom
 	}
 
 	if manager != nil {
-		names, err := manager.ListContexts()
+		exists, err := contextExists(manager, name)
 		if err != nil {
 			return err
 		}
-		for _, existing := range names {
-			if existing == name {
-				return fmt.Errorf("context %q already exists", name)
-			}
+		if exists && !force {
+			return fmt.Errorf("context %q already exists", name)
 		}
 	}
 
@@ -68,6 +66,9 @@ func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prom
 
 	if manager == nil {
 		return fmt.Errorf("context manager is not configured")
+	}
+	if force {
+		return manager.ReplaceContextConfig(name, cfg)
 	}
 	return manager.AddContextConfig(name, cfg)
 }

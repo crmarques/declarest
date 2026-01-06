@@ -14,7 +14,7 @@ The easiest way to install it is to download a release binary (**Option 1**).
 
 ```bash
 VERSION=vX.Y.Z
-ARCHIVE=declarest_${VERSION}_linux_amd64.tar.gz
+ARCHIVE=declarest_${VERSION//v}_linux_amd64.tar.gz
 
 curl -L -o /tmp/${ARCHIVE} \
   https://github.com/crmarques/declarest/releases/download/${VERSION}/${ARCHIVE}
@@ -48,3 +48,26 @@ declarest --help
 
 Contexts are stored in `~/.declarest/config` by default.
 Use `declarest config` commands to manage them.
+
+## Shell completion
+
+DeclaREST provides shell completion scripts for `bash`, `zsh`, `fish`, and PowerShell via `declarest completion <shell>`.
+
+Examples:
+
+```bash
+# Bash (one-time):
+source <(declarest completion bash)
+
+# Zsh (add to ~/.zshrc):
+declarest completion zsh > ~/.zfunc/_declarest
+echo "fpath+=(~/.zfunc)" >> ~/.zshrc
+```
+
+```bash
+# Fish:
+declarest completion fish | source
+
+# PowerShell:
+declarest completion powershell | Out-File -Encoding utf8 $PROFILE.CurrentUserAllHosts\declarest.ps1
+```
