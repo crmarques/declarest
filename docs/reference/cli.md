@@ -64,6 +64,8 @@ Manage secrets stored in the secret store.
 - `secret get`: read a secret value.
 - `secret delete`: remove a secret.
 - `secret list`: list keys for a resource.
+- `secret export`: write secrets under a path or all resources to CSV (`--path` or `--all`).
+- `secret import`: load secrets from a CSV file (`--file`) and use `--force` to override existing values.
 - `secret check`: scan for unmapped secrets.
 
 ## version
