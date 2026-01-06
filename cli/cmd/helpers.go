@@ -53,6 +53,7 @@ func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (*reconciler.D
 	if opts.skipRepoSync {
 		actual.SkipRepositorySync = true
 	}
+	captureDebugContext(actual)
 
 	if err := context.Init(); err != nil {
 		return nil, nil, err

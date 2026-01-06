@@ -6,6 +6,8 @@ This page highlights the main commands and what they do.
 ## Global flags
 
 - `--no-status`: suppress status messages and print only command output.
+- `--debug`: print debug information when errors occur (equivalent to `--verbose=all`).
+- `--verbose[=groups]`: print grouped debug information when errors occur. Groups: `network`, `repository`, `resource`, `all`. Use `--verbose` with no value for `all`.
 
 ## config
 

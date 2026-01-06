@@ -3,6 +3,8 @@ package resource
 import (
 	"fmt"
 
+	"declarest/internal/yamlutil"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,7 +31,7 @@ func (r Resource) MarshalYAMLBytes() ([]byte, error) {
 		return nil, fmt.Errorf("failed to convert resource to yaml: %w", err)
 	}
 
-	out, err := yaml.Marshal(raw)
+	out, err := yamlutil.MarshalWithIndent(raw, 2)
 	if err != nil {
 		return nil, err
 	}

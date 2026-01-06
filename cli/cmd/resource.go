@@ -22,29 +22,25 @@ import (
 )
 
 func newResourceCommand() *cobra.Command {
-	var resourceVerbose bool
-
 	cmd := &cobra.Command{
 		Use:     "resource",
 		GroupID: groupUserFacing,
 		Short:   "Operate on resources stored in the resource repository",
 	}
 
-	cmd.PersistentFlags().BoolVar(&resourceVerbose, "verbose", false, "Print detailed information for debugging")
-
-	cmd.AddCommand(newResourceGetCommand(resourceVerbose))
+	cmd.AddCommand(newResourceGetCommand())
 	cmd.AddCommand(newResourceAddCommand())
-	cmd.AddCommand(newResourceCreateCommand(resourceVerbose))
-	cmd.AddCommand(newResourceUpdateCommand(resourceVerbose))
-	cmd.AddCommand(newResourceApplyCommand(resourceVerbose))
-	cmd.AddCommand(newResourceDeleteCommand(resourceVerbose))
-	cmd.AddCommand(newResourceDiffCommand(resourceVerbose))
+	cmd.AddCommand(newResourceCreateCommand())
+	cmd.AddCommand(newResourceUpdateCommand())
+	cmd.AddCommand(newResourceApplyCommand())
+	cmd.AddCommand(newResourceDeleteCommand())
+	cmd.AddCommand(newResourceDiffCommand())
 	cmd.AddCommand(newResourceListCommand())
 
 	return cmd
 }
 
-func newResourceGetCommand(verbose bool) *cobra.Command {
+func newResourceGetCommand() *cobra.Command {
 	var (
 		path        string
 		print       bool
@@ -92,7 +88,7 @@ func newResourceGetCommand(verbose bool) *cobra.Command {
 				if fromRepo {
 					return err
 				}
-				return wrapRemoteErrorWithDetails(err, path, verbose)
+				return wrapRemoteErrorWithDetails(err, path)
 			}
 
 			secretPaths, err := recon.SecretPathsFor(path)
@@ -353,18 +349,8 @@ func newResourceAddCommand() *cobra.Command {
 			}
 
 			if applyRemote {
-				verbose := false
-				if cmd.Flags().Lookup("verbose") != nil {
-					if v, err := cmd.Flags().GetBool("verbose"); err == nil {
-						verbose = v
-					}
-				} else if cmd.InheritedFlags().Lookup("verbose") != nil {
-					if v, err := cmd.InheritedFlags().GetBool("verbose"); err == nil {
-						verbose = v
-					}
-				}
 				if err := recon.SaveRemoteResource(targetPath, res); err != nil {
-					return wrapRemoteErrorWithDetails(err, targetPath, verbose)
+					return wrapRemoteErrorWithDetails(err, targetPath)
 				}
 				successf(cmd, "applied remote resource %s", targetPath)
 			}
@@ -915,7 +901,7 @@ func newResourceListCommand() *cobra.Command {
 	return cmd
 }
 
-func newResourceCreateCommand(verbose bool) *cobra.Command {
+func newResourceCreateCommand() *cobra.Command {
 	var (
 		path string
 		all  bool
@@ -954,16 +940,16 @@ func newResourceCreateCommand(verbose bool) *cobra.Command {
 				}
 
 				if err := recon.CreateRemoteResource(target, data); err != nil {
-					return wrapRemoteErrorWithDetails(err, target, verbose)
+					return wrapRemoteErrorWithDetails(err, target)
 				}
 
 				if sync {
-					if err := syncLocalResource(recon, target, verbose); err != nil {
+					if err := syncLocalResource(recon, target); err != nil {
 						return err
 					}
 				}
 
-				if verbose {
+				if debugEnabled(debugGroupResource) {
 					successf(cmd, "created remote resource %s", target)
 					_ = printResourceJSON(cmd, data)
 				} else {
@@ -980,7 +966,7 @@ func newResourceCreateCommand(verbose bool) *cobra.Command {
 	return cmd
 }
 
-func newResourceUpdateCommand(verbose bool) *cobra.Command {
+func newResourceUpdateCommand() *cobra.Command {
 	var (
 		path string
 		all  bool
@@ -1019,15 +1005,15 @@ func newResourceUpdateCommand(verbose bool) *cobra.Command {
 				}
 
 				if err := recon.UpdateRemoteResource(target, data); err != nil {
-					return wrapRemoteErrorWithDetails(err, target, verbose)
+					return wrapRemoteErrorWithDetails(err, target)
 				}
 
 				if sync {
-					if err := syncLocalResource(recon, target, verbose); err != nil {
+					if err := syncLocalResource(recon, target); err != nil {
 						return err
 					}
 				}
-				if verbose {
+				if debugEnabled(debugGroupResource) {
 					successf(cmd, "updated remote resource %s", target)
 					_ = printResourceJSON(cmd, data)
 				} else {
@@ -1044,7 +1030,7 @@ func newResourceUpdateCommand(verbose bool) *cobra.Command {
 	return cmd
 }
 
-func newResourceApplyCommand(verbose bool) *cobra.Command {
+func newResourceApplyCommand() *cobra.Command {
 	var (
 		path string
 		all  bool
@@ -1083,11 +1069,11 @@ func newResourceApplyCommand(verbose bool) *cobra.Command {
 				}
 
 				if err := recon.SaveRemoteResource(target, data); err != nil {
-					return wrapRemoteErrorWithDetails(err, target, verbose)
+					return wrapRemoteErrorWithDetails(err, target)
 				}
 
 				if sync {
-					if err := syncLocalResource(recon, target, verbose); err != nil {
+					if err := syncLocalResource(recon, target); err != nil {
 						return err
 					}
 					if res, err := recon.GetLocalResource(target); err == nil {
@@ -1095,7 +1081,7 @@ func newResourceApplyCommand(verbose bool) *cobra.Command {
 					}
 				}
 
-				if verbose {
+				if debugEnabled(debugGroupResource) {
 					successf(cmd, "applied remote resource %s", target)
 					_ = printResourceJSON(cmd, data)
 				} else {
@@ -1112,7 +1098,7 @@ func newResourceApplyCommand(verbose bool) *cobra.Command {
 	return cmd
 }
 
-func newResourceDeleteCommand(verbose bool) *cobra.Command {
+func newResourceDeleteCommand() *cobra.Command {
 	var (
 		path         string
 		all          bool
@@ -1188,7 +1174,7 @@ func newResourceDeleteCommand(verbose bool) *cobra.Command {
 
 				if remote {
 					if err := recon.DeleteRemoteResource(target); err != nil {
-						return wrapRemoteErrorWithDetails(err, target, verbose)
+						return wrapRemoteErrorWithDetails(err, target)
 					}
 					deletedRemote = true
 				}
@@ -1293,18 +1279,18 @@ func resolvePathOrAll(cmd *cobra.Command, path string, all bool, args []string) 
 	return trimmed, nil
 }
 
-func syncLocalResource(recon *reconciler.DefaultReconciler, path string, verbose bool) error {
+func syncLocalResource(recon *reconciler.DefaultReconciler, path string) error {
 	res, err := recon.GetRemoteResource(path)
 	if err != nil {
 		if managedserver.IsNotFoundError(err) {
 			return nil
 		}
-		return wrapRemoteErrorWithDetails(err, path, verbose)
+		return wrapRemoteErrorWithDetails(err, path)
 	}
 	return saveLocalResourceWithSecrets(recon, path, res, true)
 }
 
-func newResourceDiffCommand(verbose bool) *cobra.Command {
+func newResourceDiffCommand() *cobra.Command {
 	var (
 		path string
 		fail bool
@@ -1333,10 +1319,7 @@ func newResourceDiffCommand(verbose bool) *cobra.Command {
 
 			patch, err := recon.DiffResource(path)
 			if err != nil {
-				if verbose {
-					return wrapRemoteErrorWithDetails(err, path, verbose)
-				}
-				return err
+				return wrapRemoteErrorWithDetails(err, path)
 			}
 
 			if len(patch) == 0 {
@@ -1391,7 +1374,7 @@ func PrintPatchSummary(cmd *cobra.Command, patch resource.ResourcePatch) error {
 	return nil
 }
 
-func wrapRemoteErrorWithDetails(err error, path string, verbose bool) error {
+func wrapRemoteErrorWithDetails(err error, path string) error {
 	var httpErr *managedserver.HTTPError
 	if errors.As(err, &httpErr) {
 		status := httpErr.Status()
@@ -1403,13 +1386,7 @@ func wrapRemoteErrorWithDetails(err error, path string, verbose bool) error {
 			statusText = "Unknown"
 		}
 		if managedserver.IsNotFoundError(err) {
-			if verbose {
-				return fmt.Errorf("remote resource %s not found (HTTP %d %s, url: %s, body: %s)", path, status, statusText, httpErr.URL, string(httpErr.Body))
-			}
 			return fmt.Errorf("remote resource %s not found (HTTP %d %s)", path, status, statusText)
-		}
-		if verbose {
-			return fmt.Errorf("remote server returned %d %s for %s (url: %s, body: %s)", status, statusText, path, httpErr.URL, string(httpErr.Body))
 		}
 		return fmt.Errorf("remote server returned %d %s for %s", status, statusText, path)
 	}

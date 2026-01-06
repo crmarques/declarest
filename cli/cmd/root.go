@@ -59,6 +59,9 @@ Use the CLI to:
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-status", false, "Suppress status messages and print only command output")
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-result-output", false, "DEPRECATED: use --no-status")
 	_ = cmd.PersistentFlags().MarkHidden("no-result-output")
+	cmd.PersistentFlags().Bool("debug", false, "Print debug information when errors occur (equivalent to --verbose=all)")
+	cmd.PersistentFlags().String("verbose", "", "Print debug information by group (network, repository, resource, all)")
+	cmd.PersistentFlags().Lookup("verbose").NoOptDefVal = debugGroupAll
 
 	cmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		if err == nil {
@@ -66,6 +69,10 @@ Use the CLI to:
 		}
 		return usageError(cmd, err.Error())
 	})
+
+	cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return configureDebugSettings(cmd)
+	}
 
 	cmd.AddGroup(&cobra.Group{ID: groupUserFacing, Title: "Commands:"})
 	cmd.AddGroup(&cobra.Group{ID: groupUtility, Title: "Utility Commands:"})

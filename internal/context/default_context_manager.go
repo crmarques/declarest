@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"declarest/internal/reconciler"
+	"declarest/internal/yamlutil"
 
 	"gopkg.in/yaml.v3"
 )
@@ -361,7 +362,7 @@ func (m *DefaultContextManager) saveStore(store *contextStore) error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	data, err := yaml.Marshal(store)
+	data, err := yamlutil.MarshalWithIndent(store, 2)
 	if err != nil {
 		return fmt.Errorf("failed to encode config: %w", err)
 	}
