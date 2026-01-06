@@ -13,29 +13,29 @@ const configTemplateYAML = `repository:
   git:
     local:
       base_dir: /path/to/repo
-#   ### remote git repo is optional
-#   remote:
-#     url: https://example.com/org/repo.git
-#     branch: main
-#     provider: github
-#     auto_sync: true
-#     auth:
-#       ### Choose exactly one auth method: basic_auth, ssh, access_key.
-#       basic_auth:
-#         username: change-me
-#         password: change-me
-#       ssh:
-#         user: git
-#         private_key_file: /path/to/id_rsa
-#         passphrase: change-me
-#         known_hosts_file: /path/to/known_hosts
-#         insecure_ignore_host_key: false
-#       access_key:
-#         token: change-me
-#     tls:
-#       insecure_skip_verify: false
+#  ### remote git repo is optional
+#  remote:
+#    url: https://example.com/org/repo.git
+#    branch: main
+#    provider: github
+#    auto_sync: true
+#    auth:
+#      ### Choose exactly one auth method: basic_auth, ssh, access_key.
+#      basic_auth:
+#        username: change-me
+#        password: change-me
+#      ssh:
+#        user: git
+#        private_key_file: /path/to/id_rsa
+#        passphrase: change-me
+#        known_hosts_file: /path/to/known_hosts
+#        insecure_ignore_host_key: false
+#      access_key:
+#        token: change-me
+#    tls:
+#      insecure_skip_verify: false
 # filesystem:
-#    base_dir: /path/to/repo
+#   base_dir: /path/to/repo
 
 managed_server:
   http:

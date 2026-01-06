@@ -1,7 +1,6 @@
 package cmd_test
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -37,16 +36,27 @@ func readConfigSetupStore(t *testing.T, home string) configSetupStore {
 	return store
 }
 
-func TestConfigSetupFilesystem(t *testing.T) {
+func TestConfigAddInteractiveFilesystem(t *testing.T) {
 	home := setTempHome(t)
 
 	root := newRootCommand()
-	cmd := findCommand(t, root, "config", "init")
+	cmd := findCommand(t, root, "config", "add")
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 
 	repoDir := filepath.Join(home, "repo")
-	input := fmt.Sprintf("test\nfilesystem\n%s\n\n\n", repoDir)
+	baseURL := "http://localhost:1234"
+	inputParts := []string{
+		"test", // context name
+		"",     // repository type (default filesystem)
+		repoDir,
+		baseURL,
+		"", // openapi
+		"", // managed auth
+		"", // headers
+		"", // secret store
+	}
+	input := strings.Join(inputParts, "\n") + "\n"
 	cmd.SetIn(strings.NewReader(input))
 
 	if err := cmd.RunE(cmd, []string{}); err != nil {
@@ -70,22 +80,44 @@ func TestConfigSetupFilesystem(t *testing.T) {
 	if cfg.Repository.Git != nil {
 		t.Fatalf("expected git repository config to be nil, got %#v", cfg.Repository.Git)
 	}
-	if cfg.ManagedServer != nil {
-		t.Fatalf("expected managed server config to be nil, got %#v", cfg.ManagedServer)
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed server config, got %#v", cfg.ManagedServer)
+	}
+	if cfg.ManagedServer.HTTP.BaseURL != baseURL {
+		t.Fatalf("expected managed server base URL %q, got %q", baseURL, cfg.ManagedServer.HTTP.BaseURL)
+	}
+	if cfg.ManagedServer.HTTP.Auth != nil {
+		t.Fatalf("expected no managed server auth, got %#v", cfg.ManagedServer.HTTP.Auth)
 	}
 }
 
-func TestConfigSetupGitRemote(t *testing.T) {
+func TestConfigAddInteractiveGitRemote(t *testing.T) {
 	home := setTempHome(t)
 
 	root := newRootCommand()
-	cmd := findCommand(t, root, "config", "init")
+	cmd := findCommand(t, root, "config", "add")
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 
 	repoDir := filepath.Join(home, "repo")
 	remoteURL := "https://example.com/repo.git"
-	input := fmt.Sprintf("remote\n%s\n%s\n%s\nnone\n\n\n\n\n", "git-remote", repoDir, remoteURL)
+	baseURL := "http://localhost:1234"
+	inputParts := []string{
+		"remote",
+		"git-remote",
+		repoDir,
+		remoteURL,
+		"", // remote auth
+		"", // branch
+		"", // auto sync
+		"", // skip TLS
+		baseURL,
+		"", // openapi
+		"", // managed auth
+		"", // headers
+		"", // secret store
+	}
+	input := strings.Join(inputParts, "\n") + "\n"
 	cmd.SetIn(strings.NewReader(input))
 
 	if err := cmd.RunE(cmd, []string{}); err != nil {
@@ -112,7 +144,13 @@ func TestConfigSetupGitRemote(t *testing.T) {
 	if cfg.Repository.Git.Remote == nil || cfg.Repository.Git.Remote.URL != remoteURL {
 		t.Fatalf("expected remote url %q, got %#v", remoteURL, cfg.Repository.Git.Remote)
 	}
-	if cfg.ManagedServer != nil {
-		t.Fatalf("expected managed server config to be nil, got %#v", cfg.ManagedServer)
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed server config, got %#v", cfg.ManagedServer)
+	}
+	if cfg.ManagedServer.HTTP.BaseURL != baseURL {
+		t.Fatalf("expected managed server base URL %q, got %q", baseURL, cfg.ManagedServer.HTTP.BaseURL)
+	}
+	if cfg.ManagedServer.HTTP.Auth != nil {
+		t.Fatalf("expected no managed server auth, got %#v", cfg.ManagedServer.HTTP.Auth)
 	}
 }

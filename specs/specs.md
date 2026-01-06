@@ -448,14 +448,13 @@ A “context” defines how to connect managers/providers (repo root, server bas
 Requirements:
 - Commands obtain a reconciler via `loadDefaultReconciler` (or equivalent).
 - Context commands manage contexts:
-  - `config add`
+  - `config add` (runs the interactive flow when no config path is provided)
   - `config update`
   - `config delete`
   - `config use`
   - `config rename`
   - `config list`
   - `config current`
-  - `config init`
   - `config check`
   - `config print-template`
 

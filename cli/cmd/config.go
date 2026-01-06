@@ -39,7 +39,6 @@ environments (for example dev, staging, and production) with confidence.`,
 	cmd.AddCommand(newConfigRenameCommand(manager))
 	cmd.AddCommand(newConfigListCommand(manager))
 	cmd.AddCommand(newConfigCurrentCommand(manager))
-	cmd.AddCommand(newConfigInitCommand(manager))
 	cmd.AddCommand(newConfigCheckCommand(manager))
 	cmd.AddCommand(newConfigPrintTemplateCommand())
 
@@ -61,14 +60,21 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
   declarest config add prod ./contexts/prod.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			name, config, err = resolveNameAndConfig(cmd, name, config, args)
+			name, config, err = resolveAddArgs(cmd, name, config, args)
 			if err != nil {
 				return err
 			}
-			if err := validateContextName(name); err != nil {
-				return usageError(cmd, err.Error())
+			if config != "" {
+				if name == "" {
+					return usageError(cmd, "name is required when config path is provided")
+				}
+				if err := validateContextName(name); err != nil {
+					return usageError(cmd, err.Error())
+				}
+				return manager.AddContext(name, config)
 			}
-			return manager.AddContext(name, config)
+			prompt := newPrompter(cmd.InOrStdin(), cmd.ErrOrStderr())
+			return runInteractiveContextSetup(manager, prompt, name)
 		},
 	}
 
@@ -292,6 +298,34 @@ func resolveNameAndConfig(cmd *cobra.Command, name, config string, args []string
 	}
 	if config == "" {
 		return "", "", usageError(cmd, "config file path is required")
+	}
+	return name, config, nil
+}
+
+func resolveAddArgs(cmd *cobra.Command, name, config string, args []string) (string, string, error) {
+	if len(args) > 2 {
+		return "", "", usageError(cmd, "expected <name> <config>")
+	}
+	name = strings.TrimSpace(name)
+	config = strings.TrimSpace(config)
+
+	if len(args) > 0 {
+		argName := strings.TrimSpace(args[0])
+		if argName != "" {
+			if name != "" && name != argName {
+				return "", "", usageError(cmd, "name specified twice")
+			}
+			name = argName
+		}
+	}
+	if len(args) > 1 {
+		argConfig := strings.TrimSpace(args[1])
+		if argConfig != "" {
+			if config != "" && config != argConfig {
+				return "", "", usageError(cmd, "config specified twice")
+			}
+			config = argConfig
+		}
 	}
 	return name, config, nil
 }

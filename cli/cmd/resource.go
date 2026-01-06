@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"declarest/internal/managedserver"
 	"declarest/internal/openapi"
@@ -198,7 +199,7 @@ func newResourceGetCommand(verbose bool) *cobra.Command {
 	return cmd
 }
 
-const openAPIFromContextValue = "__declarest_from_openapi_context__"
+const openAPIFromContextValue = "__from_openapi_context__"
 
 func newResourceAddCommand() *cobra.Command {
 	var (

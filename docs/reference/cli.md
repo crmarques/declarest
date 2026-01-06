@@ -11,8 +11,7 @@ This page highlights the main commands and what they do.
 
 Manage contexts and configuration files.
 
-- `config init`: interactive context setup.
-- `config add`: register a context file.
+- `config add`: register a context file. When run without a config path the command switches into the interactive flow that prints section headings, hides secret input, requires a managed server block, and surfaces numbered defaults so less typing is needed.
 - `config update`: update an existing context.
 - `config use`: set the default context.
 - `config list`: list all contexts.

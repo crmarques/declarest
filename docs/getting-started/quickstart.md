@@ -7,7 +7,7 @@ This walkthrough sets up a context, initializes a repository, and syncs a resour
 a) Interactive setup:
 
 ```bash
-declarest config init
+declarest config add staging
 ```
 
 b) Or generate a full config file:

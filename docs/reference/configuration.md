@@ -1,7 +1,7 @@
 # Configuration reference
 
 DeclaREST uses context files (YAML or JSON) to define how it connects to repositories and managed servers.
-Use `declarest config add` or `declarest config init` to register them.
+Use `declarest config add` to register them; omit the config path to run the interactive flow.
 
 ## Context file structure
 

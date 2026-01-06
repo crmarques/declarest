@@ -52,7 +52,7 @@ go build -o bin/declarest ./cli
 2) Create a context (interactive):
 
 ```bash
-./bin/declarest config init
+./bin/declarest config add staging
 ./bin/declarest config list
 ```
 

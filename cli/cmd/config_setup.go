@@ -11,75 +11,65 @@ import (
 	"declarest/internal/managedserver"
 	"declarest/internal/repository"
 	"declarest/internal/secrets"
-
-	"github.com/spf13/cobra"
 )
 
-func newConfigInitCommand(manager *ctx.DefaultContextManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "init",
-		Aliases: []string{"setup"},
-		Short:   "Interactively create a new context",
-		Long:    "Prompt for context settings and store them in the DeclaREST configuration file.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			prompt := newPrompter(cmd.InOrStdin(), cmd.ErrOrStderr())
-
-			name, err := prompt.required("Context name: ")
-			if err != nil {
-				return err
-			}
-			if err := validateContextName(name); err != nil {
-				return err
-			}
-
-			if manager != nil {
-				names, err := manager.ListContexts()
-				if err != nil {
-					return err
-				}
-				for _, existing := range names {
-					if existing == name {
-						return fmt.Errorf("context %q already exists", name)
-					}
-				}
-			}
-
-			repoType, err := prompt.choice("Repository type (filesystem/git-local/git-remote): ", normalizeRepoType)
-			if err != nil {
-				return err
-			}
-
-			repoCfg, err := promptRepositoryConfig(prompt, repoType)
-			if err != nil {
-				return err
-			}
-
-			cfg := &ctx.ContextConfig{Repository: repoCfg}
-
-			managedCfg, err := promptManagedServerConfig(prompt)
-			if err != nil {
-				return err
-			}
-			if managedCfg != nil {
-				cfg.ManagedServer = managedCfg
-			}
-
-			secretsCfg, err := promptSecretsConfig(prompt)
-			if err != nil {
-				return err
-			}
-			if secretsCfg != nil {
-				cfg.SecretManager = secretsCfg
-			}
-
-			if manager == nil {
-				return fmt.Errorf("context manager is not configured")
-			}
-			return manager.AddContextConfig(name, cfg)
-		},
+func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prompter, initialName string) error {
+	name := strings.TrimSpace(initialName)
+	var err error
+	if name == "" {
+		prompt.sectionHeader("Context name", "Give this configuration a short, unique name.")
+		name, err = prompt.required("Context name: ")
+		if err != nil {
+			return err
+		}
+	}
+	if err := validateContextName(name); err != nil {
+		return err
 	}
 
-	return cmd
+	if manager != nil {
+		names, err := manager.ListContexts()
+		if err != nil {
+			return err
+		}
+		for _, existing := range names {
+			if existing == name {
+				return fmt.Errorf("context %q already exists", name)
+			}
+		}
+	}
+
+	prompt.sectionHeader("Repository configuration", "Select where to store your resources.")
+	repoType, err := prompt.choice("Repository type", []string{"filesystem", "git-local", "git-remote"}, "filesystem", normalizeRepoType)
+	if err != nil {
+		return err
+	}
+
+	repoCfg, err := promptRepositoryConfig(prompt, repoType)
+	if err != nil {
+		return err
+	}
+
+	cfg := &ctx.ContextConfig{Repository: repoCfg}
+
+	managedCfg, err := promptManagedServerConfig(prompt)
+	if err != nil {
+		return err
+	}
+	cfg.ManagedServer = managedCfg
+
+	secretsCfg, err := promptSecretsConfig(prompt)
+	if err != nil {
+		return err
+	}
+	if secretsCfg != nil {
+		cfg.SecretManager = secretsCfg
+	}
+
+	if manager == nil {
+		return fmt.Errorf("context manager is not configured")
+	}
+	return manager.AddContextConfig(name, cfg)
 }
 
 func normalizeRepoType(raw string) (string, bool) {
@@ -131,6 +121,7 @@ func promptRepositoryConfig(prompt *prompter, repoType string) (*ctx.RepositoryC
 }
 
 func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryConfig, error) {
+	prompt.sectionHeader("Remote repository details", "Tell DeclaREST where the repository lives locally and remotely.")
 	baseDir, err := prompt.required("Local git repository base directory: ")
 	if err != nil {
 		return nil, err
@@ -149,9 +140,15 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 		},
 	}
 
-	authType, err := prompt.choice("Remote auth (none/basic/ssh/access-key): ", normalizeGitAuthType)
-	if err != nil {
-		return nil, err
+	authType := ""
+	if isSSHGitURL(remoteURL) {
+		authType = "ssh"
+	} else {
+		prompt.sectionHeader("Remote authentication", "Pick how you authenticate when talking to the remote git endpoint.")
+		authType, err = prompt.choice("Remote auth", []string{"none", "basic", "access-key"}, "none", normalizeGitAuthType)
+		if err != nil {
+			return nil, err
+		}
 	}
 	switch authType {
 	case "basic":
@@ -159,7 +156,7 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 		if err != nil {
 			return nil, err
 		}
-		password, err := prompt.required("Git basic auth password: ")
+		password, err := prompt.requiredSecret("Git basic auth password: ")
 		if err != nil {
 			return nil, err
 		}
@@ -170,11 +167,11 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 			},
 		}
 	case "access-key":
-		provider, err := prompt.choice("Git provider (github/gitlab/gitea/none): ", normalizeGitProviderChoice)
+		provider, err := prompt.choice("Git provider", []string{"github", "gitlab", "gitea", "none"}, "none", normalizeGitProviderChoice)
 		if err != nil {
 			return nil, err
 		}
-		token, err := prompt.required("Git access token: ")
+		token, err := prompt.requiredSecret("Git access token: ")
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +192,7 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 		if err != nil {
 			return nil, err
 		}
-		passphrase, err := prompt.optional("SSH key passphrase (leave blank if none): ")
+		passphrase, err := prompt.optionalSecret("SSH key passphrase (leave blank if none): ")
 		if err != nil {
 			return nil, err
 		}
@@ -254,13 +251,7 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 }
 
 func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, error) {
-	configure, err := prompt.confirm("Configure managed server?", false)
-	if err != nil {
-		return nil, err
-	}
-	if !configure {
-		return nil, nil
-	}
+	prompt.sectionHeader("Managed server configuration", "Provide the HTTP endpoint plus auth details.")
 
 	baseURL, err := prompt.required("Managed server base URL: ")
 	if err != nil {
@@ -279,7 +270,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		httpCfg.OpenAPI = strings.TrimSpace(openapiSource)
 	}
 
-	authType, err := prompt.choice("Managed server auth (none/basic/bearer/oauth2/custom-header): ", normalizeManagedAuthType)
+	authType, err := prompt.choice("Managed server auth", []string{"none", "basic", "bearer", "custom-header", "oauth2"}, "none", normalizeManagedAuthType)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +280,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		if err != nil {
 			return nil, err
 		}
-		password, err := prompt.required("Managed server basic auth password: ")
+		password, err := prompt.requiredSecret("Managed server basic auth password: ")
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +291,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 			},
 		}
 	case "bearer":
-		token, err := prompt.required("Managed server bearer token: ")
+		token, err := prompt.requiredSecret("Managed server bearer token: ")
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +305,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		if err != nil {
 			return nil, err
 		}
-		token, err := prompt.required("Managed server auth token: ")
+		token, err := prompt.requiredSecret("Managed server auth token: ")
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +320,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		if err != nil {
 			return nil, err
 		}
-		grantType, err := prompt.choice("OAuth2 grant type (client_credentials/password): ", normalizeOAuthGrantType)
+		grantType, err := prompt.choice("OAuth2 grant type", []string{"client_credentials", "password"}, "client_credentials", normalizeOAuthGrantType)
 		if err != nil {
 			return nil, err
 		}
@@ -342,7 +333,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 			if err != nil {
 				return nil, err
 			}
-			password, err := prompt.required("OAuth2 password: ")
+			password, err := prompt.requiredSecret("OAuth2 password: ")
 			if err != nil {
 				return nil, err
 			}
@@ -353,7 +344,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		if err != nil {
 			return nil, err
 		}
-		clientSecret, err := prompt.optional("OAuth2 client secret (leave blank to skip): ")
+		clientSecret, err := prompt.optionalSecret("OAuth2 client secret (leave blank to skip): ")
 		if err != nil {
 			return nil, err
 		}
@@ -407,6 +398,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 }
 
 func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error) {
+	prompt.sectionHeader("Secret store configuration (optional)", "Use a secret store to keep sensitive values out of resources.")
 	configure, err := prompt.confirm("Configure secret store?", false)
 	if err != nil {
 		return nil, err
@@ -415,7 +407,7 @@ func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error
 		return nil, nil
 	}
 
-	storeType, err := prompt.choice("Secret store type (file/vault): ", normalizeSecretStoreType)
+	storeType, err := prompt.choice("Secret store type", []string{"file", "vault"}, "file", normalizeSecretStoreType)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +431,7 @@ func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error
 }
 
 func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfig, error) {
+	prompt.sectionHeader("File secret store options", "Provide the secrets file location and key/passphrase.")
 	path, err := prompt.required("Secrets file path: ")
 	if err != nil {
 		return nil, err
@@ -447,13 +440,13 @@ func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfi
 		Path: path,
 	}
 
-	keySource, err := prompt.choice("Key source (key/key-file/passphrase/passphrase-file): ", normalizeKeySource)
+	keySource, err := prompt.choice("Key source", []string{"key", "key-file", "passphrase", "passphrase-file"}, "key", normalizeKeySource)
 	if err != nil {
 		return nil, err
 	}
 	switch keySource {
 	case "key":
-		key, err := prompt.required("Raw key (base64, 32 bytes): ")
+		key, err := prompt.requiredSecret("Raw key (base64, 32 bytes): ")
 		if err != nil {
 			return nil, err
 		}
@@ -465,7 +458,7 @@ func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfi
 		}
 		fileCfg.KeyFile = keyFile
 	case "passphrase":
-		passphrase, err := prompt.required("Passphrase: ")
+		passphrase, err := prompt.requiredSecret("Passphrase: ")
 		if err != nil {
 			return nil, err
 		}
@@ -512,6 +505,7 @@ func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfi
 }
 
 func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerConfig, error) {
+	prompt.sectionHeader("Vault secret store options", "Vault connection details, auth, and TLS settings.")
 	address, err := prompt.required("Vault address (https://vault.example.com): ")
 	if err != nil {
 		return nil, err
@@ -535,14 +529,14 @@ func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerCon
 		kvVersion = parsed
 	}
 
-	authType, err := prompt.choice("Vault auth type (token/password/approle): ", normalizeVaultAuthType)
+	authType, err := prompt.choice("Vault auth type", []string{"token", "password", "approle"}, "token", normalizeVaultAuthType)
 	if err != nil {
 		return nil, err
 	}
 	authCfg := &secrets.VaultSecretsManagerAuthConfig{}
 	switch authType {
 	case "token":
-		token, err := prompt.required("Vault token: ")
+		token, err := prompt.requiredSecret("Vault token: ")
 		if err != nil {
 			return nil, err
 		}
@@ -552,7 +546,7 @@ func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerCon
 		if err != nil {
 			return nil, err
 		}
-		password, err := prompt.required("Vault password: ")
+		password, err := prompt.requiredSecret("Vault password: ")
 		if err != nil {
 			return nil, err
 		}
@@ -566,11 +560,11 @@ func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerCon
 			Mount:    authMount,
 		}
 	case "approle":
-		roleID, err := prompt.required("Vault AppRole role_id: ")
+		roleID, err := prompt.requiredSecret("Vault AppRole role_id: ")
 		if err != nil {
 			return nil, err
 		}
-		secretID, err := prompt.required("Vault AppRole secret_id: ")
+		secretID, err := prompt.requiredSecret("Vault AppRole secret_id: ")
 		if err != nil {
 			return nil, err
 		}
@@ -826,6 +820,22 @@ func normalizeVaultAuthType(raw string) (string, bool) {
 
 func isHTTPSURL(raw string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "https://")
+}
+
+func isSSHGitURL(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "ssh://") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "git@") {
+		return true
+	}
+	if strings.Contains(trimmed, "@") && strings.Contains(trimmed, ":") &&
+		!strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return true
+	}
+	return false
 }
 
 func boolPtr(value bool) *bool {

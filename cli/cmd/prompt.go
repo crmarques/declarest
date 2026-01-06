@@ -5,18 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 type prompter struct {
-	reader *bufio.Reader
-	out    io.Writer
+	reader          *bufio.Reader
+	out             io.Writer
+	in              io.Reader
+	inputFile       *os.File
+	inputIsTerminal bool
+	passwordReader  func(fd int) ([]byte, error)
 }
 
 func newPrompter(in io.Reader, out io.Writer) *prompter {
+	var file *os.File
+	isTerm := false
+	if f, ok := in.(*os.File); ok {
+		file = f
+		isTerm = term.IsTerminal(int(f.Fd()))
+	}
 	return &prompter{
-		reader: bufio.NewReader(in),
-		out:    out,
+		reader:          bufio.NewReader(in),
+		out:             out,
+		in:              in,
+		inputFile:       file,
+		inputIsTerminal: isTerm,
+		passwordReader:  term.ReadPassword,
 	}
 }
 
@@ -80,19 +98,89 @@ func (p *prompter) optional(prompt string) (string, error) {
 	return value, nil
 }
 
-func (p *prompter) choice(prompt string, normalize func(string) (string, bool)) (string, error) {
+func (p *prompter) readSecret(prompt string) (string, error) {
+	if p.inputFile != nil && p.inputIsTerminal && p.passwordReader != nil {
+		if _, err := fmt.Fprint(p.out, prompt); err != nil {
+			return "", err
+		}
+		secretBytes, err := p.passwordReader(int(p.inputFile.Fd()))
+		fmt.Fprintln(p.out)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(secretBytes)), nil
+	}
+	return p.readLine(prompt)
+}
+
+func (p *prompter) requiredSecret(prompt string) (string, error) {
 	for {
-		value, err := p.readLine(prompt)
+		value, err := p.readSecret(prompt)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return "", errors.New("input required")
 			}
 			return "", err
 		}
-		if value == "" {
+		if value != "" {
+			return value, nil
+		}
+	}
+}
+
+func (p *prompter) optionalSecret(prompt string) (string, error) {
+	value, err := p.readSecret(prompt)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", nil
+		}
+		return "", err
+	}
+	return value, nil
+}
+
+func (p *prompter) choice(label string, options []string, defaultValue string, normalize func(string) (string, bool)) (string, error) {
+	defaultValue = strings.TrimSpace(defaultValue)
+	defaultNormalized := ""
+	if defaultValue != "" {
+		normalized, ok := normalize(defaultValue)
+		if !ok {
+			return "", fmt.Errorf("invalid default choice %q for %s", defaultValue, label)
+		}
+		defaultNormalized = normalized
+	}
+	fmt.Fprintf(p.out, "%s options:\n", label)
+	for idx, option := range options {
+		fmt.Fprintf(p.out, "  %d) %s\n", idx+1, option)
+	}
+	fmt.Fprintln(p.out)
+	defaultSuffix := ""
+	if defaultValue != "" {
+		defaultSuffix = fmt.Sprintf(" [default %s]", defaultValue)
+	}
+	promptText := fmt.Sprintf("Select option (name or number)%s: ", defaultSuffix)
+	for {
+		value, err := p.readLine(promptText)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if defaultValue != "" {
+					return defaultNormalized, nil
+				}
+				return "", errors.New("input required")
+			}
+			return "", err
+		}
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			if defaultValue != "" {
+				return defaultNormalized, nil
+			}
 			continue
 		}
-		if normalized, ok := normalize(value); ok {
+		if idx, err := strconv.Atoi(trimmed); err == nil && idx >= 1 && idx <= len(options) {
+			trimmed = options[idx-1]
+		}
+		if normalized, ok := normalize(trimmed); ok {
 			return normalized, nil
 		}
 		fmt.Fprintf(p.out, "invalid choice: %s\n", value)
@@ -124,5 +212,12 @@ func (p *prompter) confirm(prompt string, defaultValue bool) (bool, error) {
 		default:
 			fmt.Fprintf(p.out, "invalid choice: %s\n", value)
 		}
+	}
+}
+
+func (p *prompter) sectionHeader(title, subtitle string) {
+	fmt.Fprintf(p.out, "\n%s\n%s\n", title, strings.Repeat("-", len(title)))
+	if subtitle != "" {
+		fmt.Fprintln(p.out, subtitle)
 	}
 }
