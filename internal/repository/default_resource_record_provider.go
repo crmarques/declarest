@@ -84,6 +84,13 @@ func (p *DefaultResourceRecordProvider) SetOpenAPISpec(spec *openapi.Spec) {
 	p.openapiSpec = spec
 }
 
+func (p *DefaultResourceRecordProvider) OpenAPISpec() *openapi.Spec {
+	if p == nil {
+		return nil
+	}
+	return p.openapiSpec
+}
+
 func (p *DefaultResourceRecordProvider) store() FileStore {
 	if p == nil {
 		return nil

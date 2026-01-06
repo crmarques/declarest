@@ -10,7 +10,8 @@ import (
 )
 
 type Spec struct {
-	Paths []*PathItem
+	Paths      []*PathItem
+	components map[string]map[string]any
 }
 
 type PathItem struct {
@@ -24,6 +25,7 @@ type Operation struct {
 	Method               string
 	RequestContentTypes  []string
 	ResponseContentTypes []string
+	RequestSchema        map[string]any
 }
 
 func ParseSpec(data []byte) (*Spec, error) {
@@ -53,13 +55,26 @@ func ParseSpec(data []byte) (*Spec, error) {
 		return nil, errors.New("openapi spec missing paths")
 	}
 
+	var components map[string]map[string]any
+	if compValue, ok := root["components"].(map[string]any); ok {
+		if schemas, ok := compValue["schemas"].(map[string]any); ok {
+			components = make(map[string]map[string]any, len(schemas))
+			for key, entry := range schemas {
+				if schemaMap, ok := entry.(map[string]any); ok {
+					components[key] = schemaMap
+				}
+			}
+		}
+	}
+
 	var items []*PathItem
+	spec := &Spec{components: components}
 	for template, value := range pathsValue {
 		itemMap, ok := value.(map[string]any)
 		if !ok {
 			continue
 		}
-		operations := parseOperations(itemMap)
+		operations := parseOperations(itemMap, spec)
 		if len(operations) == 0 {
 			continue
 		}
@@ -78,7 +93,8 @@ func ParseSpec(data []byte) (*Spec, error) {
 		})
 	}
 
-	return &Spec{Paths: items}, nil
+	spec.Paths = items
+	return spec, nil
 }
 
 func (s *Spec) MatchPath(path string) *PathItem {
@@ -164,7 +180,7 @@ func normalizeValue(value any) any {
 	}
 }
 
-func parseOperations(item map[string]any) map[string]*Operation {
+func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 	operations := make(map[string]*Operation)
 	for key, value := range item {
 		method := strings.ToLower(strings.TrimSpace(key))
@@ -181,9 +197,86 @@ func parseOperations(item map[string]any) map[string]*Operation {
 			Method:               method,
 			RequestContentTypes:  reqTypes,
 			ResponseContentTypes: respTypes,
+			RequestSchema:        requestSchema(op, spec),
 		}
 	}
 	return operations
+}
+
+func requestSchema(op map[string]any, spec *Spec) map[string]any {
+	if spec == nil {
+		return nil
+	}
+	requestBody, ok := op["requestBody"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	content, ok := requestBody["content"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	for _, media := range []string{"application/json", "application/merge-patch+json", "application/json-patch+json"} {
+		if entry, ok := content[media]; ok {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			if schema, ok := spec.schemaFromContent(entryMap); ok {
+				return schema
+			}
+		}
+	}
+
+	for _, entry := range content {
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if schema, ok := spec.schemaFromContent(entryMap); ok {
+			return schema
+		}
+	}
+
+	return nil
+}
+
+func (s *Spec) schemaFromContent(entry map[string]any) (map[string]any, bool) {
+	if entry == nil {
+		return nil, false
+	}
+	value, ok := entry["schema"]
+	if !ok {
+		return nil, false
+	}
+	return s.resolveSchema(value)
+}
+
+func (s *Spec) resolveSchema(value any) (map[string]any, bool) {
+	if value == nil {
+		return nil, false
+	}
+	node, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	if ref, ok := node["$ref"].(string); ok {
+		return s.schemaByRef(ref)
+	}
+	return node, true
+}
+
+func (s *Spec) schemaByRef(ref string) (map[string]any, bool) {
+	if s == nil || s.components == nil || !strings.HasPrefix(ref, "#/components/schemas/") {
+		return nil, false
+	}
+	name := strings.TrimPrefix(ref, "#/components/schemas/")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, false
+	}
+	schema, ok := s.components[name]
+	return schema, ok
 }
 
 func requestContentTypes(op map[string]any) []string {

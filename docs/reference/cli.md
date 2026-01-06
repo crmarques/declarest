@@ -38,7 +38,7 @@ Operate on resource definitions.
 
 - `resource get`: fetch from remote or repo.
 - `resource list`: list repo or remote paths.
-- `resource add`: add a local resource from a file or another resource path (supports overrides and optional remote apply).
+- `resource add`: add a local resource from a file, another resource path, or an OpenAPI schema (supports overrides and optional remote apply).
 - `resource create`: create a remote resource from the repo.
 - `resource update`: update a remote resource from the repo.
 - `resource apply`: create or update a remote resource.

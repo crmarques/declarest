@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"declarest/internal/managedserver"
+	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
 	"declarest/internal/resource"
 	"declarest/internal/secrets"
@@ -196,11 +198,14 @@ func newResourceGetCommand(verbose bool) *cobra.Command {
 	return cmd
 }
 
+const openAPIFromContextValue = "__declarest_from_openapi_context__"
+
 func newResourceAddCommand() *cobra.Command {
 	var (
 		path        string
 		fromFile    string
 		fromPath    string
+		fromOpenAPI string
 		legacyFile  string
 		overrides   []string
 		applyRemote bool
@@ -217,6 +222,7 @@ func newResourceAddCommand() *cobra.Command {
 			path = strings.TrimSpace(path)
 			fromFile = strings.TrimSpace(fromFile)
 			fromPath = strings.TrimSpace(fromPath)
+			fromOpenAPI = strings.TrimSpace(fromOpenAPI)
 			legacyFile = strings.TrimSpace(legacyFile)
 			if len(args) > 0 {
 				argPath := strings.TrimSpace(args[0])
@@ -254,6 +260,15 @@ func newResourceAddCommand() *cobra.Command {
 					fromFile = legacyFile
 				}
 			}
+			useOpenAPI := cmd.Flags().Changed("from-openapi")
+			openAPISource := ""
+			if useOpenAPI {
+				if fromOpenAPI == openAPIFromContextValue || fromOpenAPI == "" {
+					openAPISource = ""
+				} else {
+					openAPISource = fromOpenAPI
+				}
+			}
 			if path == "" {
 				return usageError(cmd, "path is required")
 			}
@@ -263,8 +278,11 @@ func newResourceAddCommand() *cobra.Command {
 			if fromFile != "" && fromPath != "" {
 				return usageError(cmd, "--from-file and --from-path cannot be used together")
 			}
-			if fromFile == "" && fromPath == "" {
-				return usageError(cmd, "either --from-file or --from-path is required")
+			if useOpenAPI && (fromFile != "" || fromPath != "") {
+				return usageError(cmd, "--from-openapi cannot be combined with --from-file or --from-path")
+			}
+			if fromFile == "" && fromPath == "" && !useOpenAPI {
+				return usageError(cmd, "either --from-file, --from-path, or --from-openapi is required")
 			}
 			if fromPath != "" {
 				if err := validateLogicalPath(cmd, fromPath); err != nil {
@@ -281,7 +299,9 @@ func newResourceAddCommand() *cobra.Command {
 			}
 
 			var res resource.Resource
-			if fromPath != "" {
+			if useOpenAPI {
+				res, err = resourceFromOpenAPI(recon, path, openAPISource)
+			} else if fromPath != "" {
 				res, err = recon.GetLocalResource(fromPath)
 				if err != nil {
 					return err
@@ -354,6 +374,8 @@ func newResourceAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to add")
 	cmd.Flags().StringVar(&fromFile, "from-file", "", "Path to a JSON or YAML resource payload file")
 	cmd.Flags().StringVar(&fromPath, "from-path", "", "Resource path in the repository to copy")
+	cmd.Flags().StringVar(&fromOpenAPI, "from-openapi", "", "Build the resource from an OpenAPI schema (optional spec path; defaults to context)")
+	cmd.Flags().Lookup("from-openapi").NoOptDefVal = openAPIFromContextValue
 	cmd.Flags().StringArrayVar(&overrides, "override", nil, "Override resource fields (key=value list, JSON object, or JSON/YAML file)")
 	cmd.Flags().BoolVar(&applyRemote, "apply", false, "Apply the resource to the remote server after saving")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite the resource in the repository if it already exists")
@@ -374,14 +396,19 @@ func loadResourceFromFile(path string) (resource.Resource, error) {
 		return resource.Resource{}, err
 	}
 
-	if format, ok := resourceFileFormat(trimmed); ok {
-		return decodeResourceData(data, format)
+	doc, err := parseResourceDocument(data, filepath.Dir(trimmed))
+	if err != nil {
+		return resource.Resource{}, err
 	}
 
-	if res, err := resource.NewResourceFromJSON(data); err == nil {
+	if format, ok := resourceFileFormat(trimmed); ok {
+		return decodeResolvedResource(doc, format)
+	}
+
+	if res, err := decodeResolvedResource(doc, "json"); err == nil {
 		return res, nil
 	}
-	if res, err := resource.NewResourceFromYAML(data); err == nil {
+	if res, err := decodeResolvedResource(doc, "yaml"); err == nil {
 		return res, nil
 	}
 
@@ -406,6 +433,145 @@ func resourceFileFormat(path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func parseResourceDocument(data []byte, baseDir string) (any, error) {
+	var raw any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	normalized, err := normalizeYAMLStructure(raw)
+	if err != nil {
+		return nil, err
+	}
+	return resolveResourceIncludes(normalized, baseDir)
+}
+
+func decodeResolvedResource(doc any, format string) (resource.Resource, error) {
+	switch format {
+	case "yaml":
+		b, err := yaml.Marshal(doc)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		return resource.NewResourceFromYAML(b)
+	default:
+		b, err := json.Marshal(doc)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		return resource.NewResourceFromJSON(b)
+	}
+}
+
+func resolveResourceIncludes(value any, baseDir string) (any, error) {
+	switch t := value.(type) {
+	case map[string]any:
+		for key, item := range t {
+			resolved, err := resolveResourceIncludes(item, baseDir)
+			if err != nil {
+				return nil, err
+			}
+			t[key] = resolved
+		}
+		return t, nil
+	case []any:
+		for idx, item := range t {
+			resolved, err := resolveResourceIncludes(item, baseDir)
+			if err != nil {
+				return nil, err
+			}
+			t[idx] = resolved
+		}
+		return t, nil
+	case string:
+		includePath, ok := parseIncludeDirective(t)
+		if !ok {
+			return t, nil
+		}
+		return loadIncludedValue(baseDir, includePath)
+	default:
+		return t, nil
+	}
+}
+
+func loadIncludedValue(baseDir, includePath string) (any, error) {
+	resolved := includePath
+	if !filepath.IsAbs(includePath) {
+		resolved = filepath.Join(baseDir, includePath)
+	}
+	resolved = filepath.Clean(resolved)
+
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := resourceFileFormat(resolved); ok {
+		return parseResourceDocument(data, filepath.Dir(resolved))
+	}
+
+	return string(data), nil
+}
+
+func normalizeYAMLStructure(value any) (any, error) {
+	switch t := value.(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for key, val := range t {
+			norm, err := normalizeYAMLStructure(val)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = norm
+		}
+		return out, nil
+	case map[any]any:
+		out := make(map[string]any, len(t))
+		for key, val := range t {
+			ks, ok := key.(string)
+			if !ok {
+				return nil, fmt.Errorf("yaml key %v is not a string", key)
+			}
+			norm, err := normalizeYAMLStructure(val)
+			if err != nil {
+				return nil, err
+			}
+			out[ks] = norm
+		}
+		return out, nil
+	case []any:
+		out := make([]any, len(t))
+		for idx, val := range t {
+			norm, err := normalizeYAMLStructure(val)
+			if err != nil {
+				return nil, err
+			}
+			out[idx] = norm
+		}
+		return out, nil
+	default:
+		return t, nil
+	}
+}
+
+func parseIncludeDirective(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) <= 4 || !strings.HasPrefix(trimmed, "{{") || !strings.HasSuffix(trimmed, "}}") {
+		return "", false
+	}
+	inner := strings.TrimSpace(trimmed[2 : len(trimmed)-2])
+	const includeKeyword = "include"
+	if !strings.HasPrefix(inner, includeKeyword) {
+		return "", false
+	}
+	path := strings.TrimSpace(inner[len(includeKeyword):])
+	if path == "" {
+		return "", false
+	}
+	return path, true
 }
 
 func resolveAddTargetPath(recon *reconciler.DefaultReconciler, path string, res resource.Resource) (string, error) {
@@ -637,6 +803,39 @@ func dropResourceID(res resource.Resource) (resource.Resource, error) {
 		return resource.NewResource(clone)
 	}
 	return res, nil
+}
+
+func resourceFromOpenAPI(recon *reconciler.DefaultReconciler, logicalPath, source string) (resource.Resource, error) {
+	if recon == nil {
+		return resource.Resource{}, errors.New("reconciler is not configured")
+	}
+
+	specSource := strings.TrimSpace(source)
+	var spec *openapi.Spec
+	if specSource == "" {
+		if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
+			spec = provider.OpenAPISpec()
+		}
+		if spec == nil {
+			return resource.Resource{}, errors.New("openapi spec is not configured")
+		}
+	} else {
+		httpManager, ok := recon.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
+		if !ok || httpManager == nil {
+			return resource.Resource{}, errors.New("openapi source requires an http managed server")
+		}
+		data, err := httpManager.LoadOpenAPISpec(specSource)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		parsed, err := openapi.ParseSpec(data)
+		if err != nil {
+			return resource.Resource{}, fmt.Errorf("failed to parse openapi spec %q: %w", specSource, err)
+		}
+		spec = parsed
+	}
+
+	return openapi.BuildResourceFromSpec(spec, logicalPath)
 }
 
 func newResourceListCommand() *cobra.Command {

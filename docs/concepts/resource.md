@@ -49,6 +49,22 @@ Examples:
 - `/teams/platform/users/alice` → `teams/platform/users/alice/resource.json`
 - `/teams/platform/users/` collection metadata → `teams/platform/users/_/metadata.json`
 
+## Resource payload includes
+
+Resource payload files can inline other files that live alongside the resource definition by setting a value to the literal `{{include <file>}}` directive. The included path is resolved relative to the directory containing the current `resource.json`/`resource.yaml`. When the referenced file contains JSON or YAML content, DeclaREST merges that structured document in place; otherwise, the file is read as raw text so the resulting value remains a valid string (YAML renders it as a block scalar).
+
+Includes can be nested and DeclaREST resolves them before validating the payload, so the final document is always valid JSON/YAML regardless of how many files you compose.
+
+Example:
+
+```yaml
+service:
+  config: "{{include config.json}}"
+  script: "{{include deploy.sh}}"
+```
+
+The `config.json` data is merged as a map while `deploy.sh` is imported as a multi-line string.
+
 ## Wildcards in metadata paths
 
 Resource paths cannot contain `_`, but metadata paths can.
