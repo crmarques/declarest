@@ -271,7 +271,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		BaseURL: baseURL,
 	}
 
-	authType, err := prompt.choice("Managed server auth (none/basic/bearer/oauth2): ", normalizeManagedAuthType)
+	authType, err := prompt.choice("Managed server auth (none/basic/bearer/oauth2/custom-header): ", normalizeManagedAuthType)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +299,21 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 		httpCfg.Auth = &managedserver.HTTPResourceServerAuthConfig{
 			BearerToken: &managedserver.HTTPResourceServerBearerTokenConfig{
 				Token: token,
+			},
+		}
+	case "custom-header":
+		header, err := prompt.required("Managed server auth header name: ")
+		if err != nil {
+			return nil, err
+		}
+		token, err := prompt.required("Managed server auth token: ")
+		if err != nil {
+			return nil, err
+		}
+		httpCfg.Auth = &managedserver.HTTPResourceServerAuthConfig{
+			CustomHeader: &managedserver.HTTPResourceServerCustomHeaderConfig{
+				Header: strings.TrimSpace(header),
+				Token:  token,
 			},
 		}
 	case "oauth2":
@@ -742,6 +757,8 @@ func normalizeManagedAuthType(raw string) (string, bool) {
 		return "basic", true
 	case "bearer", "token", "bearer-token", "bearer_token":
 		return "bearer", true
+	case "custom", "custom-header", "custom_header", "header":
+		return "custom-header", true
 	case "oauth2", "oauth":
 		return "oauth2", true
 	default:

@@ -83,6 +83,7 @@ Auth options for `managed_server.http.auth`:
 - `oauth2`: token_url, grant_type, client_id, client_secret, username, password, scope, audience
 - `basic_auth`: username, password
 - `bearer_token`: token
+- `custom_header`: header, token
 
 ## Secret store configuration
 

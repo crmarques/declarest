@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=../lib/env.sh
+source "$SCRIPTS_DIR/lib/env.sh"
+# shellcheck source=../lib/logging.sh
+source "$SCRIPTS_DIR/lib/logging.sh"
+# shellcheck source=../lib/shell.sh
+source "$SCRIPTS_DIR/lib/shell.sh"
+
+if [[ -z "${RUNDECK_TOKEN:-}" ]]; then
+    die "RUNDECK_TOKEN is required to render the context file"
+fi
+
+cat > "$DECLAREST_CONTEXT_FILE" <<EOF
+repository:
+  filesystem:
+    base_dir: "$DECLAREST_REPO_DIR"
+managed_server:
+  http:
+    base_url: "$RUNDECK_BASE_URL"
+    auth:
+      custom_header:
+        header: "$RUNDECK_AUTH_HEADER"
+        token: "$RUNDECK_TOKEN"
+EOF
+
+log_line "Context file rendered to $DECLAREST_CONTEXT_FILE"

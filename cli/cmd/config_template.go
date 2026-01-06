@@ -41,7 +41,7 @@ managed_server:
 #   default_headers:
 #     X-Example: value
     auth:
-#     ### Choose exactly one auth method: oauth2, basic_auth, bearer_token.
+#     ### Choose exactly one auth method: oauth2, basic_auth, bearer_token, custom_header.
       oauth2:
         token_url: https://example.com/oauth/token
         grant_type: client_credentials
@@ -55,6 +55,9 @@ managed_server:
 #       username: change-me
 #       password: change-me
 #     bearer_token:
+#       token: change-me
+#     custom_header:
+#       header: X-Example-Token
 #       token: change-me
 #   tls:
 #     insecure_skip_verify: false

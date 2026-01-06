@@ -454,6 +454,15 @@ func (m *HTTPResourceServerManager) applyAuth(ctx context.Context, req *http.Req
 		return nil
 	}
 
+	if cfg := m.config.Auth.CustomHeader; cfg != nil {
+		header := strings.TrimSpace(cfg.Header)
+		token := strings.TrimSpace(cfg.Token)
+		if header != "" && token != "" {
+			req.Header.Set(header, token)
+			return nil
+		}
+	}
+
 	if cfg := m.config.Auth.BearerToken; cfg != nil && strings.TrimSpace(cfg.Token) != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.Token)
 		return nil

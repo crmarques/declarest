@@ -78,6 +78,32 @@ func TestHTTPResourceServerManagerAppliesBearerToken(t *testing.T) {
 	}
 }
 
+func TestHTTPResourceServerManagerAppliesCustomHeader(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://example.com",
+		Auth: &HTTPResourceServerAuthConfig{
+			CustomHeader: &HTTPResourceServerCustomHeaderConfig{
+				Header: "X-Test-Auth",
+				Token:  "token-123",
+			},
+		},
+	})
+	if err := manager.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if err := manager.applyAuth(context.Background(), req); err != nil {
+		t.Fatalf("applyAuth: %v", err)
+	}
+	if got := req.Header.Get("X-Test-Auth"); got != "token-123" {
+		t.Fatalf("expected custom header token, got %q", got)
+	}
+}
+
 func TestHTTPResourceServerManagerAppliesBasicAuth(t *testing.T) {
 	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
 		BaseURL: "https://example.com",

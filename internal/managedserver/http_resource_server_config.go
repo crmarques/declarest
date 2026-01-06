@@ -8,9 +8,10 @@ type HTTPResourceServerConfig struct {
 }
 
 type HTTPResourceServerAuthConfig struct {
-	OAuth2      *HTTPResourceServerOAuth2Config      `mapstructure:"oauth2" yaml:"oauth2,omitempty" json:"oauth2,omitempty"`
-	BasicAuth   *HTTPResourceServerBasicAuthConfig   `mapstructure:"basic_auth" yaml:"basic_auth,omitempty" json:"basic_auth,omitempty"`
-	BearerToken *HTTPResourceServerBearerTokenConfig `mapstructure:"bearer_token" yaml:"bearer_token,omitempty" json:"bearer_token,omitempty"`
+	OAuth2       *HTTPResourceServerOAuth2Config       `mapstructure:"oauth2" yaml:"oauth2,omitempty" json:"oauth2,omitempty"`
+	CustomHeader *HTTPResourceServerCustomHeaderConfig `mapstructure:"custom_header" yaml:"custom_header,omitempty" json:"custom_header,omitempty"`
+	BasicAuth    *HTTPResourceServerBasicAuthConfig    `mapstructure:"basic_auth" yaml:"basic_auth,omitempty" json:"basic_auth,omitempty"`
+	BearerToken  *HTTPResourceServerBearerTokenConfig  `mapstructure:"bearer_token" yaml:"bearer_token,omitempty" json:"bearer_token,omitempty"`
 }
 
 type HTTPResourceServerOAuth2Config struct {
@@ -31,6 +32,11 @@ type HTTPResourceServerBasicAuthConfig struct {
 
 type HTTPResourceServerBearerTokenConfig struct {
 	Token string `mapstructure:"token" yaml:"token,omitempty" json:"token,omitempty"`
+}
+
+type HTTPResourceServerCustomHeaderConfig struct {
+	Header string `mapstructure:"header" yaml:"header,omitempty" json:"header,omitempty"`
+	Token  string `mapstructure:"token" yaml:"token,omitempty" json:"token,omitempty"`
 }
 
 type HTTPResourceServerTLSConfig struct {
