@@ -387,10 +387,10 @@ case "$command" in
 
 Manual setup complete. Keycloak is running at http://localhost:${KEYCLOAK_HTTP_PORT}
 
-Use the declarest CLI with the prepared context:
-  ./tests/managed-server/keycloak/run.sh cli --work-dir "${DECLAREST_WORK_DIR}" resource list --repo
-  ./tests/managed-server/keycloak/run.sh cli --work-dir "${DECLAREST_WORK_DIR}"   # shows declarest help
-  ./tests/managed-server/keycloak/run.sh cli resource list --repo                 # reuses the last run
+Access the previously built DeclaREST binary using the rendered context (HOME and DECLAREST_CONTEXT_FILE already point to the workspace):
+  HOME="$DECLAREST_HOME_DIR" DECLAREST_CONTEXT_FILE="$DECLAREST_CONTEXT_FILE" "$DECLAREST_BIN_DIR/declarest" resource list --repo
+  HOME="$DECLAREST_HOME_DIR" DECLAREST_CONTEXT_FILE="$DECLAREST_CONTEXT_FILE" "$DECLAREST_BIN_DIR/declarest" --help
+  HOME="$DECLAREST_HOME_DIR" DECLAREST_CONTEXT_FILE="$DECLAREST_CONTEXT_FILE" "$DECLAREST_BIN_DIR/declarest" resource list --repo  # reuse the same context
 
 Logs: ${RUN_LOG}
 Repo: ${DECLAREST_REPO_DIR}
@@ -402,8 +402,8 @@ Stop Keycloak:
   ./tests/managed-server/keycloak/run.sh stop
 
 Clean the work directory:
-  ./tests/managed-server/keycloak/run.sh clean --work-dir "${DECLAREST_WORK_DIR}"
-  ./tests/managed-server/keycloak/run.sh clean
+  ./tests/cleanup-tests.sh --all
+  ./tests/cleanup-tests.sh
 EOF
         ;;
     sync)

@@ -312,13 +312,11 @@ func (m *DefaultContextManager) configFilePath() (string, error) {
 		return m.ConfigFilePath, nil
 	}
 
-	home, err := os.UserHomeDir()
+	info, err := ConfigFilePathInfo()
 	if err != nil {
-		return "", fmt.Errorf("unable to determine home directory: %w", err)
+		return "", err
 	}
-
-	dir := filepath.Join(home, defaultConfigDir)
-	return filepath.Join(dir, defaultConfigFile), nil
+	return info.Path, nil
 }
 
 func (m *DefaultContextManager) loadStore() (*contextStore, error) {

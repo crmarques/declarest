@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 const (
 	defaultRequestTimeout  = 30 * time.Second
 	defaultOAuthExpirySkew = 30 * time.Second
+	maxDebugBodyCharacters = 1024
 )
 
 type HTTPResourceServerManager struct {
@@ -28,8 +30,12 @@ type HTTPResourceServerManager struct {
 	client  *http.Client
 	baseURL *url.URL
 
-	oauthMu    sync.Mutex
-	oauthToken *oauthToken
+	oauthMu      sync.Mutex
+	oauthToken   *oauthToken
+	debugMu      sync.Mutex
+	lastRequest  *HTTPRequestDebugInfo
+	lastResponse *HTTPResponseDebugInfo
+	interactions []HTTPInteraction
 }
 
 func NewHTTPResourceServerManager(cfg *HTTPResourceServerConfig) *HTTPResourceServerManager {
@@ -339,6 +345,7 @@ func (m *HTTPResourceServerManager) executeRequest(spec *HTTPRequestSpec, timeou
 	if err := m.applyAuth(ctx, req); err != nil {
 		return nil, err
 	}
+	m.recordRequest(req, payload)
 
 	resp, err := m.client.Do(req)
 	if err != nil {
@@ -350,6 +357,8 @@ func (m *HTTPResourceServerManager) executeRequest(spec *HTTPRequestSpec, timeou
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
+
+	m.recordResponse(resp.StatusCode, resp.Header.Clone(), body)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		if !readBody {
@@ -454,6 +463,77 @@ type httpResponse struct {
 	URL        string
 }
 
+func (m *HTTPResourceServerManager) recordRequest(req *http.Request, body []byte) {
+	if m == nil || req == nil {
+		return
+	}
+	headers := formatHeadersList(req.Header)
+	m.debugMu.Lock()
+	defer m.debugMu.Unlock()
+	if len(m.interactions) == 0 || (m.interactions[len(m.interactions)-1].Request != nil && m.interactions[len(m.interactions)-1].Response != nil) {
+		m.interactions = append(m.interactions, HTTPInteraction{})
+	}
+	if len(m.interactions) > 10 {
+		m.interactions = m.interactions[len(m.interactions)-10:]
+	}
+	current := &m.interactions[len(m.interactions)-1]
+	current.Request = &HTTPRequestDebugInfo{
+		Method:  req.Method,
+		URL:     req.URL.String(),
+		Headers: headers,
+		Body:    limitDebugString(string(body)),
+	}
+	m.lastRequest = current.Request
+	if len(m.interactions) > 10 {
+		m.interactions = m.interactions[len(m.interactions)-10:]
+	}
+}
+
+func (m *HTTPResourceServerManager) recordResponse(status int, header http.Header, body []byte) {
+	if m == nil {
+		return
+	}
+	respInfo := &HTTPResponseDebugInfo{
+		StatusCode: status,
+		StatusText: http.StatusText(status),
+		Headers:    formatHeadersList(header),
+		Body:       limitDebugString(string(body)),
+	}
+	m.debugMu.Lock()
+	defer m.debugMu.Unlock()
+	if len(m.interactions) == 0 {
+		m.interactions = append(m.interactions, HTTPInteraction{})
+	}
+	current := &m.interactions[len(m.interactions)-1]
+	current.Response = respInfo
+	m.lastResponse = respInfo
+}
+
+func formatHeadersList(header http.Header) []string {
+	if len(header) == 0 {
+		return nil
+	}
+	var lines []string
+	for key, values := range header {
+		for _, value := range values {
+			lines = append(lines, fmt.Sprintf("%s: %s", key, value))
+		}
+	}
+	sort.Strings(lines)
+	return lines
+}
+
+func limitDebugString(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) <= maxDebugBodyCharacters {
+		return trimmed
+	}
+	return trimmed[:maxDebugBodyCharacters] + "... (truncated)"
+}
+
 func (m *HTTPResourceServerManager) applyAuth(ctx context.Context, req *http.Request) error {
 	if m.config == nil || m.config.Auth == nil {
 		return nil
@@ -548,12 +628,14 @@ func (m *HTTPResourceServerManager) fetchOAuthToken(ctx context.Context, cfg *HT
 		form.Set("audience", cfg.Audience)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.TokenURL, strings.NewReader(form.Encode()))
+	formData := form.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.TokenURL, strings.NewReader(formData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build oauth2 token request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	m.recordRequest(req, []byte(formData))
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("oauth2 token request failed: %w", err)
@@ -564,6 +646,8 @@ func (m *HTTPResourceServerManager) fetchOAuthToken(ctx context.Context, cfg *HT
 	if err != nil {
 		return nil, fmt.Errorf("failed to read oauth2 token response: %w", err)
 	}
+
+	m.recordResponse(resp.StatusCode, resp.Header.Clone(), body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, &HTTPError{

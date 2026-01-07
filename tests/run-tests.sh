@@ -4,6 +4,9 @@ set -euo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
+export CONTAINER_RUNTIME
+
 usage() {
     cat <<EOF
 Usage: ./tests/run-tests.sh [--e2e|--interactive] --managed-server <name> --repo-provider <name> --secret-provider <type> [-- <extra args>]
@@ -81,6 +84,27 @@ managed_server="${managed_server,,}"
 repo_provider="${repo_provider,,}"
 secret_provider="${secret_provider,,}"
 
+check_container_runtime() {
+    if ! command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1; then
+        printf "Container runtime %s is not installed or not in PATH.\n" "$CONTAINER_RUNTIME" >&2
+        printf "Install it or set CONTAINER_RUNTIME to another runtime (docker, podman).\n" >&2
+        exit 1
+    fi
+    local runtime_err
+    if ! runtime_err="$("$CONTAINER_RUNTIME" ps 2>&1 >/dev/null)"; then
+        if [[ "$runtime_err" == *"alive.lck"* ]]; then
+            printf "Container runtime %s cannot acquire its runtime lock:\n" "$CONTAINER_RUNTIME" >&2
+            printf "%s\n" "$runtime_err" >&2
+            printf "This environment restricts rootless %s; try running with a different runtime\n" "$CONTAINER_RUNTIME" >&2
+            printf "or configure %s with the privileges described in %s.\n" "$CONTAINER_RUNTIME" "https://podman.io/" >&2
+        else
+            printf "Container runtime %s is not usable:\n" "$CONTAINER_RUNTIME" >&2
+            printf "%s\n" "$runtime_err" >&2
+        fi
+        exit 1
+    fi
+}
+
 case "$managed_server" in
     keycloak|rundeck)
         ;;
@@ -124,6 +148,8 @@ case "$secret_provider" in
         exit 1
         ;;
 esac
+
+check_container_runtime
 
 managed_dir="$TESTS_DIR/managed-server/$managed_server"
 if [[ ! -d "$managed_dir" ]]; then

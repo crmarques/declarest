@@ -4,7 +4,7 @@ import "testing"
 
 func TestParseDebugSettings(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		settings, err := parseDebugSettings("", false)
+		settings, err := parseDebugSettings("")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -13,8 +13,8 @@ func TestParseDebugSettings(t *testing.T) {
 		}
 	})
 
-	t.Run("debug-defaults-to-all", func(t *testing.T) {
-		settings, err := parseDebugSettings("", true)
+	t.Run("debug-all", func(t *testing.T) {
+		settings, err := parseDebugSettings(debugGroupAll)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -29,7 +29,7 @@ func TestParseDebugSettings(t *testing.T) {
 	})
 
 	t.Run("specific-groups", func(t *testing.T) {
-		settings, err := parseDebugSettings("network,repository", false)
+		settings, err := parseDebugSettings("network,repository")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -42,7 +42,7 @@ func TestParseDebugSettings(t *testing.T) {
 	})
 
 	t.Run("unknown-group", func(t *testing.T) {
-		if _, err := parseDebugSettings("nope", false); err == nil {
+		if _, err := parseDebugSettings("nope"); err == nil {
 			t.Fatalf("expected error for unknown group")
 		}
 	})

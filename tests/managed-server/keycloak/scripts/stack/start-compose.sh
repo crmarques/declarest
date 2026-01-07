@@ -36,22 +36,26 @@ cleanup_existing() {
 
 cleanup_existing
 
-mkdir -p "$DECLAREST_WORK_DIR"
-port_file="$DECLAREST_WORK_DIR/keycloak-port"
-requested_port="${KEYCLOAK_HTTP_PORT:-}"
-selected_port="$(select_port "$requested_port" 18080 18180)"
-if [[ -z "$selected_port" ]]; then
-    selected_port="$requested_port"
-fi
-if [[ -z "$selected_port" ]]; then
-    selected_port="18080"
-fi
-if [[ -n "$requested_port" && "$selected_port" != "$requested_port" ]]; then
-    log_line "Keycloak port ${requested_port} is in use; using ${selected_port}"
-fi
-KEYCLOAK_HTTP_PORT="$selected_port"
-export KEYCLOAK_HTTP_PORT
-printf "%s" "$KEYCLOAK_HTTP_PORT" > "$port_file"
+KEYCLOAK_PORT_MIN=18080
+KEYCLOAK_PORT_MAX=18180
+VAULT_PORT_MIN=18200
+VAULT_PORT_MAX=18299
+GITEA_PORT_MIN=18082
+GITEA_PORT_MAX=18182
+
+keycloak_port_file="$DECLAREST_WORK_DIR/keycloak-port"
+vault_port_file="$DECLAREST_WORK_DIR/vault-port"
+gitea_http_file="$DECLAREST_WORK_DIR/gitea-http-port"
+
+requested_keycloak_port="${KEYCLOAK_HTTP_PORT:-}"
+requested_vault_port="${VAULT_HTTP_PORT:-}"
+requested_gitea_port="${GITEA_HTTP_PORT:-}"
+
+keycloak_port_start="$KEYCLOAK_PORT_MIN"
+vault_port_start="$VAULT_PORT_MIN"
+gitea_port_start="$GITEA_PORT_MIN"
+
+declare -a keycloak_selected_port_log=()
 
 gitlab_enabled=0
 gitea_enabled=0
@@ -123,54 +127,6 @@ if [[ $gitlab_enabled -eq 1 ]]; then
     printf "%s" "$GITLAB_SSH_PORT" > "$gitlab_ssh_file"
 fi
 
-if [[ $gitea_enabled -eq 1 ]]; then
-    gitea_http_file="$DECLAREST_WORK_DIR/gitea-http-port"
-    gitea_ssh_file="$DECLAREST_WORK_DIR/gitea-ssh-port"
-
-    requested_gitea_port="${GITEA_HTTP_PORT:-}"
-    selected_gitea_port="$(select_port "$requested_gitea_port" 18082 18180)"
-    if [[ -z "$selected_gitea_port" ]]; then
-        selected_gitea_port="$requested_gitea_port"
-    fi
-    if [[ -z "$selected_gitea_port" ]]; then
-        selected_gitea_port="18082"
-    fi
-    GITEA_HTTP_PORT="$selected_gitea_port"
-    export GITEA_HTTP_PORT
-    printf "%s" "$GITEA_HTTP_PORT" > "$gitea_http_file"
-
-    requested_gitea_ssh="${GITEA_SSH_PORT:-}"
-    selected_gitea_ssh="$(select_port "$requested_gitea_ssh" 2223 2299)"
-    if [[ -z "$selected_gitea_ssh" ]]; then
-        selected_gitea_ssh="$requested_gitea_ssh"
-    fi
-    if [[ -z "$selected_gitea_ssh" ]]; then
-        selected_gitea_ssh="2223"
-    fi
-    GITEA_SSH_PORT="$selected_gitea_ssh"
-    export GITEA_SSH_PORT
-    printf "%s" "$GITEA_SSH_PORT" > "$gitea_ssh_file"
-fi
-
-if [[ $vault_enabled -eq 1 ]]; then
-    vault_port_file="$DECLAREST_WORK_DIR/vault-port"
-
-    requested_vault_port="${VAULT_HTTP_PORT:-}"
-    selected_vault_port="$(select_port "$requested_vault_port" 18200 18299)"
-    if [[ -z "$selected_vault_port" ]]; then
-        selected_vault_port="$requested_vault_port"
-    fi
-    if [[ -z "$selected_vault_port" ]]; then
-        selected_vault_port="18200"
-    fi
-    if [[ -n "$requested_vault_port" && "$selected_vault_port" != "$requested_vault_port" ]]; then
-        log_line "Vault port ${requested_vault_port} is in use; using ${selected_vault_port}"
-    fi
-    VAULT_HTTP_PORT="$selected_vault_port"
-    export VAULT_HTTP_PORT
-    printf "%s" "$VAULT_HTTP_PORT" > "$vault_port_file"
-fi
-
 mkdir -p "$DECLAREST_COMPOSE_DIR"
 cp -R "$DECLAREST_TEST_DIR/templates/compose/." "$DECLAREST_COMPOSE_DIR"/
 mkdir -p "$DECLAREST_COMPOSE_DIR/nginx-logs"
@@ -178,8 +134,39 @@ vault_data_dir="$DECLAREST_COMPOSE_DIR/vault-data"
 mkdir -p "$vault_data_dir"
 chmod 0777 "$vault_data_dir"
 
-log_line "Writing Keycloak compose environment to $DECLAREST_COMPOSE_DIR/.env"
-cat <<ENVFILE > "$DECLAREST_COMPOSE_DIR/.env"
+select_keycloak_port() {
+    local requested="${requested_keycloak_port:-}"
+    KEYCLOAK_HTTP_PORT="$(select_port "$requested" "$keycloak_port_start" "$KEYCLOAK_PORT_MAX")"
+    if [[ -n "$requested" && "$KEYCLOAK_HTTP_PORT" != "$requested" ]]; then
+        log_line "Keycloak port ${requested} is in use; using ${KEYCLOAK_HTTP_PORT}"
+    fi
+    export KEYCLOAK_HTTP_PORT
+    printf "%s" "$KEYCLOAK_HTTP_PORT" > "$keycloak_port_file"
+}
+
+select_vault_port() {
+    local requested="${requested_vault_port:-}"
+    VAULT_HTTP_PORT="$(select_port "$requested" "$vault_port_start" "$VAULT_PORT_MAX")"
+    if [[ -n "$requested" && "$VAULT_HTTP_PORT" != "$requested" ]]; then
+        log_line "Vault port ${requested} is in use; using ${VAULT_HTTP_PORT}"
+    fi
+    export VAULT_HTTP_PORT
+    printf "%s" "$VAULT_HTTP_PORT" > "$vault_port_file"
+}
+
+select_gitea_port() {
+    local requested="${requested_gitea_port:-}"
+    GITEA_HTTP_PORT="$(select_port "$requested" "$gitea_port_start" "$GITEA_PORT_MAX")"
+    if [[ -n "$requested" && "$GITEA_HTTP_PORT" != "$requested" ]]; then
+        log_line "Gitea port ${requested} is in use; using ${GITEA_HTTP_PORT}"
+    fi
+    export GITEA_HTTP_PORT
+    printf "%s" "$GITEA_HTTP_PORT" > "$gitea_http_file"
+}
+
+write_compose_env() {
+    log_line "Writing Keycloak compose environment to $DECLAREST_COMPOSE_DIR/.env"
+    cat <<ENVFILE > "$DECLAREST_COMPOSE_DIR/.env"
 KEYCLOAK_IMAGE=$KEYCLOAK_IMAGE
 KEYCLOAK_CONTAINER_NAME=$KEYCLOAK_CONTAINER_NAME
 KEYCLOAK_ADMIN_USER=$KEYCLOAK_ADMIN_USER
@@ -198,6 +185,53 @@ GITEA_HOSTNAME=$GITEA_HOSTNAME
 GITEA_HTTP_PORT=$GITEA_HTTP_PORT
 GITEA_SSH_PORT=$GITEA_SSH_PORT
 ENVFILE
+}
+
+select_keycloak_port
+if [[ $vault_enabled -eq 1 ]]; then
+    select_vault_port
+else
+    VAULT_HTTP_PORT="${requested_vault_port:-18200}"
+    export VAULT_HTTP_PORT
+    printf "%s" "$VAULT_HTTP_PORT" > "$vault_port_file"
+fi
+if [[ $gitea_enabled -eq 1 ]]; then
+    select_gitea_port
+else
+    GITEA_HTTP_PORT="${requested_gitea_port:-18082}"
+    export GITEA_HTTP_PORT
+    printf "%s" "$GITEA_HTTP_PORT" > "$gitea_http_file"
+fi
+write_compose_env
+
+compose_up_with_retry() {
+    local attempt=1
+    local max_attempts=3
+    while true; do
+        log_line "Starting Keycloak stack with podman (attempt ${attempt})"
+        log_line "START compose up :: cd ${DECLAREST_COMPOSE_DIR} && $CONTAINER_RUNTIME compose -p ${COMPOSE_PROJECT_NAME} up -d"
+        if (cd "$DECLAREST_COMPOSE_DIR" && "$CONTAINER_RUNTIME" compose -p "$COMPOSE_PROJECT_NAME" --profile gitea --profile vault up -d) >>"$RUN_LOG" 2>&1; then
+            log_line "DONE  compose up"
+            return 0
+        fi
+        log_line "FAIL  compose up (exit $?)"
+        if (( attempt >= max_attempts )); then
+            return 1
+        fi
+        if grep -q "bind: address already in use" "$RUN_LOG"; then
+            log_line "Port conflict detected; selecting new Keycloak port (attempt ${attempt})"
+            requested_keycloak_port=""
+            keycloak_port_start=$((KEYCLOAK_HTTP_PORT + 1))
+            select_keycloak_port
+            write_compose_env
+            attempt=$((attempt + 1))
+            continue
+        fi
+        return 1
+    done
+}
+
+compose_up_with_retry
 
 log_line "Starting Keycloak stack with ${CONTAINER_RUNTIME}"
 if [[ "${CONTAINER_RUNTIME}" == "podman" ]]; then

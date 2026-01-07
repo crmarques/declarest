@@ -59,9 +59,8 @@ Use the CLI to:
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-status", false, "Suppress status messages and print only command output")
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-result-output", false, "DEPRECATED: use --no-status")
 	_ = cmd.PersistentFlags().MarkHidden("no-result-output")
-	cmd.PersistentFlags().Bool("debug", false, "Print debug information when errors occur (equivalent to --verbose=all)")
-	cmd.PersistentFlags().String("verbose", "", "Print debug information by group (network, repository, resource, all)")
-	cmd.PersistentFlags().Lookup("verbose").NoOptDefVal = debugGroupAll
+	cmd.PersistentFlags().String("debug", "", "Print grouped debug information when errors occur (groups: network, repository, resource, all)")
+	cmd.PersistentFlags().Lookup("debug").NoOptDefVal = debugGroupAll
 
 	cmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		if err == nil {

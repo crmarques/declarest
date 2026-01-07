@@ -6,6 +6,25 @@ import (
 	"strings"
 )
 
+type HTTPRequestDebugInfo struct {
+	Method  string
+	URL     string
+	Headers []string
+	Body    string
+}
+
+type HTTPResponseDebugInfo struct {
+	StatusCode int
+	StatusText string
+	Headers    []string
+	Body       string
+}
+
+type HTTPInteraction struct {
+	Request  *HTTPRequestDebugInfo
+	Response *HTTPResponseDebugInfo
+}
+
 type ServerDebugInfo struct {
 	Type                  string
 	BaseURL               string
@@ -13,6 +32,9 @@ type ServerDebugInfo struct {
 	TLSInsecureSkipVerify *bool
 	DefaultHeaders        []string
 	OpenAPI               string
+	LastRequest           *HTTPRequestDebugInfo
+	LastResponse          *HTTPResponseDebugInfo
+	Interactions          []HTTPInteraction
 }
 
 func (m *HTTPResourceServerManager) DebugInfo() ServerDebugInfo {
@@ -38,7 +60,50 @@ func (m *HTTPResourceServerManager) DebugInfo() ServerDebugInfo {
 	}
 	info.OpenAPI = strings.TrimSpace(m.config.OpenAPI)
 
+	m.debugMu.Lock()
+	if m.lastRequest != nil {
+		info.LastRequest = copyHTTPRequestDebugInfo(m.lastRequest)
+	}
+	if m.lastResponse != nil {
+		info.LastResponse = copyHTTPResponseDebugInfo(m.lastResponse)
+	}
+	for _, interaction := range m.interactions {
+		info.Interactions = append(info.Interactions, copyHTTPInteraction(interaction))
+	}
+	m.debugMu.Unlock()
+
 	return info
+}
+
+func copyHTTPRequestDebugInfo(src *HTTPRequestDebugInfo) *HTTPRequestDebugInfo {
+	if src == nil {
+		return nil
+	}
+	return &HTTPRequestDebugInfo{
+		Method:  src.Method,
+		URL:     src.URL,
+		Headers: append([]string(nil), src.Headers...),
+		Body:    src.Body,
+	}
+}
+
+func copyHTTPResponseDebugInfo(src *HTTPResponseDebugInfo) *HTTPResponseDebugInfo {
+	if src == nil {
+		return nil
+	}
+	return &HTTPResponseDebugInfo{
+		StatusCode: src.StatusCode,
+		StatusText: src.StatusText,
+		Headers:    append([]string(nil), src.Headers...),
+		Body:       src.Body,
+	}
+}
+
+func copyHTTPInteraction(src HTTPInteraction) HTTPInteraction {
+	return HTTPInteraction{
+		Request:  copyHTTPRequestDebugInfo(src.Request),
+		Response: copyHTTPResponseDebugInfo(src.Response),
+	}
 }
 
 func authMethodLabel(cfg *HTTPResourceServerAuthConfig) string {

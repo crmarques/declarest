@@ -161,3 +161,12 @@ Notes:
 Contexts are stored in `~/.declarest/config` by default.
 
 Use `declarest config list` and `declarest config use` to manage the active context.
+
+## Environment overrides
+
+DeclaREST honors these environment variables when determining where the context store lives:
+
+- `DECLAREST_CONFIG_DIR`: override the directory that contains the config file (defaults to `~/.declarest`).
+- `DECLAREST_CONFIG_FILE`: override the full config file path (defaults to `DECLAREST_CONFIG_DIR/config`).
+
+Run `declarest config env` to see the resolved values (environment vs default) that DeclaREST is using in the current shell.

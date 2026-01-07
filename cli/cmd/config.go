@@ -40,6 +40,7 @@ environments (for example dev, staging, and production) with confidence.`,
 	cmd.AddCommand(newConfigListCommand(manager))
 	cmd.AddCommand(newConfigCurrentCommand(manager))
 	cmd.AddCommand(newConfigCheckCommand(manager))
+	cmd.AddCommand(newConfigEnvCommand())
 	cmd.AddCommand(newConfigPrintTemplateCommand())
 
 	return cmd

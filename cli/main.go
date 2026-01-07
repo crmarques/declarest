@@ -9,10 +9,11 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
+		cmd.ReportDebug(err, os.Stderr)
 		if !cmd.IsHandledError(err) {
-			cmd.ReportDebug(err, os.Stderr)
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		}
 		os.Exit(1)
 	}
+	cmd.ReportDebug(nil, os.Stdout)
 }

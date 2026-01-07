@@ -6,8 +6,7 @@ This page highlights the main commands and what they do.
 ## Global flags
 
 - `--no-status`: suppress status messages and print only command output.
-- `--debug`: print debug information when errors occur (equivalent to `--verbose=all`).
-- `--verbose[=groups]`: print grouped debug information when errors occur. Groups: `network`, `repository`, `resource`, `all`. Use `--verbose` with no value for `all`.
+- `--debug[=groups]`: always print grouped debugging info (even on success) when this flag is supplied; groups are `network`, `repository`, `resource`, `all` and network output surfaces the last HTTP request/headers (including auth) plus the response.
 
 ## config
 
@@ -21,6 +20,7 @@ Manage contexts and configuration files.
 - `config rename`: rename a context.
 - `config delete`: remove a context.
 - `config check`: validate configuration and connectivity (does not validate authentication).
+- `config env`: display DECLAREST_* environment overrides and the resolved context store locations they control.
 - `config print-template`: print a full config file.
 
 ## repo

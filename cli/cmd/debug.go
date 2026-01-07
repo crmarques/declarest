@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,26 +33,30 @@ type debugSettings struct {
 }
 
 type debugContext struct {
-	server     *managedserver.ServerDebugInfo
-	repository *repository.RepositoryDebugInfo
+	server     serverDebugProvider
+	repository repositoryDebugProvider
 }
 
 var currentDebug debugSettings
 var currentDebugContext debugContext
 
+type serverDebugProvider interface {
+	DebugInfo() managedserver.ServerDebugInfo
+}
+
+type repositoryDebugProvider interface {
+	DebugInfo() repository.RepositoryDebugInfo
+}
+
 func configureDebugSettings(cmd *cobra.Command) error {
 	resetDebugContext()
 
-	verboseValue, err := lookupStringFlag(cmd, "verbose")
-	if err != nil {
-		return err
-	}
-	debugValue, err := lookupBoolFlag(cmd, "debug")
+	debugValue, err := lookupStringFlag(cmd, "debug")
 	if err != nil {
 		return err
 	}
 
-	settings, err := parseDebugSettings(verboseValue, debugValue)
+	settings, err := parseDebugSettings(debugValue)
 	if err != nil {
 		return usageError(cmd, err.Error())
 	}
@@ -61,11 +64,8 @@ func configureDebugSettings(cmd *cobra.Command) error {
 	return nil
 }
 
-func parseDebugSettings(verbose string, debug bool) (debugSettings, error) {
-	raw := strings.TrimSpace(verbose)
-	if raw == "" && debug {
-		raw = debugGroupAll
-	}
+func parseDebugSettings(value string) (debugSettings, error) {
+	raw := strings.TrimSpace(value)
 	if raw == "" {
 		return debugSettings{}, nil
 	}
@@ -140,17 +140,11 @@ func captureDebugContext(recon *reconciler.DefaultReconciler) {
 	if recon == nil {
 		return
 	}
-	if provider, ok := recon.ResourceServerManager.(interface {
-		DebugInfo() managedserver.ServerDebugInfo
-	}); ok {
-		info := provider.DebugInfo()
-		currentDebugContext.server = &info
+	if provider, ok := recon.ResourceServerManager.(serverDebugProvider); ok {
+		currentDebugContext.server = provider
 	}
-	if provider, ok := recon.ResourceRepositoryManager.(interface {
-		DebugInfo() repository.RepositoryDebugInfo
-	}); ok {
-		info := provider.DebugInfo()
-		currentDebugContext.repository = &info
+	if provider, ok := recon.ResourceRepositoryManager.(repositoryDebugProvider); ok {
+		currentDebugContext.repository = provider
 	}
 }
 
@@ -159,7 +153,7 @@ func resetDebugContext() {
 }
 
 func ReportDebug(err error, out io.Writer) {
-	if err == nil || out == nil || !currentDebug.enabled {
+	if out == nil || !currentDebug.enabled {
 		return
 	}
 
@@ -176,7 +170,7 @@ func ReportDebug(err error, out io.Writer) {
 		}
 	}
 
-	if len(sections) == 0 {
+	if len(sections) == 0 && err == nil {
 		return
 	}
 
@@ -184,9 +178,24 @@ func ReportDebug(err error, out io.Writer) {
 	for _, section := range sections {
 		fmt.Fprintf(out, "  %s:\n", section.title)
 		for _, item := range section.items {
-			fmt.Fprintf(out, "    %s: %s\n", item.key, item.value)
+			printDebugItem(out, item)
 		}
 	}
+}
+
+func printDebugItem(out io.Writer, item debugItem) {
+	if strings.Contains(item.value, "\n") {
+		fmt.Fprintf(out, "    %s:\n", item.key)
+		for _, line := range strings.Split(item.value, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			fmt.Fprintf(out, "      %s\n", line)
+		}
+		return
+	}
+	fmt.Fprintf(out, "    %s: %s\n", item.key, item.value)
 }
 
 type debugItem struct {
@@ -205,8 +214,8 @@ func (s debugSection) hasItems() bool {
 
 func buildNetworkDebugSection(err error) debugSection {
 	section := debugSection{title: "Network"}
-
-	if info := currentDebugContext.server; info != nil {
+	if provider := currentDebugContext.server; provider != nil {
+		info := provider.DebugInfo()
 		if strings.TrimSpace(info.Type) != "" {
 			section.items = append(section.items, debugItem{key: "type", value: info.Type})
 		}
@@ -225,39 +234,50 @@ func buildNetworkDebugSection(err error) debugSection {
 		if strings.TrimSpace(info.OpenAPI) != "" {
 			section.items = append(section.items, debugItem{key: "openapi", value: info.OpenAPI})
 		}
+		for idx, interaction := range info.Interactions {
+			prefix := fmt.Sprintf("interaction[%d]", idx+1)
+			if interaction.Request != nil {
+				requestLine := strings.TrimSpace(fmt.Sprintf("%s %s", interaction.Request.Method, interaction.Request.URL))
+				if requestLine != "" {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request", prefix), value: requestLine})
+				}
+				if len(interaction.Request.Headers) > 0 {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request.headers", prefix), value: strings.Join(interaction.Request.Headers, "\n")})
+				}
+				if strings.TrimSpace(interaction.Request.Body) != "" {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request.body", prefix), value: interaction.Request.Body})
+				}
+			}
+			if interaction.Response != nil {
+				statusText := interaction.Response.StatusText
+				if statusText == "" {
+					statusText = http.StatusText(interaction.Response.StatusCode)
+				}
+				if interaction.Response.StatusCode > 0 || statusText != "" {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.status", prefix), value: fmt.Sprintf("%d %s", interaction.Response.StatusCode, statusText)})
+				}
+				if len(interaction.Response.Headers) > 0 {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.headers", prefix), value: strings.Join(interaction.Response.Headers, "\n")})
+				}
+				if interaction.Response.Body != "" {
+					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.body", prefix), value: interaction.Response.Body})
+				}
+			}
+		}
 	}
-
-	var httpErr *managedserver.HTTPError
-	if errors.As(err, &httpErr) {
-		status := httpErr.Status()
-		if status == 0 {
-			status = 500
-		}
-		statusText := http.StatusText(status)
-		if statusText == "" {
-			statusText = "Unknown"
-		}
-
-		requestURL := redactURL(httpErr.URL)
-		request := strings.TrimSpace(fmt.Sprintf("%s %s", httpErr.Method, requestURL))
-		if request != "" {
-			section.items = append(section.items, debugItem{key: "request", value: request})
-		}
-		section.items = append(section.items, debugItem{key: "status", value: fmt.Sprintf("%d %s", status, statusText)})
-		if len(httpErr.Body) > 0 {
-			section.items = append(section.items, debugItem{key: "response_body_bytes", value: fmt.Sprintf("%d", len(httpErr.Body))})
-		}
+	if err != nil {
+		section.items = append(section.items, debugItem{key: "error", value: err.Error()})
 	}
-
 	return section
 }
 
 func buildRepositoryDebugSection() debugSection {
 	section := debugSection{title: "Repository"}
-	info := currentDebugContext.repository
-	if info == nil {
+	provider := currentDebugContext.repository
+	if provider == nil {
 		return section
 	}
+	info := provider.DebugInfo()
 	if strings.TrimSpace(info.Type) != "" {
 		section.items = append(section.items, debugItem{key: "type", value: info.Type})
 	}
@@ -314,17 +334,4 @@ func lookupStringFlag(cmd *cobra.Command, name string) (string, error) {
 		return cmd.InheritedFlags().GetString(name)
 	}
 	return "", nil
-}
-
-func lookupBoolFlag(cmd *cobra.Command, name string) (bool, error) {
-	if cmd == nil {
-		return false, nil
-	}
-	if cmd.Flags().Lookup(name) != nil {
-		return cmd.Flags().GetBool(name)
-	}
-	if cmd.InheritedFlags().Lookup(name) != nil {
-		return cmd.InheritedFlags().GetBool(name)
-	}
-	return false, nil
 }
