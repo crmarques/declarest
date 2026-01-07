@@ -43,6 +43,7 @@ safe_remove() {
     fi
     if command -v podman >/dev/null 2>&1; then
         podman unshare chown -R "$(id -u):$(id -g)" "$path" >/dev/null 2>&1 || true
+        podman unshare chmod -R u+rwx "$path" >/dev/null 2>&1 || true
         podman unshare rm -rf "$path" >/dev/null 2>&1 && return 0
     fi
     return 1
@@ -59,6 +60,21 @@ remove_containers_by_prefix() {
         if ((${#containers[@]} > 0)); then
             printf "Removing containers matching %s\n" "$pattern"
             "$RUNTIME" rm -f "${containers[@]}" >/dev/null 2>&1 || true
+        fi
+    done
+}
+
+remove_pods_by_prefix() {
+    local pattern
+    if ! command -v "$RUNTIME" >/dev/null 2>&1; then
+        return
+    fi
+    for pattern in "$@"; do
+        local pods
+        mapfile -t pods < <("$RUNTIME" pod ps --format '{{.Name}}' | grep -E "^${pattern}" || true)
+        if ((${#pods[@]} > 0)); then
+            printf "Removing pods matching %s\n" "$pattern"
+            "$RUNTIME" pod rm -f "${pods[@]}" >/dev/null 2>&1 || true
         fi
     done
 }
@@ -112,20 +128,34 @@ stop_stack() {
 }
 
 printf "Cleaning workspaces under %s\n" "$base"
-count=0
-remove_containers_by_prefix declarest-keycloak- declarest-rundeck-
-remove_networks_by_prefix declarest-keycloak- declarest-rundeck-
-remove_volumes_by_prefix declarest-keycloak- declarest-rundeck-
+workspaces=()
 for prefix in declarest-keycloak- declarest-rundeck-; do
     while IFS= read -r dir; do
+        workspaces+=("$dir")
+    done < <(find "$base" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null)
+done
+
+if ((${#workspaces[@]} > 0)); then
+    for dir in "${workspaces[@]}"; do
         if [[ -d "$dir" ]]; then
             printf "Stopping services in %s\n" "$dir"
             stop_stack "$dir"
-            printf "Removing %s\n" "$dir"
-            safe_remove "$dir" || printf "  Warning: could not remove %s (permissions)\n" "$dir"
-            count=$((count + 1))
         fi
-    done < <(find "$base" -maxdepth 1 -type d -name "${prefix}*" 2>/dev/null)
+    done
+fi
+
+remove_containers_by_prefix declarest-keycloak- declarest-rundeck-
+remove_pods_by_prefix declarest-keycloak- declarest-rundeck-
+remove_networks_by_prefix declarest-keycloak- declarest-rundeck-
+remove_volumes_by_prefix declarest-keycloak- declarest-rundeck-
+
+count=0
+for dir in "${workspaces[@]}"; do
+    if [[ -d "$dir" ]]; then
+        printf "Removing %s\n" "$dir"
+        safe_remove "$dir" || printf "  Warning: could not remove %s (permissions)\n" "$dir"
+        count=$((count + 1))
+    fi
 done
 
 if [[ $count -eq 0 ]]; then

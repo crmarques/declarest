@@ -83,7 +83,7 @@ func parseDebugSettings(value string) (debugSettings, error) {
 			}, nil
 		}
 		if !isKnownDebugGroup(name) {
-			return debugSettings{}, fmt.Errorf("unknown verbose group %q (available: %s)", name, strings.Join(knownDebugGroups(), ", "))
+			return debugSettings{}, fmt.Errorf("unknown debug group %q (available: %s)", name, strings.Join(knownDebugGroups(), ", "))
 		}
 		groups[name] = true
 	}
@@ -175,10 +175,13 @@ func ReportDebug(err error, out io.Writer) {
 	}
 
 	fmt.Fprintln(out, "Debug info:")
-	for _, section := range sections {
+	for idx, section := range sections {
 		fmt.Fprintf(out, "  %s:\n", section.title)
 		for _, item := range section.items {
 			printDebugItem(out, item)
+		}
+		if idx < len(sections)-1 {
+			fmt.Fprintln(out)
 		}
 	}
 }
@@ -234,41 +237,60 @@ func buildNetworkDebugSection(err error) debugSection {
 		if strings.TrimSpace(info.OpenAPI) != "" {
 			section.items = append(section.items, debugItem{key: "openapi", value: info.OpenAPI})
 		}
+		if len(info.Interactions) == 0 && (info.LastRequest != nil || info.LastResponse != nil) {
+			appendHTTPInteractionDebugItems(&section, "last_interaction", managedserver.HTTPInteraction{
+				Request:  info.LastRequest,
+				Response: info.LastResponse,
+			})
+		}
 		for idx, interaction := range info.Interactions {
 			prefix := fmt.Sprintf("interaction[%d]", idx+1)
-			if interaction.Request != nil {
-				requestLine := strings.TrimSpace(fmt.Sprintf("%s %s", interaction.Request.Method, interaction.Request.URL))
-				if requestLine != "" {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request", prefix), value: requestLine})
-				}
-				if len(interaction.Request.Headers) > 0 {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request.headers", prefix), value: strings.Join(interaction.Request.Headers, "\n")})
-				}
-				if strings.TrimSpace(interaction.Request.Body) != "" {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.request.body", prefix), value: interaction.Request.Body})
-				}
-			}
-			if interaction.Response != nil {
-				statusText := interaction.Response.StatusText
-				if statusText == "" {
-					statusText = http.StatusText(interaction.Response.StatusCode)
-				}
-				if interaction.Response.StatusCode > 0 || statusText != "" {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.status", prefix), value: fmt.Sprintf("%d %s", interaction.Response.StatusCode, statusText)})
-				}
-				if len(interaction.Response.Headers) > 0 {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.headers", prefix), value: strings.Join(interaction.Response.Headers, "\n")})
-				}
-				if interaction.Response.Body != "" {
-					section.items = append(section.items, debugItem{key: fmt.Sprintf("%s.response.body", prefix), value: interaction.Response.Body})
-				}
-			}
+			appendHTTPInteractionDebugItems(&section, prefix, interaction)
 		}
 	}
 	if err != nil {
 		section.items = append(section.items, debugItem{key: "error", value: err.Error()})
 	}
 	return section
+}
+
+func appendHTTPInteractionDebugItems(section *debugSection, prefix string, interaction managedserver.HTTPInteraction) {
+	appendHTTPRequestDebugItems(section, fmt.Sprintf("%s.request", prefix), interaction.Request)
+	appendHTTPResponseDebugItems(section, fmt.Sprintf("%s.response", prefix), interaction.Response)
+}
+
+func appendHTTPRequestDebugItems(section *debugSection, baseKey string, request *managedserver.HTTPRequestDebugInfo) {
+	if request == nil {
+		return
+	}
+	if line := strings.TrimSpace(fmt.Sprintf("%s %s", request.Method, request.URL)); line != "" {
+		section.items = append(section.items, debugItem{key: baseKey, value: line})
+	}
+	if len(request.Headers) > 0 {
+		section.items = append(section.items, debugItem{key: baseKey + ".headers", value: strings.Join(request.Headers, "\n")})
+	}
+	if strings.TrimSpace(request.Body) != "" {
+		section.items = append(section.items, debugItem{key: baseKey + ".body", value: request.Body})
+	}
+}
+
+func appendHTTPResponseDebugItems(section *debugSection, baseKey string, response *managedserver.HTTPResponseDebugInfo) {
+	if response == nil {
+		return
+	}
+	statusText := strings.TrimSpace(response.StatusText)
+	if statusText == "" {
+		statusText = http.StatusText(response.StatusCode)
+	}
+	if response.StatusCode > 0 || statusText != "" {
+		section.items = append(section.items, debugItem{key: baseKey + ".status", value: fmt.Sprintf("%d %s", response.StatusCode, statusText)})
+	}
+	if len(response.Headers) > 0 {
+		section.items = append(section.items, debugItem{key: baseKey + ".headers", value: strings.Join(response.Headers, "\n")})
+	}
+	if strings.TrimSpace(response.Body) != "" {
+		section.items = append(section.items, debugItem{key: baseKey + ".body", value: response.Body})
+	}
 }
 
 func buildRepositoryDebugSection() debugSection {

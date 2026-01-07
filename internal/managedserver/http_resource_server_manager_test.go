@@ -224,6 +224,57 @@ func TestHTTPResourceServerManagerOAuthTokenCached(t *testing.T) {
 	}
 }
 
+func TestHTTPResourceServerManagerBuildURLKeepsBasePath(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://rundeck.example/api/45/",
+	})
+	if err := manager.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	out, err := manager.buildURL("/projects/", nil)
+	if err != nil {
+		t.Fatalf("buildURL: %v", err)
+	}
+	if out != "https://rundeck.example/api/45/projects/" {
+		t.Fatalf("unexpected build url %q", out)
+	}
+}
+
+func TestHTTPResourceServerManagerBuildURLKeepsBasePathWithoutTrailingSlash(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://rundeck.example/api/45",
+	})
+	if err := manager.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	out, err := manager.buildURL("/projects/", nil)
+	if err != nil {
+		t.Fatalf("buildURL: %v", err)
+	}
+	if out != "https://rundeck.example/api/45/projects/" {
+		t.Fatalf("unexpected build url %q", out)
+	}
+}
+
+func TestHTTPResourceServerManagerBuildURLRespectsAbsolutePath(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://rundeck.example/api/45/",
+	})
+	if err := manager.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+
+	out, err := manager.buildURL("https://rundeck.example/projects/foo", nil)
+	if err != nil {
+		t.Fatalf("buildURL: %v", err)
+	}
+	if out != "https://rundeck.example/projects/foo" {
+		t.Fatalf("unexpected build url %q", out)
+	}
+}
+
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {

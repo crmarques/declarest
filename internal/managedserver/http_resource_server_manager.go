@@ -417,6 +417,11 @@ func (m *HTTPResourceServerManager) buildURL(path string, query map[string][]str
 	}
 
 	var reqURL *url.URL
+	effectivePath := path
+	if strings.HasPrefix(path, "/") {
+		effectivePath = strings.TrimPrefix(path, "/")
+	}
+
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		u, err := url.Parse(path)
 		if err != nil {
@@ -427,11 +432,14 @@ func (m *HTTPResourceServerManager) buildURL(path string, query map[string][]str
 		if m.baseURL == nil {
 			return "", errors.New("http manager base url is not configured")
 		}
-		rel, err := url.Parse(path)
+		rel, err := url.Parse(effectivePath)
 		if err != nil {
 			return "", fmt.Errorf("invalid request path %q: %w", path, err)
 		}
 		base := *m.baseURL
+		if base.Path != "" && !strings.HasSuffix(base.Path, "/") {
+			base.Path = base.Path + "/"
+		}
 		reqURL = base.ResolveReference(rel)
 	}
 

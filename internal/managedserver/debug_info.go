@@ -1,6 +1,7 @@
 package managedserver
 
 import (
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -50,11 +51,13 @@ func (m *HTTPResourceServerManager) DebugInfo() ServerDebugInfo {
 		info.TLSInsecureSkipVerify = &value
 	}
 	if len(m.config.DefaultHeaders) > 0 {
-		for key := range m.config.DefaultHeaders {
+		for key, value := range m.config.DefaultHeaders {
 			key = strings.TrimSpace(key)
-			if key != "" {
-				info.DefaultHeaders = append(info.DefaultHeaders, key)
+			value = strings.TrimSpace(value)
+			if key == "" || value == "" {
+				continue
 			}
+			info.DefaultHeaders = append(info.DefaultHeaders, fmt.Sprintf("%s: %s", key, value))
 		}
 		sort.Strings(info.DefaultHeaders)
 	}

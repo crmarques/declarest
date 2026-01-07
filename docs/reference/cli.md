@@ -6,7 +6,7 @@ This page highlights the main commands and what they do.
 ## Global flags
 
 - `--no-status`: suppress status messages and print only command output.
-- `--debug[=groups]`: always print grouped debugging info (even on success) when this flag is supplied; groups are `network`, `repository`, `resource`, `all` and network output surfaces the last HTTP request/headers (including auth) plus the response.
+- `--debug[=groups]`: always print grouped debugging info (even on success) when this flag is supplied; groups are `network`, `repository`, `resource`, `all`. The `network` group reveals the managed server type/base URL/auth, default headers, and each captured HTTP interaction (method, URL, headers, payload, status, headers, body) so you can inspect OAuth/token exchanges or other requests; `resource` enables extra CLI output during apply/create/etc.
 
 ## config
 

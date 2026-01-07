@@ -207,7 +207,11 @@ run_step() {
 }
 
 declarest_cli() {
-    HOME="$DECLAREST_HOME_DIR" "$DECLAREST_BIN_DIR/declarest" "$@"
+    local args=()
+    if [[ -n "${DECLAREST_DEBUG_GROUPS:-}" ]]; then
+        args+=("--debug=${DECLAREST_DEBUG_GROUPS}")
+    fi
+    HOME="$DECLAREST_HOME_DIR" "$DECLAREST_BIN_DIR/declarest" "${args[@]}" "$@"
 }
 
 run_cli() {

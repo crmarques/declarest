@@ -5,12 +5,15 @@ declarest_bin() {
 }
 
 declarest_cli() {
-    local bin
+    local bin args=()
     bin="$(declarest_bin)"
+    if [[ -n "${DECLAREST_DEBUG_GROUPS:-}" ]]; then
+        args+=("--debug=${DECLAREST_DEBUG_GROUPS}")
+    fi
     if [[ -n "${DECLAREST_CONTEXT_FILE:-}" ]]; then
-        HOME="$DECLAREST_HOME_DIR" DECLAREST_CONTEXT_FILE="$DECLAREST_CONTEXT_FILE" "$bin" "$@"
+        HOME="$DECLAREST_HOME_DIR" DECLAREST_CONTEXT_FILE="$DECLAREST_CONTEXT_FILE" "$bin" "${args[@]}" "$@"
     else
-        HOME="$DECLAREST_HOME_DIR" "$bin" "$@"
+        HOME="$DECLAREST_HOME_DIR" "$bin" "${args[@]}" "$@"
     fi
 }
 

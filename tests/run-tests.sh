@@ -7,6 +7,10 @@ TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
 export CONTAINER_RUNTIME
 
+if [[ -z "${DECLAREST_DEBUG_GROUPS:-}" ]]; then
+    export DECLAREST_DEBUG_GROUPS="network"
+fi
+
 usage() {
     cat <<EOF
 Usage: ./tests/run-tests.sh [--e2e|--interactive] --managed-server <name> --repo-provider <name> --secret-provider <type> [-- <extra args>]

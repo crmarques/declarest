@@ -6,6 +6,14 @@ timestamp() {
     date +"%Y-%m-%dT%H:%M:%S%z"
 }
 
+strip_debug_info() {
+    local content="$1"
+    if [[ -z "$content" ]]; then
+        return 0
+    fi
+    printf "%s" "$content" | sed '/^Debug info:/,$d'
+}
+
 log_target() {
     local target="${RUN_LOG:-}"
     [[ -z "$target" ]] && return 0
@@ -70,13 +78,13 @@ capture_logged() {
     if output=$("${cmd[@]}" 2>>"$target"); then
         log_block "${label} output" "$output"
         log_line "DONE  ${label}"
-        printf "%s" "$output"
+        printf "%s" "$(strip_debug_info "$output")"
         return 0
     else
         local status=$?
         log_block "${label} output (partial)" "$output"
         log_line "FAIL  ${label} (exit ${status})"
-        printf "%s" "$output"
+        printf "%s" "$(strip_debug_info "$output")"
         return $status
     fi
 }
