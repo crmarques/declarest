@@ -301,11 +301,15 @@ func (m *HTTPResourceServerManager) defaultMimeFor(spec *RequestSpec) string {
 	}
 }
 
-func (m *HTTPResourceServerManager) doRequest(spec *HTTPRequestSpec, timeout time.Duration, payload []byte) (*httpResponse, error) {
+func (m *HTTPResourceServerManager) doRequest(spec *HTTPRequestSpec, timeout time.Duration, payload []byte) (*HTTPResponse, error) {
 	return m.executeRequest(spec, timeout, payload, true)
 }
 
-func (m *HTTPResourceServerManager) executeRequest(spec *HTTPRequestSpec, timeout time.Duration, payload []byte, readBody bool) (*httpResponse, error) {
+func (m *HTTPResourceServerManager) ExecuteRequest(spec *HTTPRequestSpec, payload []byte) (*HTTPResponse, error) {
+	return m.doRequest(spec, defaultRequestTimeout, payload)
+}
+
+func (m *HTTPResourceServerManager) executeRequest(spec *HTTPRequestSpec, timeout time.Duration, payload []byte, readBody bool) (*HTTPResponse, error) {
 	if m.client == nil {
 		return nil, errors.New("http manager is not initialized")
 	}
@@ -364,7 +368,7 @@ func (m *HTTPResourceServerManager) executeRequest(spec *HTTPRequestSpec, timeou
 		if !readBody {
 			body = nil
 		}
-		return &httpResponse{
+		return &HTTPResponse{
 			StatusCode: resp.StatusCode,
 			Body:       body,
 			Header:     resp.Header.Clone(),
@@ -464,7 +468,7 @@ func (m *HTTPResourceServerManager) encodeResource(res resource.Resource) ([]byt
 	return payload, nil
 }
 
-type httpResponse struct {
+type HTTPResponse struct {
 	StatusCode int
 	Body       []byte
 	Header     http.Header

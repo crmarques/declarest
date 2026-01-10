@@ -145,6 +145,18 @@ seed_secrets_via_cli() {
     run_cli "secret add ldap bind credential (restore)" secret add --path "$SECRET_LDAP_PATH" --key "$SECRET_LDAP_KEY" --value "$DECLAREST_TEST_LDAP_BIND_CREDENTIAL"
 }
 
+test_ad_hoc_command() {
+    local path="/admin/realms/publico"
+    log_line "Testing ad-hoc command for $path"
+    local output
+    output=$(capture_cli "ad-hoc get realm" --no-status ad-hoc get --path "$path")
+    if ! grep -q '"realm":"publico"' <<<"$output"; then
+        log_line "ad-hoc command failed: unexpected output"
+        echo "Expected ad-hoc get to include the realm name" >&2
+        exit 1
+    fi
+}
+
 test_secret_export_import() {
     local export_file="$DECLAREST_WORK_DIR/secret-export.csv"
     mkdir -p "$(dirname "$export_file")"
@@ -425,6 +437,9 @@ for coll in "${collections[@]}"; do
     fi
 done
 log_line "Collections saved"
+
+phase "Testing ad-hoc command"
+test_ad_hoc_command
 
 if [[ $secrets_enabled -eq 1 ]]; then
     phase "Restoring secrets for diff"

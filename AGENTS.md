@@ -20,3 +20,4 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 - When you edit this file, note what new expectations future agents should know.
 - Keep guidance concise; AGENTS is meant to be quick to read before coding.
 - Document user or developer-facing behavior changes in the docs before finishing your work.
+- When new feature is added, update unit and e2e tests to validade it

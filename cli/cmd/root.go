@@ -78,6 +78,7 @@ Use the CLI to:
 
 	cmd.AddCommand(newConfigCommand())
 	cmd.AddCommand(newResourceCommand())
+	cmd.AddCommand(newAdHocCommand())
 	cmd.AddCommand(newMetadataCommand())
 	cmd.AddCommand(newRepoCommand())
 	cmd.AddCommand(newSecretCommand())

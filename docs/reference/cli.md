@@ -46,6 +46,17 @@ Operate on resource definitions.
 - `resource diff`: show differences between repo and remote.
 - `resource delete`: delete resources from repo, remote, or both.
 
+## ad-hoc
+
+Send direct HTTP requests to the managed server while still honoring any metadata files that apply to the provided logical path (they can override URLs, headers, and templated placeholders).
+
+- `ad-hoc get|post|put|patch|delete`: issue the named method. Pass the logical path either as `--path <path>` or as the positional argument.
+- `--header`: repeat to add arbitrary headers (`Name: value` or `Name=value` format). Metadata-derived headers are merged first, then user headers override.
+- `--default-headers`: re-apply the default `Accept: application/json` / `Content-Type: application/json` values even when metadata explicitly cleared them.
+- `--payload`: supply an inline payload or prefix with `@` to load payload bytes from a file (useful for POST/PUT/PATCH/DELETE operations).
+
+The command prints the raw response body to stdout and a `[OK] METHOD PATH STATUS` summary to stderr unless `--no-status` is supplied.
+
 ## metadata
 
 Manage metadata definitions.
