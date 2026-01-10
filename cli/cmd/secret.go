@@ -264,7 +264,7 @@ func newSecretDeleteCommand() *cobra.Command {
 				return usageError(cmd, "key is required")
 			}
 
-			message := fmt.Sprintf("Delete secret %s for %s from the configured secret store. %s Continue?", key, resourcePath, impactSummary(false, false))
+			message := fmt.Sprintf("Delete secret %s for %s from the configured secret store. Continue?", key, resourcePath)
 			if err := confirmAction(cmd, yes, message); err != nil {
 				return err
 			}
@@ -288,8 +288,6 @@ func newSecretDeleteCommand() *cobra.Command {
 	cmd.Flags().StringVar(&resourcePath, "path", "", "Resource path to delete secrets for")
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to delete")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
-	cmd.Flags().BoolVar(&yes, "force", false, "DEPRECATED: use --yes")
-	_ = cmd.Flags().MarkHidden("force")
 
 	return cmd
 }
@@ -412,10 +410,14 @@ func newSecretExportCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "export",
+		Use:   "export [path]",
 		Short: "Export stored secrets to CSV",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resourcePath = strings.TrimSpace(resourcePath)
+			var err error
+			resourcePath, err = resolveOptionalArg(cmd, resourcePath, args, "path")
+			if err != nil {
+				return err
+			}
 			if exportAll && resourcePath != "" {
 				return usageError(cmd, "--all cannot be combined with --path")
 			}
@@ -461,12 +463,16 @@ func newSecretImportCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "import",
+		Use:   "import <file>",
 		Short: "Import secrets from a CSV file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filePath = strings.TrimSpace(filePath)
-			if filePath == "" {
-				return usageError(cmd, "--file is required")
+			var err error
+			filePath, err = resolveOptionalArg(cmd, filePath, args, "file")
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(filePath) == "" {
+				return usageError(cmd, "file path is required (use --file or positional argument)")
 			}
 
 			f, err := os.Open(filePath)

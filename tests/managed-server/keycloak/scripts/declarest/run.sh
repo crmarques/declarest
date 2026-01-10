@@ -162,12 +162,12 @@ test_secret_export_import() {
     mkdir -p "$(dirname "$export_file")"
 
     local csv_output
-    csv_output=$(capture_cli "secret export ldap" --no-status secret export --path "$SECRET_LDAP_PATH")
+    csv_output=$(capture_cli "secret export ldap" --no-status secret export "$SECRET_LDAP_PATH")
     printf "%s" "$csv_output" > "$export_file"
 
     run_cli "secret delete ldap for import test" secret delete --path "$SECRET_LDAP_PATH" --key "$SECRET_LDAP_KEY" --yes
 
-    run_cli "secret import ldap from CSV" secret import --file "$export_file"
+    run_cli "secret import ldap from CSV" secret import "$export_file"
 
     local imported
     imported=$(capture_cli "secret get ldap after import" --no-status secret get --path "$SECRET_LDAP_PATH" --key "$SECRET_LDAP_KEY")

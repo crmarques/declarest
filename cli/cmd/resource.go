@@ -142,7 +142,7 @@ func newResourceGetCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to read")
 	cmd.Flags().BoolVar(&print, "print", true, "Print the resource payload to stdout")
-	cmd.Flags().BoolVar(&fromRepo, "from-repo", false, "Read the resource from the resource repository")
+	cmd.Flags().BoolVar(&fromRepo, "repo", false, "Read the resource from the resource repository")
 	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
 
 	registerResourcePathCompletion(cmd, resourceGetPathStrategy)
@@ -469,10 +469,9 @@ const openAPIFromContextValue = "__from_openapi_context__"
 func newResourceAddCommand() *cobra.Command {
 	var (
 		path        string
-		fromFile    string
+		filePath    string
 		fromPath    string
 		fromOpenAPI string
-		legacyFile  string
 		overrides   []string
 		applyRemote bool
 		force       bool
@@ -486,10 +485,9 @@ func newResourceAddCommand() *cobra.Command {
 				return usageError(cmd, "expected <path> [file]")
 			}
 			path = strings.TrimSpace(path)
-			fromFile = strings.TrimSpace(fromFile)
+			filePath = strings.TrimSpace(filePath)
 			fromPath = strings.TrimSpace(fromPath)
 			fromOpenAPI = strings.TrimSpace(fromOpenAPI)
-			legacyFile = strings.TrimSpace(legacyFile)
 			if len(args) > 0 {
 				argPath := strings.TrimSpace(args[0])
 				if argPath != "" {
@@ -505,25 +503,14 @@ func newResourceAddCommand() *cobra.Command {
 				argFile := strings.TrimSpace(args[1])
 				if argFile != "" {
 					if fromPath != "" {
-						return usageError(cmd, "from-path specified twice")
+						return usageError(cmd, "cannot combine --from-path with a file argument")
 					}
-					if fromFile != "" && fromFile != argFile {
-						return usageError(cmd, "from-file specified twice")
+					if filePath != "" && filePath != argFile {
+						return usageError(cmd, "file specified twice")
 					}
-					if fromFile == "" {
-						fromFile = argFile
+					if filePath == "" {
+						filePath = argFile
 					}
-				}
-			}
-			if legacyFile != "" {
-				if fromPath != "" {
-					return usageError(cmd, "from-path specified twice")
-				}
-				if fromFile != "" && fromFile != legacyFile {
-					return usageError(cmd, "from-file specified twice")
-				}
-				if fromFile == "" {
-					fromFile = legacyFile
 				}
 			}
 			useOpenAPI := cmd.Flags().Changed("from-openapi")
@@ -541,14 +528,14 @@ func newResourceAddCommand() *cobra.Command {
 			if err := validateLogicalPath(cmd, path); err != nil {
 				return err
 			}
-			if fromFile != "" && fromPath != "" {
-				return usageError(cmd, "--from-file and --from-path cannot be used together")
+			if filePath != "" && fromPath != "" {
+				return usageError(cmd, "--file and --from-path cannot be used together")
 			}
-			if useOpenAPI && (fromFile != "" || fromPath != "") {
-				return usageError(cmd, "--from-openapi cannot be combined with --from-file or --from-path")
+			if useOpenAPI && (filePath != "" || fromPath != "") {
+				return usageError(cmd, "--from-openapi cannot be combined with --file or --from-path")
 			}
-			if fromFile == "" && fromPath == "" && !useOpenAPI {
-				return usageError(cmd, "either --from-file, --from-path, or --from-openapi is required")
+			if filePath == "" && fromPath == "" && !useOpenAPI {
+				return usageError(cmd, "either --file, --from-path, or --from-openapi is required")
 			}
 			if fromPath != "" {
 				if err := validateLogicalPath(cmd, fromPath); err != nil {
@@ -577,7 +564,7 @@ func newResourceAddCommand() *cobra.Command {
 					return err
 				}
 			} else {
-				res, err = loadResourceFromFile(fromFile)
+				res, err = loadResourceFromFile(filePath)
 			}
 			if err != nil {
 				return err
@@ -628,15 +615,13 @@ func newResourceAddCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to add")
-	cmd.Flags().StringVar(&fromFile, "from-file", "", "Path to a JSON or YAML resource payload file")
+	cmd.Flags().StringVar(&filePath, "file", "", "Path to a JSON or YAML resource payload file")
 	cmd.Flags().StringVar(&fromPath, "from-path", "", "Resource path in the repository to copy")
 	cmd.Flags().StringVar(&fromOpenAPI, "from-openapi", "", "Build the resource from an OpenAPI schema (optional spec path; defaults to context)")
 	cmd.Flags().Lookup("from-openapi").NoOptDefVal = openAPIFromContextValue
 	cmd.Flags().StringArrayVar(&overrides, "override", nil, "Override resource fields (key=value list, JSON object, or JSON/YAML file)")
 	cmd.Flags().BoolVar(&applyRemote, "apply", false, "Apply the resource to the remote server after saving")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite the resource in the repository if it already exists")
-	cmd.Flags().StringVar(&legacyFile, "file", "", "Deprecated: use --from-file")
-	_ = cmd.Flags().MarkDeprecated("file", "use --from-file instead")
 
 	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
@@ -1399,6 +1384,11 @@ func newResourceDeleteCommand() *cobra.Command {
 				return err
 			}
 
+			repoChanged := cmd.Flags().Changed("repo")
+			if remote && repo && !repoChanged {
+				repo = false
+			}
+
 			isCollection := !all && resource.IsCollectionPath(targetPath)
 			resourceListChanged := cmd.Flags().Changed("resource-list")
 
@@ -1501,15 +1491,11 @@ func newResourceDeleteCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to delete")
 	cmd.Flags().BoolVar(&all, "all", false, "Delete all resources from the resource repository")
-	cmd.Flags().BoolVar(&repo, "repo", true, "Delete from the resource repository (default)")
+	cmd.Flags().BoolVar(&repo, "repo", true, "Delete from the resource repository (default unless --remote is set)")
 	cmd.Flags().BoolVar(&remote, "remote", false, "Delete remote resources")
-	cmd.Flags().BoolVar(&repo, "local", true, "Delete from the resource repository (default)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
-	cmd.Flags().BoolVar(&yes, "force", false, "DEPRECATED: use --yes")
 	cmd.Flags().BoolVar(&resourceList, "resource-list", false, "When used with --repo on a collection path, delete the collection list entry from the resource repository")
 	cmd.Flags().BoolVar(&allItems, "all-items", false, "When used with --repo on a collection path, delete all saved collection items from the resource repository")
-	_ = cmd.Flags().MarkHidden("local")
-	_ = cmd.Flags().MarkHidden("force")
 
 	registerResourcePathCompletion(cmd, resourceDeletePathStrategy)
 

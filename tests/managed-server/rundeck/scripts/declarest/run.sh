@@ -74,7 +74,7 @@ EOF
     ;;
 esac
 
-run_cli "add job with includes" resource add --path "$include_job_path" --from-file "$include_resource_file"
+run_cli "add job with includes" resource add --path "$include_job_path" --file "$include_resource_file"
 run_cli "apply job with includes" resource apply --path "$include_job_path"
 
 log_line "Rundeck E2E workflow completed"

@@ -232,18 +232,24 @@ func boolFlagValue(cmd *cobra.Command, name string, fallback bool) bool {
 }
 
 func resourceGetPathStrategy(cmd *cobra.Command) []pathCompletionSource {
-	if boolFlagValue(cmd, "from-repo", false) {
+	if boolFlagValue(cmd, "repo", false) {
 		return []pathCompletionSource{pathCompletionSourceRepo}
 	}
 	return []pathCompletionSource{pathCompletionSourceRemote}
 }
 
 func resourceDeletePathStrategy(cmd *cobra.Command) []pathCompletionSource {
+	repoValue := boolFlagValue(cmd, "repo", true)
+	remoteValue := boolFlagValue(cmd, "remote", false)
+	repoChanged := cmd.Flags().Changed("repo")
+	if remoteValue && repoValue && !repoChanged {
+		repoValue = false
+	}
 	sources := make([]pathCompletionSource, 0, 2)
-	if boolFlagValue(cmd, "repo", true) {
+	if repoValue {
 		sources = append(sources, pathCompletionSourceRepo)
 	}
-	if boolFlagValue(cmd, "remote", false) {
+	if remoteValue {
 		sources = append(sources, pathCompletionSourceRemote)
 	}
 	if len(sources) == 0 {
@@ -253,11 +259,17 @@ func resourceDeletePathStrategy(cmd *cobra.Command) []pathCompletionSource {
 }
 
 func resourceListPathStrategy(cmd *cobra.Command) []pathCompletionSource {
+	repoValue := boolFlagValue(cmd, "repo", true)
+	remoteValue := boolFlagValue(cmd, "remote", false)
+	repoChanged := cmd.Flags().Changed("repo")
+	if remoteValue && repoValue && !repoChanged {
+		repoValue = false
+	}
 	sources := make([]pathCompletionSource, 0, 2)
-	if boolFlagValue(cmd, "repo", true) {
+	if repoValue {
 		sources = append(sources, pathCompletionSourceRepo)
 	}
-	if boolFlagValue(cmd, "remote", false) {
+	if remoteValue {
 		sources = append(sources, pathCompletionSourceRemote)
 	}
 	if len(sources) == 0 {

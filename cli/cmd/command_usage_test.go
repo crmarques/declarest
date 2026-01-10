@@ -75,8 +75,8 @@ func TestResourceAddRejectsMultipleSources(t *testing.T) {
 	if err := command.Flags().Set("path", "/items/foo"); err != nil {
 		t.Fatalf("set path: %v", err)
 	}
-	if err := command.Flags().Set("from-file", "resource.json"); err != nil {
-		t.Fatalf("set from-file: %v", err)
+	if err := command.Flags().Set("file", "resource.json"); err != nil {
+		t.Fatalf("set file: %v", err)
 	}
 	if err := command.Flags().Set("from-path", "/items/bar"); err != nil {
 		t.Fatalf("set from-path: %v", err)

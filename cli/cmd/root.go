@@ -57,8 +57,6 @@ Use the CLI to:
 	configureUsage(cmd)
 
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-status", false, "Suppress status messages and print only command output")
-	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-result-output", false, "DEPRECATED: use --no-status")
-	_ = cmd.PersistentFlags().MarkHidden("no-result-output")
 	cmd.PersistentFlags().String("debug", "", "Print grouped debug information when errors occur (groups: network, repository, resource, all)")
 	cmd.PersistentFlags().Lookup("debug").NoOptDefVal = debugGroupAll
 

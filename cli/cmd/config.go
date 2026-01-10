@@ -186,8 +186,6 @@ func newConfigDeleteCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to delete")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
-	cmd.Flags().BoolVar(&yes, "force", false, "DEPRECATED: use --yes")
-	_ = cmd.Flags().MarkHidden("force")
 
 	return cmd
 }

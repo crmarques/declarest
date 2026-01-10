@@ -346,7 +346,7 @@ Diff ignores `status`, removes `meta.updatedAt`, keeps `id/name`, then applies t
 All operations MUST go through `Reconciler`. CLI never calls managers/providers directly.
 
 ### 5.1 `resource get --path <logical-path>`
-- Fetch the resource from the remote server (default) or from the repo with `--from-repo`.
+- Fetch the resource from the remote server (default) or from the repo with `--repo`.
 - `--print` writes the payload to stdout; `--save` persists the remote payload in the resource repository.
 - When the logical path is a collection, `--save` writes each item as a separate resource; use `--save-as-one-resource` to save the collection payload as a single resource.
 - Secrets are masked unless `--with-secrets`. When reading from the repo, `--with-secrets` resolves placeholders using the secret store. Saving plaintext secrets requires `--force`.
