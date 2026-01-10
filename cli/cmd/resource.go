@@ -145,6 +145,8 @@ func newResourceGetCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&fromRepo, "from-repo", false, "Read the resource from the resource repository")
 	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
 
+	registerResourcePathCompletion(cmd, resourceGetPathStrategy)
+
 	return cmd
 }
 
@@ -266,6 +268,8 @@ func newResourceSaveCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&asOneResource, "as-one-resource", false, "Save a fetched collection as a single resource repository entry")
 	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets or overriding existing definitions in the resource repository")
 
+	registerResourcePathCompletion(cmd, resourceRemotePathStrategy)
+
 	return cmd
 }
 
@@ -289,6 +293,9 @@ func newResourceExplainCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Logical resource or collection path to explain")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -630,6 +637,8 @@ func newResourceAddCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite the resource in the repository if it already exists")
 	cmd.Flags().StringVar(&legacyFile, "file", "", "Deprecated: use --from-file")
 	_ = cmd.Flags().MarkDeprecated("file", "use --from-file instead")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
@@ -1160,6 +1169,8 @@ func newResourceListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&listRepo, "repo", true, "List resources from the resource repository (default)")
 	cmd.Flags().BoolVar(&listRemote, "remote", false, "List resources from the remote server (uses resource repository collection metadata when --path is omitted)")
 
+	registerResourcePathCompletion(cmd, resourceListPathStrategy)
+
 	return cmd
 }
 
@@ -1225,6 +1236,8 @@ func newResourceCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to create")
 	cmd.Flags().BoolVar(&all, "all", false, "Create all resources from the resource repository")
 	cmd.Flags().BoolVar(&sync, "sync", false, "After creating, fetch the remote resource and save it in the resource repository")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 	return cmd
 }
 
@@ -1289,6 +1302,9 @@ func newResourceUpdateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to update")
 	cmd.Flags().BoolVar(&all, "all", false, "Update all resources from the resource repository")
 	cmd.Flags().BoolVar(&sync, "sync", false, "After updating, fetch the remote resource and save it in the resource repository")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -1357,6 +1373,9 @@ func newResourceApplyCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to apply")
 	cmd.Flags().BoolVar(&all, "all", false, "Apply all resources from the resource repository")
 	cmd.Flags().BoolVar(&sync, "sync", false, "After applying, fetch the remote resource and save it in the resource repository")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -1492,6 +1511,8 @@ func newResourceDeleteCommand() *cobra.Command {
 	_ = cmd.Flags().MarkHidden("local")
 	_ = cmd.Flags().MarkHidden("force")
 
+	registerResourcePathCompletion(cmd, resourceDeletePathStrategy)
+
 	return cmd
 }
 
@@ -1615,6 +1636,7 @@ func newResourceDiffCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to diff")
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 	cmd.Flags().BoolVar(&fail, "fail", false, "Exit with error if the resource is not in sync")
 	return cmd
 }
