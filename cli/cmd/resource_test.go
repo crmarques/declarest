@@ -241,6 +241,25 @@ func TestResourceSaveWithSecretsRequiresForce(t *testing.T) {
 	}
 }
 
+func TestResourceExplainRequiresPath(t *testing.T) {
+	root := newRootCommand()
+	command := findCommand(t, root, "resource", "explain")
+	var errBuf bytes.Buffer
+	command.SetOut(io.Discard)
+	command.SetErr(&errBuf)
+
+	err := command.RunE(command, []string{})
+	if err == nil || !cli.IsHandledError(err) {
+		t.Fatalf("expected handled error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "path is required") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "Usage:") {
+		t.Fatalf("expected usage output, got %q", errBuf.String())
+	}
+}
+
 func TestResourceCreateWithPathSkipsUsageError(t *testing.T) {
 	setTempHome(t)
 

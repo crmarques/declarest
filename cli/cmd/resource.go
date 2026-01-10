@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -31,6 +33,7 @@ func newResourceCommand() *cobra.Command {
 
 	cmd.AddCommand(newResourceGetCommand())
 	cmd.AddCommand(newResourceSaveCommand())
+	cmd.AddCommand(newResourceExplainCommand())
 	cmd.AddCommand(newResourceAddCommand())
 	cmd.AddCommand(newResourceCreateCommand())
 	cmd.AddCommand(newResourceUpdateCommand())
@@ -264,6 +267,194 @@ func newResourceSaveCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets or overriding existing definitions in the resource repository")
 
 	return cmd
+}
+
+func newResourceExplainCommand() *cobra.Command {
+	var path string
+
+	cmd := &cobra.Command{
+		Use:   "explain <path>",
+		Short: "Explain how metadata/OpenAPI map a logical path to HTTP operations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			path, err = resolveSingleArg(cmd, path, args, "path")
+			if err != nil {
+				return err
+			}
+			if err := validateLogicalPath(cmd, path); err != nil {
+				return err
+			}
+			return runResourceExplain(cmd, path)
+		},
+	}
+
+	cmd.Flags().StringVar(&path, "path", "", "Logical resource or collection path to explain")
+	return cmd
+}
+
+func runResourceExplain(cmd *cobra.Command, path string) error {
+	recon, cleanup, err := loadDefaultReconciler()
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return err
+	}
+
+	if recon.ResourceRecordProvider == nil {
+		return errors.New("resource record provider is not configured")
+	}
+
+	record, err := recon.ResourceRecordProvider.GetResourceRecord(path)
+	if err != nil {
+		return err
+	}
+
+	spec := openapiSpecFromProvider(recon.ResourceRecordProvider)
+
+	return printExplain(cmd.OutOrStdout(), path, record, spec)
+}
+
+func printExplain(out io.Writer, path string, record resource.ResourceRecord, spec *openapi.Spec) error {
+	isCollection := resource.IsCollectionPath(path)
+	fmt.Fprintf(out, "Logical Path: %s\n", path)
+	fmt.Fprintf(out, "Collection Path: %s\n", record.CollectionPath())
+	if info := record.Meta.ResourceInfo; info != nil {
+		if attr := strings.TrimSpace(info.IDFromAttribute); attr != "" {
+			fmt.Fprintf(out, "ID Attribute: %s\n", attr)
+		}
+		if attr := strings.TrimSpace(info.AliasFromAttribute); attr != "" {
+			fmt.Fprintf(out, "Alias Attribute: %s\n", attr)
+		}
+		if len(info.SecretInAttributes) > 0 {
+			fmt.Fprintf(out, "Secret Attributes: %s\n", strings.Join(info.SecretInAttributes, ", "))
+		}
+	}
+	fmt.Fprintln(out, "\nMetadata Operations:")
+
+	if record.Meta.OperationInfo == nil {
+		fmt.Fprintln(out, "  (no metadata operations configured)")
+	} else {
+		ops := []struct {
+			label string
+			op    *resource.OperationMetadata
+		}{
+			{"read", record.Meta.OperationInfo.GetResource},
+			{"list", record.Meta.OperationInfo.ListCollection},
+			{"create", record.Meta.OperationInfo.CreateResource},
+			{"update", record.Meta.OperationInfo.UpdateResource},
+			{"delete", record.Meta.OperationInfo.DeleteResource},
+		}
+		for _, entry := range ops {
+			if entry.op == nil {
+				continue
+			}
+			printOperation(entry.label, record, path, isCollection, entry.op, out)
+		}
+	}
+
+	fmt.Fprintln(out, "\nOpenAPI Metadata:")
+	describeOpenAPI(out, spec, record, path, isCollection)
+
+	return nil
+}
+
+func printOperation(label string, record resource.ResourceRecord, path string, isCollection bool, op *resource.OperationMetadata, out io.Writer) {
+	method := strings.ToUpper(strings.TrimSpace(op.HTTPMethod))
+	if method == "" {
+		method = http.MethodGet
+	}
+	targetPath, err := record.ResolveOperationPath(path, op, isCollection)
+	if err != nil {
+		fmt.Fprintf(out, "  %s: %s (path error: %v)\n", label, method, err)
+		return
+	}
+	fmt.Fprintf(out, "  %s: %s %s\n", label, method, targetPath)
+	headers := record.HeadersFor(op, path, isCollection)
+	if len(headers) > 0 {
+		lines := resource.HeaderListFromMap(headers)
+		for _, line := range lines {
+			fmt.Fprintf(out, "    header: %s\n", line)
+		}
+	}
+	if query := record.QueryFor(op); len(query) > 0 {
+		fmt.Fprintf(out, "    query: %s\n", formatQuery(query))
+	}
+	if op.URL != nil && len(op.URL.QueryStrings) > 0 {
+		fmt.Fprintf(out, "    query strings: %s\n", strings.Join(op.URL.QueryStrings, ", "))
+	}
+}
+
+func formatQuery(query map[string][]string) string {
+	var parts []string
+	for key, values := range query {
+		if len(values) == 0 {
+			parts = append(parts, fmt.Sprintf("%s=", key))
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", key, strings.Join(values, ",")))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, " ")
+}
+
+func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.ResourceRecord, path string, isCollection bool) {
+	if spec == nil {
+		fmt.Fprintln(out, "  OpenAPI spec is not configured.")
+		return
+	}
+	readOp := record.ReadOperation(isCollection)
+	remotePath := path
+	if readOp != nil {
+		if resolved, err := record.ResolveOperationPath(path, readOp, isCollection); err == nil && strings.TrimSpace(resolved) != "" {
+			remotePath = resolved
+		}
+	}
+	if remotePath == "" {
+		remotePath = "/"
+	}
+	item := spec.MatchPath(remotePath)
+	if item == nil {
+		fmt.Fprintf(out, "  No OpenAPI path matches %s\n", remotePath)
+		return
+	}
+	fmt.Fprintf(out, "  Template: %s\n", item.Template)
+	for _, method := range []string{"get", "post", "put", "patch", "delete"} {
+		if op := item.Operation(method); op != nil {
+			fmt.Fprintf(out, "    %s: requests=%s responses=%s\n", strings.ToUpper(op.Method), strings.Join(op.RequestContentTypes, ","), strings.Join(op.ResponseContentTypes, ","))
+			if summary := summarizeSchema(op.RequestSchema); summary != "" {
+				fmt.Fprintf(out, "      schema: %s\n", summary)
+			}
+		}
+	}
+}
+
+func summarizeSchema(schema map[string]any) string {
+	if len(schema) == 0 {
+		return ""
+	}
+	if props, ok := schema["properties"].(map[string]any); ok && len(props) > 0 {
+		keys := make([]string, 0, len(props))
+		for key := range props {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		return fmt.Sprintf("properties=%s", strings.Join(keys, ","))
+	}
+	if typ, ok := schema["type"].(string); ok {
+		return fmt.Sprintf("type=%s", typ)
+	}
+	return ""
+}
+
+func openapiSpecFromProvider(provider interface{}) *openapi.Spec {
+	type specProvider interface {
+		OpenAPISpec() *openapi.Spec
+	}
+	if provider, ok := provider.(specProvider); ok {
+		return provider.OpenAPISpec()
+	}
+	return nil
 }
 
 const openAPIFromContextValue = "__from_openapi_context__"
