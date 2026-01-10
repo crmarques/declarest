@@ -390,9 +390,12 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 - `unset`: remove a metadata attribute/value from the local metadata file for the logical path (when `--value` is provided, remove only that value; otherwise delete the attribute).
 - `add`: write metadata from a JSON file to the local metadata file for the logical path.
 - `update-resources`: re-save resources for the logical path using current metadata (including alias moves) based on local repository data only.
+- `infer`: examine the OpenAPI spec for the target resource/collection, propose `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`, and optionally write the suggested attributes with `--apply` (`--spec` overrides the configured OpenAPI spec and `--id-from`/`--alias-from` force a specific value).
 - Collection paths (trailing `/`) target generic metadata under `<collection>/_/metadata.json`.
 - Metadata paths default to collections; omit the trailing `/` and DeclaREST still treats the path as a collection unless `--for-resource-only` is set.
 - Metadata paths may include `_` segments to define wildcard collections (for example, `/admin/realms/_/clients/`).
+
+Inference does not write metadata unless `--apply` is set; the command prints structured reasoning so operators can review the proposed attribute names before persisting them.
 
 ### 5.6 `repo init/refresh/push/reset`
 - `init`: ensure the repository root exists (Git repo is created lazily on Git operations).

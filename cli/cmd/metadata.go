@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
 	"declarest/internal/metadata"
+	"declarest/internal/openapi"
 	"declarest/internal/resource"
 
 	"github.com/spf13/cobra"
@@ -29,6 +31,7 @@ func newMetadataCommand() *cobra.Command {
 	cmd.AddCommand(newMetadataUnsetCommand())
 	cmd.AddCommand(newMetadataAddCommand())
 	cmd.AddCommand(newMetadataUpdateResourcesCommand())
+	cmd.AddCommand(newMetadataInferCommand())
 
 	return cmd
 }
@@ -378,6 +381,133 @@ func newMetadataUpdateResourcesCommand() *cobra.Command {
 	return cmd
 }
 
+func newMetadataInferCommand() *cobra.Command {
+	var (
+		path      string
+		specPath  string
+		apply     bool
+		idFrom    string
+		aliasFrom string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "infer <path>",
+		Short: "Infer metadata attributes from an OpenAPI specification",
+		Long: `Render suggested metadata for a collection or resource based on an OpenAPI spec.
+Inference uses the configured spec by default and can be overridden with --spec.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			path, err = resolveSingleArg(cmd, path, args, "path")
+			if err != nil {
+				return err
+			}
+			trimmedPath := strings.TrimSpace(path)
+			if trimmedPath == "" {
+				return usageError(cmd, "path is required")
+			}
+			targetIsCollection := resource.IsCollectionPath(trimmedPath)
+			normalizedPath, err := normalizeMetadataInputPath(cmd, path)
+			if err != nil {
+				return err
+			}
+			if err := validateMetadataPath(cmd, normalizedPath); err != nil {
+				return err
+			}
+
+			recon, cleanup, err := loadDefaultReconciler()
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if err != nil {
+				return err
+			}
+
+			var spec *openapi.Spec
+			if specSource := strings.TrimSpace(specPath); specSource != "" {
+				data, err := os.ReadFile(specSource)
+				if err != nil {
+					return err
+				}
+				parsed, err := openapi.ParseSpec(data)
+				if err != nil {
+					return fmt.Errorf("failed to parse OpenAPI spec %q: %w", specSource, err)
+				}
+				spec = parsed
+			} else {
+				if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
+					spec = provider.OpenAPISpec()
+				}
+			}
+			if spec == nil {
+				return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
+			}
+
+			result := metadata.InferResourceMetadata(spec, resource.NormalizePath(trimmedPath), targetIsCollection, metadata.InferenceOverrides{
+				IDAttribute:    strings.TrimSpace(idFrom),
+				AliasAttribute: strings.TrimSpace(aliasFrom),
+			})
+
+			payload, err := json.MarshalIndent(metadataInferOutput{
+				ResourceInfo: &result.ResourceInfo,
+				Reasons:      result.Reasons,
+			}, "", "  ")
+			if err != nil {
+				return err
+			}
+			payload = append(payload, '\n')
+			if _, err := cmd.OutOrStdout().Write(payload); err != nil {
+				return err
+			}
+
+			if apply {
+				if result.ResourceInfo.IDFromAttribute == "" && result.ResourceInfo.AliasFromAttribute == "" {
+					infof(cmd, "nothing to apply for %s", normalizedPath)
+					return nil
+				}
+				updatedAttrs := []string{}
+				err = recon.UpdateLocalMetadata(normalizedPath, func(meta map[string]any) (bool, error) {
+					changed := false
+					if attr := strings.TrimSpace(result.ResourceInfo.IDFromAttribute); attr != "" {
+						if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.idFromAttribute", attr); err != nil {
+							return false, err
+						} else if ok {
+							changed = true
+							updatedAttrs = append(updatedAttrs, "resourceInfo.idFromAttribute")
+						}
+					}
+					if attr := strings.TrimSpace(result.ResourceInfo.AliasFromAttribute); attr != "" {
+						if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.aliasFromAttribute", attr); err != nil {
+							return false, err
+						} else if ok {
+							changed = true
+							updatedAttrs = append(updatedAttrs, "resourceInfo.aliasFromAttribute")
+						}
+					}
+					return changed, nil
+				})
+				if err != nil {
+					return err
+				}
+				if len(updatedAttrs) == 0 {
+					infof(cmd, "metadata already contains the inferred attributes for %s", normalizedPath)
+				} else {
+					successf(cmd, "applied inferred metadata (%s) for %s", strings.Join(updatedAttrs, ", "), normalizedPath)
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
+	cmd.Flags().StringVar(&specPath, "spec", "", "Path to an OpenAPI spec file (overrides configured spec)")
+	cmd.Flags().BoolVar(&apply, "apply", false, "Apply the inferred metadata to the local file")
+	cmd.Flags().StringVar(&idFrom, "id-from", "", "Force a specific attribute to use as resource ID")
+	cmd.Flags().StringVar(&aliasFrom, "alias-from", "", "Force a specific attribute to use as the alias")
+
+	return cmd
+}
+
 func parseMetadataValue(raw string) (any, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -456,6 +586,11 @@ type resourceInfoOutput struct {
 	AliasFromAttribute string    `json:"aliasFromAttribute,omitempty"`
 	CollectionPath     string    `json:"collectionPath,omitempty"`
 	SecretInAttributes *[]string `json:"secretInAttributes,omitempty"`
+}
+
+type metadataInferOutput struct {
+	ResourceInfo *resource.ResourceInfoMetadata `json:"resourceInfo,omitempty"`
+	Reasons      []string                       `json:"reasons,omitempty"`
 }
 
 func isSecretInAttributesAttribute(attribute string) bool {

@@ -23,3 +23,74 @@ paths:
           description: ok
           content:
             application/json: {}
+  /admin/realms/{realm}/clients:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                clientId:
+                  type: string
+              required:
+                - id
+                - clientId
+      responses:
+        "201":
+          description: created
+          content:
+            application/json: {}
+  /admin/realms/{realm}/clients/{id}:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId:
+                  type: string
+                name:
+                  type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json: {}
+  /admin/realms/{realm}/user-registry/{storage}/mappers:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+              required:
+                - id
+      responses:
+        "201":
+          description: created
+          content:
+            application/json: {}
+  /admin/realms/{realm}/user-registry/{storage}/mappers/{id}:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json: {}

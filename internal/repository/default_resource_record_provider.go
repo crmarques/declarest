@@ -147,9 +147,6 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	}
 
 	result := metadata.DefaultMetadata(collectionSegments)
-	if p.openapiSpec != nil {
-		result = openapi.ApplyDefaults(result, trimmed, isCollection, p.openapiSpec)
-	}
 
 	files := metadataRelPaths(segments, collectionSegments, isCollection)
 	store := p.store()
@@ -174,15 +171,43 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 		result = metadata.MergeMetadata(result, fileMetadata)
 	}
 
+	ctx := p.buildMetadataTemplateContext(trimmed)
+	opts := metadata.RenderOptions{
+		RelativePlaceholderResolver: p.resolveResourceAttributes,
+	}
 	if renderTemplates {
-		ctx := p.buildMetadataTemplateContext(trimmed)
-		opts := metadata.RenderOptions{
-			RelativePlaceholderResolver: p.resolveResourceAttributes,
-		}
 		result = metadata.RenderTemplates(result, trimmed, ctx, opts)
 	}
 
+	if p.openapiSpec != nil {
+		resourcePathForDefaults := trimmed
+		if isCollection {
+			if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
+				resourcePathForDefaults = coll
+			}
+		} else if remotePath := p.resourcePathForDefaults(trimmed, result); remotePath != "" {
+			resourcePathForDefaults = remotePath
+		}
+		result = openapi.ApplyDefaults(result, resourcePathForDefaults, isCollection, p.openapiSpec)
+		if renderTemplates {
+			result = metadata.RenderTemplates(result, trimmed, ctx, opts)
+		}
+	}
+
 	return result, nil
+}
+
+func (p *DefaultResourceRecordProvider) resourcePathForDefaults(resourcePath string, meta resource.ResourceMetadata) string {
+	record := resource.ResourceRecord{
+		Path: resourcePath,
+		Meta: meta,
+	}
+	if p.resourceLoader != nil {
+		if data, err := p.resourceLoader.GetLocalResource(resourcePath); err == nil {
+			record.Data = data
+		}
+	}
+	return record.RemoteResourcePath(record.Data)
 }
 
 func metadataRelPaths(segments, collectionSegments []string, isCollection bool) []string {

@@ -55,6 +55,7 @@ Manage metadata definitions.
 - `metadata unset`: unset an attribute.
 - `metadata add`: add metadata from a file.
 - `metadata update-resources`: rewrite resources based on new metadata rules.
+- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value).
 
 ## secret
 

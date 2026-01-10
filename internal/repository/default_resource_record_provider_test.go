@@ -297,6 +297,77 @@ func TestOpenAPIDefaultsAdjustMethods(t *testing.T) {
 	}
 }
 
+func TestOpenAPIDefaultsUseRemotePath(t *testing.T) {
+	dir := t.TempDir()
+
+	resourceDir := filepath.Join(dir, "foo", "items", "alias")
+	if err := os.MkdirAll(resourceDir, 0o755); err != nil {
+		t.Fatalf("mkdir resource dir: %v", err)
+	}
+	resourceFile := filepath.Join(resourceDir, "resource.json")
+	if err := os.WriteFile(resourceFile, []byte(`{"id":"123"}`), 0o644); err != nil {
+		t.Fatalf("write resource: %v", err)
+	}
+
+	metaDir := filepath.Join(dir, "foo", "items", "_")
+	if err := os.MkdirAll(metaDir, 0o755); err != nil {
+		t.Fatalf("mkdir metadata dir: %v", err)
+	}
+	metaFile := filepath.Join(metaDir, "metadata.json")
+	if err := os.WriteFile(metaFile, []byte(`{"resourceInfo":{"collectionPath":"/bar/items"}}`), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+
+	specJSON := `{
+  "openapi": "3.0.0",
+  "paths": {
+    "/foo/items/{id}": {
+      "put": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/bar/items/{id}": {
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}`
+
+	spec, err := openapi.ParseSpec([]byte(specJSON))
+	if err != nil {
+		t.Fatalf("ParseSpec: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, diskResourceLoader{baseDir: dir})
+	provider.SetOpenAPISpec(spec)
+
+	record, err := provider.GetResourceRecord("/foo/items/alias")
+	if err != nil {
+		t.Fatalf("GetResourceRecord: %v", err)
+	}
+	if record.Meta.OperationInfo == nil || record.Meta.OperationInfo.UpdateResource == nil {
+		t.Fatalf("missing updateResource metadata")
+	}
+	if record.Meta.OperationInfo.UpdateResource.HTTPMethod != "PATCH" {
+		t.Fatalf("expected update method PATCH, got %q", record.Meta.OperationInfo.UpdateResource.HTTPMethod)
+	}
+}
+
 func TestSecretAttributesCanBeCleared(t *testing.T) {
 	dir := t.TempDir()
 
@@ -502,4 +573,25 @@ func (f *fakeRemoteLoader) GetRemoteResource(path string) (resource.Resource, er
 		return res, nil
 	}
 	return resource.Resource{}, fs.ErrNotExist
+}
+
+type diskResourceLoader struct {
+	baseDir string
+}
+
+func (d diskResourceLoader) GetLocalResource(path string) (resource.Resource, error) {
+	normalized := resource.NormalizePath(path)
+	trimmed := strings.Trim(normalized, "/")
+	var rel string
+	if trimmed == "" {
+		rel = "resource.json"
+	} else {
+		rel = filepath.Join(filepath.FromSlash(trimmed), "resource.json")
+	}
+	full := filepath.Join(d.baseDir, rel)
+	data, err := os.ReadFile(full)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+	return resource.NewResourceFromJSON(data)
 }
