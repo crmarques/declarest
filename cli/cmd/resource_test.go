@@ -193,26 +193,51 @@ func TestResourceUpdateRequiresPathOrAll(t *testing.T) {
 	}
 }
 
-func TestResourceGetSaveAsOneResourceRequiresSave(t *testing.T) {
+func TestResourceSaveAsOneResourceRequiresCollectionPath(t *testing.T) {
 	root := newRootCommand()
-	command := findCommand(t, root, "resource", "get")
+	command := findCommand(t, root, "resource", "save")
 	var errBuf bytes.Buffer
 	command.SetOut(io.Discard)
 	command.SetErr(&errBuf)
 
-	if err := command.Flags().Set("save-as-one-resource", "true"); err != nil {
-		t.Fatalf("set save-as-one-resource: %v", err)
+	if err := command.Flags().Set("path", "/items/foo"); err != nil {
+		t.Fatalf("set path: %v", err)
+	}
+	if err := command.Flags().Set("as-one-resource", "true"); err != nil {
+		t.Fatalf("set as-one-resource: %v", err)
 	}
 
-	err := command.RunE(command, []string{"/items/"})
+	err := command.RunE(command, []string{})
 	if err == nil || !cli.IsHandledError(err) {
 		t.Fatalf("expected handled error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "save-as-one-resource") {
+	if !strings.Contains(err.Error(), "--as-one-resource requires a collection path") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 	if !strings.Contains(errBuf.String(), "Usage:") {
 		t.Fatalf("expected usage output, got %q", errBuf.String())
+	}
+}
+
+func TestResourceSaveWithSecretsRequiresForce(t *testing.T) {
+	root := newRootCommand()
+	command := findCommand(t, root, "resource", "save")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("path", "/items/foo"); err != nil {
+		t.Fatalf("set path: %v", err)
+	}
+	if err := command.Flags().Set("with-secrets", "true"); err != nil {
+		t.Fatalf("set with-secrets: %v", err)
+	}
+
+	err := command.RunE(command, []string{})
+	if err == nil || cli.IsHandledError(err) {
+		t.Fatalf("expected plain error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "refusing to save plaintext secrets without --force") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 

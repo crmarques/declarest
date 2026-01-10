@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ func newResourceCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(newResourceGetCommand())
+	cmd.AddCommand(newResourceSaveCommand())
 	cmd.AddCommand(newResourceAddCommand())
 	cmd.AddCommand(newResourceCreateCommand())
 	cmd.AddCommand(newResourceUpdateCommand())
@@ -45,10 +47,7 @@ func newResourceGetCommand() *cobra.Command {
 		path        string
 		print       bool
 		fromRepo    bool
-		save        bool
-		saveAsOne   bool
 		withSecrets bool
-		force       bool
 	)
 
 	cmd := &cobra.Command{
@@ -62,12 +61,6 @@ func newResourceGetCommand() *cobra.Command {
 			}
 			if err := validateLogicalPath(cmd, path); err != nil {
 				return err
-			}
-			if fromRepo && (save || saveAsOne) {
-				return usageError(cmd, "--from-repo cannot be combined with --save or --save-as-one-resource")
-			}
-			if saveAsOne && !save {
-				return usageError(cmd, "--save-as-one-resource requires --save")
 			}
 
 			recon, cleanup, err := loadDefaultReconciler()
@@ -104,13 +97,6 @@ func newResourceGetCommand() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
 			}
 
-			saveMode := save && !fromRepo
-			saveCollectionItems := saveMode && resource.IsCollectionPath(path) && !saveAsOne
-
-			if saveMode && withSecrets && !force {
-				return fmt.Errorf("refusing to save plaintext secrets without --force (saving secrets in the repository has security implications)")
-			}
-
 			output := res
 			if withSecrets {
 				if fromRepo {
@@ -136,43 +122,10 @@ func newResourceGetCommand() *cobra.Command {
 				}
 			}
 
-			printOutput := print
-			if saveMode && !cmd.Flags().Changed("print") {
-				printOutput = false
-			}
-
-			if printOutput {
+			if print {
 				if err := printResourceJSON(cmd, output); err != nil {
 					return err
 				}
-			}
-
-			if saveCollectionItems {
-				items, ok := res.AsArray()
-				if !ok {
-					return usageError(cmd, "collection paths require a collection payload; use --save-as-one-resource to save the full response")
-				}
-				var resources []resource.Resource
-				for _, item := range items {
-					r, err := resource.NewResource(item)
-					if err != nil {
-						return err
-					}
-					resources = append(resources, r)
-				}
-				if err := saveLocalCollectionItemsWithSecrets(recon, path, resources, !withSecrets); err != nil {
-					return err
-				}
-				successf(cmd, "fetched remote collection %s and saved %d items in the resource repository", path, len(resources))
-				return nil
-			}
-
-			if saveMode {
-				if err := saveLocalResourceWithSecrets(recon, path, res, !withSecrets); err != nil {
-					return err
-				}
-				successf(cmd, "fetched remote resource %s and saved in the resource repository", path)
-				return nil
 			}
 
 			if fromRepo {
@@ -187,10 +140,128 @@ func newResourceGetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to read")
 	cmd.Flags().BoolVar(&print, "print", true, "Print the resource payload to stdout")
 	cmd.Flags().BoolVar(&fromRepo, "from-repo", false, "Read the resource from the resource repository")
-	cmd.Flags().BoolVar(&save, "save", false, "Persist the remote resource into the resource repository (collection paths save items by default)")
-	cmd.Flags().BoolVar(&saveAsOne, "save-as-one-resource", false, "Save a fetched collection as a single resource repository entry")
 	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
-	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets into the resource repository")
+
+	return cmd
+}
+
+func newResourceSaveCommand() *cobra.Command {
+	var (
+		path          string
+		print         bool
+		withSecrets   bool
+		asOneResource bool
+		force         bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "save <path>",
+		Short: "Fetch a remote resource and persist it in the resource repository",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			path, err = resolveSingleArg(cmd, path, args, "path")
+			if err != nil {
+				return err
+			}
+			if err := validateLogicalPath(cmd, path); err != nil {
+				return err
+			}
+			if asOneResource && !resource.IsCollectionPath(path) {
+				return usageError(cmd, "--as-one-resource requires a collection path")
+			}
+			if withSecrets && !force {
+				return fmt.Errorf("refusing to save plaintext secrets without --force (saving secrets in the repository has security implications)")
+			}
+
+			recon, cleanup, err := loadDefaultReconciler()
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if err != nil {
+				return err
+			}
+
+			res, err := recon.GetRemoteResource(path)
+			if err != nil {
+				return wrapRemoteErrorWithDetails(err, path)
+			}
+
+			secretPaths, err := recon.SecretPathsFor(path)
+			if err != nil {
+				return err
+			}
+			unmapped := findUnmappedSecretPaths(res, secretPaths, resource.IsCollectionPath(path))
+			if len(unmapped) > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: potential secrets in %s are not mapped to resourceInfo.secretInAttributes:\n", path)
+				for _, attr := range unmapped {
+					fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", attr)
+				}
+				fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
+			}
+
+			output := res
+			if !withSecrets {
+				output, err = recon.MaskResourceSecrets(path, res, false)
+				if err != nil {
+					return err
+				}
+			}
+
+			if print {
+				if err := printResourceJSON(cmd, output); err != nil {
+					return err
+				}
+			}
+
+			storeSecrets := !withSecrets
+
+			if resource.IsCollectionPath(path) {
+				if asOneResource {
+					if err := ensureRepositoryOverwriteAllowed(recon, path, force); err != nil {
+						return err
+					}
+					if err := saveLocalResourceWithSecrets(recon, path, res, storeSecrets); err != nil {
+						return err
+					}
+					successf(cmd, "fetched remote collection %s and saved in the resource repository", path)
+					return nil
+				}
+
+				items, ok := res.AsArray()
+				if !ok {
+					return usageError(cmd, "collection paths require a collection payload; use --as-one-resource to save the full response")
+				}
+				var resources []resource.Resource
+				for _, item := range items {
+					r, err := resource.NewResource(item)
+					if err != nil {
+						return err
+					}
+					resources = append(resources, r)
+				}
+				if err := saveLocalCollectionItemsWithSecrets(recon, path, resources, storeSecrets); err != nil {
+					return err
+				}
+				successf(cmd, "fetched remote collection %s and saved %d items in the resource repository", path, len(resources))
+				return nil
+			}
+
+			if err := ensureRepositoryOverwriteAllowed(recon, path, force); err != nil {
+				return err
+			}
+			if err := saveLocalResourceWithSecrets(recon, path, res, storeSecrets); err != nil {
+				return err
+			}
+			successf(cmd, "fetched remote resource %s and saved in the resource repository", path)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&path, "path", "", "Resource path to save")
+	cmd.Flags().BoolVar(&print, "print", false, "Print the resource payload to stdout")
+	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
+	cmd.Flags().BoolVar(&asOneResource, "as-one-resource", false, "Save a fetched collection as a single resource repository entry")
+	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets or overriding existing definitions in the resource repository")
 
 	return cmd
 }
@@ -1288,6 +1359,20 @@ func syncLocalResource(recon *reconciler.DefaultReconciler, path string) error {
 		return wrapRemoteErrorWithDetails(err, path)
 	}
 	return saveLocalResourceWithSecrets(recon, path, res, true)
+}
+
+func ensureRepositoryOverwriteAllowed(recon *reconciler.DefaultReconciler, path string, force bool) error {
+	if force || recon == nil || recon.ResourceRepositoryManager == nil {
+		return nil
+	}
+	_, err := recon.ResourceRepositoryManager.GetResource(path)
+	if err == nil {
+		return fmt.Errorf("resource %s already exists in the resource repository; use --force to override", path)
+	}
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func newResourceDiffCommand() *cobra.Command {

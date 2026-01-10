@@ -280,7 +280,7 @@ update_with_retry() {
 refresh_master_if_needed() {
     local path="$1"
     if [[ "$path" == "/admin/realms/master" ]]; then
-        run_cli "refresh $path" resource get --path "$path" --save || true
+        run_cli "refresh $path" resource save --path "$path" --force || true
     fi
 }
 
@@ -419,7 +419,7 @@ fi
 
 phase "Retrieving resources from Keycloak"
 for path in "${local_paths_parent_first[@]}"; do
-    if ! run_cli_retry_transient "get $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" --no-status resource get --path "$path" --save --print=false; then
+    if ! run_cli_retry_transient "get $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" --no-status resource save --path "$path" --force; then
         log_line "Get failed for $path"
         exit 1
     fi
@@ -431,7 +431,7 @@ collections=(
     "/admin/realms/publico/user-registry/ldap-test/mappers/"
 )
 for coll in "${collections[@]}"; do
-    if ! run_cli_retry_transient "get collection $coll" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource get --path "$coll" --save; then
+    if ! run_cli_retry_transient "get collection $coll" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$coll"; then
         log_line "Collection get failed for $coll"
         exit 1
     fi
@@ -444,7 +444,7 @@ test_ad_hoc_command
 if [[ $secrets_enabled -eq 1 ]]; then
     phase "Restoring secrets for diff"
     for secret_path in "$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH"; do
-        if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource get --path "$secret_path" --save --with-secrets --force --print=false; then
+        if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$secret_path" --with-secrets --force; then
             log_line "Secret restore failed for $secret_path"
             exit 1
         fi
@@ -467,7 +467,7 @@ if [[ $secrets_enabled -eq 1 ]]; then
         exit 1
     fi
 
-    run_cli "save client secret (no with-secrets)" resource get --path "$SECRET_CLIENT_PATH" --save --print=false
+    run_cli "save client secret (no with-secrets)" resource save --path "$SECRET_CLIENT_PATH" --force
     if [[ "${DECLAREST_SECRET_STORE_TYPE:-file}" == "file" ]]; then
         if [[ ! -s "$DECLAREST_SECRETS_FILE" ]]; then
             log_line "Secret check failed: secrets file missing at $DECLAREST_SECRETS_FILE"
@@ -484,7 +484,7 @@ if [[ $secrets_enabled -eq 1 ]]; then
         exit 1
     fi
 
-    run_cli "save ldap bind credential (no with-secrets)" resource get --path "$SECRET_LDAP_PATH" --save --print=false
+    run_cli "save ldap bind credential (no with-secrets)" resource save --path "$SECRET_LDAP_PATH" --force
     ldap_file="$(resource_file_for_path "$SECRET_LDAP_PATH")"
     ldap_local_secret=$(jq -r '.config.bindCredential[0] // empty' "$ldap_file")
     if [[ "$ldap_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
@@ -510,7 +510,7 @@ if [[ $secrets_enabled -eq 1 ]]; then
     fi
 
     set +e
-    save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource get --path "$SECRET_CLIENT_PATH" --save --with-secrets --print=false)
+    save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource save --path "$SECRET_CLIENT_PATH" --with-secrets)
     save_with_secrets_status=$?
     set -e
     if [[ $save_with_secrets_status -eq 0 ]]; then

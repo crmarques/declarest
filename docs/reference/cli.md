@@ -37,7 +37,8 @@ Manage the resource repository.
 
 Operate on resource definitions.
 
-- `resource get`: fetch from remote or repo.
+- `resource get`: fetch from remote or repo without touching the repository (use `--from-repo` to read stored data and `--with-secrets` to include secret placeholders).
+- `resource save`: fetch a remote resource and persist it in the repository; use `--force` to override saved definitions or to include secrets with `--with-secrets`, and add `--as-one-resource` when you want to store a fetched collection as a single repository entry (collections default to saving each item separately). `--print` can be added to show the payload in addition to writing it.
 - `resource list`: list repo or remote paths.
 - `resource add`: add a local resource from a file, another resource path, or an OpenAPI schema (supports overrides and optional remote apply).
 - `resource create`: create a remote resource from the repo.
