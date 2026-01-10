@@ -42,4 +42,35 @@ if ! jq -e '(.resourceInfo.idFromAttribute == "id") and (.resourceInfo.aliasFrom
     die "generated metadata does not include the expected id/alias values"
 fi
 
+log_line "Validating metadata inference recursively"
+
+WILDCARD_CLIENTS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/clients/_/metadata.json"
+WILDCARD_MAPPERS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/user-registry/_/mappers/_/metadata.json"
+
+rm -f "$WILDCARD_CLIENTS_METADATA" "$WILDCARD_MAPPERS_METADATA"
+
+recursive_output="$(capture_cli_all "metadata infer recursive" metadata infer --no-status --apply --recursively --path /)"
+pprint="$(strip_debug_info "$recursive_output")"
+
+if ! printf '%s\n' "$pprint" | jq -e 'any(.results[]; .path == "/admin/realms/_/clients")'; then
+    die "recursive metadata infer output missing clients collection"
+fi
+if ! printf '%s\n' "$pprint" | jq -e 'any(.results[]; .path == "/admin/realms/_/user-registry/_/mappers")'; then
+    die "recursive metadata infer output missing mapper collection"
+fi
+
+if [[ ! -f "$WILDCARD_CLIENTS_METADATA" ]]; then
+    die "recursive metadata file missing at $WILDCARD_CLIENTS_METADATA"
+fi
+if ! jq -e '(.resourceInfo.idFromAttribute == "id") and (.resourceInfo.aliasFromAttribute == "clientId")' "$WILDCARD_CLIENTS_METADATA"; then
+    die "recursive clients metadata does not include the expected id/alias values"
+fi
+
+if [[ ! -f "$WILDCARD_MAPPERS_METADATA" ]]; then
+    die "recursive metadata file missing at $WILDCARD_MAPPERS_METADATA"
+fi
+if ! jq -e '(.resourceInfo.idFromAttribute == "id") and (.resourceInfo.aliasFromAttribute == "name")' "$WILDCARD_MAPPERS_METADATA"; then
+    die "recursive mapper metadata does not include the expected id/alias values"
+fi
+
 log_line "Metadata inference smoke test completed"

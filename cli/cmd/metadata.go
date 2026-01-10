@@ -6,16 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"declarest/internal/metadata"
 	"declarest/internal/openapi"
+	"declarest/internal/reconciler"
 	"declarest/internal/resource"
 
 	"github.com/spf13/cobra"
 )
 
 const metadataResourceOnlyFlag = "for-resource-only"
+const metadataInferRecursiveFlag = "recursively"
 
 func newMetadataCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -388,13 +391,15 @@ func newMetadataInferCommand() *cobra.Command {
 		apply     bool
 		idFrom    string
 		aliasFrom string
+		recursive bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "infer <path>",
 		Short: "Infer metadata attributes from an OpenAPI specification",
 		Long: `Render suggested metadata for a collection or resource based on an OpenAPI spec.
-Inference uses the configured spec by default and can be overridden with --spec.`,
+Inference uses the configured spec by default and can be overridden with --spec.
+Use --recursively to infer metadata for every collection in the OpenAPI descriptor that matches the supplied path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var err error
 			path, err = resolveSingleArg(cmd, path, args, "path")
@@ -442,10 +447,16 @@ Inference uses the configured spec by default and can be overridden with --spec.
 				return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
 			}
 
-			result := metadata.InferResourceMetadata(spec, resource.NormalizePath(trimmedPath), targetIsCollection, metadata.InferenceOverrides{
+			overrides := metadata.InferenceOverrides{
 				IDAttribute:    strings.TrimSpace(idFrom),
 				AliasAttribute: strings.TrimSpace(aliasFrom),
-			})
+			}
+
+			if recursive {
+				return runRecursiveMetadataInference(cmd, recon, spec, trimmedPath, apply, overrides)
+			}
+
+			result := metadata.InferResourceMetadata(spec, resource.NormalizePath(trimmedPath), targetIsCollection, overrides)
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
 				ResourceInfo: &result.ResourceInfo,
@@ -466,23 +477,11 @@ Inference uses the configured spec by default and can be overridden with --spec.
 				}
 				updatedAttrs := []string{}
 				err = recon.UpdateLocalMetadata(normalizedPath, func(meta map[string]any) (bool, error) {
-					changed := false
-					if attr := strings.TrimSpace(result.ResourceInfo.IDFromAttribute); attr != "" {
-						if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.idFromAttribute", attr); err != nil {
-							return false, err
-						} else if ok {
-							changed = true
-							updatedAttrs = append(updatedAttrs, "resourceInfo.idFromAttribute")
-						}
+					updated, changed, err := setInferredResourceInfoAttributes(meta, result.ResourceInfo)
+					if err != nil {
+						return false, err
 					}
-					if attr := strings.TrimSpace(result.ResourceInfo.AliasFromAttribute); attr != "" {
-						if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.aliasFromAttribute", attr); err != nil {
-							return false, err
-						} else if ok {
-							changed = true
-							updatedAttrs = append(updatedAttrs, "resourceInfo.aliasFromAttribute")
-						}
-					}
+					updatedAttrs = append(updatedAttrs, updated...)
 					return changed, nil
 				})
 				if err != nil {
@@ -502,6 +501,7 @@ Inference uses the configured spec by default and can be overridden with --spec.
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
 	cmd.Flags().StringVar(&specPath, "spec", "", "Path to an OpenAPI spec file (overrides configured spec)")
 	cmd.Flags().BoolVar(&apply, "apply", false, "Apply the inferred metadata to the local file")
+	cmd.Flags().BoolVar(&recursive, metadataInferRecursiveFlag, false, "Infer metadata for collections recursively via the OpenAPI spec")
 	cmd.Flags().StringVar(&idFrom, "id-from", "", "Force a specific attribute to use as resource ID")
 	cmd.Flags().StringVar(&aliasFrom, "alias-from", "", "Force a specific attribute to use as the alias")
 
@@ -591,6 +591,16 @@ type resourceInfoOutput struct {
 type metadataInferOutput struct {
 	ResourceInfo *resource.ResourceInfoMetadata `json:"resourceInfo,omitempty"`
 	Reasons      []string                       `json:"reasons,omitempty"`
+}
+
+type metadataInferRecursiveEntry struct {
+	Path         string                         `json:"path"`
+	ResourceInfo *resource.ResourceInfoMetadata `json:"resourceInfo,omitempty"`
+	Reasons      []string                       `json:"reasons,omitempty"`
+}
+
+type metadataInferRecursiveOutput struct {
+	Results []metadataInferRecursiveEntry `json:"results"`
 }
 
 func isSecretInAttributesAttribute(attribute string) bool {
@@ -745,4 +755,187 @@ func validateMetadataPath(cmd *cobra.Command, path string) error {
 		return usageError(cmd, err.Error())
 	}
 	return nil
+}
+
+func runRecursiveMetadataInference(cmd *cobra.Command, recon *reconciler.DefaultReconciler, spec *openapi.Spec, basePath string, apply bool, overrides metadata.InferenceOverrides) error {
+	paths := openAPICollectionPaths(spec)
+	filtered := filterCollectionPathsByPrefix(paths, basePath)
+
+	entries := make([]metadataInferRecursiveEntry, 0, len(filtered))
+	for _, candidate := range filtered {
+		result := metadata.InferResourceMetadata(spec, candidate, true, overrides)
+		info := result.ResourceInfo
+		entries = append(entries, metadataInferRecursiveEntry{
+			Path:         candidate,
+			ResourceInfo: &info,
+			Reasons:      result.Reasons,
+		})
+
+		if !apply {
+			continue
+		}
+
+		metadataPath := normalizeCollectionMetadataPath(candidate)
+		if err := validateMetadataPath(cmd, metadataPath); err != nil {
+			return err
+		}
+
+		if info.IDFromAttribute == "" && info.AliasFromAttribute == "" {
+			if !noStatusOutput {
+				infof(cmd, "nothing to apply for %s", metadataPath)
+			}
+			continue
+		}
+
+		updatedAttrs := []string{}
+		if err := recon.UpdateLocalMetadata(metadataPath, func(meta map[string]any) (bool, error) {
+			updated, changed, err := setInferredResourceInfoAttributes(meta, info)
+			if err != nil {
+				return false, err
+			}
+			updatedAttrs = append(updatedAttrs, updated...)
+			return changed, nil
+		}); err != nil {
+			return err
+		}
+
+		if len(updatedAttrs) == 0 {
+			if !noStatusOutput {
+				infof(cmd, "metadata already contains the inferred attributes for %s", metadataPath)
+			}
+		} else if !noStatusOutput {
+			successf(cmd, "applied inferred metadata (%s) for %s", strings.Join(updatedAttrs, ", "), metadataPath)
+		}
+	}
+
+	payload, err := json.MarshalIndent(metadataInferRecursiveOutput{Results: entries}, "", "  ")
+	if err != nil {
+		return err
+	}
+	payload = append(payload, '\n')
+	if _, err := cmd.OutOrStdout().Write(payload); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setInferredResourceInfoAttributes(meta map[string]any, info resource.ResourceInfoMetadata) ([]string, bool, error) {
+	updated := []string{}
+	changed := false
+	if attr := strings.TrimSpace(info.IDFromAttribute); attr != "" {
+		if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.idFromAttribute", attr); err != nil {
+			return nil, false, err
+		} else if ok {
+			changed = true
+			updated = append(updated, "resourceInfo.idFromAttribute")
+		}
+	}
+	if attr := strings.TrimSpace(info.AliasFromAttribute); attr != "" {
+		if ok, err := metadata.SetMetadataAttribute(meta, "resourceInfo.aliasFromAttribute", attr); err != nil {
+			return nil, false, err
+		} else if ok {
+			changed = true
+			updated = append(updated, "resourceInfo.aliasFromAttribute")
+		}
+	}
+	return updated, changed, nil
+}
+
+func openAPICollectionPaths(spec *openapi.Spec) []string {
+	if spec == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	paths := make([]string, 0, len(spec.Paths))
+	for _, item := range spec.Paths {
+		if item == nil {
+			continue
+		}
+		if item.Operation("post") == nil {
+			continue
+		}
+		path := wildcardCollectionPath(item.Template)
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func filterCollectionPathsByPrefix(paths []string, prefix string) []string {
+	normalizedPrefix := resource.NormalizePath(strings.TrimSpace(prefix))
+	if normalizedPrefix == "/" {
+		return append([]string(nil), paths...)
+	}
+	filtered := make([]string, 0, len(paths))
+	for _, candidate := range paths {
+		if pathMatchesPrefix(candidate, normalizedPrefix) {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func pathMatchesPrefix(candidate, prefix string) bool {
+	candidate = resource.NormalizePath(candidate)
+	prefix = resource.NormalizePath(prefix)
+	candidateSegments := resource.SplitPathSegments(candidate)
+	prefixSegments := resource.SplitPathSegments(prefix)
+	if len(prefixSegments) == 0 {
+		return true
+	}
+	if len(candidateSegments) < len(prefixSegments) {
+		return false
+	}
+	for idx, prefixSeg := range prefixSegments {
+		if !segmentsMatchWildcard(prefixSeg, candidateSegments[idx]) {
+			return false
+		}
+	}
+	return true
+}
+
+func segmentsMatchWildcard(a, b string) bool {
+	if isWildcardSegment(a) || isWildcardSegment(b) {
+		return true
+	}
+	return a == b
+}
+
+func isWildcardSegment(segment string) bool {
+	trimmed := strings.TrimSpace(segment)
+	if trimmed == "_" {
+		return true
+	}
+	return isOpenAPIPathParameter(trimmed)
+}
+
+func isOpenAPIPathParameter(segment string) bool {
+	return strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}")
+}
+
+func wildcardCollectionPath(template string) string {
+	normalized := resource.NormalizePath(template)
+	segments := resource.SplitPathSegments(normalized)
+	if len(segments) == 0 {
+		return "/"
+	}
+	for idx, segment := range segments {
+		if isOpenAPIPathParameter(segment) {
+			segments[idx] = "_"
+		}
+	}
+	return "/" + strings.Join(segments, "/")
+}
+
+func normalizeCollectionMetadataPath(path string) string {
+	normalized := resource.NormalizePath(path)
+	if normalized == "/" {
+		return "/"
+	}
+	return normalized + "/"
 }

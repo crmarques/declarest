@@ -352,3 +352,195 @@ managed_server:
 		t.Fatalf("unexpected aliasFromAttribute: %q", meta.ResourceInfo.AliasFromAttribute)
 	}
 }
+
+func TestMetadataInferRecursivelyPrintsSuggestions(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "http://example.com")
+	addContext(t, "infer-recursive", contextPath)
+
+	specPath := filepath.Join(home, "openapi.yml")
+	if err := os.WriteFile(specPath, []byte(cliInferSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "infer")
+	var out bytes.Buffer
+	command.SetOut(&out)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("spec", specPath); err != nil {
+		t.Fatalf("set spec: %v", err)
+	}
+	if err := command.Flags().Set("recursively", "true"); err != nil {
+		t.Fatalf("set recursively: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var payload struct {
+		Results []struct {
+			Path         string `json:"path"`
+			ResourceInfo struct {
+				IDFromAttribute    string `json:"idFromAttribute"`
+				AliasFromAttribute string `json:"aliasFromAttribute"`
+			} `json:"resourceInfo"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if len(payload.Results) != 2 {
+		t.Fatalf("expected 2 collection entries, got %d", len(payload.Results))
+	}
+
+	resultsByPath := make(map[string]struct {
+		id    string
+		alias string
+	})
+	for _, entry := range payload.Results {
+		resultsByPath[entry.Path] = struct {
+			id    string
+			alias string
+		}{
+			id:    entry.ResourceInfo.IDFromAttribute,
+			alias: entry.ResourceInfo.AliasFromAttribute,
+		}
+	}
+
+	if got := resultsByPath["/fruits"].id; got != "id" {
+		t.Fatalf("expected /fruits idFromAttribute id, got %q", got)
+	}
+	if got := resultsByPath["/fruits"].alias; got != "name" {
+		t.Fatalf("expected /fruits aliasFromAttribute name, got %q", got)
+	}
+	if got := resultsByPath["/things"].id; got != "collectionId" {
+		t.Fatalf("expected /things idFromAttribute collectionId, got %q", got)
+	}
+	if got := resultsByPath["/things"].alias; got != "displayName" {
+		t.Fatalf("expected /things aliasFromAttribute displayName, got %q", got)
+	}
+	if len(resultsByPath) != 2 {
+		t.Fatalf("expected only /fruits and /things entries, got %d", len(resultsByPath))
+	}
+}
+
+func TestMetadataInferRecursivelyFiltersByPath(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "http://example.com")
+	addContext(t, "infer-recursive-filter", contextPath)
+
+	specPath := filepath.Join(home, "openapi.yml")
+	if err := os.WriteFile(specPath, []byte(cliInferSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "infer")
+	var out bytes.Buffer
+	command.SetOut(&out)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("spec", specPath); err != nil {
+		t.Fatalf("set spec: %v", err)
+	}
+	if err := command.Flags().Set("recursively", "true"); err != nil {
+		t.Fatalf("set recursively: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"/things/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var payload struct {
+		Results []struct {
+			Path string `json:"path"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if len(payload.Results) != 1 {
+		t.Fatalf("expected 1 entry for /things, got %d", len(payload.Results))
+	}
+	if payload.Results[0].Path != "/things" {
+		t.Fatalf("expected /things entry, got %q", payload.Results[0].Path)
+	}
+}
+
+func TestMetadataInferRecursivelyApplyWritesMetadata(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	specPath := filepath.Join(home, "openapi.yml")
+	if err := os.WriteFile(specPath, []byte(cliInferSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	content := fmt.Sprintf(`
+repository:
+  filesystem:
+    base_dir: %s
+managed_server:
+  http:
+    base_url: http://example.com
+    openapi: %s
+`, repoDir, specPath)
+	if err := os.WriteFile(contextPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write context: %v", err)
+	}
+	addContext(t, "infer-recursive-apply", contextPath)
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "infer")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("apply", "true"); err != nil {
+		t.Fatalf("set apply: %v", err)
+	}
+	if err := command.Flags().Set("recursively", "true"); err != nil {
+		t.Fatalf("set recursively: %v", err)
+	}
+
+	for _, relPath := range []string{
+		filepath.Join("fruits", "_", "metadata.json"),
+		filepath.Join("things", "_", "metadata.json"),
+	} {
+		_ = os.Remove(filepath.Join(repoDir, relPath))
+	}
+
+	if err := command.RunE(command, []string{"/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	checkMetadata := func(rel string, expectedID, expectedAlias string) {
+		metaPath := filepath.Join(repoDir, rel)
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			t.Fatalf("read metadata %s: %v", rel, err)
+		}
+		var meta resource.ResourceMetadata
+		if err := json.Unmarshal(data, &meta); err != nil {
+			t.Fatalf("unmarshal metadata %s: %v", rel, err)
+		}
+		if meta.ResourceInfo == nil {
+			t.Fatalf("expected resourceInfo metadata in %s", rel)
+		}
+		if meta.ResourceInfo.IDFromAttribute != expectedID {
+			t.Fatalf("unexpected idFromAttribute for %s: %q", rel, meta.ResourceInfo.IDFromAttribute)
+		}
+		if meta.ResourceInfo.AliasFromAttribute != expectedAlias {
+			t.Fatalf("unexpected aliasFromAttribute for %s: %q", rel, meta.ResourceInfo.AliasFromAttribute)
+		}
+	}
+
+	checkMetadata(filepath.Join("fruits", "_", "metadata.json"), "id", "name")
+	checkMetadata(filepath.Join("things", "_", "metadata.json"), "collectionId", "displayName")
+}

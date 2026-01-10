@@ -55,7 +55,9 @@ Manage metadata definitions.
 - `metadata unset`: unset an attribute.
 - `metadata add`: add metadata from a file.
 - `metadata update-resources`: rewrite resources based on new metadata rules.
-- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value).
+- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value, and `--recursively` walks every collection defined under the supplied path).
+
+When `--recursively` is provided, the command prints a JSON payload whose `results` array contains the inferred `resourceInfo` plus `reasons` for each collection path. Add `--apply` to write the suggestions into the matching metadata files.
 
 ## secret
 
