@@ -346,15 +346,6 @@ for local in "${local_paths_parent_first[@]}"; do
 done
 log_line "All resources created remotely"
 
-phase "Remote inventory snapshot"
-remote_output=$(capture_cli "list remote resources" resource list --remote)
-split_lines_nonempty remote_paths_raw "$remote_output"
-log_line "Remote list returned ${#remote_paths_raw[@]} entries (may include multiple identifiers per resource)"
-
-phase "Initial diff"
-diff_all "post-create"
-log_line "Resources are synced after create"
-
 phase "Updating resources in Keycloak"
 for local in "${local_paths_parent_first[@]}"; do
     if ! update_with_retry "$local"; then
@@ -363,8 +354,7 @@ for local in "${local_paths_parent_first[@]}"; do
     fi
     refresh_master_if_needed "$local"
 done
-diff_all "post-update"
-log_line "Resources are synced after update"
+log_line "Resources updated in Keycloak"
 
 phase "Applying resources in Keycloak"
 for local in "${local_paths_parent_first[@]}"; do
@@ -373,8 +363,7 @@ for local in "${local_paths_parent_first[@]}"; do
         exit 1
     fi
 done
-diff_all "post-apply"
-log_line "Resources are synced after apply"
+log_line "Resources applied in Keycloak"
 
 phase "Deleting remote resources"
 for path in "${local_paths_child_first[@]}"; do

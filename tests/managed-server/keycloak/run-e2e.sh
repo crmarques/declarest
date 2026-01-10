@@ -366,13 +366,21 @@ TOTAL_STEPS=$((TOTAL_STEPS + ${#server_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#secret_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#repo_auth_secondary[@]}))
 
+STEP_NUM_WIDTH=${#TOTAL_STEPS}
+
+format_step_label() {
+    local step="$1"
+    printf "%*d/%s" "$STEP_NUM_WIDTH" "$step" "$TOTAL_STEPS"
+}
+
 run_step() {
     local title="$1"
     shift
     local cmd=("$@")
 
     current_step=$((current_step + 1))
-    local label="${current_step}/${TOTAL_STEPS}"
+    local label
+    label="$(format_step_label "$current_step")"
     log_line "STEP START (${label}) ${title}"
     print_step_start "$label" "$title"
     local started_at
