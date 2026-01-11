@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
@@ -36,6 +37,37 @@ func newPrompter(in io.Reader, out io.Writer) *prompter {
 		inputIsTerminal: isTerm,
 		passwordReader:  term.ReadPassword,
 	}
+}
+
+type interactivePrompter interface {
+	readLine(string) (string, error)
+	required(string) (string, error)
+	optional(string) (string, error)
+	requiredSecret(string) (string, error)
+	optionalSecret(string) (string, error)
+	choice(string, []string, string, func(string) (string, bool)) (string, error)
+	confirm(string, bool) (bool, error)
+	sectionHeader(string, string)
+	messagef(string, ...interface{})
+}
+
+func newInteractivePrompter(cmd *cobra.Command) interactivePrompter {
+	fallback := newPrompter(cmd.InOrStdin(), cmd.ErrOrStderr())
+	if fallback.inputIsTerminal && isTerminalWriter(cmd.ErrOrStderr()) {
+		if inFile, ok := cmd.InOrStdin().(*os.File); ok {
+			if outFile, ok := cmd.ErrOrStderr().(*os.File); ok {
+				return newHuhPrompter(inFile, outFile, outFile)
+			}
+		}
+	}
+	return fallback
+}
+
+func isTerminalWriter(w io.Writer) bool {
+	if f, ok := w.(*os.File); ok {
+		return term.IsTerminal(int(f.Fd()))
+	}
+	return false
 }
 
 func (p *prompter) readLine(prompt string) (string, error) {
@@ -220,4 +252,8 @@ func (p *prompter) sectionHeader(title, subtitle string) {
 	if subtitle != "" {
 		fmt.Fprintln(p.out, subtitle)
 	}
+}
+
+func (p *prompter) messagef(format string, args ...interface{}) {
+	fmt.Fprintf(p.out, format, args...)
 }

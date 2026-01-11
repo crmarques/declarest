@@ -84,7 +84,7 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				}
 				return manager.AddContext(name, config)
 			}
-			prompt := newPrompter(cmd.InOrStdin(), cmd.ErrOrStderr())
+			prompt := newInteractivePrompter(cmd)
 			return runInteractiveContextSetup(manager, prompt, name, force)
 		},
 	}

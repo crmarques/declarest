@@ -12,7 +12,7 @@ This page highlights the main commands and what they do.
 
 Manage contexts and configuration files.
 
-- `config add`: register a context file. Use `--force` to override an existing context; when run without a config path the command switches into the interactive flow that prints section headings, hides secret input, requires a managed server block, and surfaces numbered defaults so less typing is needed.
+- `config add`: register a context file. Use `--force` to override an existing context; when run without a config path the command opens a guided terminal UI that prints section headings, hides secret input, requires a managed server block, surfaces numbered defaults, and lets you navigate list prompts with the arrow keys.
 - `config update`: update an existing context.
 - `config use`: set the default context.
 - `config list`: list all contexts.

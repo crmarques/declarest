@@ -13,7 +13,7 @@ import (
 	"declarest/internal/secrets"
 )
 
-func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt *prompter, initialName string, force bool) error {
+func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt interactivePrompter, initialName string, force bool) error {
 	name := strings.TrimSpace(initialName)
 	var err error
 	if name == "" {
@@ -86,7 +86,7 @@ func normalizeRepoType(raw string) (string, bool) {
 	}
 }
 
-func promptRepositoryConfig(prompt *prompter, repoType string) (*ctx.RepositoryConfig, error) {
+func promptRepositoryConfig(prompt interactivePrompter, repoType string) (*ctx.RepositoryConfig, error) {
 	switch repoType {
 	case "filesystem":
 		baseDir, err := prompt.required("Repository base directory: ")
@@ -121,7 +121,7 @@ func promptRepositoryConfig(prompt *prompter, repoType string) (*ctx.RepositoryC
 	}
 }
 
-func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryConfig, error) {
+func promptGitRemoteConfig(prompt interactivePrompter) (*repository.GitResourceRepositoryConfig, error) {
 	prompt.sectionHeader("Remote repository details", "Tell DeclaREST where the repository lives locally and remotely.")
 	baseDir, err := prompt.required("Local git repository base directory: ")
 	if err != nil {
@@ -251,7 +251,7 @@ func promptGitRemoteConfig(prompt *prompter) (*repository.GitResourceRepositoryC
 	return cfg, nil
 }
 
-func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, error) {
+func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerConfig, error) {
 	prompt.sectionHeader("Managed server configuration", "Provide the HTTP endpoint plus auth details.")
 
 	baseURL, err := prompt.required("Managed server base URL: ")
@@ -398,7 +398,7 @@ func promptManagedServerConfig(prompt *prompter) (*ctx.ManagedServerConfig, erro
 	return &ctx.ManagedServerConfig{HTTP: httpCfg}, nil
 }
 
-func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error) {
+func promptSecretsConfig(prompt interactivePrompter) (*secrets.SecretsManagerConfig, error) {
 	prompt.sectionHeader("Secret store configuration (optional)", "Use a secret store to keep sensitive values out of resources.")
 	configure, err := prompt.confirm("Configure secret store?", false)
 	if err != nil {
@@ -431,7 +431,7 @@ func promptSecretsConfig(prompt *prompter) (*secrets.SecretsManagerConfig, error
 	}
 }
 
-func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfig, error) {
+func promptFileSecretsConfig(prompt interactivePrompter) (*secrets.FileSecretsManagerConfig, error) {
 	prompt.sectionHeader("File secret store options", "Provide the secrets file location and key/passphrase.")
 	path, err := prompt.required("Secrets file path: ")
 	if err != nil {
@@ -505,7 +505,7 @@ func promptFileSecretsConfig(prompt *prompter) (*secrets.FileSecretsManagerConfi
 	return fileCfg, nil
 }
 
-func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerConfig, error) {
+func promptVaultSecretsConfig(prompt interactivePrompter) (*secrets.VaultSecretsManagerConfig, error) {
 	prompt.sectionHeader("Vault secret store options", "Vault connection details, auth, and TLS settings.")
 	address, err := prompt.required("Vault address (https://vault.example.com): ")
 	if err != nil {
@@ -649,7 +649,7 @@ func promptVaultSecretsConfig(prompt *prompter) (*secrets.VaultSecretsManagerCon
 	}, nil
 }
 
-func promptHeaders(prompt *prompter) (map[string]string, error) {
+func promptHeaders(prompt interactivePrompter) (map[string]string, error) {
 	headers := map[string]string{}
 	for {
 		value, err := prompt.readLine("Header (key=value, leave blank to finish): ")
@@ -665,7 +665,7 @@ func promptHeaders(prompt *prompter) (map[string]string, error) {
 		}
 		parts := strings.SplitN(value, "=", 2)
 		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-			fmt.Fprintf(prompt.out, "invalid header: %s\n", value)
+			prompt.messagef("invalid header: %s\n", value)
 			continue
 		}
 		headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
@@ -676,7 +676,7 @@ func promptHeaders(prompt *prompter) (map[string]string, error) {
 	return headers, nil
 }
 
-func promptOptionalUint32(prompt *prompter, label string) (uint32, bool, error) {
+func promptOptionalUint32(prompt interactivePrompter, label string) (uint32, bool, error) {
 	for {
 		value, err := prompt.optional(label)
 		if err != nil {
@@ -688,18 +688,18 @@ func promptOptionalUint32(prompt *prompter, label string) (uint32, bool, error) 
 		}
 		parsed, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
-			fmt.Fprintf(prompt.out, "invalid number: %s\n", value)
+			prompt.messagef("invalid number: %s\n", value)
 			continue
 		}
 		if parsed == 0 {
-			fmt.Fprintln(prompt.out, "value must be greater than zero")
+			prompt.messagef("value must be greater than zero\n")
 			continue
 		}
 		return uint32(parsed), true, nil
 	}
 }
 
-func promptOptionalUint8(prompt *prompter, label string) (uint8, bool, error) {
+func promptOptionalUint8(prompt interactivePrompter, label string) (uint8, bool, error) {
 	for {
 		value, err := prompt.optional(label)
 		if err != nil {
@@ -711,11 +711,11 @@ func promptOptionalUint8(prompt *prompter, label string) (uint8, bool, error) {
 		}
 		parsed, err := strconv.ParseUint(value, 10, 8)
 		if err != nil {
-			fmt.Fprintf(prompt.out, "invalid number: %s\n", value)
+			prompt.messagef("invalid number: %s\n", value)
 			continue
 		}
 		if parsed == 0 {
-			fmt.Fprintln(prompt.out, "value must be greater than zero")
+			prompt.messagef("value must be greater than zero\n")
 			continue
 		}
 		return uint8(parsed), true, nil
