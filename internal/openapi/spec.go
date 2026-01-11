@@ -25,6 +25,8 @@ type PathItem struct {
 
 type Operation struct {
 	Method               string
+	Summary              string
+	Description          string
 	RequestContentTypes  []string
 	ResponseContentTypes []string
 	RequestSchema        map[string]any
@@ -209,6 +211,8 @@ func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 		opHeaders := mergeHeaderParameters(pathHeaders, headerParametersFromList(op["parameters"], spec))
 		operations[method] = &Operation{
 			Method:               method,
+			Summary:              stringField(op, "summary"),
+			Description:          stringField(op, "description"),
 			RequestContentTypes:  reqTypes,
 			ResponseContentTypes: respTypes,
 			RequestSchema:        requestSchema(op, spec),
@@ -216,6 +220,21 @@ func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 		}
 	}
 	return operations
+}
+
+func stringField(value map[string]any, key string) string {
+	if value == nil {
+		return ""
+	}
+	raw, ok := value[key]
+	if !ok {
+		return ""
+	}
+	str, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(str)
 }
 
 func requestSchema(op map[string]any, spec *Spec) map[string]any {

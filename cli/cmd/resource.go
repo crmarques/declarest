@@ -499,6 +499,8 @@ func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.Resource
 	for _, method := range []string{"get", "post", "put", "patch", "delete"} {
 		if op := item.Operation(method); op != nil {
 			fmt.Fprintf(out, "    %s:\n", strings.ToUpper(op.Method))
+			printLabeledField(out, "      ", "summary", op.Summary)
+			printLabeledField(out, "      ", "description", op.Description)
 			fmt.Fprintf(out, "      requests=%s responses=%s\n", strings.Join(op.RequestContentTypes, ","), strings.Join(op.ResponseContentTypes, ","))
 			if lines := schemaLines(op.RequestSchema); len(lines) > 0 {
 				fmt.Fprintln(out, "      schema:")
@@ -507,6 +509,23 @@ func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.Resource
 				}
 			}
 		}
+	}
+}
+
+func printLabeledField(out io.Writer, indent, label, value string) {
+	text := strings.TrimSpace(value)
+	if text == "" {
+		return
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(text, "\n")
+	fmt.Fprintf(out, "%s%s: %s\n", indent, label, strings.TrimSpace(lines[0]))
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fmt.Fprintf(out, "%s  %s\n", indent, line)
 	}
 }
 
@@ -530,6 +549,9 @@ func collectSchemaLines(schema map[string]any, indent string, lines *[]string) {
 
 	if summary := schemaSummary(schema); summary != "" {
 		*lines = append(*lines, fmt.Sprintf("%s%s", indent, summary))
+	}
+	if desc := schemaDescription(schema); desc != "" {
+		*lines = append(*lines, fmt.Sprintf("%sdescription: %s", indent, desc))
 	}
 	if req := schemaRequired(schema); len(req) > 0 {
 		*lines = append(*lines, fmt.Sprintf("%srequired: %s", indent, strings.Join(req, ", ")))
@@ -580,6 +602,16 @@ func schemaSummary(schema map[string]any) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func schemaDescription(schema map[string]any) string {
+	if schema == nil {
+		return ""
+	}
+	if desc, ok := schema["description"].(string); ok {
+		return strings.TrimSpace(desc)
+	}
+	return ""
 }
 
 func schemaRequired(schema map[string]any) []string {
