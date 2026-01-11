@@ -92,3 +92,7 @@ Manage secrets stored in the secret store.
 ## version
 
 - `version`: print the CLI version.
+
+## completion
+
+- `completion <shell>`: emit the completion script for `bash`, `zsh`, `fish`, or `powershell`. Pipe the output to `source`, redirect it into a shell-specific completion directory, or write it to your profile so Tab completion is active in every session.

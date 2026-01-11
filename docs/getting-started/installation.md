@@ -51,23 +51,49 @@ Use `declarest config` commands to manage them.
 
 ## Shell completion
 
-DeclaREST provides shell completion scripts for `bash`, `zsh`, `fish`, and PowerShell via `declarest completion <shell>`.
+`declarest completion <shell>` prints a completion script for `bash`, `zsh`, `fish`, or PowerShell. Pipe or source the script in your shell so you can press Tab to complete commands, paths, and OpenAPI templates.
 
-Examples:
+### Bash
 
-```bash
-# Bash (one-time):
-source <(declarest completion bash)
+- One-time:
+  ```bash
+  source <(declarest completion bash)
+  ```
+- Persist across sessions by adding the same command to `~/.bashrc` or `~/.bash_profile`:
+  ```bash
+  echo 'source <(declarest completion bash)' >> ~/.bashrc
+  ```
+  and reload the file with `source ~/.bashrc` (or restart the shell).
 
-# Zsh (add to ~/.zshrc):
-declarest completion zsh > ~/.zfunc/_declarest
-echo "fpath+=(~/.zfunc)" >> ~/.zshrc
-```
+### Zsh
 
-```bash
-# Fish:
-declarest completion fish | source
+- Write the completion function to your `fpath` directory:
+  ```bash
+  mkdir -p ~/.zfunc
+  declarest completion zsh > ~/.zfunc/_declarest
+  ```
+- Update `~/.zshrc` if needed:
+  ```bash
+  echo 'fpath+=(~/.zfunc)' >> ~/.zshrc
+  echo 'autoload -U compinit && compinit' >> ~/.zshrc
+  ```
+  Then restart zsh or run `source ~/.zshrc`.
 
-# PowerShell:
-declarest completion powershell | Out-File -Encoding utf8 $PROFILE.CurrentUserAllHosts\declarest.ps1
-```
+### Fish
+
+- Install the completion script into the fish completions directory:
+  ```bash
+  mkdir -p ~/.config/fish/completions
+  declarest completion fish > ~/.config/fish/completions/declarest.fish
+  ```
+  Fish automatically loads any file under `~/.config/fish/completions`, so a new shell session will honor the completions.
+
+### PowerShell
+
+- Save the completion script under your AllUsers profile and reload it at startup:
+  ```powershell
+  $profilePath = Join-Path $PROFILE.CurrentUserAllHosts 'declarest.ps1'
+  declarest completion powershell | Out-File -Encoding utf8 $profilePath
+  . $profilePath
+  ```
+  Restart PowerShell (or dot-source the file) to activate the completions for every session.
