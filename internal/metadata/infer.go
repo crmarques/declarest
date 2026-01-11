@@ -58,6 +58,27 @@ func InferResourceMetadata(spec *openapi.Spec, logicalPath string, isCollection 
 	}
 
 	pathParams := extractPathParameters(pathItem)
+	if isCollection {
+		childParams := collectionResourcePathParameters(spec, matchPath)
+		if len(childParams) > 0 {
+			existing := make(map[string]struct{}, len(pathParams)+len(childParams))
+			for _, name := range pathParams {
+				existing[name] = struct{}{}
+			}
+			for _, name := range childParams {
+				name = strings.TrimSpace(name)
+				if name == "" {
+					continue
+				}
+				if _, ok := existing[name]; ok {
+					continue
+				}
+				pathParams = append(pathParams, name)
+				existing[name] = struct{}{}
+			}
+		}
+	}
+
 	idAttr, idReason := inferIDFromSchema(schema, pathParams, overrides)
 	if idAttr != "" {
 		result.ResourceInfo.IDFromAttribute = idAttr
@@ -91,6 +112,79 @@ func collectionPathFromSegmentsForInference(segments []string) string {
 		return "/"
 	}
 	return resource.NormalizePath("/" + strings.Join(segments, "/"))
+}
+
+func collectionResourcePathParameters(spec *openapi.Spec, collectionPath string) []string {
+	if spec == nil {
+		return nil
+	}
+	normalized := resource.NormalizePath(collectionPath)
+	baseSegments := resource.SplitPathSegments(normalized)
+	type candidate struct {
+		template string
+		name     string
+	}
+	var candidates []candidate
+
+	for _, item := range spec.Paths {
+		if item == nil {
+			continue
+		}
+		segments := item.Segments
+		if len(segments) != len(baseSegments)+1 {
+			continue
+		}
+		if !segmentsStartWith(segments, baseSegments) {
+			continue
+		}
+		last := segments[len(segments)-1]
+		if !isOpenAPIPathParameter(last) {
+			continue
+		}
+		name := strings.TrimSpace(last[1 : len(last)-1])
+		if name == "" {
+			continue
+		}
+		candidates = append(candidates, candidate{template: item.Template, name: name})
+	}
+
+	if len(candidates) == 0 {
+		return nil
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].template < candidates[j].template
+	})
+
+	seen := make(map[string]struct{}, len(candidates))
+	params := make([]string, 0, len(candidates))
+	for _, cand := range candidates {
+		if _, ok := seen[cand.name]; ok {
+			continue
+		}
+		seen[cand.name] = struct{}{}
+		params = append(params, cand.name)
+	}
+	return params
+}
+
+func segmentsStartWith(segments, prefix []string) bool {
+	if len(prefix) == 0 {
+		return true
+	}
+	if len(segments) < len(prefix) {
+		return false
+	}
+	for idx, seg := range prefix {
+		if segments[idx] != seg {
+			return false
+		}
+	}
+	return true
+}
+
+func isOpenAPIPathParameter(segment string) bool {
+	segment = strings.TrimSpace(segment)
+	return strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}")
 }
 
 func extractPathParameters(item *openapi.PathItem) []string {

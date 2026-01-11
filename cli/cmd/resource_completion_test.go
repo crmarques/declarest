@@ -1,14 +1,51 @@
 package cmd
 
 import (
+	"reflect"
 	"testing"
 
 	"declarest/internal/openapi"
+	"declarest/internal/reconciler"
 )
 
 const sampleSpecJSON = `{
   "openapi": "3.0.0",
   "paths": {
+    "/admin": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/admin/realms": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/admin/realms/{id}": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/admin/realms/{id}/clients": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/admin/realms/{id}/clients/{client}": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/fruits": {
       "get": {
         "responses": {
@@ -24,6 +61,20 @@ const sampleSpecJSON = `{
       }
     },
     "/fruits/{id}/details": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/vegetables": {
+      "get": {
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/vegetables/{id}": {
       "get": {
         "responses": {
           "200": {}
@@ -58,20 +109,27 @@ func TestRemoteCompletionCollection(t *testing.T) {
 	}
 }
 
-func TestSpecPathSuggestionsFilters(t *testing.T) {
+func TestSpecChildEntries(t *testing.T) {
 	spec := mustParseSpec(t, sampleSpecJSON)
-	suggestions := specPathSuggestions(spec, "/fruits")
-	expected := []string{
-		"/fruits",
-		"/fruits/{id}",
-		"/fruits/_",
-		"/fruits/{id}/details",
-		"/fruits/_/details",
+
+	rootEntries := specChildEntries(spec, "/")
+	expectedRoot := []string{"/admin/", "/fruits/", "/vegetables/"}
+	if got := entriesValues(rootEntries); !reflect.DeepEqual(got, expectedRoot) {
+		t.Fatalf("root child entries = %v, want %v", got, expectedRoot)
 	}
-	for _, want := range expected {
-		if !containsSuggestion(suggestions, want) {
-			t.Fatalf("expected suggestion %q not found in %v", want, suggestions)
-		}
+
+	if got := entriesValues(specChildEntries(spec, "/admin/re")); !reflect.DeepEqual(got, []string{"/admin/realms/"}) {
+		t.Fatalf("unexpected mis-completion for /admin/re: %v", got)
+	}
+
+	if got := entriesValues(specChildEntries(spec, "/a")); !reflect.DeepEqual(got, []string{"/admin/"}) {
+		t.Fatalf("unexpected children for /a: %v", got)
+	}
+	if got := entriesValues(specChildEntries(spec, "/fruits")); !reflect.DeepEqual(got, []string{"/fruits/"}) {
+		t.Fatalf("unexpected children for /fruits: %v", got)
+	}
+	if got := entriesValues(specChildEntries(spec, "/admin/realms/123/")); !reflect.DeepEqual(got, []string{"/admin/realms/123/clients/"}) {
+		t.Fatalf("unexpected children for /admin/realms/123/: %v", got)
 	}
 }
 
@@ -84,11 +142,68 @@ func mustParseSpec(t *testing.T, data string) *openapi.Spec {
 	return spec
 }
 
-func containsSuggestion(list []string, target string) bool {
-	for _, entry := range list {
-		if entry == target {
-			return true
-		}
+func entriesValues(entries []pathCompletionEntry) []string {
+	if len(entries) == 0 {
+		return nil
 	}
-	return false
+	values := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		values = append(values, entry.value)
+	}
+	return values
+}
+
+func TestCompletionDescription(t *testing.T) {
+	tests := []struct {
+		name       string
+		entry      reconciler.RemoteResourceEntry
+		remotePath string
+		wantDesc   string
+	}{
+		{
+			name:       "aliasEqualsID",
+			entry:      reconciler.RemoteResourceEntry{ID: "master", Alias: "master"},
+			remotePath: "/admin/realms/master",
+			wantDesc:   "",
+		},
+		{
+			name:       "aliasDiffersFromID",
+			entry:      reconciler.RemoteResourceEntry{ID: "123", Alias: "alpha"},
+			remotePath: "/items/alpha",
+			wantDesc:   "(123)",
+		},
+		{
+			name:       "displaySegmentIsID",
+			entry:      reconciler.RemoteResourceEntry{ID: "123", Alias: "alpha"},
+			remotePath: "/items/123",
+			wantDesc:   "alpha",
+		},
+		{
+			name:       "aliasMissing",
+			entry:      reconciler.RemoteResourceEntry{ID: "abc"},
+			remotePath: "/items/abc",
+			wantDesc:   "",
+		},
+		{
+			name:       "fallbackToPath",
+			entry:      reconciler.RemoteResourceEntry{},
+			remotePath: "/",
+			wantDesc:   "",
+		},
+		{
+			name:       "sanitizedValues",
+			entry:      reconciler.RemoteResourceEntry{ID: "  id\tvalue\n", Alias: " alias "},
+			remotePath: "/items/alias",
+			wantDesc:   "(id value)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			desc := completionDescription(tc.entry, tc.remotePath)
+			if desc != tc.wantDesc {
+				t.Fatalf("completionDescription(%+v) = %q, want %q", tc.entry, desc, tc.wantDesc)
+			}
+		})
+	}
 }

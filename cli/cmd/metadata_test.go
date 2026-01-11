@@ -123,6 +123,67 @@ func TestMetadataGetPrintsSecretInAttributesWhenUnset(t *testing.T) {
 	}
 }
 
+func TestMetadataEditStripsDefaults(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "")
+	addContext(t, "edit-test", contextPath)
+
+	editorPath := filepath.Join(home, "edit.sh")
+	script := `#!/usr/bin/env bash
+set -euo pipefail
+
+if ! grep -q '"aliasFromAttribute": "id"' "$1"; then
+  echo "missing default aliasFromAttribute" >&2
+  exit 1
+fi
+
+sed -i 's/"aliasFromAttribute": "id"/"aliasFromAttribute": "name"/' "$1"
+`
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("editor", editorPath); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"/items/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, "items", "_", "metadata.json"))
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+
+	var meta resource.ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected resourceInfo metadata")
+	}
+	if meta.ResourceInfo.AliasFromAttribute != "name" {
+		t.Fatalf("unexpected aliasFromAttribute: %q", meta.ResourceInfo.AliasFromAttribute)
+	}
+	if meta.ResourceInfo.IDFromAttribute != "" {
+		t.Fatalf("expected idFromAttribute to be stripped, got %q", meta.ResourceInfo.IDFromAttribute)
+	}
+	if meta.ResourceInfo.CollectionPath != "" {
+		t.Fatalf("expected collectionPath to be stripped, got %q", meta.ResourceInfo.CollectionPath)
+	}
+	if meta.OperationInfo != nil {
+		t.Fatalf("expected default operationInfo to be stripped")
+	}
+}
+
 func TestMetadataSetSecretInAttributesCommaSeparated(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo")
@@ -289,6 +350,53 @@ func TestMetadataInferPrintsSuggestions(t *testing.T) {
 		t.Fatalf("unexpected idFromAttribute: %q", payload.ResourceInfo.IDFromAttribute)
 	}
 	if payload.ResourceInfo.AliasFromAttribute != "name" {
+		t.Fatalf("unexpected aliasFromAttribute: %q", payload.ResourceInfo.AliasFromAttribute)
+	}
+	if len(payload.Reasons) == 0 {
+		t.Fatalf("expected inference reasons, got none")
+	}
+}
+
+func TestMetadataInferDefaultsToCollectionWithoutSlash(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "http://example.com")
+	addContext(t, "infer-no-slash", contextPath)
+
+	specPath := filepath.Join(home, "openapi.yml")
+	if err := os.WriteFile(specPath, []byte(cliInferSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "infer")
+	var out bytes.Buffer
+	command.SetOut(&out)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("spec", specPath); err != nil {
+		t.Fatalf("set spec: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"/things"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	var payload struct {
+		ResourceInfo struct {
+			IDFromAttribute    string `json:"idFromAttribute"`
+			AliasFromAttribute string `json:"aliasFromAttribute"`
+		} `json:"resourceInfo"`
+		Reasons []string `json:"reasons"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if payload.ResourceInfo.IDFromAttribute != "collectionId" {
+		t.Fatalf("unexpected idFromAttribute: %q", payload.ResourceInfo.IDFromAttribute)
+	}
+	if payload.ResourceInfo.AliasFromAttribute != "displayName" {
 		t.Fatalf("unexpected aliasFromAttribute: %q", payload.ResourceInfo.AliasFromAttribute)
 	}
 	if len(payload.Reasons) == 0 {

@@ -158,6 +158,18 @@ const keycloakSpecJSON = `
         }
       }
     },
+    "/admin/realms/{realm}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
     "/admin/realms/{realm}/clients/{id}": {
       "put": {
         "requestBody": {
@@ -345,5 +357,20 @@ func TestInferKeycloakMapperCollectionMetadata(t *testing.T) {
 	}
 	if !reasonContains(result.Reasons, "schema property \"name\"") {
 		t.Fatalf("expected reason to mention schema property name, got %v", result.Reasons)
+	}
+}
+
+func TestInferKeycloakRealmCollectionMetadata(t *testing.T) {
+	spec := mustParseSpec(t, keycloakSpecJSON)
+	result := metadata.InferResourceMetadata(spec, "/admin/realms", true, metadata.InferenceOverrides{})
+
+	if got := result.ResourceInfo.IDFromAttribute; got != "realm" {
+		t.Fatalf("expected idFromAttribute realm, got %q", got)
+	}
+	if got := result.ResourceInfo.AliasFromAttribute; got != "realm" {
+		t.Fatalf("expected aliasFromAttribute realm, got %q", got)
+	}
+	if !reasonContains(result.Reasons, `path parameter "realm"`) {
+		t.Fatalf("expected reason to mention path parameter realm, got %v", result.Reasons)
 	}
 }

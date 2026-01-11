@@ -265,7 +265,14 @@ func (r *DefaultReconciler) SaveLocalCollectionItemsWithSecrets(path string, ite
 	return nil
 }
 
-func (r *DefaultReconciler) ListRemoteResourcePaths(path string) ([]string, error) {
+type RemoteResourceEntry struct {
+	Path      string
+	ID        string
+	Alias     string
+	AliasPath string
+}
+
+func (r *DefaultReconciler) ListRemoteResourceEntries(path string) ([]RemoteResourceEntry, error) {
 	if r == nil || r.ResourceServerManager == nil {
 		return nil, errors.New("resource server manager is not configured")
 	}
@@ -278,25 +285,87 @@ func (r *DefaultReconciler) ListRemoteResourcePaths(path string) ([]string, erro
 		return nil, err
 	}
 
-	items, err := r.fetchCollection(record, replacePathSegments(collectionPath, replacements), replacements, false)
+	items, err := r.fetchCollection(record, replacePathSegments(collectionPath, replacements), false)
 	if err != nil {
 		return nil, err
 	}
 
-	base := strings.TrimRight(strings.TrimRight(collectionLogicalPath, "/"), "/")
-	var paths []string
+	var entries []RemoteResourceEntry
 	for _, item := range items {
-		aliasPath := record.AliasPath(item)
-		alias := resource.LastSegment(aliasPath)
-		if alias == "" || resource.NormalizePath(aliasPath) == resource.NormalizePath(record.Path) {
-			alias = resource.LastSegment(record.RemoteResourcePath(item))
-		}
-		if alias == "" {
+		remotePath := resource.NormalizePath(record.RemoteResourcePath(item))
+		if remotePath == "" {
 			continue
 		}
-		paths = append(paths, resource.NormalizePath(base+"/"+alias))
+		recordPath := resource.NormalizePath(record.Path)
+		aliasPath := record.AliasPath(item)
+		alias := resource.LastSegment(aliasPath)
+		normAliasPath := resource.NormalizePath(aliasPath)
+
+		if alias == "" || normAliasPath == recordPath {
+			alias = resource.LastSegment(remotePath)
+			normAliasPath = remotePath
+		}
+		if alias == "" {
+			alias = resource.LastSegment(recordPath)
+			if normAliasPath == "" {
+				normAliasPath = recordPath
+			}
+		}
+		if normAliasPath == "" {
+			normAliasPath = remotePath
+		}
+		idValue := attributeValueFromResource(item, record.Meta.ResourceInfo, true, resource.LastSegment(remotePath))
+		aliasValue := attributeValueFromResource(item, record.Meta.ResourceInfo, false, alias)
+		entries = append(entries, RemoteResourceEntry{
+			Path:      remotePath,
+			ID:        idValue,
+			Alias:     aliasValue,
+			AliasPath: normAliasPath,
+		})
 	}
-	sort.Strings(paths)
+	sort.Slice(entries, func(i, j int) bool {
+		a := entries[i].AliasPath
+		if a == "" {
+			a = entries[i].Path
+		}
+		b := entries[j].AliasPath
+		if b == "" {
+			b = entries[j].Path
+		}
+		return a < b
+	})
+	return entries, nil
+}
+
+func attributeValueFromResource(item resource.Resource, info *resource.ResourceInfoMetadata, idAttr bool, fallback string) string {
+	if info != nil {
+		var attr string
+		if idAttr {
+			attr = strings.TrimSpace(info.IDFromAttribute)
+		} else {
+			attr = strings.TrimSpace(info.AliasFromAttribute)
+		}
+		if attr != "" {
+			if value, ok := resource.LookupValueFromResource(item, attr); ok {
+				value = strings.TrimSpace(value)
+				if value != "" {
+					return value
+				}
+			}
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func (r *DefaultReconciler) ListRemoteResourcePaths(path string) ([]string, error) {
+	entries, err := r.ListRemoteResourceEntries(path)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		paths = append(paths, entry.Path)
+	}
 	return paths, nil
 }
 

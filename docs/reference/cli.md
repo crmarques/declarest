@@ -66,11 +66,12 @@ The command prints the raw response body to stdout and a `[OK] METHOD PATH STATU
 Manage metadata definitions.
 
 - `metadata get`: render effective metadata.
+- `metadata edit`: open the metadata in your editor with defaults prefilled; when you save, default values are stripped before writing the file (`--editor` overrides `$VISUAL`/`$EDITOR`).
 - `metadata set`: set an attribute.
 - `metadata unset`: unset an attribute.
 - `metadata add`: add metadata from a file.
 - `metadata update-resources`: rewrite resources based on new metadata rules.
-- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value, and `--recursively` walks every collection defined under the supplied path).
+- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value, and `--recursively` walks every collection defined under the supplied path). When a collection POST schema doesn't expose the identifying properties, inference also inspects the child resource path parameters (e.g., `/admin/realms/{realm}`) so `/admin/realms/` can still suggest `realm` for `idFromAttribute`/`aliasFromAttribute`.
 
 Use `--for-resource-only` on any metadata subcommand to treat a path without a trailing slash as a resource instead of a collection default.
 
@@ -96,3 +97,25 @@ Manage secrets stored in the secret store.
 ## completion
 
 - `completion <shell>`: emit the completion script for `bash`, `zsh`, `fish`, or `powershell`. Pipe the output to `source`, redirect it into a shell-specific completion directory, or write it to your profile so Tab completion is active in every session.
+
+### Completion alias labels
+
+- Remote-oriented completions show the path and, when alias/id differ, add a description derived from the resource metadata. If the completion value already uses the alias, the description is `(id)`; if it uses the id, the description is `alias`; otherwise the description is `alias (id)`. When alias and id match, no description is printed.
+- Add metadata so the completion description surfaces friendly names. For example, `/admin/realms/` can use the realm name for both the remote ID and the alias:
+
+```json
+{
+  "resourceInfo": {
+    "idFromAttribute": "realm",
+    "aliasFromAttribute": "realm"
+  }
+}
+```
+
+Save that JSON as `admin/realms/metadata.json`, or let the CLI write it for you:
+
+```bash
+declarest metadata set --path /admin/realms/ --attribute resourceInfo.aliasFromAttribute --value realm
+```
+
+After the metadata is in place, Tab completion will emit entries such as `/admin/realms/master  (7ee92c11-d70b-44a1-a88d-148c01ba79bd)` so you get the alias names (`master`, `publico`, …) without repeating them in the description. `declarest metadata infer --path /admin/realms/ --apply` now inspects the `{realm}` path parameter to suggest the friendly name for both the ID and alias; add `--alias-from realm` if you want to override that suggestion before applying.

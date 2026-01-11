@@ -371,14 +371,96 @@ func TestListRemoteResourcePathsUsesAliasAndIDFallback(t *testing.T) {
 	}
 
 	recon := newReconcilerWithServerAndRepo(t, server, repoDir)
+	entries, err := recon.ListRemoteResourceEntries("/items")
+	if err != nil {
+		t.Fatalf("ListRemoteResourceEntries: %v", err)
+	}
+	wantEntries := []RemoteResourceEntry{
+		{Path: "/items/2", ID: "2", Alias: "2", AliasPath: "/items/2"},
+		{Path: "/items/1", ID: "1", Alias: "alpha", AliasPath: "/items/alpha"},
+	}
+	if !reflect.DeepEqual(entries, wantEntries) {
+		t.Fatalf("expected entries %#v, got %#v", wantEntries, entries)
+	}
+
 	paths, err := recon.ListRemoteResourcePaths("/items")
 	if err != nil {
 		t.Fatalf("ListRemoteResourcePaths: %v", err)
 	}
 
-	want := []string{"/items/2", "/items/alpha"}
+	want := []string{"/items/2", "/items/1"}
 	if !reflect.DeepEqual(paths, want) {
 		t.Fatalf("expected paths %#v, got %#v", want, paths)
+	}
+}
+
+func TestListRemoteResourceEntriesResolvesAncestorAlias(t *testing.T) {
+	parent := mustResource(t, map[string]any{
+		"id":   "realm-123",
+		"name": "publico",
+	})
+	child := mustResource(t, map[string]any{
+		"id":       "client-1",
+		"clientId": "app",
+	})
+
+	server := &fakeServer{
+		collections: map[string][]resource.Resource{
+			"/realms":                   {parent},
+			"/realms/realm-123/clients": {child},
+		},
+	}
+
+	repoDir := t.TempDir()
+	realmMeta := filepath.Join(repoDir, "realms", "_", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(realmMeta), 0o755); err != nil {
+		t.Fatalf("mkdir realm metadata dir: %v", err)
+	}
+	if err := os.WriteFile(realmMeta, []byte(`{
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write realm metadata: %v", err)
+	}
+
+	clientMeta := filepath.Join(repoDir, "realms", "_", "clients", "_", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(clientMeta), 0o755); err != nil {
+		t.Fatalf("mkdir client metadata dir: %v", err)
+	}
+	if err := os.WriteFile(clientMeta, []byte(`{
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "clientId"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write client metadata: %v", err)
+	}
+
+	recon := newReconcilerWithServerAndRepo(t, server, repoDir)
+	entries, err := recon.ListRemoteResourceEntries("/realms/publico/clients")
+	if err != nil {
+		t.Fatalf("ListRemoteResourceEntries: %v", err)
+	}
+
+	wantEntries := []RemoteResourceEntry{
+		{
+			Path:      "/realms/realm-123/clients/client-1",
+			ID:        "client-1",
+			Alias:     "app",
+			AliasPath: "/realms/publico/clients/app",
+		},
+	}
+	if !reflect.DeepEqual(entries, wantEntries) {
+		t.Fatalf("expected entries %#v, got %#v", wantEntries, entries)
+	}
+
+	if !containsCall(server.calls, "list:/realms") {
+		t.Fatalf("expected list:/realms in calls, got %#v", server.calls)
+	}
+	if !containsCall(server.calls, "list:/realms/realm-123/clients") {
+		t.Fatalf("expected list:/realms/realm-123/clients in calls, got %#v", server.calls)
 	}
 }
 

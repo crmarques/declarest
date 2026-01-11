@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -30,11 +32,130 @@ func newMetadataCommand() *cobra.Command {
 	cmd.PersistentFlags().Bool(metadataResourceOnlyFlag, false, "Treat the path as a resource when no trailing / is provided")
 
 	cmd.AddCommand(newMetadataGetCommand())
+	cmd.AddCommand(newMetadataEditCommand())
 	cmd.AddCommand(newMetadataSetCommand())
 	cmd.AddCommand(newMetadataUnsetCommand())
 	cmd.AddCommand(newMetadataAddCommand())
 	cmd.AddCommand(newMetadataUpdateResourcesCommand())
 	cmd.AddCommand(newMetadataInferCommand())
+
+	return cmd
+}
+
+func newMetadataEditCommand() *cobra.Command {
+	var (
+		path   string
+		editor string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "edit <path>",
+		Short: "Edit metadata using your editor with defaults prefilled",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			path, err = resolveSingleArg(cmd, path, args, "path")
+			if err != nil {
+				return err
+			}
+			path, err = normalizeMetadataInputPath(cmd, path)
+			if err != nil {
+				return err
+			}
+			if err := validateMetadataPath(cmd, path); err != nil {
+				return err
+			}
+
+			recon, cleanup, err := loadDefaultReconciler()
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if err != nil {
+				return err
+			}
+			if recon.ResourceRecordProvider == nil {
+				return errors.New("resource record provider is not configured")
+			}
+
+			mergedMeta, err := recon.ResourceRecordProvider.GetMergedMetadata(path)
+			if err != nil {
+				return err
+			}
+
+			payload, err := formatMetadataOutput(mergedMeta)
+			if err != nil {
+				return err
+			}
+			payloadData, err := json.MarshalIndent(payload, "", "  ")
+			if err != nil {
+				return err
+			}
+			payloadData = append(payloadData, '\n')
+
+			tempFile, err := os.CreateTemp("", "declarest-metadata-*.json")
+			if err != nil {
+				return fmt.Errorf("create temp metadata file: %w", err)
+			}
+			tempPath := tempFile.Name()
+			if err := tempFile.Close(); err != nil {
+				return fmt.Errorf("close temp metadata file: %w", err)
+			}
+			defer os.Remove(tempPath)
+
+			if err := os.WriteFile(tempPath, payloadData, 0o644); err != nil {
+				return fmt.Errorf("write temp metadata file: %w", err)
+			}
+
+			editorArgs, err := resolveEditorCommand(editor)
+			if err != nil {
+				return err
+			}
+			editorArgs = append(editorArgs, tempPath)
+			if err := runEditor(editorArgs); err != nil {
+				return err
+			}
+
+			editedData, err := os.ReadFile(tempPath)
+			if err != nil {
+				return fmt.Errorf("read edited metadata: %w", err)
+			}
+			editedMeta, err := decodeMetadataEditFile(editedData)
+			if err != nil {
+				return err
+			}
+
+			defaultMeta, err := defaultMetadataForPath(path, recon.ResourceRecordProvider)
+			if err != nil {
+				return err
+			}
+			defaultPayload, err := formatMetadataOutput(defaultMeta)
+			if err != nil {
+				return err
+			}
+			defaultMap, err := payloadToMetadataMap(defaultPayload)
+			if err != nil {
+				return err
+			}
+
+			stripped := stripDefaultMetadata(editedMeta, defaultMap)
+			if err := recon.UpdateLocalMetadata(path, func(meta map[string]any) (bool, error) {
+				for key := range meta {
+					delete(meta, key)
+				}
+				for key, value := range stripped {
+					meta[key] = value
+				}
+				return true, nil
+			}); err != nil {
+				return err
+			}
+
+			successf(cmd, "updated metadata for %s", path)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
+	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to $VISUAL or $EDITOR)")
 
 	return cmd
 }
@@ -91,6 +212,49 @@ func newMetadataGetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to show metadata for (defaults to collection)")
 
 	return cmd
+}
+
+type metadataOpenAPIProvider interface {
+	OpenAPISpec() *openapi.Spec
+}
+
+func defaultMetadataForPath(path string, provider any) (resource.ResourceMetadata, error) {
+	trimmed := strings.TrimSpace(path)
+	isCollection := strings.HasSuffix(trimmed, "/")
+	clean := strings.Trim(trimmed, " /")
+	segments := resource.SplitPathSegments(clean)
+	collectionSegments := segments
+	if !isCollection && len(collectionSegments) > 0 {
+		collectionSegments = collectionSegments[:len(collectionSegments)-1]
+	}
+
+	meta := metadata.DefaultMetadata(collectionSegments)
+
+	var spec *openapi.Spec
+	if p, ok := provider.(metadataOpenAPIProvider); ok {
+		spec = p.OpenAPISpec()
+	}
+	if spec == nil {
+		return meta, nil
+	}
+
+	resourcePathForDefaults := trimmed
+	if meta.ResourceInfo != nil {
+		if isCollection {
+			if coll := strings.TrimSpace(meta.ResourceInfo.CollectionPath); coll != "" {
+				resourcePathForDefaults = coll
+			}
+		} else {
+			record := resource.ResourceRecord{
+				Path: trimmed,
+				Meta: meta,
+			}
+			resourcePathForDefaults = record.RemoteResourcePath(resource.Resource{})
+		}
+	}
+
+	meta = openapi.ApplyDefaults(meta, resourcePathForDefaults, isCollection, spec)
+	return meta, nil
 }
 
 func newMetadataSetCommand() *cobra.Command {
@@ -410,6 +574,8 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 			if trimmedPath == "" {
 				return usageError(cmd, "path is required")
 			}
+			metadataOnly := metadataForResourceOnly(cmd)
+			logicalPath := resource.NormalizePath(trimmedPath)
 			targetIsCollection := resource.IsCollectionPath(trimmedPath)
 			normalizedPath, err := normalizeMetadataInputPath(cmd, path)
 			if err != nil {
@@ -447,6 +613,12 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 				return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
 			}
 
+			if !targetIsCollection && !metadataOnly {
+				if !openAPIPathEndsWithParameter(spec, logicalPath) {
+					targetIsCollection = true
+				}
+			}
+
 			overrides := metadata.InferenceOverrides{
 				IDAttribute:    strings.TrimSpace(idFrom),
 				AliasAttribute: strings.TrimSpace(aliasFrom),
@@ -456,7 +628,7 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 				return runRecursiveMetadataInference(cmd, recon, spec, trimmedPath, apply, overrides)
 			}
 
-			result := metadata.InferResourceMetadata(spec, resource.NormalizePath(trimmedPath), targetIsCollection, overrides)
+			result := metadata.InferResourceMetadata(spec, logicalPath, targetIsCollection, overrides)
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
 				ResourceInfo: &result.ResourceInfo,
@@ -524,6 +696,62 @@ func parseMetadataValue(raw string) (any, error) {
 		return nil, err
 	}
 	return value, nil
+}
+
+func resolveEditorCommand(override string) ([]string, error) {
+	editor := strings.TrimSpace(override)
+	if editor == "" {
+		editor = strings.TrimSpace(os.Getenv("VISUAL"))
+	}
+	if editor == "" {
+		editor = strings.TrimSpace(os.Getenv("EDITOR"))
+	}
+	if editor == "" {
+		return nil, errors.New("editor not configured: set --editor, $VISUAL, or $EDITOR")
+	}
+	fields := strings.Fields(editor)
+	if len(fields) == 0 {
+		return nil, errors.New("editor command is empty")
+	}
+	return fields, nil
+}
+
+func runEditor(args []string) error {
+	if len(args) == 0 {
+		return errors.New("editor command is empty")
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("editor failed: %w", err)
+	}
+	return nil
+}
+
+func decodeMetadataEditFile(data []byte) (map[string]any, error) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return map[string]any{}, nil
+	}
+	return decodeMetadataFile(data)
+}
+
+func payloadToMetadataMap(payload any) (map[string]any, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	var meta map[string]any
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&meta); err != nil {
+		return nil, err
+	}
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	return meta, nil
 }
 
 func decodeMetadataFile(data []byte) (map[string]any, error) {
@@ -670,6 +898,51 @@ func setSecretInAttributes(meta map[string]any, attribute string, input secretLi
 		return metadata.SetMetadataAttribute(meta, attribute, input.values[0])
 	}
 	return metadata.SetMetadataAttribute(meta, attribute, input.values)
+}
+
+func stripDefaultMetadata(current, defaults map[string]any) map[string]any {
+	cleaned := map[string]any{}
+	for key, value := range current {
+		defaultValue, ok := defaults[key]
+		if ok {
+			if cleanedValue, keep := stripDefaultValue(value, defaultValue); keep {
+				cleaned[key] = cleanedValue
+			}
+			continue
+		}
+		if shouldDropEmptyString(value) {
+			continue
+		}
+		cleaned[key] = value
+	}
+	return cleaned
+}
+
+func stripDefaultValue(value, defaultValue any) (any, bool) {
+	if shouldDropEmptyString(value) {
+		return nil, false
+	}
+	valueMap, valueIsMap := value.(map[string]any)
+	defaultMap, defaultIsMap := defaultValue.(map[string]any)
+	if valueIsMap && defaultIsMap {
+		nested := stripDefaultMetadata(valueMap, defaultMap)
+		if len(nested) == 0 {
+			return nil, false
+		}
+		return nested, true
+	}
+	if reflect.DeepEqual(value, defaultValue) {
+		return nil, false
+	}
+	return value, true
+}
+
+func shouldDropEmptyString(value any) bool {
+	text, ok := value.(string)
+	if !ok {
+		return false
+	}
+	return strings.TrimSpace(text) == ""
 }
 
 func splitCommaList(raw string) []string {
@@ -897,6 +1170,17 @@ func pathMatchesPrefix(candidate, prefix string) bool {
 		}
 	}
 	return true
+}
+
+func openAPIPathEndsWithParameter(spec *openapi.Spec, path string) bool {
+	if spec == nil {
+		return false
+	}
+	item := spec.MatchPath(path)
+	if item == nil || len(item.Segments) == 0 {
+		return false
+	}
+	return isOpenAPIPathParameter(item.Segments[len(item.Segments)-1])
 }
 
 func segmentsMatchWildcard(a, b string) bool {

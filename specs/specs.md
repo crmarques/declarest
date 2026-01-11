@@ -384,8 +384,9 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 
 > If the server API supports PUT vs PATCH nuances, the effective metadata decides which verb/pattern to use.
 
-### 5.5 `metadata get/set/unset/add/update-resources`
+### 5.5 `metadata get/edit/set/unset/add/update-resources`
 - `get`: render the effective metadata after layering and template rendering; output JSON to stdout.
+- `edit`: open metadata in the configured editor with defaults prefilled, then strip default values before saving.
 - `set`: update a metadata attribute in the local metadata file for the logical path.
 - `unset`: remove a metadata attribute/value from the local metadata file for the logical path (when `--value` is provided, remove only that value; otherwise delete the attribute).
 - `add`: write metadata from a JSON file to the local metadata file for the logical path.

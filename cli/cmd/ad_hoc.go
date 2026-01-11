@@ -139,9 +139,14 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 		ContentType: contentType,
 	}
 
-	payloadBytes, err := loadAdHocPayload(payloadFlag)
+	payloadBytes, payloadSource, err := loadAdHocPayload(payloadFlag)
 	if err != nil {
 		return err
+	}
+	if payloadSource != "" {
+		infof(cmd, "Payload loaded from %s", payloadSource)
+	} else if strings.TrimSpace(payloadFlag) != "" {
+		infof(cmd, "Payload provided as literal string; use @path to load from a file")
 	}
 
 	httpManager, ok := recon.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
@@ -241,23 +246,23 @@ func parseAdHocHeader(raw string) (string, string, error) {
 	return "", "", fmt.Errorf("headers must be in the form Name: value or Name=value")
 }
 
-func loadAdHocPayload(raw string) ([]byte, error) {
+func loadAdHocPayload(raw string) ([]byte, string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return nil, nil
+		return nil, "", nil
 	}
 	if strings.HasPrefix(value, "@") {
 		path := strings.TrimSpace(strings.TrimPrefix(value, "@"))
 		if path == "" {
-			return nil, fmt.Errorf("payload file path is empty")
+			return nil, "", fmt.Errorf("payload file path is empty")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read payload file %q: %w", path, err)
+			return nil, "", fmt.Errorf("failed to read payload file %q: %w", path, err)
 		}
-		return data, nil
+		return data, path, nil
 	}
-	return []byte(value), nil
+	return []byte(value), "", nil
 }
 
 func takeAdHocHeaderValues(headers map[string][]string, name string) []string {

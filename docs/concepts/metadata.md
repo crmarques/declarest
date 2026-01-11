@@ -160,3 +160,7 @@ Each operation can define:
 - Use `declarest metadata get` to inspect effective metadata.
 - Use `declarest metadata set` and `declarest metadata add` to update metadata files.
 - Run `declarest metadata update-resources` after changing alias/id rules.
+
+## Metadata inference
+
+`declarest metadata infer` walks the configured OpenAPI spec and suggests `resourceInfo` attributes. In addition to examining the collection/resource request schema and property names, inference now also looks at the child resource path parameters when the collection schema does not expose the identifier fields. For example, `/admin/realms/` can now infer both `idFromAttribute` and `aliasFromAttribute` as `realm` by detecting the `{realm}` parameter on `/admin/realms/{realm}` before you add metadata files or flags.
