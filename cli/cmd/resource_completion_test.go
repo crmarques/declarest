@@ -285,3 +285,40 @@ func TestCompletionDescription(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletionHasResourceEntries(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []pathCompletionEntry
+		want    bool
+	}{
+		{
+			name:    "empty",
+			entries: nil,
+			want:    false,
+		},
+		{
+			name:    "collectionsOnly",
+			entries: []pathCompletionEntry{{value: "/admin/"}, {value: "/fruits/"}},
+			want:    false,
+		},
+		{
+			name:    "resourceEntry",
+			entries: []pathCompletionEntry{{value: "/admin/realms/master"}},
+			want:    true,
+		},
+		{
+			name:    "mixedEntries",
+			entries: []pathCompletionEntry{{value: "/admin/"}, {value: "/admin/realms/master"}},
+			want:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := completionHasResourceEntries(tc.entries); got != tc.want {
+				t.Fatalf("completionHasResourceEntries() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

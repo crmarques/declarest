@@ -147,7 +147,7 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 		values = append(values, entry.suggestion())
 	}
 	directive := cobra.ShellCompDirectiveNoFileComp
-	if hasOpenAPIChildren {
+	if hasOpenAPIChildren || completionHasResourceEntries(entries) {
 		directive |= cobra.ShellCompDirectiveNoSpace
 	}
 	return values, directive
@@ -201,6 +201,15 @@ func gatherPathSuggestions(recon *reconciler.DefaultReconciler, prefix string, s
 	}
 
 	return completionEntriesToSortedList(entries), openAPIInfo.hasEntries
+}
+
+func completionHasResourceEntries(entries []pathCompletionEntry) bool {
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.value, "/") {
+			return true
+		}
+	}
+	return false
 }
 
 func repoPathSuggestions(recon *reconciler.DefaultReconciler, prefix string) []string {
