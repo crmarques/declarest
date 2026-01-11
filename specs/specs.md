@@ -455,6 +455,7 @@ Requirements:
 - Context commands manage contexts:
   - `config add` (runs the interactive flow when no config path is provided)
   - `config update`
+  - `config edit`
   - `config delete`
   - `config use`
   - `config rename`
