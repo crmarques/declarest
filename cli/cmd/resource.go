@@ -34,6 +34,7 @@ func newResourceCommand() *cobra.Command {
 	cmd.AddCommand(newResourceGetCommand())
 	cmd.AddCommand(newResourceSaveCommand())
 	cmd.AddCommand(newResourceExplainCommand())
+	cmd.AddCommand(newResourceTemplateCommand())
 	cmd.AddCommand(newResourceAddCommand())
 	cmd.AddCommand(newResourceCreateCommand())
 	cmd.AddCommand(newResourceUpdateCommand())
@@ -299,6 +300,35 @@ func newResourceExplainCommand() *cobra.Command {
 	return cmd
 }
 
+func newResourceTemplateCommand() *cobra.Command {
+	var path string
+
+	cmd := &cobra.Command{
+		Use:   "template <path>",
+		Short: "Print a sample payload from the collection's OpenAPI schema",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			path, err = resolveSingleArg(cmd, path, args, "path")
+			if err != nil {
+				return err
+			}
+			if err := validateLogicalPath(cmd, path); err != nil {
+				return err
+			}
+			if !resource.IsCollectionPath(path) {
+				return usageError(cmd, "collection path (ending with /) is required")
+			}
+			return runResourceTemplate(cmd, path)
+		},
+	}
+
+	cmd.Flags().StringVar(&path, "path", "", "Collection path to sample")
+
+	registerResourcePathCompletion(cmd, resourceRemotePathStrategy)
+
+	return cmd
+}
+
 func runResourceExplain(cmd *cobra.Command, path string) error {
 	recon, cleanup, err := loadDefaultReconciler()
 	if cleanup != nil {
@@ -320,6 +350,46 @@ func runResourceExplain(cmd *cobra.Command, path string) error {
 	spec := openapiSpecFromProvider(recon.ResourceRecordProvider)
 
 	return printExplain(cmd.OutOrStdout(), path, record, spec)
+}
+
+func runResourceTemplate(cmd *cobra.Command, path string) error {
+	recon, cleanup, err := loadDefaultReconciler()
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return err
+	}
+
+	if recon.ResourceRecordProvider == nil {
+		return errors.New("resource record provider is not configured")
+	}
+
+	spec := openapiSpecFromProvider(recon.ResourceRecordProvider)
+	if spec == nil {
+		return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
+	}
+
+	normalized := resource.NormalizePath(path)
+	schema := openapi.CollectionRequestSchema(spec, normalized)
+	if schema == nil {
+		return fmt.Errorf("no OpenAPI schema matches %s", normalized)
+	}
+	value, ok := openapi.DefaultValueForSchema(spec, schema)
+	if !ok {
+		return fmt.Errorf("OpenAPI schema for %s does not define a sample", normalized)
+	}
+
+	payload, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	payload = append(payload, '\n')
+	if _, err := cmd.OutOrStdout().Write(payload); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func printExplain(out io.Writer, path string, record resource.ResourceRecord, spec *openapi.Spec) error {
@@ -428,30 +498,117 @@ func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.Resource
 	fmt.Fprintf(out, "  Template: %s\n", item.Template)
 	for _, method := range []string{"get", "post", "put", "patch", "delete"} {
 		if op := item.Operation(method); op != nil {
-			fmt.Fprintf(out, "    %s: requests=%s responses=%s\n", strings.ToUpper(op.Method), strings.Join(op.RequestContentTypes, ","), strings.Join(op.ResponseContentTypes, ","))
-			if summary := summarizeSchema(op.RequestSchema); summary != "" {
-				fmt.Fprintf(out, "      schema: %s\n", summary)
+			fmt.Fprintf(out, "    %s:\n", strings.ToUpper(op.Method))
+			fmt.Fprintf(out, "      requests=%s responses=%s\n", strings.Join(op.RequestContentTypes, ","), strings.Join(op.ResponseContentTypes, ","))
+			if lines := schemaLines(op.RequestSchema); len(lines) > 0 {
+				fmt.Fprintln(out, "      schema:")
+				for _, line := range lines {
+					fmt.Fprintf(out, "        %s\n", line)
+				}
 			}
 		}
 	}
 }
 
-func summarizeSchema(schema map[string]any) string {
+func schemaLines(schema map[string]any) []string {
 	if len(schema) == 0 {
-		return ""
+		return nil
 	}
+	var lines []string
+	collectSchemaLines(schema, "", &lines)
+	return lines
+}
+
+func collectSchemaLines(schema map[string]any, indent string, lines *[]string) {
+	if schema == nil {
+		return
+	}
+	if ref, ok := schema["$ref"].(string); ok && strings.TrimSpace(ref) != "" {
+		*lines = append(*lines, fmt.Sprintf("%s$ref: %s", indent, ref))
+		return
+	}
+
+	if summary := schemaSummary(schema); summary != "" {
+		*lines = append(*lines, fmt.Sprintf("%s%s", indent, summary))
+	}
+	if req := schemaRequired(schema); len(req) > 0 {
+		*lines = append(*lines, fmt.Sprintf("%srequired: %s", indent, strings.Join(req, ", ")))
+	}
+
 	if props, ok := schema["properties"].(map[string]any); ok && len(props) > 0 {
+		*lines = append(*lines, fmt.Sprintf("%sproperties:", indent))
 		keys := make([]string, 0, len(props))
 		for key := range props {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		return fmt.Sprintf("properties=%s", strings.Join(keys, ","))
+		for _, key := range keys {
+			*lines = append(*lines, fmt.Sprintf("%s  %s:", indent, key))
+			if propSchema, ok := props[key].(map[string]any); ok && len(propSchema) > 0 {
+				collectSchemaLines(propSchema, indent+"    ", lines)
+			} else {
+				*lines = append(*lines, fmt.Sprintf("%s    %s", indent, formatSchemaValue(props[key])))
+			}
+		}
 	}
-	if typ, ok := schema["type"].(string); ok {
-		return fmt.Sprintf("type=%s", typ)
+
+	if items, ok := schema["items"].(map[string]any); ok && len(items) > 0 {
+		*lines = append(*lines, fmt.Sprintf("%sitems:", indent))
+		collectSchemaLines(items, indent+"  ", lines)
 	}
-	return ""
+}
+
+func schemaSummary(schema map[string]any) string {
+	var parts []string
+	if typ, ok := schema["type"].(string); ok && strings.TrimSpace(typ) != "" {
+		parts = append(parts, fmt.Sprintf("type=%s", typ))
+	}
+	if format, ok := schema["format"].(string); ok && strings.TrimSpace(format) != "" {
+		parts = append(parts, fmt.Sprintf("format=%s", format))
+	}
+	if enum, ok := schema["enum"].([]any); ok && len(enum) > 0 {
+		var tokens []string
+		for _, entry := range enum {
+			if str, ok := entry.(string); ok {
+				tokens = append(tokens, str)
+			} else {
+				tokens = append(tokens, fmt.Sprintf("%v", entry))
+			}
+		}
+		if len(tokens) > 0 {
+			parts = append(parts, fmt.Sprintf("enum=%s", strings.Join(tokens, ",")))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func schemaRequired(schema map[string]any) []string {
+	raw, ok := schema["required"].([]any)
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	var result []string
+	for _, entry := range raw {
+		if str, ok := entry.(string); ok && strings.TrimSpace(str) != "" {
+			result = append(result, str)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+func formatSchemaValue(value any) string {
+	if value == nil {
+		return "null"
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprintf("%v", typed)
+	}
 }
 
 func openapiSpecFromProvider(provider interface{}) *openapi.Spec {

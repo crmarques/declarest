@@ -36,6 +36,20 @@ func (entry pathCompletionEntry) suggestion() string {
 	return entry.value + "\t" + entry.description
 }
 
+type completionPrefixInfo struct {
+	trimmed          string
+	lastToken        string
+	hasTrailingSlash bool
+}
+
+type openAPICompletionInfo struct {
+	entries      []pathCompletionEntry
+	hasEntries   bool
+	hasSpec      bool
+	hasPrefix    bool
+	isCollection bool
+}
+
 func completionEntriesToSortedList(entries map[string]pathCompletionEntry) []pathCompletionEntry {
 	if len(entries) == 0 {
 		return nil
@@ -50,6 +64,42 @@ func completionEntriesToSortedList(entries map[string]pathCompletionEntry) []pat
 		result = append(result, entries[key])
 	}
 	return result
+}
+
+func newCompletionPrefixInfo(prefix string) completionPrefixInfo {
+	trimmed := strings.TrimSpace(prefix)
+	hasTrailingSlash := strings.HasSuffix(trimmed, "/")
+	lastToken := ""
+	if trimmed != "" {
+		if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+			lastToken = trimmed[idx+1:]
+		} else {
+			lastToken = trimmed
+		}
+	}
+	if hasTrailingSlash {
+		lastToken = ""
+	}
+	return completionPrefixInfo{
+		trimmed:          trimmed,
+		lastToken:        lastToken,
+		hasTrailingSlash: hasTrailingSlash,
+	}
+}
+
+func newOpenAPICompletionInfo(provider interface{}, prefix string) openAPICompletionInfo {
+	spec := openapiSpecFromProvider(provider)
+	if spec == nil {
+		return openAPICompletionInfo{}
+	}
+	entries := specChildEntries(spec, prefix)
+	return openAPICompletionInfo{
+		entries:      entries,
+		hasEntries:   len(entries) > 0,
+		hasSpec:      true,
+		hasPrefix:    specHasPrefix(spec, prefix),
+		isCollection: specCollectionPath(spec, prefix),
+	}
 }
 
 func registerResourcePathCompletion(cmd *cobra.Command, strategy pathCompletionStrategy) {
@@ -104,34 +154,98 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 }
 
 func gatherPathSuggestions(recon *reconciler.DefaultReconciler, prefix string, sources []pathCompletionSource) ([]pathCompletionEntry, bool) {
+	info := newCompletionPrefixInfo(prefix)
+	openAPIInfo := newOpenAPICompletionInfo(recon.ResourceRecordProvider, info.trimmed)
+	if openAPIInfo.hasEntries && info.lastToken != "" {
+		return openAPIInfo.entries, true
+	}
+
+	if info.hasTrailingSlash && openAPIInfo.hasSpec && openAPIInfo.hasPrefix && !openAPIInfo.isCollection {
+		return openAPIInfo.entries, openAPIInfo.hasEntries
+	}
+
 	entries := make(map[string]pathCompletionEntry)
-	for _, source := range sources {
-		switch source {
-		case pathCompletionSourceRepo:
-			for _, candidate := range repoPathSuggestions(recon, prefix) {
-				entries[candidate] = pathCompletionEntry{value: candidate}
+	if info.hasTrailingSlash && (openAPIInfo.isCollection || !openAPIInfo.hasSpec || !openAPIInfo.hasPrefix) {
+		for _, source := range sources {
+			switch source {
+			case pathCompletionSourceRepo:
+				for _, entry := range repoCollectionSuggestions(recon, prefix) {
+					entries[entry.value] = entry
+				}
+			case pathCompletionSourceRemote:
+				for _, entry := range remoteCollectionSuggestions(recon, prefix) {
+					entries[entry.value] = entry
+				}
 			}
-		case pathCompletionSourceRemote:
-			for _, entry := range remotePathSuggestions(recon, prefix) {
-				entries[entry.value] = entry
+		}
+	} else {
+		for _, source := range sources {
+			switch source {
+			case pathCompletionSourceRepo:
+				for _, candidate := range repoPathSuggestions(recon, prefix) {
+					entries[candidate] = pathCompletionEntry{value: candidate}
+				}
+			case pathCompletionSourceRemote:
+				for _, entry := range remotePathSuggestions(recon, prefix) {
+					entries[entry.value] = entry
+				}
 			}
 		}
 	}
 
-	ioEntries := openAPIChildEntries(recon.ResourceRecordProvider, prefix)
-	hasChildren := len(ioEntries) > 0
-	for _, entry := range ioEntries {
+	for _, entry := range openAPIInfo.entries {
 		if _, exists := entries[entry.value]; exists {
 			continue
 		}
 		entries[entry.value] = entry
 	}
 
-	return completionEntriesToSortedList(entries), hasChildren
+	return completionEntriesToSortedList(entries), openAPIInfo.hasEntries
 }
 
 func repoPathSuggestions(recon *reconciler.DefaultReconciler, prefix string) []string {
 	return filterPathsByPrefix(recon.RepositoryResourcePaths(), prefix)
+}
+
+func repoCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
+	if recon == nil {
+		return nil
+	}
+	base := completionCollectionBase(prefix)
+	if base == "" {
+		return nil
+	}
+	baseSegments := resource.SplitPathSegments(base)
+	baseDepth := len(baseSegments)
+	prefixPath := base
+	if prefixPath != "/" {
+		prefixPath += "/"
+	}
+
+	info := collectionResourceInfo(recon, prefix)
+	entries := make(map[string]pathCompletionEntry)
+	for _, path := range recon.RepositoryResourcePaths() {
+		normalized := resource.NormalizePath(path)
+		if !strings.HasPrefix(normalized, prefixPath) {
+			continue
+		}
+		if len(resource.SplitPathSegments(normalized)) != baseDepth+1 {
+			continue
+		}
+		res, err := recon.GetLocalResource(normalized)
+		if err != nil {
+			res = resource.Resource{}
+		}
+		fallback := resource.LastSegment(normalized)
+		idValue, aliasValue := collectionEntryValues(info, res, fallback)
+		entry, ok := collectionCompletionEntry(base, idValue, idValue, aliasValue, info)
+		if !ok {
+			continue
+		}
+		entries[entry.value] = entry
+	}
+
+	return completionEntriesToSortedList(entries)
 }
 
 func remotePathSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
@@ -141,6 +255,34 @@ func remotePathSuggestions(recon *reconciler.DefaultReconciler, prefix string) [
 		return nil
 	}
 	return filterEntriesByPrefix(items, prefix)
+}
+
+func remoteCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
+	if recon == nil {
+		return nil
+	}
+	base := completionCollectionBase(prefix)
+	if base == "" {
+		return nil
+	}
+	info := collectionResourceInfo(recon, prefix)
+
+	items, err := recon.ListRemoteResourceEntries(base)
+	if err != nil {
+		return nil
+	}
+
+	entries := make(map[string]pathCompletionEntry)
+	for _, item := range items {
+		idSegment := resource.LastSegment(item.Path)
+		entry, ok := collectionCompletionEntry(base, idSegment, item.ID, item.Alias, info)
+		if !ok {
+			continue
+		}
+		entries[entry.value] = entry
+	}
+
+	return completionEntriesToSortedList(entries)
 }
 
 func filterPathsByPrefix(paths []string, prefix string) []string {
@@ -207,6 +349,111 @@ func filterEntriesByPrefix(entries []reconciler.RemoteResourceEntry, prefix stri
 	return results
 }
 
+func completionCollectionBase(prefix string) string {
+	trimmed := strings.TrimSpace(prefix)
+	if trimmed == "" {
+		return "/"
+	}
+	return resource.NormalizePath(trimmed)
+}
+
+func collectionResourceInfo(recon *reconciler.DefaultReconciler, prefix string) *resource.ResourceInfoMetadata {
+	if recon == nil {
+		return nil
+	}
+	collectionPath := normalizedCompletionPrefix(prefix)
+	if collectionPath == "" {
+		return nil
+	}
+	if collectionPath != "/" && !strings.HasSuffix(collectionPath, "/") {
+		collectionPath += "/"
+	}
+	meta, err := recon.ResourceMetadata(collectionPath)
+	if err != nil {
+		return nil
+	}
+	return meta.ResourceInfo
+}
+
+func collectionEntryValues(info *resource.ResourceInfoMetadata, res resource.Resource, fallback string) (string, string) {
+	idAttr, aliasAttr := collectionAttributeNames(info)
+	idValue := completionAttributeValue(res, idAttr, fallback)
+	aliasValue := completionAttributeValue(res, aliasAttr, fallback)
+	return idValue, aliasValue
+}
+
+func collectionAttributeNames(info *resource.ResourceInfoMetadata) (string, string) {
+	if info == nil {
+		return "", ""
+	}
+	return strings.TrimSpace(info.IDFromAttribute), strings.TrimSpace(info.AliasFromAttribute)
+}
+
+func completionAttributeValue(res resource.Resource, attr string, fallback string) string {
+	attr = strings.TrimSpace(attr)
+	if attr != "" {
+		if value, ok := resource.LookupValueFromResource(res, attr); ok {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				return value
+			}
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func collectionCompletionEntry(basePath, idSegment, idValue, aliasValue string, info *resource.ResourceInfoMetadata) (pathCompletionEntry, bool) {
+	segment := sanitizeCompletionSegment(idSegment)
+	if segment == "" {
+		segment = sanitizeCompletionSegment(idValue)
+	}
+	if segment == "" {
+		return pathCompletionEntry{}, false
+	}
+	value := completionPathForSegment(basePath, segment)
+	if value == "" {
+		return pathCompletionEntry{}, false
+	}
+	description := collectionAliasDescription(info, idValue, aliasValue)
+	return pathCompletionEntry{value: value, description: description}, true
+}
+
+func completionPathForSegment(basePath, segment string) string {
+	base := resource.NormalizePath(basePath)
+	segment = strings.Trim(segment, "/")
+	if segment == "" {
+		return ""
+	}
+	if base == "/" {
+		return resource.NormalizePath("/" + segment)
+	}
+	return resource.NormalizePath(strings.TrimRight(base, "/") + "/" + segment)
+}
+
+func sanitizeCompletionSegment(segment string) string {
+	segment = cleanupCompletionAttribute(segment)
+	segment = strings.ReplaceAll(segment, "/", "-")
+	segment = strings.ReplaceAll(segment, "\\", "-")
+	return segment
+}
+
+func collectionAliasDescription(info *resource.ResourceInfoMetadata, idValue, aliasValue string) string {
+	if completionUsesSameAttribute(info) {
+		return ""
+	}
+	idValue = cleanupCompletionAttribute(idValue)
+	aliasValue = cleanupCompletionAttribute(aliasValue)
+	if aliasValue == "" || aliasValue == idValue {
+		return ""
+	}
+	return aliasValue
+}
+
+func completionUsesSameAttribute(info *resource.ResourceInfoMetadata) bool {
+	idAttr, aliasAttr := collectionAttributeNames(info)
+	return idAttr != "" && aliasAttr != "" && idAttr == aliasAttr
+}
+
 func cleanupCompletionAttribute(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -236,11 +483,11 @@ func completionDescription(entry reconciler.RemoteResourceEntry, displayPath str
 	displaySegment := cleanupCompletionAttribute(resource.LastSegment(displayPath))
 	switch displaySegment {
 	case alias:
-		return fmt.Sprintf("(%s)", id)
+		return id
 	case id:
 		return alias
 	default:
-		return fmt.Sprintf("%s (%s)", alias, id)
+		return fmt.Sprintf("%s %s", alias, id)
 	}
 }
 
@@ -369,6 +616,66 @@ func specChildEntries(spec *openapi.Spec, prefix string) []pathCompletionEntry {
 	}
 
 	return entries
+}
+
+func specHasPrefix(spec *openapi.Spec, prefix string) bool {
+	if spec == nil {
+		return false
+	}
+	normalizedPrefix := normalizedCompletionPrefix(prefix)
+	segments := resource.SplitPathSegments(normalizedPrefix)
+	if len(segments) == 0 {
+		return len(spec.Paths) > 0
+	}
+	for _, item := range spec.Paths {
+		if item == nil || item.Template == "" {
+			continue
+		}
+		template := resource.NormalizePath(item.Template)
+		if containsWildcardSegment(template) {
+			continue
+		}
+		templateSegments := resource.SplitPathSegments(template)
+		if len(templateSegments) < len(segments) {
+			continue
+		}
+		if segmentsMatchBase(templateSegments, segments) {
+			return true
+		}
+	}
+	return false
+}
+
+func specCollectionPath(spec *openapi.Spec, prefix string) bool {
+	if spec == nil {
+		return false
+	}
+	normalizedPrefix := normalizedCompletionPrefix(prefix)
+	segments := resource.SplitPathSegments(normalizedPrefix)
+	if len(segments) == 0 {
+		return false
+	}
+	for _, item := range spec.Paths {
+		if item == nil || item.Template == "" {
+			continue
+		}
+		template := resource.NormalizePath(item.Template)
+		if containsWildcardSegment(template) {
+			continue
+		}
+		templateSegments := resource.SplitPathSegments(template)
+		if len(templateSegments) <= len(segments) {
+			continue
+		}
+		if !segmentsMatchBase(templateSegments, segments) {
+			continue
+		}
+		nextSegment := templateSegments[len(segments)]
+		if isOpenAPIPathParameter(nextSegment) {
+			return true
+		}
+	}
+	return false
 }
 
 func segmentsMatchBase(segments, base []string) bool {

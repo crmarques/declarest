@@ -631,8 +631,9 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 			result := metadata.InferResourceMetadata(spec, logicalPath, targetIsCollection, overrides)
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
-				ResourceInfo: &result.ResourceInfo,
-				Reasons:      result.Reasons,
+				ResourceInfo:  &result.ResourceInfo,
+				OperationInfo: result.OperationInfo,
+				Reasons:       result.Reasons,
 			}, "", "  ")
 			if err != nil {
 				return err
@@ -643,7 +644,7 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 			}
 
 			if apply {
-				if result.ResourceInfo.IDFromAttribute == "" && result.ResourceInfo.AliasFromAttribute == "" {
+				if result.ResourceInfo.IDFromAttribute == "" && result.ResourceInfo.AliasFromAttribute == "" && !operationInfoHasHeaders(result.OperationInfo) {
 					infof(cmd, "nothing to apply for %s", normalizedPath)
 					return nil
 				}
@@ -654,6 +655,14 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 						return false, err
 					}
 					updatedAttrs = append(updatedAttrs, updated...)
+					if result.OperationInfo != nil {
+						headerUpdated, headerChanged, err := setInferredOperationHeaders(meta, result.OperationInfo)
+						if err != nil {
+							return false, err
+						}
+						updatedAttrs = append(updatedAttrs, headerUpdated...)
+						changed = changed || headerChanged
+					}
 					return changed, nil
 				})
 				if err != nil {
@@ -817,14 +826,16 @@ type resourceInfoOutput struct {
 }
 
 type metadataInferOutput struct {
-	ResourceInfo *resource.ResourceInfoMetadata `json:"resourceInfo,omitempty"`
-	Reasons      []string                       `json:"reasons,omitempty"`
+	ResourceInfo  *resource.ResourceInfoMetadata  `json:"resourceInfo,omitempty"`
+	OperationInfo *resource.OperationInfoMetadata `json:"operationInfo,omitempty"`
+	Reasons       []string                        `json:"reasons,omitempty"`
 }
 
 type metadataInferRecursiveEntry struct {
-	Path         string                         `json:"path"`
-	ResourceInfo *resource.ResourceInfoMetadata `json:"resourceInfo,omitempty"`
-	Reasons      []string                       `json:"reasons,omitempty"`
+	Path          string                          `json:"path"`
+	ResourceInfo  *resource.ResourceInfoMetadata  `json:"resourceInfo,omitempty"`
+	OperationInfo *resource.OperationInfoMetadata `json:"operationInfo,omitempty"`
+	Reasons       []string                        `json:"reasons,omitempty"`
 }
 
 type metadataInferRecursiveOutput struct {
@@ -1039,9 +1050,10 @@ func runRecursiveMetadataInference(cmd *cobra.Command, recon *reconciler.Default
 		result := metadata.InferResourceMetadata(spec, candidate, true, overrides)
 		info := result.ResourceInfo
 		entries = append(entries, metadataInferRecursiveEntry{
-			Path:         candidate,
-			ResourceInfo: &info,
-			Reasons:      result.Reasons,
+			Path:          candidate,
+			ResourceInfo:  &info,
+			OperationInfo: result.OperationInfo,
+			Reasons:       result.Reasons,
 		})
 
 		if !apply {
@@ -1053,7 +1065,7 @@ func runRecursiveMetadataInference(cmd *cobra.Command, recon *reconciler.Default
 			return err
 		}
 
-		if info.IDFromAttribute == "" && info.AliasFromAttribute == "" {
+		if info.IDFromAttribute == "" && info.AliasFromAttribute == "" && !operationInfoHasHeaders(result.OperationInfo) {
 			if !noStatusOutput {
 				infof(cmd, "nothing to apply for %s", metadataPath)
 			}
@@ -1067,6 +1079,14 @@ func runRecursiveMetadataInference(cmd *cobra.Command, recon *reconciler.Default
 				return false, err
 			}
 			updatedAttrs = append(updatedAttrs, updated...)
+			if result.OperationInfo != nil {
+				headerUpdated, headerChanged, err := setInferredOperationHeaders(meta, result.OperationInfo)
+				if err != nil {
+					return false, err
+				}
+				updatedAttrs = append(updatedAttrs, headerUpdated...)
+				changed = changed || headerChanged
+			}
 			return changed, nil
 		}); err != nil {
 			return err
@@ -1110,6 +1130,55 @@ func setInferredResourceInfoAttributes(meta map[string]any, info resource.Resour
 		} else if ok {
 			changed = true
 			updated = append(updated, "resourceInfo.aliasFromAttribute")
+		}
+	}
+	return updated, changed, nil
+}
+
+func operationInfoHasHeaders(info *resource.OperationInfoMetadata) bool {
+	if info == nil {
+		return false
+	}
+	ops := []*resource.OperationMetadata{
+		info.ListCollection,
+		info.CreateResource,
+		info.GetResource,
+		info.UpdateResource,
+		info.DeleteResource,
+	}
+	for _, op := range ops {
+		if op != nil && len(op.HTTPHeaders) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func setInferredOperationHeaders(meta map[string]any, info *resource.OperationInfoMetadata) ([]string, bool, error) {
+	updated := []string{}
+	changed := false
+	if info == nil {
+		return updated, false, nil
+	}
+	candidates := []struct {
+		op   *resource.OperationMetadata
+		path string
+	}{
+		{info.ListCollection, "operationInfo.listCollection.httpHeaders"},
+		{info.CreateResource, "operationInfo.createResource.httpHeaders"},
+		{info.GetResource, "operationInfo.getResource.httpHeaders"},
+		{info.UpdateResource, "operationInfo.updateResource.httpHeaders"},
+		{info.DeleteResource, "operationInfo.deleteResource.httpHeaders"},
+	}
+	for _, candidate := range candidates {
+		if candidate.op == nil || len(candidate.op.HTTPHeaders) == 0 {
+			continue
+		}
+		if ok, err := metadata.SetMetadataAttribute(meta, candidate.path, candidate.op.HTTPHeaders); err != nil {
+			return nil, false, err
+		} else if ok {
+			changed = true
+			updated = append(updated, candidate.path)
 		}
 	}
 	return updated, changed, nil

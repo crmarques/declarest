@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"declarest/internal/managedserver"
+	"declarest/internal/openapi"
 	"declarest/internal/resource"
 
 	"github.com/spf13/cobra"
@@ -82,6 +83,7 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 	if provider == nil {
 		return errors.New("resource record provider is not configured")
 	}
+	spec := openapiSpecFromProvider(provider)
 
 	record, err := provider.GetResourceRecord(path)
 	if err != nil {
@@ -109,6 +111,7 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 	}
 
 	headers := record.HeadersFor(op, path, isCollection)
+	applyOpenAPIHeaders(headers, spec, targetPath, methodUpper)
 	acceptValues := takeAdHocHeaderValues(headers, "Accept")
 	contentType := firstAdHocHeaderValue(headers, "Content-Type")
 
@@ -288,4 +291,36 @@ func firstAdHocHeaderValue(headers map[string][]string, name string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func applyOpenAPIHeaders(headers map[string][]string, spec *openapi.Spec, rawPath, method string) {
+	if spec == nil || headers == nil {
+		return
+	}
+	path := resource.NormalizePath(rawPath)
+	if path == "" {
+		path = "/"
+	}
+	item := spec.MatchPath(path)
+	if item == nil {
+		return
+	}
+	op := item.Operation(strings.ToLower(strings.TrimSpace(method)))
+	if op == nil {
+		return
+	}
+	for name, value := range op.HeaderParameters {
+		key := http.CanonicalHeaderKey(strings.TrimSpace(name))
+		if key == "" {
+			continue
+		}
+		val := strings.TrimSpace(value)
+		if val == "" {
+			continue
+		}
+		if _, exists := headers[key]; exists {
+			continue
+		}
+		headers[key] = []string{val}
+	}
 }

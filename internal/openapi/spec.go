@@ -3,6 +3,7 @@ package openapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -10,8 +11,9 @@ import (
 )
 
 type Spec struct {
-	Paths      []*PathItem
-	components map[string]map[string]any
+	Paths           []*PathItem
+	components      map[string]map[string]any
+	parameterValues map[string]map[string]any
 }
 
 type PathItem struct {
@@ -26,6 +28,7 @@ type Operation struct {
 	RequestContentTypes  []string
 	ResponseContentTypes []string
 	RequestSchema        map[string]any
+	HeaderParameters     map[string]string
 }
 
 func ParseSpec(data []byte) (*Spec, error) {
@@ -56,6 +59,7 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 
 	var components map[string]map[string]any
+	var parameterValues map[string]map[string]any
 	if compValue, ok := root["components"].(map[string]any); ok {
 		if schemas, ok := compValue["schemas"].(map[string]any); ok {
 			components = make(map[string]map[string]any, len(schemas))
@@ -65,10 +69,18 @@ func ParseSpec(data []byte) (*Spec, error) {
 				}
 			}
 		}
+		if params, ok := compValue["parameters"].(map[string]any); ok {
+			parameterValues = make(map[string]map[string]any, len(params))
+			for key, entry := range params {
+				if paramMap, ok := entry.(map[string]any); ok {
+					parameterValues[key] = paramMap
+				}
+			}
+		}
 	}
 
 	var items []*PathItem
-	spec := &Spec{components: components}
+	spec := &Spec{components: components, parameterValues: parameterValues}
 	for template, value := range pathsValue {
 		itemMap, ok := value.(map[string]any)
 		if !ok {
@@ -182,6 +194,7 @@ func normalizeValue(value any) any {
 
 func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 	operations := make(map[string]*Operation)
+	pathHeaders := headerParametersFromList(item["parameters"], spec)
 	for key, value := range item {
 		method := strings.ToLower(strings.TrimSpace(key))
 		if !isHTTPMethod(method) {
@@ -193,11 +206,13 @@ func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 		}
 		reqTypes := requestContentTypes(op)
 		respTypes := responseContentTypes(op)
+		opHeaders := mergeHeaderParameters(pathHeaders, headerParametersFromList(op["parameters"], spec))
 		operations[method] = &Operation{
 			Method:               method,
 			RequestContentTypes:  reqTypes,
 			ResponseContentTypes: respTypes,
 			RequestSchema:        requestSchema(op, spec),
+			HeaderParameters:     opHeaders,
 		}
 	}
 	return operations
@@ -241,6 +256,123 @@ func requestSchema(op map[string]any, spec *Spec) map[string]any {
 	return nil
 }
 
+func headerParametersFromList(value any, spec *Spec) map[string]string {
+	params := parseParameterList(value, spec)
+	if len(params) == 0 {
+		return nil
+	}
+	values := make(map[string]string)
+	for _, param := range params {
+		in, ok := param["in"].(string)
+		if !ok || strings.ToLower(strings.TrimSpace(in)) != "header" {
+			continue
+		}
+		nameValue, ok := param["name"].(string)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(nameValue)
+		if name == "" {
+			continue
+		}
+		if value, ok := headerValueFromParameter(param, spec); ok {
+			values[name] = value
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
+
+func parseParameterList(value any, spec *Spec) []map[string]any {
+	rawList, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	var result []map[string]any
+	for _, entry := range rawList {
+		param, ok := spec.resolveParameter(entry)
+		if !ok || param == nil {
+			continue
+		}
+		result = append(result, param)
+	}
+	return result
+}
+
+func mergeHeaderParameters(base, override map[string]string) map[string]string {
+	if len(base) == 0 && len(override) == 0 {
+		return nil
+	}
+	merged := make(map[string]string)
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range override {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		merged[key] = value
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
+func headerValueFromParameter(param map[string]any, spec *Spec) (string, bool) {
+	if example, ok := param["example"]; ok {
+		if str, ok := valueToString(example); ok {
+			return str, true
+		}
+	}
+	if schemaValue, ok := param["schema"]; ok {
+		if schema, ok := spec.resolveSchema(schemaValue); ok {
+			if def, ok := DefaultValueForSchema(spec, schema); ok {
+				if str, ok := valueToString(def); ok {
+					return str, true
+				}
+			}
+		}
+	}
+	if def, ok := param["default"]; ok {
+		if str, ok := valueToString(def); ok {
+			return str, true
+		}
+	}
+	return "", false
+}
+
+func valueToString(value any) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	switch typed := value.(type) {
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return "", false
+		}
+		return trimmed, true
+	case fmt.Stringer:
+		trimmed := strings.TrimSpace(typed.String())
+		if trimmed == "" {
+			return "", false
+		}
+		return trimmed, true
+	default:
+		normalized := strings.TrimSpace(fmt.Sprint(typed))
+		if normalized == "" {
+			return "", false
+		}
+		return normalized, true
+	}
+}
+
 func (s *Spec) schemaFromContent(entry map[string]any) (map[string]any, bool) {
 	if entry == nil {
 		return nil, false
@@ -277,6 +409,34 @@ func (s *Spec) schemaByRef(ref string) (map[string]any, bool) {
 	}
 	schema, ok := s.components[name]
 	return schema, ok
+}
+
+func (s *Spec) resolveParameter(value any) (map[string]any, bool) {
+	node, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	if ref, ok := node["$ref"].(string); ok {
+		return s.parameterByRef(ref)
+	}
+	return node, true
+}
+
+func (s *Spec) parameterByRef(ref string) (map[string]any, bool) {
+	if s == nil || s.parameterValues == nil {
+		return nil, false
+	}
+	const prefix = "#/components/parameters/"
+	if !strings.HasPrefix(ref, prefix) {
+		return nil, false
+	}
+	name := strings.TrimPrefix(ref, prefix)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, false
+	}
+	param, ok := s.parameterValues[name]
+	return param, ok
 }
 
 func requestContentTypes(op map[string]any) []string {

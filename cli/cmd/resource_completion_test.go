@@ -6,6 +6,7 @@ import (
 
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
+	"declarest/internal/resource"
 )
 
 const sampleSpecJSON = `{
@@ -133,6 +134,54 @@ func TestSpecChildEntries(t *testing.T) {
 	}
 }
 
+func TestSpecCollectionPath(t *testing.T) {
+	spec := mustParseSpec(t, sampleSpecJSON)
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/admin/", false},
+		{"/admin/realms/", true},
+		{"/admin/realms/123/", false},
+		{"/admin/realms/123/clients/", true},
+		{"/fruits/", true},
+		{"/fruits/123/", false},
+		{"/vegetables/", true},
+		{"/unknown/", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := specCollectionPath(spec, tc.path); got != tc.want {
+				t.Fatalf("specCollectionPath(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSpecHasPrefix(t *testing.T) {
+	spec := mustParseSpec(t, sampleSpecJSON)
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/", true},
+		{"/admin/", true},
+		{"/admin/realms/123/", true},
+		{"/unknown/", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := specHasPrefix(spec, tc.path); got != tc.want {
+				t.Fatalf("specHasPrefix(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 func mustParseSpec(t *testing.T, data string) *openapi.Spec {
 	t.Helper()
 	spec, err := openapi.ParseSpec([]byte(data))
@@ -153,6 +202,35 @@ func entriesValues(entries []pathCompletionEntry) []string {
 	return values
 }
 
+func TestCollectionCompletionEntry(t *testing.T) {
+	info := &resource.ResourceInfoMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "clientId",
+	}
+	entry, ok := collectionCompletionEntry("/admin/realms/master/clients", "abcd", "abcd", "clientA", info)
+	if !ok {
+		t.Fatalf("expected completion entry")
+	}
+	if entry.value != "/admin/realms/master/clients/abcd" {
+		t.Fatalf("entry value = %q, want %q", entry.value, "/admin/realms/master/clients/abcd")
+	}
+	if entry.description != "clientA" {
+		t.Fatalf("entry description = %q, want %q", entry.description, "clientA")
+	}
+
+	same := &resource.ResourceInfoMetadata{
+		IDFromAttribute:    "realm",
+		AliasFromAttribute: "realm",
+	}
+	entry, ok = collectionCompletionEntry("/admin/realms", "master", "master", "master", same)
+	if !ok {
+		t.Fatalf("expected completion entry for same-attr case")
+	}
+	if entry.description != "" {
+		t.Fatalf("entry description = %q, want %q", entry.description, "")
+	}
+}
+
 func TestCompletionDescription(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -170,7 +248,7 @@ func TestCompletionDescription(t *testing.T) {
 			name:       "aliasDiffersFromID",
 			entry:      reconciler.RemoteResourceEntry{ID: "123", Alias: "alpha"},
 			remotePath: "/items/alpha",
-			wantDesc:   "(123)",
+			wantDesc:   "123",
 		},
 		{
 			name:       "displaySegmentIsID",
@@ -194,7 +272,7 @@ func TestCompletionDescription(t *testing.T) {
 			name:       "sanitizedValues",
 			entry:      reconciler.RemoteResourceEntry{ID: "  id\tvalue\n", Alias: " alias "},
 			remotePath: "/items/alias",
-			wantDesc:   "(id value)",
+			wantDesc:   "id value",
 		},
 	}
 

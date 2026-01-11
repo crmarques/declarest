@@ -194,6 +194,10 @@ func schemaDefaultObject(spec *Spec, schema map[string]any) map[string]any {
 	return result
 }
 
+func DefaultValueForSchema(spec *Spec, schema map[string]any) (any, bool) {
+	return schemaDefaultValue(spec, schema)
+}
+
 func schemaDefaultArray(spec *Spec, schema map[string]any) (any, bool) {
 	items, exists := schema["items"]
 	if !exists {

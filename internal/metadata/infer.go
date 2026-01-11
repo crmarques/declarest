@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -18,8 +19,9 @@ type InferenceOverrides struct {
 
 // InferenceResult captures the suggested metadata plus reasoning for humans.
 type InferenceResult struct {
-	ResourceInfo resource.ResourceInfoMetadata
-	Reasons      []string
+	ResourceInfo  resource.ResourceInfoMetadata
+	OperationInfo *resource.OperationInfoMetadata
+	Reasons       []string
 }
 
 // InferResourceMetadata returns metadata suggestions derived from an OpenAPI
@@ -93,6 +95,13 @@ func InferResourceMetadata(spec *openapi.Spec, logicalPath string, isCollection 
 	}
 	if aliasReason != "" {
 		result.Reasons = append(result.Reasons, aliasReason)
+	}
+
+	if headers, reasons := inferOperationHeaders(spec, logicalPath, result.ResourceInfo.CollectionPath); headers != nil {
+		result.OperationInfo = headers
+		if len(reasons) > 0 {
+			result.Reasons = append(result.Reasons, reasons...)
+		}
 	}
 
 	return result
@@ -357,4 +366,165 @@ func findPropertyFromList(idx *propertyIndex, candidates []string, require bool)
 		}
 	}
 	return "", false
+}
+
+func inferOperationHeaders(spec *openapi.Spec, logicalPath, collectionPath string) (*resource.OperationInfoMetadata, []string) {
+	if spec == nil {
+		return nil, nil
+	}
+	collectionItem := spec.MatchPath(resource.NormalizePath(collectionPath))
+	resourceItem := spec.MatchPath(resource.NormalizePath(logicalPath))
+	info := &resource.OperationInfoMetadata{}
+	var reasons []string
+	updated := false
+
+	if collectionItem != nil {
+		if op := collectionItem.Operation("get"); op != nil {
+			if headers := headerListFromOperation(op); len(headers) > 0 {
+				info.ListCollection = &resource.OperationMetadata{HTTPHeaders: headers}
+				updated = true
+				if reason := headerReason("listCollection", op, headers); reason != "" {
+					reasons = append(reasons, reason)
+				}
+			}
+		}
+	}
+
+	if op := selectCreateOperationSpec(collectionItem, resourceItem); op != nil {
+		if headers := headerListFromOperation(op); len(headers) > 0 {
+			info.CreateResource = &resource.OperationMetadata{HTTPHeaders: headers}
+			updated = true
+			if reason := headerReason("createResource", op, headers); reason != "" {
+				reasons = append(reasons, reason)
+			}
+		}
+	}
+
+	if resourceItem != nil {
+		if op := resourceItem.Operation("get"); op != nil {
+			if headers := headerListFromOperation(op); len(headers) > 0 {
+				info.GetResource = &resource.OperationMetadata{HTTPHeaders: headers}
+				updated = true
+				if reason := headerReason("getResource", op, headers); reason != "" {
+					reasons = append(reasons, reason)
+				}
+			}
+		}
+		if op := selectUpdateOperationSpec(resourceItem); op != nil {
+			if headers := headerListFromOperation(op); len(headers) > 0 {
+				info.UpdateResource = &resource.OperationMetadata{HTTPHeaders: headers}
+				updated = true
+				if reason := headerReason("updateResource", op, headers); reason != "" {
+					reasons = append(reasons, reason)
+				}
+			}
+		}
+		if op := resourceItem.Operation("delete"); op != nil {
+			if headers := headerListFromOperation(op); len(headers) > 0 {
+				info.DeleteResource = &resource.OperationMetadata{HTTPHeaders: headers}
+				updated = true
+				if reason := headerReason("deleteResource", op, headers); reason != "" {
+					reasons = append(reasons, reason)
+				}
+			}
+		}
+	}
+
+	if !updated {
+		return nil, nil
+	}
+	return info, reasons
+}
+
+func headerListFromOperation(op *openapi.Operation) resource.HeaderList {
+	if op == nil || len(op.HeaderParameters) == 0 {
+		return nil
+	}
+	headers := make(resource.HeaderList, 0, len(op.HeaderParameters))
+	for name, value := range op.HeaderParameters {
+		key := http.CanonicalHeaderKey(strings.TrimSpace(name))
+		if key == "" {
+			continue
+		}
+		val := strings.TrimSpace(value)
+		if val == "" {
+			continue
+		}
+		headers = append(headers, fmt.Sprintf("%s: %s", key, val))
+	}
+	if len(headers) == 0 {
+		return nil
+	}
+	sort.Strings(headers)
+	return headers
+}
+
+func headerNames(headers resource.HeaderList) []string {
+	if len(headers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(headers))
+	for _, entry := range headers {
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) == 0 {
+			continue
+		}
+		name := strings.TrimSpace(parts[0])
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+	return names
+}
+
+func headerReason(operationName string, op *openapi.Operation, headers resource.HeaderList) string {
+	if op == nil || len(headers) == 0 {
+		return ""
+	}
+	names := headerNames(headers)
+	if len(names) == 0 {
+		return ""
+	}
+	plural := ""
+	if len(names) > 1 {
+		plural = "s"
+	}
+	method := strings.ToUpper(op.Method)
+	if method == "" {
+		method = "GET"
+	}
+	return fmt.Sprintf("inferred HTTP header%s %s for %s from OpenAPI %s", plural, strings.Join(names, ", "), operationName, method)
+}
+
+func selectCreateOperationSpec(collectionItem, resourceItem *openapi.PathItem) *openapi.Operation {
+	if collectionItem != nil {
+		if op := collectionItem.Operation("post"); op != nil {
+			return op
+		}
+	}
+	if resourceItem != nil {
+		for _, method := range []string{"put", "post", "patch"} {
+			if op := resourceItem.Operation(method); op != nil {
+				return op
+			}
+		}
+	}
+	return nil
+}
+
+func selectUpdateOperationSpec(resourceItem *openapi.PathItem) *openapi.Operation {
+	if resourceItem == nil {
+		return nil
+	}
+	for _, method := range []string{"put", "patch", "post"} {
+		if op := resourceItem.Operation(method); op != nil {
+			return op
+		}
+	}
+	return nil
 }

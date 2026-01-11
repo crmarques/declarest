@@ -292,11 +292,20 @@ func (r *DefaultReconciler) ListRemoteResourceEntries(path string) ([]RemoteReso
 
 	var entries []RemoteResourceEntry
 	for _, item := range items {
-		remotePath := resource.NormalizePath(record.RemoteResourcePath(item))
+		recordPath := resource.NormalizePath(record.Path)
+		idValue := attributeValueFromResource(item, record.Meta.ResourceInfo, true, "")
+		aliasValue := attributeValueFromResource(item, record.Meta.ResourceInfo, false, "")
+		segment := idValue
+		if segment == "" {
+			segment = aliasValue
+		}
+		if segment == "" {
+			segment = resource.LastSegment(recordPath)
+		}
+		remotePath := collectionResourcePath(record.CollectionPath(), segment)
 		if remotePath == "" {
 			continue
 		}
-		recordPath := resource.NormalizePath(record.Path)
 		aliasPath := record.AliasPath(item)
 		alias := resource.LastSegment(aliasPath)
 		normAliasPath := resource.NormalizePath(aliasPath)
@@ -314,8 +323,12 @@ func (r *DefaultReconciler) ListRemoteResourceEntries(path string) ([]RemoteReso
 		if normAliasPath == "" {
 			normAliasPath = remotePath
 		}
-		idValue := attributeValueFromResource(item, record.Meta.ResourceInfo, true, resource.LastSegment(remotePath))
-		aliasValue := attributeValueFromResource(item, record.Meta.ResourceInfo, false, alias)
+		if idValue == "" {
+			idValue = resource.LastSegment(remotePath)
+		}
+		if aliasValue == "" {
+			aliasValue = alias
+		}
 		entries = append(entries, RemoteResourceEntry{
 			Path:      remotePath,
 			ID:        idValue,
@@ -355,6 +368,32 @@ func attributeValueFromResource(item resource.Resource, info *resource.ResourceI
 		}
 	}
 	return strings.TrimSpace(fallback)
+}
+
+func collectionResourcePath(collectionPath, segment string) string {
+	segment = strings.TrimSpace(segment)
+	if segment == "" {
+		return ""
+	}
+	base := strings.TrimRight(strings.TrimSpace(collectionPath), "/")
+	if base == "" {
+		base = "/"
+	}
+	segment = sanitizeResourceSegment(segment)
+	if base == "/" {
+		return resource.NormalizePath("/" + segment)
+	}
+	return resource.NormalizePath(base + "/" + segment)
+}
+
+func sanitizeResourceSegment(segment string) string {
+	segment = strings.TrimSpace(segment)
+	if segment == "" {
+		return ""
+	}
+	segment = strings.ReplaceAll(segment, "/", "-")
+	segment = strings.ReplaceAll(segment, "\\", "-")
+	return segment
 }
 
 func (r *DefaultReconciler) ListRemoteResourcePaths(path string) ([]string, error) {

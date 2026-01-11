@@ -6,6 +6,7 @@ import (
 
 	"declarest/internal/metadata"
 	"declarest/internal/openapi"
+	"declarest/internal/resource"
 )
 
 const inferenceSpecJSON = `
@@ -249,6 +250,118 @@ const keycloakSpecJSON = `
 }
 `
 
+const headerSpecJSON = `
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/widgets": {
+      "get": {
+        "parameters": [
+          {
+            "name": "X-Client",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "default": "clientA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "parameters": [
+          {
+            "name": "X-Workspace",
+            "in": "header",
+            "example": "workspace"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created"
+          }
+        }
+      }
+    },
+    "/widgets/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "X-Token",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "default": "token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "parameters": [
+          {
+            "name": "X-Client",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "default": "clientA"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "name": "X-Delete",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "default": "delete"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted"
+          }
+        }
+      }
+    }
+  }
+}
+`
+
 func mustParseSpec(t *testing.T, data string) *openapi.Spec {
 	t.Helper()
 	spec, err := openapi.ParseSpec([]byte(data))
@@ -373,4 +486,47 @@ func TestInferKeycloakRealmCollectionMetadata(t *testing.T) {
 	if !reasonContains(result.Reasons, `path parameter "realm"`) {
 		t.Fatalf("expected reason to mention path parameter realm, got %v", result.Reasons)
 	}
+}
+
+func TestInferOperationHeaders(t *testing.T) {
+	spec := mustParseSpec(t, headerSpecJSON)
+	collectionResult := metadata.InferResourceMetadata(spec, "/widgets/", true, metadata.InferenceOverrides{})
+
+	if collectionResult.OperationInfo == nil {
+		t.Fatalf("expected operation info to be inferred for collection")
+	}
+
+	expectHeader := func(op *resource.OperationMetadata, expected string, label string) {
+		if op == nil {
+			t.Fatalf("expected %s metadata to exist", label)
+		}
+		if !headerListContains(op.HTTPHeaders, expected) {
+			t.Fatalf("expected %s to include %q, got %#v", label, expected, op.HTTPHeaders)
+		}
+	}
+
+	expectHeader(collectionResult.OperationInfo.ListCollection, "X-Client: clientA", "listCollection")
+	expectHeader(collectionResult.OperationInfo.CreateResource, "X-Workspace: workspace", "createResource")
+
+	resourceResult := metadata.InferResourceMetadata(spec, "/widgets/widgetA", false, metadata.InferenceOverrides{})
+	if resourceResult.OperationInfo == nil {
+		t.Fatalf("expected operation info to be inferred for resource")
+	}
+
+	expectHeader(resourceResult.OperationInfo.GetResource, "X-Token: token", "getResource")
+	expectHeader(resourceResult.OperationInfo.UpdateResource, "X-Client: clientA", "updateResource")
+	expectHeader(resourceResult.OperationInfo.DeleteResource, "X-Delete: delete", "deleteResource")
+
+	if !reasonContains(collectionResult.Reasons, "X-Client") && !reasonContains(resourceResult.Reasons, "X-Client") {
+		t.Fatalf("expected reason to mention inferred headers, got %v / %v", collectionResult.Reasons, resourceResult.Reasons)
+	}
+}
+
+func headerListContains(headers resource.HeaderList, target string) bool {
+	for _, entry := range headers {
+		if entry == target {
+			return true
+		}
+	}
+	return false
 }
