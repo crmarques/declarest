@@ -57,7 +57,7 @@ func newAdHocMethodCommand(name, method, short string) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Logical resource or collection path")
-	cmd.Flags().StringArrayVar(&headers, "header", nil, "Add a request header (Name: value)")
+	cmd.Flags().StringArrayVar(&headers, "header", nil, "Add a request header (Name: value or Name=value)")
 	cmd.Flags().BoolVar(&defaultHeaders, "default-headers", false, "Ensure Accept/Content-Type defaults are applied")
 	cmd.Flags().StringVar(&payload, "payload", "", "Request payload string or @file path (methods with bodies only)")
 

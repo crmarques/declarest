@@ -29,7 +29,7 @@ func newRepoCommand() *cobra.Command {
 func newRepoInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialise the resource repository",
+		Short: "Initialize the resource repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			recon, cleanup, err := loadDefaultReconcilerSkippingRepoSync()
 			if cleanup != nil {
@@ -41,13 +41,13 @@ func newRepoInitCommand() *cobra.Command {
 			if err := recon.InitRepositoryLocal(); err != nil {
 				return err
 			}
-			successf(cmd, "initialised local repository")
+			successf(cmd, "initialized local repository")
 			remoteConfigured, err := recon.InitRepositoryRemoteIfEmpty()
 			if err != nil {
 				return err
 			}
 			if remoteConfigured {
-				successf(cmd, "initialised remote repository")
+				successf(cmd, "initialized remote repository")
 			} else {
 				successf(cmd, "remote repository not configured")
 			}

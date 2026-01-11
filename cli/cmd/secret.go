@@ -37,7 +37,7 @@ func newSecretCommand() *cobra.Command {
 func newSecretInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialise the configured secret store",
+		Short: "Initialize the configured secret store",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			recon, cleanup, err := loadDefaultReconcilerSkippingRepoSync()
 			if cleanup != nil {
@@ -51,7 +51,7 @@ func newSecretInitCommand() *cobra.Command {
 				return err
 			}
 
-			successf(cmd, "initialised secret store")
+			successf(cmd, "initialized secret store")
 			return nil
 		},
 	}

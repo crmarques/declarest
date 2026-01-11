@@ -36,7 +36,7 @@ Use the CLI to:
   - pull remote resources into version control
   - apply repository changes back to the remote system, or clean up resources entirely`,
 		Example: `  # Pull a remote resource into the repository and persist the file there
-  declarest resource get --path /projects/example --save
+  declarest resource save --path /projects/example
 
   # Apply a repository resource definition to the remote managed server
   declarest resource apply --path /projects/example
@@ -57,7 +57,7 @@ Use the CLI to:
 	configureUsage(cmd)
 
 	cmd.PersistentFlags().BoolVar(&noStatusOutput, "no-status", false, "Suppress status messages and print only command output")
-	cmd.PersistentFlags().String("debug", "", "Print grouped debug information when errors occur (groups: network, repository, resource, all)")
+	cmd.PersistentFlags().String("debug", "", "Print grouped debug information (groups: network, repository, resource, all)")
 	cmd.PersistentFlags().Lookup("debug").NoOptDefVal = debugGroupAll
 
 	cmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {

@@ -479,7 +479,7 @@ func newMetadataAddCommand() *cobra.Command {
 			}
 
 			if filePath == "" {
-				return usageError(cmd, "--file is required")
+				return usageError(cmd, "file path is required (use --file or positional argument)")
 			}
 
 			payload, err := os.ReadFile(filePath)
@@ -650,11 +650,6 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 
 			result := metadata.InferResourceMetadata(spec, logicalPath, targetIsCollection, overrides)
 			metadataTargetPath := normalizedPath
-			if targetIsCollection {
-				if wildcard := collectionMetadataPathForSpec(spec, logicalPath); wildcard != "" {
-					metadataTargetPath = wildcard
-				}
-			}
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
 				ResourceInfo:  &result.ResourceInfo,
@@ -1268,28 +1263,6 @@ func pathMatchesPrefix(candidate, prefix string) bool {
 		}
 	}
 	return true
-}
-
-func collectionMetadataPathForSpec(spec *openapi.Spec, logicalPath string) string {
-	if spec == nil {
-		return ""
-	}
-	normalized := resource.NormalizePath(logicalPath)
-	if normalized == "" {
-		return ""
-	}
-	item := spec.MatchPath(normalized)
-	if item == nil {
-		return ""
-	}
-	wildcard := wildcardCollectionPath(item.Template)
-	if wildcard == "" {
-		return ""
-	}
-	if wildcard == "/" {
-		return "/"
-	}
-	return normalizeCollectionMetadataPath(wildcard)
 }
 
 func openAPIPathEndsWithParameter(spec *openapi.Spec, path string) bool {

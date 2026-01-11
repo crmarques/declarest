@@ -1,96 +1,89 @@
 # CLI reference
 
-Run `declarest --help` for the full command list.
-This page highlights the main commands and what they do.
+Run `declarest --help` for the full command list. This page highlights the main commands and what they do.
+
+## Command order
+
+- The CLI groups commands as specified in `specs/04-cli.md`: `resource`, `metadata`, `repo`, `secret`, `config`. Utility commands such as `ad-hoc`, `version`, and `completion` appear afterward.
+- Keeping this order consistent across help output makes it easier to find the command group you expect.
 
 ## Global flags
 
-- `--no-status`: suppress status messages and print only command output.
-- `--debug[=groups]`: always print grouped debugging info (even on success) when this flag is supplied; groups are `network`, `repository`, `resource`, `all`. The `network` group reveals the managed server type/base URL/auth, default headers, and each captured HTTP interaction (method, URL, headers, payload, status, headers, body) so you can inspect OAuth/token exchanges or other requests; `resource` enables extra CLI output during apply/create/etc.
-
-## config
-
-Manage contexts and configuration files.
-
-- `config add`: register a context file. Use `--force` to override an existing context; when run without a config path the command opens a guided terminal UI that prints section headings, hides secret input, requires a managed server block, surfaces numbered defaults, and lets you navigate list prompts with the arrow keys.
-- `config update`: update an existing context.
-- `config edit`: open a context configuration in your editor with defaults prefilled; when you save, the context is added or updated (`--editor` overrides `$VISUAL`/`$EDITOR`, otherwise `vi` is used).
-- `config use`: set the default context.
-- `config list`: list all contexts.
-- `config current`: show the current context.
-- `config rename`: rename a context.
-- `config delete`: remove a context.
-- `config check`: validate configuration and connectivity (does not validate authentication).
-- `config env`: display DECLAREST_* environment overrides and the resolved context store locations they control.
-- `config print-template`: print a full config file.
-
-## repo
-
-Manage the resource repository.
-
-- `repo init`: initialize local and (optionally) remote repositories.
-- `repo refresh`: fast-forward local from remote.
-- `repo push`: push local changes to remote.
-- `repo reset`: hard reset local to remote.
-- `repo check`: validate repository connectivity.
+- `--no-status`: status messages (for example `[OK] created remote resource /teams/platform/users/alice`) are printed to stderr by default; this flag suppresses them and leaves only the command output on stdout.
+- `--debug[=groups]`: print grouped debug information even when commands succeed. Groups are `network`, `repository`, `resource`, and `all`, which reveals HTTP interactions, repository metadata, and resource payloads as needed.
 
 ## resource
 
 Operate on resource definitions.
 
-- `resource get`: fetch from remote or repo without touching the repository (use `--repo` to read stored data and `--with-secrets` to include secret placeholders).
-- `resource save`: fetch a remote resource and persist it in the repository; use `--force` to override saved definitions or to include secrets with `--with-secrets`, and add `--as-one-resource` when you want to store a fetched collection as a single repository entry (collections default to saving each item separately). `--print` can be added to show the payload in addition to writing it.
-- `resource explain`: describe the metadata/OpenAPI interpretation for a logical path so you can understand the collection path, id/alias attributes, headers, and matching HTTP operations. The output now groups metadata operations separately from the OpenAPI metadata section and prints the request schema structure for each matching method in a readable outline.
-- `resource template`: print a sample collection payload generated from the OpenAPI schema for the supplied path (requires the configured OpenAPI spec).
-- `resource list`: list repo or remote paths.
-- `resource add`: add a local resource from a file, another resource path, or an OpenAPI schema (supports overrides and optional remote apply).
-- `resource create`: create a remote resource from the repo.
-- `resource update`: update a remote resource from the repo.
-- `resource apply`: create or update a remote resource.
-- `resource diff`: show differences between repo and remote.
-- `resource delete`: delete resources from repo, remote, or both (when `--remote` is set without `--repo`, remote-only deletion is assumed).
+- `resource get`: fetch from the remote server or the repository (`--repo`). Output is printed by default (`--print`), and secrets are masked unless you add `--with-secrets` (repo reads resolve placeholders using the secret store).
+- `resource save`: fetch a remote resource and persist the result in the repository. Use `--force` to override existing definitions or to persist secrets via `--with-secrets`, and add `--as-one-resource` when you want a whole collection response in a single file (`--print` shows the payload).
+- `resource add`: add definitions from a file, another resource path, or an OpenAPI schema (`--override`, `--from-openapi`, and optional `--apply` to push immediately).
+- `resource explain`: describe metadata/OpenAPI mappings for a logical path, including metadata operations, resolved IDs/aliases, headers, and schema outlines.
+- `resource template`: print an OpenAPI-based sample collection payload for the supplied path (requires an OpenAPI spec).
+- `resource list`: list repository or remote paths. By default `--repo` is true; add `--remote` to enumerate the server. When `--remote` is used without `--path`, DeclaREST walks the repository collection metadata to drive remote listing.
+- `resource create`, `resource update`, `resource apply`: reconcile repository payloads with the remote. `--all` operates on all repository paths, `--sync` re-fetches each remote resource after the operation, and `apply` creates/updates/no-ops in one idempotent command.
+- `resource diff`: show repository vs. remote differences, applying metadata compare rules before printing a concise summary.
+- `resource delete`: remove repository entries (`--repo`, true by default) and optionally remote resources (`--remote`). Remote-only deletion requires explicit `--repo=false`. On collection paths, add `--resource-list` to delete the collection entry in the repository and `--all-items` to delete every saved item under the collection, both only supported when `--repo` is true. `--yes` skips confirmations and `--all` deletes every resource path.
 
-Path arguments (the positional `<path>` argument or the `--path` flag) now provide context-aware shell completion: remote-focused commands (like `resource get`/`save`) query the managed server, repo-focused commands (such as `resource apply`/`create`/`update`/`diff`) use the repository contents, and every completion list also surfaces configured OpenAPI path templates when available. When your input matches a static OpenAPI segment, those templates are suggested first; when you end a collection path with `/`, DeclaREST lists the collection items from the chosen origin.
-
-## ad-hoc
-
-Send direct HTTP requests to the managed server while still honoring any metadata files that apply to the provided logical path (they can override URLs, headers, and templated placeholders).
-
-- `ad-hoc get|post|put|patch|delete`: issue the named method. Pass the logical path either as `--path <path>` or as the positional argument; headers merge from metadata first, fall back to any OpenAPI header parameters, and then pick up explicit `--header` overrides.
-- `--header`: repeat to add arbitrary headers (`Name: value` or `Name=value` format). Metadata-derived headers are merged first, then user headers override.
-- `--default-headers`: re-apply the default `Accept: application/json` / `Content-Type: application/json` values even when metadata explicitly cleared them.
-- `--payload`: supply an inline payload or prefix with `@` to load payload bytes from a file (useful for POST/PUT/PATCH/DELETE operations).
-
-The command prints the response body to stdout (JSON responses are formatted like `resource get`) and a `[OK] METHOD PATH STATUS` summary to stderr unless `--no-status` is supplied.
+Path arguments (positional `<path>` or `--path`) now provide context-aware shell completion: remote-focused commands query the server, repo-focused commands use the repository contents, and every completion list also surfaces OpenAPI path templates when available. Static OpenAPI segments come first and collections ending with `/` list the child resources from the chosen origin.
 
 ## metadata
 
-Manage metadata definitions.
+Manage metadata definitions for resources and collections.
 
-- `metadata get`: render effective metadata.
-- `metadata edit`: open the metadata in your editor with defaults prefilled; when you save, default values are stripped before writing the file (`--editor` overrides `$VISUAL`/`$EDITOR`, otherwise `vi` is used).
-- `metadata set`: set an attribute.
-- `metadata unset`: unset an attribute.
-- `metadata add`: add metadata from a file.
-- `metadata update-resources`: rewrite resources based on new metadata rules.
-- `metadata infer`: infer resource metadata (id/alias attributes) from the OpenAPI spec (`--spec` overrides the configured spec, `--apply` writes the suggestions, `--id-from`/`--alias-from` force a value, and `--recursively` walks every collection defined under the supplied path). When a collection POST schema doesn't expose the identifying properties, inference also inspects the child resource path parameters (e.g., `/admin/realms/{realm}`) so `/admin/realms/` can still suggest `realm` for `idFromAttribute`/`aliasFromAttribute`, and it now also surfaces OpenAPI header parameters so `operationInfo.*.httpHeaders` can be suggested.
+- `metadata get`: render the effective metadata after layering and template rendering.
+- `metadata edit`: open metadata in your editor with defaults prefilled, then strip default values before saving (`--editor` overrides `$VISUAL/$EDITOR`, otherwise `vi` is used).
+- `metadata set`/`unset`: modify metadata attributes/value pairs (`--value` accepts JSON literals, `resourceInfo.secretInAttributes` accepts comma-separated entries).
+- `metadata add`: write metadata from a JSON file (`--file` or positional argument).
+- `metadata update-resources`: re-save repository resources using the latest metadata rules (alias moves are tracked in the result).
+- `metadata infer`: inspect the OpenAPI spec to suggest `resourceInfo.idFromAttribute`/`aliasFromAttribute` (`--spec` overrides the configured descriptor, `--id-from`/`--alias-from` force values, `--recursively` walks matching collections, and `--apply` writes the suggestions).
+- Use `--for-resource-only` on any subcommand to treat a path without a trailing `/` as a resource default.
 
-Use `--for-resource-only` on any metadata subcommand to treat a path without a trailing slash as a resource instead of a collection default.
+## repo
 
-When `--recursively` is provided, the command prints a JSON payload whose `results` array contains the inferred `resourceInfo` plus `reasons` for each collection path. Add `--apply` to write the suggestions into the matching metadata files.
+Manage the resource repository.
+
+- `repo init`: initialize the local repository (Git repo created lazily) and optionally configure the remote.
+- `repo refresh`: fetch and fast-forward the configured branch (fails on divergence or dirty tree).
+- `repo push`: push the current/configured branch (`--force` requires confirmation unless `--yes`).
+- `repo reset`: hard reset to the remote branch (`--yes` skips confirmation).
+- `repo check`: verify repository connectivity and initialization state.
 
 ## secret
 
-Manage secrets stored in the secret store.
+Manage secrets in the configured secret store.
 
-- `secret init`: initialize the secret store.
-- `secret add`: create or update a secret value.
-- `secret get`: read a secret value.
-- `secret delete`: remove a secret.
-- `secret list`: list keys for a resource.
-- `secret export`: write secrets under a path or all resources to CSV (`--path` or positional path, or `--all`).
-- `secret import`: load secrets from a CSV file (`--file` or positional file) and use `--force` to override existing values.
-- `secret check`: scan for unmapped secrets.
+- `secret init`: initialize the store.
+- `secret add|get|delete`: read and write secrets at `<path>` and `<key>`.
+- `secret list`: default groups keys by resource path; `--paths-only` shows only resource paths, `--show-secrets` includes values (flags are mutually exclusive).
+- `secret export`: write secrets to CSV (`--path` or `--all`).
+- `secret import`: load secrets from CSV (`--file` or positional file, use `--force` to override).
+- `secret check`: scan resources for unmapped secrets and optionally `--fix` to map them and rewrite resources (requires an enabled secret store).
+
+## config
+
+Manage DeclaREST contexts and configuration files.
+
+- `config add`: register a context from a file or run the interactive setup when no file is provided (`--force` overrides existing contexts).
+- `config update`: replace an existing context from a configuration file.
+- `config edit`: edit a context’s configuration in your editor (`--editor` overrides the default).
+- `config use`: set the default context.
+- `config rename`: rename a context.
+- `config list` / `config current`: show available contexts and the active one.
+- `config delete`: remove a context (`--yes` skips confirmation).
+- `config check`: validate configuration, repository, managed server, and secret store access.
+- `config env`: show DECLAREST_* environment overrides.
+- `config print-template`: print a full context configuration file.
+
+## ad-hoc
+
+Send direct HTTP requests to the managed server while still honoring any metadata overrides.
+
+- `ad-hoc get|post|put|patch|delete`: issue the named method. Supply the logical path either as `--path <path>` or the positional argument; metadata headers merge first, OpenAPI headers next, and repeated `--header` values (`Name: value` or `Name=value`) override everything.
+- `--default-headers`: reapply the JSON Accept/Content-Type defaults even when metadata clears them.
+- `--payload`: inline payload or use `@file` to load from disk.
+- Responses are printed to stdout (JSON is formatted like `resource get`), and a `[OK] METHOD PATH STATUS` summary is emitted on stderr unless `--no-status` is set.
 
 ## version
 
@@ -98,27 +91,10 @@ Manage secrets stored in the secret store.
 
 ## completion
 
-- `completion <shell>`: emit the completion script for `bash`, `zsh`, `fish`, or `powershell`. Pipe the output to `source`, redirect it into a shell-specific completion directory, or write it to your profile so Tab completion is active in every session.
+- `completion <shell>`: emit completion scripts for `bash`, `zsh`, `fish`, or `powershell`; write them to your profile or a shell-specific completion directory to enable tab completion globally.
 
 ### Completion alias labels
 
-- When completing a collection path (input ends with `/` and the OpenAPI spec indicates a collection), entries are shown as `<collection>/<id> (alias)` using the collection's `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`. If those attributes are the same, the description is omitted.
-- For other remote-oriented completions, the description still depends on which value is in the path: if the completion value uses the alias, the description is `(id)`; if it uses the id, the description is `alias`; otherwise the description is `alias (id)`. When alias and id match, no description is printed.
-- Add metadata so the completion description surfaces friendly names. For example, `/admin/realms/` can use the realm name for both the remote ID and the alias:
-
-```json
-{
-  "resourceInfo": {
-    "idFromAttribute": "realm",
-    "aliasFromAttribute": "realm"
-  }
-}
-```
-
-Save that JSON as `admin/realms/metadata.json`, or let the CLI write it for you:
-
-```bash
-declarest metadata set --path /admin/realms/ --attribute resourceInfo.aliasFromAttribute --value realm
-```
-
-After the metadata is in place, Tab completion for a collection such as `/admin/realms/master/clients/` will emit entries like `/admin/realms/master/clients/7ee92c11-d70b-44a1-a88d-148c01ba79bd  (clientA)` so you get the alias names (`clientA`, `clientB`, …) alongside the IDs. `declarest metadata infer --path /admin/realms/ --apply` now inspects the `{realm}` path parameter to suggest the friendly name for both the ID and alias; add `--alias-from realm` if you want to override that suggestion before applying.
+- When completing a collection path (input ends with `/` and the OpenAPI spec marks it as a collection), entries are shown as `<collection>/<id> (alias)` using `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`. If those attributes match, the alias is omitted.
+- For other completions, descriptions depend on whether the suggestion uses the alias (description `id`), the ID (`alias`), or both (`alias (id)`).
+- Adding metadata for friendly names (e.g., `resourceInfo.aliasFromAttribute`) surfaces readable aliases: `/admin/realms/master/clients/7ee92c11-d70b-44a1-a88d-148c01ba79bd  (clientA)`.

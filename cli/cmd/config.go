@@ -55,7 +55,7 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "add <name> <config>",
+		Use:     "add [name] [config]",
 		Aliases: []string{"add-context"},
 		Short:   "Register a new context using the provided configuration file",
 		Long:    "Add a context record to the DeclaREST configuration store. If the context already exists, use update instead.",

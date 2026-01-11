@@ -38,7 +38,7 @@ declarest repo init
 ## 4) Pull a resource from your managed server into Git repository
 
 ```bash
-declarest resource get --path /teams/platform/users/alice --save
+declarest resource save --path /teams/platform/users/alice
 ```
 
 This creates a `resource.json` (or `resource.yaml` when configured) under the repository base directory at:

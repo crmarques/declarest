@@ -265,7 +265,7 @@ func newResourceSaveCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to save")
 	cmd.Flags().BoolVar(&print, "print", false, "Print the resource payload to stdout")
-	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (resolves repo placeholders via the secret store)")
+	cmd.Flags().BoolVar(&withSecrets, "with-secrets", false, "Include secrets in output (saving plaintext secrets requires --force)")
 	cmd.Flags().BoolVar(&asOneResource, "as-one-resource", false, "Save a fetched collection as a single resource repository entry")
 	cmd.Flags().BoolVar(&force, "force", false, "Allow saving plaintext secrets or overriding existing definitions in the resource repository")
 
@@ -635,7 +635,7 @@ func newResourceAddCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add <path>",
+		Use:   "add <path> [file]",
 		Short: "Add a resource definition to the resource repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 2 {
@@ -1539,11 +1539,6 @@ func newResourceDeleteCommand() *cobra.Command {
 			targetPath, err := resolvePathOrAll(cmd, path, all, args)
 			if err != nil {
 				return err
-			}
-
-			repoChanged := cmd.Flags().Changed("repo")
-			if remote && repo && !repoChanged {
-				repo = false
 			}
 
 			isCollection := !all && resource.IsCollectionPath(targetPath)

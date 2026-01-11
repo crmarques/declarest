@@ -102,7 +102,7 @@ func successf(cmd *cobra.Command, format string, args ...any) {
 	if noStatusOutput {
 		return
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "[OK] "+format+"\n", args...)
+	fmt.Fprintf(cmd.ErrOrStderr(), "[OK] "+format+"\n", args...)
 }
 
 func infof(cmd *cobra.Command, format string, args ...any) {

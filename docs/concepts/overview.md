@@ -10,7 +10,7 @@ A common workflow looks like:
 
 ```bash
 # download the resource into Git repository
-declarest resource get --path /teams/platform/users/alice --save
+declarest resource save --path /teams/platform/users/alice
 
 # you may want to edit that resource with your preferred tool
 vi <base_repo_dir>/teams/platform/users/alice/resource.json # or resource.yaml when configured

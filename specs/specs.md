@@ -348,11 +348,15 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 
 ### 5.1 `resource get --path <logical-path>`
 - Fetch the resource from the remote server (default) or from the repo with `--repo`.
-- `--print` writes the payload to stdout; `--save` persists the remote payload in the resource repository.
-- When the logical path is a collection, `--save` writes each item as a separate resource; use `--save-as-one-resource` to save the collection payload as a single resource.
-- Secrets are masked unless `--with-secrets`. When reading from the repo, `--with-secrets` resolves placeholders using the secret store. Saving plaintext secrets requires `--force`.
+- `--print` writes the payload to stdout; secrets are masked unless `--with-secrets`. When reading from the repo, `--with-secrets` resolves placeholders using the secret store. Saving plaintext secrets requires `--force`.
 
-### 5.2 `resource list [--path <collection-logical-path>]`
+### 5.2 `resource save --path <logical-path>`
+- Fetch the remote resource and persist it in the resource repository.
+- `--force` overrides existing definitions and allows secrets to be preserved via `--with-secrets`.
+- When the logical path is a collection, the command saves each item separately; add `--as-one-resource` to keep the entire response as a single resource file.
+- `--print` can be added to display the persisted payload.
+
+### 5.3 `resource list [--path <collection-logical-path>]`
 - Lists logical paths within a collection from the repo (default) or remote with `--remote`.
 - Defaults:
   - `--repo` is true by default.
@@ -364,28 +368,27 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 - If `--remote` is used without `--path` and the repo has no collection metadata, the result may be empty.
 - Output is sorted and concise; explicitly setting both `--repo` and `--remote` is an error.
 
-### 5.3 `resource diff --path <logical-path>`
+### 5.4 `resource diff --path <logical-path>`
 - Compare desired (`resource.json` in repo) vs actual (server).
 - Apply metadata compare rules before diff (ignore/suppress/filter/jq).
 - Diff uses JSON Patch internally but prints a concise human-readable summary (one line per operation).
 
-### 5.4 `resource create/update/delete/apply`
+### 5.5 `resource create/update/delete/apply`
 - `create`: create remote resource from repo payload (fail if exists unless API says otherwise)
 - `update`: update remote resource from repo payload (fail if missing unless API says otherwise)
-- `delete`: delete resource repository entries by default; add `--remote` to delete remote resources too (confirmation required unless `--yes` is set).
+- `delete`: delete resource repository entries by default; add `--remote` to delete remote resources too (confirmation required unless `--yes` is set). Use `--repo=false` when you want remote-only deletion. On collection paths, add `--resource-list` to delete the collection entry in the repository and `--all-items` to delete every saved item under the collection.
 - `apply`: idempotent reconcile:
   - if missing → create
   - if present and differs → update
   - if equal → no-op with a clear message
 - `--all` applies the operation to every resource path in the resource repository; `--all` cannot be combined with `--path`.
 - `--sync` (create/update/apply): after each remote operation, fetch the remote resource and save it in the resource repository.
-- `delete` defaults to repository entries; set `--remote` for remote deletes. Use `--repo=false` if you want remote-only deletion.
 - `--yes` skips confirmation prompts (useful for non-interactive scripts).
 - `--all` deletes repository entries by default, and deletes remote resources when `--remote` is set.
 
 > If the server API supports PUT vs PATCH nuances, the effective metadata decides which verb/pattern to use.
 
-### 5.5 `metadata get/edit/set/unset/add/update-resources`
+### 5.6 `metadata get/edit/set/unset/add/update-resources`
 - `get`: render the effective metadata after layering and template rendering; output JSON to stdout.
 - `edit`: open metadata in the configured editor with defaults prefilled, then strip default values before saving.
 - `set`: update a metadata attribute in the local metadata file for the logical path.
@@ -399,14 +402,14 @@ All operations MUST go through `Reconciler`. CLI never calls managers/providers 
 
 Inference does not write metadata unless `--apply` is set; the command prints structured reasoning so operators can review the proposed attribute names before persisting them.
 
-### 5.6 `repo init/refresh/push/reset`
+### 5.7 `repo init/refresh/push/reset`
 - `init`: ensure the repository root exists (Git repo is created lazily on Git operations).
 - `refresh`: fetch and fast-forward the current/configured branch; fails on divergence or working tree changes.
 - `push`: push the current/configured branch to the remote. `--force` requires confirmation unless `--yes` is set.
 - `reset`: fetch and hard-reset the current/configured branch to the remote; requires confirmation unless `--yes` is set.
 - Filesystem repositories return errors for refresh/push/reset.
 
-### 5.7 `secret list [--path <logical-path>]`
+### 5.8 `secret list [--path <logical-path>]`
 - Default output groups keys under each resource path:
   ```
   /path:
@@ -417,7 +420,7 @@ Inference does not write metadata unless `--apply` is set; the command prints st
 - `--show-secrets` includes secret values as `key:value`.
 - `--paths-only` and `--show-secrets` are mutually exclusive.
 
-### 5.8 `secret check [--path <logical-path>] [--fix]`
+### 5.9 `secret check [--path <logical-path>] [--fix]`
 - Scans local resources for likely secret fields that are not mapped in `resourceInfo.secretInAttributes`.
 - When `--fix` is set, DeclaREST adds missing secret paths to metadata and rewrites resources with `{{secret .}}` placeholders, storing values in the configured secret store.
 - If no secret store is configured, `--fix` aborts with a guidance message.

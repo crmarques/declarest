@@ -7,7 +7,7 @@ the CLI by its **logical path**.
 DeclaREST identifies everything using a **logical path** (sometimes called a “resource path” in the CLI).
 The same path is used to:
 
-- Address a resource in commands like `declarest resource get --path ...`
+- Address a resource in commands like `declarest resource get --path ...` and `declarest resource save --path ...`
 - Locate the corresponding files in the repository
 - Render REST endpoints via metadata templates
 
@@ -20,7 +20,7 @@ Examples:
 
 ```bash
 # Single resource
-declarest resource get --path /teams/platform/users/alice --save
+declarest resource save --path /teams/platform/users/alice
 
 # List resources under a collection
 declarest resource list --repo --path /teams/platform/users/

@@ -68,7 +68,7 @@ Or generate a full config file:
 
 ```bash
 ./bin/declarest repo init
-./bin/declarest resource get --path /teams/platform/users/alice --save
+./bin/declarest resource save --path /teams/platform/users/alice
 ```
 
 4) Edit repo files and reconcile back:

@@ -66,14 +66,14 @@ RESOURCE_PATH="/admin/realms/publico/clients/testB"
 ## 4) Pull remote state into the repository
 
 ```bash
-declarest resource get --path "$RESOURCE_PATH" --save
+declarest resource save --path "$RESOURCE_PATH"
 ```
 
 For collection paths, DeclaREST saves each item as a separate resource by default.
 To store the full collection response as one file:
 
 ```bash
-declarest resource get --path "/admin/realms/publico/user-registry/ldap-test/mappers/" --save --save-as-one-resource
+declarest resource save --path "/admin/realms/publico/user-registry/ldap-test/mappers/" --as-one-resource
 ```
 
 ## 5) Diff and apply repository state back to the API

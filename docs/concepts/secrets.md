@@ -71,7 +71,7 @@ declarest secret add /teams/platform/users/alice credentials.password change-me
 - Use `--with-secrets` to resolve and print secret values.
 - Saving secrets into the repository requires `--force`.
 
-When you run `declarest resource get --save` without `--with-secrets`, DeclaREST stores secrets in the secret store (when configured) and saves placeholders in the repository.
+When you run `declarest resource save --path /teams/platform/users/alice` without `--with-secrets` (the default), DeclaREST stores secrets in the secret store (when configured) and saves placeholders in the repository; add `--with-secrets --force` when you need to persist plaintext credentials.
 
 ## Secret store
 
