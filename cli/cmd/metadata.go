@@ -229,6 +229,9 @@ func defaultMetadataForPath(path string, provider any) (resource.ResourceMetadat
 	}
 
 	meta := metadata.DefaultMetadata(collectionSegments)
+	if meta.ResourceInfo != nil {
+		meta.ResourceInfo.CollectionPath = defaultCollectionPathForEditing(collectionSegments)
+	}
 
 	var spec *openapi.Spec
 	if p, ok := provider.(metadataOpenAPIProvider); ok {
@@ -255,6 +258,23 @@ func defaultMetadataForPath(path string, provider any) (resource.ResourceMetadat
 
 	meta = openapi.ApplyDefaults(meta, resourcePathForDefaults, isCollection, spec)
 	return meta, nil
+}
+
+func defaultCollectionPathForEditing(segments []string) string {
+	normalized := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if trimmed := strings.TrimSpace(segment); trimmed != "" {
+			normalized = append(normalized, trimmed)
+		}
+	}
+
+	if len(normalized) == 0 {
+		return "/"
+	}
+	if len(normalized) == 1 {
+		return resource.NormalizePath("/" + normalized[0])
+	}
+	return fmt.Sprintf("{{../resourceInfo.collectionPath}}/%s", normalized[len(normalized)-1])
 }
 
 func newMetadataSetCommand() *cobra.Command {
@@ -629,6 +649,12 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 			}
 
 			result := metadata.InferResourceMetadata(spec, logicalPath, targetIsCollection, overrides)
+			metadataTargetPath := normalizedPath
+			if targetIsCollection {
+				if wildcard := collectionMetadataPathForSpec(spec, logicalPath); wildcard != "" {
+					metadataTargetPath = wildcard
+				}
+			}
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
 				ResourceInfo:  &result.ResourceInfo,
@@ -644,12 +670,15 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 			}
 
 			if apply {
+				if err := validateMetadataPath(cmd, metadataTargetPath); err != nil {
+					return err
+				}
 				if result.ResourceInfo.IDFromAttribute == "" && result.ResourceInfo.AliasFromAttribute == "" && !operationInfoHasHeaders(result.OperationInfo) {
-					infof(cmd, "nothing to apply for %s", normalizedPath)
+					infof(cmd, "nothing to apply for %s", metadataTargetPath)
 					return nil
 				}
 				updatedAttrs := []string{}
-				err = recon.UpdateLocalMetadata(normalizedPath, func(meta map[string]any) (bool, error) {
+				err = recon.UpdateLocalMetadata(metadataTargetPath, func(meta map[string]any) (bool, error) {
 					updated, changed, err := setInferredResourceInfoAttributes(meta, result.ResourceInfo)
 					if err != nil {
 						return false, err
@@ -669,9 +698,9 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 					return err
 				}
 				if len(updatedAttrs) == 0 {
-					infof(cmd, "metadata already contains the inferred attributes for %s", normalizedPath)
+					infof(cmd, "metadata already contains the inferred attributes for %s", metadataTargetPath)
 				} else {
-					successf(cmd, "applied inferred metadata (%s) for %s", strings.Join(updatedAttrs, ", "), normalizedPath)
+					successf(cmd, "applied inferred metadata (%s) for %s", strings.Join(updatedAttrs, ", "), metadataTargetPath)
 				}
 			}
 
@@ -1239,6 +1268,28 @@ func pathMatchesPrefix(candidate, prefix string) bool {
 		}
 	}
 	return true
+}
+
+func collectionMetadataPathForSpec(spec *openapi.Spec, logicalPath string) string {
+	if spec == nil {
+		return ""
+	}
+	normalized := resource.NormalizePath(logicalPath)
+	if normalized == "" {
+		return ""
+	}
+	item := spec.MatchPath(normalized)
+	if item == nil {
+		return ""
+	}
+	wildcard := wildcardCollectionPath(item.Template)
+	if wildcard == "" {
+		return ""
+	}
+	if wildcard == "/" {
+		return "/"
+	}
+	return normalizeCollectionMetadataPath(wildcard)
 }
 
 func openAPIPathEndsWithParameter(spec *openapi.Spec, path string) bool {

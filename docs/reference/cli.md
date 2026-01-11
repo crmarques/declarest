@@ -60,7 +60,7 @@ Send direct HTTP requests to the managed server while still honoring any metadat
 - `--default-headers`: re-apply the default `Accept: application/json` / `Content-Type: application/json` values even when metadata explicitly cleared them.
 - `--payload`: supply an inline payload or prefix with `@` to load payload bytes from a file (useful for POST/PUT/PATCH/DELETE operations).
 
-The command prints the raw response body to stdout and a `[OK] METHOD PATH STATUS` summary to stderr unless `--no-status` is supplied.
+The command prints the response body to stdout (JSON responses are formatted like `resource get`) and a `[OK] METHOD PATH STATUS` summary to stderr unless `--no-status` is supplied.
 
 ## metadata
 

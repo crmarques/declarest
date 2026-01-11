@@ -469,6 +469,7 @@ run_step "Registering declarest context (primary)" "$SCRIPTS_DIR/context/registe
 run_step "Validating OpenAPI defaults (primary)" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
 run_step "Validating metadata inference (primary)" "$SCRIPTS_DIR/declarest/metadata-infer-smoke.sh"
 run_step "Validating metadata edit (primary)" "$SCRIPTS_DIR/declarest/metadata-edit-smoke.sh"
+run_step "Validating metadata inheritance (primary)" "$SCRIPTS_DIR/declarest/metadata-inheritance-smoke.sh"
 if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
     run_step "Sanitizing repository (primary)" "$REPO_SCRIPTS_DIR/strip-secrets.sh" "$DECLAREST_REPO_DIR"
 fi

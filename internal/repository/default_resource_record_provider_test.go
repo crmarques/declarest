@@ -441,6 +441,74 @@ func TestMetadataLayeringPrefersLiteralOverWildcard(t *testing.T) {
 	}
 }
 
+func TestMetadataDoesNotInheritIDAliasFromAncestorCollections(t *testing.T) {
+	dir := t.TempDir()
+
+	metaPath := filepath.Join(dir, "admin", "realms", "_", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o755); err != nil {
+		t.Fatalf("mkdir metadata dir: %v", err)
+	}
+	if err := os.WriteFile(metaPath, []byte(`{"resourceInfo":{"idFromAttribute":"realm","aliasFromAttribute":"realm"}}`), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, nil)
+	meta, err := provider.GetMergedMetadata("/admin/realms/master/components/")
+	if err != nil {
+		t.Fatalf("GetMergedMetadata returned error: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected ResourceInfo")
+	}
+	if got := meta.ResourceInfo.IDFromAttribute; got != "id" {
+		t.Fatalf("expected idFromAttribute to default, got %q", got)
+	}
+	if got := meta.ResourceInfo.AliasFromAttribute; got != "id" {
+		t.Fatalf("expected aliasFromAttribute to default, got %q", got)
+	}
+
+	meta, err = provider.GetMergedMetadata("/admin/realms/master/components/ldap-test")
+	if err != nil {
+		t.Fatalf("GetMergedMetadata returned error: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected ResourceInfo")
+	}
+	if got := meta.ResourceInfo.IDFromAttribute; got != "id" {
+		t.Fatalf("expected idFromAttribute to default, got %q", got)
+	}
+	if got := meta.ResourceInfo.AliasFromAttribute; got != "id" {
+		t.Fatalf("expected aliasFromAttribute to default, got %q", got)
+	}
+}
+
+func TestMetadataDoesNotInheritIDAliasFromWildcardAncestorCollections(t *testing.T) {
+	dir := t.TempDir()
+
+	metaPath := filepath.Join(dir, "admin", "_", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o755); err != nil {
+		t.Fatalf("mkdir metadata dir: %v", err)
+	}
+	if err := os.WriteFile(metaPath, []byte(`{"resourceInfo":{"idFromAttribute":"realm","aliasFromAttribute":"realm"}}`), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, nil)
+	meta, err := provider.GetMergedMetadata("/admin/realms/master/components/")
+	if err != nil {
+		t.Fatalf("GetMergedMetadata returned error: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected ResourceInfo")
+	}
+	if got := meta.ResourceInfo.IDFromAttribute; got != "id" {
+		t.Fatalf("expected idFromAttribute to default, got %q", got)
+	}
+	if got := meta.ResourceInfo.AliasFromAttribute; got != "id" {
+		t.Fatalf("expected aliasFromAttribute to default, got %q", got)
+	}
+}
+
 func TestMetadataArraysOverrideEarlierValues(t *testing.T) {
 	dir := t.TempDir()
 

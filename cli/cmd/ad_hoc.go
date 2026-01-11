@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -58,6 +60,12 @@ func newAdHocMethodCommand(name, method, short string) *cobra.Command {
 	cmd.Flags().StringArrayVar(&headers, "header", nil, "Add a request header (Name: value)")
 	cmd.Flags().BoolVar(&defaultHeaders, "default-headers", false, "Ensure Accept/Content-Type defaults are applied")
 	cmd.Flags().StringVar(&payload, "payload", "", "Request payload string or @file path (methods with bodies only)")
+
+	if name == "get" {
+		registerResourcePathCompletion(cmd, resourceGetPathStrategy)
+	} else {
+		registerResourcePathCompletion(cmd, resourceRemotePathStrategy)
+	}
 
 	return cmd
 }
@@ -162,10 +170,8 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 		return err
 	}
 
-	if len(resp.Body) > 0 {
-		if _, err := cmd.OutOrStdout().Write(resp.Body); err != nil {
-			return fmt.Errorf("failed to write response: %w", err)
-		}
+	if err := writeAdHocResponse(cmd, resp); err != nil {
+		return err
 	}
 
 	if !noStatusOutput {
@@ -173,6 +179,39 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 	}
 
 	return nil
+}
+
+func writeAdHocResponse(cmd *cobra.Command, resp *managedserver.HTTPResponse) error {
+	if resp == nil || len(resp.Body) == 0 {
+		return nil
+	}
+	if shouldFormatAdHocJSON(resp) {
+		res, err := resource.NewResourceFromJSON(resp.Body)
+		if err == nil {
+			return printResourceJSON(cmd, res)
+		}
+	}
+	if _, err := cmd.OutOrStdout().Write(resp.Body); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
+	return nil
+}
+
+func shouldFormatAdHocJSON(resp *managedserver.HTTPResponse) bool {
+	if resp == nil || len(resp.Body) == 0 {
+		return false
+	}
+	if resp.Header != nil {
+		contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+		if strings.Contains(contentType, "json") {
+			return true
+		}
+	}
+	trimmed := bytes.TrimSpace(resp.Body)
+	if len(trimmed) == 0 {
+		return false
+	}
+	return json.Valid(trimmed)
 }
 
 func selectAdHocOperation(record resource.ResourceRecord, method string, isCollection bool) *resource.OperationMetadata {

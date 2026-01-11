@@ -150,7 +150,7 @@ test_ad_hoc_command() {
     log_line "Testing ad-hoc command for $path"
     local output
     output=$(capture_cli "ad-hoc get realm" --no-status ad-hoc get --path "$path")
-    if ! grep -q '"realm":"publico"' <<<"$output"; then
+    if ! grep -Eq '"realm"[[:space:]]*:[[:space:]]*"publico"' <<<"$output"; then
         log_line "ad-hoc command failed: unexpected output"
         echo "Expected ad-hoc get to include the realm name" >&2
         exit 1

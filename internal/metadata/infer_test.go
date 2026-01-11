@@ -245,6 +245,39 @@ const keycloakSpecJSON = `
           }
         }
       }
+    },
+    "/admin/realms/{realm}/components": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/admin/realms/{realm}/components/{component}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -470,6 +503,21 @@ func TestInferKeycloakMapperCollectionMetadata(t *testing.T) {
 	}
 	if !reasonContains(result.Reasons, "schema property \"name\"") {
 		t.Fatalf("expected reason to mention schema property name, got %v", result.Reasons)
+	}
+}
+
+func TestInferKeycloakComponentCollectionMetadataUsesChildParam(t *testing.T) {
+	spec := mustParseSpec(t, keycloakSpecJSON)
+	result := metadata.InferResourceMetadata(spec, "/admin/realms/publico/components/", true, metadata.InferenceOverrides{})
+
+	if got := result.ResourceInfo.IDFromAttribute; got != "component" {
+		t.Fatalf("expected idFromAttribute component, got %q", got)
+	}
+	if got := result.ResourceInfo.AliasFromAttribute; got != "component" {
+		t.Fatalf("expected aliasFromAttribute component, got %q", got)
+	}
+	if reasonContains(result.Reasons, `path parameter "realm"`) {
+		t.Fatalf("unexpected reason still referencing realm, got %v", result.Reasons)
 	}
 }
 

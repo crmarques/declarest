@@ -183,12 +183,24 @@ func segmentsStartWith(segments, prefix []string) bool {
 	if len(segments) < len(prefix) {
 		return false
 	}
-	for idx, seg := range prefix {
-		if segments[idx] != seg {
+	for idx, prefixSeg := range prefix {
+		if !segmentsMatchWildcard(prefixSeg, segments[idx]) {
 			return false
 		}
 	}
 	return true
+}
+
+func segmentsMatchWildcard(prefix, value string) bool {
+	return isWildcardSegment(prefix) || isWildcardSegment(value) || prefix == value
+}
+
+func isWildcardSegment(segment string) bool {
+	trimmed := strings.TrimSpace(segment)
+	if trimmed == "_" {
+		return true
+	}
+	return isOpenAPIPathParameter(trimmed)
 }
 
 func isOpenAPIPathParameter(segment string) bool {

@@ -72,6 +72,7 @@ Metadata is merged in this order (later wins):
 Metadata discovery details:
 - At every depth, DeclaREST loads both **literal** and **wildcard** (`_`) metadata directories. For a path like `/a/b/c`, variants such as `/a/b/c/metadata.json`, `/a/b/_/metadata.json`, `/a/_/c/metadata.json`, `/a/_/_/metadata.json`, etc. are considered.
 - Files are applied in deterministic order: shallower prefixes first; within the same depth, entries with more wildcards are applied before fewer; ties are lexicographic. Later files override earlier ones using the merge rules below.
+- `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute` do **not** inherit from ancestor collections; they only apply when defined at the current collection depth (or in the resource-specific `metadata.json`). Otherwise they fall back to defaults.
 
 Example for `/fruits/apples/apple-01`:
 1. defaults

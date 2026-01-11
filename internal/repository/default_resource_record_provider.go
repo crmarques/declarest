@@ -145,18 +145,19 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	if !isCollection && len(collectionSegments) > 0 {
 		collectionSegments = collectionSegments[:len(collectionSegments)-1]
 	}
+	collectionDepth := len(collectionSegments)
 
 	result := metadata.DefaultMetadata(collectionSegments)
 
 	files := metadataRelPaths(segments, collectionSegments, isCollection)
 	store := p.store()
-	for _, relPath := range files {
-		data, err := store.ReadFile(relPath)
+	for _, candidate := range files {
+		data, err := store.ReadFile(candidate.rel)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			return resource.ResourceMetadata{}, fmt.Errorf("failed to read metadata file %q: %w", relPath, err)
+			return resource.ResourceMetadata{}, fmt.Errorf("failed to read metadata file %q: %w", candidate.rel, err)
 		}
 
 		if len(data) == 0 {
@@ -165,7 +166,12 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 
 		var fileMetadata resource.ResourceMetadata
 		if err := json.Unmarshal(data, &fileMetadata); err != nil {
-			return resource.ResourceMetadata{}, fmt.Errorf("failed to parse metadata file %q: %w", relPath, err)
+			return resource.ResourceMetadata{}, fmt.Errorf("failed to parse metadata file %q: %w", candidate.rel, err)
+		}
+
+		if candidate.depth < collectionDepth && fileMetadata.ResourceInfo != nil {
+			fileMetadata.ResourceInfo.IDFromAttribute = ""
+			fileMetadata.ResourceInfo.AliasFromAttribute = ""
 		}
 
 		result = metadata.MergeMetadata(result, fileMetadata)
@@ -210,7 +216,12 @@ func (p *DefaultResourceRecordProvider) resourcePathForDefaults(resourcePath str
 	return record.RemoteResourcePath(record.Data)
 }
 
-func metadataRelPaths(segments, collectionSegments []string, isCollection bool) []string {
+type metadataCandidate struct {
+	rel   string
+	depth int
+}
+
+func metadataRelPaths(segments, collectionSegments []string, isCollection bool) []metadataCandidate {
 	type candidate struct {
 		rel       string
 		depth     int
@@ -259,11 +270,11 @@ func metadataRelPaths(segments, collectionSegments []string, isCollection bool) 
 	})
 
 	var (
-		files []string
+		files []metadataCandidate
 		seen  = make(map[string]struct{})
 	)
 
-	add := func(rel string) error {
+	add := func(rel string, depth int) error {
 		if strings.TrimSpace(rel) == "" {
 			return nil
 		}
@@ -271,12 +282,12 @@ func metadataRelPaths(segments, collectionSegments []string, isCollection bool) 
 			return nil
 		}
 		seen[rel] = struct{}{}
-		files = append(files, rel)
+		files = append(files, metadataCandidate{rel: rel, depth: depth})
 		return nil
 	}
 
 	for _, cand := range candidates {
-		_ = add(cand.rel)
+		_ = add(cand.rel, cand.depth)
 	}
 
 	return files

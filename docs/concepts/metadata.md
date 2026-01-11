@@ -35,6 +35,7 @@ Merge behavior:
 - Objects merge recursively.
 - Scalars overwrite earlier values.
 - Arrays replace earlier arrays (no deep merge).
+- `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute` do not inherit from ancestor collections; they only apply when defined at the current collection depth (or in the resource-specific `metadata.json`). Otherwise they fall back to defaults.
 
 ### Wildcards
 
