@@ -255,6 +255,30 @@ func (m *DefaultContextManager) ListContexts() ([]string, error) {
 	return names, nil
 }
 
+func (m *DefaultContextManager) GetContextConfig(name string) (*ContextConfig, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, false, errors.New("context name is required")
+	}
+
+	store, err := m.loadStore()
+	if err != nil {
+		return nil, false, err
+	}
+
+	cfg, ok := store.lookup(name)
+	if !ok {
+		return nil, false, nil
+	}
+	if cfg == nil {
+		return &ContextConfig{}, true, nil
+	}
+	return cfg, true, nil
+}
+
 func (m *DefaultContextManager) LoadDefaultContext() (Context, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

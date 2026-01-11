@@ -14,6 +14,7 @@ Manage contexts and configuration files.
 
 - `config add`: register a context file. Use `--force` to override an existing context; when run without a config path the command opens a guided terminal UI that prints section headings, hides secret input, requires a managed server block, surfaces numbered defaults, and lets you navigate list prompts with the arrow keys.
 - `config update`: update an existing context.
+- `config edit`: open a context configuration in your editor with defaults prefilled; when you save, the context is added or updated (`--editor` overrides `$VISUAL`/`$EDITOR`, otherwise `vi` is used).
 - `config use`: set the default context.
 - `config list`: list all contexts.
 - `config current`: show the current context.
@@ -67,7 +68,7 @@ The command prints the response body to stdout (JSON responses are formatted lik
 Manage metadata definitions.
 
 - `metadata get`: render effective metadata.
-- `metadata edit`: open the metadata in your editor with defaults prefilled; when you save, default values are stripped before writing the file (`--editor` overrides `$VISUAL`/`$EDITOR`).
+- `metadata edit`: open the metadata in your editor with defaults prefilled; when you save, default values are stripped before writing the file (`--editor` overrides `$VISUAL`/`$EDITOR`, otherwise `vi` is used).
 - `metadata set`: set an attribute.
 - `metadata unset`: unset an attribute.
 - `metadata add`: add metadata from a file.

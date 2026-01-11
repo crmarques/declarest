@@ -34,6 +34,7 @@ environments (for example dev, staging, and production) with confidence.`,
 
 	cmd.AddCommand(newConfigAddCommand(manager))
 	cmd.AddCommand(newConfigUpdateCommand(manager))
+	cmd.AddCommand(newConfigEditCommand(manager))
 	cmd.AddCommand(newConfigUseCommand(manager))
 	cmd.AddCommand(newConfigDeleteCommand(manager))
 	cmd.AddCommand(newConfigRenameCommand(manager))

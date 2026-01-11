@@ -9,6 +9,7 @@ Do not change interface shapes without explicit design approval.
 - `internal/managedserver`: resource server contracts + HTTP implementation.
 - `internal/repository`: repo contracts + Git/FS implementations.
 - `internal/metadata`: metadata loading, layering, access.
+- `internal/secrets`: secret loading, access, saving.
 - `internal/context`: context discovery/config wiring (ContextManager).
 - `internal/resource`: JSON helpers, patching, diffing.
 
@@ -17,4 +18,5 @@ Do not change interface shapes without explicit design approval.
 - Server I/O only via `ResourceServerManager`.
 - Metadata lookups only via `MetadataProvider`.
 - Context lifecycle only via `ContextManager`.
+- Secret I/O only via `SecretsManager`.
 - All orchestration only via `Reconciler`.
