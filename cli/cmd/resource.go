@@ -510,6 +510,9 @@ func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.Resource
 			}
 		}
 	}
+
+	fmt.Fprintln(out, "\nSchema:")
+	printSchemaBlock(out, item)
 }
 
 func printLabeledField(out io.Writer, indent, label, value string) {
@@ -640,6 +643,62 @@ func formatSchemaValue(value any) string {
 		return typed.String()
 	default:
 		return fmt.Sprintf("%v", typed)
+	}
+}
+
+func printSchemaBlock(out io.Writer, item *openapi.PathItem) {
+	if item == nil {
+		fmt.Fprintln(out, "  No OpenAPI schema available.")
+		return
+	}
+	type candidate struct {
+		label  string
+		schema map[string]any
+	}
+	var candidates []candidate
+	for _, method := range []struct {
+		name string
+	}{
+		{name: "get"},
+		{name: "post"},
+		{name: "put"},
+		{name: "patch"},
+	} {
+		if op := item.Operation(method.name); op != nil {
+			if schema := op.ResponseSchema; schema != nil {
+				candidates = append(candidates, candidate{
+					label:  fmt.Sprintf("%s response", strings.ToUpper(method.name)),
+					schema: schema,
+				})
+				continue
+			}
+			if schema := op.RequestSchema; schema != nil {
+				candidates = append(candidates, candidate{
+					label:  fmt.Sprintf("%s request", strings.ToUpper(method.name)),
+					schema: schema,
+				})
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		fmt.Fprintln(out, "  Schema is not defined for this path.")
+		return
+	}
+	chosen := candidates[0]
+	for _, cand := range candidates {
+		if strings.HasPrefix(cand.label, "GET") {
+			chosen = cand
+			break
+		}
+	}
+	fmt.Fprintf(out, "  source: %s\n", chosen.label)
+	lines := schemaLines(chosen.schema)
+	if len(lines) == 0 {
+		fmt.Fprintln(out, "  Schema exists but no details are available.")
+		return
+	}
+	for _, line := range lines {
+		fmt.Fprintf(out, "  %s\n", line)
 	}
 }
 

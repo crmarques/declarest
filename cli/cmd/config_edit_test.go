@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"declarest/internal/context"
@@ -116,6 +117,91 @@ EOF
 	}
 	if cfg.ManagedServer.HTTP.BaseURL != "https://example.com/api" {
 		t.Fatalf("expected base_url to be set, got %q", cfg.ManagedServer.HTTP.BaseURL)
+	}
+}
+
+func TestConfigEditPrepopulatesExistingAttributes(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo4")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "https://example.com/api")
+	addContext(t, "preload", contextPath)
+
+	captured := filepath.Join(home, "captured.yaml")
+	editorPath := filepath.Join(home, "capture.sh")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+cp "$1" %q
+`, captured)
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "config", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("editor", editorPath); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"preload"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	data, err := os.ReadFile(captured)
+	if err != nil {
+		t.Fatalf("read captured config: %v", err)
+	}
+	output := string(data)
+	if !strings.Contains(output, "base_dir: "+repoDir) {
+		t.Fatalf("expected filesystem base_dir in editor payload, got:\n%s", output)
+	}
+	if !strings.Contains(output, "base_url: https://example.com/api") {
+		t.Fatalf("expected managed server base_url, got:\n%s", output)
+	}
+}
+
+func TestConfigEditLoadsFromConfigFile(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo5")
+	contextPath := filepath.Join(home, "context-file.yaml")
+	writeContextConfig(t, contextPath, repoDir, "https://example.com/api")
+
+	captured := filepath.Join(home, "captured-file.yaml")
+	editorPath := filepath.Join(home, "capture-file.sh")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+cp "$1" %q
+`, captured)
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "config", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("editor", editorPath); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+
+	if err := command.RunE(command, []string{contextPath}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	data, err := os.ReadFile(captured)
+	if err != nil {
+		t.Fatalf("read captured config: %v", err)
+	}
+	output := string(data)
+	if !strings.Contains(output, "base_dir: "+repoDir) {
+		t.Fatalf("expected filesystem base_dir in editor payload, got:\n%s", output)
+	}
+	if !strings.Contains(output, "base_url: https://example.com/api") {
+		t.Fatalf("expected managed server base_url, got:\n%s", output)
 	}
 }
 

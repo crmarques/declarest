@@ -30,6 +30,7 @@ type Operation struct {
 	RequestContentTypes  []string
 	ResponseContentTypes []string
 	RequestSchema        map[string]any
+	ResponseSchema       map[string]any
 	HeaderParameters     map[string]string
 }
 
@@ -216,6 +217,7 @@ func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 			RequestContentTypes:  reqTypes,
 			ResponseContentTypes: respTypes,
 			RequestSchema:        requestSchema(op, spec),
+			ResponseSchema:       responseSchema(op, spec),
 			HeaderParameters:     opHeaders,
 		}
 	}
@@ -272,6 +274,81 @@ func requestSchema(op map[string]any, spec *Spec) map[string]any {
 		}
 	}
 
+	return nil
+}
+
+func responseSchema(op map[string]any, spec *Spec) map[string]any {
+	if spec == nil {
+		return nil
+	}
+	responses, ok := op["responses"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	if schema := responseSchemaForCodes(responses, spec, func(code string) bool {
+		return strings.HasPrefix(code, "2")
+	}); schema != nil {
+		return schema
+	}
+	if schema := responseSchemaForCodes(responses, spec, func(code string) bool {
+		return code == "default"
+	}); schema != nil {
+		return schema
+	}
+	return responseSchemaForCodes(responses, spec, func(code string) bool {
+		return true
+	})
+}
+
+func responseSchemaForCodes(responses map[string]any, spec *Spec, filter func(string) bool) map[string]any {
+	if responses == nil {
+		return nil
+	}
+	codes := make([]string, 0, len(responses))
+	for code := range responses {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		if !filter(code) {
+			continue
+		}
+		if schema := schemaFromResponseEntry(responses[code], spec); schema != nil {
+			return schema
+		}
+	}
+	return nil
+}
+
+func schemaFromResponseEntry(entry any, spec *Spec) map[string]any {
+	resp, ok := entry.(map[string]any)
+	if !ok {
+		return nil
+	}
+	content, ok := resp["content"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	for _, media := range []string{"application/json", "application/merge-patch+json", "application/json-patch+json"} {
+		if item, ok := content[media]; ok {
+			itemMap, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if schema, ok := spec.schemaFromContent(itemMap); ok {
+				return schema
+			}
+		}
+	}
+	for _, raw := range content {
+		itemMap, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if schema, ok := spec.schemaFromContent(itemMap); ok {
+			return schema
+		}
+	}
 	return nil
 }
 

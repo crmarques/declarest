@@ -10,11 +10,11 @@ Use `declarest config edit <name>` (or `--name <name>`) to open the stored conte
 declarest config edit staging --editor "code --wait"
 ```
 
-If the named context does not exist yet, the command creates it once you save the file. The `--editor` flag overrides `$VISUAL`/`$EDITOR` (defaults to `vi` when neither is set).
+DeclaREST pre-fills the file with every attribute (using defaults for anything you have not defined) and removes those defaults before saving so the stored file stays clean. If the named context does not exist yet, the command creates it once you save the file. If the argument you're passing points to an existing context YAML (for example `contexts/staging.yaml`), DeclaREST loads that file so you see the attributes you already wrote. The `--editor` flag overrides the default `vi`.
 
 ## Edit metadata rules
 
-Use `declarest metadata edit <path>` to open the merged metadata template for a collection or resource. The CLI preloads metadata defaults (IDs, operations, headers, filters, etc.) and, when you save, strips the default values so only your overrides remain in the local metadata file:
+Use `declarest metadata edit <path>` to open the merged metadata template for a collection or resource. The CLI preloads metadata defaults (IDs, operations, headers, filters, etc.) so every attribute is present, and, when you save, strips those defaults again so only your overrides remain in the local metadata file:
 
 ```
 declarest metadata edit /teams/platform/users/
@@ -26,4 +26,4 @@ By default the command treats paths without a trailing `/` as collections; add `
 declarest metadata edit /teams/platform/users/alice --for-resource-only
 ```
 
-You can also override the editor with `--editor` (just like `config edit`). Save the file when you are done, and DeclaREST writes the changes to the correct `<collection>/_/metadata.json` or `<resource>/metadata.json`.
+You can also override the editor with `--editor` (just like `config edit`). The default editor is `vi`. Save the file when you are done, and DeclaREST writes the changes to the correct `<collection>/_/metadata.json` or `<resource>/metadata.json`.

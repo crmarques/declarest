@@ -86,7 +86,19 @@ func TestDescribeOpenAPIShowsSummaryAndDescription(t *testing.T) {
           "200": {
             "description": "ok",
             "content": {
-              "application/json": {}
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -132,6 +144,9 @@ func TestDescribeOpenAPIShowsSummaryAndDescription(t *testing.T) {
 		"summary: Create item",
 		"description: Create a single item",
 		"description: Item payload",
+		"Schema:",
+		"source: GET response",
+		"type=object",
 	} {
 		if !strings.Contains(output, substring) {
 			t.Fatalf("expected %q in output:\n%s", substring, output)

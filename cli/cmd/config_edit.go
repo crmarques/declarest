@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -45,8 +46,21 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				return err
 			}
 
+			initialConfig := existing
+			if !exists {
+				if info, statErr := os.Stat(name); statErr == nil && !info.IsDir() {
+					cfg, readErr := readContextConfigFile(name)
+					if readErr != nil {
+						return readErr
+					}
+					initialConfig = cfg
+				} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+					return fmt.Errorf("stat %q: %w", name, statErr)
+				}
+			}
+
 			payload := defaultConfigEditPayload()
-			applyContextConfigToPayload(&payload, existing)
+			applyContextConfigToPayload(&payload, initialConfig)
 
 			payloadData, err := yamlutil.MarshalWithIndent(payload, 2)
 			if err != nil {
@@ -102,7 +116,7 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to edit")
-	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to $VISUAL, $EDITOR, or vi)")
+	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to vi)")
 
 	return cmd
 }
@@ -439,6 +453,18 @@ func decodeContextEditFile(data []byte) (*ctx.ContextConfig, error) {
 	var cfg ctx.ContextConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse context config: %w", err)
+	}
+	return &cfg, nil
+}
+
+func readContextConfigFile(path string) (*ctx.ContextConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read context config %q: %w", path, err)
+	}
+	var cfg ctx.ContextConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse context config %q: %w", path, err)
 	}
 	return &cfg, nil
 }

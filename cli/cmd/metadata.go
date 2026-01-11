@@ -155,7 +155,7 @@ func newMetadataEditCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
-	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to $VISUAL, $EDITOR, or vi)")
+	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to vi)")
 
 	return cmd
 }
@@ -733,12 +733,6 @@ func parseMetadataValue(raw string) (any, error) {
 
 func resolveEditorCommand(override string) ([]string, error) {
 	editor := strings.TrimSpace(override)
-	if editor == "" {
-		editor = strings.TrimSpace(os.Getenv("VISUAL"))
-	}
-	if editor == "" {
-		editor = strings.TrimSpace(os.Getenv("EDITOR"))
-	}
 	if editor == "" {
 		editor = "vi"
 	}
