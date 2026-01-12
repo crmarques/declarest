@@ -19,7 +19,7 @@ DeclaREST syncs resources between a Git-backed repository and a target server, l
 
 ## How it works
 
-1. *Resources* live in the repository (`/teams/platform/users/alice`) keeping the same structure used in *managed server* (`https://<hostname>/teams/platform/users/alice`).
+1. *Resources* live in the repository (`<repo_base_dir>/teams/platform/users/alice`) keeping the same structure used in *managed server* (`https://<hostname>/teams/platform/users/alice`).
 2. You can pull a *resource* from the *REST API server* into *Git repository*: `declarest resource save --path /teams/platform/users/alice`.
 3. You can update *resource* state in repository and push it back to the *API REST server*: `declarest resource apply --path /teams/platform/users/alice`.
 4. If needed, you can verify state differences for a *resource* between the *Git repository* (*desired state*) and the *managed server* (*actual state*): `declarest resource diff --path /teams/platform/users/alice`.
