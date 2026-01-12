@@ -100,6 +100,10 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 			}
 			editedConfig = normalizeContextConfig(editedConfig)
 
+			if err := ctx.ValidateContextConfig(editedConfig); err != nil {
+				return err
+			}
+
 			if exists {
 				if err := manager.ReplaceContextConfig(name, editedConfig); err != nil {
 					return err

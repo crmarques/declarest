@@ -208,6 +208,54 @@ sed -i 's/"aliasFromAttribute": "id"/"aliasFromAttribute": "name"/' "$1"
 	}
 }
 
+func TestMetadataEditRejectsInvalidMetadata(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo-invalid-metadata")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "")
+	addContext(t, "meta-invalid", contextPath)
+
+	editorPath := filepath.Join(home, "invalid-metadata.sh")
+	script := `#!/usr/bin/env bash
+set -euo pipefail
+
+cat > "$1" <<'EOF'
+{
+  "resourceInfo": {
+    "secretInAttributes": "not-an-array"
+  }
+}
+EOF
+`
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("editor", editorPath); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+
+	err := command.RunE(command, []string{"/items/"})
+	if err == nil {
+		t.Fatalf("expected metadata edit to reject invalid payload")
+	}
+	if !strings.Contains(err.Error(), "invalid metadata") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	metaPath := filepath.Join(repoDir, "items", "_", "metadata.json")
+	if _, statErr := os.Stat(metaPath); statErr == nil {
+		t.Fatalf("metadata file should not be created after invalid edit")
+	} else if !os.IsNotExist(statErr) {
+		t.Fatalf("unexpected metadata stat error: %v", statErr)
+	}
+}
+
 func TestMetadataSetSecretInAttributesCommaSeparated(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo")

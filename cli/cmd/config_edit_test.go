@@ -120,6 +120,60 @@ EOF
 	}
 }
 
+func TestConfigEditRejectsConflictingRepositories(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo-conflict")
+	contextPath := filepath.Join(home, "context-conflict.yaml")
+	writeContextConfig(t, contextPath, repoDir, "https://example.com/api")
+	addContext(t, "conflict", contextPath)
+
+	editorPath := filepath.Join(home, "invalid-edit.sh")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+
+cat > "$1" <<'EOF'
+repository:
+  filesystem:
+    base_dir: %s
+  git:
+    local:
+      base_dir: %s
+managed_server:
+  http:
+    base_url: https://example.com/api
+EOF
+`, repoDir, repoDir)
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	root := newRootCommand()
+	command := findCommand(t, root, "config", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("editor", editorPath); err != nil {
+		t.Fatalf("set editor: %v", err)
+	}
+
+	err := command.RunE(command, []string{"conflict"})
+	if err == nil {
+		t.Fatalf("expected edit command to reject invalid config")
+	}
+	if !strings.Contains(err.Error(), "repository configuration must define either git or filesystem, not both") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	store := readConfigSetupStore(t, home)
+	cfg := findContextConfig(t, store, "conflict")
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed server config, got %#v", cfg.ManagedServer)
+	}
+	if cfg.ManagedServer.HTTP.BaseURL != "https://example.com/api" {
+		t.Fatalf("context should remain unchanged after validation failure")
+	}
+}
+
 func TestConfigEditPrepopulatesExistingAttributes(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo4")

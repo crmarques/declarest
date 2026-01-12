@@ -122,6 +122,9 @@ func newMetadataEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := metadata.ValidateMetadataDocument(editedMeta); err != nil {
+				return fmt.Errorf("invalid metadata: %w", err)
+			}
 
 			defaultMeta, err := defaultMetadataForPath(path, recon.ResourceRecordProvider)
 			if err != nil {
