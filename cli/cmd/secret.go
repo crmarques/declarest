@@ -39,16 +39,16 @@ func newSecretInitCommand() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize the configured secret store",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			recon, cleanup, err := loadDefaultReconcilerSkippingRepoSync()
+			recon, cleanup, err := loadDefaultReconcilerForSecrets()
 			if cleanup != nil {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			if err := recon.EnsureSecretsFile(); err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			successf(cmd, "initialized secret store")
@@ -110,12 +110,12 @@ func newSecretGetCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			value, err := recon.GetSecret(resourcePath, key)
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout(), value)
@@ -197,11 +197,11 @@ func newSecretAddCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			if err := recon.SetSecret(resourcePath, key, value); err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			successf(cmd, "stored secret %s for %s", key, resourcePath)
 			return nil
@@ -274,11 +274,11 @@ func newSecretDeleteCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			if err := recon.DeleteSecret(resourcePath, key); err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			successf(cmd, "deleted secret %s for %s", key, resourcePath)
 			return nil
@@ -317,7 +317,7 @@ func newSecretListCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			if resourcePath != "" {
@@ -326,7 +326,7 @@ func newSecretListCommand() *cobra.Command {
 				}
 				keys, err := recon.ListSecretKeys(resourcePath)
 				if err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				if len(keys) == 0 {
 					return nil
@@ -336,12 +336,12 @@ func newSecretListCommand() *cobra.Command {
 					infof(cmd, "%s", resourcePath)
 					return nil
 				}
-				return writeSecretKeys(cmd, resourcePath, keys, showSecrets, recon.GetSecret)
+				return wrapSecretStoreError(writeSecretKeys(cmd, resourcePath, keys, showSecrets, recon.GetSecret))
 			}
 
 			paths, err := recon.ListSecretResources()
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			if len(paths) == 0 {
 				return nil
@@ -356,14 +356,14 @@ func newSecretListCommand() *cobra.Command {
 			for _, path := range paths {
 				keys, err := recon.ListSecretKeys(path)
 				if err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				if len(keys) == 0 {
 					continue
 				}
 				sort.Strings(keys)
 				if err := writeSecretKeys(cmd, path, keys, showSecrets, recon.GetSecret); err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 			}
 			return nil
@@ -435,16 +435,16 @@ func newSecretExportCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			rows, err := secretExportRows(recon, exportAll, resourcePath)
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			if err := writeSecretCSV(cmd.OutOrStdout(), rows); err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			return nil
 		},
@@ -494,7 +494,7 @@ func newSecretImportCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			for _, row := range rows {
@@ -505,7 +505,7 @@ func newSecretImportCommand() *cobra.Command {
 
 			conflicts, err := secretImportConflicts(recon, rows)
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			if len(conflicts) > 0 && !force {
 				fmt.Fprintln(cmd.ErrOrStderr(), "Import would overwrite existing secrets; use --force to continue.")
@@ -517,7 +517,7 @@ func newSecretImportCommand() *cobra.Command {
 
 			for _, row := range rows {
 				if err := recon.SetSecret(row.Path, row.Key, row.Value); err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 			}
 

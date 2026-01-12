@@ -43,7 +43,7 @@ func MaskResourceSecrets(res resource.Resource, resourcePath string, secretPaths
 		return res, nil
 	}
 	if store && manager == nil {
-		return resource.Resource{}, errors.New("secret store is not configured")
+		return resource.Resource{}, ErrSecretStoreNotConfigured
 	}
 
 	if res.Kind() == resource.KindArray {
@@ -189,7 +189,7 @@ func ResolveResourceSecrets(res resource.Resource, resourcePath string, secretPa
 		return res, nil
 	}
 	if manager == nil {
-		return resource.Resource{}, errors.New("secret store is not configured")
+		return resource.Resource{}, ErrSecretStoreNotConfigured
 	}
 
 	if res.Kind() == resource.KindArray {

@@ -650,6 +650,9 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 
 			result := metadata.InferResourceMetadata(spec, logicalPath, targetIsCollection, overrides)
 			metadataTargetPath := normalizedPath
+			if apply {
+				metadataTargetPath = inferenceMetadataTargetPath(spec, logicalPath, normalizedPath, targetIsCollection, metadataOnly)
+			}
 
 			payload, err := json.MarshalIndent(metadataInferOutput{
 				ResourceInfo:  &result.ResourceInfo,
@@ -1309,4 +1312,25 @@ func normalizeCollectionMetadataPath(path string) string {
 		return "/"
 	}
 	return normalized + "/"
+}
+
+func inferenceMetadataTargetPath(spec *openapi.Spec, logicalPath, normalizedPath string, targetIsCollection, metadataOnly bool) string {
+	if spec == nil || !targetIsCollection || metadataOnly {
+		return normalizedPath
+	}
+	if wildcard := wildcardCollectionPathForLogicalPath(spec, logicalPath); wildcard != "" {
+		return normalizeCollectionMetadataPath(wildcard)
+	}
+	return normalizedPath
+}
+
+func wildcardCollectionPathForLogicalPath(spec *openapi.Spec, logicalPath string) string {
+	if spec == nil {
+		return ""
+	}
+	item := spec.MatchPath(resource.NormalizePath(logicalPath))
+	if item == nil || item.Template == "" {
+		return ""
+	}
+	return wildcardCollectionPath(item.Template)
 }

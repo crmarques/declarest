@@ -249,7 +249,7 @@ func (m *VaultSecretsManager) ensureInit() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if !m.initialized {
-		return errors.New("vault secret store is not initialized")
+		return ErrSecretStoreNotInitialized
 	}
 	return nil
 }

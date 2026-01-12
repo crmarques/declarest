@@ -88,11 +88,11 @@ func (m *FileSecretsManager) Init() error {
 		return errors.New("file secret store is nil")
 	}
 	if m.cfg == nil {
-		return errors.New("file secret store config is required")
+		return errors.New("secret_store.file configuration is required in the context")
 	}
 	trimmed := strings.TrimSpace(m.cfg.Path)
 	if trimmed == "" {
-		return errors.New("file secret store path is required")
+		return errors.New("secret_store.file.path is required in the secret_store configuration")
 	}
 	abs, err := filepath.Abs(trimmed)
 	if err != nil {
@@ -289,7 +289,7 @@ func (m *FileSecretsManager) ensureInit() error {
 		return errors.New("file secret store is nil")
 	}
 	if !m.initialized {
-		return errors.New("file secret store is not initialized")
+		return ErrSecretStoreNotInitialized
 	}
 	return nil
 }
@@ -322,7 +322,7 @@ func (m *FileSecretsManager) setSecret(resourcePath string, key string, value st
 
 func (m *FileSecretsManager) persistLocked() error {
 	if m.path == "" {
-		return errors.New("secrets file path is required")
+		return errors.New("secret_store.file.path must be configured to persist the secrets file")
 	}
 	payload, err := encryptStore(m.store, m.key, m.kdf)
 	if err != nil {
@@ -399,10 +399,10 @@ func (m *FileSecretsManager) keySource() (keySource, error) {
 	passphraseFile := strings.TrimSpace(m.cfg.PassphraseFile)
 
 	if keyFile != "" && key != "" {
-		return keySource{}, errors.New("both key and key_file are set")
+		return keySource{}, errors.New("only one of secret_store.file.key or secret_store.file.key_file may be set")
 	}
 	if passphraseFile != "" && passphrase != "" {
-		return keySource{}, errors.New("both passphrase and passphrase_file are set")
+		return keySource{}, errors.New("only one of secret_store.file.passphrase or secret_store.file.passphrase_file may be set")
 	}
 
 	if keyFile != "" {
@@ -421,7 +421,7 @@ func (m *FileSecretsManager) keySource() (keySource, error) {
 	}
 
 	if key != "" && passphrase != "" {
-		return keySource{}, errors.New("provide either a key or a passphrase")
+		return keySource{}, errors.New("provide either secret_store.file.key (or key_file) or secret_store.file.passphrase (or passphrase_file)")
 	}
 	if key != "" {
 		return keySource{kind: keySourceRaw, value: key}, nil
@@ -429,7 +429,7 @@ func (m *FileSecretsManager) keySource() (keySource, error) {
 	if passphrase != "" {
 		return keySource{kind: keySourcePassphrase, value: passphrase}, nil
 	}
-	return keySource{}, errors.New("a key or passphrase is required")
+	return keySource{}, errors.New("set secret_store.file.key (or key_file) or secret_store.file.passphrase (or passphrase_file)")
 }
 
 func (m *FileSecretsManager) ensureFilePermissions() error {

@@ -9,6 +9,7 @@ import (
 	ctx "declarest/internal/context"
 	"declarest/internal/reconciler"
 	"declarest/internal/resource"
+	"declarest/internal/secrets"
 
 	"github.com/spf13/cobra"
 )
@@ -37,6 +38,41 @@ func loadDefaultReconciler() (*reconciler.DefaultReconciler, func(), error) {
 
 func loadDefaultReconcilerSkippingRepoSync() (*reconciler.DefaultReconciler, func(), error) {
 	return loadDefaultReconcilerWithOptions(loadReconcilerOptions{skipRepoSync: true})
+}
+
+func loadDefaultReconcilerForSecrets() (*reconciler.DefaultReconciler, func(), error) {
+	manager := &ctx.DefaultContextManager{}
+	context, err := manager.LoadDefaultContext()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	actual, ok := context.Reconciler.(*reconciler.DefaultReconciler)
+	if !ok {
+		return nil, nil, errors.New("unexpected reconciler type")
+	}
+	captureDebugContext(actual)
+
+	if err := actual.InitSecrets(); err != nil {
+		return nil, nil, err
+	}
+
+	var once sync.Once
+	cleanup := func() {
+		once.Do(func() {
+			if actual.ResourceRepositoryManager != nil {
+				actual.ResourceRepositoryManager.Close()
+			}
+			if actual.ResourceServerManager != nil {
+				actual.ResourceServerManager.Close()
+			}
+			if actual.SecretsManager != nil {
+				actual.SecretsManager.Close()
+			}
+		})
+	}
+
+	return actual, cleanup, nil
 }
 
 func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (*reconciler.DefaultReconciler, func(), error) {
@@ -96,6 +132,19 @@ func validateLogicalPath(cmd *cobra.Command, path string) error {
 		return usageError(cmd, err.Error())
 	}
 	return nil
+}
+
+func wrapSecretStoreError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, secrets.ErrSecretStoreNotInitialized) {
+		return fmt.Errorf("%w (run \"declarest secret init\" to initialize the secrets store)", err)
+	}
+	if errors.Is(err, secrets.ErrSecretStoreNotConfigured) {
+		return fmt.Errorf("%w (define a secret_store section in your context configuration and rerun `declarest secret init`)", err)
+	}
+	return err
 }
 
 func successf(cmd *cobra.Command, format string, args ...any) {

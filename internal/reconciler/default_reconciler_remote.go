@@ -394,7 +394,7 @@ func (r *DefaultReconciler) resolveSecretsForRemote(record resource.ResourceReco
 			return resource.Resource{}, err
 		}
 		if hasPlaceholders {
-			return resource.Resource{}, errors.New("secret store is not configured")
+			return resource.Resource{}, secrets.ErrSecretStoreNotConfigured
 		}
 		return data, nil
 	}

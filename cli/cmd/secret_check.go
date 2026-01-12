@@ -9,6 +9,7 @@ import (
 	"declarest/internal/metadata"
 	"declarest/internal/reconciler"
 	"declarest/internal/resource"
+	"declarest/internal/secrets"
 
 	"github.com/spf13/cobra"
 )
@@ -39,12 +40,12 @@ func newSecretCheckCommand() *cobra.Command {
 				defer cleanup()
 			}
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 
 			targets, err := secretCheckTargets(recon, path)
 			if err != nil {
-				return err
+				return wrapSecretStoreError(err)
 			}
 			if len(targets) == 0 {
 				return nil
@@ -55,12 +56,12 @@ func newSecretCheckCommand() *cobra.Command {
 			for _, target := range targets {
 				res, err := recon.GetLocalResource(target)
 				if err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				resources[target] = res
 				mapped, err := recon.SecretPathsFor(target)
 				if err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				unmapped := findUnmappedSecretPaths(res, mapped, resource.IsCollectionPath(target))
 				if len(unmapped) > 0 {
@@ -88,7 +89,7 @@ func newSecretCheckCommand() *cobra.Command {
 			}
 			if recon.SecretsManager == nil {
 				fmt.Fprintln(cmd.ErrOrStderr(), "Secret store is not configured. Configure one and rerun with --fix.")
-				return handledError{msg: "secret store is not configured"}
+				return handledError{msg: wrapSecretStoreError(secrets.ErrSecretStoreNotConfigured).Error()}
 			}
 
 			fixed := 0
@@ -101,10 +102,10 @@ func newSecretCheckCommand() *cobra.Command {
 				if err := recon.UpdateLocalMetadata(target, func(meta map[string]any) (bool, error) {
 					return mergeSecretInAttributes(meta, findings[target])
 				}); err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				if err := saveLocalResourceWithSecrets(recon, target, res, true); err != nil {
-					return err
+					return wrapSecretStoreError(err)
 				}
 				fixed++
 			}

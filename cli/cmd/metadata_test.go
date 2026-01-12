@@ -65,6 +65,30 @@ paths:
             application/json: {}
 `
 
+const cliInferWildcardSpecYAML = `
+openapi: 3.0.0
+paths:
+  /admin/realms/{realm}/clients:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId:
+                  type: string
+                clientName:
+                  type: string
+              required:
+                - clientId
+      responses:
+        "201":
+          description: created
+          content:
+            application/json: {}
+`
+
 func TestMetadataGetPrintsSecretInAttributesWhenEmpty(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo")
@@ -458,6 +482,70 @@ managed_server:
 	}
 	if meta.ResourceInfo.AliasFromAttribute != "displayName" {
 		t.Fatalf("unexpected aliasFromAttribute: %q", meta.ResourceInfo.AliasFromAttribute)
+	}
+}
+
+func TestMetadataInferApplyUsesWildcardPath(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	specPath := filepath.Join(home, "openapi-wildcards.yml")
+	if err := os.WriteFile(specPath, []byte(cliInferWildcardSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	content := fmt.Sprintf(`
+repository:
+  filesystem:
+    base_dir: %s
+managed_server:
+  http:
+    base_url: http://example.com
+    openapi: %s
+`, repoDir, specPath)
+	if err := os.WriteFile(contextPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write context: %v", err)
+	}
+	addContext(t, "infer-wildcard", contextPath)
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "infer")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.Flags().Set("apply", "true"); err != nil {
+		t.Fatalf("set apply: %v", err)
+	}
+	if err := command.Flags().Set("spec", specPath); err != nil {
+		t.Fatalf("set spec: %v", err)
+	}
+
+	if err := command.RunE(command, []string{"/admin/realms/publico/clients/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	wildcardMetaPath := filepath.Join(repoDir, "admin", "realms", "_", "clients", "_", "metadata.json")
+	data, err := os.ReadFile(wildcardMetaPath)
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+
+	var meta resource.ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected resourceInfo metadata")
+	}
+	if meta.ResourceInfo.IDFromAttribute != "clientId" {
+		t.Fatalf("unexpected idFromAttribute: %q", meta.ResourceInfo.IDFromAttribute)
+	}
+
+	literalMetaPath := filepath.Join(repoDir, "admin", "realms", "publico", "clients", "_", "metadata.json")
+	if _, err := os.Stat(literalMetaPath); err == nil {
+		t.Fatalf("unexpected metadata at literal realm path")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat literal metadata: %v", err)
 	}
 }
 
