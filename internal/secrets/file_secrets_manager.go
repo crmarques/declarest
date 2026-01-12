@@ -384,7 +384,7 @@ func (m *FileSecretsManager) readPayloadIfExists() (fileSecretsPayload, bool, er
 		return payload, false, err
 	}
 	if len(strings.TrimSpace(string(data))) == 0 {
-		return payload, false, errors.New("secrets file is empty")
+		return payload, false, nil
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return payload, false, fmt.Errorf("failed to parse secrets file: %w", err)
@@ -482,10 +482,10 @@ func deriveKey(source keySource, kdf fileSecretsKDF) ([]byte, error) {
 		}
 		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(source.value))
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode base64 key: %w", err)
+			return nil, fmt.Errorf("secret_store.file.key must be base64-encoded: %w", err)
 		}
 		if len(raw) != fileSecretsKeyLen {
-			return nil, fmt.Errorf("key must be %d bytes after base64 decoding", fileSecretsKeyLen)
+			return nil, fmt.Errorf("secret_store.file.key must decode to %d bytes, got %d", fileSecretsKeyLen, len(raw))
 		}
 		return raw, nil
 	case fileSecretsKDFArgon2id:
