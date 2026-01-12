@@ -119,6 +119,12 @@ secret_store:
 Notes:
 
 - Provide either `key` or `passphrase` (or their *_file variants).
+- If you configure `secret_store.file.key`, it must be base64 encoded and decode to exactly 32 bytes (AES-256 requires a 256-bit key); otherwise `declarest secret init` fails. Generate a compliant key with:
+  - ``python - <<'PY'
+    import os, base64
+    print(base64.b64encode(os.urandom(32)).decode())
+    PY``
+  - `openssl rand -base64 32`
 - When using a passphrase, keys are derived using Argon2id by default.
 - Secrets files are stored with restrictive permissions.
 
