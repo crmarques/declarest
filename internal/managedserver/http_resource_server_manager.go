@@ -116,6 +116,12 @@ func (m *HTTPResourceServerManager) configureTLSConfig(tlsCfg *tls.Config, cfg *
 			return fmt.Errorf("failed to load client certificate/key: %w", err)
 		}
 		tlsCfg.Certificates = append(tlsCfg.Certificates, cert)
+		if tlsCfg.GetClientCertificate == nil {
+			loadedCert := tlsCfg.Certificates[len(tlsCfg.Certificates)-1]
+			tlsCfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return &loadedCert, nil
+			}
+		}
 	}
 
 	return nil

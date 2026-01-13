@@ -41,6 +41,10 @@ This directory contains an optional end-to-end smoke test that provisions a temp
 CONTAINER_RUNTIME=podman ./tests/run-tests.sh --e2e --managed-server keycloak --repo-provider file --secret-provider file
 ```
 
+## Profiles & status output
+
+`./tests/run-tests.sh` defaults to the `--complete` profile, which exercises every group (context, metadata, OpenAPI, DeclaREST main flows, and auth variations). Use `--reduced` to run only the representative variants, and add `--skip-testing-context`, `--skip-testing-metadata`, `--skip-testing-openapi`, `--skip-testing-declarest`, or `--skip-testing-variation` to omit individual testing groups. The runner prints aligned `RUNNING`, `DONE`, `FAILED`, and `SKIPPED` statuses before each group.
+
 Repository types:
 
 - `fs`: use the bundled template repository directly (no Git).

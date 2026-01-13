@@ -384,12 +384,11 @@ func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerCo
 	}
 
 	if isHTTPSURL(baseURL) {
-		var tlsCfg *managedserver.HTTPResourceServerTLSConfig
+		var tlsCfg managedserver.HTTPResourceServerTLSConfig
+		var tlsConfigured bool
 		ensureTLSConfig := func() *managedserver.HTTPResourceServerTLSConfig {
-			if tlsCfg == nil {
-				tlsCfg = &managedserver.HTTPResourceServerTLSConfig{}
-			}
-			return tlsCfg
+			tlsConfigured = true
+			return &tlsCfg
 		}
 
 		insecureTLS, err := prompt.confirm("Skip TLS verification for managed server?", false)
@@ -422,8 +421,8 @@ func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerCo
 			cfg.ClientKeyFile = strings.TrimSpace(clientKey)
 		}
 
-		if tlsCfg != nil {
-			httpCfg.TLS = tlsCfg
+		if tlsConfigured {
+			httpCfg.TLS = &tlsCfg
 		}
 	}
 

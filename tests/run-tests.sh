@@ -21,6 +21,15 @@ Options:
   --managed-server NAME Managed server to target (keycloak or rundeck).
   --repo-provider NAME  Repository provider (file, git, gitlab, gitea, github).
   --secret-provider TYPE Secret store provider (none, file, vault).
+  --complete            Run the complete e2e profile (default, exercises all variants).
+  --reduced             Run the reduced e2e profile (shorthand for --e2e-profile reduced; representative variants only).
+  --e2e-profile NAME    E2E profile to execute (complete, reduced).
+  --skip-testing-context   Skip the "Testing context operations" group.
+  --skip-testing-metadata  Skip the "Testing metadata operations" group.
+  --skip-testing-openapi   Skip the "Testing OpenAPI operations" group.
+  --skip-testing-declarest Skip the "Testing DeclaREST main flows" group.
+  --skip-testing-variation Skip the "Testing variation flows" group.
+  --keep-workspace      Preserve the test workspace after the run.
   -h, --help            Show this help message.
 
 Examples:
@@ -32,6 +41,7 @@ Defaults:
   managed-server=keycloak
   repo-provider=git
   secret-provider=file (rundeck defaults to none)
+  e2e-profile=complete
 EOF
 }
 
@@ -42,6 +52,36 @@ secret_provider="file"
 repo_provider_set=0
 secret_provider_set=0
 extra_args=()
+profile="complete"
+skip_context_flag=0
+skip_metadata_flag=0
+skip_openapi_flag=0
+skip_declarest_flag=0
+skip_variation_flag=0
+set_e2e_profile() {
+    local desired="${1:-}"
+    if [[ -z "$desired" ]]; then
+        printf "Missing value for --e2e-profile\n" >&2
+        usage >&2
+        exit 1
+    fi
+    desired="${desired,,}"
+    case "$desired" in
+        complete|reduced)
+            profile="$desired"
+            ;;
+        *)
+            printf "Invalid --e2e-profile: %s (expected complete or reduced)\n" "$desired" >&2
+            exit 1
+            ;;
+    esac
+}
+export DECLAREST_SKIP_TESTING_CONTEXT="0"
+export DECLAREST_SKIP_TESTING_METADATA="0"
+export DECLAREST_SKIP_TESTING_OPENAPI="0"
+export DECLAREST_SKIP_TESTING_DECLAREST="0"
+export DECLAREST_SKIP_TESTING_VARIATION="0"
+export KEEP_WORKSPACE="0"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -61,6 +101,47 @@ while [[ $# -gt 0 ]]; do
             repo_provider="${2:-}"
             repo_provider_set=1
             shift 2
+            ;;
+        --complete)
+            set_e2e_profile complete
+            shift
+            ;;
+        --reduced)
+            set_e2e_profile reduced
+            shift
+            ;;
+        --e2e-profile)
+            set_e2e_profile "$2"
+            shift 2
+            ;;
+        --skip-testing-context)
+            skip_context_flag=1
+            export DECLAREST_SKIP_TESTING_CONTEXT="1"
+            shift
+            ;;
+        --skip-testing-metadata)
+            skip_metadata_flag=1
+            export DECLAREST_SKIP_TESTING_METADATA="1"
+            shift
+            ;;
+        --skip-testing-openapi)
+            skip_openapi_flag=1
+            export DECLAREST_SKIP_TESTING_OPENAPI="1"
+            shift
+            ;;
+        --skip-testing-declarest)
+            skip_declarest_flag=1
+            export DECLAREST_SKIP_TESTING_DECLAREST="1"
+            shift
+            ;;
+        --skip-testing-variation)
+            skip_variation_flag=1
+            export DECLAREST_SKIP_TESTING_VARIATION="1"
+            shift
+            ;;
+        --keep-workspace)
+            export KEEP_WORKSPACE="1"
+            shift
             ;;
         --secret-provider)
             secret_provider="${2:-}"
@@ -84,9 +165,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+export DECLAREST_E2E_PROFILE="$profile"
+
 managed_server="${managed_server,,}"
 repo_provider="${repo_provider,,}"
 secret_provider="${secret_provider,,}"
+export DECLAREST_MANAGED_SERVER="$managed_server"
+export DECLAREST_REPO_PROVIDER="$repo_provider"
+export DECLAREST_SECRET_PROVIDER="$secret_provider"
 
 check_container_runtime() {
     if ! command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1; then
@@ -179,10 +265,191 @@ if [[ ! -x "$runner" ]]; then
     exit 1
 fi
 
+STEP_COLUMN_WIDTH=32
+STATUS_COLUMN_WIDTH=8
+EXEC_COLUMN_WIDTH=12
+DURATION_COLUMN_WIDTH=18
+TOTAL_GROUPS=10
+current_group_index=0
+tty_output=0
+if [[ -t 1 ]]; then
+    tty_output=1
+fi
+
+format_status_line() {
+    local step="$1"
+    local status="$2"
+    local execution="${3:-}"
+    local duration="${4:-}"
+    printf "%-${STEP_COLUMN_WIDTH}s | %-${STATUS_COLUMN_WIDTH}s | %-${EXEC_COLUMN_WIDTH}s | %-${DURATION_COLUMN_WIDTH}s" \
+        "$step" "$status" "$execution" "$duration"
+}
+
+print_group_status_header() {
+    local header
+    header=$(format_status_line "Step" "Status" "Execution" "Duration")
+    printf "%s\n" "$header"
+}
+
+print_group_status_inline() {
+    local line
+    line=$(format_status_line "$1" "$2" "$3" "$4")
+    if [[ $tty_output -eq 1 ]]; then
+        printf "\r\033[K%s" "$line"
+    else
+        printf "%s\n" "$line"
+    fi
+}
+
+print_group_status_final() {
+    local line
+    line=$(format_status_line "$1" "$2" "$3" "$4")
+    if [[ $tty_output -eq 1 ]]; then
+        printf "\r\033[K%s\n" "$line"
+    else
+        printf "%s\n" "$line"
+    fi
+}
+
+run_group() {
+    local title="$1"
+    local func="$2"
+    local skip_key="${3:-}"
+    local skip_message=""
+    local skip_flag=0
+    current_group_index=$((current_group_index + 1))
+    local progress="(${current_group_index}/${TOTAL_GROUPS})"
+
+    case "$skip_key" in
+        context)
+            skip_flag="$skip_context_flag"
+            skip_message="flag --skip-testing-context"
+            ;;
+        metadata)
+            skip_flag="$skip_metadata_flag"
+            skip_message="flag --skip-testing-metadata"
+            ;;
+        openapi)
+            skip_flag="$skip_openapi_flag"
+            skip_message="flag --skip-testing-openapi"
+            ;;
+        declarest)
+            skip_flag="$skip_declarest_flag"
+            skip_message="flag --skip-testing-declarest"
+            ;;
+        variation)
+            if [[ "$skip_variation_flag" -eq 1 ]]; then
+                skip_flag=1
+                skip_message="flag --skip-testing-variation"
+            elif [[ "$should_run_variation" -eq 0 ]]; then
+                skip_flag=1
+                if [[ "$should_run_declarest" -eq 0 ]]; then
+                    skip_message="main flows disabled"
+                else
+                    skip_message="variation profile disabled"
+                fi
+            fi
+            ;;
+        *)
+            skip_flag=0
+            ;;
+    esac
+
+    if [[ "$skip_flag" -eq 1 ]]; then
+        print_group_status_final "$title" "SKIPPED" "${progress}" "$skip_message"
+        log_line "GROUP SKIPPED ($title): $skip_message"
+        return 0
+    fi
+
+    local started_at
+    started_at=$(date +%s)
+    log_line "GROUP START ($title)"
+    if [[ $tty_output -eq 1 ]]; then
+        print_group_status_inline "$title" "RUNNING" "${progress}" "0s"
+    fi
+
+    local status
+    if [[ $tty_output -eq 1 ]]; then
+        set +e
+        "$func" &
+        local func_pid=$!
+        local elapsed=0
+        while kill -0 "$func_pid" >/dev/null 2>&1; do
+            sleep 1
+            elapsed=$((elapsed + 1))
+            print_group_status_inline "$title" "RUNNING" "${progress}" "${elapsed}s"
+        done
+        wait "$func_pid"
+        status=$?
+        set -e
+    else
+        set +e
+        "$func"
+        status=$?
+        set -e
+    fi
+
+    elapsed=$(( $(date +%s) - started_at ))
+    if [[ $status -eq 0 ]]; then
+        print_group_status_final "$title" "DONE" "${progress}" "${elapsed}s"
+        log_line "GROUP DONE ($title) (${elapsed}s)"
+    else
+        print_group_status_final "$title" "FAILED" "${progress}" "${elapsed}s"
+        log_line "GROUP FAILED ($title) (${elapsed}s)"
+        printf "See detailed log: %s\n" "$RUN_LOG"
+        exit $status
+    fi
+}
+
+run_keycloak_e2e_flow() {
+    local previous_orchestrated="${DECLAREST_GROUP_ORCHESTRATOR:-}"
+    export DECLAREST_GROUP_ORCHESTRATOR="1"
+
+    source "$managed_dir/run-e2e.sh"
+
+    echo "Starting Keycloak E2E run"
+    printf "Detailed log: %s\n" "$RUN_LOG"
+    log_line "Keycloak E2E run started"
+    log_line "Container runtime: $CONTAINER_RUNTIME"
+    log_line "E2E profile: $e2e_profile"
+
+    ensure_github_pat_ssh_credentials
+
+    print_group_status_header
+
+    run_group "Preparing workspace" run_preparing_workspace
+    run_group "Preparing services" run_preparing_services
+    run_group "Configuring services" run_configuring_services
+    run_group "Configuring context" run_configuring_context
+    run_group "Testing context operations" run_testing_context_operations context
+    run_group "Testing metadata operations" run_testing_metadata_operations metadata
+    run_group "Testing OpenAPI operations" run_testing_openapi_operations openapi
+    run_group "Testing DeclaREST main flows" run_testing_declarest_main_flows declarest
+    run_group "Testing variation flows" run_testing_variation_flows variation
+    run_group "Finishing execution" run_finishing_execution
+
+    log_line "E2E test completed successfully"
+    printf "E2E test completed successfully. Log: %s\n" "$RUN_LOG"
+
+    if [[ -z "$previous_orchestrated" ]]; then
+        unset DECLAREST_GROUP_ORCHESTRATOR
+    else
+        export DECLAREST_GROUP_ORCHESTRATOR="$previous_orchestrated"
+    fi
+}
+
 printf "Running mode=%s, managed-server=%s, repo-provider=%s, secret-provider=%s\n" "$mode" "$managed_server" "$repo_provider" "$secret_provider"
 
-exec "$runner" \
-    --managed-server "$managed_server" \
-    --repo-provider "$repo_provider" \
-    --secret-provider "$secret_provider" \
-    "${extra_args[@]}"
+if [[ "$mode" == "interactive" ]]; then
+    exec "$runner" \
+        --managed-server "$managed_server" \
+        --repo-provider "$repo_provider" \
+        --secret-provider "$secret_provider" \
+        "${extra_args[@]}"
+fi
+
+if [[ "$mode" == "e2e" && "$managed_server" == "keycloak" ]]; then
+    run_keycloak_e2e_flow
+else
+    exec "$runner"
+fi

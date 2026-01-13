@@ -102,13 +102,47 @@ run_logged "sign client cert" openssl x509 -req -in "$tmpdir/client.csr" -CA "$t
     -CAkey "$tmpdir/ca.key" -CAcreateserial -out "$tmpdir/client.pem" -days 365 \
     -extensions v3_req -extfile "$tmpdir/client.cnf"
 
+cat <<'PY' > "$tmpdir/tls_server.py"
+import http.server
+import ssl
+import socketserver
+import sys
+
+port = int(sys.argv[1])
+certfile = sys.argv[2]
+keyfile = sys.argv[3]
+cafile = sys.argv[4]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        return
+
+    def _send_response(self):
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_HEAD(self):
+        self._send_response()
+
+    def do_GET(self):
+        self._send_response()
+
+with socketserver.TCPServer(("127.0.0.1", port), Handler) as httpd:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    context.load_verify_locations(cafile=cafile)
+    context.verify_mode = ssl.CERT_REQUIRED
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    httpd.serve_forever()
+PY
+
 log_line "Starting TLS server with client authentication on port $port"
-openssl s_server -accept "127.0.0.1:$port" -cert "$tmpdir/server.pem" -key "$tmpdir/server.key" \
-    -WWW -Verify 1 -CAfile "$tmpdir/ca.pem" > "$tmpdir/openssl.log" 2>&1 &
+python3 "$tmpdir/tls_server.py" "$port" "$tmpdir/server.pem" "$tmpdir/server.key" "$tmpdir/ca.pem" > "$tmpdir/server.log" 2>&1 &
 server_pid=$!
 sleep 1
 if ! kill -0 "$server_pid" >/dev/null 2>&1; then
-    cat "$tmpdir/openssl.log"
+    cat "$tmpdir/server.log"
     die "TLS server failed to start"
 fi
 

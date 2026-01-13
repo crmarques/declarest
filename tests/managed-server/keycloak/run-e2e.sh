@@ -2,41 +2,46 @@
 
 set -euo pipefail
 
+script_invoked_directly=0
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    script_invoked_directly=1
+fi
+
 KEYCLOAK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$KEYCLOAK_DIR/scripts"
-
-usage() {
-    cat <<EOF
-Usage: ./tests/managed-server/keycloak/run-e2e.sh [--managed-server NAME] [--repo-provider NAME] [--secret-provider NAME]
-
-Options:
-  --managed-server NAME   Managed server to target (default: keycloak)
-                            Available: keycloak
-  --repo-provider NAME    Repository provider (default: git)
-                            Available: file, git, gitlab, gitea and github
-  --secret-provider NAME  Secret store provider (defaults: file)
-                            Available: none, file and vault
-  -h, --help              Show this help message.
-EOF
-}
 
 # shellcheck source=scripts/lib/args.sh
 source "$SCRIPTS_DIR/lib/args.sh"
 # shellcheck source=scripts/lib/github-auth.sh
 source "$SCRIPTS_DIR/lib/github-auth.sh"
 
-managed_server="keycloak"
-repo_provider="git"
-secret_provider="file"
+# Defaults provided by `tests/run-tests.sh`.
+managed_server="${DECLAREST_MANAGED_SERVER:-keycloak}"
+repo_provider="${DECLAREST_REPO_PROVIDER:-git}"
+secret_provider="${DECLAREST_SECRET_PROVIDER:-file}"
 
-parse_common_flags "$@"
+e2e_profile="${DECLAREST_E2E_PROFILE:-complete}"
+skip_testing_context="${DECLAREST_SKIP_TESTING_CONTEXT:-0}"
+skip_testing_metadata="${DECLAREST_SKIP_TESTING_METADATA:-0}"
+skip_testing_openapi="${DECLAREST_SKIP_TESTING_OPENAPI:-0}"
+skip_testing_declarest="${DECLAREST_SKIP_TESTING_DECLAREST:-0}"
+skip_testing_variation="${DECLAREST_SKIP_TESTING_VARIATION:-0}"
+parse_common_flags
 resolve_repo_provider
 apply_repo_provider_env
+
+should_run_context=$((skip_testing_context == 0 ? 1 : 0))
+should_run_metadata=$((skip_testing_metadata == 0 ? 1 : 0))
+should_run_openapi=$((skip_testing_openapi == 0 ? 1 : 0))
+should_run_declarest=$((skip_testing_declarest == 0 ? 1 : 0))
+should_run_variation=$((skip_testing_variation == 0 && should_run_declarest == 1 ? 1 : 0))
 
 # shellcheck source=scripts/lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
 # shellcheck source=scripts/lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
+# shellcheck source=scripts/lib/cli.sh
+source "$SCRIPTS_DIR/lib/cli.sh"
 
 REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/common"
 PROVIDER_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider"
@@ -73,6 +78,9 @@ is_tty() {
 }
 
 print_step_start() {
+    if [[ "${DECLAREST_GROUP_ORCHESTRATOR:-0}" == "1" ]]; then
+        return 0
+    fi
     local label="$1"
     local title="$2"
 
@@ -84,15 +92,18 @@ print_step_start() {
 }
 
 print_step_result() {
+    if [[ "${DECLAREST_GROUP_ORCHESTRATOR:-0}" == "1" ]]; then
+        return 0
+    fi
     local state="$1"
     local label="$2"
-    local title="$3"
+    local display_title="$3"
     local duration="$4"
 
     if is_tty; then
         printf "\r\033[K"
     fi
-    printf "[%s] %s | %s" "$state" "$label" "$title"
+    printf "[%s] %s | %s" "$state" "$label" "$display_title"
     if [[ -n "$duration" ]]; then
         printf " %ss" "$duration"
     fi
@@ -109,8 +120,12 @@ cleanup() {
         log_line "KEEP_KEYCLOAK=1; skipping Keycloak shutdown"
     fi
 
-    log_line "Cleaning up work directory"
-    "$SCRIPTS_DIR/workspace/cleanup.sh" >>"$RUN_LOG" 2>&1 || true
+    if [[ "${KEEP_WORKSPACE:-0}" == "1" ]]; then
+        log_line "KEEP_WORKSPACE=1; skipping workspace cleanup"
+    else
+        log_line "Cleaning up work directory"
+        "$SCRIPTS_DIR/workspace/cleanup.sh" >>"$RUN_LOG" 2>&1 || true
+    fi
 
     if [[ $status -ne 0 ]]; then
         printf "\nRun failed (exit %s). See log: %s\n" "$status" "$RUN_LOG"
@@ -317,13 +332,6 @@ set_context() {
     fi
 }
 
-TOTAL_STEPS=4
-if [[ "$secret_provider" == "none" ]]; then
-    TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
-if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
-    TOTAL_STEPS=$((TOTAL_STEPS + 1))
-fi
 
 server_auth_primary="oauth2"
 server_auth_secondary=(bearer)
@@ -353,38 +361,107 @@ if [[ "$repo_type" == "git-remote" ]]; then
     fi
 fi
 
-heavy_steps=4
-heavy_steps=$((heavy_steps + 1))
-if [[ "$repo_type" == "git-remote" ]]; then
-    heavy_steps=$((heavy_steps + 1))
-fi
-if [[ "$repo_type" == "git-local" ]]; then
-    heavy_steps=$((heavy_steps + 1))
-fi
-TOTAL_STEPS=$((TOTAL_STEPS + heavy_steps))
-TOTAL_STEPS=$((TOTAL_STEPS + ${#server_auth_secondary[@]}))
-TOTAL_STEPS=$((TOTAL_STEPS + ${#secret_auth_secondary[@]}))
-TOTAL_STEPS=$((TOTAL_STEPS + ${#repo_auth_secondary[@]}))
-TOTAL_STEPS=$((TOTAL_STEPS + 3))
-TOTAL_STEPS=$((TOTAL_STEPS + 1)) # env context overrides step
+calculate_variant_count() {
+    local array_name="$1"
+    local length=0
+    eval "length=\${#${array_name}[@]}"
+    if [[ "$length" -eq 0 ]]; then
+        printf "0"
+        return
+    fi
+    if [[ "$e2e_profile" == "complete" ]]; then
+        printf "%s" "$length"
+    else
+        printf "1"
+    fi
+}
 
+calculate_total_steps() {
+    local total=0
+
+    # Preparing workspace
+    total=$((total + 1))
+    if [[ "$secret_provider" == "none" ]]; then
+        total=$((total + 1))
+    fi
+    total=$((total + 1))
+
+    # Preparing services
+    total=$((total + 2))
+
+    # Configuring services
+    total=$((total + 2))
+    if [[ "$repo_type" == "git-remote" ]]; then
+        total=$((total + 1))
+    fi
+
+    # Configuring context
+    total=$((total + 3))
+
+    # Testing context operations
+    total=$((total + 1))
+
+    # Testing metadata operations
+    total=$((total + 6))
+
+    # Testing OpenAPI operations
+    total=$((total + 1))
+
+    # Testing DeclaREST main flows
+    if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
+        total=$((total + 1))
+    fi
+    total=$((total + 1))
+    total=$((total + 1))
+
+    # Testing variation flows
+    total=$((total + server_variation_count + secret_variation_count + repo_variation_count + 1))
+
+    TOTAL_STEPS="$total"
+}
+
+server_variation_count=$(calculate_variant_count server_auth_secondary)
+secret_variation_count=$(calculate_variant_count secret_auth_secondary)
+repo_variation_count=$(calculate_variant_count repo_auth_secondary)
+
+calculate_total_steps
 STEP_NUM_WIDTH=${#TOTAL_STEPS}
+current_group=""
 
 format_step_label() {
     local step="$1"
     printf "%*d/%s" "$STEP_NUM_WIDTH" "$step" "$TOTAL_STEPS"
 }
 
+format_group_title() {
+    local title="$1"
+    if [[ -n "$current_group" ]]; then
+        printf "%s | %s" "$current_group" "$title"
+    else
+        printf "%s" "$title"
+    fi
+}
+
 run_step() {
     local title="$1"
-    shift
+    local execute="$2"
+    shift 2
     local cmd=("$@")
 
     current_step=$((current_step + 1))
     local label
-    label="$(format_step_label "$current_step")"
-    log_line "STEP START (${label}) ${title}"
-    print_step_start "$label" "$title"
+    label=$(format_step_label "$current_step")
+    local display_title
+    display_title=$(format_group_title "$title")
+
+    if [[ "$execute" -eq 0 ]]; then
+        print_step_result "SKIPPED" "$label" "$display_title" ""
+        log_line "STEP SKIPPED (${label}) ${display_title}"
+        return 0
+    fi
+
+    log_line "STEP START (${label}) ${display_title}"
+    print_step_start "$label" "$display_title"
     local started_at
     started_at=$(date +%s)
 
@@ -398,129 +475,270 @@ run_step() {
 
     local elapsed=$(( $(date +%s) - started_at ))
     if [[ $status -eq 0 ]]; then
-        print_step_result "DONE" "$label" "$title" "$elapsed"
-        log_line "STEP DONE (${label}) ${title} (${elapsed}s)"
+        print_step_result "DONE" "$label" "$display_title" "$elapsed"
+        log_line "STEP DONE (${label}) ${display_title} (${elapsed}s)"
         return 0
     fi
 
-    print_step_result "FAIL" "$label" "$title" "$elapsed"
-    log_line "STEP FAILED (${label}) ${title} (exit ${status}, ${elapsed}s)"
+    print_step_result "FAIL" "$label" "$display_title" "$elapsed"
+    log_line "STEP FAILED (${label}) ${display_title} (exit ${status}, ${elapsed}s)"
+    if [[ "${DECLAREST_GROUP_ORCHESTRATOR:-0}" == "1" ]]; then
+        return $status
+    fi
     printf "See detailed log: %s\n" "$RUN_LOG"
     exit $status
 }
 
-current_step=0
-
-ensure_github_pat_ssh_credentials
-
-echo "Starting Keycloak E2E run"
-echo "Detailed log: $RUN_LOG"
-log_line "Keycloak E2E run started"
-log_line "Container runtime: $CONTAINER_RUNTIME"
-
-run_step "Preparing workspace" "$SCRIPTS_DIR/workspace/prepare.sh"
-if [[ "$secret_provider" == "none" ]]; then
-    template_dest="$DECLAREST_WORK_DIR/templates/repo-no-secrets"
-    run_step "Preparing template (no secrets)" "$REPO_SCRIPTS_DIR/strip-secrets.sh" "$DECLAREST_TEST_DIR/templates/repo" "$template_dest"
-    export DECLAREST_TEMPLATE_REPO_DIR="$template_dest"
-fi
-run_step "Building declarest CLI" "$SCRIPTS_DIR/declarest/build.sh"
-run_step "Starting stack" "$SCRIPTS_DIR/stack/start-compose.sh"
-
-provider_label=""
-provider_env=""
-provider_setup=""
-if [[ "$repo_type" == "git-remote" ]]; then
-    case "$repo_provider" in
-        gitlab)
-            provider_label="GitLab"
-            provider_env="$DECLAREST_WORK_DIR/gitlab.env"
-            provider_setup="$PROVIDER_SCRIPTS_DIR/gitlab/setup.sh"
-            ;;
-        gitea)
-            provider_label="Gitea"
-            provider_env="$DECLAREST_WORK_DIR/gitea.env"
-            provider_setup="$PROVIDER_SCRIPTS_DIR/gitea/setup.sh"
-            ;;
-        github)
-            provider_label="GitHub"
-            ;;
-    esac
-fi
-
-run_step "Preparing services" "$SCRIPTS_DIR/stack/prepare-services-e2e.sh" "$provider_setup"
-
-if [[ -n "$provider_setup" ]]; then
-    if [[ ! -f "$provider_env" ]]; then
-        die "${provider_label} env file missing: $provider_env"
+run_preparing_workspace() {
+    current_group="Preparing workspace"
+    run_step "Preparing workspace" 1 "$SCRIPTS_DIR/workspace/prepare.sh"
+    if [[ "$secret_provider" == "none" ]]; then
+        template_dest="$DECLAREST_WORK_DIR/templates/repo-no-secrets"
+        run_step "Preparing template (no secrets)" 1 "$REPO_SCRIPTS_DIR/strip-secrets.sh" "$DECLAREST_TEST_DIR/templates/repo" "$template_dest"
+        export DECLAREST_TEMPLATE_REPO_DIR="$template_dest"
     fi
-    # shellcheck source=/dev/null
-    source "$provider_env"
-fi
+    run_step "Building declarest CLI" 1 "$SCRIPTS_DIR/declarest/build.sh"
+    current_group=""
+}
 
-configure_server_auth "$server_auth_primary"
-configure_secret_auth "$secret_auth_primary"
-if [[ "$repo_type" == "git-remote" ]]; then
-    configure_repo_auth "$repo_auth_primary"
-fi
-set_context "primary"
+run_preparing_services() {
+    current_group="Preparing services"
+    run_step "Starting stack" 1 "$SCRIPTS_DIR/stack/start-compose.sh"
 
-run_step "Preparing repo (primary)" "$REPO_SCRIPTS_DIR/prepare.sh"
-run_step "Configuring declarest context (primary)" "$SCRIPTS_DIR/context/render.sh"
-run_step "Registering declarest context (primary)" "$SCRIPTS_DIR/context/register.sh"
-run_step "Validating OpenAPI defaults (primary)" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
-run_step "Validating metadata inference (primary)" "$SCRIPTS_DIR/declarest/metadata-infer-smoke.sh"
-run_step "Validating metadata edit (primary)" "$SCRIPTS_DIR/declarest/metadata-edit-smoke.sh"
-run_step "Validating metadata inheritance (primary)" "$SCRIPTS_DIR/declarest/metadata-inheritance-smoke.sh"
-if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
-    run_step "Sanitizing repository (primary)" "$REPO_SCRIPTS_DIR/strip-secrets.sh" "$DECLAREST_REPO_DIR"
-fi
-run_step "Running declarest workflow (primary)" "$SCRIPTS_DIR/declarest/run.sh"
-if [[ "$repo_type" == "git-remote" ]]; then
-    run_step "Verifying remote repo (primary)" "$REPO_SCRIPTS_DIR/verify.sh"
-elif [[ "$repo_type" == "git-local" ]]; then
-    run_step "Printing git log (primary)" "$REPO_SCRIPTS_DIR/print-log.sh"
-fi
-
-for server_auth in "${server_auth_secondary[@]}"; do
-    configure_server_auth "$server_auth"
-    configure_secret_auth "$secret_auth_primary"
+    local provider_label=""
+    local provider_env=""
+    local provider_setup=""
     if [[ "$repo_type" == "git-remote" ]]; then
-        configure_repo_auth "$repo_auth_primary"
+        case "$repo_provider" in
+            gitlab)
+                provider_label="GitLab"
+                provider_env="$DECLAREST_WORK_DIR/gitlab.env"
+                provider_setup="$PROVIDER_SCRIPTS_DIR/gitlab/setup.sh"
+                ;;
+            gitea)
+                provider_label="Gitea"
+                provider_env="$DECLAREST_WORK_DIR/gitea.env"
+                provider_setup="$PROVIDER_SCRIPTS_DIR/gitea/setup.sh"
+                ;;
+            github)
+                provider_label="GitHub"
+                ;;
+        esac
     fi
-    set_context "server-${server_auth}"
-    run_step "Validating server auth (${server_auth})" "$SCRIPTS_DIR/declarest/server-auth-smoke.sh"
-done
 
-if [[ "$secret_provider" == "vault" ]]; then
-    for vault_auth in "${secret_auth_secondary[@]}"; do
+    run_step "Preparing services" 1 "$SCRIPTS_DIR/stack/prepare-services-e2e.sh" "$provider_setup"
+
+    if [[ -n "$provider_setup" ]]; then
+        if [[ ! -f "$provider_env" ]]; then
+            die "${provider_label} env file missing: $provider_env"
+        fi
+        # shellcheck source=/dev/null
+        source "$provider_env"
+    fi
+    current_group=""
+}
+
+run_configuring_services() {
+    current_group="Configuring services"
+    run_step "Configuring server auth (primary)" 1 configure_server_auth "$server_auth_primary"
+    run_step "Configuring secret auth (primary)" 1 configure_secret_auth "$secret_auth_primary"
+    if [[ "$repo_type" == "git-remote" ]]; then
+        run_step "Configuring repo auth (primary)" 1 configure_repo_auth "$repo_auth_primary"
+    fi
+    current_group=""
+    set_context "primary"
+}
+
+run_configuring_context() {
+    current_group="Configuring context"
+    run_step "Preparing repo (primary)" 1 "$REPO_SCRIPTS_DIR/prepare.sh"
+    run_step "Configuring declarest context (primary)" 1 "$SCRIPTS_DIR/context/render.sh"
+    run_step "Registering declarest context (primary)" 1 "$SCRIPTS_DIR/context/register.sh"
+    current_group=""
+}
+
+run_testing_context_operations() {
+    current_group="Testing context operations"
+    set_context "primary"
+    run_step "Validating context overrides" "$should_run_context" "$SCRIPTS_DIR/declarest/env-context-smoke.sh"
+    current_group=""
+}
+
+run_testing_metadata_operations() {
+    current_group="Testing metadata operations"
+    set_context "primary"
+    run_step "Validating metadata inference (primary)" "$should_run_metadata" "$SCRIPTS_DIR/declarest/metadata-infer-smoke.sh"
+    run_step "Validating metadata edit (primary)" "$should_run_metadata" "$SCRIPTS_DIR/declarest/metadata-edit-smoke.sh"
+    run_step "Validating metadata inheritance (primary)" "$should_run_metadata" "$SCRIPTS_DIR/declarest/metadata-inheritance-smoke.sh"
+
+    if [[ "$should_run_metadata" -eq 1 ]]; then
+        set_context "metadata-base-dir"
+        export DECLAREST_METADATA_DIR="$DECLAREST_WORK_DIR/metadata-base-dir"
+    fi
+    run_step "Configuring declarest context (metadata base dir)" "$should_run_metadata" "$SCRIPTS_DIR/context/render.sh"
+    run_step "Registering declarest context (metadata base dir)" "$should_run_metadata" "$SCRIPTS_DIR/context/register.sh"
+    run_step "Validating metadata base dir override" "$should_run_metadata" "$SCRIPTS_DIR/declarest/metadata-base-dir-smoke.sh"
+    if [[ "$should_run_metadata" -eq 1 ]]; then
+        unset DECLAREST_METADATA_DIR
+    fi
+    set_context "primary"
+    if [[ "$should_run_metadata" -eq 1 ]]; then
+        run_cli "restoring context (primary)" config set-current-context --name "keycloak-e2e"
+    fi
+    current_group=""
+}
+
+run_testing_openapi_operations() {
+    current_group="Testing OpenAPI operations"
+    set_context "primary"
+    run_step "Validating OpenAPI defaults (primary)" "$should_run_openapi" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
+    current_group=""
+}
+
+run_testing_declarest_main_flows() {
+    current_group="Testing DeclaREST main flows"
+    set_context "primary"
+    if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
+        run_step "Sanitizing repository (primary)" "$should_run_declarest" "$REPO_SCRIPTS_DIR/strip-secrets.sh" "$DECLAREST_REPO_DIR"
+    fi
+    run_step "Running declarest workflow (primary)" "$should_run_declarest" "$SCRIPTS_DIR/declarest/run.sh"
+    if [[ "$repo_type" == "git-remote" ]]; then
+        run_step "Verifying remote repo (primary)" "$should_run_declarest" "$REPO_SCRIPTS_DIR/verify.sh"
+    elif [[ "$repo_type" == "git-local" ]]; then
+        run_step "Printing git log (primary)" "$should_run_declarest" "$REPO_SCRIPTS_DIR/print-log.sh"
+    fi
+    current_group=""
+}
+
+run_testing_variation_flows() {
+    current_group="Testing variation flows"
+    set_context "primary"
+    if [[ "$should_run_variation" -eq 1 ]]; then
         configure_server_auth "$server_auth_primary"
-        configure_secret_auth "$vault_auth"
+        configure_secret_auth "$secret_auth_primary"
         if [[ "$repo_type" == "git-remote" ]]; then
             configure_repo_auth "$repo_auth_primary"
         fi
-        set_context "vault-${vault_auth}"
-        run_step "Validating vault auth (${vault_auth})" "$SCRIPTS_DIR/declarest/secret-auth-smoke.sh"
+    fi
+
+    local server_variants=()
+    if [[ ${#server_auth_secondary[@]} -gt 0 ]]; then
+        if [[ "$e2e_profile" == "complete" ]]; then
+            server_variants=("${server_auth_secondary[@]}")
+        else
+            server_variants=("${server_auth_secondary[0]}")
+        fi
+    fi
+    for server_auth in "${server_variants[@]}"; do
+        if [[ "$should_run_variation" -eq 1 ]]; then
+            configure_server_auth "$server_auth"
+            configure_secret_auth "$secret_auth_primary"
+            if [[ "$repo_type" == "git-remote" ]]; then
+                configure_repo_auth "$repo_auth_primary"
+            fi
+            set_context "server-${server_auth}"
+        fi
+        run_step "Validating server auth (${server_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/server-auth-smoke.sh"
     done
+
+    if [[ "$should_run_variation" -eq 1 ]]; then
+        configure_server_auth "$server_auth_primary"
+        configure_secret_auth "$secret_auth_primary"
+        if [[ "$repo_type" == "git-remote" ]]; then
+            configure_repo_auth "$repo_auth_primary"
+        fi
+        set_context "primary"
+    fi
+
+    if [[ "$secret_provider" == "vault" && ${#secret_auth_secondary[@]} -gt 0 ]]; then
+        local secret_variants=()
+        if [[ "$e2e_profile" == "complete" ]]; then
+            secret_variants=("${secret_auth_secondary[@]}")
+        else
+            secret_variants=("${secret_auth_secondary[0]}")
+        fi
+        for vault_auth in "${secret_variants[@]}"; do
+            if [[ "$should_run_variation" -eq 1 ]]; then
+                configure_server_auth "$server_auth_primary"
+                configure_secret_auth "$vault_auth"
+                if [[ "$repo_type" == "git-remote" ]]; then
+                    configure_repo_auth "$repo_auth_primary"
+                fi
+                set_context "vault-${vault_auth}"
+            fi
+            run_step "Validating vault auth (${vault_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/secret-auth-smoke.sh"
+        done
+        if [[ "$should_run_variation" -eq 1 ]]; then
+            configure_secret_auth "$secret_auth_primary"
+            configure_server_auth "$server_auth_primary"
+            if [[ "$repo_type" == "git-remote" ]]; then
+                configure_repo_auth "$repo_auth_primary"
+            fi
+            set_context "primary"
+        fi
+    fi
+
+    if [[ "$repo_type" == "git-remote" && ${#repo_auth_secondary[@]} -gt 0 ]]; then
+        local repo_variants=()
+        if [[ "$e2e_profile" == "complete" ]]; then
+            repo_variants=("${repo_auth_secondary[@]}")
+        else
+            repo_variants=("${repo_auth_secondary[0]}")
+        fi
+        for repo_auth in "${repo_variants[@]}"; do
+            if [[ "$should_run_variation" -eq 1 ]]; then
+                configure_repo_auth "$repo_auth"
+            fi
+            run_step "Validating repo auth (${repo_auth})" "$should_run_variation" "$REPO_SCRIPTS_DIR/auth-smoke.sh"
+        done
+        if [[ "$should_run_variation" -eq 1 ]]; then
+            configure_repo_auth "$repo_auth_primary"
+        fi
+    fi
+
+    set_context "primary"
+    run_step "Validating managed server TLS" "$should_run_variation" "$SCRIPTS_DIR/declarest/managed-server-tls-smoke.sh"
+    set_context ""
+    current_group=""
+}
+
+run_finishing_execution() {
+    current_group="Finishing execution"
+    run_step "Finalizing execution" 1 true
+    current_group=""
+}
+
+current_step=0
+
+run_keycloak_full_flow() {
+    ensure_github_pat_ssh_credentials
+
+    if [[ "$script_invoked_directly" -eq 1 ]]; then
+        echo "Starting Keycloak E2E run"
+        echo "Detailed log: $RUN_LOG"
+        log_line "Keycloak E2E run started"
+        log_line "Container runtime: $CONTAINER_RUNTIME"
+        log_line "E2E profile: $e2e_profile"
+    fi
+
+    run_preparing_workspace
+    run_preparing_services
+    run_configuring_services
+    run_configuring_context
+
+    run_testing_context_operations
+    run_testing_metadata_operations
+    run_testing_openapi_operations
+    run_testing_declarest_main_flows
+    run_testing_variation_flows
+
+    if [[ "$script_invoked_directly" -eq 1 ]]; then
+        print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
+        log_line "E2E test completed successfully"
+        echo "E2E test completed successfully. Log: $RUN_LOG"
+    fi
+}
+
+if [[ "$script_invoked_directly" -eq 1 ]]; then
+    run_keycloak_full_flow
 fi
-
-if [[ "$repo_type" == "git-remote" ]]; then
-    for repo_auth in "${repo_auth_secondary[@]}"; do
-        configure_repo_auth "$repo_auth"
-        run_step "Validating repo auth (${repo_auth})" "$REPO_SCRIPTS_DIR/auth-smoke.sh"
-    done
-fi
-
-set_context "metadata-base-dir"
-export DECLAREST_METADATA_DIR="$DECLAREST_WORK_DIR/metadata-base-dir"
-run_step "Configuring declarest context (metadata base dir)" "$SCRIPTS_DIR/context/render.sh"
-run_step "Registering declarest context (metadata base dir)" "$SCRIPTS_DIR/context/register.sh"
-run_step "Validating metadata base dir override" "$SCRIPTS_DIR/declarest/metadata-base-dir-smoke.sh"
-unset DECLAREST_METADATA_DIR
-set_context ""
-run_step "Validating managed server TLS" "$SCRIPTS_DIR/declarest/managed-server-tls-smoke.sh"
-run_step "Validating context overrides" "$SCRIPTS_DIR/declarest/env-context-smoke.sh"
-
-print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
-log_line "E2E test completed successfully"
-echo "E2E test completed successfully. Log: $RUN_LOG"
