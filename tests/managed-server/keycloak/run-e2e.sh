@@ -366,7 +366,7 @@ TOTAL_STEPS=$((TOTAL_STEPS + ${#server_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#secret_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#repo_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + 3))
-TOTAL_STEPS=$((TOTAL_STEPS + 1))
+TOTAL_STEPS=$((TOTAL_STEPS + 1)) # env context overrides step
 
 STEP_NUM_WIDTH=${#TOTAL_STEPS}
 
@@ -519,6 +519,7 @@ run_step "Validating metadata base dir override" "$SCRIPTS_DIR/declarest/metadat
 unset DECLAREST_METADATA_DIR
 set_context ""
 run_step "Validating managed server TLS" "$SCRIPTS_DIR/declarest/managed-server-tls-smoke.sh"
+run_step "Validating context overrides" "$SCRIPTS_DIR/declarest/env-context-smoke.sh"
 
 print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
 log_line "E2E test completed successfully"

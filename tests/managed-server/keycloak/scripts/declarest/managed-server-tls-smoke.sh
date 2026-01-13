@@ -136,9 +136,13 @@ fi
 
 run_cli "activate tls context" config use "$context_name"
 
+prev_cli_retry_pattern="${CLI_RETRY_PATTERN:-}"
+CLI_RETRY_PATTERN="${CLI_RETRY_PATTERN:-$DEFAULT_CLI_RETRY_PATTERN}|context deadline exceeded"
 if ! run_cli_retry_transient "validate tls connection" 5 2 config check; then
+    CLI_RETRY_PATTERN="$prev_cli_retry_pattern"
     die "TLS configuration check failed"
 fi
+CLI_RETRY_PATTERN="$prev_cli_retry_pattern"
 
 run_cli "restore default context" config use "$orig_context_name"
 context_restored=1

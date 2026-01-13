@@ -20,7 +20,7 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				return handledError{msg: "configuration check failed"}
 			}
 
-			context, err := manager.LoadDefaultContext()
+			context, err := ctx.LoadContextWithEnv(manager)
 			if err != nil {
 				reportCheck(cmd, "Load default context", err)
 				return handledError{msg: "configuration check failed"}

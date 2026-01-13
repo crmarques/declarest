@@ -159,7 +159,7 @@ func newRepoCheckCommand() *cobra.Command {
 		Short: "Verify repository connectivity and sync status",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager := &ctx.DefaultContextManager{}
-			context, err := manager.LoadDefaultContext()
+			context, err := ctx.LoadContextWithEnv(manager)
 			if err != nil {
 				reportCheck(cmd, "Load default context", err)
 				return handledError{msg: "repository check failed"}

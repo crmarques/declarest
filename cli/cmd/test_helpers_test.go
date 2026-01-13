@@ -29,6 +29,7 @@ func setTempHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ctx.HomeEnvVar, home)
 	return home
 }
 

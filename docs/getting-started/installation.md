@@ -46,7 +46,7 @@ declarest --help
 
 ## Configuration store location
 
-Contexts are stored in `~/.declarest/config` by default.
+Contexts are stored in `DECLAREST_HOME/.declarest/config` by default (`DECLAREST_HOME` falls back to `$HOME`).
 Use `declarest config` commands to manage them.
 
 ## Shell completion

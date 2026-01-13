@@ -42,7 +42,7 @@ func loadDefaultReconcilerSkippingRepoSync() (*reconciler.DefaultReconciler, fun
 
 func loadDefaultReconcilerForSecrets() (*reconciler.DefaultReconciler, func(), error) {
 	manager := &ctx.DefaultContextManager{}
-	context, err := manager.LoadDefaultContext()
+	context, err := ctx.LoadContextWithEnv(manager)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +77,7 @@ func loadDefaultReconcilerForSecrets() (*reconciler.DefaultReconciler, func(), e
 
 func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (*reconciler.DefaultReconciler, func(), error) {
 	manager := &ctx.DefaultContextManager{}
-	context, err := manager.LoadDefaultContext()
+	context, err := ctx.LoadContextWithEnv(manager)
 	if err != nil {
 		return nil, nil, err
 	}

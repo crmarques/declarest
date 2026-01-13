@@ -40,7 +40,7 @@ func TestConfigEnvCommandDefaults(t *testing.T) {
 	if !strings.Contains(output, dirInfo.Path) {
 		t.Fatalf("missing config dir path %q: %q", dirInfo.Path, output)
 	}
-	if !strings.Contains(output, "default (HOME/.declarest)") {
+	if !strings.Contains(output, "default (DECLAREST_HOME/.declarest)") {
 		t.Fatalf("unexpected source for config dir: %q", output)
 	}
 
@@ -50,7 +50,7 @@ func TestConfigEnvCommandDefaults(t *testing.T) {
 	if !strings.Contains(output, fileInfo.Path) {
 		t.Fatalf("missing config file path %q: %q", fileInfo.Path, output)
 	}
-	if !strings.Contains(output, "default (HOME/.declarest/config)") {
+	if !strings.Contains(output, "default (DECLAREST_HOME/.declarest/config)") {
 		t.Fatalf("unexpected source for config file: %q", output)
 	}
 
@@ -113,7 +113,7 @@ func TestConfigEnvCommandConfigFileOverride(t *testing.T) {
 	if !strings.Contains(output, "environment (DECLAREST_CONFIG_FILE)") {
 		t.Fatalf("expected environment source for config file: %q", output)
 	}
-	if !strings.Contains(output, "default (HOME/.declarest)") {
+	if !strings.Contains(output, "default (DECLAREST_HOME/.declarest)") {
 		t.Fatalf("expected default source for config dir: %q", output)
 	}
 }

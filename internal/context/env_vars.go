@@ -10,6 +10,7 @@ import (
 const (
 	ConfigDirEnvVar  = "DECLAREST_CONFIG_DIR"
 	ConfigFileEnvVar = "DECLAREST_CONFIG_FILE"
+	HomeEnvVar       = "DECLAREST_HOME"
 )
 
 type ConfigPathInfo struct {
@@ -23,7 +24,7 @@ func ConfigDirPathInfo() (ConfigPathInfo, error) {
 	if dir, ok := configDirEnvValue(); ok {
 		return ConfigPathInfo{Path: dir, FromEnv: true}, nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := homeDir()
 	if err != nil {
 		return ConfigPathInfo{}, fmt.Errorf("unable to determine home directory: %w", err)
 	}
@@ -57,6 +58,25 @@ func configDirEnvValue() (string, bool) {
 
 func configFileEnvValue() (string, bool) {
 	value, ok := os.LookupEnv(ConfigFileEnvVar)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func homeDir() (string, error) {
+	if dir, ok := homeEnvValue(); ok {
+		return dir, nil
+	}
+	return os.UserHomeDir()
+}
+
+func homeEnvValue() (string, bool) {
+	value, ok := os.LookupEnv(HomeEnvVar)
 	if !ok {
 		return "", false
 	}

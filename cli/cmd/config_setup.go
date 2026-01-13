@@ -385,16 +385,19 @@ func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerCo
 
 	if isHTTPSURL(baseURL) {
 		var tlsCfg *managedserver.HTTPResourceServerTLSConfig
+		ensureTLSConfig := func() *managedserver.HTTPResourceServerTLSConfig {
+			if tlsCfg == nil {
+				tlsCfg = &managedserver.HTTPResourceServerTLSConfig{}
+			}
+			return tlsCfg
+		}
 
 		insecureTLS, err := prompt.confirm("Skip TLS verification for managed server?", false)
 		if err != nil {
 			return nil, err
 		}
 		if insecureTLS {
-			if tlsCfg == nil {
-				tlsCfg = &managedserver.HTTPResourceServerTLSConfig{}
-			}
-			tlsCfg.InsecureSkipVerify = true
+			ensureTLSConfig().InsecureSkipVerify = true
 		}
 
 		caCert, err := prompt.optional("CA certificate file (leave blank to use system trust): ")
@@ -402,10 +405,7 @@ func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerCo
 			return nil, err
 		}
 		if trimmed := strings.TrimSpace(caCert); trimmed != "" {
-			if tlsCfg == nil {
-				tlsCfg = &managedserver.HTTPResourceServerTLSConfig{}
-			}
-			tlsCfg.CACertFile = trimmed
+			ensureTLSConfig().CACertFile = trimmed
 		}
 
 		clientCert, err := prompt.optional("Client certificate file (leave blank to skip mTLS): ")
@@ -417,11 +417,9 @@ func promptManagedServerConfig(prompt interactivePrompter) (*ctx.ManagedServerCo
 			if err != nil {
 				return nil, err
 			}
-			if tlsCfg == nil {
-				tlsCfg = &managedserver.HTTPResourceServerTLSConfig{}
-			}
-			tlsCfg.ClientCertFile = trimmed
-			tlsCfg.ClientKeyFile = strings.TrimSpace(clientKey)
+			cfg := ensureTLSConfig()
+			cfg.ClientCertFile = trimmed
+			cfg.ClientKeyFile = strings.TrimSpace(clientKey)
 		}
 
 		if tlsCfg != nil {

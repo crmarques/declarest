@@ -66,7 +66,7 @@ func configDirSource(info ctx.ConfigPathInfo) string {
 	if info.FromEnv {
 		return fmt.Sprintf("environment (%s)", ctx.ConfigDirEnvVar)
 	}
-	return "default (HOME/.declarest)"
+	return "default (DECLAREST_HOME/.declarest)"
 }
 
 func configFileSource(fileInfo, dirInfo ctx.ConfigPathInfo) string {
@@ -76,5 +76,5 @@ func configFileSource(fileInfo, dirInfo ctx.ConfigPathInfo) string {
 	if dirInfo.FromEnv {
 		return fmt.Sprintf("default (derived from %s)", ctx.ConfigDirEnvVar)
 	}
-	return "default (HOME/.declarest/config)"
+	return "default (DECLAREST_HOME/.declarest/config)"
 }
