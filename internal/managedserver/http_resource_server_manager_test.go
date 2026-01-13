@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -272,6 +274,78 @@ func TestHTTPResourceServerManagerBuildURLRespectsAbsolutePath(t *testing.T) {
 	}
 	if out != "https://rundeck.example/projects/foo" {
 		t.Fatalf("unexpected build url %q", out)
+	}
+}
+
+func TestHTTPResourceServerManagerLoadOpenAPISpecReadsFile(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://example.com",
+	})
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "spec.json")
+	content := `{"openapi":"3.0.0"}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write spec file: %v", err)
+	}
+
+	data, err := manager.LoadOpenAPISpec(path)
+	if err != nil {
+		t.Fatalf("LoadOpenAPISpec: %v", err)
+	}
+	if string(data) != content {
+		t.Fatalf("unexpected spec data %q", string(data))
+	}
+}
+
+func TestHTTPResourceServerManagerLoadOpenAPISpecFetchesURL(t *testing.T) {
+	content := `{"openapi":"3.0.0"}`
+	specURL := "http://example.com/openapi.json"
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://example.com",
+	})
+	manager.client = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("unexpected method %s", req.Method)
+			}
+			if req.URL.String() != specURL {
+				t.Fatalf("unexpected url %s", req.URL.String())
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(content)),
+			}, nil
+		}),
+	}
+
+	data, err := manager.LoadOpenAPISpec(specURL)
+	if err != nil {
+		t.Fatalf("LoadOpenAPISpec: %v", err)
+	}
+	if string(data) != content {
+		t.Fatalf("unexpected spec data %q", string(data))
+	}
+}
+
+func TestHTTPResourceServerManagerLoadOpenAPISpecFileErrorDoesNotCallHTTP(t *testing.T) {
+	manager := NewHTTPResourceServerManager(&HTTPResourceServerConfig{
+		BaseURL: "https://example.com",
+	})
+	manager.client = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			t.Fatalf("unexpected HTTP request %s %s", req.Method, req.URL.Path)
+			return nil, nil
+		}),
+	}
+
+	path := filepath.Join(t.TempDir(), "missing.json")
+	_, err := manager.LoadOpenAPISpec(path)
+	if err == nil {
+		t.Fatalf("expected error when spec file is missing")
+	}
+	if !strings.Contains(err.Error(), "failed to read openapi file") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

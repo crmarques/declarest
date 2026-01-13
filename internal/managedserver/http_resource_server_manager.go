@@ -698,27 +698,19 @@ func (m *HTTPResourceServerManager) LoadOpenAPISpec(source string) ([]byte, erro
 	}
 
 	if isHTTPURL(trimmed) {
-		if err := m.Init(); err != nil {
-			return nil, err
+		if m.client == nil {
+			if err := m.Init(); err != nil {
+				return nil, err
+			}
 		}
 		return m.fetchSpecURL(trimmed)
 	}
 
-	if data, err := os.ReadFile(trimmed); err == nil {
-		return data, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
+	data, err := os.ReadFile(trimmed)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read openapi file %q: %w", trimmed, err)
 	}
-
-	if err := m.Init(); err != nil {
-		return nil, err
-	}
-
-	fullURL, err := m.buildURL(trimmed, nil)
-	if err != nil {
-		return nil, err
-	}
-	return m.fetchSpecURL(fullURL)
+	return data, nil
 }
 
 func (m *HTTPResourceServerManager) fetchSpecURL(fullURL string) ([]byte, error) {
