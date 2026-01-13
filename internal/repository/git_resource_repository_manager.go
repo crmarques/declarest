@@ -851,6 +851,9 @@ func (m *GitResourceRepositoryManager) commitMetadataChange(path, filePath, acti
 	if err != nil {
 		return err
 	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || strings.HasPrefix(rel, "../") {
+		return nil
+	}
 	rel = filepath.ToSlash(rel)
 
 	wt, err := repo.Worktree()

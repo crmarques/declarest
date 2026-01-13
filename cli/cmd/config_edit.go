@@ -239,7 +239,10 @@ type httpCustomHeaderEditConfig struct {
 }
 
 type httpTLSEditConfig struct {
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
+	CACertFile         string `yaml:"ca_cert_file"`
+	ClientCertFile     string `yaml:"client_cert_file"`
+	ClientKeyFile      string `yaml:"client_key_file"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 }
 
 type secretStoreEditConfig struct {
@@ -402,6 +405,9 @@ func applyContextConfigToPayload(payload *configEditPayload, cfg *ctx.ContextCon
 			}
 		}
 		if httpCfg.TLS != nil {
+			payload.ManagedServer.HTTP.TLS.CACertFile = httpCfg.TLS.CACertFile
+			payload.ManagedServer.HTTP.TLS.ClientCertFile = httpCfg.TLS.ClientCertFile
+			payload.ManagedServer.HTTP.TLS.ClientKeyFile = httpCfg.TLS.ClientKeyFile
 			payload.ManagedServer.HTTP.TLS.InsecureSkipVerify = httpCfg.TLS.InsecureSkipVerify
 		}
 	}
@@ -985,6 +991,9 @@ var configEditComments = map[string]string{
 	"managed_server.http.auth.custom_header.header":           "Header name to send for the custom auth.",
 	"managed_server.http.auth.custom_header.token":            "Header value for the custom auth method.",
 	"managed_server.http.tls":                                 "TLS overrides for the HTTP server.",
+	"managed_server.http.tls.ca_cert_file":                    "CA certificate used to authenticate the managed server.",
+	"managed_server.http.tls.client_cert_file":                "Client certificate used for mutual TLS.",
+	"managed_server.http.tls.client_key_file":                 "Private key associated with the client certificate.",
 	"managed_server.http.tls.insecure_skip_verify":            "Skip TLS certificate verification for the managed server.",
 	"secret_store":                                            "Secret store settings for sensitive values.",
 	"secret_store.file":                                       "File-based secret store configuration.",

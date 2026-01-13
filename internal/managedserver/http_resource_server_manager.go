@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,8 +68,8 @@ func (m *HTTPResourceServerManager) Init() error {
 	m.baseURL = parsed
 
 	tlsCfg := &tls.Config{}
-	if m.config.TLS != nil && m.config.TLS.InsecureSkipVerify {
-		tlsCfg.InsecureSkipVerify = true
+	if err := m.configureTLSConfig(tlsCfg, m.config.TLS); err != nil {
+		return err
 	}
 
 	transport := &http.Transport{
@@ -77,6 +78,44 @@ func (m *HTTPResourceServerManager) Init() error {
 
 	m.client = &http.Client{
 		Transport: transport,
+	}
+
+	return nil
+}
+
+func (m *HTTPResourceServerManager) configureTLSConfig(tlsCfg *tls.Config, cfg *HTTPResourceServerTLSConfig) error {
+	if tlsCfg == nil || cfg == nil {
+		return nil
+	}
+	if cfg.InsecureSkipVerify {
+		tlsCfg.InsecureSkipVerify = true
+	}
+
+	if caPath := strings.TrimSpace(cfg.CACertFile); caPath != "" {
+		data, err := os.ReadFile(caPath)
+		if err != nil {
+			return fmt.Errorf("failed to read CA certificate file %q: %w", caPath, err)
+		}
+		pool := x509.NewCertPool()
+		if ok := pool.AppendCertsFromPEM(data); !ok {
+			return fmt.Errorf("failed to parse CA certificate file %q", caPath)
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	certPath := strings.TrimSpace(cfg.ClientCertFile)
+	keyPath := strings.TrimSpace(cfg.ClientKeyFile)
+	switch {
+	case certPath != "" && keyPath == "":
+		return errors.New("client_key_file must be set when client_cert_file is configured")
+	case certPath == "" && keyPath != "":
+		return errors.New("client_cert_file must be set when client_key_file is configured")
+	case certPath != "" && keyPath != "":
+		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			return fmt.Errorf("failed to load client certificate/key: %w", err)
+		}
+		tlsCfg.Certificates = append(tlsCfg.Certificates, cert)
 	}
 
 	return nil

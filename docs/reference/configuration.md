@@ -84,6 +84,9 @@ managed_server:
       bearer_token:
         token: YOUR_TOKEN
     tls:
+      ca_cert_file: /path/to/ca.pem
+      client_cert_file: /path/to/client.pem
+      client_key_file: /path/to/client-key.pem
       insecure_skip_verify: false
 ```
 
@@ -96,6 +99,9 @@ Auth options for `managed_server.http.auth`:
 
 When `managed_server.http.openapi` is set, DeclaREST loads the OpenAPI spec (URL or file)
 to pick smarter default HTTP methods and content types when metadata does not override them.
+
+`managed_server.http.tls.ca_cert_file` lets you verify the server with a custom CA trust bundle.
+Provide both `client_cert_file` and `client_key_file` to enable mutual TLS.
 
 ## Secret store configuration
 

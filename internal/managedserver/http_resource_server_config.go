@@ -41,5 +41,8 @@ type HTTPResourceServerCustomHeaderConfig struct {
 }
 
 type HTTPResourceServerTLSConfig struct {
-	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify" yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
+	CACertFile         string `mapstructure:"ca_cert_file" yaml:"ca_cert_file,omitempty" json:"ca_cert_file,omitempty"`
+	ClientCertFile     string `mapstructure:"client_cert_file" yaml:"client_cert_file,omitempty" json:"client_cert_file,omitempty"`
+	ClientKeyFile      string `mapstructure:"client_key_file" yaml:"client_key_file,omitempty" json:"client_key_file,omitempty"`
+	InsecureSkipVerify bool   `mapstructure:"insecure_skip_verify" yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
 }

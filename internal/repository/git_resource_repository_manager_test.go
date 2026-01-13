@@ -400,3 +400,34 @@ func TestGitRepositoryManagerSyncLocalFromRemoteProvidesHints(t *testing.T) {
 		t.Fatalf("expected recovery hints in error, got %q", msg)
 	}
 }
+
+func TestGitRepositoryManagerCommitMetadataOutsideRepo(t *testing.T) {
+	repoDir := t.TempDir()
+	repo, err := git.PlainInit(repoDir, false)
+	if err != nil {
+		t.Fatalf("init repo: %v", err)
+	}
+	initialHash := commitFile(t, repo, repoDir, "seed.txt", "seed")
+
+	manager := NewGitResourceRepositoryManager(repoDir)
+	metadataDir := t.TempDir()
+	manager.SetMetadataBaseDir(metadataDir)
+
+	metadataPath := "/admin/realms/metadata-base-dir-test/"
+	filePath, err := manager.fs.metadataFile(metadataPath)
+	if err != nil {
+		t.Fatalf("metadata file path: %v", err)
+	}
+
+	if err := manager.commitMetadataChange(metadataPath, filePath, "Update", false); err != nil {
+		t.Fatalf("commit metadata: %v", err)
+	}
+
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatalf("head after commit: %v", err)
+	}
+	if head.Hash() != initialHash {
+		t.Fatalf("expected head %s, got %s", initialHash, head.Hash())
+	}
+}
