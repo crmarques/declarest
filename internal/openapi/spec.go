@@ -31,7 +31,14 @@ type Operation struct {
 	ResponseContentTypes []string
 	RequestSchema        map[string]any
 	ResponseSchema       map[string]any
+	RequestSchemaRef     string
+	ResponseSchemaRef    string
 	HeaderParameters     map[string]string
+}
+
+type schemaInfo struct {
+	Schema map[string]any
+	Ref    string
 }
 
 func ParseSpec(data []byte) (*Spec, error) {
@@ -210,14 +217,18 @@ func parseOperations(item map[string]any, spec *Spec) map[string]*Operation {
 		reqTypes := requestContentTypes(op)
 		respTypes := responseContentTypes(op)
 		opHeaders := mergeHeaderParameters(pathHeaders, headerParametersFromList(op["parameters"], spec))
+		reqSchemaInfo := requestSchema(op, spec)
+		respSchemaInfo := responseSchema(op, spec)
 		operations[method] = &Operation{
 			Method:               method,
 			Summary:              stringField(op, "summary"),
 			Description:          stringField(op, "description"),
 			RequestContentTypes:  reqTypes,
 			ResponseContentTypes: respTypes,
-			RequestSchema:        requestSchema(op, spec),
-			ResponseSchema:       responseSchema(op, spec),
+			RequestSchema:        reqSchemaInfo.Schema,
+			ResponseSchema:       respSchemaInfo.Schema,
+			RequestSchemaRef:     reqSchemaInfo.Ref,
+			ResponseSchemaRef:    respSchemaInfo.Ref,
 			HeaderParameters:     opHeaders,
 		}
 	}
@@ -239,17 +250,17 @@ func stringField(value map[string]any, key string) string {
 	return strings.TrimSpace(str)
 }
 
-func requestSchema(op map[string]any, spec *Spec) map[string]any {
+func requestSchema(op map[string]any, spec *Spec) schemaInfo {
 	if spec == nil {
-		return nil
+		return schemaInfo{}
 	}
 	requestBody, ok := op["requestBody"].(map[string]any)
 	if !ok {
-		return nil
+		return schemaInfo{}
 	}
 	content, ok := requestBody["content"].(map[string]any)
 	if !ok {
-		return nil
+		return schemaInfo{}
 	}
 
 	for _, media := range []string{"application/json", "application/merge-patch+json", "application/json-patch+json"} {
@@ -258,8 +269,8 @@ func requestSchema(op map[string]any, spec *Spec) map[string]any {
 			if !ok {
 				continue
 			}
-			if schema, ok := spec.schemaFromContent(entryMap); ok {
-				return schema
+			if info, ok := spec.schemaInfoFromContent(entryMap); ok {
+				return info
 			}
 		}
 	}
@@ -269,40 +280,40 @@ func requestSchema(op map[string]any, spec *Spec) map[string]any {
 		if !ok {
 			continue
 		}
-		if schema, ok := spec.schemaFromContent(entryMap); ok {
-			return schema
+		if info, ok := spec.schemaInfoFromContent(entryMap); ok {
+			return info
 		}
 	}
 
-	return nil
+	return schemaInfo{}
 }
 
-func responseSchema(op map[string]any, spec *Spec) map[string]any {
+func responseSchema(op map[string]any, spec *Spec) schemaInfo {
 	if spec == nil {
-		return nil
+		return schemaInfo{}
 	}
 	responses, ok := op["responses"].(map[string]any)
 	if !ok {
-		return nil
+		return schemaInfo{}
 	}
-	if schema := responseSchemaForCodes(responses, spec, func(code string) bool {
+	if info := responseSchemaForCodes(responses, spec, func(code string) bool {
 		return strings.HasPrefix(code, "2")
-	}); schema != nil {
-		return schema
+	}); info.Schema != nil {
+		return info
 	}
-	if schema := responseSchemaForCodes(responses, spec, func(code string) bool {
+	if info := responseSchemaForCodes(responses, spec, func(code string) bool {
 		return code == "default"
-	}); schema != nil {
-		return schema
+	}); info.Schema != nil {
+		return info
 	}
 	return responseSchemaForCodes(responses, spec, func(code string) bool {
 		return true
 	})
 }
 
-func responseSchemaForCodes(responses map[string]any, spec *Spec, filter func(string) bool) map[string]any {
+func responseSchemaForCodes(responses map[string]any, spec *Spec, filter func(string) bool) schemaInfo {
 	if responses == nil {
-		return nil
+		return schemaInfo{}
 	}
 	codes := make([]string, 0, len(responses))
 	for code := range responses {
@@ -313,21 +324,21 @@ func responseSchemaForCodes(responses map[string]any, spec *Spec, filter func(st
 		if !filter(code) {
 			continue
 		}
-		if schema := schemaFromResponseEntry(responses[code], spec); schema != nil {
-			return schema
+		if info, ok := schemaFromResponseEntry(responses[code], spec); ok {
+			return info
 		}
 	}
-	return nil
+	return schemaInfo{}
 }
 
-func schemaFromResponseEntry(entry any, spec *Spec) map[string]any {
+func schemaFromResponseEntry(entry any, spec *Spec) (schemaInfo, bool) {
 	resp, ok := entry.(map[string]any)
 	if !ok {
-		return nil
+		return schemaInfo{}, false
 	}
 	content, ok := resp["content"].(map[string]any)
 	if !ok {
-		return nil
+		return schemaInfo{}, false
 	}
 	for _, media := range []string{"application/json", "application/merge-patch+json", "application/json-patch+json"} {
 		if item, ok := content[media]; ok {
@@ -335,8 +346,8 @@ func schemaFromResponseEntry(entry any, spec *Spec) map[string]any {
 			if !ok {
 				continue
 			}
-			if schema, ok := spec.schemaFromContent(itemMap); ok {
-				return schema
+			if info, ok := spec.schemaInfoFromContent(itemMap); ok {
+				return info, true
 			}
 		}
 	}
@@ -345,11 +356,11 @@ func schemaFromResponseEntry(entry any, spec *Spec) map[string]any {
 		if !ok {
 			continue
 		}
-		if schema, ok := spec.schemaFromContent(itemMap); ok {
-			return schema
+		if info, ok := spec.schemaInfoFromContent(itemMap); ok {
+			return info, true
 		}
 	}
-	return nil
+	return schemaInfo{}, false
 }
 
 func headerParametersFromList(value any, spec *Spec) map[string]string {
@@ -470,28 +481,50 @@ func valueToString(value any) (string, bool) {
 }
 
 func (s *Spec) schemaFromContent(entry map[string]any) (map[string]any, bool) {
+	if info, ok := s.schemaInfoFromContent(entry); ok {
+		return info.Schema, true
+	}
+	return nil, false
+}
+
+func (s *Spec) schemaInfoFromContent(entry map[string]any) (schemaInfo, bool) {
 	if entry == nil {
-		return nil, false
+		return schemaInfo{}, false
 	}
 	value, ok := entry["schema"]
 	if !ok {
-		return nil, false
+		return schemaInfo{}, false
 	}
-	return s.resolveSchema(value)
+	schema, ref, ok := s.resolveSchemaInfo(value)
+	if !ok {
+		return schemaInfo{}, false
+	}
+	return schemaInfo{Schema: schema, Ref: ref}, true
 }
 
 func (s *Spec) resolveSchema(value any) (map[string]any, bool) {
+	schema, _, ok := s.resolveSchemaInfo(value)
+	return schema, ok
+}
+
+func (s *Spec) resolveSchemaInfo(value any) (map[string]any, string, bool) {
 	if value == nil {
-		return nil, false
+		return nil, "", false
 	}
 	node, ok := value.(map[string]any)
 	if !ok {
-		return nil, false
+		return nil, "", false
 	}
 	if ref, ok := node["$ref"].(string); ok {
-		return s.schemaByRef(ref)
+		ref = strings.TrimSpace(ref)
+		if ref != "" {
+			if schema, ok := s.schemaByRef(ref); ok {
+				return schema, ref, true
+			}
+			return node, ref, true
+		}
 	}
-	return node, true
+	return node, "", true
 }
 
 func (s *Spec) schemaByRef(ref string) (map[string]any, bool) {
@@ -505,6 +538,11 @@ func (s *Spec) schemaByRef(ref string) (map[string]any, bool) {
 	}
 	schema, ok := s.components[name]
 	return schema, ok
+}
+
+// SchemaFromRef returns the schema definition referenced by the supplied OpenAPI $ref value.
+func (s *Spec) SchemaFromRef(ref string) (map[string]any, bool) {
+	return s.schemaByRef(ref)
 }
 
 func (s *Spec) resolveParameter(value any) (map[string]any, bool) {

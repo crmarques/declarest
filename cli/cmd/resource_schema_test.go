@@ -139,14 +139,16 @@ func TestDescribeOpenAPIShowsSummaryAndDescription(t *testing.T) {
 	output := buf.String()
 
 	for _, substring := range []string{
+		"Template: /items",
 		"summary: List items",
 		"description: Retrieve all items",
 		"summary: Create item",
 		"description: Create a single item",
-		"description: Item payload",
-		"Schema:",
-		"source: GET response",
-		"type=object",
+		"requests:",
+		"responses: application/json",
+		"response schema: type=array",
+		"request schema: type=object",
+		"Schema is not defined for this path.",
 	} {
 		if !strings.Contains(output, substring) {
 			t.Fatalf("expected %q in output:\n%s", substring, output)

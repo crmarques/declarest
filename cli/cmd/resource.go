@@ -496,23 +496,111 @@ func describeOpenAPI(out io.Writer, spec *openapi.Spec, record resource.Resource
 		return
 	}
 	fmt.Fprintf(out, "  Template: %s\n", item.Template)
+	refs := printOpenAPIMethods(out, item)
+	fmt.Fprintln(out, "\nSchema:")
+	printSchemaDetails(out, spec, refs)
+}
+
+func printOpenAPIMethods(out io.Writer, item *openapi.PathItem) []string {
+	var refs []string
 	for _, method := range []string{"get", "post", "put", "patch", "delete"} {
 		if op := item.Operation(method); op != nil {
 			fmt.Fprintf(out, "    %s:\n", strings.ToUpper(op.Method))
-			printLabeledField(out, "      ", "summary", op.Summary)
-			printLabeledField(out, "      ", "description", op.Description)
-			fmt.Fprintf(out, "      requests=%s responses=%s\n", strings.Join(op.RequestContentTypes, ","), strings.Join(op.ResponseContentTypes, ","))
-			if lines := schemaLines(op.RequestSchema); len(lines) > 0 {
-				fmt.Fprintln(out, "      schema:")
-				for _, line := range lines {
-					fmt.Fprintf(out, "        %s\n", line)
-				}
-			}
+			refs = append(refs, printOpenAPIMethodDetails(out, op)...)
 		}
 	}
+	return refs
+}
 
-	fmt.Fprintln(out, "\nSchema:")
-	printSchemaBlock(out, item)
+func printOpenAPIMethodDetails(out io.Writer, op *openapi.Operation) []string {
+	const indent = "      "
+	printLabeledField(out, indent, "summary", op.Summary)
+	printLabeledField(out, indent, "description", op.Description)
+	printContentLine(out, indent, "requests", op.RequestContentTypes)
+	printContentLine(out, indent, "responses", op.ResponseContentTypes)
+	var refs []string
+	if ref := printSchemaLine(out, indent, "request schema", op.RequestSchemaRef, op.RequestSchema); ref != "" {
+		refs = append(refs, ref)
+	}
+	if ref := printSchemaLine(out, indent, "response schema", op.ResponseSchemaRef, op.ResponseSchema); ref != "" {
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+func printContentLine(out io.Writer, indent, label string, values []string) {
+	if len(values) == 0 {
+		fmt.Fprintf(out, "%s%s:\n", indent, label)
+		return
+	}
+	fmt.Fprintf(out, "%s%s: %s\n", indent, label, strings.Join(values, ", "))
+}
+
+func printSchemaLine(out io.Writer, indent, label, ref string, schema map[string]any) string {
+	if ref != "" {
+		fmt.Fprintf(out, "%s%s: %s\n", indent, label, schemaNameFromRef(ref))
+		return ref
+	}
+	if schema != nil {
+		summary := schemaSummary(schema)
+		if summary == "" {
+			summary = "(inline schema)"
+		}
+		fmt.Fprintf(out, "%s%s: %s\n", indent, label, summary)
+	}
+	return ""
+}
+
+func schemaNameFromRef(ref string) string {
+	const prefix = "#/components/schemas/"
+	if strings.HasPrefix(ref, prefix) {
+		name := strings.TrimPrefix(ref, prefix)
+		if strings.TrimSpace(name) != "" {
+			return name
+		}
+	}
+	return strings.TrimSpace(ref)
+}
+
+func printSchemaDetails(out io.Writer, spec *openapi.Spec, refs []string) {
+	refs = uniqueRefs(refs)
+	if len(refs) == 0 {
+		fmt.Fprintln(out, "  Schema is not defined for this path.")
+		return
+	}
+	for _, ref := range refs {
+		name := schemaNameFromRef(ref)
+		if schema, ok := spec.SchemaFromRef(ref); ok && schema != nil {
+			fmt.Fprintf(out, "  %s:\n", name)
+			lines := schemaLines(schema)
+			if len(lines) == 0 {
+				fmt.Fprintln(out, "    Schema exists but no details are available.")
+				continue
+			}
+			for _, line := range lines {
+				fmt.Fprintf(out, "    %s\n", line)
+			}
+			continue
+		}
+		fmt.Fprintf(out, "  %s (schema definition unavailable)\n", name)
+	}
+}
+
+func uniqueRefs(refs []string) []string {
+	seen := make(map[string]struct{}, len(refs))
+	var result []string
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		result = append(result, ref)
+	}
+	return result
 }
 
 func printLabeledField(out io.Writer, indent, label, value string) {
@@ -643,62 +731,6 @@ func formatSchemaValue(value any) string {
 		return typed.String()
 	default:
 		return fmt.Sprintf("%v", typed)
-	}
-}
-
-func printSchemaBlock(out io.Writer, item *openapi.PathItem) {
-	if item == nil {
-		fmt.Fprintln(out, "  No OpenAPI schema available.")
-		return
-	}
-	type candidate struct {
-		label  string
-		schema map[string]any
-	}
-	var candidates []candidate
-	for _, method := range []struct {
-		name string
-	}{
-		{name: "get"},
-		{name: "post"},
-		{name: "put"},
-		{name: "patch"},
-	} {
-		if op := item.Operation(method.name); op != nil {
-			if schema := op.ResponseSchema; schema != nil {
-				candidates = append(candidates, candidate{
-					label:  fmt.Sprintf("%s response", strings.ToUpper(method.name)),
-					schema: schema,
-				})
-				continue
-			}
-			if schema := op.RequestSchema; schema != nil {
-				candidates = append(candidates, candidate{
-					label:  fmt.Sprintf("%s request", strings.ToUpper(method.name)),
-					schema: schema,
-				})
-			}
-		}
-	}
-	if len(candidates) == 0 {
-		fmt.Fprintln(out, "  Schema is not defined for this path.")
-		return
-	}
-	chosen := candidates[0]
-	for _, cand := range candidates {
-		if strings.HasPrefix(cand.label, "GET") {
-			chosen = cand
-			break
-		}
-	}
-	fmt.Fprintf(out, "  source: %s\n", chosen.label)
-	lines := schemaLines(chosen.schema)
-	if len(lines) == 0 {
-		fmt.Fprintln(out, "  Schema exists but no details are available.")
-		return
-	}
-	for _, line := range lines {
-		fmt.Fprintf(out, "  %s\n", line)
 	}
 }
 
