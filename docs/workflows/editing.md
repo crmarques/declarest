@@ -10,13 +10,13 @@ Use `declarest config edit <name>` (or `--name <name>`) to open the stored conte
 declarest config edit staging --editor "code --wait"
 ```
 
-DeclaREST pre-fills the file with every attribute (using defaults for anything you have not defined) and removes those defaults before saving so the stored file stays clean. If the named context does not exist yet, the command creates it once you save the file. If the argument you're passing points to an existing context YAML (for example `contexts/staging.yaml`), DeclaREST loads that file so you see the attributes you already wrote. The `--editor` flag overrides the default `vi`.
+DeclaREST pre-fills the file with every attribute (using defaults for anything you have not defined) and removes those defaults before saving so the stored file stays clean. Inline comments now describe each field, and a header line reminds you defaults are stripped and that the CLI ignores the guidance comments before parsing. Saving without editing anything leaves the stored config untouched and prints `[OK] no updates detected`. If the named context does not exist yet, the command creates it once you save the file. If the argument you're passing points to an existing context YAML (for example `contexts/staging.yaml`), DeclaREST loads that file so you see the attributes you already wrote. The `--editor` flag overrides the default `vi`.
 
 Before writing the context back to the store, DeclaREST parses and validates your edits. Syntax errors, schema violations, or unsupported combinations (like specifying both git and filesystem repositories or multiple secret store auth methods) will cause the command to abort; fix the issues and save the file again.
 
 ## Edit metadata rules
 
-Use `declarest metadata edit <path>` to open the merged metadata template for a collection or resource. The CLI preloads metadata defaults (IDs, operations, headers, filters, etc.) so every attribute is present, and, when you save, strips those defaults again so only your overrides remain in the local metadata file:
+Use `declarest metadata edit <path>` to open the merged metadata template for a collection or resource. The CLI preloads metadata defaults (IDs, operations, headers, filters, etc.) so every attribute is present, and, when you save, strips those defaults again so only your overrides remain in the local metadata file. Inline comments annotate every attribute and a header note reminds you that the CLI ignores the comment lines before parsing.
 
 ```
 declarest metadata edit /teams/platform/users/

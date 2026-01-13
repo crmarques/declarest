@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"reflect"
 	"strings"
 
 	ctx "declarest/internal/context"
 	"declarest/internal/managedserver"
 	"declarest/internal/repository"
 	"declarest/internal/secrets"
-	"declarest/internal/yamlutil"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -62,7 +62,7 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 			payload := defaultConfigEditPayload()
 			applyContextConfigToPayload(&payload, initialConfig)
 
-			payloadData, err := yamlutil.MarshalWithIndent(payload, 2)
+			payloadData, err := marshalConfigEditPayloadWithComments(payload)
 			if err != nil {
 				return err
 			}
@@ -105,6 +105,11 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 			}
 
 			if exists {
+				normalizedExisting := normalizeContextConfig(existing)
+				if reflect.DeepEqual(normalizedExisting, editedConfig) {
+					successf(cmd, "no updates detected for %s", name)
+					return nil
+				}
 				if err := manager.ReplaceContextConfig(name, editedConfig); err != nil {
 					return err
 				}
@@ -869,4 +874,144 @@ func normalizeVaultTLSConfig(cfg *secrets.VaultSecretsManagerTLSConfig) *secrets
 		return nil
 	}
 	return &normalized
+}
+
+const configEditTemplateComment = "=====\nThis template shows all available options and fills currently unset attributes with defaults. \nOnce you save this file, all attributes that still match the defaults together with comments will be removed from final file.\n=====\n"
+
+func marshalConfigEditPayloadWithComments(payload configEditPayload) ([]byte, error) {
+	data, err := yaml.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) == 0 {
+		return nil, fmt.Errorf("config template is empty")
+	}
+
+	root := doc.Content[0]
+	root.HeadComment = configEditTemplateComment
+	annotateYAMLNode(root, "", configEditComments)
+
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(root); err != nil {
+		_ = encoder.Close()
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func annotateYAMLNode(node *yaml.Node, path string, comments map[string]string) {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return
+	}
+	for idx := 0; idx < len(node.Content)-1; idx += 2 {
+		keyNode := node.Content[idx]
+		valueNode := node.Content[idx+1]
+		childPath := joinYAMLPath(path, keyNode.Value)
+		if comment, ok := comments[childPath]; ok {
+			keyNode.HeadComment = comment
+		}
+		annotateYAMLNode(valueNode, childPath, comments)
+	}
+}
+
+func joinYAMLPath(parent, child string) string {
+	if parent == "" {
+		return child
+	}
+	return parent + "." + child
+}
+
+var configEditComments = map[string]string{
+	"repository":                                              "Repository settings determine where and how resources are persisted.",
+	"repository.resource_format":                              "Preferred format for saved resources (json or yaml); omit for json.",
+	"repository.git":                                          "Git-backed repository configuration.",
+	"repository.git.local":                                    "Local clone configuration.",
+	"repository.git.local.base_dir":                           "Local directory used to store fetched resources.",
+	"repository.git.remote":                                   "Remote Git synchronization settings.",
+	"repository.git.remote.url":                               "Remote Git URL.",
+	"repository.git.remote.branch":                            "Branch tracked for synchronization operations.",
+	"repository.git.remote.provider":                          "Optional Git hosting provider hint.",
+	"repository.git.remote.auto_sync":                         "Auto-sync the local repo when operations run; true keeps it up to date.",
+	"repository.git.remote.auth":                              "Authentication method for Git pushes/pulls.",
+	"repository.git.remote.auth.basic_auth":                   "Use basic auth for Git operations.",
+	"repository.git.remote.auth.basic_auth.username":          "Username for Git basic authentication.",
+	"repository.git.remote.auth.basic_auth.password":          "Password for Git basic authentication.",
+	"repository.git.remote.auth.ssh":                          "Use SSH keypair authentication.",
+	"repository.git.remote.auth.ssh.user":                     "SSH username.",
+	"repository.git.remote.auth.ssh.private_key_file":         "Path to an SSH private key.",
+	"repository.git.remote.auth.ssh.passphrase":               "Passphrase for the SSH private key.",
+	"repository.git.remote.auth.ssh.known_hosts_file":         "Known hosts file used for SSH validation.",
+	"repository.git.remote.auth.ssh.insecure_ignore_host_key": "Skip known-host checks for SSH (use cautiously).",
+	"repository.git.remote.auth.access_key":                   "Use a provider access token for Git authentication.",
+	"repository.git.remote.auth.access_key.token":             "Personal access token for the Git provider.",
+	"repository.git.remote.tls":                               "TLS overrides for the Git remote.",
+	"repository.git.remote.tls.insecure_skip_verify":          "Skip TLS verification for the Git remote certificate.",
+	"repository.filesystem":                                   "Filesystem-backed resource repository configuration.",
+	"repository.filesystem.base_dir":                          "Directory storing resources when using the filesystem backend.",
+	"managed_server":                                          "Managed server options configure how DeclaREST calls the API.",
+	"managed_server.http":                                     "HTTP settings for managed server requests.",
+	"managed_server.http.base_url":                            "Base API URL used for all resource operations.",
+	"managed_server.http.openapi":                             "Path or URL to the OpenAPI spec used for metadata inference.",
+	"managed_server.http.default_headers":                     "Headers sent on every request (values may reference templates).",
+	"managed_server.http.auth":                                "Select one authentication method for the managed server.",
+	"managed_server.http.auth.oauth2":                         "OAuth2 credentials for server access.",
+	"managed_server.http.auth.oauth2.token_url":               "Token endpoint URL for OAuth2.",
+	"managed_server.http.auth.oauth2.grant_type":              "OAuth2 grant type (e.g., client_credentials).",
+	"managed_server.http.auth.oauth2.client_id":               "OAuth2 client ID.",
+	"managed_server.http.auth.oauth2.client_secret":           "OAuth2 client secret.",
+	"managed_server.http.auth.oauth2.username":                "Username for password grant.",
+	"managed_server.http.auth.oauth2.password":                "Password for password grant.",
+	"managed_server.http.auth.oauth2.scope":                   "Space-separated OAuth2 scopes.",
+	"managed_server.http.auth.oauth2.audience":                "Audience claim for OAuth2.",
+	"managed_server.http.auth.basic_auth":                     "Basic auth credentials for the server.",
+	"managed_server.http.auth.basic_auth.username":            "Username for basic authentication.",
+	"managed_server.http.auth.basic_auth.password":            "Password for basic authentication.",
+	"managed_server.http.auth.bearer_token":                   "Bearer token authentication.",
+	"managed_server.http.auth.bearer_token.token":             "Token used in the Authorization header.",
+	"managed_server.http.auth.custom_header":                  "Custom header authentication.",
+	"managed_server.http.auth.custom_header.header":           "Header name to send for the custom auth.",
+	"managed_server.http.auth.custom_header.token":            "Header value for the custom auth method.",
+	"managed_server.http.tls":                                 "TLS overrides for the HTTP server.",
+	"managed_server.http.tls.insecure_skip_verify":            "Skip TLS certificate verification for the managed server.",
+	"secret_store":                                            "Secret store settings for sensitive values.",
+	"secret_store.file":                                       "File-based secret store configuration.",
+	"secret_store.file.path":                                  "Path to the encrypted secrets file.",
+	"secret_store.file.key":                                   "Base64-encoded AES key used to encrypt the file.",
+	"secret_store.file.key_file":                              "File path containing the AES key.",
+	"secret_store.file.passphrase":                            "Passphrase for the encryption key.",
+	"secret_store.file.passphrase_file":                       "Path to a file with the passphrase.",
+	"secret_store.file.kdf":                                   "Key derivation parameters for the file store.",
+	"secret_store.file.kdf.time":                              "Time parameter controlling KDF iterations.",
+	"secret_store.file.kdf.memory":                            "Memory parameter for the KDF.",
+	"secret_store.file.kdf.threads":                           "Thread count used by the KDF.",
+	"secret_store.vault":                                      "HashiCorp Vault configuration.",
+	"secret_store.vault.address":                              "Vault server address (including protocol).",
+	"secret_store.vault.mount":                                "Vault KV mount path.",
+	"secret_store.vault.path_prefix":                          "Prefix inside the mount where secrets reside.",
+	"secret_store.vault.kv_version":                           "KV engine version (1 or 2).",
+	"secret_store.vault.auth":                                 "Vault authentication method.",
+	"secret_store.vault.auth.token":                           "Vault token for authentication.",
+	"secret_store.vault.auth.password":                        "Username/password authentication for Vault.",
+	"secret_store.vault.auth.password.username":               "Username for Vault password auth.",
+	"secret_store.vault.auth.password.password":               "Password for Vault password auth.",
+	"secret_store.vault.auth.password.mount":                  "Mount point for password authentication.",
+	"secret_store.vault.auth.approle":                         "AppRole authentication details.",
+	"secret_store.vault.auth.approle.role_id":                 "Role ID used for AppRole auth.",
+	"secret_store.vault.auth.approle.secret_id":               "Secret ID used for AppRole auth.",
+	"secret_store.vault.auth.approle.mount":                   "Mount path for the AppRole backend.",
+	"secret_store.vault.tls":                                  "TLS overrides for Vault.",
+	"secret_store.vault.tls.ca_cert_file":                     "CA certificate used to validate Vault.",
+	"secret_store.vault.tls.client_cert_file":                 "Client certificate for Vault.",
+	"secret_store.vault.tls.client_key_file":                  "Client private key for Vault TLS.",
+	"secret_store.vault.tls.insecure_skip_verify":             "Skip TLS verification when talking to Vault.",
 }

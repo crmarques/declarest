@@ -85,11 +85,10 @@ func newMetadataEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			payloadData, err := json.MarshalIndent(payload, "", "  ")
+			payloadData, err := marshalMetadataEditPayloadWithComments(payload)
 			if err != nil {
 				return err
 			}
-			payloadData = append(payloadData, '\n')
 
 			tempFile, err := os.CreateTemp("", "declarest-metadata-*.json")
 			if err != nil {
@@ -780,10 +779,11 @@ func runEditor(args []string) error {
 }
 
 func decodeMetadataEditFile(data []byte) (map[string]any, error) {
-	if len(bytes.TrimSpace(data)) == 0 {
+	cleaned := stripMetadataComments(data)
+	if len(bytes.TrimSpace(cleaned)) == 0 {
 		return map[string]any{}, nil
 	}
-	return decodeMetadataFile(data)
+	return decodeMetadataFile(cleaned)
 }
 
 func payloadToMetadataMap(payload any) (map[string]any, error) {
@@ -818,6 +818,168 @@ func decodeMetadataFile(data []byte) (map[string]any, error) {
 		meta = map[string]any{}
 	}
 	return meta, nil
+}
+
+const metadataEditTemplateHeader = "=====\nThis template shows all available options and fills currently unset attributes with defaults. \nOnce you save this file, all attributes that still match the defaults together with comments will be removed from final file.\n=====\n"
+
+var metadataEditComments = newMetadataEditComments()
+
+func marshalMetadataEditPayloadWithComments(payload any) ([]byte, error) {
+	metaMap, err := payloadToMetadataMap(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var builder strings.Builder
+	for _, line := range strings.Split(metadataEditTemplateHeader, "\n") {
+		builder.WriteString("// ")
+		builder.WriteString(line)
+		builder.WriteByte('\n')
+	}
+	builder.WriteByte('\n')
+
+	if err := encodeJSONWithComments(&builder, metaMap, "", metadataEditComments, 0); err != nil {
+		return nil, err
+	}
+	builder.WriteByte('\n')
+
+	return []byte(builder.String()), nil
+}
+
+func encodeJSONWithComments(w *strings.Builder, value any, path string, comments map[string]string, indent int) error {
+	indentStr := strings.Repeat(" ", indent)
+	switch val := value.(type) {
+	case map[string]any:
+		if len(val) == 0 {
+			w.WriteString("{}")
+			return nil
+		}
+		w.WriteString("{\n")
+		keys := make([]string, 0, len(val))
+		for key := range val {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for idx, key := range keys {
+			childPath := joinJSONPath(path, key)
+			entryIndent := strings.Repeat(" ", indent+2)
+			if comment, ok := comments[childPath]; ok {
+				w.WriteString(entryIndent)
+				w.WriteString("// ")
+				w.WriteString(comment)
+				w.WriteByte('\n')
+			}
+			w.WriteString(entryIndent)
+			w.WriteString("\"")
+			w.WriteString(key)
+			w.WriteString("\": ")
+			if err := encodeJSONWithComments(w, val[key], childPath, comments, indent+2); err != nil {
+				return err
+			}
+			if idx < len(keys)-1 {
+				w.WriteString(",\n")
+			} else {
+				w.WriteString("\n")
+			}
+		}
+		w.WriteString(indentStr)
+		w.WriteString("}")
+	case []any:
+		if len(val) == 0 {
+			w.WriteString("[]")
+			return nil
+		}
+		w.WriteString("[\n")
+		for idx, item := range val {
+			childPath := fmt.Sprintf("%s[%d]", path, idx)
+			entryIndent := strings.Repeat(" ", indent+2)
+			w.WriteString(entryIndent)
+			if err := encodeJSONWithComments(w, item, childPath, comments, indent+2); err != nil {
+				return err
+			}
+			if idx < len(val)-1 {
+				w.WriteString(",\n")
+			} else {
+				w.WriteString("\n")
+			}
+		}
+		w.WriteString(indentStr)
+		w.WriteString("]")
+	default:
+		data, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		w.Write(data)
+	}
+	return nil
+}
+
+func joinJSONPath(parent, child string) string {
+	if parent == "" {
+		return child
+	}
+	return parent + "." + child
+}
+
+func stripMetadataComments(data []byte) []byte {
+	lines := bytes.Split(data, []byte("\n"))
+	out := make([][]byte, 0, len(lines))
+	for _, line := range lines {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 {
+			out = append(out, line)
+			continue
+		}
+		if isMetadataCommentLine(trimmed) {
+			continue
+		}
+		out = append(out, line)
+	}
+	return bytes.Join(out, []byte("\n"))
+}
+
+func isMetadataCommentLine(line []byte) bool {
+	return bytes.HasPrefix(line, []byte("//")) || bytes.HasPrefix(line, []byte("#"))
+}
+
+func newMetadataEditComments() map[string]string {
+	comments := map[string]string{
+		"resourceInfo":                                      "Resource-level overrides for ID, alias, collection path, and secrets.",
+		"resourceInfo.collectionPath":                       "Absolute collection endpoint used for operations.",
+		"resourceInfo.idFromAttribute":                      "Attribute to treat as the resource identifier instead of the path.",
+		"resourceInfo.aliasFromAttribute":                   "Attribute to use as the alias or directory name.",
+		"resourceInfo.secretInAttributes":                   "Dot paths treated as secrets; empty list clears inherited secrets.",
+		"operationInfo":                                     "Operation-specific metadata overrides for CRUD and list actions.",
+		"operationInfo.compareResources":                    "Comparison overrides used when diffing resources.",
+		"operationInfo.compareResources.ignoreAttributes":   "Attributes ignored during comparisons.",
+		"operationInfo.compareResources.suppressAttributes": "Attributes suppressed from the diff output.",
+		"operationInfo.compareResources.filterAttributes":   "Attributes used to filter diffs.",
+		"operationInfo.compareResources.jqExpression":       "jq expression applied before comparing resources.",
+	}
+
+	operations := map[string]string{
+		"getResource":    "Metadata for fetching a single resource.",
+		"createResource": "Metadata for creating a new resource.",
+		"updateResource": "Metadata for updating an existing resource.",
+		"deleteResource": "Metadata for deleting a resource.",
+		"listCollection": "Metadata for listing collection items.",
+	}
+	for op, description := range operations {
+		prefix := "operationInfo." + op
+		comments[prefix] = description
+		comments[prefix+".url.path"] = "Relative or templated path appended to collectionPath."
+		comments[prefix+".url.queryStrings"] = "Query parameters (key=value or templated values)."
+		comments[prefix+".httpMethod"] = "HTTP method used for this operation (auto-filled)."
+		comments[prefix+".httpHeaders"] = "Headers sent with the request; values may reference templates."
+		comments[prefix+".payload"] = "Payload transforms (suppress/filter/jq) before sending."
+		comments[prefix+".payload.suppressAttributes"] = "Attributes removed from the outgoing payload."
+		comments[prefix+".payload.filterAttributes"] = "Attributes whitelisted in the outgoing payload."
+		comments[prefix+".payload.jqExpression"] = "jq expression applied to the outgoing payload."
+		comments[prefix+".jqFilter"] = "jq expression run on responses; useful for list endpoints."
+	}
+
+	return comments
 }
 
 type secretListInput struct {
