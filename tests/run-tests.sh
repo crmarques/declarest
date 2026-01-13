@@ -265,10 +265,6 @@ if [[ ! -x "$runner" ]]; then
     exit 1
 fi
 
-STEP_COLUMN_WIDTH=32
-STATUS_COLUMN_WIDTH=8
-EXEC_COLUMN_WIDTH=12
-DURATION_COLUMN_WIDTH=18
 TOTAL_GROUPS=10
 current_group_index=0
 tty_output=0
@@ -276,24 +272,94 @@ if [[ -t 1 ]]; then
     tty_output=1
 fi
 
+STEP_HEADER="Step"
+STATUS_HEADER="Status"
+EXEC_HEADER="Execution"
+DURATION_HEADER="Duration"
+
+STATUS_VALUES=(RUNNING SKIPPED DONE FAILED)
+EXEC_GROUP_TITLES=(
+    "Preparing workspace"
+    "Preparing services"
+    "Configuring services"
+    "Configuring context"
+    "Testing context operations"
+    "Testing metadata operations"
+    "Testing OpenAPI operations"
+    "Testing DeclaREST main flows"
+    "Testing variation flows"
+    "Finishing execution"
+)
+STEP_COLUMN_WIDTH=${#STEP_HEADER}
+progress_sample="(${TOTAL_GROUPS}/${TOTAL_GROUPS})"
+if [[ ${#progress_sample} -gt STEP_COLUMN_WIDTH ]]; then
+    STEP_COLUMN_WIDTH=${#progress_sample}
+fi
+
+STATUS_COLUMN_WIDTH=${#STATUS_HEADER}
+for status in "${STATUS_VALUES[@]}"; do
+    if [[ ${#status} -gt STATUS_COLUMN_WIDTH ]]; then
+        STATUS_COLUMN_WIDTH=${#status}
+    fi
+done
+
+EXEC_COLUMN_WIDTH=${#EXEC_HEADER}
+for title in "${EXEC_GROUP_TITLES[@]}"; do
+    if [[ ${#title} -gt EXEC_COLUMN_WIDTH ]]; then
+        EXEC_COLUMN_WIDTH=${#title}
+    fi
+done
+
+DURATION_COLUMN_WIDTH=${#DURATION_HEADER}
+
+repeat_char() {
+    local char="$1"
+    local count="$2"
+    if [[ "$count" -le 0 ]]; then
+        printf ""
+        return 0
+    fi
+    printf '%*s' "$count" '' | tr ' ' "$char"
+}
+
+truncate_value() {
+    local value="$1"
+    local width="$2"
+    if [[ ${#value} -le width ]]; then
+        printf "%s" "$value"
+    else
+        printf "%s" "${value:0:width}"
+    fi
+}
+
 format_status_line() {
     local step="$1"
     local status="$2"
     local execution="${3:-}"
     local duration="${4:-}"
-    printf "%-${STEP_COLUMN_WIDTH}s | %-${STATUS_COLUMN_WIDTH}s | %-${EXEC_COLUMN_WIDTH}s | %-${DURATION_COLUMN_WIDTH}s" \
-        "$step" "$status" "$execution" "$duration"
+    printf "| %-*s | %-*s | %-*s | %-*s |" \
+        "$STEP_COLUMN_WIDTH" "$step" \
+        "$STATUS_COLUMN_WIDTH" "$status" \
+        "$EXEC_COLUMN_WIDTH" "$execution" \
+        "$DURATION_COLUMN_WIDTH" "$duration"
 }
 
+TABLE_HEADER_ROW=$(format_status_line "Step" "Status" "Execution" "$DURATION_HEADER")
+TABLE_ROW_WIDTH=${#TABLE_HEADER_ROW}
+TABLE_BORDER_TOP="+$(repeat_char '-' $((TABLE_ROW_WIDTH - 2)))+"
+TABLE_HEADER_DIVIDER="|$(repeat_char '=' $((TABLE_ROW_WIDTH - 2)))|"
+
 print_group_status_header() {
-    local header
-    header=$(format_status_line "Step" "Status" "Execution" "Duration")
-    printf "%s\n" "$header"
+    printf "%s\n" "$TABLE_BORDER_TOP"
+    printf "%s\n" "$TABLE_HEADER_ROW"
+    printf "%s\n" "$TABLE_HEADER_DIVIDER"
 }
 
 print_group_status_inline() {
     local line
-    line=$(format_status_line "$1" "$2" "$3" "$4")
+    local duration
+    duration=$(truncate_value "$4" "$DURATION_COLUMN_WIDTH")
+    line=$(format_status_line "$1" "$2" "$3" "$duration")
     if [[ $tty_output -eq 1 ]]; then
         printf "\r\033[K%s" "$line"
     else
@@ -303,12 +369,18 @@ print_group_status_inline() {
 
 print_group_status_final() {
     local line
-    line=$(format_status_line "$1" "$2" "$3" "$4")
+    local duration
+    duration=$(truncate_value "$4" "$DURATION_COLUMN_WIDTH")
+    line=$(format_status_line "$1" "$2" "$3" "$duration")
     if [[ $tty_output -eq 1 ]]; then
         printf "\r\033[K%s\n" "$line"
     else
         printf "%s\n" "$line"
     fi
+}
+
+print_table_footer() {
+    printf "%s\n" "$TABLE_BORDER_TOP"
 }
 
 run_group() {
@@ -356,7 +428,7 @@ run_group() {
     esac
 
     if [[ "$skip_flag" -eq 1 ]]; then
-        print_group_status_final "$title" "SKIPPED" "${progress}" "$skip_message"
+        print_group_status_final "${progress}" "SKIPPED" "$title" "$skip_message"
         log_line "GROUP SKIPPED ($title): $skip_message"
         return 0
     fi
@@ -365,7 +437,7 @@ run_group() {
     started_at=$(date +%s)
     log_line "GROUP START ($title)"
     if [[ $tty_output -eq 1 ]]; then
-        print_group_status_inline "$title" "RUNNING" "${progress}" "0s"
+        print_group_status_inline "${progress}" "RUNNING" "$title" "0s"
     fi
 
     local status
@@ -377,7 +449,7 @@ run_group() {
         while kill -0 "$func_pid" >/dev/null 2>&1; do
             sleep 1
             elapsed=$((elapsed + 1))
-            print_group_status_inline "$title" "RUNNING" "${progress}" "${elapsed}s"
+            print_group_status_inline "${progress}" "RUNNING" "$title" "${elapsed}s"
         done
         wait "$func_pid"
         status=$?
@@ -391,10 +463,10 @@ run_group() {
 
     elapsed=$(( $(date +%s) - started_at ))
     if [[ $status -eq 0 ]]; then
-        print_group_status_final "$title" "DONE" "${progress}" "${elapsed}s"
+        print_group_status_final "${progress}" "DONE" "$title" "${elapsed}s"
         log_line "GROUP DONE ($title) (${elapsed}s)"
     else
-        print_group_status_final "$title" "FAILED" "${progress}" "${elapsed}s"
+        print_group_status_final "${progress}" "FAILED" "$title" "${elapsed}s"
         log_line "GROUP FAILED ($title) (${elapsed}s)"
         printf "See detailed log: %s\n" "$RUN_LOG"
         exit $status
@@ -427,6 +499,8 @@ run_keycloak_e2e_flow() {
     run_group "Testing DeclaREST main flows" run_testing_declarest_main_flows declarest
     run_group "Testing variation flows" run_testing_variation_flows variation
     run_group "Finishing execution" run_finishing_execution
+
+    print_table_footer
 
     log_line "E2E test completed successfully"
     printf "E2E test completed successfully. Log: %s\n" "$RUN_LOG"
