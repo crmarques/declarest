@@ -23,7 +23,11 @@ context_deleted=0
 context_restored=0
 context_name="tls-${DECLAREST_RUN_ID:-tls}"
 context_cfg="$tmpdir/context.yaml"
-orig_context_name="${DECLAREST_CONTEXT_NAME:-}"
+orig_context_name="$(capture_cli "current context" config current)"
+orig_context_name="${orig_context_name%%$'\n'*}"
+if [[ -z "$orig_context_name" ]]; then
+    die "failed to determine current context"
+fi
 
 cleanup() {
     set +e
@@ -132,7 +136,9 @@ fi
 
 run_cli "activate tls context" config use "$context_name"
 
-run_cli "validate tls connection" config check
+if ! run_cli_retry_transient "validate tls connection" 5 2 config check; then
+    die "TLS configuration check failed"
+fi
 
 run_cli "restore default context" config use "$orig_context_name"
 context_restored=1

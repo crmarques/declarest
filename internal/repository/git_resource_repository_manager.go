@@ -1242,7 +1242,7 @@ func (m *GitResourceRepositoryManager) wrapRepoSyncError(err error) error {
 			repoDir = dir
 		}
 	}
-	return RepoSyncError{
+	return &RepoSyncError{
 		repoDir: repoDir,
 		cause:   err,
 	}
