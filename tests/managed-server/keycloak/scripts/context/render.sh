@@ -303,6 +303,11 @@ case "$secret_store_type" in
         ;;
 esac
 
+metadata_block=""
+if [[ -n "${DECLAREST_METADATA_DIR:-}" ]]; then
+    metadata_block=$'metadata:\n  base_dir: '"$(yaml_quote "$DECLAREST_METADATA_DIR")"
+fi
+
 sed \
     -e "s#__KEYCLOAK_URL__#${keycloak_url_escaped}#g" \
     "$tpl_config" | while IFS= read -r line; do
@@ -314,6 +319,10 @@ sed \
             printf "%s\n" "$server_auth_block"
         elif [[ "$line" == "__SECRET_STORE_BLOCK__" ]]; then
             printf "%s\n" "$secret_store_block"
+        elif [[ "$line" == "__METADATA_BLOCK__" ]]; then
+            if [[ -n "$metadata_block" ]]; then
+                printf "%s\n" "$metadata_block"
+            fi
         else
             printf "%s\n" "$line"
         fi

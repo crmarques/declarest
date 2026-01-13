@@ -17,13 +17,13 @@ import (
 )
 
 type DefaultResourceRecordProvider struct {
-	BaseDir        string
-	fileStore      FileStore
-	resourceLoader ResourceLoader
-	resourceFormat ResourceFormat
-	remoteMu       sync.Mutex
-	remoteInFlight map[string]int
-	openapiSpec    *openapi.Spec
+	MetadataBaseDir string
+	fileStore       FileStore
+	resourceLoader  ResourceLoader
+	resourceFormat  ResourceFormat
+	remoteMu        sync.Mutex
+	remoteInFlight  map[string]int
+	openapiSpec     *openapi.Spec
 }
 
 type ResourceLoader interface {
@@ -54,12 +54,12 @@ func (s *FileSystemStore) ReadFile(relPath string) ([]byte, error) {
 	return os.ReadFile(full)
 }
 
-func NewDefaultResourceRecordProvider(baseDir string, loader ResourceLoader) *DefaultResourceRecordProvider {
+func NewDefaultResourceRecordProvider(metadataBaseDir string, loader ResourceLoader) *DefaultResourceRecordProvider {
 	return &DefaultResourceRecordProvider{
-		BaseDir:        baseDir,
-		fileStore:      NewFileSystemStore(baseDir),
-		resourceLoader: loader,
-		resourceFormat: ResourceFormatJSON,
+		MetadataBaseDir: metadataBaseDir,
+		fileStore:       NewFileSystemStore(metadataBaseDir),
+		resourceLoader:  loader,
+		resourceFormat:  ResourceFormatJSON,
 	}
 }
 
@@ -96,7 +96,7 @@ func (p *DefaultResourceRecordProvider) store() FileStore {
 		return nil
 	}
 	if p.fileStore == nil {
-		p.fileStore = NewFileSystemStore(p.BaseDir)
+		p.fileStore = NewFileSystemStore(p.MetadataBaseDir)
 	}
 	return p.fileStore
 }

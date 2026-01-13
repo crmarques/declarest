@@ -17,10 +17,26 @@ log_line "Validating metadata inference using Keycloak OpenAPI paths"
 
 TARGET_PATH="/admin/realms/publico/clients/"
 METADATA_FILE="${DECLAREST_REPO_DIR%/}/admin/realms/publico/clients/_/metadata.json"
+WILDCARD_CLIENTS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/clients/_/metadata.json"
+WILDCARD_MAPPERS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/user-registry/_/mappers/_/metadata.json"
 
-if [[ -f "$METADATA_FILE" ]]; then
-    rm -f "$METADATA_FILE"
-fi
+cleanup_metadata_for_inference() {
+    rm -f "$METADATA_FILE" "$WILDCARD_CLIENTS_METADATA"
+}
+
+pickup_metadata_file() {
+    if [[ -f "$METADATA_FILE" ]]; then
+        printf "%s" "$METADATA_FILE"
+        return 0
+    fi
+    if [[ -f "$WILDCARD_CLIENTS_METADATA" ]]; then
+        printf "%s" "$WILDCARD_CLIENTS_METADATA"
+        return 0
+    fi
+    return 1
+}
+
+cleanup_metadata_for_inference
 
 output="$(capture_cli_all "metadata infer clients" metadata infer --no-status --apply "$TARGET_PATH")"
 pprint="$(printf '%s\n' "$output")"
@@ -34,18 +50,17 @@ if ! printf '%s\n' "$pprint" | grep -q '"aliasFromAttribute": "clientId"'; then
     die "metadata infer output did not include the expected aliasFromAttribute"
 fi
 
-if [[ ! -f "$METADATA_FILE" ]]; then
-    die "metadata file not generated at $METADATA_FILE"
+metadata_file="$(pickup_metadata_file || true)"
+
+if [[ -z "$metadata_file" ]]; then
+    die "metadata file not generated at $METADATA_FILE or $WILDCARD_CLIENTS_METADATA"
 fi
 
-if ! jq -e '(.resourceInfo.idFromAttribute == "id") and (.resourceInfo.aliasFromAttribute == "clientId")' "$METADATA_FILE"; then
+if ! jq -e '(.resourceInfo.idFromAttribute == "id") and (.resourceInfo.aliasFromAttribute == "clientId")' "$metadata_file"; then
     die "generated metadata does not include the expected id/alias values"
 fi
 
 log_line "Validating metadata inference recursively"
-
-WILDCARD_CLIENTS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/clients/_/metadata.json"
-WILDCARD_MAPPERS_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/user-registry/_/mappers/_/metadata.json"
 
 rm -f "$WILDCARD_CLIENTS_METADATA" "$WILDCARD_MAPPERS_METADATA"
 

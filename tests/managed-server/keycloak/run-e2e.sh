@@ -365,6 +365,7 @@ TOTAL_STEPS=$((TOTAL_STEPS + heavy_steps))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#server_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#secret_auth_secondary[@]}))
 TOTAL_STEPS=$((TOTAL_STEPS + ${#repo_auth_secondary[@]}))
+TOTAL_STEPS=$((TOTAL_STEPS + 3))
 
 STEP_NUM_WIDTH=${#TOTAL_STEPS}
 
@@ -508,6 +509,14 @@ if [[ "$repo_type" == "git-remote" ]]; then
         run_step "Validating repo auth (${repo_auth})" "$REPO_SCRIPTS_DIR/auth-smoke.sh"
     done
 fi
+
+set_context "metadata-base-dir"
+export DECLAREST_METADATA_DIR="$DECLAREST_WORK_DIR/metadata-base-dir"
+run_step "Configuring declarest context (metadata base dir)" "$SCRIPTS_DIR/context/render.sh"
+run_step "Registering declarest context (metadata base dir)" "$SCRIPTS_DIR/context/register.sh"
+run_step "Validating metadata base dir override" "$SCRIPTS_DIR/declarest/metadata-base-dir-smoke.sh"
+unset DECLAREST_METADATA_DIR
+set_context ""
 
 print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
 log_line "E2E test completed successfully"

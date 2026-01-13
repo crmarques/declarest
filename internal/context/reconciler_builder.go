@@ -18,8 +18,9 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 	}
 
 	var (
-		baseDir     string
-		repoManager repository.ResourceRepositoryManager
+		baseDir         string
+		metadataBaseDir string
+		repoManager     repository.ResourceRepositoryManager
 	)
 
 	resourceFormat := repository.ResourceFormatJSON
@@ -47,8 +48,19 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 		}
 	}
 
+	if cfg.Metadata != nil {
+		metadataBaseDir = strings.TrimSpace(cfg.Metadata.BaseDir)
+	}
+	if metadataBaseDir == "" {
+		metadataBaseDir = baseDir
+	}
+
 	if repoManager == nil {
 		repoManager = repository.NewGitResourceRepositoryManager("")
+	}
+
+	if setter, ok := repoManager.(interface{ SetMetadataBaseDir(string) }); ok {
+		setter.SetMetadataBaseDir(metadataBaseDir)
 	}
 
 	if cfg.Repository != nil && cfg.Repository.Git != nil {
@@ -111,7 +123,7 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 		SecretsManager:            secretsManager,
 	}
 
-	provider := repository.NewDefaultResourceRecordProvider(baseDir, recon)
+	provider := repository.NewDefaultResourceRecordProvider(metadataBaseDir, recon)
 	provider.SetResourceFormat(resourceFormat)
 	if openapiSpec != nil {
 		provider.SetOpenAPISpec(openapiSpec)

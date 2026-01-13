@@ -37,4 +37,7 @@ func TestConfigPrintTemplateIncludesSections(t *testing.T) {
 	if cfg.SecretManager == nil || cfg.SecretManager.File == nil {
 		t.Fatalf("expected secret store config, got %#v", cfg.SecretManager)
 	}
+	if cfg.Metadata == nil || cfg.Metadata.BaseDir == "" {
+		t.Fatalf("expected metadata config, got %#v", cfg.Metadata)
+	}
 }

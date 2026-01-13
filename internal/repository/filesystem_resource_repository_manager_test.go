@@ -2,6 +2,7 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +60,43 @@ func TestFileSystemRepositoryRejectsMetadataTraversal(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "escapes base directory") {
 		t.Fatalf("expected traversal error, got %v", err)
+	}
+}
+
+func TestFileSystemRepositorySupportsDistinctMetadataDir(t *testing.T) {
+	repoDir := t.TempDir()
+	metaDir := t.TempDir()
+	manager := NewFileSystemResourceRepositoryManager(repoDir)
+	manager.SetMetadataBaseDir(metaDir)
+	if err := manager.Init(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	path := "/items/foo"
+	payload := map[string]any{"id": "x"}
+	if err := manager.WriteMetadata(path, payload); err != nil {
+		t.Fatalf("WriteMetadata: %v", err)
+	}
+
+	rel := MetadataFileRelPath(path)
+	metaPath := filepath.Join(metaDir, rel)
+	if _, err := os.Stat(metaPath); err != nil {
+		t.Fatalf("expected metadata at %s: %v", metaPath, err)
+	}
+
+	repoMeta := filepath.Join(repoDir, rel)
+	if _, err := os.Stat(repoMeta); err == nil {
+		t.Fatalf("expected no metadata in repo dir %s", repoMeta)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected metadata absence, got %v", err)
+	}
+
+	read, err := manager.ReadMetadata(path)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if read["id"] != payload["id"] {
+		t.Fatalf("expected metadata id %v, got %v", payload["id"], read["id"])
 	}
 }
 

@@ -57,6 +57,16 @@ func (m *GitResourceRepositoryManager) SetResourceFormat(format ResourceFormat) 
 	m.fs.SetResourceFormat(m.resourceFormat)
 }
 
+func (m *GitResourceRepositoryManager) SetMetadataBaseDir(dir string) {
+	if m == nil {
+		return
+	}
+	if m.fs == nil {
+		m.fs = NewFileSystemResourceRepositoryManager("")
+	}
+	m.fs.SetMetadataBaseDir(dir)
+}
+
 func (m *GitResourceRepositoryManager) Init() error {
 	if m == nil {
 		return errors.New("git resource repository manager is nil")

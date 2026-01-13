@@ -99,6 +99,9 @@ secret_store:
 #     client_cert_file: /path/to/client.pem
 #     client_key_file: /path/to/client-key.pem
 #     insecure_skip_verify: false
+metadata:
+# metadata files default to the repository base directory when unset.
+  base_dir: /path/to/metadata
 `
 
 func newConfigPrintTemplateCommand() *cobra.Command {

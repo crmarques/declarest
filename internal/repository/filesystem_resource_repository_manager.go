@@ -15,8 +15,9 @@ import (
 )
 
 type FileSystemResourceRepositoryManager struct {
-	BaseDir        string
-	ResourceFormat ResourceFormat
+	BaseDir         string
+	MetadataBaseDir string
+	ResourceFormat  ResourceFormat
 }
 
 func NewFileSystemResourceRepositoryManager(baseDir string) *FileSystemResourceRepositoryManager {
@@ -31,6 +32,13 @@ func (m *FileSystemResourceRepositoryManager) SetResourceFormat(format ResourceF
 		return
 	}
 	m.ResourceFormat = normalizeResourceFormat(format)
+}
+
+func (m *FileSystemResourceRepositoryManager) SetMetadataBaseDir(dir string) {
+	if m == nil {
+		return
+	}
+	m.MetadataBaseDir = strings.TrimSpace(dir)
 }
 
 func (m *FileSystemResourceRepositoryManager) resourceFormat() ResourceFormat {
@@ -376,7 +384,7 @@ func (m *FileSystemResourceRepositoryManager) resourceDir(path string) (string, 
 }
 
 func (m *FileSystemResourceRepositoryManager) metadataFile(path string) (string, error) {
-	return m.safeJoin(MetadataFileRelPath(path))
+	return m.metadataSafeJoin(MetadataFileRelPath(path))
 }
 
 func (m *FileSystemResourceRepositoryManager) collectionDir(path string) (string, error) {
@@ -385,6 +393,21 @@ func (m *FileSystemResourceRepositoryManager) collectionDir(path string) (string
 
 func (m *FileSystemResourceRepositoryManager) safeJoin(rel string) (string, error) {
 	return SafeJoin(m.BaseDir, rel)
+}
+
+func (m *FileSystemResourceRepositoryManager) metadataSafeJoin(rel string) (string, error) {
+	return SafeJoin(m.metadataBaseDir(), rel)
+}
+
+func (m *FileSystemResourceRepositoryManager) metadataBaseDir() string {
+	if m == nil {
+		return ""
+	}
+	dir := strings.TrimSpace(m.MetadataBaseDir)
+	if dir == "" {
+		dir = strings.TrimSpace(m.BaseDir)
+	}
+	return dir
 }
 
 type resourceFileCandidatePath struct {

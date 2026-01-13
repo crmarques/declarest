@@ -162,6 +162,15 @@ Notes:
 - Provide exactly one auth method: `token`, `password`, or `approle`.
 - mTLS is optional; it is enabled when client cert/key files are provided (CA is optional if the server cert is already trusted).
 
+## Metadata configuration
+
+```yaml
+metadata:
+  base_dir: /path/to/metadata
+```
+
+- `metadata.base_dir` optionally points metadata reads/writes to a dedicated directory; leave it unset to keep metadata under the same directory configured for `repository.filesystem.base_dir` or `repository.git.local.base_dir`.
+
 ## Context store location
 
 Contexts are stored in `~/.declarest/config` by default.
