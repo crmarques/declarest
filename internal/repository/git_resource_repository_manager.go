@@ -1145,12 +1145,12 @@ func isDirEmpty(dir string) (bool, error) {
 	return len(entries) == 0, nil
 }
 
-type repoSyncError struct {
+type RepoSyncError struct {
 	repoDir string
 	cause   error
 }
 
-func (e repoSyncError) Error() string {
+func (e RepoSyncError) Error() string {
 	target := "git repository"
 	if strings.TrimSpace(e.repoDir) != "" {
 		target = fmt.Sprintf("git repository at %s", e.repoDir)
@@ -1165,7 +1165,7 @@ func (e repoSyncError) Error() string {
 	return fmt.Sprintf("%s\nTry:\n  declarest repo reset\n  declarest repo push --force", msg)
 }
 
-func (e repoSyncError) Unwrap() error {
+func (e RepoSyncError) Unwrap() error {
 	return e.cause
 }
 
@@ -1239,7 +1239,7 @@ func (m *GitResourceRepositoryManager) wrapRepoSyncError(err error) error {
 			repoDir = dir
 		}
 	}
-	return repoSyncError{
+	return RepoSyncError{
 		repoDir: repoDir,
 		cause:   err,
 	}

@@ -125,6 +125,9 @@ func newConfigUpdateCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Existing context identifier to update")
 	cmd.Flags().StringVar(&config, "config", "", "Path to the context configuration file")
 
+	registerContextNameArgumentCompletion(cmd, manager, false, 0)
+	registerContextNameFlagCompletion(cmd, manager, "name")
+
 	return cmd
 }
 
@@ -151,6 +154,9 @@ func newConfigUseCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to activate as default")
+
+	registerContextNameArgumentCompletion(cmd, manager, false, 0)
+	registerContextNameFlagCompletion(cmd, manager, "name")
 
 	return cmd
 }
@@ -187,6 +193,9 @@ func newConfigDeleteCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to delete")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
+
+	registerContextNameArgumentCompletion(cmd, manager, false, 0)
+	registerContextNameFlagCompletion(cmd, manager, "name")
 
 	return cmd
 }
@@ -264,6 +273,9 @@ func newConfigRenameCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 
 	cmd.Flags().StringVar(&currentName, "current-name", "", "Existing context identifier")
 	cmd.Flags().StringVar(&newName, "new-name", "", "New context identifier")
+
+	registerContextNameArgumentCompletion(cmd, manager, false, 0)
+	registerContextNameFlagCompletion(cmd, manager, "current-name")
 
 	return cmd
 }

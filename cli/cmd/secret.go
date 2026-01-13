@@ -126,7 +126,7 @@ func newSecretGetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&resourcePath, "path", "", "Resource path to read secrets for")
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to read")
 
-	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+	registerSecretPathAndKeyCompletion(cmd)
 
 	return cmd
 }
@@ -214,7 +214,7 @@ func newSecretAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to store")
 	cmd.Flags().StringVar(&value, "value", "", "Secret value to store")
 
-	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+	registerSecretPathAndKeyCompletion(cmd)
 
 	return cmd
 }
@@ -293,7 +293,7 @@ func newSecretDeleteCommand() *cobra.Command {
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to delete")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
 
-	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+	registerSecretPathAndKeyCompletion(cmd)
 
 	return cmd
 }

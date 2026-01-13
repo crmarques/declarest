@@ -17,6 +17,7 @@ type DefaultReconciler struct {
 	ResourceRecordProvider    repository.ResourceRecordProvider
 	SecretsManager            secrets.SecretsManager
 	SkipRepositorySync        bool
+	RepoSyncError             error
 }
 
 func (r *DefaultReconciler) Init() error {
@@ -28,12 +29,20 @@ func (r *DefaultReconciler) Init() error {
 		if err := r.ResourceRepositoryManager.Init(); err != nil {
 			return err
 		}
+		r.RepoSyncError = nil
 		if !r.SkipRepositorySync {
 			if syncer, ok := r.ResourceRepositoryManager.(interface {
 				SyncLocalFromRemoteIfConfigured() error
 			}); ok {
 				if err := syncer.SyncLocalFromRemoteIfConfigured(); err != nil {
-					return err
+					var syncErr *repository.RepoSyncError
+					if errors.As(err, &syncErr) {
+						r.RepoSyncError = err
+					} else {
+						return err
+					}
+				} else {
+					r.RepoSyncError = nil
 				}
 			}
 		}

@@ -127,6 +127,9 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Context identifier to edit")
 	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to vi)")
 
+	registerContextNameArgumentCompletion(cmd, manager, true, 0)
+	registerContextNameFlagCompletion(cmd, manager, "name")
+
 	return cmd
 }
 
