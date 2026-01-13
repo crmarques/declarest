@@ -19,6 +19,9 @@ secret_store:
     passphrase: change-me
 ```
 
+Fields in a context file can include `${VAR}` placeholders (for example, `secret_store.file.key: "${MY_SECRET_STORE_KEY}"`).
+DeclaREST resolves these references when loading the context, keeps the source file untouched, and fails if any referenced environment variable is not set.
+
 ## Repository configuration
 
 `repository.resource_format` controls how resource payload files are stored in the repo. Use `json` (default)

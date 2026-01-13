@@ -172,6 +172,9 @@ func loadContextByName(manager ContextManager, name string, overrides map[string
 	if err := applyContextEnvOverrides(cfg, overrides); err != nil {
 		return Context{}, err
 	}
+	if err := resolveContextEnvPlaceholders(cfg); err != nil {
+		return Context{}, fmt.Errorf("failed to resolve environment references for context %q: %w", name, err)
+	}
 	ctx, err := buildContext(name, cfg)
 	if err != nil {
 		if !exists {

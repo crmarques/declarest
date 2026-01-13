@@ -106,3 +106,55 @@ func TestLoadContextWithEnvUnsupportedOverride(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestLoadContextWithEnvResolvesPlaceholders(t *testing.T) {
+	manager := newTempManager(t)
+	envName := "env-placeholder-success"
+	repoDir := filepath.Join(t.TempDir(), "repo")
+	cfg := &ContextConfig{
+		Repository: &RepositoryConfig{
+			Filesystem: &repository.FileSystemResourceRepositoryConfig{BaseDir: "${DECLAREST_ENV_PLACEHOLDER_REPO_DIR}"},
+		},
+	}
+	if err := manager.AddContextConfig(envName, cfg); err != nil {
+		t.Fatalf("AddContextConfig: %v", err)
+	}
+
+	t.Setenv("DECLAREST_CTX_NAME", envName)
+	t.Setenv("DECLAREST_ENV_PLACEHOLDER_REPO_DIR", repoDir)
+
+	ctx, err := LoadContextWithEnv(manager)
+	if err != nil {
+		t.Fatalf("LoadContextWithEnv: %v", err)
+	}
+	recon, ok := ctx.Reconciler.(*reconciler.DefaultReconciler)
+	if !ok {
+		t.Fatalf("unexpected reconciler type %T", ctx.Reconciler)
+	}
+
+	fs := requireFileSystemRepo(t, recon)
+	if fs.BaseDir != repoDir {
+		t.Fatalf("expected repository base dir %q, got %q", repoDir, fs.BaseDir)
+	}
+}
+
+func TestLoadContextWithEnvMissingPlaceholderVariable(t *testing.T) {
+	manager := newTempManager(t)
+	envName := "env-placeholder-missing"
+	cfg := &ContextConfig{
+		Repository: &RepositoryConfig{
+			Filesystem: &repository.FileSystemResourceRepositoryConfig{BaseDir: "${DECLAREST_ENV_PLACEHOLDER_REPO_DIR}"},
+		},
+	}
+	if err := manager.AddContextConfig(envName, cfg); err != nil {
+		t.Fatalf("AddContextConfig: %v", err)
+	}
+
+	t.Setenv("DECLAREST_CTX_NAME", envName)
+
+	if _, err := LoadContextWithEnv(manager); err == nil {
+		t.Fatal("expected error when placeholder environment variable is missing")
+	} else if !strings.Contains(err.Error(), "DECLAREST_ENV_PLACEHOLDER_REPO_DIR") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

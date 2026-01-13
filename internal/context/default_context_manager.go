@@ -297,7 +297,15 @@ func (m *DefaultContextManager) LoadDefaultContext() (Context, error) {
 		return Context{}, fmt.Errorf("context %q is missing", store.CurrentContext)
 	}
 
-	recon, err := m.buildReconciler(cfg)
+	cfgCopy, err := cloneContextConfig(cfg)
+	if err != nil {
+		return Context{}, err
+	}
+	if err := resolveContextEnvPlaceholders(cfgCopy); err != nil {
+		return Context{}, fmt.Errorf("failed to resolve environment references for context %q: %w", store.CurrentContext, err)
+	}
+
+	recon, err := m.buildReconciler(cfgCopy)
 	if err != nil {
 		return Context{}, err
 	}
