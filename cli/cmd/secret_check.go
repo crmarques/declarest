@@ -118,6 +118,8 @@ func newSecretCheckCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource path to check (optional)")
 	cmd.Flags().BoolVar(&fix, "fix", false, "Map detected secrets into metadata and store values in the secret store")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 

@@ -40,6 +40,8 @@ Manage metadata definitions for resources and collections.
 - `metadata infer`: inspect the OpenAPI spec to suggest `resourceInfo.idFromAttribute`/`aliasFromAttribute` (`--spec` overrides the configured descriptor, `--id-from`/`--alias-from` force values, `--recursively` walks matching collections, and `--apply` writes the suggestions).
 - Use `--for-resource-only` on any subcommand to treat a path without a trailing `/` as a resource default.
 
+Metadata commands reuse the shared logical-path completion helper, so `<path>` arguments (or `--path`) suggest the same repository/OpenAPI entries that other commands do. Setting `--attribute resourceInfo.secretInAttributes` also activates tab completion for `--value`, which lists the secret attribute paths detected for the provided logical path.
+
 ## repo
 
 Manage the resource repository.
@@ -60,6 +62,8 @@ Manage secrets in the configured secret store.
 - `secret export`: write secrets to CSV (`--path` or `--all`).
 - `secret import`: load secrets from CSV (`--file` or positional file, use `--force` to override).
 - `secret check`: scan resources for unmapped secrets and optionally `--fix` to map them and rewrite resources (requires an enabled secret store).
+
+Secret subcommands reuse the common `<path>` completion helper, so their path suggestions match the repository/OpenAPI-aware entries shown elsewhere in the CLI.
 
 ## config
 

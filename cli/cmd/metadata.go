@@ -160,6 +160,8 @@ func newMetadataEditCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
 	cmd.Flags().StringVar(&editor, "editor", "", "Editor command (defaults to vi)")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -213,6 +215,8 @@ func newMetadataGetCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to show metadata for (defaults to collection)")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
@@ -363,6 +367,9 @@ func newMetadataSetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&attribute, "attribute", "", "Metadata attribute to set (dot-separated)")
 	cmd.Flags().StringVar(&value, "value", "", "Metadata value (JSON literal or string)")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+	registerSecretAttributeValueCompletion(cmd)
+
 	return cmd
 }
 
@@ -429,6 +436,9 @@ func newMetadataUnsetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
 	cmd.Flags().StringVar(&attribute, "attribute", "", "Metadata attribute to unset (dot-separated)")
 	cmd.Flags().StringVar(&value, "value", "", "Metadata value to remove (optional; omit to delete the attribute)")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+	registerSecretAttributeValueCompletion(cmd)
 
 	return cmd
 }
@@ -515,6 +525,8 @@ func newMetadataAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
 	cmd.Flags().StringVar(&filePath, "file", "", "Path to a JSON metadata file")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -567,6 +579,8 @@ func newMetadataUpdateResourcesCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&path, "path", "", "Resource or collection path to update (defaults to collection)")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
@@ -715,6 +729,8 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 	cmd.Flags().BoolVar(&recursive, metadataInferRecursiveFlag, false, "Infer metadata for collections recursively via the OpenAPI spec")
 	cmd.Flags().StringVar(&idFrom, "id-from", "", "Force a specific attribute to use as resource ID")
 	cmd.Flags().StringVar(&aliasFrom, "alias-from", "", "Force a specific attribute to use as the alias")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
@@ -991,6 +1007,144 @@ func splitCommaList(raw string) []string {
 		values = append(values, value)
 	}
 	return values
+}
+
+func registerSecretAttributeValueCompletion(cmd *cobra.Command) {
+	if cmd.Flag("value") == nil {
+		return
+	}
+	_ = cmd.RegisterFlagCompletionFunc("value", secretAttributeValueCompletion)
+}
+
+func secretAttributeValueCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	attribute, err := cmd.Flags().GetString("attribute")
+	if err != nil || !isSecretInAttributesAttribute(attribute) {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+	metadataPath, isCollection := metadataCompletionTargetPath(cmd, args)
+	if metadataPath == "" {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	recon, cleanup, err := resourcePathCompletionLoader()
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil || recon == nil {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	candidates := secretAttributeCandidates(recon, metadataPath, isCollection)
+	if len(candidates) == 0 {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	base, prefix := splitCommaCompletionParts(toComplete)
+	existing := make(map[string]struct{}, len(candidates))
+	for _, entry := range splitCommaList(toComplete) {
+		existing[entry] = struct{}{}
+	}
+
+	matches := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if _, ok := existing[candidate]; ok {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(candidate, prefix) {
+			continue
+		}
+		matches = append(matches, base+candidate)
+	}
+
+	if len(matches) == 0 {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+	sort.Strings(matches)
+	return matches, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
+
+func metadataCompletionTargetPath(cmd *cobra.Command, args []string) (string, bool) {
+	rawPath := ""
+	if len(args) > 0 {
+		rawPath = strings.TrimSpace(args[0])
+	}
+	if flag := cmd.Flags().Lookup("path"); flag != nil {
+		value := strings.TrimSpace(flag.Value.String())
+		if value != "" {
+			rawPath = value
+		}
+	}
+	if rawPath == "" {
+		return "", false
+	}
+	normalized, err := normalizeMetadataInputPath(cmd, rawPath)
+	if err != nil {
+		return "", false
+	}
+	return normalized, resource.IsCollectionPath(normalized)
+}
+
+func splitCommaCompletionParts(value string) (string, string) {
+	if value == "" {
+		return "", ""
+	}
+	idx := strings.LastIndex(value, ",")
+	if idx < 0 {
+		return "", strings.TrimSpace(value)
+	}
+	baseEnd := idx + 1
+	for baseEnd < len(value) && value[baseEnd] == ' ' {
+		baseEnd++
+	}
+	return value[:baseEnd], strings.TrimSpace(value[baseEnd:])
+}
+
+func secretAttributeCandidates(recon *reconciler.DefaultReconciler, metadataPath string, isCollection bool) []string {
+	if recon == nil {
+		return nil
+	}
+	candidateSet := make(map[string]struct{})
+
+	addCandidate := func(value string) {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			candidateSet[trimmed] = struct{}{}
+		}
+	}
+
+	if meta, err := recon.ResourceMetadata(metadataPath); err == nil && meta.ResourceInfo != nil {
+		for _, attr := range meta.ResourceInfo.SecretInAttributes {
+			addCandidate(attr)
+		}
+	}
+
+	var paths []string
+	if isCollection {
+		if collectionPaths, err := recon.RepositoryPathsInCollection(metadataPath); err == nil {
+			paths = append(paths, collectionPaths...)
+		}
+	} else {
+		paths = append(paths, metadataPath)
+	}
+
+	for _, target := range paths {
+		res, err := recon.GetLocalResource(target)
+		if err != nil {
+			continue
+		}
+		for _, attr := range findUnmappedSecretPaths(res, nil, resource.IsCollectionPath(target)) {
+			addCandidate(attr)
+		}
+	}
+
+	if len(candidateSet) == 0 {
+		return nil
+	}
+	candidates := make([]string, 0, len(candidateSet))
+	for value := range candidateSet {
+		candidates = append(candidates, value)
+	}
+	sort.Strings(candidates)
+	return candidates
 }
 
 func coerceStringSlice(values []any) ([]string, error) {

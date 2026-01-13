@@ -126,6 +126,8 @@ func newSecretGetCommand() *cobra.Command {
 	cmd.Flags().StringVar(&resourcePath, "path", "", "Resource path to read secrets for")
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to read")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -212,6 +214,8 @@ func newSecretAddCommand() *cobra.Command {
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to store")
 	cmd.Flags().StringVar(&value, "value", "", "Secret value to store")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -288,6 +292,8 @@ func newSecretDeleteCommand() *cobra.Command {
 	cmd.Flags().StringVar(&resourcePath, "path", "", "Resource path to delete secrets for")
 	cmd.Flags().StringVar(&key, "key", "", "Secret key to delete")
 	cmd.Flags().BoolVar(&yes, "yes", false, "Skip confirmation prompts")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
@@ -374,6 +380,8 @@ func newSecretListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&pathsOnly, "paths-only", false, "List only paths that have stored secrets")
 	cmd.Flags().BoolVar(&showSecrets, "show-secrets", false, "Include secret values in output")
 
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
+
 	return cmd
 }
 
@@ -452,6 +460,8 @@ func newSecretExportCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&resourcePath, "path", "", "Resource path to export secrets for")
 	cmd.Flags().BoolVar(&exportAll, "all", false, "Export secrets for all resources")
+
+	registerResourcePathCompletion(cmd, resourceRepoPathStrategy)
 
 	return cmd
 }
