@@ -2,11 +2,15 @@ package cmd_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"declarest/internal/resource"
 
 	cli "declarest/cli/cmd"
 )
@@ -113,6 +117,82 @@ func TestSecretCheckSkipsNonSecretTokenFlags(t *testing.T) {
 	}
 	if strings.Contains(output, "client.secret.creation.time") {
 		t.Fatalf("unexpected secret creation time warning, got %q", output)
+	}
+}
+
+func TestSecretCheckFixRespectsMetadataWildcardPath(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo")
+	contextPath := filepath.Join(home, "context.yaml")
+	specPath := filepath.Join(home, "openapi.yml")
+	secretStorePath := filepath.Join(home, "secrets.json")
+	passphrase := "change-me"
+
+	if err := os.WriteFile(specPath, []byte(cliInferSpecYAML), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	config := fmt.Sprintf(
+		`repository:
+  filesystem:
+    base_dir: %q
+managed_server:
+  http:
+    base_url: http://example.com
+    openapi: %q
+secret_store:
+  file:
+    path: %q
+    passphrase: %q
+`, repoDir, specPath, secretStorePath, passphrase)
+
+	if err := os.WriteFile(contextPath, []byte(config), 0o644); err != nil {
+		t.Fatalf("write context: %v", err)
+	}
+	addContext(t, "secret-check-wildcard", contextPath)
+
+	root := newRootCommand()
+	initCmd := findCommand(t, root, "secret", "init")
+	initCmd.SetOut(io.Discard)
+	initCmd.SetErr(io.Discard)
+	if err := initCmd.RunE(initCmd, nil); err != nil {
+		t.Fatalf("secret init: %v", err)
+	}
+
+	writeResourceFile(t, repoDir, "/fruits/apple", `{"password":"s3cr3t"}`)
+
+	checkCmd := findCommand(t, root, "secret", "check")
+	checkCmd.SetOut(io.Discard)
+	checkCmd.SetErr(io.Discard)
+	if err := checkCmd.Flags().Set("fix", "true"); err != nil {
+		t.Fatalf("set fix: %v", err)
+	}
+	if err := checkCmd.RunE(checkCmd, []string{"/fruits/apple"}); err != nil {
+		t.Fatalf("secret check --fix: %v", err)
+	}
+
+	metadataPath := filepath.Join(repoDir, "fruits", "_", "_", "metadata.json")
+	data, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+
+	var meta resource.ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected resourceInfo metadata")
+	}
+	found := false
+	for _, attr := range meta.ResourceInfo.SecretInAttributes {
+		if attr == "password" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected password to be marked as secret, got %v", meta.ResourceInfo.SecretInAttributes)
 	}
 }
 

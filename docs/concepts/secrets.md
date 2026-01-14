@@ -65,6 +65,8 @@ declarest secret check --fix
 declarest secret add /teams/platform/users/alice credentials.password change-me
 ```
 
+When `declarest secret check --fix` maps secrets, it now reuses the OpenAPI-based wildcard metadata path selection from `metadata infer` so `resourceInfo.secretInAttributes` is written once for the inferred collection instead of creating resource-specific metadata files.
+
 ## Printing resources with or without secrets
 
 - Default output masks secrets.

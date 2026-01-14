@@ -61,7 +61,7 @@ Manage secrets in the configured secret store.
 - `secret list`: default groups keys by resource path; `--paths-only` shows only resource paths, `--show-secrets` includes values (flags are mutually exclusive).
 - `secret export`: write secrets to CSV (`--path` or `--all`).
 - `secret import`: load secrets from CSV (`--file` or positional file, use `--force` to override).
-- `secret check`: scan resources for unmapped secrets and optionally `--fix` to map them and rewrite resources (requires an enabled secret store).
+- `secret check`: scan resources for unmapped secrets and optionally `--fix` to map them and rewrite resources (requires an enabled secret store) while reusing the OpenAPI-based wildcard metadata path selection from `metadata infer` so `resourceInfo.secretInAttributes` stays in the inferred collection metadata.
 
 Secret subcommands reuse the common `<path>` completion helper, so their path suggestions match the repository/OpenAPI-aware entries shown elsewhere in the CLI.
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"declarest/internal/metadata"
+	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
 	"declarest/internal/resource"
 	"declarest/internal/secrets"
@@ -41,6 +42,11 @@ func newSecretCheckCommand() *cobra.Command {
 			}
 			if err != nil {
 				return wrapSecretStoreError(err)
+			}
+
+			var spec *openapi.Spec
+			if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
+				spec = provider.OpenAPISpec()
 			}
 
 			targets, err := secretCheckTargets(recon, path)
@@ -99,7 +105,12 @@ func newSecretCheckCommand() *cobra.Command {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Skipping %s: collection resources cannot be fixed; save items instead.\n", target)
 					continue
 				}
-				if err := recon.UpdateLocalMetadata(target, func(meta map[string]any) (bool, error) {
+				logicalPath := resource.NormalizePath(target)
+				metadataTargetPath := inferenceMetadataTargetPath(spec, logicalPath, logicalPath, true, false)
+				if err := validateMetadataPath(cmd, metadataTargetPath); err != nil {
+					return err
+				}
+				if err := recon.UpdateLocalMetadata(metadataTargetPath, func(meta map[string]any) (bool, error) {
 					return mergeSecretInAttributes(meta, findings[target])
 				}); err != nil {
 					return wrapSecretStoreError(err)

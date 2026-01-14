@@ -414,6 +414,11 @@ calculate_total_steps() {
     total=$((total + 1))
     total=$((total + 1))
 
+    # Testing secret check metadata
+    if [[ "$secret_provider" != "none" ]]; then
+        total=$((total + 1))
+    fi
+
     # Testing variation flows
     total=$((total + server_variation_count + secret_variation_count + repo_variation_count + 1))
 
@@ -610,6 +615,17 @@ run_testing_declarest_main_flows() {
     current_group=""
 }
 
+run_testing_secret_check_metadata() {
+    current_group="Testing secret check metadata"
+    set_context "primary"
+    local should_run="$should_run_declarest"
+    if [[ "$secret_provider" == "none" ]]; then
+        should_run=0
+    fi
+    run_step "Validating secret check metadata mapping" "$should_run" "$SCRIPTS_DIR/declarest/secret-check-metadata-smoke.sh"
+    current_group=""
+}
+
 run_testing_variation_flows() {
     current_group="Testing variation flows"
     set_context "primary"
@@ -730,6 +746,7 @@ run_keycloak_full_flow() {
     run_testing_metadata_operations
     run_testing_openapi_operations
     run_testing_declarest_main_flows
+    run_testing_secret_check_metadata
     run_testing_variation_flows
 
     if [[ "$script_invoked_directly" -eq 1 ]]; then
