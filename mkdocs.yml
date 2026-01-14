@@ -30,7 +30,9 @@ nav:
     - Secrets: concepts/secrets.md
   - Workflows:
     - Syncing resources: workflows/sync.md
+    - Editing contexts & metadata: workflows/editing.md
     - Repository operations: workflows/repository.md
+    - Ad-hoc requests: workflows/ad-hoc.md
   - Reference:
     - Configuration: reference/configuration.md
     - CLI: reference/cli.md
