@@ -70,6 +70,48 @@ sed -i 's|base_url: \"\"|base_url: https://example.com/api|' "$1"
 	}
 }
 
+func TestConfigEditUsesDefaultEditor(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo-default")
+	contextPath := filepath.Join(home, "context-default-editor.yaml")
+	writeContextConfig(t, contextPath, repoDir, "https://example.com/api")
+	addContext(t, "default-editor", contextPath)
+
+	editorPath := filepath.Join(home, "default-editor.sh")
+	captured := filepath.Join(home, "default-editor-touched.txt")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+
+touch %q
+cat > "$1" <<'EOF'
+repository:
+  filesystem:
+    base_dir: %s
+managed_server:
+  http:
+    base_url: https://example.com/api
+EOF
+`, captured, repoDir)
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	setDefaultEditor(t, editorPath)
+
+	root := newRootCommand()
+	command := findCommand(t, root, "config", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.RunE(command, []string{"default-editor"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	if _, err := os.Stat(captured); err != nil {
+		t.Fatalf("expected default editor script to run: %v", err)
+	}
+}
+
 func TestConfigEditAddsContext(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo2")

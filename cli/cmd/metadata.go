@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	ctx "declarest/internal/context"
 	"declarest/internal/metadata"
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
@@ -104,7 +105,11 @@ func newMetadataEditCommand() *cobra.Command {
 				return fmt.Errorf("write temp metadata file: %w", err)
 			}
 
-			editorArgs, err := resolveEditorCommand(editor)
+			defaultEditor, err := metadataDefaultEditor()
+			if err != nil {
+				return err
+			}
+			editorArgs, err := resolveEditorCommand(editor, defaultEditor)
 			if err != nil {
 				return err
 			}
@@ -753,8 +758,16 @@ func parseMetadataValue(raw string) (any, error) {
 	return value, nil
 }
 
-func resolveEditorCommand(override string) ([]string, error) {
+func metadataDefaultEditor() (string, error) {
+	manager := &ctx.DefaultContextManager{}
+	return manager.GetDefaultEditor()
+}
+
+func resolveEditorCommand(override, fallback string) ([]string, error) {
 	editor := strings.TrimSpace(override)
+	if editor == "" {
+		editor = strings.TrimSpace(fallback)
+	}
 	if editor == "" {
 		editor = "vi"
 	}

@@ -186,6 +186,16 @@ Contexts are stored in `DECLAREST_HOME/.declarest/config` by default (`DECLAREST
 
 Use `declarest config list` and `declarest config use` to manage the active context.
 
+## Default editor
+
+Add a top-level `defaultEditor` entry next to `contexts` and `currentContext` in the context store (typically `DECLAREST_HOME/.declarest/config`) to change the default editor command that powers `config edit` and `metadata edit` when `--editor` is omitted. For example:
+
+```yaml
+defaultEditor: code --wait
+```
+
+`config edit` and `metadata edit` use the configured command and fall back to `vi` when the field is absent; the `--editor` flag still overrides both the configured value and the `vi` fallback.
+
 ## Environment overrides
 
 DeclaREST honors these environment variables when determining where the context store lives:

@@ -33,7 +33,7 @@ Path arguments (positional `<path>` or `--path`) now provide context-aware shell
 Manage metadata definitions for resources and collections.
 
 - `metadata get`: render the effective metadata after layering and template rendering.
-- `metadata edit`: open the merged metadata with defaults filled for every attribute (even ones you never defined) so the template shows the full shape, then strip those defaults before saving so the file stays clean (`--editor` overrides the default `vi`). Inline comments describe each attribute and a top note reminds you the CLI ignores those comments before parsing so only overrides remain.
+- `metadata edit`: open the merged metadata with defaults filled for every attribute (even ones you never defined) so the template shows the full shape, then strip those defaults before saving so the file stays clean (`--editor` overrides the default editor set via `defaultEditor` in the context store and the CLI falls back to `vi`). Inline comments describe each attribute and a top note reminds you the CLI ignores those comments before parsing so only overrides remain.
 - `metadata set`/`unset`: modify metadata attributes/value pairs (`--value` accepts JSON literals, `resourceInfo.secretInAttributes` accepts comma-separated entries).
 - `metadata add`: write metadata from a JSON file (`--file` or positional argument).
 - `metadata update-resources`: re-save repository resources using the latest metadata rules (alias moves are tracked in the result).
@@ -71,7 +71,7 @@ Manage DeclaREST contexts and configuration files.
 
 - `config add`: register a context from a file or run the interactive setup when no file is provided (`--force` overrides existing contexts).
 - `config update`: replace an existing context from a configuration file.
-- `config edit`: edit a context’s configuration in your editor (`--editor` overrides the default `vi`); it preloads every attribute (filling unspecified values with the defaults) and, if you pass an existing config file, loads that file so you start with what is already defined. Inline comments explain each field and a heading reminds you defaults are stripped and comments are ignored before parsing. After you save, DeclaREST drops the defaults so only your overrides remain, and if you exit without making changes the command reports `[OK] no updates detected`.
+- `config edit`: edit a context’s configuration in your editor (`--editor` overrides the default editor set via `defaultEditor` in the context store and the CLI falls back to `vi`); it preloads every attribute (filling unspecified values with the defaults) and, if you pass an existing config file, loads that file so you start with what is already defined. Inline comments explain each field and a heading reminds you defaults are stripped and comments are ignored before parsing. After you save, DeclaREST drops the defaults so only your overrides remain, and if you exit without making changes the command reports `[OK] no updates detected`.
 - `config use`: set the default context.
 - `config rename`: rename a context.
 - `config list` / `config current`: show available contexts and the active one.

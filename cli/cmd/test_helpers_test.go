@@ -52,3 +52,11 @@ func addContext(t *testing.T, name, contextPath string) {
 		t.Fatalf("AddContext: %v", err)
 	}
 }
+
+func setDefaultEditor(t *testing.T, editor string) {
+	t.Helper()
+	manager := &ctx.DefaultContextManager{}
+	if err := manager.SetDefaultEditor(editor); err != nil {
+		t.Fatalf("SetDefaultEditor: %v", err)
+	}
+}

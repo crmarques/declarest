@@ -20,7 +20,7 @@ func TestResolveEditorCommandDefaultsToVi(t *testing.T) {
 		t.Fatalf("set EDITOR: %v", err)
 	}
 
-	args, err := resolveEditorCommand("")
+	args, err := resolveEditorCommand("", "")
 	if err != nil {
 		t.Fatalf("resolveEditorCommand: %v", err)
 	}
@@ -30,7 +30,18 @@ func TestResolveEditorCommandDefaultsToVi(t *testing.T) {
 }
 
 func TestResolveEditorCommandWithOverride(t *testing.T) {
-	args, err := resolveEditorCommand("code --wait")
+	args, err := resolveEditorCommand("code --wait", "")
+	if err != nil {
+		t.Fatalf("resolveEditorCommand: %v", err)
+	}
+	want := []string{"code", "--wait"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("expected %v, got %v", want, args)
+	}
+}
+
+func TestResolveEditorCommandUsesFallback(t *testing.T) {
+	args, err := resolveEditorCommand("", "code --wait")
 	if err != nil {
 		t.Fatalf("resolveEditorCommand: %v", err)
 	}

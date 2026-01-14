@@ -81,7 +81,11 @@ func newConfigEditCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				return fmt.Errorf("write temp config file: %w", err)
 			}
 
-			editorArgs, err := resolveEditorCommand(editor)
+			defaultEditor, err := manager.GetDefaultEditor()
+			if err != nil {
+				return err
+			}
+			editorArgs, err := resolveEditorCommand(editor, defaultEditor)
 			if err != nil {
 				return err
 			}

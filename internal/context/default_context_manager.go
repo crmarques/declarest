@@ -36,6 +36,7 @@ type storedContext struct {
 type contextStore struct {
 	Contexts       []storedContext `yaml:"contexts"`
 	CurrentContext string          `yaml:"currentContext"`
+	DefaultEditor  string          `yaml:"defaultEditor,omitempty"`
 }
 
 func (m *DefaultContextManager) AddContext(name string, file string) error {
@@ -220,6 +221,19 @@ func (m *DefaultContextManager) SetDefaultContext(name string) error {
 	return m.saveStore(store)
 }
 
+func (m *DefaultContextManager) SetDefaultEditor(editor string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	store, err := m.loadStore()
+	if err != nil {
+		return err
+	}
+
+	store.DefaultEditor = strings.TrimSpace(editor)
+	return m.saveStore(store)
+}
+
 func (m *DefaultContextManager) GetDefaultContext() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -234,6 +248,18 @@ func (m *DefaultContextManager) GetDefaultContext() (string, error) {
 	}
 
 	return store.CurrentContext, nil
+}
+
+func (m *DefaultContextManager) GetDefaultEditor() (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	store, err := m.loadStore()
+	if err != nil {
+		return "", err
+	}
+
+	return store.DefaultEditor, nil
 }
 
 func (m *DefaultContextManager) ListContexts() ([]string, error) {

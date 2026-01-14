@@ -18,4 +18,6 @@ Commands obtain a reconciler via `loadDefaultReconciler` (or equivalent).
 - `repository.filesystem.base_dir`: non-Git filesystem repository.
 - `metadata.base_dir`: optional path where metadata files are stored; defaults to the same base directory configured for the repository.
 
+The context store also captures a top-level `defaultEditor` entry (alongside `contexts` and `currentContext`). When present, `config edit` and `metadata edit` use the configured command to launch your editor; otherwise they default to `vi`. `--editor` overrides both the store value and the fallback.
+
 If an existing context format already exists, do not invent a new one.

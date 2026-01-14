@@ -208,6 +208,64 @@ sed -i 's/"aliasFromAttribute": "id"/"aliasFromAttribute": "name"/' "$1"
 	}
 }
 
+func TestMetadataEditUsesDefaultEditor(t *testing.T) {
+	home := setTempHome(t)
+	repoDir := filepath.Join(home, "repo-default-meta")
+	contextPath := filepath.Join(home, "context.yaml")
+	writeContextConfig(t, contextPath, repoDir, "")
+	addContext(t, "meta-default-editor", contextPath)
+
+	editorPath := filepath.Join(home, "metadata-default-editor.sh")
+	captured := filepath.Join(home, "metadata-default-editor.txt")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -euo pipefail
+
+cat > "$1" <<'EOF'
+{
+  "resourceInfo": {
+    "aliasFromAttribute": "name"
+  }
+}
+EOF
+
+touch %q
+`, captured)
+	if err := os.WriteFile(editorPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write editor script: %v", err)
+	}
+
+	setDefaultEditor(t, editorPath)
+
+	root := newRootCommand()
+	command := findCommand(t, root, "metadata", "edit")
+	command.SetOut(io.Discard)
+	command.SetErr(io.Discard)
+
+	if err := command.RunE(command, []string{"/items/"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repoDir, "items", "_", "metadata.json"))
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+
+	var meta resource.ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected resourceInfo metadata")
+	}
+	if meta.ResourceInfo.AliasFromAttribute != "name" {
+		t.Fatalf("unexpected aliasFromAttribute: %q", meta.ResourceInfo.AliasFromAttribute)
+	}
+
+	if _, err := os.Stat(captured); err != nil {
+		t.Fatalf("expected default editor script to run: %v", err)
+	}
+}
+
 func TestMetadataEditRejectsInvalidMetadata(t *testing.T) {
 	home := setTempHome(t)
 	repoDir := filepath.Join(home, "repo-invalid-metadata")
