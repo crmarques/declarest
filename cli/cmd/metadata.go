@@ -137,6 +137,7 @@ func newMetadataEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			applyListCollectionTemplateDefaults(defaultMap)
 
 			stripped := stripDefaultMetadata(editedMeta, defaultMap)
 			if err := recon.UpdateLocalMetadata(path, func(meta map[string]any) (bool, error) {
@@ -829,6 +830,7 @@ func marshalMetadataEditPayloadWithComments(payload any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	applyListCollectionTemplateDefaults(metaMap)
 
 	var builder strings.Builder
 	for _, line := range strings.Split(metadataEditTemplateHeader, "\n") {
@@ -972,14 +974,68 @@ func newMetadataEditComments() map[string]string {
 		comments[prefix+".url.queryStrings"] = "Query parameters (key=value or templated values)."
 		comments[prefix+".httpMethod"] = "HTTP method used for this operation (auto-filled)."
 		comments[prefix+".httpHeaders"] = "Headers sent with the request; values may reference templates."
-		comments[prefix+".payload"] = "Payload transforms (suppress/filter/jq) before sending."
-		comments[prefix+".payload.suppressAttributes"] = "Attributes removed from the outgoing payload."
-		comments[prefix+".payload.filterAttributes"] = "Attributes whitelisted in the outgoing payload."
-		comments[prefix+".payload.jqExpression"] = "jq expression applied to the outgoing payload."
-		comments[prefix+".jqFilter"] = "jq expression run on responses; useful for list endpoints."
+		comments[prefix+".payload"] = "Payload transforms (suppress/filter/jq) before sending requests or trimming fetched items."
+		comments[prefix+".payload.suppressAttributes"] = "Attributes removed from outgoing requests or fetched items."
+		comments[prefix+".payload.filterAttributes"] = "Attributes whitelisted in outgoing requests or kept on fetched items."
+		comments[prefix+".payload.jqExpression"] = "jq expression applied to outgoing payloads or fetched items."
+		comments[prefix+".jqFilter"] = "jq expression run on list responses before alias/id matching; can filter/select items."
 	}
 
 	return comments
+}
+
+func applyListCollectionTemplateDefaults(meta map[string]any) {
+	if meta == nil {
+		return
+	}
+	opInfo := ensureMetadataMap(meta, "operationInfo")
+	if opInfo == nil {
+		return
+	}
+
+	list := ensureMetadataMap(opInfo, "listCollection")
+	if list == nil {
+		return
+	}
+
+	ensureStringField(list, "jqFilter", "")
+	payload := ensureMetadataMap(list, "payload")
+	ensureSliceField(payload, "filterAttributes")
+	ensureSliceField(payload, "suppressAttributes")
+	ensureStringField(payload, "jqExpression", "")
+}
+
+func ensureMetadataMap(parent map[string]any, key string) map[string]any {
+	if parent == nil {
+		return nil
+	}
+	if child, ok := parent[key]; ok {
+		if cast, ok := child.(map[string]any); ok {
+			return cast
+		}
+		return nil
+	}
+	child := map[string]any{}
+	parent[key] = child
+	return child
+}
+
+func ensureStringField(parent map[string]any, key, value string) {
+	if parent == nil {
+		return
+	}
+	if _, ok := parent[key]; !ok {
+		parent[key] = value
+	}
+}
+
+func ensureSliceField(parent map[string]any, key string) {
+	if parent == nil {
+		return
+	}
+	if _, ok := parent[key]; !ok {
+		parent[key] = []any{}
+	}
 }
 
 type secretListInput struct {
