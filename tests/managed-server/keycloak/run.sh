@@ -295,7 +295,6 @@ case "$command" in
                     if [[ ! -f "$provider_env" ]]; then
                         die "Provider env file missing: $provider_env"
                     fi
-                    # shellcheck source=/dev/null
                     source "$provider_env"
                 fi
             fi

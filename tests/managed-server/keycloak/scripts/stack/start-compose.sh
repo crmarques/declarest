@@ -4,11 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=../lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
-# shellcheck source=../lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
-# shellcheck source=../lib/ports.sh
 source "$SCRIPTS_DIR/lib/ports.sh"
 
 cleanup_existing() {
@@ -19,7 +16,6 @@ cleanup_existing() {
         (cd "$DECLAREST_COMPOSE_DIR" && run_logged "compose down" "$CONTAINER_RUNTIME" compose -p "$project_name" down --remove-orphans)
     fi
 
-    # Fallback cleanup if compose metadata is gone (e.g., work dir wiped).
     mapfile -t compose_containers < <("$CONTAINER_RUNTIME" ps -aq --filter "label=com.docker.compose.project=${project_name}")
     if ((${#compose_containers[@]} > 0)); then
         run_logged "remove compose containers" "$CONTAINER_RUNTIME" rm -f "${compose_containers[@]}"

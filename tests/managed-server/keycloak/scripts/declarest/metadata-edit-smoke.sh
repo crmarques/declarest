@@ -43,7 +43,6 @@ cat > "$EDITOR_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-# No edits needed; metadata edit should strip defaults when saving.
 exit 0
 EOF
 chmod 0755 "$EDITOR_SCRIPT"

@@ -47,14 +47,14 @@ func TestConfigAddInteractiveFilesystem(t *testing.T) {
 	repoDir := filepath.Join(home, "repo")
 	baseURL := "http://localhost:1234"
 	inputParts := []string{
-		"test", // context name
-		"",     // repository type (default filesystem)
+		"test",
+		"",
 		repoDir,
 		baseURL,
-		"", // openapi
-		"", // managed auth
-		"", // headers
-		"", // secret store
+		"",
+		"",
+		"",
+		"",
 	}
 	input := strings.Join(inputParts, "\n") + "\n"
 	cmd.SetIn(strings.NewReader(input))
@@ -107,15 +107,15 @@ func TestConfigAddInteractiveGitRemote(t *testing.T) {
 		"git-remote",
 		repoDir,
 		remoteURL,
-		"", // remote auth
-		"", // branch
-		"", // auto sync
-		"", // skip TLS
+		"",
+		"",
+		"",
+		"",
 		baseURL,
-		"", // openapi
-		"", // managed auth
-		"", // headers
-		"", // secret store
+		"",
+		"",
+		"",
+		"",
 	}
 	input := strings.Join(inputParts, "\n") + "\n"
 	cmd.SetIn(strings.NewReader(input))

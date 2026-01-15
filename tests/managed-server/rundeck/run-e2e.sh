@@ -27,7 +27,6 @@ Options:
 USAGE
 }
 
-# shellcheck source=scripts/lib/shell.sh
 source "$SCRIPTS_DIR/lib/shell.sh"
 
 resolve_container_runtime() {
@@ -97,9 +96,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# shellcheck source=scripts/lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
-# shellcheck source=scripts/lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/file"
@@ -227,7 +224,6 @@ run_preparing_services() {
     run_step "Starting Rundeck" 1 "$SCRIPTS_DIR/stack/start.sh"
     run_step "Preparing Rundeck services" 1 "$SCRIPTS_DIR/stack/prepare-services.sh"
     if [[ -f "$DECLAREST_RUNDECK_ENV_FILE" ]]; then
-        # shellcheck source=/dev/null
         source "$DECLAREST_RUNDECK_ENV_FILE"
     fi
 }

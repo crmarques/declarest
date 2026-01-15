@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
 GITHUB_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./prompts.sh
 source "$GITHUB_LIB_DIR/prompts.sh"
-# shellcheck source=./shell.sh
 source "$GITHUB_LIB_DIR/shell.sh"
 
 github_pat_load_defaults() {

@@ -10,23 +10,17 @@ import (
 	"declarest/internal/resource"
 )
 
-// InferenceOverrides let callers force specific attribute names instead of
-// relying purely on the OpenAPI heuristics.
 type InferenceOverrides struct {
 	IDAttribute    string
 	AliasAttribute string
 }
 
-// InferenceResult captures the suggested metadata plus reasoning for humans.
 type InferenceResult struct {
 	ResourceInfo  resource.ResourceInfoMetadata
 	OperationInfo *resource.OperationInfoMetadata
 	Reasons       []string
 }
 
-// InferResourceMetadata returns metadata suggestions derived from an OpenAPI
-// spec for the given logical path. The logicalPath value should not include a
-// trailing slash (normalize it with resource.NormalizePath before calling).
 func InferResourceMetadata(spec *openapi.Spec, logicalPath string, isCollection bool, overrides InferenceOverrides) InferenceResult {
 	logicalPath = resource.NormalizePath(logicalPath)
 	result := InferenceResult{

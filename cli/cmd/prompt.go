@@ -89,7 +89,7 @@ func normalizeLineInput(input string) string {
 	if !strings.ContainsAny(input, "\b\x7f") {
 		return input
 	}
-	// Some terminals send backspace/delete bytes; strip them from captured input.
+
 	normalized := make([]rune, 0, len(input))
 	for _, r := range input {
 		switch r {

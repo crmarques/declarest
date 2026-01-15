@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Common environment variables for the Keycloak test harness.
 export DECLAREST_TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export DECLAREST_TESTS_ROOT="$(cd "$DECLAREST_TEST_DIR/../.." && pwd)"
 export DECLAREST_RUN_ID="${DECLAREST_RUN_ID:-$(date +%Y%m%dT%H%M%S)}"
@@ -63,13 +62,11 @@ export DECLAREST_SECRETS_PASSPHRASE="${DECLAREST_SECRETS_PASSPHRASE:-declarest-e
 export DECLAREST_TEST_CLIENT_SECRET="${DECLAREST_TEST_CLIENT_SECRET:-declarest-client-secret}"
 export DECLAREST_TEST_LDAP_BIND_CREDENTIAL="${DECLAREST_TEST_LDAP_BIND_CREDENTIAL:-declarest-ldap-bind}"
 
-# Container runtime (docker or podman)
 export CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
     export COMPOSE_PROJECT_NAME="$(basename "$DECLAREST_WORK_DIR")"
 fi
 
-# Keycloak container settings
 if [[ -z "${KEYCLOAK_CONTAINER_NAME:-}" ]]; then
     if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
         export KEYCLOAK_CONTAINER_NAME="${COMPOSE_PROJECT_NAME}_keycloak-declarest-test_1"
@@ -98,7 +95,6 @@ else
     export KEYCLOAK_HTTP_PORT="18080"
 fi
 
-# Vault container settings (used for vault secret store tests when enabled)
 export VAULT_IMAGE="${VAULT_IMAGE:-docker.io/hashicorp/vault:1.17.2}"
 if [[ -z "${VAULT_CONTAINER_NAME:-}" ]]; then
     if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
@@ -142,7 +138,6 @@ export DECLAREST_VAULT_CLIENT_CERT_FILE="${DECLAREST_VAULT_CLIENT_CERT_FILE:-}"
 export DECLAREST_VAULT_CLIENT_KEY_FILE="${DECLAREST_VAULT_CLIENT_KEY_FILE:-}"
 export DECLAREST_VAULT_INSECURE_SKIP_VERIFY="${DECLAREST_VAULT_INSECURE_SKIP_VERIFY:-}"
 
-# GitLab container settings (used for git-remote tests when enabled)
 export GITLAB_IMAGE="${GITLAB_IMAGE:-docker.io/gitlab/gitlab-ce:16.9.1-ce.0}"
 export GITLAB_HOSTNAME="${GITLAB_HOSTNAME:-gitlab}"
 export GITLAB_ROOT_PASSWORD="${GITLAB_ROOT_PASSWORD:-Dcl9T7pR2X5mZ${DECLAREST_RUN_ID}}"
@@ -183,7 +178,6 @@ else
     export GITLAB_SSH_PORT="2222"
 fi
 
-# Gitea container settings (used for git-remote tests when enabled)
 export GITEA_IMAGE="${GITEA_IMAGE:-docker.io/gitea/gitea:1.25.3-rootless}"
 export GITEA_HOSTNAME="${GITEA_HOSTNAME:-gitea}"
 export GITEA_USER="${GITEA_USER:-declarest}"
@@ -224,6 +218,5 @@ fi
 
 vault_env_file="${DECLAREST_WORK_DIR:-}/vault.env"
 if [[ -n "$vault_env_file" && -f "$vault_env_file" ]]; then
-    # shellcheck source=/dev/null
     source "$vault_env_file"
 fi

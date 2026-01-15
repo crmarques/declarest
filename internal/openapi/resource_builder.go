@@ -37,14 +37,10 @@ func schemaForResource(spec *Spec, logicalPath string) map[string]any {
 	return schemaForPathAndMethods(spec, normalized, []string{"put", "patch", "post"})
 }
 
-// ResourceRequestSchema returns the request schema associated with the
-// resource located at logicalPath (preferring collection POST payloads).
 func ResourceRequestSchema(spec *Spec, logicalPath string) map[string]any {
 	return schemaForResource(spec, logicalPath)
 }
 
-// CollectionRequestSchema returns the request schema associated with the
-// collection located at logicalPath (the POST payload for that collection).
 func CollectionRequestSchema(spec *Spec, logicalPath string) map[string]any {
 	return schemaForPathAndMethods(spec, resource.NormalizePath(logicalPath), []string{"post"})
 }

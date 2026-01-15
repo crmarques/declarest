@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 ARGS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./shell.sh
 source "$ARGS_LIB_DIR/shell.sh"
 
 require_arg() {

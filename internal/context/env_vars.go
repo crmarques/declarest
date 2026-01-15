@@ -18,8 +18,6 @@ type ConfigPathInfo struct {
 	FromEnv bool
 }
 
-// ConfigDirPathInfo returns the directory where DeclaREST stores context configurations,
-// honoring DECLAREST_CONFIG_DIR when it is set.
 func ConfigDirPathInfo() (ConfigPathInfo, error) {
 	if dir, ok := configDirEnvValue(); ok {
 		return ConfigPathInfo{Path: dir, FromEnv: true}, nil
@@ -31,8 +29,6 @@ func ConfigDirPathInfo() (ConfigPathInfo, error) {
 	return ConfigPathInfo{Path: filepath.Join(home, defaultConfigDir), FromEnv: false}, nil
 }
 
-// ConfigFilePathInfo returns the path to the context store file, honoring DECLAREST_CONFIG_FILE
-// or constructing the default inside the chosen config directory.
 func ConfigFilePathInfo() (ConfigPathInfo, error) {
 	if file, ok := configFileEnvValue(); ok {
 		return ConfigPathInfo{Path: file, FromEnv: true}, nil

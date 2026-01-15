@@ -7,7 +7,6 @@ import (
 	"declarest/internal/resource"
 )
 
-// ValidateMetadataDocument ensures the provided map matches the expected metadata schema.
 func ValidateMetadataDocument(doc map[string]any) error {
 	if doc == nil {
 		return nil

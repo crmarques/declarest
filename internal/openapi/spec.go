@@ -540,7 +540,6 @@ func (s *Spec) schemaByRef(ref string) (map[string]any, bool) {
 	return schema, ok
 }
 
-// SchemaFromRef returns the schema definition referenced by the supplied OpenAPI $ref value.
 func (s *Spec) SchemaFromRef(ref string) (map[string]any, bool) {
 	return s.schemaByRef(ref)
 }

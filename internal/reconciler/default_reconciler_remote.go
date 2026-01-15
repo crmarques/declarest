@@ -70,7 +70,6 @@ func (r *DefaultReconciler) GetRemoteResource(path string) (resource.Resource, e
 		return err
 	}
 
-	// First try the literal path provided by the user.
 	literalOp := record.ReadOperation(false)
 	literalSpec, err := r.buildRequestSpecWithTarget(record, path, "", literalOp, false)
 	if err != nil {
@@ -83,9 +82,7 @@ func (r *DefaultReconciler) GetRemoteResource(path string) (resource.Resource, e
 		if err := resolve(); err != nil {
 			return resource.Resource{}, err
 		}
-		// Only attempt collection-based lookup when no local definition exists.
-		// When we do have local state, prefer the metadata-driven remote path
-		// (typically id-based) to avoid ambiguous alias matches.
+
 		if data.V == nil {
 			if target := resource.LastSegment(path); target != "" {
 				if fromCollection, ok, lookupErr := r.findResourceInCollection(resolvedRecord, replacements, target); lookupErr == nil && ok {
@@ -100,7 +97,6 @@ func (r *DefaultReconciler) GetRemoteResource(path string) (resource.Resource, e
 		return resource.Resource{}, err
 	}
 
-	// Fallback to metadata-driven path resolution.
 	if err := resolve(); err != nil {
 		return resource.Resource{}, err
 	}
@@ -171,7 +167,7 @@ func (r *DefaultReconciler) DeleteRemoteResource(path string) error {
 			return lookupErr
 		}
 		if !ok {
-			// Treat not found as an idempotent delete.
+
 			return nil
 		}
 		if altData.V != nil {
@@ -211,7 +207,7 @@ func (r *DefaultReconciler) SaveRemoteResource(path string, data resource.Resour
 		}
 		if err := r.updateRemoteResource(resolvedPath, record, data); err != nil {
 			if managedserver.IsNotFoundError(err) {
-				// Remote disappeared between existence check and update; try creating instead.
+
 				return r.createRemoteResource(record, data)
 			}
 			return err
@@ -492,7 +488,6 @@ func (r *DefaultReconciler) findResourceInCollection(record resource.ResourceRec
 		}
 	}
 
-	// Retry without jqFilter if no match found and a filter was applied.
 	if listOp != nil && strings.TrimSpace(listOp.JQFilter) != "" {
 		opNoFilter := *record.ReadOperation(true)
 		opNoFilter.JQFilter = ""

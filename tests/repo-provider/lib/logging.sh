@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-# Lightweight logging helpers shared by repo-provider scripts.
 
 timestamp() {
     date +"%Y-%m-%dT%H:%M:%S%z"

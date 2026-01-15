@@ -4,9 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=../lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
-# shellcheck source=../lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
 
 usage() {
@@ -75,8 +73,6 @@ remove_work_dir() {
         return 0
     fi
 
-    # Attempt to remove rootless container storage before deleting the work dir to
-    # avoid permission issues with overlay mounts owned by the user namespace.
     if [[ -n "$home_dir" && -d "$home_dir" && "$home_dir" == "$work_dir"* ]]; then
         storage_dir="$home_dir/.local/share/containers"
         if [[ -d "$storage_dir" ]] && runtime_available; then
@@ -87,9 +83,6 @@ remove_work_dir() {
 
     chmod -R u+w "$work_dir" >/dev/null 2>&1 || true
 
-    # The Vault container may write files owned by subordinate UIDs that are not removable
-    # from the host user namespace. Attempt a regular removal first, then fall back to a
-    # Podman user-namespace removal when available.
     set +e
     rm -rf "$work_dir"
     rm_status=$?

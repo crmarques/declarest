@@ -4,17 +4,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=../lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
-# shellcheck source=../lib/shell.sh
 source "$SCRIPTS_DIR/lib/shell.sh"
-# shellcheck source=../lib/shell.sh
 source "$SCRIPTS_DIR/lib/shell.sh"
-# shellcheck source=../lib/repo.sh
 source "$SCRIPTS_DIR/lib/repo.sh"
-# shellcheck source=../lib/cli.sh
 source "$SCRIPTS_DIR/lib/cli.sh"
-# shellcheck source=../lib/git-auth.sh
 source "$SCRIPTS_DIR/lib/git-auth.sh"
 
 repo_type="$(resolve_repo_type)"

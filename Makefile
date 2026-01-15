@@ -11,27 +11,27 @@ LDFLAGS := -s -w -X declarest/cli/cmd.Version=$(VERSION) -X declarest/cli/cmd.Co
 
 .PHONY: help build test run fmt tidy deps clean
 
-help: ## Show available targets
+help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .+' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-build: ## Compile the declarest CLI binary
+build:
 	mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) $(CMD)
 
-test: ## Run all unit tests with race detector
+test:
 	go test -race ./...
 
-run: ## Execute the CLI without building (use ARGS="...")
+run:
 	go run $(CMD) $(ARGS)
 
-fmt: ## Format Go source files
+fmt:
 	go fmt ./...
 
-tidy: ## Ensure go.mod/go.sum are tidy
+tidy:
 	go mod tidy
 
-deps: ## Download module dependencies
+deps:
 	go mod download
 
-clean: ## Remove build artifacts
+clean:
 	rm -rf $(BIN_DIR)

@@ -4,13 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=../lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
-# shellcheck source=../lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
-# shellcheck source=../lib/text.sh
 source "$SCRIPTS_DIR/lib/text.sh"
-# shellcheck source=../lib/cli.sh
 source "$SCRIPTS_DIR/lib/cli.sh"
 
 CLI_RETRY_PATTERN="502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|connection refused|connect: connection refused|EOF|i/o timeout"

@@ -528,7 +528,6 @@ func TestGetRemoteResourceFallsBackToAliasLookupOn404(t *testing.T) {
 
 	recon := newReconcilerWithServer(t, server)
 
-	// Override metadata for this path to ensure aliasFromAttribute is used.
 	provider := repository.NewDefaultResourceRecordProvider(filepath.Join("..", "..", "tests", "sample", "repo"), recon)
 	recon.ResourceRecordProvider = provider
 

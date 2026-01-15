@@ -49,9 +49,6 @@ func (rr ResourceRecord) AliasPath(res Resource) string {
 		return path
 	}
 
-	// Alias paths should be based on the local record path, not on the remote
-	// collection path from metadata overrides. This lets repositories keep a
-	// domain-friendly structure even when remote endpoints differ.
 	base := strings.TrimSpace(rr.Path)
 	if base == "" {
 		base = "/"
@@ -348,7 +345,6 @@ func suppressAttributes(src map[string]any, paths []string) map[string]any {
 	return cloned
 }
 
-// GetAttrPath retrieves a nested value from a map using dot-separated segments.
 func GetAttrPath(obj map[string]any, path string) (any, bool) {
 	segments := splitAttrPath(path)
 	if len(segments) == 0 {

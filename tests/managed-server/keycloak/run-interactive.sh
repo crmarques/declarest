@@ -25,9 +25,7 @@ Defaults:
 EOF
 }
 
-# shellcheck source=scripts/lib/args.sh
 source "$SCRIPTS_DIR/lib/args.sh"
-# shellcheck source=scripts/lib/github-auth.sh
 source "$SCRIPTS_DIR/lib/github-auth.sh"
 
 managed_server="keycloak"

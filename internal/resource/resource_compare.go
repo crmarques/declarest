@@ -2,7 +2,6 @@ package resource
 
 import "strings"
 
-// ApplyCompareRules prepares a resource for comparison by applying ignore/filter/suppress/jq rules.
 func ApplyCompareRules(res Resource, cmp *CompareMetadata) (Resource, error) {
 	if cmp == nil {
 		return res, nil

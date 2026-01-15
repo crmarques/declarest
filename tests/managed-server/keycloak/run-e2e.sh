@@ -10,12 +10,9 @@ fi
 KEYCLOAK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$KEYCLOAK_DIR/scripts"
 
-# shellcheck source=scripts/lib/args.sh
 source "$SCRIPTS_DIR/lib/args.sh"
-# shellcheck source=scripts/lib/github-auth.sh
 source "$SCRIPTS_DIR/lib/github-auth.sh"
 
-# Defaults provided by `tests/run-tests.sh`.
 managed_server="${DECLAREST_MANAGED_SERVER:-keycloak}"
 repo_provider="${DECLAREST_REPO_PROVIDER:-git}"
 secret_provider="${DECLAREST_SECRET_PROVIDER:-file}"
@@ -40,11 +37,8 @@ else
     should_run_variation=0
 fi
 
-# shellcheck source=scripts/lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
-# shellcheck source=scripts/lib/logging.sh
 source "$SCRIPTS_DIR/lib/logging.sh"
-# shellcheck source=scripts/lib/cli.sh
 source "$SCRIPTS_DIR/lib/cli.sh"
 
 REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/common"
@@ -383,47 +377,37 @@ calculate_variant_count() {
 calculate_total_steps() {
     local total=0
 
-    # Preparing workspace
     total=$((total + 1))
     if [[ "$secret_provider" == "none" ]]; then
         total=$((total + 1))
     fi
     total=$((total + 1))
 
-    # Preparing services
     total=$((total + 2))
 
-    # Configuring services
     total=$((total + 2))
     if [[ "$repo_type" == "git-remote" ]]; then
         total=$((total + 1))
     fi
 
-    # Configuring context
     total=$((total + 3))
 
-    # Testing context operations
     total=$((total + 1))
 
-    # Testing metadata operations
     total=$((total + 6))
 
-    # Testing OpenAPI operations
     total=$((total + 1))
 
-    # Testing DeclaREST main flows
     if [[ "$secret_provider" == "none" && "$repo_type" == "git-remote" ]]; then
         total=$((total + 1))
     fi
     total=$((total + 1))
     total=$((total + 1))
 
-    # Testing secret check metadata
     if [[ "$secret_provider" != "none" ]]; then
         total=$((total + 1))
     fi
 
-    # Testing variation flows
     total=$((total + server_variation_count + secret_variation_count + repo_variation_count + 1))
 
     TOTAL_STEPS="$total"
@@ -541,7 +525,6 @@ run_preparing_services() {
         if [[ ! -f "$provider_env" ]]; then
             die "${provider_label} env file missing: $provider_env"
         fi
-        # shellcheck source=/dev/null
         source "$provider_env"
     fi
     current_group=""
