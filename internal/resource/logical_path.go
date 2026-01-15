@@ -62,3 +62,20 @@ func SplitPathSegments(path string) []string {
 	}
 	return segments
 }
+
+func PathWildcardVariants(segments []string) [][]string {
+	if len(segments) == 0 {
+		return nil
+	}
+
+	results := [][]string{{}}
+	for _, segment := range segments {
+		var next [][]string
+		for _, prefix := range results {
+			next = append(next, append(append([]string{}, prefix...), segment))
+			next = append(next, append(append([]string{}, prefix...), "_"))
+		}
+		results = next
+	}
+	return results
+}

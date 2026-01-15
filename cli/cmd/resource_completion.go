@@ -792,7 +792,7 @@ func metadataCompletionNode(baseDir string, segments []string) (string, bool) {
 		return "", false
 	}
 
-	for _, candidate := range expandWithWildcards(segments) {
+	for _, candidate := range resource.PathWildcardVariants(segments) {
 		path := filepath.Join(current, filepath.Join(candidate...))
 		if !dirExists(path) {
 			continue
@@ -803,23 +803,6 @@ func metadataCompletionNode(baseDir string, segments []string) (string, bool) {
 	}
 
 	return "", false
-}
-
-func expandWithWildcards(segments []string) [][]string {
-	if len(segments) == 0 {
-		return nil
-	}
-
-	results := [][]string{{}}
-	for _, segment := range segments {
-		var next [][]string
-		for _, prefix := range results {
-			next = append(next, append(append([]string{}, prefix...), segment))
-			next = append(next, append(append([]string{}, prefix...), "_"))
-		}
-		results = next
-	}
-	return results
 }
 
 func dirExists(path string) bool {

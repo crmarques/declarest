@@ -248,7 +248,7 @@ func metadataRelPaths(segments, collectionSegments []string, isCollection bool) 
 	addCandidate(filepath.Join("_", "metadata.json"), 1, 1)
 
 	for depth := 1; depth <= len(collectionSegments); depth++ {
-		for _, variant := range expandWithWildcards(collectionSegments[:depth]) {
+		for _, variant := range resource.PathWildcardVariants(collectionSegments[:depth]) {
 			wildcards := countWildcards(variant)
 			addCandidate(filepath.Join(filepath.Join(variant...), "metadata.json"), len(variant), wildcards)
 			addCandidate(filepath.Join(filepath.Join(variant...), "_", "metadata.json"), len(variant)+1, wildcards+1)
@@ -291,24 +291,6 @@ func metadataRelPaths(segments, collectionSegments []string, isCollection bool) 
 	}
 
 	return files
-}
-
-func expandWithWildcards(segments []string) [][]string {
-	if len(segments) == 0 {
-		return nil
-	}
-
-	results := [][]string{{}}
-	for _, segment := range segments {
-		var next [][]string
-		for _, prefix := range results {
-			next = append(next, append(append([]string{}, prefix...), segment))
-			next = append(next, append(append([]string{}, prefix...), "_"))
-		}
-		results = next
-	}
-
-	return results
 }
 
 func countWildcards(segments []string) int {
