@@ -1,0 +1,5 @@
+{
+    "resourceInfo": {
+        "collectionPath": "/admin/realms/{{.realm}}/user-store/"
+    }
+}

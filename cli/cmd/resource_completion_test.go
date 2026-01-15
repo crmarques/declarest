@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
+	"declarest/internal/repository"
 	"declarest/internal/resource"
 )
 
@@ -320,5 +323,68 @@ func TestCompletionHasResourceEntries(t *testing.T) {
 				t.Fatalf("completionHasResourceEntries() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMetadataChildEntries(t *testing.T) {
+	metaDir := t.TempDir()
+	metaPath := filepath.Join(metaDir, "admin", "realms", "_", "user-store", "_")
+	if err := os.MkdirAll(metaPath, 0o755); err != nil {
+		t.Fatalf("mkdir metadata path: %v", err)
+	}
+	metaFile := filepath.Join(metaPath, "metadata.json")
+	if err := os.WriteFile(metaFile, []byte(`{
+  "resourceInfo": {
+    "collectionPath": "/admin/realms/{{.realm}}/user-store/"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write metadata file: %v", err)
+	}
+
+	recon := &reconciler.DefaultReconciler{
+		ResourceRecordProvider: repository.NewDefaultResourceRecordProvider(metaDir, nil),
+	}
+
+	expect := []string{"/admin/realms/publico/user-store/"}
+	info := newCompletionPrefixInfo("/admin/realms/publico/")
+	entries, ok := metadataChildEntries(recon, info)
+	if !ok {
+		t.Fatalf("expected metadata entries for /admin/realms/publico/")
+	}
+	if got := entriesValues(entries); !reflect.DeepEqual(got, expect) {
+		t.Fatalf("metadata entries = %v, want %v", got, expect)
+	}
+
+	info = newCompletionPrefixInfo("/admin/realms/publico/u")
+	entries, ok = metadataChildEntries(recon, info)
+	if !ok {
+		t.Fatalf("expected metadata entries for partial prefix /admin/realms/publico/u")
+	}
+	if got := entriesValues(entries); !reflect.DeepEqual(got, expect) {
+		t.Fatalf("metadata entries for partial prefix = %v, want %v", got, expect)
+	}
+}
+
+func TestMetadataChildEntriesTemplateRepo(t *testing.T) {
+	metaDir := filepath.Join("..", "..", "tests", "managed-server", "keycloak", "templates", "repo")
+	recon := &reconciler.DefaultReconciler{
+		ResourceRecordProvider: repository.NewDefaultResourceRecordProvider(metaDir, nil),
+	}
+
+	info := newCompletionPrefixInfo("/admin/realms/publico/")
+	entries, ok := metadataChildEntries(recon, info)
+	if !ok {
+		t.Fatalf("expected metadata entries for template repo")
+	}
+
+	found := false
+	for _, entry := range entries {
+		if entry.value == "/admin/realms/publico/user-store/" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("metadata entries missing user-store: %v", entries)
 	}
 }

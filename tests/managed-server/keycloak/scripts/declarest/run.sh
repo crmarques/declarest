@@ -157,6 +157,17 @@ test_ad_hoc_command() {
     fi
 }
 
+test_completion_metadata_fragment() {
+    log_line "Testing resource path completion includes metadata fragments"
+    local output
+    output=$(capture_cli "resource completion metadata" --no-status __complete resource get /admin/realms/publico/ "")
+    if ! grep -F "/admin/realms/publico/user-store/" <<<"$output"; then
+        log_line "Completion output missing /admin/realms/publico/user-store/"
+        echo "Expected metadata-defined fragment /admin/realms/publico/user-store/ in completion results" >&2
+        exit 1
+    fi
+}
+
 test_secret_export_import() {
     local export_file="$DECLAREST_WORK_DIR/secret-export.csv"
     mkdir -p "$(dirname "$export_file")"
@@ -347,6 +358,9 @@ fi
 
 sort_paths_by_depth local_paths local_paths_parent_first asc
 sort_paths_by_depth local_paths local_paths_child_first desc
+
+phase "Testing path completion fragments"
+test_completion_metadata_fragment
 
 phase "Creating remote resources"
 for local in "${local_paths_parent_first[@]}"; do

@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
+	"declarest/internal/repository"
 	"declarest/internal/resource"
 
 	"github.com/spf13/cobra"
@@ -104,10 +107,11 @@ func newOpenAPICompletionInfo(provider interface{}, prefix string) openAPIComple
 
 func registerResourcePathCompletion(cmd *cobra.Command, strategy pathCompletionStrategy) {
 	validator := func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) > 0 {
-			return nil, cobra.ShellCompDirectiveDefault
+		prefix := toComplete
+		if prefix == "" && len(args) > 0 {
+			prefix = args[len(args)-1]
 		}
-		return completeResourcePathCandidates(cmd, toComplete, strategy)
+		return completeResourcePathCandidates(cmd, prefix, strategy)
 	}
 	cmd.ValidArgsFunction = validator
 
@@ -156,12 +160,33 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 func gatherPathSuggestions(recon *reconciler.DefaultReconciler, prefix string, sources []pathCompletionSource) ([]pathCompletionEntry, bool) {
 	info := newCompletionPrefixInfo(prefix)
 	openAPIInfo := newOpenAPICompletionInfo(recon.ResourceRecordProvider, info.trimmed)
+	metadataEntries, hasMetadataEntries := metadataChildEntries(recon, info)
 	if openAPIInfo.hasEntries && info.lastToken != "" {
-		return openAPIInfo.entries, true
+		combined := make(map[string]pathCompletionEntry)
+		for _, entry := range openAPIInfo.entries {
+			combined[entry.value] = entry
+		}
+		for _, entry := range metadataEntries {
+			if _, exists := combined[entry.value]; exists {
+				continue
+			}
+			combined[entry.value] = entry
+		}
+		return completionEntriesToSortedList(combined), openAPIInfo.hasEntries || hasMetadataEntries
 	}
 
 	if info.hasTrailingSlash && openAPIInfo.hasSpec && openAPIInfo.hasPrefix && !openAPIInfo.isCollection {
-		return openAPIInfo.entries, openAPIInfo.hasEntries
+		combined := make(map[string]pathCompletionEntry)
+		for _, entry := range openAPIInfo.entries {
+			combined[entry.value] = entry
+		}
+		for _, entry := range metadataEntries {
+			if _, exists := combined[entry.value]; exists {
+				continue
+			}
+			combined[entry.value] = entry
+		}
+		return completionEntriesToSortedList(combined), openAPIInfo.hasEntries || hasMetadataEntries
 	}
 
 	entries := make(map[string]pathCompletionEntry)
@@ -200,7 +225,14 @@ func gatherPathSuggestions(recon *reconciler.DefaultReconciler, prefix string, s
 		entries[entry.value] = entry
 	}
 
-	return completionEntriesToSortedList(entries), openAPIInfo.hasEntries
+	for _, entry := range metadataEntries {
+		if _, exists := entries[entry.value]; exists {
+			continue
+		}
+		entries[entry.value] = entry
+	}
+
+	return completionEntriesToSortedList(entries), openAPIInfo.hasEntries || hasMetadataEntries
 }
 
 func completionHasResourceEntries(entries []pathCompletionEntry) bool {
@@ -685,6 +717,114 @@ func specCollectionPath(spec *openapi.Spec, prefix string) bool {
 		}
 	}
 	return false
+}
+
+func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPrefixInfo) ([]pathCompletionEntry, bool) {
+
+	provider, ok := recon.ResourceRecordProvider.(*repository.DefaultResourceRecordProvider)
+	if recon == nil || !ok {
+		return nil, false
+	}
+
+	metadataDir := strings.TrimSpace(provider.MetadataBaseDir)
+	if metadataDir == "" {
+		return nil, false
+	}
+
+	normalized := normalizedCompletionPrefix(info.trimmed)
+	segments := resource.SplitPathSegments(normalized)
+	baseSegments := segments
+	partial := ""
+	if !info.hasTrailingSlash && len(segments) > 0 {
+		partial = segments[len(segments)-1]
+		baseSegments = segments[:len(segments)-1]
+	}
+
+	node, ok := metadataCompletionNode(metadataDir, baseSegments)
+	if !ok {
+		return nil, false
+	}
+
+	parentPath := "/"
+	if len(baseSegments) > 0 {
+		parentPath = resource.NormalizePath("/" + strings.Join(baseSegments, "/"))
+	}
+
+	entries := make(map[string]pathCompletionEntry)
+	children, err := os.ReadDir(node)
+	if err != nil {
+		return nil, false
+	}
+	for _, child := range children {
+		if !child.IsDir() {
+			continue
+		}
+		name := child.Name()
+		if name == "_" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if partial != "" && !strings.HasPrefix(name, partial) {
+			continue
+		}
+		if !dirExists(filepath.Join(node, name, "_")) {
+			continue
+		}
+		value := completionPathForSegment(parentPath, name)
+		if value == "" {
+			continue
+		}
+		entries[value+"/"] = pathCompletionEntry{value: value + "/"}
+	}
+
+	return completionEntriesToSortedList(entries), len(entries) > 0
+}
+
+func metadataCompletionNode(baseDir string, segments []string) (string, bool) {
+	current := strings.TrimSpace(baseDir)
+	if current == "" {
+		return "", false
+	}
+
+	if len(segments) == 0 {
+		if dirExists(current) {
+			return current, true
+		}
+		return "", false
+	}
+
+	for _, candidate := range expandWithWildcards(segments) {
+		path := filepath.Join(current, filepath.Join(candidate...))
+		if !dirExists(path) {
+			continue
+		}
+		if filepath.Base(path) == "_" || dirExists(filepath.Join(path, "_")) {
+			return path, true
+		}
+	}
+
+	return "", false
+}
+
+func expandWithWildcards(segments []string) [][]string {
+	if len(segments) == 0 {
+		return nil
+	}
+
+	results := [][]string{{}}
+	for _, segment := range segments {
+		var next [][]string
+		for _, prefix := range results {
+			next = append(next, append(append([]string{}, prefix...), segment))
+			next = append(next, append(append([]string{}, prefix...), "_"))
+		}
+		results = next
+	}
+	return results
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func segmentsMatchBase(segments, base []string) bool {
