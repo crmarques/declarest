@@ -247,6 +247,8 @@ if [[ ! -d "$managed_dir" ]]; then
     exit 1
 fi
 
+managed_component_script="$managed_dir/run-e2e.sh"
+
 case "$mode" in
     e2e)
         runner="$managed_dir/run-e2e.sh"
@@ -265,7 +267,37 @@ if [[ ! -x "$runner" ]]; then
     exit 1
 fi
 
-TOTAL_GROUPS=10
+GROUP_DEFINITIONS=(
+    "Preparing workspace|run_preparing_workspace|"
+    "Preparing services|run_preparing_services|"
+    "Configuring services|run_configuring_services|"
+    "Configuring context|run_configuring_context|"
+    "Testing context operations|run_testing_context_operations|context"
+    "Testing metadata operations|run_testing_metadata_operations|metadata"
+    "Testing OpenAPI operations|run_testing_openapi_operations|openapi"
+    "Testing DeclaREST main flows|run_testing_declarest_main_flows|declarest"
+    "Testing secret check metadata|run_testing_secret_check_metadata|declarest"
+    "Testing variation flows|run_testing_variation_flows|variation"
+    "Finishing execution|run_finishing_execution|"
+)
+GROUP_TITLES=()
+GROUP_FUNCTIONS=()
+GROUP_SKIP_KEYS=()
+
+populate_group_definitions() {
+    local entry
+    for entry in "${GROUP_DEFINITIONS[@]}"; do
+        IFS='|' read -r title func skip <<< "$entry"
+        GROUP_TITLES+=("$title")
+        GROUP_FUNCTIONS+=("$func")
+        GROUP_SKIP_KEYS+=("$skip")
+    done
+}
+
+populate_group_definitions
+
+TOTAL_GROUPS=${#GROUP_TITLES[@]}
+EXEC_GROUP_TITLES=("${GROUP_TITLES[@]}")
 current_group_index=0
 tty_output=0
 if [[ -t 1 ]]; then
@@ -278,18 +310,7 @@ EXEC_HEADER="Execution"
 DURATION_HEADER="Duration"
 
 STATUS_VALUES=(RUNNING SKIPPED DONE FAILED)
-EXEC_GROUP_TITLES=(
-    "Preparing workspace"
-    "Preparing services"
-    "Configuring services"
-    "Configuring context"
-    "Testing context operations"
-    "Testing metadata operations"
-    "Testing OpenAPI operations"
-    "Testing DeclaREST main flows"
-    "Testing variation flows"
-    "Finishing execution"
-)
+
 STEP_COLUMN_WIDTH=${#STEP_HEADER}
 progress_sample="(${TOTAL_GROUPS}/${TOTAL_GROUPS})"
 if [[ ${#progress_sample} -gt STEP_COLUMN_WIDTH ]]; then
@@ -406,16 +427,21 @@ run_group() {
             skip_message="flag --skip-testing-openapi"
             ;;
         declarest)
-            skip_flag="$skip_declarest_flag"
-            skip_message="flag --skip-testing-declarest"
+            if [[ "$skip_declarest_flag" -eq 1 ]]; then
+                skip_flag=1
+                skip_message="flag --skip-testing-declarest"
+            elif [[ "${should_run_declarest:-0}" -eq 0 ]]; then
+                skip_flag=1
+                skip_message="main flows disabled"
+            fi
             ;;
         variation)
             if [[ "$skip_variation_flag" -eq 1 ]]; then
                 skip_flag=1
                 skip_message="flag --skip-testing-variation"
-            elif [[ "$should_run_variation" -eq 0 ]]; then
+            elif [[ "${should_run_variation:-0}" -eq 0 ]]; then
                 skip_flag=1
-                if [[ "$should_run_declarest" -eq 0 ]]; then
+                if [[ "${should_run_declarest:-0}" -eq 0 ]]; then
                     skip_message="main flows disabled"
                 else
                     skip_message="variation profile disabled"
@@ -473,37 +499,33 @@ run_group() {
     fi
 }
 
-run_keycloak_e2e_flow() {
+run_managed_server_e2e_flow() {
+    local script_path="$managed_component_script"
+    if [[ ! -f "$script_path" ]]; then
+        printf "Managed server component script not found: %s\n" "$script_path" >&2
+        exit 1
+    fi
+
     local previous_orchestrated="${DECLAREST_GROUP_ORCHESTRATOR:-}"
     export DECLAREST_GROUP_ORCHESTRATOR="1"
 
-    source "$managed_dir/run-e2e.sh"
+    source "$script_path"
 
-    echo "Starting Keycloak E2E run"
-    printf "Detailed log: %s\n" "$RUN_LOG"
-    log_line "Keycloak E2E run started"
-    log_line "Container runtime: $CONTAINER_RUNTIME"
-    log_line "E2E profile: $e2e_profile"
-
-    ensure_github_pat_ssh_credentials
+    printf "Starting %s E2E run\n" "$managed_server"
+    if declare -f managed_server_bootstrap >/dev/null 2>&1; then
+        managed_server_bootstrap
+    fi
+    printf "Detailed log: %s\n" "${RUN_LOG:-}"
 
     print_group_status_header
-
-    run_group "Preparing workspace" run_preparing_workspace
-    run_group "Preparing services" run_preparing_services
-    run_group "Configuring services" run_configuring_services
-    run_group "Configuring context" run_configuring_context
-    run_group "Testing context operations" run_testing_context_operations context
-    run_group "Testing metadata operations" run_testing_metadata_operations metadata
-    run_group "Testing OpenAPI operations" run_testing_openapi_operations openapi
-    run_group "Testing DeclaREST main flows" run_testing_declarest_main_flows declarest
-    run_group "Testing variation flows" run_testing_variation_flows variation
-    run_group "Finishing execution" run_finishing_execution
-
+    current_group_index=0
+    for idx in "${!GROUP_TITLES[@]}"; do
+        run_group "${GROUP_TITLES[$idx]}" "${GROUP_FUNCTIONS[$idx]}" "${GROUP_SKIP_KEYS[$idx]}"
+    done
     print_table_footer
 
     log_line "E2E test completed successfully"
-    printf "E2E test completed successfully. Log: %s\n" "$RUN_LOG"
+    printf "E2E test completed successfully. Log: %s\n" "${RUN_LOG:-}"
 
     if [[ -z "$previous_orchestrated" ]]; then
         unset DECLAREST_GROUP_ORCHESTRATOR
@@ -520,10 +542,8 @@ if [[ "$mode" == "interactive" ]]; then
         --repo-provider "$repo_provider" \
         --secret-provider "$secret_provider" \
         "${extra_args[@]}"
-fi
-
-if [[ "$mode" == "e2e" && "$managed_server" == "keycloak" ]]; then
-    run_keycloak_e2e_flow
+elif [[ "$mode" == "e2e" ]]; then
+    run_managed_server_e2e_flow
 else
     exec "$runner"
 fi

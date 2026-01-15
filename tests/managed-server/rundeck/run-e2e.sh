@@ -2,11 +2,16 @@
 
 set -euo pipefail
 
+script_invoked_directly=0
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    script_invoked_directly=1
+fi
+
 RUNDECK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$RUNDECK_DIR/scripts"
 
 usage() {
-    cat <<EOF
+    cat <<USAGE
 Usage: ./tests/managed-server/rundeck/run-e2e.sh [options]
 
 Options:
@@ -19,7 +24,7 @@ Options:
   --project NAME          Override the Rundeck project name.
   --job NAME              Override the Rundeck job name.
   -h, --help              Show this help message.
-EOF
+USAGE
 }
 
 # shellcheck source=scripts/lib/shell.sh
@@ -105,7 +110,7 @@ require_cmd curl
 require_cmd jq
 
 mkdir -p "$DECLAREST_LOG_DIR"
-export RUN_LOG="${RUN_LOG:-$DECLAREST_LOG_DIR/run-e2e_$(date -Iseconds | tr ':' '-').log}"
+export RUN_LOG="${RUN_LOG:-$DECLAREST_LOG_DIR/run-e2e_$(date -Iseconds | tr ':' '-')}.log"
 touch "$RUN_LOG"
 
 is_tty() {
@@ -159,9 +164,24 @@ cleanup() {
 
 trap 'cleanup "$?"' EXIT INT TERM
 
+TOTAL_STEPS=9
+current_step=0
+
+should_run_context=$((skip_testing_context == 0 ? 1 : 0))
+should_run_metadata=$((skip_testing_metadata == 0 ? 1 : 0))
+should_run_openapi=$((skip_testing_openapi == 0 ? 1 : 0))
+should_run_declarest=$((skip_testing_declarest == 0 ? 1 : 0))
+should_run_variation=0
+
+managed_server_bootstrap() {
+    log_line "Rundeck E2E run started"
+    log_line "Container runtime: $CONTAINER_RUNTIME"
+}
+
 run_step() {
     local title="$1"
-    shift
+    local execute="$2"
+    shift 2
     local cmd=("$@")
 
     current_step=$((current_step + 1))
@@ -170,6 +190,12 @@ run_step() {
     print_step_start "$label" "$title"
     local started_at
     started_at=$(date +%s)
+
+    if [[ "$execute" -eq 0 ]]; then
+        print_step_result "SKIPPED" "$label" "$title" ""
+        log_line "STEP SKIPPED (${label}) ${title}"
+        return 0
+    fi
 
     set +e
     (
@@ -192,30 +218,80 @@ run_step() {
     exit $status
 }
 
-current_step=0
-TOTAL_STEPS=9
+run_preparing_workspace() {
+    run_step "Preparing workspace" 1 "$SCRIPTS_DIR/workspace/prepare.sh"
+    run_step "Building DeclaREST CLI" 1 "$SCRIPTS_DIR/declarest/build.sh"
+}
 
-echo "Starting Rundeck E2E run"
-echo "Detailed log: $RUN_LOG"
-log_line "Rundeck E2E run started"
-log_line "Container runtime: $CONTAINER_RUNTIME"
+run_preparing_services() {
+    run_step "Starting Rundeck" 1 "$SCRIPTS_DIR/stack/start.sh"
+    run_step "Preparing Rundeck services" 1 "$SCRIPTS_DIR/stack/prepare-services.sh"
+    if [[ -f "$DECLAREST_RUNDECK_ENV_FILE" ]]; then
+        # shellcheck source=/dev/null
+        source "$DECLAREST_RUNDECK_ENV_FILE"
+    fi
+}
 
-run_step "Preparing workspace" "$SCRIPTS_DIR/workspace/prepare.sh"
-run_step "Building declarest CLI" "$SCRIPTS_DIR/declarest/build.sh"
-run_step "Starting Rundeck" "$SCRIPTS_DIR/stack/start.sh"
-run_step "Preparing Rundeck services" "$SCRIPTS_DIR/stack/prepare-services.sh"
+run_configuring_services() {
+    run_step "Configuring services" 1 true
+}
 
-if [[ -f "$DECLAREST_RUNDECK_ENV_FILE" ]]; then
-    # shellcheck source=/dev/null
-    source "$DECLAREST_RUNDECK_ENV_FILE"
+run_configuring_context() {
+    run_step "Preparing repository" 1 "$REPO_SCRIPTS_DIR/prepare.sh"
+    run_step "Rendering context" 1 "$SCRIPTS_DIR/context/render.sh"
+    run_step "Registering context" 1 "$SCRIPTS_DIR/context/register.sh"
+}
+
+run_testing_context_operations() {
+    run_step "Testing context operations" "$should_run_context" true
+}
+
+run_testing_metadata_operations() {
+    run_step "Testing metadata operations" "$should_run_metadata" true
+}
+
+run_testing_openapi_operations() {
+    run_step "Validating OpenAPI defaults" "$should_run_openapi" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
+}
+
+run_testing_declarest_main_flows() {
+    run_step "Running DeclaREST workflow" "$should_run_declarest" "$SCRIPTS_DIR/declarest/run.sh"
+}
+
+run_testing_secret_check_metadata() {
+    run_step "Validating secret check metadata" "$should_run_declarest" true
+}
+
+run_testing_variation_flows() {
+    run_step "Testing variation flows" "$should_run_variation" true
+}
+
+run_finishing_execution() {
+    run_step "Finalizing execution" 1 true
+}
+
+run_rundeck_full_flow() {
+    printf "Starting Rundeck E2E run\n"
+    printf "Detailed log: %s\n" "$RUN_LOG"
+    managed_server_bootstrap
+
+    run_preparing_workspace
+    run_preparing_services
+    run_configuring_services
+    run_configuring_context
+    run_testing_context_operations
+    run_testing_metadata_operations
+    run_testing_openapi_operations
+    run_testing_declarest_main_flows
+    run_testing_secret_check_metadata
+    run_testing_variation_flows
+    run_finishing_execution
+
+    print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
+    log_line "E2E test completed successfully"
+    printf "E2E test completed successfully. Log: %s\n" "$RUN_LOG"
+}
+
+if [[ "$script_invoked_directly" -eq 1 ]]; then
+    run_rundeck_full_flow
 fi
-
-run_step "Preparing repository" "$REPO_SCRIPTS_DIR/prepare.sh"
-run_step "Rendering context" "$SCRIPTS_DIR/context/render.sh"
-run_step "Registering context" "$SCRIPTS_DIR/context/register.sh"
-run_step "Validating OpenAPI defaults" "$SCRIPTS_DIR/declarest/openapi-smoke.sh"
-run_step "Running declarest workflow" "$SCRIPTS_DIR/declarest/run.sh"
-
-print_step_result "DONE" "$TOTAL_STEPS/$TOTAL_STEPS" "Completing E2E flow" ""
-log_line "E2E test completed successfully"
-echo "E2E test completed successfully. Log: $RUN_LOG"

@@ -34,7 +34,11 @@ should_run_context=$((skip_testing_context == 0 ? 1 : 0))
 should_run_metadata=$((skip_testing_metadata == 0 ? 1 : 0))
 should_run_openapi=$((skip_testing_openapi == 0 ? 1 : 0))
 should_run_declarest=$((skip_testing_declarest == 0 ? 1 : 0))
-should_run_variation=$((skip_testing_variation == 0 && should_run_declarest == 1 ? 1 : 0))
+if [[ "$skip_testing_variation" -eq 0 && "$should_run_declarest" -eq 1 && "$e2e_profile" == "complete" ]]; then
+    should_run_variation=1
+else
+    should_run_variation=0
+fi
 
 # shellcheck source=scripts/lib/env.sh
 source "$SCRIPTS_DIR/lib/env.sh"
@@ -629,12 +633,11 @@ run_testing_secret_check_metadata() {
 run_testing_variation_flows() {
     current_group="Testing variation flows"
     set_context "primary"
-    if [[ "$should_run_variation" -eq 1 ]]; then
-        configure_server_auth "$server_auth_primary"
-        configure_secret_auth "$secret_auth_primary"
-        if [[ "$repo_type" == "git-remote" ]]; then
-            configure_repo_auth "$repo_auth_primary"
-        fi
+
+    configure_server_auth "$server_auth_primary"
+    configure_secret_auth "$secret_auth_primary"
+    if [[ "$repo_type" == "git-remote" ]]; then
+        configure_repo_auth "$repo_auth_primary"
     fi
 
     local server_variants=()
@@ -646,25 +649,21 @@ run_testing_variation_flows() {
         fi
     fi
     for server_auth in "${server_variants[@]}"; do
-        if [[ "$should_run_variation" -eq 1 ]]; then
-            configure_server_auth "$server_auth"
-            configure_secret_auth "$secret_auth_primary"
-            if [[ "$repo_type" == "git-remote" ]]; then
-                configure_repo_auth "$repo_auth_primary"
-            fi
-            set_context "server-${server_auth}"
-        fi
-        run_step "Validating server auth (${server_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/server-auth-smoke.sh"
-    done
-
-    if [[ "$should_run_variation" -eq 1 ]]; then
-        configure_server_auth "$server_auth_primary"
+        configure_server_auth "$server_auth"
         configure_secret_auth "$secret_auth_primary"
         if [[ "$repo_type" == "git-remote" ]]; then
             configure_repo_auth "$repo_auth_primary"
         fi
-        set_context "primary"
+        set_context "server-${server_auth}"
+        run_step "Validating server auth (${server_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/server-auth-smoke.sh"
+    done
+
+    configure_server_auth "$server_auth_primary"
+    configure_secret_auth "$secret_auth_primary"
+    if [[ "$repo_type" == "git-remote" ]]; then
+        configure_repo_auth "$repo_auth_primary"
     fi
+    set_context "primary"
 
     if [[ "$secret_provider" == "vault" && ${#secret_auth_secondary[@]} -gt 0 ]]; then
         local secret_variants=()
@@ -674,24 +673,20 @@ run_testing_variation_flows() {
             secret_variants=("${secret_auth_secondary[0]}")
         fi
         for vault_auth in "${secret_variants[@]}"; do
-            if [[ "$should_run_variation" -eq 1 ]]; then
-                configure_server_auth "$server_auth_primary"
-                configure_secret_auth "$vault_auth"
-                if [[ "$repo_type" == "git-remote" ]]; then
-                    configure_repo_auth "$repo_auth_primary"
-                fi
-                set_context "vault-${vault_auth}"
-            fi
-            run_step "Validating vault auth (${vault_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/secret-auth-smoke.sh"
-        done
-        if [[ "$should_run_variation" -eq 1 ]]; then
-            configure_secret_auth "$secret_auth_primary"
             configure_server_auth "$server_auth_primary"
+            configure_secret_auth "$vault_auth"
             if [[ "$repo_type" == "git-remote" ]]; then
                 configure_repo_auth "$repo_auth_primary"
             fi
-            set_context "primary"
+            set_context "vault-${vault_auth}"
+            run_step "Validating vault auth (${vault_auth})" "$should_run_variation" "$SCRIPTS_DIR/declarest/secret-auth-smoke.sh"
+        done
+        configure_secret_auth "$secret_auth_primary"
+        configure_server_auth "$server_auth_primary"
+        if [[ "$repo_type" == "git-remote" ]]; then
+            configure_repo_auth "$repo_auth_primary"
         fi
+        set_context "primary"
     fi
 
     if [[ "$repo_type" == "git-remote" && ${#repo_auth_secondary[@]} -gt 0 ]]; then
@@ -702,14 +697,10 @@ run_testing_variation_flows() {
             repo_variants=("${repo_auth_secondary[0]}")
         fi
         for repo_auth in "${repo_variants[@]}"; do
-            if [[ "$should_run_variation" -eq 1 ]]; then
-                configure_repo_auth "$repo_auth"
-            fi
+            configure_repo_auth "$repo_auth"
             run_step "Validating repo auth (${repo_auth})" "$should_run_variation" "$REPO_SCRIPTS_DIR/auth-smoke.sh"
         done
-        if [[ "$should_run_variation" -eq 1 ]]; then
-            configure_repo_auth "$repo_auth_primary"
-        fi
+        configure_repo_auth "$repo_auth_primary"
     fi
 
     set_context "primary"
@@ -726,16 +717,20 @@ run_finishing_execution() {
 
 current_step=0
 
-run_keycloak_full_flow() {
+managed_server_bootstrap() {
     ensure_github_pat_ssh_credentials
+    log_line "Keycloak E2E run started"
+    log_line "Container runtime: $CONTAINER_RUNTIME"
+    log_line "E2E profile: $e2e_profile"
+}
 
+run_keycloak_full_flow() {
     if [[ "$script_invoked_directly" -eq 1 ]]; then
         echo "Starting Keycloak E2E run"
         echo "Detailed log: $RUN_LOG"
-        log_line "Keycloak E2E run started"
-        log_line "Container runtime: $CONTAINER_RUNTIME"
-        log_line "E2E profile: $e2e_profile"
     fi
+
+    managed_server_bootstrap
 
     run_preparing_workspace
     run_preparing_services
