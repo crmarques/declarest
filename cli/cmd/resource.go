@@ -1333,31 +1333,10 @@ func resourceFromOpenAPI(recon *reconciler.DefaultReconciler, logicalPath, sourc
 		return resource.Resource{}, errors.New("reconciler is not configured")
 	}
 
-	specSource := strings.TrimSpace(source)
-	var spec *openapi.Spec
-	if specSource == "" {
-		if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
-			spec = provider.OpenAPISpec()
-		}
-		if spec == nil {
-			return resource.Resource{}, errors.New("openapi spec is not configured")
-		}
-	} else {
-		httpManager, ok := recon.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
-		if !ok || httpManager == nil {
-			return resource.Resource{}, errors.New("openapi source requires an http managed server")
-		}
-		data, err := httpManager.LoadOpenAPISpec(specSource)
-		if err != nil {
-			return resource.Resource{}, err
-		}
-		parsed, err := openapi.ParseSpec(data)
-		if err != nil {
-			return resource.Resource{}, fmt.Errorf("failed to parse openapi spec %q: %w", specSource, err)
-		}
-		spec = parsed
+	spec, err := resolveOpenAPISpec(recon, source)
+	if err != nil {
+		return resource.Resource{}, err
 	}
-
 	return openapi.BuildResourceFromSpec(spec, logicalPath)
 }
 

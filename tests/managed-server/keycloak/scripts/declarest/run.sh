@@ -144,8 +144,14 @@ seed_secrets_via_cli() {
 test_ad_hoc_command() {
     local path="/admin/realms/publico"
     log_line "Testing ad-hoc command for $path"
-    local output
-    output=$(capture_cli "ad-hoc get realm" --no-status ad-hoc get --path "$path")
+    local attempts="${KEYCLOAK_RETRY_ATTEMPTS:-10}"
+    local delay="${KEYCLOAK_RETRY_DELAY:-2}"
+    if ! run_cli_retry_transient "ad-hoc get realm" "$attempts" "$delay" --no-status ad-hoc get --path "$path"; then
+        log_line "ad-hoc command failed after retries"
+        echo "Expected ad-hoc get to succeed" >&2
+        exit 1
+    fi
+    local output="$CLI_LAST_OUTPUT"
     if ! grep -Eq '"realm"[[:space:]]*:[[:space:]]*"publico"' <<<"$output"; then
         log_line "ad-hoc command failed: unexpected output"
         echo "Expected ad-hoc get to include the realm name" >&2

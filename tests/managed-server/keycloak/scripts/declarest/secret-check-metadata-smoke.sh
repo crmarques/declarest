@@ -21,19 +21,22 @@ fi
 TARGET_PATH="/admin/realms/publico/user-registry/ldap-test/mappers/secret-check-mapper"
 RESOURCE_DIR="${DECLAREST_REPO_DIR%/}/admin/realms/publico/user-registry/ldap-test/mappers/secret-check-mapper"
 RESOURCE_FILE="$RESOURCE_DIR/resource.json"
-WILDCARD_METADATA="${DECLAREST_REPO_DIR%/}/admin/realms/_/user-registry/_/metadata.json"
-BACKUP_METADATA="${WILDCARD_METADATA}.bak"
+METADATA_BASE="${DECLAREST_REPO_DIR%/}/admin/realms/_/user-registry/_"
+declare -a backup_metadata_files=()
+declare -a matched_metadata_files=()
 
-backup_exists=0
 cleanup() {
     local status="$?"
     rm -f "$RESOURCE_FILE"
     rmdir "$RESOURCE_DIR" >/dev/null 2>&1 || true
-    if [[ $backup_exists -eq 1 && -f "$BACKUP_METADATA" ]]; then
-        mv "$BACKUP_METADATA" "$WILDCARD_METADATA"
-    elif [[ $backup_exists -eq 0 ]]; then
-        rm -f "$WILDCARD_METADATA"
-    fi
+    for file in "${matched_metadata_files[@]}"; do
+        rm -f "$file"
+    done
+    for file in "${backup_metadata_files[@]}"; do
+        if [[ -f "${file}.bak" ]]; then
+            mv "${file}.bak" "$file"
+        fi
+    done
     return "$status"
 }
 trap cleanup EXIT
@@ -51,19 +54,25 @@ cat <<'EOF' >"$RESOURCE_FILE"
 }
 EOF
 
-if [[ -f "$WILDCARD_METADATA" ]]; then
-    mv "$WILDCARD_METADATA" "$BACKUP_METADATA"
-    backup_exists=1
-fi
+while IFS= read -r file; do
+    if [[ -f "$file" ]]; then
+        mv "$file" "${file}.bak"
+        backup_metadata_files+=("$file")
+    fi
+done < <(find "$METADATA_BASE" -name metadata.json -print)
 
 run_cli "secret check metadata" secret check --fix --path "$TARGET_PATH"
 
-if [[ ! -f "$WILDCARD_METADATA" ]]; then
-    die "Secret check did not generate metadata at $WILDCARD_METADATA"
+while IFS= read -r file; do
+    if jq -e '.resourceInfo.secretInAttributes[]? | select(. == "config.bindCredential[0]")' "$file" >/dev/null; then
+        matched_metadata_files+=("$file")
+    fi
+done < <(find "$METADATA_BASE" -name metadata.json -print)
+
+if [[ ${#matched_metadata_files[@]} -eq 0 ]]; then
+    die "Secret check did not generate metadata with expected secret path under $METADATA_BASE"
 fi
 
-if ! jq -e '.resourceInfo.secretInAttributes[]? | select(. == "config.bindCredential[0]")' "$WILDCARD_METADATA" >/dev/null; then
-    die "Wildcard metadata missing expected secret path at $WILDCARD_METADATA"
-fi
+log_line "Secret check mapped secrets into metadata"
 
 log_line "Secret check mapped secrets into wildcard metadata"

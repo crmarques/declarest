@@ -635,24 +635,12 @@ Use --recursively to infer metadata for every collection in the OpenAPI descript
 				return err
 			}
 
-			var spec *openapi.Spec
-			if specSource := strings.TrimSpace(specPath); specSource != "" {
-				data, err := os.ReadFile(specSource)
-				if err != nil {
-					return err
+			spec, err := resolveOpenAPISpec(recon, specPath)
+			if err != nil {
+				if errors.Is(err, errOpenAPISpecNotConfigured) {
+					return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
 				}
-				parsed, err := openapi.ParseSpec(data)
-				if err != nil {
-					return fmt.Errorf("failed to parse OpenAPI spec %q: %w", specSource, err)
-				}
-				spec = parsed
-			} else {
-				if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
-					spec = provider.OpenAPISpec()
-				}
-			}
-			if spec == nil {
-				return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
+				return err
 			}
 
 			if !targetIsCollection && !metadataOnly {
