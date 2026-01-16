@@ -2,15 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
-	"declarest/internal/repository"
 	"declarest/internal/resource"
 
 	"github.com/spf13/cobra"
@@ -720,14 +717,12 @@ func specCollectionPath(spec *openapi.Spec, prefix string) bool {
 }
 
 func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPrefixInfo) ([]pathCompletionEntry, bool) {
-
-	provider, ok := recon.ResourceRecordProvider.(*repository.DefaultResourceRecordProvider)
-	if recon == nil || !ok {
+	if recon == nil {
 		return nil, false
 	}
 
-	metadataDir := strings.TrimSpace(provider.MetadataBaseDir)
-	if metadataDir == "" {
+	provider, ok := recon.ResourceRecordProvider.(metadataChildCollectionProvider)
+	if !ok {
 		return nil, false
 	}
 
@@ -740,8 +735,8 @@ func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPr
 		baseSegments = segments[:len(segments)-1]
 	}
 
-	node, ok := metadataCompletionNode(metadataDir, baseSegments)
-	if !ok {
+	children, err := provider.MetadataChildCollections(baseSegments)
+	if err != nil || len(children) == 0 {
 		return nil, false
 	}
 
@@ -751,22 +746,8 @@ func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPr
 	}
 
 	entries := make(map[string]pathCompletionEntry)
-	children, err := os.ReadDir(node)
-	if err != nil {
-		return nil, false
-	}
-	for _, child := range children {
-		if !child.IsDir() {
-			continue
-		}
-		name := child.Name()
-		if name == "_" || strings.HasPrefix(name, ".") {
-			continue
-		}
+	for _, name := range children {
 		if partial != "" && !strings.HasPrefix(name, partial) {
-			continue
-		}
-		if !dirExists(filepath.Join(node, name, "_")) {
 			continue
 		}
 		value := completionPathForSegment(parentPath, name)
@@ -779,35 +760,8 @@ func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPr
 	return completionEntriesToSortedList(entries), len(entries) > 0
 }
 
-func metadataCompletionNode(baseDir string, segments []string) (string, bool) {
-	current := strings.TrimSpace(baseDir)
-	if current == "" {
-		return "", false
-	}
-
-	if len(segments) == 0 {
-		if dirExists(current) {
-			return current, true
-		}
-		return "", false
-	}
-
-	for _, candidate := range resource.PathWildcardVariants(segments) {
-		path := filepath.Join(current, filepath.Join(candidate...))
-		if !dirExists(path) {
-			continue
-		}
-		if filepath.Base(path) == "_" || dirExists(filepath.Join(path, "_")) {
-			return path, true
-		}
-	}
-
-	return "", false
-}
-
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
+type metadataChildCollectionProvider interface {
+	MetadataChildCollections(baseSegments []string) ([]string, error)
 }
 
 func segmentsMatchBase(segments, base []string) bool {

@@ -426,3 +426,68 @@ func (p *DefaultResourceRecordProvider) exitRemote(path string) {
 	}
 	p.remoteInFlight[path]--
 }
+
+func (p *DefaultResourceRecordProvider) MetadataChildCollections(baseSegments []string) ([]string, error) {
+	metadataDir := strings.TrimSpace(p.MetadataBaseDir)
+	if metadataDir == "" {
+		return nil, nil
+	}
+
+	node, ok := metadataCompletionNode(metadataDir, baseSegments)
+	if !ok {
+		return nil, nil
+	}
+
+	children, err := os.ReadDir(node)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []string
+	for _, child := range children {
+		if !child.IsDir() {
+			continue
+		}
+		name := child.Name()
+		if name == "_" || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if !dirExists(filepath.Join(node, name, "_")) {
+			continue
+		}
+		results = append(results, name)
+	}
+	sort.Strings(results)
+	return results, nil
+}
+
+func metadataCompletionNode(baseDir string, segments []string) (string, bool) {
+	current := strings.TrimSpace(baseDir)
+	if current == "" {
+		return "", false
+	}
+
+	if len(segments) == 0 {
+		if dirExists(current) {
+			return current, true
+		}
+		return "", false
+	}
+
+	for _, candidate := range resource.PathWildcardVariants(segments) {
+		path := filepath.Join(current, filepath.Join(candidate...))
+		if !dirExists(path) {
+			continue
+		}
+		if filepath.Base(path) == "_" || dirExists(filepath.Join(path, "_")) {
+			return path, true
+		}
+	}
+
+	return "", false
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}

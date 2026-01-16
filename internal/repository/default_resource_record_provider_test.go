@@ -88,6 +88,31 @@ func TestMetadataFilesIncludeWildcardSegments(t *testing.T) {
 	}
 }
 
+func TestMetadataChildCollections(t *testing.T) {
+	dir := t.TempDir()
+	childPath := filepath.Join(dir, "admin", "realms", "_", "user-store", "_")
+	if err := os.MkdirAll(childPath, 0o755); err != nil {
+		t.Fatalf("mkdir metadata tree: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(childPath, "metadata.json"), []byte(`{
+  "resourceInfo": {
+    "collectionPath": "/admin/realms/{{.realm}}/user-store/"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write metadata file: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, nil)
+	children, err := provider.MetadataChildCollections([]string{"admin", "realms", "publico"})
+	if err != nil {
+		t.Fatalf("MetadataChildCollections returned error: %v", err)
+	}
+	expected := []string{"user-store"}
+	if !reflect.DeepEqual(children, expected) {
+		t.Fatalf("MetadataChildCollections = %v, want %v", children, expected)
+	}
+}
+
 func TestRenderStringSupportsRelativePlaceholders(t *testing.T) {
 	dir := t.TempDir()
 
