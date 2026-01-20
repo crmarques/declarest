@@ -11,10 +11,6 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-type serverAccessChecker interface {
-	CheckAccess() error
-}
-
 func (r *DefaultReconciler) Close() error {
 	if r == nil {
 		return nil
@@ -50,7 +46,7 @@ func (r *DefaultReconciler) CheckManagedServerAccess() error {
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
-	if checker, ok := r.ResourceServerManager.(serverAccessChecker); ok {
+	if checker, ok := r.ResourceServerManager.(interface{ CheckAccess() error }); ok {
 		return checker.CheckAccess()
 	}
 	if err := r.ResourceServerManager.Init(); err != nil {
@@ -80,9 +76,7 @@ func (r *DefaultReconciler) RepositoryResourcePathsWithErrors() ([]string, error
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return nil, errors.New("resource repository manager is not configured")
 	}
-	if lister, ok := r.ResourceRepositoryManager.(interface {
-		ListResourcePathsWithErrors() ([]string, error)
-	}); ok {
+	if lister, ok := r.ResourceRepositoryManager.(repository.ResourceRepositoryPathLister); ok {
 		return lister.ListResourcePathsWithErrors()
 	}
 	return r.ResourceRepositoryManager.ListResourcePaths(), nil
@@ -136,14 +130,16 @@ func (r *DefaultReconciler) ExecuteHTTPRequest(spec *managedserver.HTTPRequestSp
 	if r == nil || r.ResourceServerManager == nil {
 		return nil, errors.New("managed server is not configured")
 	}
-	manager, ok := r.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
-	if !ok || manager == nil {
-		return nil, errors.New("managed server must be configured as an http server")
+	executor, ok := r.ResourceServerManager.(interface {
+		ExecuteRequest(spec *managedserver.HTTPRequestSpec, payload []byte) (*managedserver.HTTPResponse, error)
+	})
+	if !ok || executor == nil {
+		return nil, errors.New("managed server must support http requests")
 	}
 	if spec == nil {
 		return nil, errors.New("http request spec is required")
 	}
-	return manager.ExecuteRequest(spec, payload)
+	return executor.ExecuteRequest(spec, payload)
 }
 
 func (r *DefaultReconciler) RepositoryDebugInfo() (repository.RepositoryDebugInfo, bool) {

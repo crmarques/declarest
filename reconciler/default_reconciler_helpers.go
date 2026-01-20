@@ -11,14 +11,6 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func (r *DefaultReconciler) InitRepository() error {
-	if err := r.InitRepositoryLocal(); err != nil {
-		return err
-	}
-	_, err := r.InitRepositoryRemoteIfEmpty()
-	return err
-}
-
 func (r *DefaultReconciler) InitRepositoryLocal() error {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return errors.New("resource repository manager is not configured")
@@ -54,10 +46,6 @@ func (r *DefaultReconciler) RefreshRepository() error {
 	return rebaser.RebaseLocalFromRemote()
 }
 
-func (r *DefaultReconciler) UpdateRemoteRepository() error {
-	return r.UpdateRemoteRepositoryWithForce(false)
-}
-
 func (r *DefaultReconciler) UpdateRemoteRepositoryWithForce(force bool) error {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return errors.New("resource repository manager is not configured")
@@ -85,10 +73,6 @@ func (r *DefaultReconciler) ResetRepository() error {
 		return errors.New("repository reset is not supported by the configured repository")
 	}
 	return resetter.ResetLocal()
-}
-
-func (r *DefaultReconciler) RepositoryResourcePaths() []string {
-	return r.ListLocalResourcePaths()
 }
 
 func (r *DefaultReconciler) RepositoryPathsInCollection(path string) ([]string, error) {
@@ -518,7 +502,7 @@ func (r *DefaultReconciler) SetSecret(resourcePath string, key string, value str
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return err
 	}
-	return r.SecretsManager.UpdateSecret(resourcePath, key, value)
+	return r.SecretsManager.SetSecret(resourcePath, key, value)
 }
 
 func (r *DefaultReconciler) DeleteSecret(resourcePath string, key string) error {
@@ -528,7 +512,7 @@ func (r *DefaultReconciler) DeleteSecret(resourcePath string, key string) error 
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return err
 	}
-	return r.SecretsManager.DeleteSecret(resourcePath, key, "")
+	return r.SecretsManager.DeleteSecret(resourcePath, key)
 }
 
 func (r *DefaultReconciler) ListSecretKeys(resourcePath string) ([]string, error) {
@@ -538,7 +522,7 @@ func (r *DefaultReconciler) ListSecretKeys(resourcePath string) ([]string, error
 	if err := r.validateLogicalPath(resourcePath); err != nil {
 		return nil, err
 	}
-	return r.SecretsManager.ListKeys(resourcePath), nil
+	return r.SecretsManager.ListKeys(resourcePath)
 }
 
 func (r *DefaultReconciler) ListSecretResources() ([]string, error) {

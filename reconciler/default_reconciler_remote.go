@@ -394,10 +394,6 @@ func (r *DefaultReconciler) UpdateRemoteResource(path string, data resource.Reso
 	return r.updateRemoteResource(resolvedPath, record, data)
 }
 
-func (r *DefaultReconciler) SyncRemoteResource(string) error {
-	return errors.New("remote resource sync is not implemented")
-}
-
 func (r *DefaultReconciler) GetRemoteResourcePath(path string) (string, error) {
 	if err := r.validateLogicalPath(path); err != nil {
 		return path, err

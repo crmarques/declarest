@@ -299,21 +299,11 @@ func pathDepth(path string) int {
 	return len(strings.Split(trimmed, "/"))
 }
 
-func (r *DefaultReconciler) SyncLocalResource(string) error {
-	return errors.New("local resource sync is not implemented")
-}
-
-func (r *DefaultReconciler) SyncAllResources() error {
-	return errors.New("resource sync is not implemented")
-}
-
 func (r *DefaultReconciler) ListLocalResourcePaths() []string {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return []string{}
 	}
-	if lister, ok := r.ResourceRepositoryManager.(interface {
-		ListResourcePathsWithErrors() ([]string, error)
-	}); ok {
+	if lister, ok := r.ResourceRepositoryManager.(repository.ResourceRepositoryPathLister); ok {
 		paths, err := lister.ListResourcePathsWithErrors()
 		if err == nil {
 			return paths
@@ -381,10 +371,6 @@ func (r *DefaultReconciler) DiffResource(path string) (resource.ResourcePatch, e
 
 	patch := resource.BuildJSONPatch(localPrepared.V, remotePrepared.V)
 	return patch, nil
-}
-
-func (r *DefaultReconciler) CheckIfResourceIsSynced(string) (bool, error) {
-	return false, errors.New("sync check is not implemented")
 }
 
 func (r *DefaultReconciler) GetLocalResourcePath(path string) (string, error) {

@@ -86,11 +86,13 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.AppReconciler, er
 	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
 		openapiSource := strings.TrimSpace(cfg.ManagedServer.HTTP.OpenAPI)
 		if openapiSource != "" {
-			httpManager, ok := serverManager.(*managedserver.HTTPResourceServerManager)
-			if !ok || httpManager == nil {
+			loader, ok := serverManager.(interface {
+				LoadOpenAPISpec(source string) ([]byte, error)
+			})
+			if !ok || loader == nil {
 				return nil, errors.New("openapi configuration requires an http managed server")
 			}
-			data, err := httpManager.LoadOpenAPISpec(openapiSource)
+			data, err := loader.LoadOpenAPISpec(openapiSource)
 			if err != nil {
 				return nil, err
 			}

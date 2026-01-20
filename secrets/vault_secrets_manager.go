@@ -156,15 +156,11 @@ func (m *VaultSecretsManager) GetSecret(resourcePath string, key string) (string
 	return value, nil
 }
 
-func (m *VaultSecretsManager) CreateSecret(resourcePath string, key string, value string) error {
+func (m *VaultSecretsManager) SetSecret(resourcePath string, key string, value string) error {
 	return m.setSecret(resourcePath, key, value)
 }
 
-func (m *VaultSecretsManager) UpdateSecret(resourcePath string, key string, value string) error {
-	return m.setSecret(resourcePath, key, value)
-}
-
-func (m *VaultSecretsManager) DeleteSecret(resourcePath string, key string, _ string) error {
+func (m *VaultSecretsManager) DeleteSecret(resourcePath string, key string) error {
 	if err := m.ensureInit(); err != nil {
 		return err
 	}
@@ -187,20 +183,23 @@ func (m *VaultSecretsManager) DeleteSecret(resourcePath string, key string, _ st
 	return m.writeSecretData(resourcePath, entries)
 }
 
-func (m *VaultSecretsManager) ListKeys(resourcePath string) []string {
-	if m == nil || !m.initialized {
-		return []string{}
+func (m *VaultSecretsManager) ListKeys(resourcePath string) ([]string, error) {
+	if err := m.ensureInit(); err != nil {
+		return nil, err
 	}
 	entries, err := m.readSecretData(resourcePath)
 	if err != nil {
-		return []string{}
+		if errors.Is(err, fs.ErrNotExist) {
+			return []string{}, nil
+		}
+		return nil, err
 	}
 	keys := make([]string, 0, len(entries))
 	for k := range entries {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	return keys
+	return keys, nil
 }
 
 func (m *VaultSecretsManager) ListResources() ([]string, error) {

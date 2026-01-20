@@ -28,11 +28,7 @@ func (m *memorySecretsManager) GetSecret(resourcePath string, key string) (strin
 	return "", errors.New("secret not found")
 }
 
-func (m *memorySecretsManager) CreateSecret(resourcePath string, key string, value string) error {
-	return m.UpdateSecret(resourcePath, key, value)
-}
-
-func (m *memorySecretsManager) UpdateSecret(resourcePath string, key string, value string) error {
+func (m *memorySecretsManager) SetSecret(resourcePath string, key string, value string) error {
 	if m.store == nil {
 		m.store = make(map[string]map[string]string)
 	}
@@ -43,7 +39,7 @@ func (m *memorySecretsManager) UpdateSecret(resourcePath string, key string, val
 	return nil
 }
 
-func (m *memorySecretsManager) DeleteSecret(resourcePath string, key string, value string) error {
+func (m *memorySecretsManager) DeleteSecret(resourcePath string, key string) error {
 	if m.store == nil {
 		return nil
 	}
@@ -53,20 +49,20 @@ func (m *memorySecretsManager) DeleteSecret(resourcePath string, key string, val
 	return nil
 }
 
-func (m *memorySecretsManager) ListKeys(resourcePath string) []string {
+func (m *memorySecretsManager) ListKeys(resourcePath string) ([]string, error) {
 	if m.store == nil {
-		return nil
+		return []string{}, nil
 	}
 	entry, ok := m.store[resourcePath]
 	if !ok {
-		return nil
+		return []string{}, nil
 	}
 	keys := make([]string, 0, len(entry))
 	for key := range entry {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	return keys
+	return keys, nil
 }
 
 func (m *memorySecretsManager) ListResources() ([]string, error) {

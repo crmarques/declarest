@@ -9,17 +9,8 @@ import (
 
 type AppReconciler interface {
 	Reconciler
-	RepositoryAdmin
-	MetadataAdmin
-	RemoteResourceLister
-	SecretsAdmin
-	ManagedServerAdmin
-	DebugInfoProvider
-	AdHocRequester
 	Close() error
-}
 
-type RepositoryAdmin interface {
 	InitRepositoryLocal() error
 	InitRepositoryRemoteIfEmpty() (bool, error)
 	RefreshRepository() error
@@ -32,9 +23,7 @@ type RepositoryAdmin interface {
 	CheckRemoteSync() (bool, bool, error)
 	RepositoryResourcePathsWithErrors() ([]string, error)
 	RepositoryPathsInCollection(path string) ([]string, error)
-}
 
-type MetadataAdmin interface {
 	ResourceRecord(path string) (resource.ResourceRecord, error)
 	MergedMetadata(path string) (resource.ResourceMetadata, error)
 	ResourceMetadata(path string) (resource.ResourceMetadata, error)
@@ -43,15 +32,11 @@ type MetadataAdmin interface {
 	UpdateLocalResourcesForMetadata(path string) ([]LocalResourceUpdateResult, error)
 	MetadataChildCollections(baseSegments []string) ([]string, error)
 	OpenAPISpec() *openapi.Spec
-}
 
-type RemoteResourceLister interface {
 	ListRemoteResourceEntries(path string) ([]RemoteResourceEntry, error)
 	ListRemoteResourcePaths(path string) ([]string, error)
 	ListRemoteResourcePathsFromLocal() ([]string, error)
-}
 
-type SecretsAdmin interface {
 	InitSecrets() error
 	EnsureSecretsFile() error
 	GetSecret(resourcePath string, key string) (string, error)
@@ -65,18 +50,12 @@ type SecretsAdmin interface {
 	SaveLocalResourceWithSecrets(path string, res resource.Resource, storeSecrets bool) error
 	SaveLocalCollectionItemsWithSecrets(path string, items []resource.Resource, storeSecrets bool) error
 	SecretsConfigured() bool
-}
 
-type ManagedServerAdmin interface {
 	ManagedServerConfigured() bool
 	CheckManagedServerAccess() error
-}
 
-type DebugInfoProvider interface {
 	RepositoryDebugInfo() (repository.RepositoryDebugInfo, bool)
 	ServerDebugInfo() (managedserver.ServerDebugInfo, bool)
-}
 
-type AdHocRequester interface {
 	ExecuteHTTPRequest(spec *managedserver.HTTPRequestSpec, payload []byte) (*managedserver.HTTPResponse, error)
 }

@@ -100,8 +100,8 @@ func TestVaultSecretsManagerTokenRoundTripKV2(t *testing.T) {
 	if err := manager.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	if err := manager.UpdateSecret("/apps/app1", "password", "s3cr3t"); err != nil {
-		t.Fatalf("UpdateSecret: %v", err)
+	if err := manager.SetSecret("/apps/app1", "password", "s3cr3t"); err != nil {
+		t.Fatalf("SetSecret: %v", err)
 	}
 	value, err := manager.GetSecret("/apps/app1", "password")
 	if err != nil {
@@ -110,7 +110,7 @@ func TestVaultSecretsManagerTokenRoundTripKV2(t *testing.T) {
 	if value != "s3cr3t" {
 		t.Fatalf("expected secret value, got %q", value)
 	}
-	if err := manager.DeleteSecret("/apps/app1", "password", ""); err != nil {
+	if err := manager.DeleteSecret("/apps/app1", "password"); err != nil {
 		t.Fatalf("DeleteSecret: %v", err)
 	}
 	_, err = manager.GetSecret("/apps/app1", "password")

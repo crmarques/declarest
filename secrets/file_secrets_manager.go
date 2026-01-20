@@ -168,15 +168,11 @@ func (m *FileSecretsManager) GetSecret(resourcePath string, key string) (string,
 	return value, nil
 }
 
-func (m *FileSecretsManager) CreateSecret(resourcePath string, key string, value string) error {
+func (m *FileSecretsManager) SetSecret(resourcePath string, key string, value string) error {
 	return m.setSecret(resourcePath, key, value)
 }
 
-func (m *FileSecretsManager) UpdateSecret(resourcePath string, key string, value string) error {
-	return m.setSecret(resourcePath, key, value)
-}
-
-func (m *FileSecretsManager) DeleteSecret(resourcePath string, key string, _ string) error {
+func (m *FileSecretsManager) DeleteSecret(resourcePath string, key string) error {
 	if err := m.ensureInit(); err != nil {
 		return err
 	}
@@ -207,9 +203,9 @@ func (m *FileSecretsManager) DeleteSecret(resourcePath string, key string, _ str
 	return m.persistLocked()
 }
 
-func (m *FileSecretsManager) ListKeys(resourcePath string) []string {
-	if m == nil || !m.initialized {
-		return []string{}
+func (m *FileSecretsManager) ListKeys(resourcePath string) ([]string, error) {
+	if err := m.ensureInit(); err != nil {
+		return nil, err
 	}
 	path := resource.NormalizePath(resourcePath)
 
@@ -218,18 +214,18 @@ func (m *FileSecretsManager) ListKeys(resourcePath string) []string {
 
 	resources := m.store.Resources
 	if resources == nil {
-		return []string{}
+		return []string{}, nil
 	}
 	entries, ok := resources[path]
 	if !ok {
-		return []string{}
+		return []string{}, nil
 	}
 	keys := make([]string, 0, len(entries))
 	for k := range entries {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	return keys
+	return keys, nil
 }
 
 func (m *FileSecretsManager) ListResources() ([]string, error) {

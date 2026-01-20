@@ -31,10 +31,6 @@ type ResourceLoader interface {
 	GetLocalResource(path string) (resource.Resource, error)
 }
 
-type RemoteResourceLoader interface {
-	GetRemoteResource(path string) (resource.Resource, error)
-}
-
 type FileStore interface {
 	ReadFile(path string) ([]byte, error)
 }
@@ -577,7 +573,9 @@ func (p *DefaultResourceRecordProvider) loadRemoteResourceAttributes(path string
 		return nil, false
 	}
 
-	loader, ok := p.resourceLoader.(RemoteResourceLoader)
+	loader, ok := p.resourceLoader.(interface {
+		GetRemoteResource(path string) (resource.Resource, error)
+	})
 	if !ok || loader == nil {
 		return nil, false
 	}

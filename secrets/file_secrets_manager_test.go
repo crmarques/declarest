@@ -23,16 +23,16 @@ func TestFileSecretsManagerRoundTripWithRawKey(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
-	if err := manager.CreateSecret("/items/foo", "password", "p"); err != nil {
-		t.Fatalf("CreateSecret: %v", err)
+	if err := manager.SetSecret("/items/foo", "password", "p"); err != nil {
+		t.Fatalf("SetSecret: %v", err)
 	}
 
 	if val, err := manager.GetSecret("/items/foo", "password"); err != nil || val != "p" {
 		t.Fatalf("GetSecret: got %q err=%v", val, err)
 	}
 
-	if keys := manager.ListKeys("/items/foo"); len(keys) != 1 || keys[0] != "password" {
-		t.Fatalf("ListKeys: unexpected keys %#v", keys)
+	if keys, err := manager.ListKeys("/items/foo"); err != nil || len(keys) != 1 || keys[0] != "password" {
+		t.Fatalf("ListKeys: unexpected keys %#v (err=%v)", keys, err)
 	}
 
 	resources, err := manager.ListResources()
@@ -61,7 +61,7 @@ func TestFileSecretsManagerRoundTripWithRawKey(t *testing.T) {
 		t.Fatalf("GetSecret (reopen): got %q err=%v", val, err)
 	}
 
-	if err := clone.DeleteSecret("/items/foo", "password", ""); err != nil {
+	if err := clone.DeleteSecret("/items/foo", "password"); err != nil {
 		t.Fatalf("DeleteSecret: %v", err)
 	}
 	if _, err := clone.GetSecret("/items/foo", "password"); !errors.Is(err, fs.ErrNotExist) {
@@ -85,8 +85,8 @@ func TestFileSecretsManagerRoundTripWithPassphrase(t *testing.T) {
 	if err := manager.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	if err := manager.UpdateSecret("/items/bar", "token", "t"); err != nil {
-		t.Fatalf("UpdateSecret: %v", err)
+	if err := manager.SetSecret("/items/bar", "token", "t"); err != nil {
+		t.Fatalf("SetSecret: %v", err)
 	}
 	manager.Close()
 

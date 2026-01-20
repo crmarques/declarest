@@ -313,7 +313,7 @@ func maskObjectSecrets(res resource.Resource, resourcePath string, secretPaths [
 			if err != nil {
 				return resource.Resource{}, fmt.Errorf("secret %q: %w", path, err)
 			}
-			if err := manager.UpdateSecret(normalizedPath, path, secretValue); err != nil {
+			if err := manager.SetSecret(normalizedPath, path, secretValue); err != nil {
 				return resource.Resource{}, err
 			}
 		}
