@@ -1,4 +1,4 @@
-package cmd
+package secrets
 
 import (
 	"encoding/json"
@@ -8,7 +8,6 @@ import (
 	"unicode"
 
 	"declarest/internal/resource"
-	"declarest/internal/secrets"
 )
 
 var secretKeySuffixes = []string{
@@ -48,7 +47,7 @@ var booleanStringValues = map[string]struct{}{
 	"off":   {},
 }
 
-func findUnmappedSecretPaths(res resource.Resource, mapped []string, collection bool) []string {
+func FindUnmappedSecretPaths(res resource.Resource, mapped []string, collection bool) []string {
 	mappedSet := buildSecretPathSet(mapped)
 	found := map[string]struct{}{}
 	scanForUnmappedSecrets(res.V, "", mappedSet, found, collection)
@@ -215,7 +214,7 @@ func isSecretValue(value any) bool {
 		if _, ok := booleanStringValues[strings.ToLower(trimmed)]; ok {
 			return false
 		}
-		if _, ok := secrets.ParseSecretTemplate(trimmed); ok {
+		if _, ok := ParseSecretTemplate(trimmed); ok {
 			return false
 		}
 		return true

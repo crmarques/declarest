@@ -92,14 +92,7 @@ func newResourceGetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			unmapped := findUnmappedSecretPaths(res, secretPaths, resource.IsCollectionPath(path))
-			if len(unmapped) > 0 {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: potential secrets in %s are not mapped to resourceInfo.secretInAttributes:\n", path)
-				for _, attr := range unmapped {
-					fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", attr)
-				}
-				fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
-			}
+			warnUnmappedSecrets(cmd, path, res, secretPaths)
 
 			output := res
 			if withSecrets {
@@ -196,14 +189,7 @@ func newResourceSaveCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			unmapped := findUnmappedSecretPaths(res, secretPaths, resource.IsCollectionPath(path))
-			if len(unmapped) > 0 {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: potential secrets in %s are not mapped to resourceInfo.secretInAttributes:\n", path)
-				for _, attr := range unmapped {
-					fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", attr)
-				}
-				fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
-			}
+			warnUnmappedSecrets(cmd, path, res, secretPaths)
 
 			output := res
 			if !withSecrets {
@@ -1802,6 +1788,18 @@ func resolvePathOrAll(cmd *cobra.Command, path string, all bool, args []string) 
 	return trimmed, nil
 }
 
+func warnUnmappedSecrets(cmd *cobra.Command, path string, res resource.Resource, secretPaths []string) {
+	unmapped := secrets.FindUnmappedSecretPaths(res, secretPaths, resource.IsCollectionPath(path))
+	if len(unmapped) == 0 {
+		return
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "Warning: potential secrets in %s are not mapped to resourceInfo.secretInAttributes:\n", path)
+	for _, attr := range unmapped {
+		fmt.Fprintf(cmd.ErrOrStderr(), "  - %s\n", attr)
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
+}
+
 func syncLocalResource(recon *reconciler.DefaultReconciler, path string) error {
 	res, err := recon.GetRemoteResource(path)
 	if err != nil {
@@ -1817,7 +1815,7 @@ func ensureRepositoryOverwriteAllowed(recon *reconciler.DefaultReconciler, path 
 	if force || recon == nil || recon.ResourceRepositoryManager == nil {
 		return nil
 	}
-	_, err := recon.ResourceRepositoryManager.GetResource(path)
+	_, err := recon.GetLocalResource(path)
 	if err == nil {
 		return fmt.Errorf("resource %s already exists in the resource repository; use --force to override", path)
 	}

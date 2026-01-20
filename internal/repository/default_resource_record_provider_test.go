@@ -466,6 +466,30 @@ func TestMetadataLayeringPrefersLiteralOverWildcard(t *testing.T) {
 	}
 }
 
+func TestMetadataIncludesWildcardResourceVariants(t *testing.T) {
+	dir := t.TempDir()
+
+	metaPath := filepath.Join(dir, "a", "_", "c", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(metaPath), 0o755); err != nil {
+		t.Fatalf("mkdir metadata dir: %v", err)
+	}
+	if err := os.WriteFile(metaPath, []byte(`{"resourceInfo":{"aliasFromAttribute":"wild"}}`), 0o644); err != nil {
+		t.Fatalf("write metadata: %v", err)
+	}
+
+	provider := NewDefaultResourceRecordProvider(dir, nil)
+	meta, err := provider.GetMergedMetadata("/a/b/c")
+	if err != nil {
+		t.Fatalf("GetMergedMetadata returned error: %v", err)
+	}
+	if meta.ResourceInfo == nil {
+		t.Fatalf("expected ResourceInfo")
+	}
+	if got := meta.ResourceInfo.AliasFromAttribute; got != "wild" {
+		t.Fatalf("expected wildcard resource metadata to apply, got %q", got)
+	}
+}
+
 func TestMetadataDoesNotInheritIDAliasFromAncestorCollections(t *testing.T) {
 	dir := t.TempDir()
 

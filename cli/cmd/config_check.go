@@ -37,17 +37,14 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 
 			reportCheck(cmd, fmt.Sprintf("Loaded context %q", context.Name), nil)
 
-			if recon.ResourceRepositoryManager == nil {
-				failed = true
-				reportCheck(cmd, "Repository access", errors.New("resource repository manager is not configured"))
-			} else if err := recon.ResourceRepositoryManager.Init(); err != nil {
+			if err := recon.CheckLocalRepositoryAccess(); err != nil {
 				failed = true
 				reportCheck(cmd, "Repository access", err)
 			} else {
 				reportCheck(cmd, "Repository access", nil)
 			}
 
-			remoteConfigured, remoteEmpty, err := checkRemoteAccess(recon.ResourceRepositoryManager)
+			remoteConfigured, remoteEmpty, err := recon.CheckRemoteAccess()
 			if err != nil {
 				failed = true
 				reportCheck(cmd, "Remote repository access", err)

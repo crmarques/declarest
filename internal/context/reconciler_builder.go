@@ -124,6 +124,9 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error
 	}
 
 	provider := repository.NewDefaultResourceRecordProvider(metadataBaseDir, recon)
+	if manager, ok := repoManager.(repository.MetadataRepositoryManager); ok {
+		provider.SetMetadataManager(manager)
+	}
 	provider.SetResourceFormat(resourceFormat)
 	if openapiSpec != nil {
 		provider.SetOpenAPISpec(openapiSpec)

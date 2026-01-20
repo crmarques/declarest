@@ -69,7 +69,7 @@ func newSecretCheckCommand() *cobra.Command {
 				if err != nil {
 					return wrapSecretStoreError(err)
 				}
-				unmapped := findUnmappedSecretPaths(res, mapped, resource.IsCollectionPath(target))
+				unmapped := secrets.FindUnmappedSecretPaths(res, mapped, resource.IsCollectionPath(target))
 				if len(unmapped) > 0 {
 					findings[target] = unmapped
 				}

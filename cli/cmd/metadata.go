@@ -16,6 +16,7 @@ import (
 	"declarest/internal/openapi"
 	"declarest/internal/reconciler"
 	"declarest/internal/resource"
+	"declarest/internal/secrets"
 
 	"github.com/spf13/cobra"
 )
@@ -1350,7 +1351,7 @@ func secretAttributeCandidates(recon *reconciler.DefaultReconciler, metadataPath
 		if err != nil {
 			continue
 		}
-		for _, attr := range findUnmappedSecretPaths(res, nil, resource.IsCollectionPath(target)) {
+		for _, attr := range secrets.FindUnmappedSecretPaths(res, nil, resource.IsCollectionPath(target)) {
 			addCandidate(attr)
 		}
 	}

@@ -177,10 +177,7 @@ func newRepoCheckCommand() *cobra.Command {
 			reportCheckStatus(cmd, fmt.Sprintf("Loaded context %q", context.Name), checkStatusOK, nil)
 
 			localAccessOk := false
-			if recon.ResourceRepositoryManager == nil {
-				failed = true
-				reportCheckStatus(cmd, "Local repository access", checkStatusFailed, errors.New("resource repository manager is not configured"))
-			} else if err := recon.ResourceRepositoryManager.Init(); err != nil {
+			if err := recon.CheckLocalRepositoryAccess(); err != nil {
 				failed = true
 				reportCheckStatus(cmd, "Local repository access", checkStatusFailed, err)
 			} else {
@@ -192,7 +189,7 @@ func newRepoCheckCommand() *cobra.Command {
 			if !localAccessOk {
 				reportCheckStatus(cmd, "Local repository initialized", checkStatusSkipped, nil)
 			} else {
-				supported, initialized, err := checkLocalRepositoryInitialized(recon.ResourceRepositoryManager)
+				supported, initialized, err := recon.CheckLocalRepositoryInitialized()
 				if err != nil {
 					failed = true
 					reportCheckStatus(cmd, "Local repository initialized", checkStatusFailed, err)
@@ -207,7 +204,7 @@ func newRepoCheckCommand() *cobra.Command {
 				}
 			}
 
-			remoteConfigured, remoteEmpty, err := checkRemoteAccess(recon.ResourceRepositoryManager)
+			remoteConfigured, remoteEmpty, err := recon.CheckRemoteAccess()
 			remoteAccessErr := err != nil
 			remoteAccessOk := false
 			if err != nil {
@@ -242,7 +239,7 @@ func newRepoCheckCommand() *cobra.Command {
 			}
 
 			if localInitOk && remoteInitializedOk {
-				_, inSync, err := checkRemoteSync(recon.ResourceRepositoryManager)
+				_, inSync, err := recon.CheckRemoteSync()
 				if err != nil {
 					failed = true
 					reportCheckStatus(cmd, "Remote and local repositories sync check", checkStatusFailed, err)

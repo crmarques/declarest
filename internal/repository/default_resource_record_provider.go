@@ -19,6 +19,7 @@ import (
 type DefaultResourceRecordProvider struct {
 	MetadataBaseDir string
 	fileStore       FileStore
+	metadataManager MetadataRepositoryManager
 	resourceLoader  ResourceLoader
 	resourceFormat  ResourceFormat
 	remoteMu        sync.Mutex
@@ -68,6 +69,13 @@ func (p *DefaultResourceRecordProvider) SetFileStore(store FileStore) {
 		return
 	}
 	p.fileStore = store
+}
+
+func (p *DefaultResourceRecordProvider) SetMetadataManager(manager MetadataRepositoryManager) {
+	if p == nil {
+		return
+	}
+	p.metadataManager = manager
 }
 
 func (p *DefaultResourceRecordProvider) SetResourceFormat(format ResourceFormat) {
@@ -150,23 +158,13 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	result := metadata.DefaultMetadata(collectionSegments)
 
 	files := metadataRelPaths(segments, collectionSegments, isCollection)
-	store := p.store()
 	for _, candidate := range files {
-		data, err := store.ReadFile(candidate.rel)
+		fileMetadata, ok, err := p.readMetadataCandidate(candidate)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return resource.ResourceMetadata{}, fmt.Errorf("failed to read metadata file %q: %w", candidate.rel, err)
+			return resource.ResourceMetadata{}, err
 		}
-
-		if len(data) == 0 {
+		if !ok {
 			continue
-		}
-
-		var fileMetadata resource.ResourceMetadata
-		if err := json.Unmarshal(data, &fileMetadata); err != nil {
-			return resource.ResourceMetadata{}, fmt.Errorf("failed to parse metadata file %q: %w", candidate.rel, err)
 		}
 
 		if candidate.depth < collectionDepth && fileMetadata.ResourceInfo != nil {
@@ -201,6 +199,58 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	}
 
 	return result, nil
+}
+
+func (p *DefaultResourceRecordProvider) readMetadataCandidate(candidate metadataCandidate) (resource.ResourceMetadata, bool, error) {
+	if manager := p.metadataManager; manager != nil {
+		if path := metadataPathFromRel(candidate.rel); path != "" {
+			meta, err := manager.ReadMetadata(path)
+			if err != nil {
+				return resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata %q: %w", path, err)
+			}
+			if len(meta) == 0 {
+				return resource.ResourceMetadata{}, false, nil
+			}
+			fileMetadata, err := metadataFromMap(meta)
+			if err != nil {
+				return resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata %q: %w", path, err)
+			}
+			return fileMetadata, true, nil
+		}
+	}
+
+	store := p.store()
+	data, err := store.ReadFile(candidate.rel)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return resource.ResourceMetadata{}, false, nil
+		}
+		return resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata file %q: %w", candidate.rel, err)
+	}
+	if len(data) == 0 {
+		return resource.ResourceMetadata{}, false, nil
+	}
+
+	var fileMetadata resource.ResourceMetadata
+	if err := json.Unmarshal(data, &fileMetadata); err != nil {
+		return resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata file %q: %w", candidate.rel, err)
+	}
+	return fileMetadata, true, nil
+}
+
+func metadataFromMap(meta map[string]any) (resource.ResourceMetadata, error) {
+	if len(meta) == 0 {
+		return resource.ResourceMetadata{}, nil
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return resource.ResourceMetadata{}, err
+	}
+	var parsed resource.ResourceMetadata
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return resource.ResourceMetadata{}, err
+	}
+	return parsed, nil
 }
 
 func (p *DefaultResourceRecordProvider) resourcePathForDefaults(resourcePath string, meta resource.ResourceMetadata) string {
@@ -256,7 +306,10 @@ func metadataRelPaths(segments, collectionSegments []string, isCollection bool) 
 	}
 
 	if !isCollection && len(segments) > 0 {
-		addCandidate(filepath.Join(filepath.Join(segments...), "metadata.json"), len(segments), countWildcards(segments))
+		for _, variant := range resource.PathWildcardVariants(segments) {
+			wildcards := countWildcards(variant)
+			addCandidate(filepath.Join(filepath.Join(variant...), "metadata.json"), len(variant), wildcards)
+		}
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -301,6 +354,31 @@ func countWildcards(segments []string) int {
 		}
 	}
 	return count
+}
+
+func metadataPathFromRel(rel string) string {
+	rel = strings.TrimSpace(filepath.ToSlash(rel))
+	switch rel {
+	case "", "metadata.json":
+		return ""
+	case "_/metadata.json":
+		return "/"
+	}
+	if strings.HasSuffix(rel, "/_/metadata.json") {
+		dir := strings.TrimSuffix(rel, "/_/metadata.json")
+		if dir == "" {
+			return "/"
+		}
+		return "/" + dir + "/"
+	}
+	if strings.HasSuffix(rel, "/metadata.json") {
+		dir := strings.TrimSuffix(rel, "/metadata.json")
+		if dir == "" {
+			return ""
+		}
+		return "/" + dir
+	}
+	return ""
 }
 
 func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(resourcePath string) map[string]any {

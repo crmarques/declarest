@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"declarest/internal/resource"
+	"declarest/internal/secrets"
 )
 
 func TestFindUnmappedSecretPathsCollectionIgnoresItemPrefix(t *testing.T) {
@@ -19,7 +20,7 @@ func TestFindUnmappedSecretPathsCollectionIgnoresItemPrefix(t *testing.T) {
 	}
 
 	mapped := []string{"config.bindCredential[0]"}
-	unmapped := findUnmappedSecretPaths(res, mapped, true)
+	unmapped := secrets.FindUnmappedSecretPaths(res, mapped, true)
 	if len(unmapped) != 0 {
 		t.Fatalf("expected no unmapped secrets, got %v", unmapped)
 	}

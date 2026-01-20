@@ -7,26 +7,12 @@ import (
 
 	"declarest/internal/managedserver"
 	"declarest/internal/reconciler"
-	"declarest/internal/repository"
 
-	gittransport "github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/spf13/cobra"
 )
 
-type remoteAccessChecker interface {
-	CheckRemoteAccess() (bool, error)
-}
-
-type remoteSyncChecker interface {
-	CheckRemoteSync() (bool, bool, error)
-}
-
 type serverAccessChecker interface {
 	CheckAccess() error
-}
-
-type localRepoChecker interface {
-	IsLocalRepositoryInitialized() (bool, error)
 }
 
 type checkStatus string
@@ -61,41 +47,6 @@ func reportCheckStatus(cmd *cobra.Command, label string, status checkStatus, err
 		fmt.Fprintf(cmd.OutOrStdout(), "[OK] %s\n", label)
 		return true
 	}
-}
-
-func checkRemoteAccess(manager repository.ResourceRepositoryManager) (bool, bool, error) {
-	if manager == nil {
-		return false, false, errors.New("resource repository manager is not configured")
-	}
-	if checker, ok := manager.(remoteAccessChecker); ok {
-		configured, err := checker.CheckRemoteAccess()
-		if err != nil && errors.Is(err, gittransport.ErrEmptyRemoteRepository) {
-			return configured, true, nil
-		}
-		return configured, false, err
-	}
-	return false, false, nil
-}
-
-func checkLocalRepositoryInitialized(manager repository.ResourceRepositoryManager) (bool, bool, error) {
-	if manager == nil {
-		return false, false, errors.New("resource repository manager is not configured")
-	}
-	if checker, ok := manager.(localRepoChecker); ok {
-		initialized, err := checker.IsLocalRepositoryInitialized()
-		return true, initialized, err
-	}
-	return false, false, nil
-}
-
-func checkRemoteSync(manager repository.ResourceRepositoryManager) (bool, bool, error) {
-	if manager == nil {
-		return false, false, errors.New("resource repository manager is not configured")
-	}
-	if checker, ok := manager.(remoteSyncChecker); ok {
-		return checker.CheckRemoteSync()
-	}
-	return false, false, nil
 }
 
 func checkManagedServerAccess(manager managedserver.ResourceServerManager) error {
