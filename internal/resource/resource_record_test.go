@@ -1,6 +1,9 @@
 package resource
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestResourceRecordAliasPath_UsesLocalBasePathForItems(t *testing.T) {
 	record := ResourceRecord{
@@ -146,5 +149,135 @@ func TestResourceRecordAliasPathSanitizesSegments(t *testing.T) {
 	want := "/items/a-b-c"
 	if got != want {
 		t.Fatalf("AliasPath() = %q, want %q", got, want)
+	}
+}
+
+func TestResourceRecordCollectionPath(t *testing.T) {
+	cases := []struct {
+		name   string
+		record ResourceRecord
+		want   string
+	}{
+		{
+			name: "metadata_override",
+			record: ResourceRecord{
+				Path: "/ignore/me",
+				Meta: ResourceMetadata{
+					ResourceInfo: &ResourceInfoMetadata{
+						CollectionPath: " /items/ ",
+					},
+				},
+			},
+			want: "/items",
+		},
+		{
+			name:   "collection_path",
+			record: ResourceRecord{Path: "/items/"},
+			want:   "/items",
+		},
+		{
+			name:   "resource_path",
+			record: ResourceRecord{Path: "/items/item-1"},
+			want:   "/items",
+		},
+		{
+			name:   "empty_path",
+			record: ResourceRecord{Path: ""},
+			want:   "/",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.record.CollectionPath()
+			if got != tc.want {
+				t.Fatalf("CollectionPath() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResourceRecordResolveOperationPath(t *testing.T) {
+	res, err := NewResource(map[string]any{
+		"id":   "123",
+		"name": "alias-1",
+	})
+	if err != nil {
+		t.Fatalf("NewResource: %v", err)
+	}
+
+	record := ResourceRecord{
+		Path: "/items/alias-1",
+		Data: res,
+		Meta: ResourceMetadata{
+			ResourceInfo: &ResourceInfoMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+				CollectionPath:     "/items",
+			},
+		},
+	}
+
+	cases := []struct {
+		name     string
+		template string
+		want     string
+		wantErr  bool
+	}{
+		{name: "dot", template: ".", want: "/items"},
+		{name: "relative_collection", template: "./mappers", want: "/items/mappers"},
+		{name: "absolute_template", template: "/custom/{{.alias}}", want: "/custom/alias-1"},
+		{name: "relative_path", template: "custom/{{.id}}", want: "custom/123"},
+		{name: "invalid_template", template: "{{", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			op := &OperationMetadata{
+				URL: &OperationURLMetadata{
+					Path: tc.template,
+				},
+			}
+			got, err := record.ResolveOperationPath(record.Path, op, false)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for template %q", tc.template)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolveOperationPath: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("ResolveOperationPath(%q) = %q, want %q", tc.template, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResourceRecordQueryFor(t *testing.T) {
+	record := ResourceRecord{}
+	if got := record.QueryFor(nil); len(got) != 0 {
+		t.Fatalf("expected empty query map, got %#v", got)
+	}
+
+	op := &OperationMetadata{
+		URL: &OperationURLMetadata{
+			QueryStrings: []string{
+				"a=1",
+				"a=2",
+				"b",
+				" =skip",
+				"c= 3 ",
+			},
+		},
+	}
+	got := record.QueryFor(op)
+	want := map[string][]string{
+		"a": []string{"1", "2"},
+		"b": []string{""},
+		"c": []string{"3"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("QueryFor() = %#v, want %#v", got, want)
 	}
 }

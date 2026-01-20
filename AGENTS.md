@@ -16,6 +16,7 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 6. **Close the feedback loop on failures.** When an error is reported, analyze the logs, implement the fix, and rerun the requested tests (e.g., the e2e command) until they finish successfully before stopping.
 7. **Respect existing architecture and formats.** Any new code should mirror the structural and coding patterns used by similar, already-implemented components, and input/output files must follow the established formats or outputs currently in use.
 8. **Avoid explanatory comments.** Keep code self-documenting, and do not add or preserve comments that merely restate what the code already expresses.
+9. **Skip change summaries.** Do not include a change summary at the end of request processing.
 
 ## Domain specs (load as needed)
 - `specs/01-purpose-glossary.md`: purpose and shared terminology.
@@ -34,3 +35,4 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 - Document user or developer-facing behavior changes in the docs before finishing your work.
 - When new feature is added, update unit and e2e tests to validade it
 - Latest update: split `specs/specs.md` into domain-focused files and require loading the relevant spec file(s) per task.
+- Latest update: add guidance to skip change summaries at the end of request processing.
