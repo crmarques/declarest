@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
 )
 
 func secretPathsFor(recon *reconciler.DefaultReconciler, path string) ([]string, error) {

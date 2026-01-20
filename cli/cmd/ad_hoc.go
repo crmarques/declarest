@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"declarest/internal/managedserver"
-	"declarest/internal/openapi"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/resource"
 
 	"github.com/spf13/cobra"
 )

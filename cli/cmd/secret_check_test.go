@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/resource"
 
-	cli "declarest/cli/cmd"
+	cli "github.com/crmarques/declarest/cli/cmd"
 )
 
 func TestSecretCheckFindsUnmappedSecrets(t *testing.T) {

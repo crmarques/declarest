@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestMetadataEditTemplateShowsListCollectionFilterOptions(t *testing.T) {

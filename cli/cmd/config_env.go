@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"text/tabwriter"
 
-	ctx "declarest/internal/context"
+	ctx "github.com/crmarques/declarest/context"
 
 	"github.com/spf13/cobra"
 )

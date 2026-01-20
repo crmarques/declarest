@@ -15,12 +15,12 @@ make test
 make fmt
 ```
 
-The CLI source lives in `cli/`. Core logic is under `internal/`.
+The CLI source lives in `cli/`. Core logic lives in top-level packages.
 
 ## Project structure
 
 - `cli/`: Cobra commands and CLI entrypoint.
-- `internal/`: core packages (reconciler, metadata, repository, secrets).
+- `context/`, `managedserver/`, `metadata/`, `openapi/`, `reconciler/`, `repository/`, `resource/`, `secrets/`, `yamlutil/`: core packages.
 - `specs/`: detailed specification for behavior and file layout.
 - `tests/`: integration and e2e harnesses.
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	ctx "declarest/internal/context"
+	ctx "github.com/crmarques/declarest/context"
 
 	"github.com/spf13/cobra"
 )

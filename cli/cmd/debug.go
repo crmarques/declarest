@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strings"
 
-	"declarest/internal/managedserver"
-	"declarest/internal/reconciler"
-	"declarest/internal/repository"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/repository"
 
 	"github.com/spf13/cobra"
 )

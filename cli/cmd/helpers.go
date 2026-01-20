@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	ctx "declarest/internal/context"
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
-	"declarest/internal/secrets"
+	ctx "github.com/crmarques/declarest/context"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 
 	"github.com/spf13/cobra"
 )

@@ -3,8 +3,8 @@ package cmd
 import (
 	"testing"
 
-	"declarest/internal/resource"
-	"declarest/internal/secrets"
+	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 )
 
 func TestFindUnmappedSecretPathsCollectionIgnoresItemPrefix(t *testing.T) {

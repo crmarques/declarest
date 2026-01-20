@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	cli "declarest/cli/cmd"
-	"declarest/internal/context"
+	cli "github.com/crmarques/declarest/cli/cmd"
+	"github.com/crmarques/declarest/context"
 )
 
 func TestConfigDeletePromptsWithoutYes(t *testing.T) {

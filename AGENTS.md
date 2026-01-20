@@ -9,7 +9,7 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 ## Guidelines for AI contributors
 
 1. **Prioritize the repository requirements.** Identify the domain/concern of the task, then load the relevant spec file(s) from `specs/` plus `docs/reference/cli.md` when CLI behavior is involved. Use `specs/specs.md` as the full source of truth.
-2. **Lean on the existing architecture.** Make minimal changes to interfaces in `internal/` packages; follow the module layering described in `specs/specs.md` §6.
+2. **Lean on the existing architecture.** Make minimal changes to interfaces in core packages; follow the module layering described in `specs/specs.md` §6.
 3. **Follow standard workflows.** Prefer `go test ./...` and `gofmt` for Go files, ensure shell scripts pass `shellcheck` when practical, and use `rg` for fast lookups.
 4. **Document behavior.** Add coverage or notes for new features, especially when introducing CLI flags or metadata semantics.
 5. **Escalate blockers.** If you encounter runtime/environment constraints (e.g., Podman permission errors), describe them in the final report rather than rerunning failing commands indefinitely.
@@ -36,3 +36,4 @@ This repository uses an AGENTS document to orient AI contributors. Whenever you 
 - When new feature is added, update unit and e2e tests to validade it
 - Latest update: split `specs/specs.md` into domain-focused files and require loading the relevant spec file(s) per task.
 - Latest update: add guidance to skip change summaries at the end of request processing.
+- Latest update: move core packages out of `internal/` to support reuse by external modules.

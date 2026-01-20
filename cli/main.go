@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"declarest/cli/cmd"
+	"github.com/crmarques/declarest/cli/cmd"
 )
 
 func main() {

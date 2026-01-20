@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	cli "declarest/cli/cmd"
+	cli "github.com/crmarques/declarest/cli/cmd"
 )
 
 func TestSecretExportPathCSV(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
 
 	"github.com/spf13/cobra"
 )

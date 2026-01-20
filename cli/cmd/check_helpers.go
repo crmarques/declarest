@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"declarest/internal/managedserver"
-	"declarest/internal/reconciler"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/reconciler"
 
 	"github.com/spf13/cobra"
 )

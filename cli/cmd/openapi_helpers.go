@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"declarest/internal/managedserver"
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
 )
 
 var errOpenAPISpecNotConfigured = errors.New("openapi spec is not configured")

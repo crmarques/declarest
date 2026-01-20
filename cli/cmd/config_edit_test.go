@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/context"
+	"github.com/crmarques/declarest/context"
 )
 
 func TestConfigEditUpdatesExisting(t *testing.T) {

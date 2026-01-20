@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	ctx "declarest/internal/context"
-	"declarest/internal/managedserver"
-	"declarest/internal/repository"
-	"declarest/internal/secrets"
+	ctx "github.com/crmarques/declarest/context"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/secrets"
 )
 
 func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt interactivePrompter, initialName string, force bool) error {

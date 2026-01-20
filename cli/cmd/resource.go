@@ -15,11 +15,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"declarest/internal/managedserver"
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
-	"declarest/internal/secrets"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 
 	"github.com/spf13/cobra"
 )

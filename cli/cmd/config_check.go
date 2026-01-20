@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	ctx "declarest/internal/context"
-	"declarest/internal/reconciler"
+	ctx "github.com/crmarques/declarest/context"
+	"github.com/crmarques/declarest/reconciler"
 
 	"github.com/spf13/cobra"
 )

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"declarest/internal/reconciler"
+	"github.com/crmarques/declarest/reconciler"
 
 	"github.com/spf13/cobra"
 )

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	cli "declarest/cli/cmd"
-	ctx "declarest/internal/context"
+	cli "github.com/crmarques/declarest/cli/cmd"
+	ctx "github.com/crmarques/declarest/context"
 
 	"github.com/spf13/cobra"
 )

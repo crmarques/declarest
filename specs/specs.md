@@ -434,12 +434,12 @@ Inference does not write metadata unless `--apply` is set; the command prints st
 | Package | Responsibility |
 | --- | --- |
 | `cli/cmd` | Cobra commands. Parses args/flags, prints output. Calls only `Reconciler`. |
-| `internal/reconciler` | Orchestrates compare/diff/sync using metadata + managers. |
-| `internal/managedserver` | Resource server contracts + HTTP implementation. |
-| `internal/repository` | Repo contracts + Git/FS implementation. |
-| `internal/metadata` | Metadata loading, layering, access. |
-| `internal/context` | Context discovery/config wiring (ContextManager). |
-| `internal/resource` | Pure helpers for JSON handling, patching, diffing. |
+| `reconciler` | Orchestrates compare/diff/sync using metadata + managers. |
+| `managedserver` | Resource server contracts + HTTP implementation. |
+| `repository` | Repo contracts + Git/FS implementation. |
+| `metadata` | Metadata loading, layering, access. |
+| `context` | Context discovery/config wiring (ContextManager). |
+| `resource` | Pure helpers for JSON handling, patching, diffing. |
 
 ### Hard boundaries (MUST)
 - Repository I/O only via `ResourceRepositoryManager`

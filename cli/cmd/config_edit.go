@@ -9,10 +9,10 @@ import (
 	"reflect"
 	"strings"
 
-	ctx "declarest/internal/context"
-	"declarest/internal/managedserver"
-	"declarest/internal/repository"
-	"declarest/internal/secrets"
+	ctx "github.com/crmarques/declarest/context"
+	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/secrets"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

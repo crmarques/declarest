@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/resource"
 )
 
 const cliInferSpecYAML = `

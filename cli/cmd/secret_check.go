@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	"declarest/internal/metadata"
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
-	"declarest/internal/secrets"
+	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 
 	"github.com/spf13/cobra"
 )

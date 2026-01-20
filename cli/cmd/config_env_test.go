@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	ctx "declarest/internal/context"
+	ctx "github.com/crmarques/declarest/context"
 )
 
 func TestConfigEnvCommandDefaults(t *testing.T) {

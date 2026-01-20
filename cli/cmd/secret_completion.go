@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/resource"
 
 	"github.com/spf13/cobra"
 )

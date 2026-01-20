@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	cli "declarest/cli/cmd"
-	"declarest/internal/resource"
+	cli "github.com/crmarques/declarest/cli/cmd"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestDeleteDefaultsRepoOnly(t *testing.T) {

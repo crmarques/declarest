@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/openapi"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestPrintExplainIncludesOpenAPIDetails(t *testing.T) {

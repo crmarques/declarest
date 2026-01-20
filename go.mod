@@ -1,4 +1,4 @@
-module declarest
+module github.com/crmarques/declarest
 
 go 1.25.6
 

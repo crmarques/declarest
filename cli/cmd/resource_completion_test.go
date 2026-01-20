@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
-	"declarest/internal/repository"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/resource"
 )
 
 const sampleSpecJSON = `{

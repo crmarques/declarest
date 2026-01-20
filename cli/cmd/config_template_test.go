@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"declarest/internal/context"
+	"github.com/crmarques/declarest/context"
 
 	"gopkg.in/yaml.v3"
 )

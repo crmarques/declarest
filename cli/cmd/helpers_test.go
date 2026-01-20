@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/secrets"
+	"github.com/crmarques/declarest/secrets"
 )
 
 func TestWrapSecretStoreError(t *testing.T) {

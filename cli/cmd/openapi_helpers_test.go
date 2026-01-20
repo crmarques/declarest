@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"declarest/internal/openapi"
-	"declarest/internal/reconciler"
-	"declarest/internal/resource"
+	"github.com/crmarques/declarest/openapi"
+	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/resource"
 )
 
 const sampleOpenAPISpec = `
