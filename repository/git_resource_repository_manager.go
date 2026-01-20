@@ -280,11 +280,19 @@ func (m *GitResourceRepositoryManager) GetResourceCollection(path string) ([]res
 }
 
 func (m *GitResourceRepositoryManager) ListResourcePaths() []string {
+	paths, err := m.ListResourcePathsWithErrors()
+	if err != nil {
+		return paths
+	}
+	return paths
+}
+
+func (m *GitResourceRepositoryManager) ListResourcePathsWithErrors() ([]string, error) {
 	fs, err := m.ensureFS()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return fs.ListResourcePaths()
+	return fs.ListResourcePathsWithErrors()
 }
 
 func (m *GitResourceRepositoryManager) RebaseLocalFromRemote() error {

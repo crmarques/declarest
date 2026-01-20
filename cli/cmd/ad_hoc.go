@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -87,13 +86,9 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 		return err
 	}
 
-	provider := recon.ResourceRecordProvider
-	if provider == nil {
-		return errors.New("resource record provider is not configured")
-	}
-	spec := openapiSpecFromProvider(provider)
+	spec := recon.OpenAPISpec()
 
-	record, err := provider.GetResourceRecord(path)
+	record, err := recon.ResourceRecord(path)
 	if err != nil {
 		return err
 	}
@@ -160,12 +155,7 @@ func runAdHocRequest(cmd *cobra.Command, method, pathFlag string, headerFlags []
 		infof(cmd, "Payload provided as literal string; use @path to load from a file")
 	}
 
-	httpManager, ok := recon.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
-	if !ok || httpManager == nil {
-		return errors.New("managed server must be configured as an http server")
-	}
-
-	resp, err := httpManager.ExecuteRequest(httpSpec, payloadBytes)
+	resp, err := recon.ExecuteHTTPRequest(httpSpec, payloadBytes)
 	if err != nil {
 		return err
 	}

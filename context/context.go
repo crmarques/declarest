@@ -8,7 +8,7 @@ import (
 
 type Context struct {
 	Name       string
-	Reconciler reconciler.Reconciler
+	Reconciler reconciler.AppReconciler
 }
 
 func (c *Context) Init() error {

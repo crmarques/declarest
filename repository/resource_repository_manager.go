@@ -14,6 +14,10 @@ type ResourceRepositoryManager interface {
 	Close() error
 }
 
+type ResourceRepositoryPathLister interface {
+	ListResourcePathsWithErrors() ([]string, error)
+}
+
 type MetadataRepositoryManager interface {
 	ReadMetadata(path string) (map[string]any, error)
 	WriteMetadata(path string, metadata map[string]any) error

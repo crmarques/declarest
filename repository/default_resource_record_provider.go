@@ -116,6 +116,32 @@ func (p *DefaultResourceRecordProvider) format() ResourceFormat {
 	return normalizeResourceFormat(p.resourceFormat)
 }
 
+type metadataPathInfo struct {
+	trimmed            string
+	isCollection       bool
+	segments           []string
+	collectionSegments []string
+	collectionDepth    int
+}
+
+func buildMetadataPathInfo(resourcePath string) metadataPathInfo {
+	trimmed := strings.TrimSpace(resourcePath)
+	isCollection := strings.HasSuffix(trimmed, "/")
+	clean := strings.Trim(trimmed, " /")
+	segments := resource.SplitPathSegments(clean)
+	collectionSegments := segments
+	if !isCollection && len(collectionSegments) > 0 {
+		collectionSegments = collectionSegments[:len(collectionSegments)-1]
+	}
+	return metadataPathInfo{
+		trimmed:            trimmed,
+		isCollection:       isCollection,
+		segments:           segments,
+		collectionSegments: collectionSegments,
+		collectionDepth:    len(collectionSegments),
+	}
+}
+
 func (p *DefaultResourceRecordProvider) GetResourceRecord(resourcePath string) (resource.ResourceRecord, error) {
 	meta, err := p.resolveMetadata(resourcePath)
 	if err != nil {
@@ -145,19 +171,48 @@ func (p *DefaultResourceRecordProvider) resolveMetadata(resourcePath string) (re
 }
 
 func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath string, renderTemplates bool) (resource.ResourceMetadata, error) {
-	trimmed := strings.TrimSpace(resourcePath)
-	isCollection := strings.HasSuffix(trimmed, "/")
-	clean := strings.Trim(trimmed, " /")
-	segments := resource.SplitPathSegments(clean)
-	collectionSegments := segments
-	if !isCollection && len(collectionSegments) > 0 {
-		collectionSegments = collectionSegments[:len(collectionSegments)-1]
+	info := buildMetadataPathInfo(resourcePath)
+	result, err := p.resolveMetadataBase(info)
+	if err != nil {
+		return resource.ResourceMetadata{}, err
 	}
-	collectionDepth := len(collectionSegments)
 
-	result := metadata.DefaultMetadata(collectionSegments)
+	var ctx map[string]any
+	var opts metadata.RenderOptions
+	if renderTemplates {
+		var attrsCache map[string]map[string]any
+		ctx, attrsCache, err = p.buildMetadataTemplateContext(info)
+		if err != nil {
+			return resource.ResourceMetadata{}, err
+		}
+		opts = metadataRenderOptions(attrsCache)
+		result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
+	}
 
-	files := metadataRelPaths(segments, collectionSegments, isCollection)
+	if p.openapiSpec != nil {
+		resourcePathForDefaults := info.trimmed
+		if info.isCollection {
+			if result.ResourceInfo != nil {
+				if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
+					resourcePathForDefaults = coll
+				}
+			}
+		} else if remotePath := p.resourcePathForDefaults(info.trimmed, result); remotePath != "" {
+			resourcePathForDefaults = remotePath
+		}
+		result = openapi.ApplyDefaults(result, resourcePathForDefaults, info.isCollection, p.openapiSpec)
+		if renderTemplates {
+			result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
+		}
+	}
+
+	return result, nil
+}
+
+func (p *DefaultResourceRecordProvider) resolveMetadataBase(info metadataPathInfo) (resource.ResourceMetadata, error) {
+	result := metadata.DefaultMetadata(info.collectionSegments)
+
+	files := metadataRelPaths(info.segments, info.collectionSegments, info.isCollection)
 	for _, candidate := range files {
 		fileMetadata, ok, err := p.readMetadataCandidate(candidate)
 		if err != nil {
@@ -167,7 +222,7 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 			continue
 		}
 
-		if candidate.depth < collectionDepth && fileMetadata.ResourceInfo != nil {
+		if candidate.depth < info.collectionDepth && fileMetadata.ResourceInfo != nil {
 			fileMetadata.ResourceInfo.IDFromAttribute = ""
 			fileMetadata.ResourceInfo.AliasFromAttribute = ""
 		}
@@ -175,30 +230,56 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 		result = metadata.MergeMetadata(result, fileMetadata)
 	}
 
-	ctx := p.buildMetadataTemplateContext(trimmed)
-	opts := metadata.RenderOptions{
-		RelativePlaceholderResolver: p.resolveResourceAttributes,
-	}
-	if renderTemplates {
-		result = metadata.RenderTemplates(result, trimmed, ctx, opts)
+	return result, nil
+}
+
+func (p *DefaultResourceRecordProvider) resolveMetadataWithContext(resourcePath string, ctx map[string]any, attrsCache map[string]map[string]any) (resource.ResourceMetadata, error) {
+	info := buildMetadataPathInfo(resourcePath)
+	result, err := p.resolveMetadataBase(info)
+	if err != nil {
+		return resource.ResourceMetadata{}, err
 	}
 
+	opts := metadataRenderOptions(attrsCache)
+	result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
+
 	if p.openapiSpec != nil {
-		resourcePathForDefaults := trimmed
-		if isCollection {
-			if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
-				resourcePathForDefaults = coll
+		resourcePathForDefaults := info.trimmed
+		if info.isCollection {
+			if result.ResourceInfo != nil {
+				if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
+					resourcePathForDefaults = coll
+				}
 			}
-		} else if remotePath := p.resourcePathForDefaults(trimmed, result); remotePath != "" {
+		} else if remotePath := p.resourcePathForDefaults(info.trimmed, result); remotePath != "" {
 			resourcePathForDefaults = remotePath
 		}
-		result = openapi.ApplyDefaults(result, resourcePathForDefaults, isCollection, p.openapiSpec)
-		if renderTemplates {
-			result = metadata.RenderTemplates(result, trimmed, ctx, opts)
-		}
+		result = openapi.ApplyDefaults(result, resourcePathForDefaults, info.isCollection, p.openapiSpec)
+		result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
 	}
 
 	return result, nil
+}
+
+func metadataRenderOptions(attrsCache map[string]map[string]any) metadata.RenderOptions {
+	if attrsCache == nil {
+		return metadata.RenderOptions{}
+	}
+	return metadata.RenderOptions{
+		RelativePlaceholderResolver: func(targetPath string) (map[string]any, bool) {
+			normalized := resource.NormalizePath(targetPath)
+			attrs, ok := attrsCache[normalized]
+			return attrs, ok
+		},
+	}
+}
+
+func renderMetadataWithContext(meta resource.ResourceMetadata, resourcePath string, ctx map[string]any, opts metadata.RenderOptions) resource.ResourceMetadata {
+	if ctx == nil {
+		ctx = map[string]any{}
+	}
+	ctxCopy := cloneContext(ctx)
+	return metadata.RenderTemplates(meta, resourcePath, ctxCopy, opts)
 }
 
 func (p *DefaultResourceRecordProvider) readMetadataCandidate(candidate metadataCandidate) (resource.ResourceMetadata, bool, error) {
@@ -381,22 +462,31 @@ func metadataPathFromRel(rel string) string {
 	return ""
 }
 
-func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(resourcePath string) map[string]any {
+func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(info metadataPathInfo) (map[string]any, map[string]map[string]any, error) {
 	ctx := make(map[string]any)
-	trimmed := strings.Trim(resourcePath, " /")
-	if trimmed == "" {
-		return ctx
+	attrsCache := make(map[string]map[string]any)
+	if info.trimmed == "" {
+		return ctx, attrsCache, nil
 	}
 
-	segments := resource.SplitPathSegments(trimmed)
-	for i := 1; i <= len(segments); i++ {
-		prefix := "/" + strings.Join(segments[:i], "/")
-		if attrs, ok := p.resolveResourceAttributes(prefix); ok {
+	for i := 1; i <= len(info.segments); i++ {
+		prefix := "/" + strings.Join(info.segments[:i], "/")
+		meta, err := p.resolveMetadataWithContext(prefix, ctx, attrsCache)
+		if err != nil {
+			return nil, nil, err
+		}
+		record := resource.ResourceRecord{
+			Path: prefix,
+			Meta: meta,
+		}
+		if attrs, ok := p.resolveResourceAttributes(prefix, record); ok {
+			normalized := resource.NormalizePath(prefix)
+			attrsCache[normalized] = attrs
 			mergeContext(ctx, attrs)
 		}
 	}
 
-	return ctx
+	return ctx, attrsCache, nil
 }
 
 func mergeContext(dst map[string]any, src map[string]any) {
@@ -405,7 +495,18 @@ func mergeContext(dst map[string]any, src map[string]any) {
 	}
 }
 
-func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string) (map[string]any, bool) {
+func cloneContext(src map[string]any) map[string]any {
+	if src == nil {
+		return map[string]any{}
+	}
+	dst := make(map[string]any, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string, record resource.ResourceRecord) (map[string]any, bool) {
 	if p.resourceLoader != nil {
 		if res, err := p.resourceLoader.GetLocalResource(path); err == nil {
 			if obj, ok := res.AsObject(); ok {
@@ -416,20 +517,20 @@ func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string) (
 
 	data, format, err := p.readResourcePayload(path)
 	if err != nil {
-		return p.loadRemoteResourceAttributes(path)
+		return p.loadRemoteResourceAttributes(path, record)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
-		return p.loadRemoteResourceAttributes(path)
+		return p.loadRemoteResourceAttributes(path, record)
 	}
 
 	res, err := decodeResourcePayload(data, format)
 	if err != nil {
-		return p.loadRemoteResourceAttributes(path)
+		return p.loadRemoteResourceAttributes(path, record)
 	}
 
 	obj, ok := res.AsObject()
 	if !ok {
-		return p.loadRemoteResourceAttributes(path)
+		return p.loadRemoteResourceAttributes(path, record)
 	}
 
 	return obj, true
@@ -456,15 +557,30 @@ func (p *DefaultResourceRecordProvider) readResourcePayload(path string) ([]byte
 	return nil, p.format(), os.ErrNotExist
 }
 
-func (p *DefaultResourceRecordProvider) loadRemoteResourceAttributes(path string) (map[string]any, bool) {
-	loader, ok := p.resourceLoader.(RemoteResourceLoader)
-	if !ok || loader == nil {
-		return nil, false
-	}
+func (p *DefaultResourceRecordProvider) loadRemoteResourceAttributes(path string, record resource.ResourceRecord) (map[string]any, bool) {
 	if !p.enterRemote(path) {
 		return nil, false
 	}
 	defer p.exitRemote(path)
+
+	if loader, ok := p.resourceLoader.(metadata.RemoteRecordLoader); ok && loader != nil {
+		if strings.TrimSpace(record.Path) == "" {
+			record.Path = path
+		}
+		res, err := loader.GetRemoteResourceWithRecord(record, path, resource.IsCollectionPath(path))
+		if err != nil {
+			return nil, false
+		}
+		if obj, ok := res.AsObject(); ok {
+			return obj, true
+		}
+		return nil, false
+	}
+
+	loader, ok := p.resourceLoader.(RemoteResourceLoader)
+	if !ok || loader == nil {
+		return nil, false
+	}
 
 	res, err := loader.GetRemoteResource(path)
 	if err != nil {

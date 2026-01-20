@@ -542,7 +542,7 @@ func newSecretImportCommand() *cobra.Command {
 	return cmd
 }
 
-func secretExportRows(recon *reconciler.DefaultReconciler, exportAll bool, resourcePath string) ([]secretCSVRow, error) {
+func secretExportRows(recon reconciler.AppReconciler, exportAll bool, resourcePath string) ([]secretCSVRow, error) {
 	var paths []string
 	if exportAll {
 		p, err := recon.ListSecretResources()
@@ -650,7 +650,7 @@ func isSecretCSVHeader(record []string) bool {
 		strings.EqualFold(strings.TrimSpace(record[2]), "value")
 }
 
-func secretImportConflicts(recon *reconciler.DefaultReconciler, rows []secretCSVRow) ([]string, error) {
+func secretImportConflicts(recon reconciler.AppReconciler, rows []secretCSVRow) ([]string, error) {
 	seen := map[string]map[string]struct{}{}
 	var conflicts []string
 	for _, row := range rows {

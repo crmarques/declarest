@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	ctx "github.com/crmarques/declarest/context"
-	"github.com/crmarques/declarest/reconciler"
 
 	"github.com/spf13/cobra"
 )
@@ -165,12 +164,12 @@ func newRepoCheckCommand() *cobra.Command {
 				return handledError{msg: "repository check failed"}
 			}
 
-			recon, ok := context.Reconciler.(*reconciler.DefaultReconciler)
-			if !ok {
-				reportCheck(cmd, "Load default context", errors.New("unexpected reconciler type"))
+			recon := context.Reconciler
+			if recon == nil {
+				reportCheck(cmd, "Load default context", errors.New("reconciler is not configured"))
 				return handledError{msg: "repository check failed"}
 			}
-			defer closeReconciler(recon)
+			defer recon.Close()
 
 			failed := false
 

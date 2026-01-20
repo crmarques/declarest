@@ -12,7 +12,7 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.Reconciler, error) {
+func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.AppReconciler, error) {
 	if cfg == nil {
 		return nil, errors.New("context configuration is missing")
 	}

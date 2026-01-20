@@ -304,6 +304,14 @@ func (m *FileSystemResourceRepositoryManager) GetResourceCollection(path string)
 }
 
 func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
+	paths, err := m.ListResourcePathsWithErrors()
+	if err != nil {
+		return paths
+	}
+	return paths
+}
+
+func (m *FileSystemResourceRepositoryManager) ListResourcePathsWithErrors() ([]string, error) {
 	base := strings.TrimSpace(m.BaseDir)
 	if base == "" {
 		base = "."
@@ -311,9 +319,9 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 
 	seen := make(map[string]struct{})
 	var paths []string
-	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			return nil
@@ -323,7 +331,7 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 		}
 		rel, err := filepath.Rel(base, filepath.Dir(path))
 		if err != nil {
-			return nil
+			return err
 		}
 		var logical string
 		if rel == "." {
@@ -337,7 +345,9 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 		seen[logical] = struct{}{}
 		paths = append(paths, logical)
 		return nil
-	})
+	}); err != nil {
+		return paths, err
+	}
 
 	sort.Slice(paths, func(i, j int) bool {
 		di := strings.Count(strings.Trim(paths[i], "/"), "/")
@@ -348,7 +358,7 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePaths() []string {
 		return di < dj
 	})
 
-	return paths
+	return paths, nil
 }
 
 func (FileSystemResourceRepositoryManager) Close() error { return nil }

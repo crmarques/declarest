@@ -32,24 +32,24 @@ type loadReconcilerOptions struct {
 	skipRepoSync bool
 }
 
-func loadDefaultReconciler() (*reconciler.DefaultReconciler, func(), error) {
+func loadDefaultReconciler() (reconciler.AppReconciler, func(), error) {
 	return loadDefaultReconcilerWithOptions(loadReconcilerOptions{})
 }
 
-func loadDefaultReconcilerSkippingRepoSync() (*reconciler.DefaultReconciler, func(), error) {
+func loadDefaultReconcilerSkippingRepoSync() (reconciler.AppReconciler, func(), error) {
 	return loadDefaultReconcilerWithOptions(loadReconcilerOptions{skipRepoSync: true})
 }
 
-func loadDefaultReconcilerForSecrets() (*reconciler.DefaultReconciler, func(), error) {
+func loadDefaultReconcilerForSecrets() (reconciler.AppReconciler, func(), error) {
 	manager := &ctx.DefaultContextManager{}
 	context, err := ctx.LoadContextWithEnv(manager)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	actual, ok := context.Reconciler.(*reconciler.DefaultReconciler)
-	if !ok {
-		return nil, nil, errors.New("unexpected reconciler type")
+	actual := context.Reconciler
+	if actual == nil {
+		return nil, nil, errors.New("reconciler is not configured")
 	}
 	captureDebugContext(actual)
 
@@ -60,34 +60,26 @@ func loadDefaultReconcilerForSecrets() (*reconciler.DefaultReconciler, func(), e
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
-			if actual.ResourceRepositoryManager != nil {
-				actual.ResourceRepositoryManager.Close()
-			}
-			if actual.ResourceServerManager != nil {
-				actual.ResourceServerManager.Close()
-			}
-			if actual.SecretsManager != nil {
-				actual.SecretsManager.Close()
-			}
+			_ = actual.Close()
 		})
 	}
 
 	return actual, cleanup, nil
 }
 
-func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (*reconciler.DefaultReconciler, func(), error) {
+func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (reconciler.AppReconciler, func(), error) {
 	manager := &ctx.DefaultContextManager{}
 	context, err := ctx.LoadContextWithEnv(manager)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	actual, ok := context.Reconciler.(*reconciler.DefaultReconciler)
-	if !ok {
-		return nil, nil, errors.New("unexpected reconciler type")
+	actual := context.Reconciler
+	if actual == nil {
+		return nil, nil, errors.New("reconciler is not configured")
 	}
 	if opts.skipRepoSync {
-		actual.SkipRepositorySync = true
+		actual.SetSkipRepositorySync(true)
 	}
 	captureDebugContext(actual)
 
@@ -98,15 +90,7 @@ func loadDefaultReconcilerWithOptions(opts loadReconcilerOptions) (*reconciler.D
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
-			if actual.ResourceRepositoryManager != nil {
-				actual.ResourceRepositoryManager.Close()
-			}
-			if actual.ResourceServerManager != nil {
-				actual.ResourceServerManager.Close()
-			}
-			if actual.SecretsManager != nil {
-				actual.SecretsManager.Close()
-			}
+			_ = actual.Close()
 		})
 	}
 

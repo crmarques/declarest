@@ -324,16 +324,12 @@ func runResourceExplain(cmd *cobra.Command, path string) error {
 		return err
 	}
 
-	if recon.ResourceRecordProvider == nil {
-		return errors.New("resource record provider is not configured")
-	}
-
-	record, err := recon.ResourceRecordProvider.GetResourceRecord(path)
+	record, err := recon.ResourceRecord(path)
 	if err != nil {
 		return err
 	}
 
-	spec := openapiSpecFromProvider(recon.ResourceRecordProvider)
+	spec := recon.OpenAPISpec()
 
 	return printExplain(cmd.OutOrStdout(), path, record, spec)
 }
@@ -347,11 +343,7 @@ func runResourceTemplate(cmd *cobra.Command, path string) error {
 		return err
 	}
 
-	if recon.ResourceRecordProvider == nil {
-		return errors.New("resource record provider is not configured")
-	}
-
-	spec := openapiSpecFromProvider(recon.ResourceRecordProvider)
+	spec := recon.OpenAPISpec()
 	if spec == nil {
 		return errors.New("openapi spec is not configured; provide --spec or configure managed_server.http.openapi")
 	}
@@ -720,16 +712,6 @@ func formatSchemaValue(value any) string {
 	}
 }
 
-func openapiSpecFromProvider(provider interface{}) *openapi.Spec {
-	type specProvider interface {
-		OpenAPISpec() *openapi.Spec
-	}
-	if provider, ok := provider.(specProvider); ok {
-		return provider.OpenAPISpec()
-	}
-	return nil
-}
-
 const openAPIFromContextValue = "__from_openapi_context__"
 
 func newResourceAddCommand() *cobra.Command {
@@ -1083,12 +1065,12 @@ func parseIncludeDirective(value string) (string, bool) {
 	return path, true
 }
 
-func resolveAddTargetPath(recon *reconciler.DefaultReconciler, path string, res resource.Resource) (string, error) {
-	if recon == nil || recon.ResourceRecordProvider == nil {
-		return "", errors.New("resource record provider is not configured")
+func resolveAddTargetPath(recon reconciler.AppReconciler, path string, res resource.Resource) (string, error) {
+	if recon == nil {
+		return "", errors.New("reconciler is not configured")
 	}
 
-	record, err := recon.ResourceRecordProvider.GetResourceRecord(path)
+	record, err := recon.ResourceRecord(path)
 	if err != nil {
 		return "", err
 	}
@@ -1105,7 +1087,7 @@ func resolveAddTargetPath(recon *reconciler.DefaultReconciler, path string, res 
 	return record.AliasPath(processed), nil
 }
 
-func localResourceExists(recon *reconciler.DefaultReconciler, path string) (bool, error) {
+func localResourceExists(recon reconciler.AppReconciler, path string) (bool, error) {
 	if recon == nil {
 		return false, errors.New("reconciler is not configured")
 	}
@@ -1314,7 +1296,7 @@ func dropResourceID(res resource.Resource) (resource.Resource, error) {
 	return res, nil
 }
 
-func resourceFromOpenAPI(recon *reconciler.DefaultReconciler, logicalPath, source string) (resource.Resource, error) {
+func resourceFromOpenAPI(recon reconciler.AppReconciler, logicalPath, source string) (resource.Resource, error) {
 	if recon == nil {
 		return resource.Resource{}, errors.New("reconciler is not configured")
 	}
@@ -1377,7 +1359,7 @@ func newResourceListCommand() *cobra.Command {
 				if listRemote {
 					paths, err = recon.ListRemoteResourcePathsFromLocal()
 				} else {
-					paths = recon.RepositoryResourcePaths()
+					paths, err = recon.RepositoryResourcePathsWithErrors()
 				}
 			}
 			if err != nil {
@@ -1430,7 +1412,10 @@ func newResourceCreateCommand() *cobra.Command {
 
 			paths := []string{targetPath}
 			if all {
-				paths = recon.RepositoryResourcePaths()
+				paths, err = recon.RepositoryResourcePathsWithErrors()
+				if err != nil {
+					return err
+				}
 				if len(paths) == 0 {
 					return nil
 				}
@@ -1497,7 +1482,10 @@ func newResourceUpdateCommand() *cobra.Command {
 
 			paths := []string{targetPath}
 			if all {
-				paths = recon.RepositoryResourcePaths()
+				paths, err = recon.RepositoryResourcePathsWithErrors()
+				if err != nil {
+					return err
+				}
 				if len(paths) == 0 {
 					return nil
 				}
@@ -1564,7 +1552,10 @@ func newResourceApplyCommand() *cobra.Command {
 
 			paths := []string{targetPath}
 			if all {
-				paths = recon.RepositoryResourcePaths()
+				paths, err = recon.RepositoryResourcePathsWithErrors()
+				if err != nil {
+					return err
+				}
 				if len(paths) == 0 {
 					return nil
 				}
@@ -1673,7 +1664,10 @@ func newResourceDeleteCommand() *cobra.Command {
 
 			paths := []string{targetPath}
 			if all {
-				paths = recon.RepositoryResourcePaths()
+				paths, err = recon.RepositoryResourcePathsWithErrors()
+				if err != nil {
+					return err
+				}
 				if len(paths) == 0 {
 					return nil
 				}
@@ -1800,7 +1794,7 @@ func warnUnmappedSecrets(cmd *cobra.Command, path string, res resource.Resource,
 	fmt.Fprintln(cmd.ErrOrStderr(), "Run `declarest secret check` to review or `declarest secret check --fix` to map and store them.")
 }
 
-func syncLocalResource(recon *reconciler.DefaultReconciler, path string) error {
+func syncLocalResource(recon reconciler.AppReconciler, path string) error {
 	res, err := recon.GetRemoteResource(path)
 	if err != nil {
 		if managedserver.IsNotFoundError(err) {
@@ -1811,8 +1805,8 @@ func syncLocalResource(recon *reconciler.DefaultReconciler, path string) error {
 	return saveLocalResourceWithSecrets(recon, path, res, true)
 }
 
-func ensureRepositoryOverwriteAllowed(recon *reconciler.DefaultReconciler, path string, force bool) error {
-	if force || recon == nil || recon.ResourceRepositoryManager == nil {
+func ensureRepositoryOverwriteAllowed(recon reconciler.AppReconciler, path string, force bool) error {
+	if force || recon == nil {
 		return nil
 	}
 	_, err := recon.GetLocalResource(path)

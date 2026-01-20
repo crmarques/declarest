@@ -87,8 +87,7 @@ func newCompletionPrefixInfo(prefix string) completionPrefixInfo {
 	}
 }
 
-func newOpenAPICompletionInfo(provider interface{}, prefix string) openAPICompletionInfo {
-	spec := openapiSpecFromProvider(provider)
+func newOpenAPICompletionInfo(spec *openapi.Spec, prefix string) openAPICompletionInfo {
 	if spec == nil {
 		return openAPICompletionInfo{}
 	}
@@ -154,9 +153,9 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 	return values, directive
 }
 
-func gatherPathSuggestions(recon *reconciler.DefaultReconciler, prefix string, sources []pathCompletionSource) ([]pathCompletionEntry, bool) {
+func gatherPathSuggestions(recon reconciler.AppReconciler, prefix string, sources []pathCompletionSource) ([]pathCompletionEntry, bool) {
 	info := newCompletionPrefixInfo(prefix)
-	openAPIInfo := newOpenAPICompletionInfo(recon.ResourceRecordProvider, info.trimmed)
+	openAPIInfo := newOpenAPICompletionInfo(recon.OpenAPISpec(), info.trimmed)
 	metadataEntries, hasMetadataEntries := metadataChildEntries(recon, info)
 	if openAPIInfo.hasEntries && info.lastToken != "" {
 		combined := make(map[string]pathCompletionEntry)
@@ -241,11 +240,15 @@ func completionHasResourceEntries(entries []pathCompletionEntry) bool {
 	return false
 }
 
-func repoPathSuggestions(recon *reconciler.DefaultReconciler, prefix string) []string {
-	return filterPathsByPrefix(recon.RepositoryResourcePaths(), prefix)
+func repoPathSuggestions(recon reconciler.AppReconciler, prefix string) []string {
+	paths, err := recon.RepositoryResourcePathsWithErrors()
+	if err != nil {
+		return nil
+	}
+	return filterPathsByPrefix(paths, prefix)
 }
 
-func repoCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
+func repoCollectionSuggestions(recon reconciler.AppReconciler, prefix string) []pathCompletionEntry {
 	if recon == nil {
 		return nil
 	}
@@ -262,7 +265,11 @@ func repoCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix strin
 
 	info := collectionResourceInfo(recon, prefix)
 	entries := make(map[string]pathCompletionEntry)
-	for _, path := range recon.RepositoryResourcePaths() {
+	paths, err := recon.RepositoryResourcePathsWithErrors()
+	if err != nil {
+		return nil
+	}
+	for _, path := range paths {
 		normalized := resource.NormalizePath(path)
 		if !strings.HasPrefix(normalized, prefixPath) {
 			continue
@@ -286,7 +293,7 @@ func repoCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix strin
 	return completionEntriesToSortedList(entries)
 }
 
-func remotePathSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
+func remotePathSuggestions(recon reconciler.AppReconciler, prefix string) []pathCompletionEntry {
 	collection := remoteCompletionCollection(prefix)
 	items, err := recon.ListRemoteResourceEntries(collection)
 	if err != nil {
@@ -295,7 +302,7 @@ func remotePathSuggestions(recon *reconciler.DefaultReconciler, prefix string) [
 	return filterEntriesByPrefix(items, prefix)
 }
 
-func remoteCollectionSuggestions(recon *reconciler.DefaultReconciler, prefix string) []pathCompletionEntry {
+func remoteCollectionSuggestions(recon reconciler.AppReconciler, prefix string) []pathCompletionEntry {
 	if recon == nil {
 		return nil
 	}
@@ -395,7 +402,7 @@ func completionCollectionBase(prefix string) string {
 	return resource.NormalizePath(trimmed)
 }
 
-func collectionResourceInfo(recon *reconciler.DefaultReconciler, prefix string) *resource.ResourceInfoMetadata {
+func collectionResourceInfo(recon reconciler.AppReconciler, prefix string) *resource.ResourceInfoMetadata {
 	if recon == nil {
 		return nil
 	}
@@ -570,14 +577,6 @@ func remoteCompletionCollection(prefix string) string {
 	return normalized[:idx]
 }
 
-func openAPIChildEntries(provider interface{}, prefix string) []pathCompletionEntry {
-	spec := openapiSpecFromProvider(provider)
-	if spec == nil {
-		return nil
-	}
-	return specChildEntries(spec, prefix)
-}
-
 func specChildEntries(spec *openapi.Spec, prefix string) []pathCompletionEntry {
 	type childInfo struct {
 		path    string
@@ -716,13 +715,8 @@ func specCollectionPath(spec *openapi.Spec, prefix string) bool {
 	return false
 }
 
-func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPrefixInfo) ([]pathCompletionEntry, bool) {
+func metadataChildEntries(recon reconciler.AppReconciler, info completionPrefixInfo) ([]pathCompletionEntry, bool) {
 	if recon == nil {
-		return nil, false
-	}
-
-	provider, ok := recon.ResourceRecordProvider.(metadataChildCollectionProvider)
-	if !ok {
 		return nil, false
 	}
 
@@ -735,7 +729,7 @@ func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPr
 		baseSegments = segments[:len(segments)-1]
 	}
 
-	children, err := provider.MetadataChildCollections(baseSegments)
+	children, err := recon.MetadataChildCollections(baseSegments)
 	if err != nil || len(children) == 0 {
 		return nil, false
 	}
@@ -758,10 +752,6 @@ func metadataChildEntries(recon *reconciler.DefaultReconciler, info completionPr
 	}
 
 	return completionEntriesToSortedList(entries), len(entries) > 0
-}
-
-type metadataChildCollectionProvider interface {
-	MetadataChildCollections(baseSegments []string) ([]string, error)
 }
 
 func segmentsMatchBase(segments, base []string) bool {

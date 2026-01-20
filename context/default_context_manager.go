@@ -440,7 +440,7 @@ func (m *DefaultContextManager) readContextConfig(file string) (*ContextConfig, 
 	return &cfg, nil
 }
 
-func (m *DefaultContextManager) buildReconciler(cfg *ContextConfig) (reconciler.Reconciler, error) {
+func (m *DefaultContextManager) buildReconciler(cfg *ContextConfig) (reconciler.AppReconciler, error) {
 	return buildReconcilerFromConfig(cfg)
 }
 

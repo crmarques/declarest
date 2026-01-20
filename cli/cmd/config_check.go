@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	ctx "github.com/crmarques/declarest/context"
-	"github.com/crmarques/declarest/reconciler"
 
 	"github.com/spf13/cobra"
 )
@@ -26,12 +25,12 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				return handledError{msg: "configuration check failed"}
 			}
 
-			recon, ok := context.Reconciler.(*reconciler.DefaultReconciler)
-			if !ok {
-				reportCheck(cmd, "Load default context", errors.New("unexpected reconciler type"))
+			recon := context.Reconciler
+			if recon == nil {
+				reportCheck(cmd, "Load default context", errors.New("reconciler is not configured"))
 				return handledError{msg: "configuration check failed"}
 			}
-			defer closeReconciler(recon)
+			defer recon.Close()
 
 			failed := false
 
@@ -56,18 +55,18 @@ func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 				reportCheck(cmd, "Remote repository access", nil)
 			}
 
-			if recon.ResourceServerManager == nil {
+			if !recon.ManagedServerConfigured() {
 				reportCheck(cmd, "Managed server not configured", nil)
-			} else if err := checkManagedServerAccess(recon.ResourceServerManager); err != nil {
+			} else if err := recon.CheckManagedServerAccess(); err != nil {
 				failed = true
 				reportCheck(cmd, "Managed server access", err)
 			} else {
 				reportCheck(cmd, "Managed server access", nil)
 			}
 
-			if recon.SecretsManager == nil {
+			if !recon.SecretsConfigured() {
 				reportCheck(cmd, "Secret store not configured", nil)
-			} else if err := recon.SecretsManager.Init(); err != nil {
+			} else if err := recon.InitSecrets(); err != nil {
 				failed = true
 				reportCheck(cmd, "Secret store access", err)
 			} else {

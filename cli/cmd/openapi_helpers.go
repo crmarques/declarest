@@ -13,38 +13,37 @@ import (
 
 var errOpenAPISpecNotConfigured = errors.New("openapi spec is not configured")
 
-type openAPISpecProvider interface {
-	OpenAPISpec() *openapi.Spec
-}
-
-func resolveOpenAPISpec(recon *reconciler.DefaultReconciler, specSource string) (*openapi.Spec, error) {
+func resolveOpenAPISpec(recon reconciler.AppReconciler, specSource string) (*openapi.Spec, error) {
 	if recon == nil {
 		return nil, errors.New("reconciler is not configured")
 	}
 
 	trimmed := strings.TrimSpace(specSource)
 	if trimmed == "" {
-		if provider, ok := recon.ResourceRecordProvider.(openAPISpecProvider); ok {
-			if spec := provider.OpenAPISpec(); spec != nil {
-				return spec, nil
-			}
+		if spec := recon.OpenAPISpec(); spec != nil {
+			return spec, nil
 		}
 		return nil, errOpenAPISpecNotConfigured
 	}
 	return loadOpenAPISpecFromSource(recon, trimmed)
 }
 
-func loadOpenAPISpecFromSource(recon *reconciler.DefaultReconciler, source string) (*openapi.Spec, error) {
+func loadOpenAPISpecFromSource(recon reconciler.AppReconciler, source string) (*openapi.Spec, error) {
 	if isHTTPURL(source) {
-		httpManager, ok := recon.ResourceServerManager.(*managedserver.HTTPResourceServerManager)
-		if !ok || httpManager == nil {
+		if recon == nil || !recon.ManagedServerConfigured() {
 			return nil, errors.New("openapi source requires an http managed server")
 		}
-		data, err := httpManager.LoadOpenAPISpec(source)
+		resp, err := recon.ExecuteHTTPRequest(&managedserver.HTTPRequestSpec{
+			Method: "GET",
+			Path:   source,
+		}, nil)
 		if err != nil {
 			return nil, err
 		}
-		return parseOpenAPISpec(source, data)
+		if resp == nil {
+			return nil, errors.New("openapi response is empty")
+		}
+		return parseOpenAPISpec(source, resp.Body)
 	}
 
 	data, err := os.ReadFile(source)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/secrets"
@@ -14,7 +15,7 @@ import (
 type DefaultReconciler struct {
 	ResourceServerManager     managedserver.ResourceServerManager
 	ResourceRepositoryManager repository.ResourceRepositoryManager
-	ResourceRecordProvider    repository.ResourceRecordProvider
+	ResourceRecordProvider    metadata.Provider
 	SecretsManager            secrets.SecretsManager
 	SkipRepositorySync        bool
 	RepoSyncError             error

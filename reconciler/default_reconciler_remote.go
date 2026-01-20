@@ -126,6 +126,121 @@ func (r *DefaultReconciler) GetRemoteResource(path string) (resource.Resource, e
 	return resolvedRecord.ApplyPayload(fetched, payload)
 }
 
+func (r *DefaultReconciler) GetRemoteResourceWithRecord(record resource.ResourceRecord, logicalPath string, isCollection bool) (resource.Resource, error) {
+	if r == nil || r.ResourceServerManager == nil {
+		return resource.Resource{}, errors.New("resource server manager is not configured")
+	}
+	if err := r.validateLogicalPath(logicalPath); err != nil {
+		return resource.Resource{}, err
+	}
+
+	if isCollection {
+		targetPath, resolvedRecord, _, err := r.resolveRemoteCollectionPathWithRecord(logicalPath, record)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+
+		items, err := r.fetchCollection(resolvedRecord, targetPath, false)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		payload := resolvedRecord.ListPayload()
+		processed := make([]any, 0, len(items))
+		for _, item := range items {
+			transformed, err := resolvedRecord.ApplyPayload(item, payload)
+			if err != nil {
+				return resource.Resource{}, err
+			}
+			processed = append(processed, transformed.V)
+		}
+		return resource.NewResource(processed)
+	}
+
+	if strings.TrimSpace(record.Path) == "" {
+		record.Path = logicalPath
+	}
+
+	data := record.Data
+	if data.V == nil {
+		if local, err := r.GetLocalResource(logicalPath); err == nil {
+			data = local
+		}
+	}
+
+	var (
+		resolvedPath    string
+		resolvedRecord  resource.ResourceRecord
+		replacements    map[string]string
+		resolutionReady bool
+	)
+	resolve := func() error {
+		if resolutionReady {
+			return nil
+		}
+		var err error
+		resolvedPath, resolvedRecord, replacements, err = r.resolveRemoteResourcePathWithRecord(logicalPath, data, record)
+		if err == nil {
+			resolutionReady = true
+		}
+		return err
+	}
+
+	literalOp := record.ReadOperation(false)
+	literalSpec, err := r.buildRequestSpecWithTarget(record, logicalPath, "", literalOp, false)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+	if fetched, err := r.ResourceServerManager.GetResource(literalSpec); err == nil {
+		payload := record.ReadPayload()
+		return record.ApplyPayload(fetched, payload)
+	} else if managedserver.IsNotFoundError(err) {
+		if err := resolve(); err != nil {
+			return resource.Resource{}, err
+		}
+
+		if data.V == nil {
+			if target := resource.LastSegment(logicalPath); target != "" {
+				if fromCollection, ok, lookupErr := r.findResourceInCollection(resolvedRecord, replacements, target); lookupErr == nil && ok {
+					payload := resolvedRecord.ReadPayload()
+					return resolvedRecord.ApplyPayload(fromCollection, payload)
+				} else if lookupErr != nil {
+					return resource.Resource{}, lookupErr
+				}
+			}
+		}
+	} else {
+		return resource.Resource{}, err
+	}
+
+	if err := resolve(); err != nil {
+		return resource.Resource{}, err
+	}
+	targetPath := resolvedPath
+
+	if exists, resolved, resolvedData, err := r.remoteResourceExists(targetPath, resolvedRecord, data, replacements); err == nil && exists {
+		targetPath = resolved
+		if resolvedData.V != nil {
+			resolvedRecord.Data = resolvedData
+		}
+	} else if err != nil {
+		return resource.Resource{}, err
+	}
+
+	op := adjustOperation(resolvedRecord.ReadOperation(false))
+	spec, err := r.buildRequestSpecWithTarget(resolvedRecord, targetPath, logicalPath, op, false)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	fetched, err := r.ResourceServerManager.GetResource(spec)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	payload := resolvedRecord.ReadPayload()
+	return resolvedRecord.ApplyPayload(fetched, payload)
+}
+
 func (r *DefaultReconciler) DeleteRemoteResource(path string) error {
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
@@ -551,8 +666,15 @@ func (r *DefaultReconciler) resolveRemoteResourcePath(path string, data resource
 	if err != nil {
 		return path, resource.ResourceRecord{}, nil, err
 	}
+	return r.resolveRemoteResourcePathWithRecord(path, data, record)
+}
 
-	replacements, err := r.buildAliasReplacements(path, data, true, true)
+func (r *DefaultReconciler) resolveRemoteResourcePathWithRecord(path string, data resource.Resource, record resource.ResourceRecord) (string, resource.ResourceRecord, map[string]string, error) {
+	if strings.TrimSpace(record.Path) == "" {
+		record.Path = path
+	}
+
+	replacements, err := r.buildAliasReplacementsWithRecord(path, data, true, true, &record)
 	if err != nil {
 		return path, record, nil, err
 	}
@@ -577,8 +699,15 @@ func (r *DefaultReconciler) resolveRemoteCollectionPath(path string) (string, re
 	if err != nil {
 		return path, resource.ResourceRecord{}, nil, err
 	}
+	return r.resolveRemoteCollectionPathWithRecord(path, record)
+}
 
-	replacements, err := r.buildAliasReplacements(path, resource.Resource{}, false, true)
+func (r *DefaultReconciler) resolveRemoteCollectionPathWithRecord(path string, record resource.ResourceRecord) (string, resource.ResourceRecord, map[string]string, error) {
+	if strings.TrimSpace(record.Path) == "" {
+		record.Path = path
+	}
+
+	replacements, err := r.buildAliasReplacementsWithRecord(path, resource.Resource{}, false, true, nil)
 	if err != nil {
 		return path, record, nil, err
 	}
@@ -591,7 +720,7 @@ func (r *DefaultReconciler) resolveRemoteCollectionPath(path string) (string, re
 	return collectionPath, record, replacements, nil
 }
 
-func (r *DefaultReconciler) buildAliasReplacements(path string, data resource.Resource, includeTarget bool, allowRemote bool) (map[string]string, error) {
+func (r *DefaultReconciler) buildAliasReplacementsWithRecord(path string, data resource.Resource, includeTarget bool, allowRemote bool, targetRecord *resource.ResourceRecord) (map[string]string, error) {
 	segments := resource.SplitPathSegments(path)
 	replacements := make(map[string]string)
 	limit := len(segments)
@@ -607,9 +736,18 @@ func (r *DefaultReconciler) buildAliasReplacements(path string, data resource.Re
 		if err != nil {
 			return nil, err
 		}
-		record, err := r.recordFor(prefix)
-		if err != nil {
-			return nil, err
+
+		var record resource.ResourceRecord
+		if isTarget && targetRecord != nil {
+			record = *targetRecord
+			if strings.TrimSpace(record.Path) == "" {
+				record.Path = prefix
+			}
+		} else {
+			record, err = r.recordFor(prefix)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if ok {

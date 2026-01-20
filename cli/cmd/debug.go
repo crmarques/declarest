@@ -33,20 +33,12 @@ type debugSettings struct {
 }
 
 type debugContext struct {
-	server     serverDebugProvider
-	repository repositoryDebugProvider
+	serverInfo     func() (managedserver.ServerDebugInfo, bool)
+	repositoryInfo func() (repository.RepositoryDebugInfo, bool)
 }
 
 var currentDebug debugSettings
 var currentDebugContext debugContext
-
-type serverDebugProvider interface {
-	DebugInfo() managedserver.ServerDebugInfo
-}
-
-type repositoryDebugProvider interface {
-	DebugInfo() repository.RepositoryDebugInfo
-}
 
 func configureDebugSettings(cmd *cobra.Command) error {
 	resetDebugContext()
@@ -136,16 +128,12 @@ func debugEnabled(group string) bool {
 	return currentDebug.groups[group]
 }
 
-func captureDebugContext(recon *reconciler.DefaultReconciler) {
+func captureDebugContext(recon reconciler.AppReconciler) {
 	if recon == nil {
 		return
 	}
-	if provider, ok := recon.ResourceServerManager.(serverDebugProvider); ok {
-		currentDebugContext.server = provider
-	}
-	if provider, ok := recon.ResourceRepositoryManager.(repositoryDebugProvider); ok {
-		currentDebugContext.repository = provider
-	}
+	currentDebugContext.serverInfo = recon.ServerDebugInfo
+	currentDebugContext.repositoryInfo = recon.RepositoryDebugInfo
 }
 
 func resetDebugContext() {
@@ -217,8 +205,11 @@ func (s debugSection) hasItems() bool {
 
 func buildNetworkDebugSection(err error) debugSection {
 	section := debugSection{title: "Network"}
-	if provider := currentDebugContext.server; provider != nil {
-		info := provider.DebugInfo()
+	if getter := currentDebugContext.serverInfo; getter != nil {
+		info, ok := getter()
+		if !ok {
+			return section
+		}
 		if strings.TrimSpace(info.Type) != "" {
 			section.items = append(section.items, debugItem{key: "type", value: info.Type})
 		}
@@ -295,11 +286,14 @@ func appendHTTPResponseDebugItems(section *debugSection, baseKey string, respons
 
 func buildRepositoryDebugSection() debugSection {
 	section := debugSection{title: "Repository"}
-	provider := currentDebugContext.repository
-	if provider == nil {
+	getter := currentDebugContext.repositoryInfo
+	if getter == nil {
 		return section
 	}
-	info := provider.DebugInfo()
+	info, ok := getter()
+	if !ok {
+		return section
+	}
 	if strings.TrimSpace(info.Type) != "" {
 		section.items = append(section.items, debugItem{key: "type", value: info.Type})
 	}

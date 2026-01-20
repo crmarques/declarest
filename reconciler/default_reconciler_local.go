@@ -299,13 +299,25 @@ func pathDepth(path string) int {
 	return len(strings.Split(trimmed, "/"))
 }
 
-func (r *DefaultReconciler) SyncLocalResource(string) error { return nil }
+func (r *DefaultReconciler) SyncLocalResource(string) error {
+	return errors.New("local resource sync is not implemented")
+}
 
-func (r *DefaultReconciler) SyncAllResources() error { return nil }
+func (r *DefaultReconciler) SyncAllResources() error {
+	return errors.New("resource sync is not implemented")
+}
 
 func (r *DefaultReconciler) ListLocalResourcePaths() []string {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return []string{}
+	}
+	if lister, ok := r.ResourceRepositoryManager.(interface {
+		ListResourcePathsWithErrors() ([]string, error)
+	}); ok {
+		paths, err := lister.ListResourcePathsWithErrors()
+		if err == nil {
+			return paths
+		}
 	}
 	return r.ResourceRepositoryManager.ListResourcePaths()
 }
@@ -397,5 +409,16 @@ func (r *DefaultReconciler) GetLocalResourcePath(path string) (string, error) {
 }
 
 func (r *DefaultReconciler) GetLocalCollectionPath(path string) (string, error) {
-	return r.GetRemoteCollectionPath(path)
+	if err := r.validateLogicalPath(path); err != nil {
+		return path, err
+	}
+	normalized := resource.NormalizePath(path)
+	if resource.IsCollectionPath(path) {
+		return normalized, nil
+	}
+	last := resource.LastSegment(normalized)
+	if last == "" {
+		return normalized, nil
+	}
+	return resource.NormalizePath(strings.TrimSuffix(normalized, "/"+last)), nil
 }

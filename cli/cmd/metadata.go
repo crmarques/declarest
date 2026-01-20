@@ -74,11 +74,8 @@ func newMetadataEditCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if recon.ResourceRecordProvider == nil {
-				return errors.New("resource record provider is not configured")
-			}
 
-			mergedMeta, err := recon.ResourceRecordProvider.GetMergedMetadata(path)
+			mergedMeta, err := recon.MergedMetadata(path)
 			if err != nil {
 				return err
 			}
@@ -131,7 +128,7 @@ func newMetadataEditCommand() *cobra.Command {
 				return fmt.Errorf("invalid metadata: %w", err)
 			}
 
-			defaultMeta, err := defaultMetadataForPath(path, recon.ResourceRecordProvider)
+			defaultMeta, err := defaultMetadataForPath(path, recon.OpenAPISpec())
 			if err != nil {
 				return err
 			}
@@ -227,11 +224,7 @@ func newMetadataGetCommand() *cobra.Command {
 	return cmd
 }
 
-type metadataOpenAPIProvider interface {
-	OpenAPISpec() *openapi.Spec
-}
-
-func defaultMetadataForPath(path string, provider any) (resource.ResourceMetadata, error) {
+func defaultMetadataForPath(path string, spec *openapi.Spec) (resource.ResourceMetadata, error) {
 	trimmed := strings.TrimSpace(path)
 	isCollection := strings.HasSuffix(trimmed, "/")
 	clean := strings.Trim(trimmed, " /")
@@ -246,10 +239,6 @@ func defaultMetadataForPath(path string, provider any) (resource.ResourceMetadat
 		meta.ResourceInfo.CollectionPath = defaultCollectionPathForEditing(collectionSegments)
 	}
 
-	var spec *openapi.Spec
-	if p, ok := provider.(metadataOpenAPIProvider); ok {
-		spec = p.OpenAPISpec()
-	}
 	if spec == nil {
 		return meta, nil
 	}
@@ -1319,7 +1308,7 @@ func splitCommaCompletionParts(value string) (string, string) {
 	return value[:baseEnd], strings.TrimSpace(value[baseEnd:])
 }
 
-func secretAttributeCandidates(recon *reconciler.DefaultReconciler, metadataPath string, isCollection bool) []string {
+func secretAttributeCandidates(recon reconciler.AppReconciler, metadataPath string, isCollection bool) []string {
 	if recon == nil {
 		return nil
 	}
@@ -1439,7 +1428,7 @@ func validateMetadataPath(cmd *cobra.Command, path string) error {
 	return nil
 }
 
-func runRecursiveMetadataInference(cmd *cobra.Command, recon *reconciler.DefaultReconciler, spec *openapi.Spec, basePath string, apply bool, overrides metadata.InferenceOverrides) error {
+func runRecursiveMetadataInference(cmd *cobra.Command, recon reconciler.AppReconciler, spec *openapi.Spec, basePath string, apply bool, overrides metadata.InferenceOverrides) error {
 	paths := openAPICollectionPaths(spec)
 	filtered := filterCollectionPathsByPrefix(paths, basePath)
 

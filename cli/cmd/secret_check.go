@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/openapi"
 	"github.com/crmarques/declarest/reconciler"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/secrets"
@@ -44,10 +43,7 @@ func newSecretCheckCommand() *cobra.Command {
 				return wrapSecretStoreError(err)
 			}
 
-			var spec *openapi.Spec
-			if provider, ok := recon.ResourceRecordProvider.(interface{ OpenAPISpec() *openapi.Spec }); ok {
-				spec = provider.OpenAPISpec()
-			}
+			spec := recon.OpenAPISpec()
 
 			targets, err := secretCheckTargets(recon, path)
 			if err != nil {
@@ -93,7 +89,7 @@ func newSecretCheckCommand() *cobra.Command {
 			if !fix {
 				return nil
 			}
-			if recon.SecretsManager == nil {
+			if !recon.SecretsConfigured() {
 				fmt.Fprintln(cmd.ErrOrStderr(), "Secret store is not configured. Configure one and rerun with --fix.")
 				return handledError{msg: wrapSecretStoreError(secrets.ErrSecretStoreNotConfigured).Error()}
 			}
@@ -134,12 +130,12 @@ func newSecretCheckCommand() *cobra.Command {
 	return cmd
 }
 
-func secretCheckTargets(recon *reconciler.DefaultReconciler, path string) ([]string, error) {
+func secretCheckTargets(recon reconciler.AppReconciler, path string) ([]string, error) {
 	if recon == nil {
 		return nil, errors.New("reconciler is not configured")
 	}
 	if strings.TrimSpace(path) == "" {
-		return recon.RepositoryResourcePaths(), nil
+		return recon.RepositoryResourcePathsWithErrors()
 	}
 	if resource.IsCollectionPath(path) {
 		return recon.RepositoryPathsInCollection(path)
