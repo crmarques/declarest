@@ -9,3 +9,7 @@ type SecretsManager interface {
 	ListResources() ([]string, error)
 	Close() error
 }
+
+type FileEnsurer interface {
+	EnsureFile() error
+}

@@ -3,8 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	ctx "github.com/crmarques/declarest/context"
@@ -12,8 +10,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type configManager interface {
+	ctx.ContextManager
+	AddContextConfig(name string, cfg *ctx.ContextConfig) error
+	ReplaceContextConfig(name string, cfg *ctx.ContextConfig) error
+	GetDefaultEditor() (string, error)
+}
+
 func newConfigCommand() *cobra.Command {
-	manager := &ctx.DefaultContextManager{}
+	var manager configManager = &ctx.DefaultContextManager{}
 
 	cmd := &cobra.Command{
 		Use:     "config",
@@ -47,7 +52,7 @@ environments (for example dev, staging, and production) with confidence.`,
 	return cmd
 }
 
-func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigAddCommand(manager configManager) *cobra.Command {
 	var (
 		name   string
 		config string
@@ -97,7 +102,7 @@ func newConfigAddCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	return cmd
 }
 
-func newConfigUpdateCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigUpdateCommand(manager configManager) *cobra.Command {
 	var (
 		name   string
 		config string
@@ -131,7 +136,7 @@ func newConfigUpdateCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	return cmd
 }
 
-func newConfigUseCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigUseCommand(manager configManager) *cobra.Command {
 	var name string
 
 	cmd := &cobra.Command{
@@ -161,7 +166,7 @@ func newConfigUseCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	return cmd
 }
 
-func newConfigDeleteCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigDeleteCommand(manager configManager) *cobra.Command {
 	var (
 		name string
 		yes  bool
@@ -200,7 +205,7 @@ func newConfigDeleteCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	return cmd
 }
 
-func newConfigCurrentCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigCurrentCommand(manager configManager) *cobra.Command {
 	return &cobra.Command{
 		Use:     "current",
 		Aliases: []string{"display-current-context"},
@@ -217,7 +222,7 @@ func newConfigCurrentCommand(manager *ctx.DefaultContextManager) *cobra.Command 
 	}
 }
 
-func newConfigListCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigListCommand(manager configManager) *cobra.Command {
 	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"list-contexts"},
@@ -241,7 +246,7 @@ func newConfigListCommand(manager *ctx.DefaultContextManager) *cobra.Command {
 	}
 }
 
-func newConfigRenameCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigRenameCommand(manager configManager) *cobra.Command {
 	var (
 		currentName string
 		newName     string
@@ -412,24 +417,19 @@ func resolveRenameArgs(cmd *cobra.Command, currentName, newName string, args []s
 	return currentName, newName, nil
 }
 
-func configStoreLabel(manager *ctx.DefaultContextManager) string {
-	path := ""
-	if manager != nil {
-		path = strings.TrimSpace(manager.ConfigFilePath)
+func configStoreLabel(_ configManager) string {
+	info, err := ctx.ConfigFilePathInfo()
+	if err != nil {
+		return "the local config store"
 	}
-	if path == "" {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			path = filepath.Join(home, ".declarest", "config")
-		}
-	}
+	path := strings.TrimSpace(info.Path)
 	if path == "" {
 		return "the local config store"
 	}
 	return fmt.Sprintf("config store %s", path)
 }
 
-func contextExists(manager *ctx.DefaultContextManager, name string) (bool, error) {
+func contextExists(manager configManager, name string) (bool, error) {
 	if manager == nil {
 		return false, errors.New("context manager is not configured")
 	}

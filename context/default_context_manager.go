@@ -76,6 +76,7 @@ func (m *DefaultContextManager) AddContextConfig(name string, cfg *ContextConfig
 	if cfg == nil {
 		return errors.New("context configuration is required")
 	}
+	cfg = NormalizeContextConfig(cfg)
 
 	store, err := m.loadStore()
 	if err != nil {
@@ -105,6 +106,7 @@ func (m *DefaultContextManager) ReplaceContextConfig(name string, cfg *ContextCo
 	if cfg == nil {
 		return errors.New("context configuration is required")
 	}
+	cfg = NormalizeContextConfig(cfg)
 
 	store, err := m.loadStore()
 	if err != nil {
@@ -437,7 +439,7 @@ func (m *DefaultContextManager) readContextConfig(file string) (*ContextConfig, 
 		return nil, fmt.Errorf("failed to parse context config %q: %w", file, err)
 	}
 
-	return &cfg, nil
+	return NormalizeContextConfig(&cfg), nil
 }
 
 func (m *DefaultContextManager) buildReconciler(cfg *ContextConfig) (reconciler.AppReconciler, error) {

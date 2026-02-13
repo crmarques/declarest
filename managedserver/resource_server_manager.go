@@ -12,3 +12,19 @@ type ResourceServerManager interface {
 	ResourceExists(spec RequestSpec) (bool, error)
 	Close() error
 }
+
+type AccessChecker interface {
+	CheckAccess() error
+}
+
+type OpenAPISpecLoader interface {
+	LoadOpenAPISpec(source string) ([]byte, error)
+}
+
+type HTTPRequestExecutor interface {
+	ExecuteRequest(spec *HTTPRequestSpec, payload []byte) (*HTTPResponse, error)
+}
+
+type ServerDebugInfoProvider interface {
+	DebugInfo() ServerDebugInfo
+}

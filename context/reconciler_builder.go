@@ -16,6 +16,7 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.AppReconciler, er
 	if cfg == nil {
 		return nil, errors.New("context configuration is missing")
 	}
+	cfg = NormalizeContextConfig(cfg)
 
 	var (
 		baseDir         string
@@ -59,21 +60,17 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.AppReconciler, er
 		repoManager = repository.NewGitResourceRepositoryManager("")
 	}
 
-	if setter, ok := repoManager.(interface{ SetMetadataBaseDir(string) }); ok {
+	if setter, ok := repoManager.(repository.MetadataBaseDirSetter); ok {
 		setter.SetMetadataBaseDir(metadataBaseDir)
 	}
 
 	if cfg.Repository != nil && cfg.Repository.Git != nil {
-		if setter, ok := repoManager.(interface {
-			SetConfig(*repository.GitResourceRepositoryConfig)
-		}); ok {
+		if setter, ok := repoManager.(repository.GitConfigSetter); ok {
 			setter.SetConfig(cfg.Repository.Git)
 		}
 	}
 
-	if setter, ok := repoManager.(interface {
-		SetResourceFormat(repository.ResourceFormat)
-	}); ok {
+	if setter, ok := repoManager.(repository.ResourceFormatSetter); ok {
 		setter.SetResourceFormat(resourceFormat)
 	}
 
@@ -86,9 +83,7 @@ func buildReconcilerFromConfig(cfg *ContextConfig) (reconciler.AppReconciler, er
 	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
 		openapiSource := strings.TrimSpace(cfg.ManagedServer.HTTP.OpenAPI)
 		if openapiSource != "" {
-			loader, ok := serverManager.(interface {
-				LoadOpenAPISpec(source string) ([]byte, error)
-			})
+			loader, ok := serverManager.(managedserver.OpenAPISpecLoader)
 			if !ok || loader == nil {
 				return nil, errors.New("openapi configuration requires an http managed server")
 			}

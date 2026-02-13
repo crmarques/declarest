@@ -3,6 +3,8 @@
 set -euo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export DECLAREST_TESTS_ROOT="$TESTS_DIR"
+source "$TESTS_DIR/scripts/components.sh"
 
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
 export CONTAINER_RUNTIME
@@ -12,17 +14,24 @@ if [[ -z "${DECLAREST_DEBUG_GROUPS:-}" ]]; then
 fi
 
 usage() {
+    local managed_servers repo_providers secret_providers
+    managed_servers="$(list_components "managed-server" | paste -sd ", " -)"
+    repo_providers="$(list_components "repo-provider" | paste -sd ", " -)"
+    secret_providers="$(list_components "secret-provider" | paste -sd ", " -)"
+    managed_servers="${managed_servers:-none}"
+    repo_providers="${repo_providers:-none}"
+    secret_providers="${secret_providers:-none}"
     cat <<EOF
 Usage: ./tests/run-tests.sh [--e2e|--interactive] --managed-server <name> --repo-provider <name> --secret-provider <type> [-- <extra args>]
 
 Options:
   --e2e                 Run the managed server's e2e workflow (default).
   --interactive         Run the managed server's interactive workflow.
-  --managed-server NAME Managed server to target (keycloak or rundeck).
-  --repo-provider NAME  Repository provider (file, git, gitlab, gitea, github).
-  --secret-provider TYPE Secret store provider (none, file, vault).
+  --managed-server NAME Managed server to target (available: $managed_servers).
+  --repo-provider NAME  Repository provider (available: $repo_providers).
+  --secret-provider TYPE Secret store provider (available: $secret_providers).
   --complete            Run the complete e2e profile (default, exercises all variants).
-  --reduced             Run the reduced e2e profile (shorthand for --e2e-profile reduced; representative variants only).
+  --reduced             Run the reduced e2e profile (shorthand for --e2e-profile reduced; core flow with trimmed lifecycle).
   --e2e-profile NAME    E2E profile to execute (complete, reduced).
   --skip-testing-context   Skip the "Testing context operations" group.
   --skip-testing-metadata  Skip the "Testing metadata operations" group.
@@ -39,16 +48,16 @@ Examples:
 Defaults:
   mode=e2e
   managed-server=keycloak
-  repo-provider=git
-  secret-provider=file (rundeck defaults to none)
+  repo-provider=managed-server default
+  secret-provider=managed-server default
   e2e-profile=complete
 EOF
 }
 
 mode="e2e"
 managed_server="keycloak"
-repo_provider="git"
-secret_provider="file"
+repo_provider=""
+secret_provider=""
 repo_provider_set=0
 secret_provider_set=0
 extra_args=()
@@ -166,10 +175,50 @@ while [[ $# -gt 0 ]]; do
 done
 
 export DECLAREST_E2E_PROFILE="$profile"
+if [[ "$profile" == "reduced" ]]; then
+    skip_metadata_flag=1
+    export DECLAREST_SKIP_TESTING_METADATA="1"
+    skip_openapi_flag=1
+    export DECLAREST_SKIP_TESTING_OPENAPI="1"
+    skip_variation_flag=1
+    export DECLAREST_SKIP_TESTING_VARIATION="1"
+fi
 
 managed_server="${managed_server,,}"
+if ! load_managed_server_component "$managed_server"; then
+    available="$(list_components "managed-server" | paste -sd ", " -)"
+    printf "Unsupported managed server: %s (available: %s)\n" "$managed_server" "$available" >&2
+    exit 1
+fi
+
+if [[ $repo_provider_set -eq 0 ]]; then
+    repo_provider="$(managed_server_default_repo_provider)"
+fi
+if [[ $secret_provider_set -eq 0 ]]; then
+    secret_provider="$(managed_server_default_secret_provider)"
+fi
+if [[ -z "$repo_provider" || -z "$secret_provider" ]]; then
+    printf "Managed server defaults missing (repo=%s secret=%s)\n" "$repo_provider" "$secret_provider" >&2
+    exit 1
+fi
 repo_provider="${repo_provider,,}"
 secret_provider="${secret_provider,,}"
+
+if ! load_repo_provider_component "$repo_provider"; then
+    available="$(list_components "repo-provider" | paste -sd ", " -)"
+    printf "Unsupported repo provider: %s (available: %s)\n" "$repo_provider" "$available" >&2
+    exit 1
+fi
+if ! load_secret_provider_component "$secret_provider"; then
+    available="$(list_components "secret-provider" | paste -sd ", " -)"
+    printf "Unsupported secret provider: %s (available: %s)\n" "$secret_provider" "$available" >&2
+    exit 1
+fi
+
+if ! managed_server_validate "$repo_provider" "$secret_provider"; then
+    exit 1
+fi
+
 export DECLAREST_MANAGED_SERVER="$managed_server"
 export DECLAREST_REPO_PROVIDER="$repo_provider"
 export DECLAREST_SECRET_PROVIDER="$secret_provider"
@@ -195,72 +244,19 @@ check_container_runtime() {
     fi
 }
 
-case "$managed_server" in
-    keycloak|rundeck)
-        ;;
-    *)
-        printf "Unsupported managed server: %s\n" "$managed_server" >&2
-        exit 1
-        ;;
-esac
-
-if [[ "$managed_server" == "rundeck" ]]; then
-    if [[ $repo_provider_set -eq 0 ]]; then
-        repo_provider="file"
-    fi
-    if [[ $secret_provider_set -eq 0 ]]; then
-        secret_provider="none"
-    fi
-    if [[ "$repo_provider" != "file" ]]; then
-        printf "Rundeck harness supports only repo-provider file (got %s)\n" "$repo_provider" >&2
-        exit 1
-    fi
-    if [[ "$secret_provider" != "none" ]]; then
-        printf "Rundeck harness does not support secret providers (got %s)\n" "$secret_provider" >&2
-        exit 1
-    fi
-fi
-
-case "$repo_provider" in
-    file|git|gitlab|gitea|github)
-        ;;
-    *)
-        printf "Unsupported repo provider: %s\n" "$repo_provider" >&2
-        exit 1
-        ;;
-esac
-
-case "$secret_provider" in
-    none|file|vault)
-        ;;
-    *)
-        printf "Unsupported secret provider: %s\n" "$secret_provider" >&2
-        exit 1
-        ;;
-esac
-
 check_container_runtime
 
-managed_dir="$TESTS_DIR/managed-server/$managed_server"
-if [[ ! -d "$managed_dir" ]]; then
-    printf "Managed server directory not found: %s\n" "$managed_dir" >&2
+managed_component_script="$(managed_server_runner "e2e")"
+if [[ -z "$managed_component_script" ]]; then
+    printf "Managed server e2e runner not resolved for %s\n" "$managed_server" >&2
     exit 1
 fi
 
-managed_component_script="$managed_dir/run-e2e.sh"
-
-case "$mode" in
-    e2e)
-        runner="$managed_dir/run-e2e.sh"
-        ;;
-    interactive)
-        runner="$managed_dir/run-interactive.sh"
-        ;;
-    *)
-        printf "Unsupported mode: %s\n" "$mode" >&2
-        exit 1
-        ;;
-esac
+runner="$(managed_server_runner "$mode")"
+if [[ -z "$runner" ]]; then
+    printf "Managed server runner not resolved for %s (mode %s)\n" "$managed_server" "$mode" >&2
+    exit 1
+fi
 
 if [[ ! -x "$runner" ]]; then
     printf "Runner script not found or not executable: %s\n" "$runner" >&2

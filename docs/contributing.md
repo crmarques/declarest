@@ -36,7 +36,7 @@ E2E runs are orchestrated by the generic runner, which dispatches to a managed s
 ./tests/run-tests.sh --help
 ```
 
-By default `./tests/run-tests.sh` runs the `--complete` profile, which drives the full set of context/metadata/OpenAPI/main flow/variation groups. Use `--reduced` for a representative subset and `--skip-testing-*` flags to omit individual test groups (the runner prints aligned RUNNING/DONE/SKIPPED/FAILED statuses for each group).
+By default `./tests/run-tests.sh` runs the `--complete` profile, which drives the full set of context/metadata/OpenAPI/main flow/variation groups. Use `--reduced` for the primary flow only (representative subset with a trimmed lifecycle; metadata/OpenAPI/variation groups are skipped) and `--skip-testing-*` flags to omit individual test groups (the runner prints aligned RUNNING/DONE/SKIPPED/FAILED statuses for each group).
 
 See `tests/managed-server/keycloak/README.md` for Keycloak prerequisites and options.
 

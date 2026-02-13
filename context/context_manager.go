@@ -5,6 +5,7 @@ type ContextManager interface {
 	UpdateContext(name string, file string) error
 	DeleteContext(name string) error
 	RenameContext(currentName string, newName string) error
+	GetContextConfig(name string) (*ContextConfig, bool, error)
 	SetDefaultContext(name string) error
 	GetDefaultContext() (string, error)
 	ListContexts() ([]string, error)

@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/crmarques/declarest/openapi"
 	"github.com/crmarques/declarest/reconciler"
@@ -22,7 +24,21 @@ const (
 
 type pathCompletionStrategy func(*cobra.Command) []pathCompletionSource
 
-var resourcePathCompletionLoader = loadDefaultReconcilerSkippingRepoSync
+type pathCompletionLoader func(requireRemote bool) (reconciler.AppReconciler, func(), error)
+
+var resourcePathCompletionLoader pathCompletionLoader = loadCompletionReconciler
+
+type pathCompletionCacheEntry struct {
+	expires  time.Time
+	entries  []pathCompletionEntry
+	hasChild bool
+}
+
+var (
+	pathCompletionCacheTTL = 2 * time.Second
+	pathCompletionCacheMu  sync.Mutex
+	pathCompletionCache    = make(map[string]pathCompletionCacheEntry)
+)
 
 type pathCompletionEntry struct {
 	value       string
@@ -128,8 +144,12 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 	if len(sources) == 0 {
 		sources = []pathCompletionSource{pathCompletionSourceRepo}
 	}
+	cacheKey := pathCompletionCacheKey(toComplete, sources)
+	if entries, hasOpenAPIChildren, ok := getPathCompletionCache(cacheKey); ok {
+		return completionEntriesResult(entries, hasOpenAPIChildren)
+	}
 
-	recon, cleanup, err := resourcePathCompletionLoader()
+	recon, cleanup, err := resourcePathCompletionLoader(completionSourcesRequireRemote(sources))
 	if cleanup != nil {
 		defer cleanup()
 	}
@@ -142,6 +162,11 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 	if len(entries) == 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	setPathCompletionCache(cacheKey, entries, hasOpenAPIChildren)
+	return completionEntriesResult(entries, hasOpenAPIChildren)
+}
+
+func completionEntriesResult(entries []pathCompletionEntry, hasOpenAPIChildren bool) ([]string, cobra.ShellCompDirective) {
 	values := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		values = append(values, entry.suggestion())
@@ -151,6 +176,61 @@ func completeResourcePathCandidates(cmd *cobra.Command, toComplete string, strat
 		directive |= cobra.ShellCompDirectiveNoSpace
 	}
 	return values, directive
+}
+
+func completionSourcesRequireRemote(sources []pathCompletionSource) bool {
+	for _, source := range sources {
+		if source == pathCompletionSourceRemote {
+			return true
+		}
+	}
+	return false
+}
+
+func pathCompletionCacheKey(prefix string, sources []pathCompletionSource) string {
+	hasRepo := false
+	hasRemote := false
+	for _, source := range sources {
+		if source == pathCompletionSourceRepo {
+			hasRepo = true
+		}
+		if source == pathCompletionSourceRemote {
+			hasRemote = true
+		}
+	}
+	return fmt.Sprintf("%t|%t|%s", hasRepo, hasRemote, strings.TrimSpace(prefix))
+}
+
+func getPathCompletionCache(key string) ([]pathCompletionEntry, bool, bool) {
+	if strings.TrimSpace(key) == "" {
+		return nil, false, false
+	}
+	now := time.Now()
+	pathCompletionCacheMu.Lock()
+	defer pathCompletionCacheMu.Unlock()
+	entry, ok := pathCompletionCache[key]
+	if !ok {
+		return nil, false, false
+	}
+	if !entry.expires.After(now) {
+		delete(pathCompletionCache, key)
+		return nil, false, false
+	}
+	cloned := append([]pathCompletionEntry{}, entry.entries...)
+	return cloned, entry.hasChild, true
+}
+
+func setPathCompletionCache(key string, entries []pathCompletionEntry, hasChild bool) {
+	if strings.TrimSpace(key) == "" || len(entries) == 0 {
+		return
+	}
+	pathCompletionCacheMu.Lock()
+	defer pathCompletionCacheMu.Unlock()
+	pathCompletionCache[key] = pathCompletionCacheEntry{
+		expires:  time.Now().Add(pathCompletionCacheTTL),
+		entries:  append([]pathCompletionEntry{}, entries...),
+		hasChild: hasChild,
+	}
 }
 
 func gatherPathSuggestions(recon reconciler.AppReconciler, prefix string, sources []pathCompletionSource) ([]pathCompletionEntry, bool) {

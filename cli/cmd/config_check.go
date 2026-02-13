@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newConfigCheckCommand(manager *ctx.DefaultContextManager) *cobra.Command {
+func newConfigCheckCommand(manager ctx.ContextManager) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check",
 		Short: "Verify configuration and connectivity",

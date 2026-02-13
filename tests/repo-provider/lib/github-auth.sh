@@ -18,10 +18,6 @@ github_pat_ssh_load_defaults() {
 }
 
 ensure_github_pat_credentials() {
-    if [[ "${repo_provider:-}" != "github" ]]; then
-        return 0
-    fi
-
     github_pat_load_defaults
     if ! is_interactive; then
         if [[ -z "$github_https_url" || -z "$github_pat" ]]; then
@@ -39,10 +35,6 @@ ensure_github_pat_credentials() {
 }
 
 ensure_github_pat_ssh_credentials() {
-    if [[ "${repo_provider:-}" != "github" ]]; then
-        return 0
-    fi
-
     github_pat_ssh_load_defaults
     if ! is_interactive; then
         if [[ -z "$github_https_url" || -z "$github_pat" || -z "$github_ssh_url" || -z "$github_ssh_key_file" ]]; then

@@ -102,7 +102,7 @@ func RenderTemplates(meta resource.ResourceMetadata, resourcePath string, ctx ma
 		collectionPath = meta.ResourceInfo.CollectionPath
 	}
 
-	pathCtx := cloneContext(ctx)
+	pathCtx := resource.CloneMapStringAny(ctx)
 	if !isCollection {
 		pathCtx["id"] = "{{.id}}"
 		pathCtx["alias"] = "{{.alias}}"
@@ -163,7 +163,7 @@ func mergeOperationMetadata(base, override *resource.OperationMetadata) *resourc
 		}
 	}
 	if override.Payload != nil {
-		base.Payload = clonePayloadConfig(override.Payload)
+		base.Payload = resource.CloneOperationPayloadConfig(override.Payload)
 	}
 	base.JQFilter = chooseString(base.JQFilter, override.JQFilter)
 	return base
@@ -213,20 +213,9 @@ func cloneOperationMetadata(src *resource.OperationMetadata) *resource.Operation
 		}
 	}
 	if src.Payload != nil {
-		result.Payload = clonePayloadConfig(src.Payload)
+		result.Payload = resource.CloneOperationPayloadConfig(src.Payload)
 	}
 	return result
-}
-
-func clonePayloadConfig(src *resource.OperationPayloadConfig) *resource.OperationPayloadConfig {
-	if src == nil {
-		return nil
-	}
-	return &resource.OperationPayloadConfig{
-		SuppressAttributes: append([]string{}, src.SuppressAttributes...),
-		FilterAttributes:   append([]string{}, src.FilterAttributes...),
-		JQExpression:       src.JQExpression,
-	}
 }
 
 func cloneCompareMetadata(src *resource.CompareMetadata) *resource.CompareMetadata {
@@ -324,17 +313,6 @@ func renderHeaders(headers resource.HeaderList, ctx map[string]any, resourcePath
 		rendered = append(rendered, fmt.Sprintf("%s: %s", name, value))
 	}
 	return rendered
-}
-
-func cloneContext(src map[string]any) map[string]any {
-	if src == nil {
-		return map[string]any{}
-	}
-	dst := make(map[string]any, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
 }
 
 func replaceRelativePlaceholders(raw, resourcePath string, resolver RelativePlaceholderResolver) string {

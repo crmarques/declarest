@@ -363,6 +363,13 @@ func (m *FileSystemResourceRepositoryManager) ListResourcePathsWithErrors() ([]s
 
 func (FileSystemResourceRepositoryManager) Close() error { return nil }
 
+func (m *FileSystemResourceRepositoryManager) RunBatch(fn func() error) error {
+	if fn == nil {
+		return errors.New("batch function is required")
+	}
+	return fn()
+}
+
 func (m *FileSystemResourceRepositoryManager) writeResource(path string, res resource.Resource) error {
 	filePath, err := m.resourceFile(path)
 	if err != nil {

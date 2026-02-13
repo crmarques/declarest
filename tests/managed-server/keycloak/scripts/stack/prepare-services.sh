@@ -4,10 +4,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TESTS_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 source "$SCRIPTS_DIR/lib/env.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
-
-SECRET_PROVIDER_DIR="$DECLAREST_TESTS_ROOT/secret-provider"
+source "$TESTS_ROOT/scripts/components.sh"
 
 wait_for_keycloak() {
     local url="http://localhost:${KEYCLOAK_HTTP_PORT}/realms/master"
@@ -35,24 +35,9 @@ wait_for_keycloak() {
     return 1
 }
 
-secret_store_type="${DECLAREST_SECRET_STORE_TYPE:-file}"
-secret_store_type="${secret_store_type,,}"
-vault_enabled=0
-case "$secret_store_type" in
-    vault)
-        vault_enabled=1
-        ;;
-    none|file|"")
-        ;;
-    *)
-        log_line "Unsupported secret store type: ${secret_store_type}"
-        exit 1
-        ;;
-esac
-
-if [[ $vault_enabled -eq 1 ]]; then
-    log_line "Configuring Vault instance"
-    "$SECRET_PROVIDER_DIR/vault/setup.sh"
-fi
+secret_provider="${DECLAREST_SECRET_STORE_TYPE:-file}"
+secret_provider="${secret_provider,,}"
+load_secret_provider_component "$secret_provider"
+secret_provider_prepare_services
 
 wait_for_keycloak

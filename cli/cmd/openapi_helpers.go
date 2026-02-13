@@ -13,6 +13,8 @@ import (
 
 var errOpenAPISpecNotConfigured = errors.New("openapi spec is not configured")
 
+const openAPISpecAcceptHeader = "application/json, application/yaml, application/x-yaml, text/yaml, */*"
+
 func resolveOpenAPISpec(recon reconciler.AppReconciler, specSource string) (*openapi.Spec, error) {
 	if recon == nil {
 		return nil, errors.New("reconciler is not configured")
@@ -29,13 +31,14 @@ func resolveOpenAPISpec(recon reconciler.AppReconciler, specSource string) (*ope
 }
 
 func loadOpenAPISpecFromSource(recon reconciler.AppReconciler, source string) (*openapi.Spec, error) {
-	if isHTTPURL(source) {
+	if managedserver.IsHTTPURL(source) {
 		if recon == nil || !recon.ManagedServerConfigured() {
 			return nil, errors.New("openapi source requires an http managed server")
 		}
 		resp, err := recon.ExecuteHTTPRequest(&managedserver.HTTPRequestSpec{
 			Method: "GET",
 			Path:   source,
+			Accept: openAPISpecAcceptHeader,
 		}, nil)
 		if err != nil {
 			return nil, err
@@ -59,9 +62,4 @@ func parseOpenAPISpec(source string, data []byte) (*openapi.Spec, error) {
 		return nil, fmt.Errorf("failed to parse openapi spec %q: %w", source, err)
 	}
 	return spec, nil
-}
-
-func isHTTPURL(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
 }

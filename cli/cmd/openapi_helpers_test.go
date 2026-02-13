@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/openapi"
 	"github.com/crmarques/declarest/reconciler"
 	"github.com/crmarques/declarest/resource"
@@ -26,6 +27,12 @@ type testOpenAPISpecProvider struct {
 	spec *openapi.Spec
 }
 
+type testOpenAPIHTTPServer struct {
+	lastSpec *managedserver.HTTPRequestSpec
+	response *managedserver.HTTPResponse
+	err      error
+}
+
 func (p *testOpenAPISpecProvider) GetResourceRecord(path string) (resource.ResourceRecord, error) {
 	return resource.ResourceRecord{}, nil
 }
@@ -36,6 +43,49 @@ func (p *testOpenAPISpecProvider) GetMergedMetadata(path string) (resource.Resou
 
 func (p *testOpenAPISpecProvider) OpenAPISpec() *openapi.Spec {
 	return p.spec
+}
+
+func (s *testOpenAPIHTTPServer) Init() error {
+	return nil
+}
+
+func (s *testOpenAPIHTTPServer) GetResource(managedserver.RequestSpec) (resource.Resource, error) {
+	return resource.Resource{}, errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) GetResourceCollection(managedserver.RequestSpec) ([]resource.Resource, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) CreateResource(resource.Resource, managedserver.RequestSpec) error {
+	return errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) UpdateResource(resource.Resource, managedserver.RequestSpec) error {
+	return errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) DeleteResource(managedserver.RequestSpec) error {
+	return errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) ResourceExists(managedserver.RequestSpec) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (s *testOpenAPIHTTPServer) Close() error {
+	return nil
+}
+
+func (s *testOpenAPIHTTPServer) ExecuteRequest(spec *managedserver.HTTPRequestSpec, _ []byte) (*managedserver.HTTPResponse, error) {
+	s.lastSpec = spec
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.response == nil {
+		return &managedserver.HTTPResponse{}, nil
+	}
+	return s.response, nil
 }
 
 func TestResolveOpenAPISpecUsesProvider(t *testing.T) {
@@ -80,6 +130,29 @@ func TestResolveOpenAPISpecHTTPRequiresManager(t *testing.T) {
 	_, err := resolveOpenAPISpec(&reconciler.DefaultReconciler{}, "http://example.com/openapi.yaml")
 	if err == nil || !strings.Contains(err.Error(), "http managed server") {
 		t.Fatalf("expected http managed server error, got %v", err)
+	}
+}
+
+func TestResolveOpenAPISpecHTTPSetsAcceptHeader(t *testing.T) {
+	server := &testOpenAPIHTTPServer{
+		response: &managedserver.HTTPResponse{Body: []byte(sampleOpenAPISpec)},
+	}
+	recon := &reconciler.DefaultReconciler{
+		ResourceServerManager: server,
+	}
+
+	spec, err := resolveOpenAPISpec(recon, "https://example.com/openapi.yaml")
+	if err != nil {
+		t.Fatalf("resolveOpenAPISpec returned error: %v", err)
+	}
+	if spec == nil {
+		t.Fatal("expected parsed spec")
+	}
+	if server.lastSpec == nil {
+		t.Fatal("expected ExecuteRequest to be called")
+	}
+	if server.lastSpec.Accept != openAPISpecAcceptHeader {
+		t.Fatalf("expected accept header %q, got %q", openAPISpecAcceptHeader, server.lastSpec.Accept)
 	}
 }
 

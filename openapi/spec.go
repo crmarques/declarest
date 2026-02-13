@@ -14,6 +14,7 @@ type Spec struct {
 	Paths           []*PathItem
 	components      map[string]map[string]any
 	parameterValues map[string]map[string]any
+	pathsByLen      map[int][]*PathItem
 }
 
 type PathItem struct {
@@ -116,6 +117,7 @@ func ParseSpec(data []byte) (*Spec, error) {
 	}
 
 	spec.Paths = items
+	spec.pathsByLen = buildPathLengthIndex(items)
 	return spec, nil
 }
 
@@ -125,8 +127,17 @@ func (s *Spec) MatchPath(path string) *PathItem {
 	}
 	segments := splitSegments(path)
 
+	candidates := s.Paths
+	if s.pathsByLen != nil {
+		if indexed, ok := s.pathsByLen[len(segments)]; ok {
+			candidates = indexed
+		} else {
+			candidates = nil
+		}
+	}
+
 	var best *PathItem
-	for _, item := range s.Paths {
+	for _, item := range candidates {
 		if !segmentsMatch(item.Segments, segments) {
 			continue
 		}
@@ -150,6 +161,21 @@ func (s *Spec) MatchPath(path string) *PathItem {
 	}
 
 	return best
+}
+
+func buildPathLengthIndex(items []*PathItem) map[int][]*PathItem {
+	if len(items) == 0 {
+		return nil
+	}
+	index := make(map[int][]*PathItem)
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		key := len(item.Segments)
+		index[key] = append(index[key], item)
+	}
+	return index
 }
 
 func (p *PathItem) Operation(method string) *Operation {

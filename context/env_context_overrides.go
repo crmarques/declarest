@@ -83,10 +83,6 @@ var (
 	contextEnvSuffixToPath map[string]string
 )
 
-type contextConfigAccessor interface {
-	GetContextConfig(name string) (*ContextConfig, bool, error)
-}
-
 func init() {
 	contextEnvSuffixToPath = make(map[string]string, len(contextEnvSetters))
 	for path := range contextEnvSetters {
@@ -127,6 +123,9 @@ func contextOverridesFromEnv() (map[string]string, error) {
 }
 
 func LoadContextWithEnv(manager ContextManager) (Context, error) {
+	if manager == nil {
+		return Context{}, fmt.Errorf("context manager is not configured")
+	}
 	overrides, err := contextOverridesFromEnv()
 	if err != nil {
 		return Context{}, err
@@ -147,11 +146,7 @@ func loadDefaultContextWithOverrides(manager ContextManager, overrides map[strin
 }
 
 func loadContextByName(manager ContextManager, name string, overrides map[string]string, requireExists bool) (Context, error) {
-	accessor, ok := manager.(contextConfigAccessor)
-	if !ok {
-		return Context{}, fmt.Errorf("context manager cannot expose stored configuration")
-	}
-	cfg, exists, err := accessor.GetContextConfig(name)
+	cfg, exists, err := manager.GetContextConfig(name)
 	if err != nil {
 		return Context{}, err
 	}
@@ -175,6 +170,7 @@ func loadContextByName(manager ContextManager, name string, overrides map[string
 	if err := resolveContextEnvPlaceholders(cfg); err != nil {
 		return Context{}, fmt.Errorf("failed to resolve environment references for context %q: %w", name, err)
 	}
+	cfg = NormalizeContextConfig(cfg)
 	ctx, err := buildContext(name, cfg)
 	if err != nil {
 		if !exists {

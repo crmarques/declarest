@@ -46,7 +46,7 @@ func (r *DefaultReconciler) CheckManagedServerAccess() error {
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
-	if checker, ok := r.ResourceServerManager.(interface{ CheckAccess() error }); ok {
+	if checker, ok := r.ResourceServerManager.(managedserver.AccessChecker); ok {
 		return checker.CheckAccess()
 	}
 	if err := r.ResourceServerManager.Init(); err != nil {
@@ -130,9 +130,7 @@ func (r *DefaultReconciler) ExecuteHTTPRequest(spec *managedserver.HTTPRequestSp
 	if r == nil || r.ResourceServerManager == nil {
 		return nil, errors.New("managed server is not configured")
 	}
-	executor, ok := r.ResourceServerManager.(interface {
-		ExecuteRequest(spec *managedserver.HTTPRequestSpec, payload []byte) (*managedserver.HTTPResponse, error)
-	})
+	executor, ok := r.ResourceServerManager.(managedserver.HTTPRequestExecutor)
 	if !ok || executor == nil {
 		return nil, errors.New("managed server must support http requests")
 	}
@@ -146,9 +144,7 @@ func (r *DefaultReconciler) RepositoryDebugInfo() (repository.RepositoryDebugInf
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return repository.RepositoryDebugInfo{}, false
 	}
-	if provider, ok := r.ResourceRepositoryManager.(interface {
-		DebugInfo() repository.RepositoryDebugInfo
-	}); ok {
+	if provider, ok := r.ResourceRepositoryManager.(repository.RepositoryDebugInfoProvider); ok {
 		return provider.DebugInfo(), true
 	}
 	return repository.RepositoryDebugInfo{}, false
@@ -158,9 +154,7 @@ func (r *DefaultReconciler) ServerDebugInfo() (managedserver.ServerDebugInfo, bo
 	if r == nil || r.ResourceServerManager == nil {
 		return managedserver.ServerDebugInfo{}, false
 	}
-	if provider, ok := r.ResourceServerManager.(interface {
-		DebugInfo() managedserver.ServerDebugInfo
-	}); ok {
+	if provider, ok := r.ResourceServerManager.(managedserver.ServerDebugInfoProvider); ok {
 		return provider.DebugInfo(), true
 	}
 	return managedserver.ServerDebugInfo{}, false

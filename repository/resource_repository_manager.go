@@ -18,6 +18,10 @@ type ResourceRepositoryPathLister interface {
 	ListResourcePathsWithErrors() ([]string, error)
 }
 
+type ResourceRepositoryBatcher interface {
+	RunBatch(fn func() error) error
+}
+
 type MetadataRepositoryManager interface {
 	ReadMetadata(path string) (map[string]any, error)
 	WriteMetadata(path string, metadata map[string]any) error
@@ -42,4 +46,44 @@ type ResourceRepositoryForcePusher interface {
 
 type ResourceRepositoryResetter interface {
 	ResetLocal() error
+}
+
+type RepositorySyncer interface {
+	SyncLocalFromRemoteIfConfigured() error
+}
+
+type LocalRepositoryInitializer interface {
+	InitLocalRepository() error
+}
+
+type RemoteRepositoryInitializer interface {
+	InitRemoteIfEmpty() (bool, error)
+}
+
+type RemoteAccessChecker interface {
+	CheckRemoteAccess() (bool, error)
+}
+
+type LocalRepositoryStateChecker interface {
+	IsLocalRepositoryInitialized() (bool, error)
+}
+
+type RemoteSyncChecker interface {
+	CheckRemoteSync() (bool, bool, error)
+}
+
+type MetadataBaseDirSetter interface {
+	SetMetadataBaseDir(dir string)
+}
+
+type GitConfigSetter interface {
+	SetConfig(cfg *GitResourceRepositoryConfig)
+}
+
+type ResourceFormatSetter interface {
+	SetResourceFormat(format ResourceFormat)
+}
+
+type RepositoryDebugInfoProvider interface {
+	DebugInfo() RepositoryDebugInfo
 }

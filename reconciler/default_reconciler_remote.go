@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/crmarques/declarest/managedserver"
@@ -12,121 +13,40 @@ import (
 )
 
 func (r *DefaultReconciler) GetRemoteResource(path string) (resource.Resource, error) {
-	if r == nil || r.ResourceServerManager == nil {
-		return resource.Resource{}, errors.New("resource server manager is not configured")
-	}
-	if err := r.validateLogicalPath(path); err != nil {
-		return resource.Resource{}, err
-	}
-
-	isCollection := resource.IsCollectionPath(path)
-	if isCollection {
-		targetPath, record, _, err := r.resolveRemoteCollectionPath(path)
-		if err != nil {
-			return resource.Resource{}, err
-		}
-
-		items, err := r.fetchCollection(record, targetPath, false)
-		if err != nil {
-			return resource.Resource{}, err
-		}
-		payload := record.ListPayload()
-		processed := make([]any, 0, len(items))
-		for _, item := range items {
-			transformed, err := record.ApplyPayload(item, payload)
-			if err != nil {
-				return resource.Resource{}, err
-			}
-			processed = append(processed, transformed.V)
-		}
-		return resource.NewResource(processed)
-	}
-
-	record, err := r.recordFor(path)
-	if err != nil {
-		return resource.Resource{}, err
-	}
-
-	var data resource.Resource
-	if local, err := r.GetLocalResource(path); err == nil {
-		data = local
-	}
-
-	var (
-		resolvedPath    string
-		resolvedRecord  resource.ResourceRecord
-		replacements    map[string]string
-		resolutionReady bool
-	)
-	resolve := func() error {
-		if resolutionReady {
-			return nil
-		}
-		var err error
-		resolvedPath, resolvedRecord, replacements, err = r.resolveRemoteResourcePath(path, data)
-		if err == nil {
-			resolutionReady = true
-		}
-		return err
-	}
-
-	literalOp := record.ReadOperation(false)
-	literalSpec, err := r.buildRequestSpecWithTarget(record, path, "", literalOp, false)
-	if err != nil {
-		return resource.Resource{}, err
-	}
-	if fetched, err := r.ResourceServerManager.GetResource(literalSpec); err == nil {
-		payload := record.ReadPayload()
-		return record.ApplyPayload(fetched, payload)
-	} else if managedserver.IsNotFoundError(err) {
-		if err := resolve(); err != nil {
-			return resource.Resource{}, err
-		}
-
-		if data.V == nil {
-			if target := resource.LastSegment(path); target != "" {
-				if fromCollection, ok, lookupErr := r.findResourceInCollection(resolvedRecord, replacements, target); lookupErr == nil && ok {
-					payload := resolvedRecord.ReadPayload()
-					return resolvedRecord.ApplyPayload(fromCollection, payload)
-				} else if lookupErr != nil {
-					return resource.Resource{}, lookupErr
-				}
-			}
-		}
-	} else {
-		return resource.Resource{}, err
-	}
-
-	if err := resolve(); err != nil {
-		return resource.Resource{}, err
-	}
-	targetPath := resolvedPath
-
-	if exists, resolved, resolvedData, err := r.remoteResourceExists(targetPath, resolvedRecord, data, replacements); err == nil && exists {
-		targetPath = resolved
-		if resolvedData.V != nil {
-			resolvedRecord.Data = resolvedData
-		}
-	} else if err != nil {
-		return resource.Resource{}, err
-	}
-
-	op := adjustOperation(resolvedRecord.ReadOperation(false))
-	spec, err := r.buildRequestSpecWithTarget(resolvedRecord, targetPath, path, op, false)
-	if err != nil {
-		return resource.Resource{}, err
-	}
-
-	fetched, err := r.ResourceServerManager.GetResource(spec)
-	if err != nil {
-		return resource.Resource{}, err
-	}
-
-	payload := resolvedRecord.ReadPayload()
-	return resolvedRecord.ApplyPayload(fetched, payload)
+	end := r.beginRemoteOperation()
+	defer end()
+	return r.getRemoteResource(path, nil, resource.IsCollectionPath(path))
 }
 
 func (r *DefaultReconciler) GetRemoteResourceWithRecord(record resource.ResourceRecord, logicalPath string, isCollection bool) (resource.Resource, error) {
+	end := r.beginRemoteOperation()
+	defer end()
+	return r.getRemoteResource(logicalPath, &record, isCollection)
+}
+
+func (r *DefaultReconciler) beginRemoteOperation() func() {
+	if r == nil {
+		return func() {}
+	}
+	r.remoteOpMu.Lock()
+	if r.remoteOpDepth == 0 {
+		r.remoteCollectionCache = make(map[string][]resource.Resource)
+	}
+	r.remoteOpDepth++
+	r.remoteOpMu.Unlock()
+	return func() {
+		r.remoteOpMu.Lock()
+		if r.remoteOpDepth > 0 {
+			r.remoteOpDepth--
+		}
+		if r.remoteOpDepth == 0 {
+			r.remoteCollectionCache = nil
+		}
+		r.remoteOpMu.Unlock()
+	}
+}
+
+func (r *DefaultReconciler) getRemoteResource(logicalPath string, providedRecord *resource.ResourceRecord, isCollection bool) (resource.Resource, error) {
 	if r == nil || r.ResourceServerManager == nil {
 		return resource.Resource{}, errors.New("resource server manager is not configured")
 	}
@@ -134,30 +54,21 @@ func (r *DefaultReconciler) GetRemoteResourceWithRecord(record resource.Resource
 		return resource.Resource{}, err
 	}
 
+	record, hasRecord, err := r.remoteBaseRecord(logicalPath, providedRecord)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
 	if isCollection {
-		targetPath, resolvedRecord, _, err := r.resolveRemoteCollectionPathWithRecord(logicalPath, record)
+		targetPath, resolvedRecord, _, err := r.resolveRemoteCollection(logicalPath, record, hasRecord)
 		if err != nil {
 			return resource.Resource{}, err
 		}
-
 		items, err := r.fetchCollection(resolvedRecord, targetPath, false)
 		if err != nil {
 			return resource.Resource{}, err
 		}
-		payload := resolvedRecord.ListPayload()
-		processed := make([]any, 0, len(items))
-		for _, item := range items {
-			transformed, err := resolvedRecord.ApplyPayload(item, payload)
-			if err != nil {
-				return resource.Resource{}, err
-			}
-			processed = append(processed, transformed.V)
-		}
-		return resource.NewResource(processed)
-	}
-
-	if strings.TrimSpace(record.Path) == "" {
-		record.Path = logicalPath
+		return collectionPayloadResource(resolvedRecord, items)
 	}
 
 	data := record.Data
@@ -178,7 +89,7 @@ func (r *DefaultReconciler) GetRemoteResourceWithRecord(record resource.Resource
 			return nil
 		}
 		var err error
-		resolvedPath, resolvedRecord, replacements, err = r.resolveRemoteResourcePathWithRecord(logicalPath, data, record)
+		resolvedPath, resolvedRecord, replacements, err = r.resolveRemoteResource(logicalPath, data, record, hasRecord)
 		if err == nil {
 			resolutionReady = true
 		}
@@ -241,7 +152,51 @@ func (r *DefaultReconciler) GetRemoteResourceWithRecord(record resource.Resource
 	return resolvedRecord.ApplyPayload(fetched, payload)
 }
 
+func (r *DefaultReconciler) remoteBaseRecord(logicalPath string, providedRecord *resource.ResourceRecord) (resource.ResourceRecord, bool, error) {
+	if providedRecord != nil {
+		record := *providedRecord
+		if strings.TrimSpace(record.Path) == "" {
+			record.Path = logicalPath
+		}
+		return record, true, nil
+	}
+	record, err := r.recordFor(logicalPath)
+	if err != nil {
+		return resource.ResourceRecord{}, false, err
+	}
+	return record, false, nil
+}
+
+func (r *DefaultReconciler) resolveRemoteCollection(logicalPath string, record resource.ResourceRecord, hasRecord bool) (string, resource.ResourceRecord, map[string]string, error) {
+	if hasRecord {
+		return r.resolveRemoteCollectionPathWithRecord(logicalPath, record)
+	}
+	return r.resolveRemoteCollectionPath(logicalPath)
+}
+
+func (r *DefaultReconciler) resolveRemoteResource(logicalPath string, data resource.Resource, record resource.ResourceRecord, hasRecord bool) (string, resource.ResourceRecord, map[string]string, error) {
+	if hasRecord {
+		return r.resolveRemoteResourcePathWithRecord(logicalPath, data, record)
+	}
+	return r.resolveRemoteResourcePath(logicalPath, data)
+}
+
+func collectionPayloadResource(record resource.ResourceRecord, items []resource.Resource) (resource.Resource, error) {
+	payload := record.ListPayload()
+	processed := make([]any, 0, len(items))
+	for _, item := range items {
+		transformed, err := record.ApplyPayload(item, payload)
+		if err != nil {
+			return resource.Resource{}, err
+		}
+		processed = append(processed, transformed.V)
+	}
+	return resource.NewResource(processed)
+}
+
 func (r *DefaultReconciler) DeleteRemoteResource(path string) error {
+	end := r.beginRemoteOperation()
+	defer end()
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
@@ -299,6 +254,8 @@ func (r *DefaultReconciler) DeleteRemoteResource(path string) error {
 }
 
 func (r *DefaultReconciler) SaveRemoteResource(path string, data resource.Resource) error {
+	end := r.beginRemoteOperation()
+	defer end()
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
@@ -348,6 +305,8 @@ func (r *DefaultReconciler) SaveRemoteResource(path string, data resource.Resour
 }
 
 func (r *DefaultReconciler) CreateRemoteResource(path string, data resource.Resource) error {
+	end := r.beginRemoteOperation()
+	defer end()
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
@@ -364,6 +323,8 @@ func (r *DefaultReconciler) CreateRemoteResource(path string, data resource.Reso
 }
 
 func (r *DefaultReconciler) UpdateRemoteResource(path string, data resource.Resource) error {
+	end := r.beginRemoteOperation()
+	defer end()
 	if r == nil || r.ResourceServerManager == nil {
 		return errors.New("resource server manager is not configured")
 	}
@@ -395,6 +356,8 @@ func (r *DefaultReconciler) UpdateRemoteResource(path string, data resource.Reso
 }
 
 func (r *DefaultReconciler) GetRemoteResourcePath(path string) (string, error) {
+	end := r.beginRemoteOperation()
+	defer end()
 	if err := r.validateLogicalPath(path); err != nil {
 		return path, err
 	}
@@ -410,6 +373,8 @@ func (r *DefaultReconciler) GetRemoteResourcePath(path string) (string, error) {
 }
 
 func (r *DefaultReconciler) GetRemoteCollectionPath(path string) (string, error) {
+	end := r.beginRemoteOperation()
+	defer end()
 	if err := r.validateLogicalPath(path); err != nil {
 		return path, err
 	}
@@ -631,14 +596,19 @@ func (r *DefaultReconciler) fetchCollection(record resource.ResourceRecord, targ
 		return nil, err
 	}
 
-	items, err := r.ResourceServerManager.GetResourceCollection(spec)
-	if err != nil {
-		return nil, err
-	}
+	cacheKey := r.remoteCollectionCacheKey(spec, op)
+	items, cached := r.remoteCollectionFromCache(cacheKey)
+	if !cached {
+		items, err = r.ResourceServerManager.GetResourceCollection(spec)
+		if err != nil {
+			return nil, err
+		}
 
-	items, err = applyCollectionFilter(op, items)
-	if err != nil {
-		return nil, err
+		items, err = applyCollectionFilter(op, items)
+		if err != nil {
+			return nil, err
+		}
+		r.storeRemoteCollectionCache(cacheKey, items)
 	}
 
 	if !applyPayload {
@@ -655,6 +625,96 @@ func (r *DefaultReconciler) fetchCollection(record resource.ResourceRecord, targ
 		processed = append(processed, transformed)
 	}
 	return processed, nil
+}
+
+func (r *DefaultReconciler) remoteCollectionCacheKey(spec managedserver.RequestSpec, op *resource.OperationMetadata) string {
+	if r == nil {
+		return ""
+	}
+	httpSpec := spec.HTTP
+	if httpSpec == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(strings.ToUpper(strings.TrimSpace(httpSpec.Method)))
+	b.WriteByte(' ')
+	b.WriteString(strings.TrimSpace(httpSpec.Path))
+	b.WriteByte('\n')
+
+	if len(httpSpec.Query) > 0 {
+		keys := make([]string, 0, len(httpSpec.Query))
+		for key := range httpSpec.Query {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			values := append([]string{}, httpSpec.Query[key]...)
+			sort.Strings(values)
+			b.WriteString("q:")
+			b.WriteString(key)
+			b.WriteByte('=')
+			b.WriteString(strings.Join(values, ","))
+			b.WriteByte('\n')
+		}
+	}
+
+	if len(httpSpec.Headers) > 0 {
+		keys := make([]string, 0, len(httpSpec.Headers))
+		for key := range httpSpec.Headers {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			values := append([]string{}, httpSpec.Headers[key]...)
+			sort.Strings(values)
+			b.WriteString("h:")
+			b.WriteString(strings.ToLower(key))
+			b.WriteByte('=')
+			b.WriteString(strings.Join(values, ","))
+			b.WriteByte('\n')
+		}
+	}
+
+	if op != nil {
+		b.WriteString("f:")
+		b.WriteString(strings.TrimSpace(op.JQFilter))
+	}
+
+	return b.String()
+}
+
+func (r *DefaultReconciler) remoteCollectionFromCache(key string) ([]resource.Resource, bool) {
+	if r == nil || strings.TrimSpace(key) == "" {
+		return nil, false
+	}
+
+	r.remoteOpMu.Lock()
+	defer r.remoteOpMu.Unlock()
+	if r.remoteCollectionCache == nil {
+		return nil, false
+	}
+	items, ok := r.remoteCollectionCache[key]
+	if !ok {
+		return nil, false
+	}
+	cloned := make([]resource.Resource, len(items))
+	copy(cloned, items)
+	return cloned, true
+}
+
+func (r *DefaultReconciler) storeRemoteCollectionCache(key string, items []resource.Resource) {
+	if r == nil || strings.TrimSpace(key) == "" {
+		return
+	}
+	r.remoteOpMu.Lock()
+	defer r.remoteOpMu.Unlock()
+	if r.remoteCollectionCache == nil {
+		return
+	}
+	cloned := make([]resource.Resource, len(items))
+	copy(cloned, items)
+	r.remoteCollectionCache[key] = cloned
 }
 
 func (r *DefaultReconciler) resolveRemoteResourcePath(path string, data resource.Resource) (string, resource.ResourceRecord, map[string]string, error) {
@@ -822,21 +882,10 @@ func adjustOperation(op *resource.OperationMetadata) *resource.OperationMetadata
 	}
 
 	if op.Payload != nil {
-		cloned.Payload = clonePayloadConfig(op.Payload)
+		cloned.Payload = resource.CloneOperationPayloadConfig(op.Payload)
 	}
 
 	return cloned
-}
-
-func clonePayloadConfig(src *resource.OperationPayloadConfig) *resource.OperationPayloadConfig {
-	if src == nil {
-		return nil
-	}
-	return &resource.OperationPayloadConfig{
-		SuppressAttributes: append([]string{}, src.SuppressAttributes...),
-		FilterAttributes:   append([]string{}, src.FilterAttributes...),
-		JQExpression:       src.JQExpression,
-	}
 }
 
 func replacePathSegments(path string, replacements map[string]string) string {

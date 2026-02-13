@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 ARGS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TESTS_ROOT="$(cd "$ARGS_LIB_DIR/../../../.." && pwd)"
 source "$ARGS_LIB_DIR/shell.sh"
+source "$TESTS_ROOT/scripts/components.sh"
 
 require_arg() {
     local opt="$1"
@@ -51,68 +53,16 @@ parse_common_flags() {
     esac
 
     repo_provider="${repo_provider,,}"
-    case "$repo_provider" in
-        file|git|gitlab|gitea|github)
-            ;;
-        *)
-            die "Invalid --repo-provider: ${repo_provider} (expected file, git, gitlab, gitea, or github)"
-            ;;
-    esac
+    if [[ -z "$repo_provider" || ! component_exists "repo-provider" "$repo_provider" ]]; then
+        local available
+        available="$(list_components "repo-provider" | paste -sd ", " -)"
+        die "Invalid --repo-provider: ${repo_provider} (available: ${available})"
+    fi
 
     secret_provider="${secret_provider,,}"
-    case "$secret_provider" in
-        none|file|vault)
-            ;;
-        *)
-            die "Invalid --secret-provider: ${secret_provider} (expected none, file, or vault)"
-            ;;
-    esac
-}
-
-resolve_repo_provider() {
-    repo_type=""
-    remote_repo_provider=""
-    case "$repo_provider" in
-        file)
-            repo_type="fs"
-            ;;
-        git)
-            repo_type="git-local"
-            ;;
-        gitlab|gitea|github)
-            repo_type="git-remote"
-            remote_repo_provider="$repo_provider"
-            ;;
-        *)
-            die "Unsupported repo provider: ${repo_provider}"
-            ;;
-    esac
-}
-
-apply_repo_provider_env() {
-    export DECLAREST_REPO_TYPE="$repo_type"
-    export DECLAREST_SECRET_STORE_TYPE="$secret_provider"
-    export DECLAREST_REMOTE_REPO_PROVIDER=""
-    export DECLAREST_REPO_PROVIDER=""
-    export DECLAREST_GITLAB_ENABLE="0"
-    export DECLAREST_GITEA_ENABLE="0"
-
-    if [[ "$repo_type" == "git-remote" ]]; then
-        export DECLAREST_REPO_PROVIDER="$remote_repo_provider"
-        export DECLAREST_REMOTE_REPO_PROVIDER="$remote_repo_provider"
-        case "$remote_repo_provider" in
-            gitlab)
-                export DECLAREST_GITLAB_ENABLE="1"
-                ;;
-            gitea)
-                export DECLAREST_GITEA_ENABLE="1"
-                ;;
-        esac
+    if [[ -z "$secret_provider" || ! component_exists "secret-provider" "$secret_provider" ]]; then
+        local available
+        available="$(list_components "secret-provider" | paste -sd ", " -)"
+        die "Invalid --secret-provider: ${secret_provider} (available: ${available})"
     fi
-}
-
-clear_remote_repo_env() {
-    export DECLAREST_REPO_REMOTE_URL=""
-    export DECLAREST_REMOTE_REPO_PROVIDER=""
-    export DECLAREST_REPO_PROVIDER=""
 }

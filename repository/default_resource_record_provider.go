@@ -120,6 +120,26 @@ type metadataPathInfo struct {
 	collectionDepth    int
 }
 
+type metadataResolveCache struct {
+	baseByPath       map[string]resource.ResourceMetadata
+	metadataByRel    map[string]metadataCandidateResult
+	resourceDefaults map[string]resource.Resource
+}
+
+type metadataCandidateResult struct {
+	meta resource.ResourceMetadata
+	ok   bool
+	err  error
+}
+
+func newMetadataResolveCache() *metadataResolveCache {
+	return &metadataResolveCache{
+		baseByPath:       make(map[string]resource.ResourceMetadata),
+		metadataByRel:    make(map[string]metadataCandidateResult),
+		resourceDefaults: make(map[string]resource.Resource),
+	}
+}
+
 func buildMetadataPathInfo(resourcePath string) metadataPathInfo {
 	trimmed := strings.TrimSpace(resourcePath)
 	isCollection := strings.HasSuffix(trimmed, "/")
@@ -167,8 +187,13 @@ func (p *DefaultResourceRecordProvider) resolveMetadata(resourcePath string) (re
 }
 
 func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath string, renderTemplates bool) (resource.ResourceMetadata, error) {
+	cache := newMetadataResolveCache()
+	return p.resolveMetadataInternalCached(resourcePath, renderTemplates, cache)
+}
+
+func (p *DefaultResourceRecordProvider) resolveMetadataInternalCached(resourcePath string, renderTemplates bool, cache *metadataResolveCache) (resource.ResourceMetadata, error) {
 	info := buildMetadataPathInfo(resourcePath)
-	result, err := p.resolveMetadataBase(info)
+	result, err := p.resolveMetadataBase(info, cache)
 	if err != nil {
 		return resource.ResourceMetadata{}, err
 	}
@@ -177,7 +202,7 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	var opts metadata.RenderOptions
 	if renderTemplates {
 		var attrsCache map[string]map[string]any
-		ctx, attrsCache, err = p.buildMetadataTemplateContext(info)
+		ctx, attrsCache, err = p.buildMetadataTemplateContext(info, cache)
 		if err != nil {
 			return resource.ResourceMetadata{}, err
 		}
@@ -186,17 +211,7 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	}
 
 	if p.openapiSpec != nil {
-		resourcePathForDefaults := info.trimmed
-		if info.isCollection {
-			if result.ResourceInfo != nil {
-				if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
-					resourcePathForDefaults = coll
-				}
-			}
-		} else if remotePath := p.resourcePathForDefaults(info.trimmed, result); remotePath != "" {
-			resourcePathForDefaults = remotePath
-		}
-		result = openapi.ApplyDefaults(result, resourcePathForDefaults, info.isCollection, p.openapiSpec)
+		result = metadata.ApplyOpenAPIDefaults(result, info.trimmed, info.isCollection, p.resourceDataForDefaults(info.trimmed, cache), p.openapiSpec)
 		if renderTemplates {
 			result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
 		}
@@ -205,12 +220,18 @@ func (p *DefaultResourceRecordProvider) resolveMetadataInternal(resourcePath str
 	return result, nil
 }
 
-func (p *DefaultResourceRecordProvider) resolveMetadataBase(info metadataPathInfo) (resource.ResourceMetadata, error) {
-	result := metadata.DefaultMetadata(info.collectionSegments)
+func (p *DefaultResourceRecordProvider) resolveMetadataBase(info metadataPathInfo, cache *metadataResolveCache) (resource.ResourceMetadata, error) {
+	if cache != nil {
+		if cached, ok := cache.baseByPath[info.trimmed]; ok {
+			return cloneResourceMetadata(cached), nil
+		}
+	}
+
+	result, _ := metadata.DefaultMetadataForPath(info.trimmed, metadata.CollectionPathRuntime)
 
 	files := metadataRelPaths(info.segments, info.collectionSegments, info.isCollection)
 	for _, candidate := range files {
-		fileMetadata, ok, err := p.readMetadataCandidate(candidate)
+		fileMetadata, ok, err := p.readMetadataCandidate(candidate, cache)
 		if err != nil {
 			return resource.ResourceMetadata{}, err
 		}
@@ -226,12 +247,16 @@ func (p *DefaultResourceRecordProvider) resolveMetadataBase(info metadataPathInf
 		result = metadata.MergeMetadata(result, fileMetadata)
 	}
 
+	if cache != nil {
+		cache.baseByPath[info.trimmed] = cloneResourceMetadata(result)
+	}
+
 	return result, nil
 }
 
-func (p *DefaultResourceRecordProvider) resolveMetadataWithContext(resourcePath string, ctx map[string]any, attrsCache map[string]map[string]any) (resource.ResourceMetadata, error) {
+func (p *DefaultResourceRecordProvider) resolveMetadataWithContext(resourcePath string, ctx map[string]any, attrsCache map[string]map[string]any, cache *metadataResolveCache) (resource.ResourceMetadata, error) {
 	info := buildMetadataPathInfo(resourcePath)
-	result, err := p.resolveMetadataBase(info)
+	result, err := p.resolveMetadataBase(info, cache)
 	if err != nil {
 		return resource.ResourceMetadata{}, err
 	}
@@ -240,17 +265,7 @@ func (p *DefaultResourceRecordProvider) resolveMetadataWithContext(resourcePath 
 	result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
 
 	if p.openapiSpec != nil {
-		resourcePathForDefaults := info.trimmed
-		if info.isCollection {
-			if result.ResourceInfo != nil {
-				if coll := strings.TrimSpace(result.ResourceInfo.CollectionPath); coll != "" {
-					resourcePathForDefaults = coll
-				}
-			}
-		} else if remotePath := p.resourcePathForDefaults(info.trimmed, result); remotePath != "" {
-			resourcePathForDefaults = remotePath
-		}
-		result = openapi.ApplyDefaults(result, resourcePathForDefaults, info.isCollection, p.openapiSpec)
+		result = metadata.ApplyOpenAPIDefaults(result, info.trimmed, info.isCollection, p.resourceDataForDefaults(info.trimmed, cache), p.openapiSpec)
 		result = renderMetadataWithContext(result, info.trimmed, ctx, opts)
 	}
 
@@ -274,25 +289,42 @@ func renderMetadataWithContext(meta resource.ResourceMetadata, resourcePath stri
 	if ctx == nil {
 		ctx = map[string]any{}
 	}
-	ctxCopy := cloneContext(ctx)
+	ctxCopy := resource.CloneMapStringAny(ctx)
 	return metadata.RenderTemplates(meta, resourcePath, ctxCopy, opts)
 }
 
-func (p *DefaultResourceRecordProvider) readMetadataCandidate(candidate metadataCandidate) (resource.ResourceMetadata, bool, error) {
+func (p *DefaultResourceRecordProvider) readMetadataCandidate(candidate metadataCandidate, cache *metadataResolveCache) (resource.ResourceMetadata, bool, error) {
+	if cache != nil {
+		if entry, ok := cache.metadataByRel[candidate.rel]; ok {
+			return cloneResourceMetadata(entry.meta), entry.ok, entry.err
+		}
+	}
+
+	cacheEntry := func(meta resource.ResourceMetadata, ok bool, err error) (resource.ResourceMetadata, bool, error) {
+		if cache != nil {
+			cache.metadataByRel[candidate.rel] = metadataCandidateResult{
+				meta: cloneResourceMetadata(meta),
+				ok:   ok,
+				err:  err,
+			}
+		}
+		return meta, ok, err
+	}
+
 	if manager := p.metadataManager; manager != nil {
 		if path := metadataPathFromRel(candidate.rel); path != "" {
 			meta, err := manager.ReadMetadata(path)
 			if err != nil {
-				return resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata %q: %w", path, err)
+				return cacheEntry(resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata %q: %w", path, err))
 			}
 			if len(meta) == 0 {
-				return resource.ResourceMetadata{}, false, nil
+				return cacheEntry(resource.ResourceMetadata{}, false, nil)
 			}
 			fileMetadata, err := metadataFromMap(meta)
 			if err != nil {
-				return resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata %q: %w", path, err)
+				return cacheEntry(resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata %q: %w", path, err))
 			}
-			return fileMetadata, true, nil
+			return cacheEntry(fileMetadata, true, nil)
 		}
 	}
 
@@ -300,19 +332,19 @@ func (p *DefaultResourceRecordProvider) readMetadataCandidate(candidate metadata
 	data, err := store.ReadFile(candidate.rel)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return resource.ResourceMetadata{}, false, nil
+			return cacheEntry(resource.ResourceMetadata{}, false, nil)
 		}
-		return resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata file %q: %w", candidate.rel, err)
+		return cacheEntry(resource.ResourceMetadata{}, false, fmt.Errorf("failed to read metadata file %q: %w", candidate.rel, err))
 	}
 	if len(data) == 0 {
-		return resource.ResourceMetadata{}, false, nil
+		return cacheEntry(resource.ResourceMetadata{}, false, nil)
 	}
 
 	var fileMetadata resource.ResourceMetadata
 	if err := json.Unmarshal(data, &fileMetadata); err != nil {
-		return resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata file %q: %w", candidate.rel, err)
+		return cacheEntry(resource.ResourceMetadata{}, false, fmt.Errorf("failed to parse metadata file %q: %w", candidate.rel, err))
 	}
-	return fileMetadata, true, nil
+	return cacheEntry(fileMetadata, true, nil)
 }
 
 func metadataFromMap(meta map[string]any) (resource.ResourceMetadata, error) {
@@ -330,17 +362,80 @@ func metadataFromMap(meta map[string]any) (resource.ResourceMetadata, error) {
 	return parsed, nil
 }
 
-func (p *DefaultResourceRecordProvider) resourcePathForDefaults(resourcePath string, meta resource.ResourceMetadata) string {
-	record := resource.ResourceRecord{
-		Path: resourcePath,
-		Meta: meta,
+func cloneResourceMetadata(meta resource.ResourceMetadata) resource.ResourceMetadata {
+	cloned := resource.ResourceMetadata{}
+	if meta.ResourceInfo != nil {
+		info := *meta.ResourceInfo
+		if info.SecretInAttributes != nil {
+			info.SecretInAttributes = append([]string{}, info.SecretInAttributes...)
+		}
+		cloned.ResourceInfo = &info
+	}
+	if meta.OperationInfo != nil {
+		info := &resource.OperationInfoMetadata{
+			GetResource:      cloneOperationMetadata(meta.OperationInfo.GetResource),
+			CreateResource:   cloneOperationMetadata(meta.OperationInfo.CreateResource),
+			UpdateResource:   cloneOperationMetadata(meta.OperationInfo.UpdateResource),
+			DeleteResource:   cloneOperationMetadata(meta.OperationInfo.DeleteResource),
+			ListCollection:   cloneOperationMetadata(meta.OperationInfo.ListCollection),
+			CompareResources: cloneCompareMetadata(meta.OperationInfo.CompareResources),
+		}
+		cloned.OperationInfo = info
+	}
+	return cloned
+}
+
+func cloneOperationMetadata(op *resource.OperationMetadata) *resource.OperationMetadata {
+	if op == nil {
+		return nil
+	}
+	cloned := &resource.OperationMetadata{
+		HTTPMethod:  op.HTTPMethod,
+		HTTPHeaders: append(resource.HeaderList{}, op.HTTPHeaders...),
+		JQFilter:    op.JQFilter,
+	}
+	if op.URL != nil {
+		cloned.URL = &resource.OperationURLMetadata{
+			Path:         op.URL.Path,
+			QueryStrings: append([]string{}, op.URL.QueryStrings...),
+		}
+	}
+	if op.Payload != nil {
+		cloned.Payload = resource.CloneOperationPayloadConfig(op.Payload)
+	}
+	return cloned
+}
+
+func cloneCompareMetadata(meta *resource.CompareMetadata) *resource.CompareMetadata {
+	if meta == nil {
+		return nil
+	}
+	return &resource.CompareMetadata{
+		IgnoreAttributes:   append([]string{}, meta.IgnoreAttributes...),
+		SuppressAttributes: append([]string{}, meta.SuppressAttributes...),
+		FilterAttributes:   append([]string{}, meta.FilterAttributes...),
+		JQExpression:       meta.JQExpression,
+	}
+}
+
+func (p *DefaultResourceRecordProvider) resourceDataForDefaults(resourcePath string, cache *metadataResolveCache) resource.Resource {
+	if cache != nil {
+		if data, ok := cache.resourceDefaults[resourcePath]; ok {
+			return data
+		}
 	}
 	if p.resourceLoader != nil {
 		if data, err := p.resourceLoader.GetLocalResource(resourcePath); err == nil {
-			record.Data = data
+			if cache != nil {
+				cache.resourceDefaults[resourcePath] = data
+			}
+			return data
 		}
 	}
-	return record.RemoteResourcePath(record.Data)
+	if cache != nil {
+		cache.resourceDefaults[resourcePath] = resource.Resource{}
+	}
+	return resource.Resource{}
 }
 
 type metadataCandidate struct {
@@ -458,7 +553,7 @@ func metadataPathFromRel(rel string) string {
 	return ""
 }
 
-func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(info metadataPathInfo) (map[string]any, map[string]map[string]any, error) {
+func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(info metadataPathInfo, cache *metadataResolveCache) (map[string]any, map[string]map[string]any, error) {
 	ctx := make(map[string]any)
 	attrsCache := make(map[string]map[string]any)
 	if info.trimmed == "" {
@@ -467,7 +562,7 @@ func (p *DefaultResourceRecordProvider) buildMetadataTemplateContext(info metada
 
 	for i := 1; i <= len(info.segments); i++ {
 		prefix := "/" + strings.Join(info.segments[:i], "/")
-		meta, err := p.resolveMetadataWithContext(prefix, ctx, attrsCache)
+		meta, err := p.resolveMetadataWithContext(prefix, ctx, attrsCache, cache)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -489,17 +584,6 @@ func mergeContext(dst map[string]any, src map[string]any) {
 	for key, value := range src {
 		dst[key] = value
 	}
-}
-
-func cloneContext(src map[string]any) map[string]any {
-	if src == nil {
-		return map[string]any{}
-	}
-	dst := make(map[string]any, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
-	return dst
 }
 
 func (p *DefaultResourceRecordProvider) resolveResourceAttributes(path string, record resource.ResourceRecord) (map[string]any, bool) {
@@ -573,9 +657,7 @@ func (p *DefaultResourceRecordProvider) loadRemoteResourceAttributes(path string
 		return nil, false
 	}
 
-	loader, ok := p.resourceLoader.(interface {
-		GetRemoteResource(path string) (resource.Resource, error)
-	})
+	loader, ok := p.resourceLoader.(metadata.RemoteResourceLoader)
 	if !ok || loader == nil {
 		return nil, false
 	}

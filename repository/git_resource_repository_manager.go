@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/crmarques/declarest/resource"
@@ -29,6 +30,9 @@ type GitResourceRepositoryManager struct {
 	fs             *FileSystemResourceRepositoryManager
 	config         *GitResourceRepositoryConfig
 	resourceFormat ResourceFormat
+	batchMu        sync.Mutex
+	batchDepth     int
+	batchDirty     bool
 }
 
 func NewGitResourceRepositoryManager(baseDir string) *GitResourceRepositoryManager {
@@ -293,6 +297,58 @@ func (m *GitResourceRepositoryManager) ListResourcePathsWithErrors() ([]string, 
 		return nil, err
 	}
 	return fs.ListResourcePathsWithErrors()
+}
+
+func (m *GitResourceRepositoryManager) RunBatch(fn func() error) error {
+	if fn == nil {
+		return errors.New("batch function is required")
+	}
+	m.beginBatch()
+	err := fn()
+	if err != nil {
+		_ = m.endBatch(false)
+		return err
+	}
+	return m.endBatch(true)
+}
+
+func (m *GitResourceRepositoryManager) beginBatch() {
+	m.batchMu.Lock()
+	defer m.batchMu.Unlock()
+	m.batchDepth++
+}
+
+func (m *GitResourceRepositoryManager) endBatch(success bool) error {
+	m.batchMu.Lock()
+	if m.batchDepth > 0 {
+		m.batchDepth--
+	}
+	outermost := m.batchDepth == 0
+	dirty := m.batchDirty
+	if outermost {
+		m.batchDirty = false
+	}
+	m.batchMu.Unlock()
+
+	if !success || !outermost || !dirty {
+		return nil
+	}
+
+	return m.commitBatchChanges()
+}
+
+func (m *GitResourceRepositoryManager) inBatch() bool {
+	m.batchMu.Lock()
+	defer m.batchMu.Unlock()
+	return m.batchDepth > 0
+}
+
+func (m *GitResourceRepositoryManager) markBatchDirty() {
+	m.batchMu.Lock()
+	defer m.batchMu.Unlock()
+	if m.batchDepth > 0 {
+		m.batchDirty = true
+	}
 }
 
 func (m *GitResourceRepositoryManager) RebaseLocalFromRemote() error {
@@ -604,6 +660,9 @@ func (m *GitResourceRepositoryManager) CheckRemoteAccess() (bool, error) {
 		InsecureSkipTLS: settings.insecureSkipTLS,
 	})
 	if err != nil {
+		if errors.Is(err, transport.ErrEmptyRemoteRepository) {
+			return true, ErrRemoteRepositoryEmpty
+		}
 		return true, sanitizeGitError(err)
 	}
 	return true, nil
@@ -770,70 +829,15 @@ func (m *GitResourceRepositoryManager) ensureFS() (*FileSystemResourceRepository
 }
 
 func (m *GitResourceRepositoryManager) commitResourceChange(path, action string, deleted bool) error {
-	fs, err := m.ensureFS()
+	repo, wt, changed, err := m.stageResourceChange(path, deleted)
 	if err != nil {
 		return err
 	}
-
-	repo, repoRoot, err := m.openRepo()
-	if err != nil {
-		return err
-	}
-
-	wt, err := repo.Worktree()
-	if err != nil {
-		return err
-	}
-
-	filePaths, err := fs.resourceFilesForDelete(path)
-	if err != nil {
-		return err
-	}
-
-	var primaryFile string
-	if !deleted {
-		filePath, err := fs.resourceFile(path)
-		if err != nil {
-			return err
-		}
-		primaryFile = filePath
-	}
-
-	changed := false
-	for _, filePath := range filePaths {
-		rel, err := filepath.Rel(repoRoot, filePath)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-
-		if deleted || (primaryFile != "" && filePath != primaryFile) {
-			if _, err := wt.Remove(rel); err != nil {
-				tracked, trackErr := m.isIndexTracked(repo, rel)
-				if trackErr != nil {
-					return trackErr
-				}
-				if !tracked {
-					continue
-				}
-				return err
-			}
-		} else {
-			if _, err := wt.Add(rel); err != nil {
-				return err
-			}
-		}
-
-		relChanged, err := m.hasStagedChanges(wt, rel)
-		if err != nil {
-			return err
-		}
-		if relChanged {
-			changed = true
-		}
-	}
-
 	if !changed {
+		return nil
+	}
+	if m.inBatch() {
+		m.markBatchDirty()
 		return nil
 	}
 
@@ -849,54 +853,160 @@ func (m *GitResourceRepositoryManager) commitResourceChange(path, action string,
 	return m.autoSyncIfEnabled()
 }
 
-func (m *GitResourceRepositoryManager) commitMetadataChange(path, filePath, action string, deleted bool) error {
-	repo, repoRoot, err := m.openRepo()
+func (m *GitResourceRepositoryManager) stageResourceChange(path string, deleted bool) (*git.Repository, *git.Worktree, bool, error) {
+	fs, err := m.ensureFS()
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
 
-	rel, err := filepath.Rel(repoRoot, filePath)
+	repo, repoRoot, err := m.openRepo()
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || strings.HasPrefix(rel, "../") {
-		return nil
-	}
-	rel = filepath.ToSlash(rel)
 
 	wt, err := repo.Worktree()
 	if err != nil {
-		return err
+		return nil, nil, false, err
 	}
 
-	if deleted {
-		if _, err := wt.Remove(rel); err != nil {
-			tracked, trackErr := m.isIndexTracked(repo, rel)
-			if trackErr != nil {
-				return trackErr
-			}
-			if !tracked {
-				return nil
-			}
-			return err
+	filePaths, err := fs.resourceFilesForDelete(path)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	var primaryFile string
+	if !deleted {
+		filePath, err := fs.resourceFile(path)
+		if err != nil {
+			return nil, nil, false, err
 		}
-	} else {
-		if _, err := wt.Add(rel); err != nil {
-			return err
+		primaryFile = filePath
+	}
+
+	changed := false
+	for _, filePath := range filePaths {
+		rel, err := filepath.Rel(repoRoot, filePath)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		rel = filepath.ToSlash(rel)
+
+		if deleted || (primaryFile != "" && filePath != primaryFile) {
+			if _, err := wt.Remove(rel); err != nil {
+				tracked, trackErr := m.isIndexTracked(repo, rel)
+				if trackErr != nil {
+					return nil, nil, false, trackErr
+				}
+				if !tracked {
+					continue
+				}
+				return nil, nil, false, err
+			}
+		} else {
+			if _, err := wt.Add(rel); err != nil {
+				return nil, nil, false, err
+			}
+		}
+
+		relChanged, err := m.hasStagedChanges(wt, rel)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		if relChanged {
+			changed = true
 		}
 	}
 
-	changed, err := m.hasStagedChanges(wt, rel)
+	return repo, wt, changed, nil
+}
+
+func (m *GitResourceRepositoryManager) commitMetadataChange(path, filePath, action string, deleted bool) error {
+	repo, wt, changed, err := m.stageMetadataChange(filePath, deleted)
 	if err != nil {
 		return err
 	}
 	if !changed {
 		return nil
 	}
+	if m.inBatch() {
+		m.markBatchDirty()
+		return nil
+	}
 
 	message := fmt.Sprintf("%s metadata %s", strings.TrimSpace(action), path)
 	signature := m.commitSignature(repo)
 	_, err = wt.Commit(message, &git.CommitOptions{
+		Author:    &signature,
+		Committer: &signature,
+	})
+	if err != nil {
+		return err
+	}
+	return m.autoSyncIfEnabled()
+}
+
+func (m *GitResourceRepositoryManager) stageMetadataChange(filePath string, deleted bool) (*git.Repository, *git.Worktree, bool, error) {
+	repo, repoRoot, err := m.openRepo()
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	rel, err := filepath.Rel(repoRoot, filePath)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || strings.HasPrefix(rel, "../") {
+		return nil, nil, false, nil
+	}
+	rel = filepath.ToSlash(rel)
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	if deleted {
+		if _, err := wt.Remove(rel); err != nil {
+			tracked, trackErr := m.isIndexTracked(repo, rel)
+			if trackErr != nil {
+				return nil, nil, false, trackErr
+			}
+			if !tracked {
+				return nil, nil, false, nil
+			}
+			return nil, nil, false, err
+		}
+	} else {
+		if _, err := wt.Add(rel); err != nil {
+			return nil, nil, false, err
+		}
+	}
+
+	changed, err := m.hasStagedChanges(wt, rel)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return repo, wt, changed, nil
+}
+
+func (m *GitResourceRepositoryManager) commitBatchChanges() error {
+	repo, _, err := m.openRepo()
+	if err != nil {
+		return err
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+	changed, err := hasAnyStagedChanges(wt)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	signature := m.commitSignature(repo)
+	_, err = wt.Commit("Batch update resources and metadata", &git.CommitOptions{
 		Author:    &signature,
 		Committer: &signature,
 	})

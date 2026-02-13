@@ -13,7 +13,7 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func runInteractiveContextSetup(manager *ctx.DefaultContextManager, prompt interactivePrompter, initialName string, force bool) error {
+func runInteractiveContextSetup(manager configManager, prompt interactivePrompter, initialName string, force bool) error {
 	name := strings.TrimSpace(initialName)
 	var err error
 	if name == "" {

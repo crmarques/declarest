@@ -742,7 +742,7 @@ func (m *HTTPResourceServerManager) LoadOpenAPISpec(source string) ([]byte, erro
 		return nil, errors.New("openapi source is required")
 	}
 
-	if isHTTPURL(trimmed) {
+	if IsHTTPURL(trimmed) {
 		if m.client == nil {
 			if err := m.Init(); err != nil {
 				return nil, err
@@ -769,10 +769,6 @@ func (m *HTTPResourceServerManager) fetchSpecURL(fullURL string) ([]byte, error)
 		return nil, err
 	}
 	return resp.Body, nil
-}
-
-func isHTTPURL(raw string) bool {
-	return strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://")
 }
 
 type oauthToken struct {

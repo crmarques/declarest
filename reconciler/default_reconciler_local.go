@@ -39,70 +39,11 @@ func (r *DefaultReconciler) DeleteLocalResource(path string) error {
 }
 
 func (r *DefaultReconciler) SaveLocalResource(path string, data resource.Resource) error {
-	if r == nil || r.ResourceRepositoryManager == nil {
-		return errors.New("resource repository manager is not configured")
-	}
-	if err := r.validateLogicalPath(path); err != nil {
-		return err
-	}
-	record, err := r.recordFor(path)
-	if err != nil {
-		return err
-	}
-	payload := record.ReadPayload()
-	processed, err := record.ApplyPayload(data, payload)
-	if err != nil {
-		return err
-	}
-	targetPath := record.AliasPath(processed)
-	if err := r.validateLogicalPath(targetPath); err != nil {
-		return err
-	}
-	return r.ResourceRepositoryManager.ApplyResource(targetPath, processed)
+	return r.SaveLocalResourceWithSecrets(path, data, false)
 }
 
 func (r *DefaultReconciler) SaveLocalCollectionItems(path string, items []resource.Resource) error {
-	if r == nil || r.ResourceRepositoryManager == nil {
-		return errors.New("resource repository manager is not configured")
-	}
-	if err := r.validateLogicalPath(path); err != nil {
-		return err
-	}
-	record, err := r.recordFor(path)
-	if err != nil {
-		return err
-	}
-
-	basePath := resource.NormalizePath(path)
-	basePath = strings.TrimRight(basePath, "/")
-
-	for idx, item := range items {
-		alias := resource.LastSegment(record.AliasPath(item))
-		if alias == "" {
-			alias = resource.LastSegment(record.RemoteResourcePath(item))
-		}
-		if alias == "" {
-			alias = fmt.Sprintf("%d", idx)
-		}
-		targetPath := resource.NormalizePath(basePath + "/" + alias)
-		if err := r.validateLogicalPath(targetPath); err != nil {
-			return err
-		}
-
-		targetRecord, err := r.recordFor(targetPath)
-		if err != nil {
-			return err
-		}
-		payload := targetRecord.ReadPayload()
-		processed, err := targetRecord.ApplyPayload(item, payload)
-		if err != nil {
-			return err
-		}
-		if err := r.ResourceRepositoryManager.ApplyResource(targetPath, processed); err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.SaveLocalCollectionItemsWithSecrets(path, items, false)
 }
 
 func (r *DefaultReconciler) UpdateLocalResourcesForMetadata(path string) ([]LocalResourceUpdateResult, error) {
@@ -131,21 +72,26 @@ func (r *DefaultReconciler) UpdateLocalResourcesForMetadata(path string) ([]Loca
 	}
 
 	var results []LocalResourceUpdateResult
-	for _, target := range targets {
-		res, err := r.GetLocalResource(target)
-		if err != nil {
-			return nil, fmt.Errorf("update resource %s: %w", target, err)
-		}
+	if err := r.runRepositoryBatch(func() error {
+		for _, target := range targets {
+			res, err := r.GetLocalResource(target)
+			if err != nil {
+				return fmt.Errorf("update resource %s: %w", target, err)
+			}
 
-		updatedPath, moved, err := r.updateLocalResourceForMetadata(target, res)
-		if err != nil {
-			return nil, fmt.Errorf("update resource %s: %w", target, err)
+			updatedPath, moved, err := r.updateLocalResourceForMetadata(target, res)
+			if err != nil {
+				return fmt.Errorf("update resource %s: %w", target, err)
+			}
+			results = append(results, LocalResourceUpdateResult{
+				OriginalPath: target,
+				UpdatedPath:  updatedPath,
+				Moved:        moved,
+			})
 		}
-		results = append(results, LocalResourceUpdateResult{
-			OriginalPath: target,
-			UpdatedPath:  updatedPath,
-			Moved:        moved,
-		})
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return results, nil

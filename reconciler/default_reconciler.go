@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
@@ -19,6 +20,9 @@ type DefaultReconciler struct {
 	SecretsManager            secrets.SecretsManager
 	SkipRepositorySync        bool
 	RepoSyncError             error
+	remoteOpMu                sync.Mutex
+	remoteOpDepth             int
+	remoteCollectionCache     map[string][]resource.Resource
 }
 
 func (r *DefaultReconciler) Init() error {
@@ -32,9 +36,7 @@ func (r *DefaultReconciler) Init() error {
 		}
 		r.RepoSyncError = nil
 		if !r.SkipRepositorySync {
-			if syncer, ok := r.ResourceRepositoryManager.(interface {
-				SyncLocalFromRemoteIfConfigured() error
-			}); ok {
+			if syncer, ok := r.ResourceRepositoryManager.(repository.RepositorySyncer); ok {
 				if err := syncer.SyncLocalFromRemoteIfConfigured(); err != nil {
 					var syncErr *repository.RepoSyncError
 					if errors.As(err, &syncErr) {

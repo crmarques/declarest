@@ -15,9 +15,7 @@ func (r *DefaultReconciler) InitRepositoryLocal() error {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return errors.New("resource repository manager is not configured")
 	}
-	if initializer, ok := r.ResourceRepositoryManager.(interface {
-		InitLocalRepository() error
-	}); ok {
+	if initializer, ok := r.ResourceRepositoryManager.(repository.LocalRepositoryInitializer); ok {
 		return initializer.InitLocalRepository()
 	}
 	return r.ResourceRepositoryManager.Init()
@@ -27,9 +25,7 @@ func (r *DefaultReconciler) InitRepositoryRemoteIfEmpty() (bool, error) {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return false, errors.New("resource repository manager is not configured")
 	}
-	if initializer, ok := r.ResourceRepositoryManager.(interface {
-		InitRemoteIfEmpty() (bool, error)
-	}); ok {
+	if initializer, ok := r.ResourceRepositoryManager.(repository.RemoteRepositoryInitializer); ok {
 		return initializer.InitRemoteIfEmpty()
 	}
 	return false, nil
@@ -96,6 +92,19 @@ func (r *DefaultReconciler) RepositoryPathsInCollection(path string) ([]string, 
 		}
 	}
 	return results, nil
+}
+
+func (r *DefaultReconciler) runRepositoryBatch(fn func() error) error {
+	if fn == nil {
+		return errors.New("batch function is required")
+	}
+	if r == nil || r.ResourceRepositoryManager == nil {
+		return errors.New("resource repository manager is not configured")
+	}
+	if batcher, ok := r.ResourceRepositoryManager.(repository.ResourceRepositoryBatcher); ok {
+		return batcher.RunBatch(fn)
+	}
+	return fn()
 }
 
 func (r *DefaultReconciler) ResourceMetadata(path string) (resource.ResourceMetadata, error) {
@@ -203,50 +212,49 @@ func (r *DefaultReconciler) SaveLocalCollectionItemsWithSecrets(path string, ite
 		record.Path = path
 	}
 
-	basePath := resource.NormalizePath(path)
-	basePath = strings.TrimRight(basePath, "/")
+	basePath := strings.TrimRight(resource.NormalizePath(path), "/")
+	return r.runRepositoryBatch(func() error {
+		for idx, item := range items {
+			aliasPath := record.AliasPath(item)
+			alias := resource.LastSegment(aliasPath)
+			if alias == "" || resource.NormalizePath(aliasPath) == resource.NormalizePath(record.Path) {
+				alias = resource.LastSegment(record.RemoteResourcePath(item))
+			}
+			if alias == "" {
+				alias = fmt.Sprintf("%d", idx)
+			}
 
-	for idx, item := range items {
-		aliasPath := record.AliasPath(item)
-		alias := resource.LastSegment(aliasPath)
-		if alias == "" || resource.NormalizePath(aliasPath) == resource.NormalizePath(record.Path) {
-			alias = resource.LastSegment(record.RemoteResourcePath(item))
-		}
-		if alias == "" {
-			alias = fmt.Sprintf("%d", idx)
-		}
+			targetPath := resource.NormalizePath(basePath + "/" + alias)
+			if err := r.validateLogicalPath(targetPath); err != nil {
+				return err
+			}
 
-		targetPath := resource.NormalizePath(basePath + "/" + alias)
-		if err := r.validateLogicalPath(targetPath); err != nil {
-			return err
-		}
-
-		targetRecord, err := r.ResourceRecordProvider.GetResourceRecord(targetPath)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(targetRecord.Path) == "" {
-			targetRecord.Path = targetPath
-		}
-		payload := targetRecord.ReadPayload()
-		processed, err := targetRecord.ApplyPayload(item, payload)
-		if err != nil {
-			return err
-		}
-
-		if storeSecrets {
-			processed, err = r.MaskResourceSecrets(targetPath, processed, true)
+			targetRecord, err := r.ResourceRecordProvider.GetResourceRecord(targetPath)
 			if err != nil {
 				return err
 			}
-		}
+			if strings.TrimSpace(targetRecord.Path) == "" {
+				targetRecord.Path = targetPath
+			}
+			payload := targetRecord.ReadPayload()
+			processed, err := targetRecord.ApplyPayload(item, payload)
+			if err != nil {
+				return err
+			}
 
-		if err := r.ResourceRepositoryManager.ApplyResource(targetPath, processed); err != nil {
-			return err
-		}
-	}
+			if storeSecrets {
+				processed, err = r.MaskResourceSecrets(targetPath, processed, true)
+				if err != nil {
+					return err
+				}
+			}
 
-	return nil
+			if err := r.ResourceRepositoryManager.ApplyResource(targetPath, processed); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 type RemoteResourceEntry struct {
@@ -257,6 +265,8 @@ type RemoteResourceEntry struct {
 }
 
 func (r *DefaultReconciler) ListRemoteResourceEntries(path string) ([]RemoteResourceEntry, error) {
+	end := r.beginRemoteOperation()
+	defer end()
 	if r == nil || r.ResourceServerManager == nil {
 		return nil, errors.New("resource server manager is not configured")
 	}
@@ -479,7 +489,7 @@ func (r *DefaultReconciler) EnsureSecretsFile() error {
 	if r == nil || r.SecretsManager == nil {
 		return secrets.ErrSecretStoreNotConfigured
 	}
-	if initializer, ok := r.SecretsManager.(interface{ EnsureFile() error }); ok {
+	if initializer, ok := r.SecretsManager.(secrets.FileEnsurer); ok {
 		return initializer.EnsureFile()
 	}
 	return nil

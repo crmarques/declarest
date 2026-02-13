@@ -7,10 +7,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-type AppReconciler interface {
-	Reconciler
-	Close() error
-
+type RepositoryReconciler interface {
 	InitRepositoryLocal() error
 	InitRepositoryRemoteIfEmpty() (bool, error)
 	RefreshRepository() error
@@ -23,7 +20,9 @@ type AppReconciler interface {
 	CheckRemoteSync() (bool, bool, error)
 	RepositoryResourcePathsWithErrors() ([]string, error)
 	RepositoryPathsInCollection(path string) ([]string, error)
+}
 
+type MetadataReconciler interface {
 	ResourceRecord(path string) (resource.ResourceRecord, error)
 	MergedMetadata(path string) (resource.ResourceMetadata, error)
 	ResourceMetadata(path string) (resource.ResourceMetadata, error)
@@ -36,7 +35,9 @@ type AppReconciler interface {
 	ListRemoteResourceEntries(path string) ([]RemoteResourceEntry, error)
 	ListRemoteResourcePaths(path string) ([]string, error)
 	ListRemoteResourcePathsFromLocal() ([]string, error)
+}
 
+type SecretsReconciler interface {
 	InitSecrets() error
 	EnsureSecretsFile() error
 	GetSecret(resourcePath string, key string) (string, error)
@@ -50,12 +51,25 @@ type AppReconciler interface {
 	SaveLocalResourceWithSecrets(path string, res resource.Resource, storeSecrets bool) error
 	SaveLocalCollectionItemsWithSecrets(path string, items []resource.Resource, storeSecrets bool) error
 	SecretsConfigured() bool
+}
 
+type ServerReconciler interface {
 	ManagedServerConfigured() bool
 	CheckManagedServerAccess() error
+	ExecuteHTTPRequest(spec *managedserver.HTTPRequestSpec, payload []byte) (*managedserver.HTTPResponse, error)
+}
 
+type DiagnosticsReconciler interface {
 	RepositoryDebugInfo() (repository.RepositoryDebugInfo, bool)
 	ServerDebugInfo() (managedserver.ServerDebugInfo, bool)
+}
 
-	ExecuteHTTPRequest(spec *managedserver.HTTPRequestSpec, payload []byte) (*managedserver.HTTPResponse, error)
+type AppReconciler interface {
+	Reconciler
+	RepositoryReconciler
+	MetadataReconciler
+	SecretsReconciler
+	ServerReconciler
+	DiagnosticsReconciler
+	Close() error
 }

@@ -9,6 +9,8 @@ fi
 
 RUNDECK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$RUNDECK_DIR/scripts"
+TESTS_ROOT="$(cd "$RUNDECK_DIR/../.." && pwd)"
+source "$TESTS_ROOT/scripts/components.sh"
 
 usage() {
     cat <<USAGE
@@ -99,7 +101,29 @@ done
 source "$SCRIPTS_DIR/lib/env.sh"
 source "$SCRIPTS_DIR/lib/logging.sh"
 
-REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/file"
+managed_server="${DECLAREST_MANAGED_SERVER:-rundeck}"
+managed_server="${managed_server,,}"
+repo_provider="${DECLAREST_REPO_PROVIDER:-}"
+secret_provider="${DECLAREST_SECRET_PROVIDER:-}"
+
+load_managed_server_component "$managed_server"
+if [[ -z "$repo_provider" ]]; then
+    repo_provider="$(managed_server_default_repo_provider)"
+fi
+if [[ -z "$secret_provider" ]]; then
+    secret_provider="$(managed_server_default_secret_provider)"
+fi
+repo_provider="${repo_provider,,}"
+secret_provider="${secret_provider,,}"
+
+load_repo_provider_component "$repo_provider"
+load_secret_provider_component "$secret_provider"
+managed_server_validate "$repo_provider" "$secret_provider"
+
+repo_provider_apply_env
+secret_provider_apply_env
+
+REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/common"
 
 require_cmd "$CONTAINER_RUNTIME"
 require_cmd go
@@ -164,6 +188,11 @@ trap 'cleanup "$?"' EXIT INT TERM
 TOTAL_STEPS=9
 current_step=0
 
+skip_testing_context="${DECLAREST_SKIP_TESTING_CONTEXT:-0}"
+skip_testing_metadata="${DECLAREST_SKIP_TESTING_METADATA:-0}"
+skip_testing_openapi="${DECLAREST_SKIP_TESTING_OPENAPI:-0}"
+skip_testing_declarest="${DECLAREST_SKIP_TESTING_DECLAREST:-0}"
+
 should_run_context=$((skip_testing_context == 0 ? 1 : 0))
 should_run_metadata=$((skip_testing_metadata == 0 ? 1 : 0))
 should_run_openapi=$((skip_testing_openapi == 0 ? 1 : 0))
@@ -220,12 +249,18 @@ run_preparing_workspace() {
     run_step "Building DeclaREST CLI" 1 "$SCRIPTS_DIR/declarest/build.sh"
 }
 
-run_preparing_services() {
-    run_step "Starting Rundeck" 1 "$SCRIPTS_DIR/stack/start.sh"
-    run_step "Preparing Rundeck services" 1 "$SCRIPTS_DIR/stack/prepare-services.sh"
+prepare_services() {
+    "$SCRIPTS_DIR/stack/prepare-services.sh"
+    repo_provider_prepare_services
+    secret_provider_prepare_services
     if [[ -f "$DECLAREST_RUNDECK_ENV_FILE" ]]; then
         source "$DECLAREST_RUNDECK_ENV_FILE"
     fi
+}
+
+run_preparing_services() {
+    run_step "Starting Rundeck" 1 "$SCRIPTS_DIR/stack/start.sh"
+    run_step "Preparing Rundeck services" 1 prepare_services
 }
 
 run_configuring_services() {

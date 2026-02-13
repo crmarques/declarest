@@ -40,6 +40,36 @@ func loadDefaultReconcilerSkippingRepoSync() (reconciler.AppReconciler, func(), 
 	return loadDefaultReconcilerWithOptions(loadReconcilerOptions{skipRepoSync: true})
 }
 
+func loadCompletionReconciler(requireRemote bool) (reconciler.AppReconciler, func(), error) {
+	manager := &ctx.DefaultContextManager{}
+	context, err := ctx.LoadContextWithEnv(manager)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	actual := context.Reconciler
+	if actual == nil {
+		return nil, nil, errors.New("reconciler is not configured")
+	}
+	actual.SetSkipRepositorySync(true)
+	captureDebugContext(actual)
+
+	if requireRemote {
+		if err := context.Init(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	var once sync.Once
+	cleanup := func() {
+		once.Do(func() {
+			_ = actual.Close()
+		})
+	}
+
+	return actual, cleanup, nil
+}
+
 func loadDefaultReconcilerForSecrets() (reconciler.AppReconciler, func(), error) {
 	manager := &ctx.DefaultContextManager{}
 	context, err := ctx.LoadContextWithEnv(manager)

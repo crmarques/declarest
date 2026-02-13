@@ -11,7 +11,6 @@ KEYCLOAK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$KEYCLOAK_DIR/scripts"
 
 source "$SCRIPTS_DIR/lib/args.sh"
-source "$SCRIPTS_DIR/lib/github-auth.sh"
 
 managed_server="${DECLAREST_MANAGED_SERVER:-keycloak}"
 repo_provider="${DECLAREST_REPO_PROVIDER:-git}"
@@ -24,14 +23,24 @@ skip_testing_openapi="${DECLAREST_SKIP_TESTING_OPENAPI:-0}"
 skip_testing_declarest="${DECLAREST_SKIP_TESTING_DECLAREST:-0}"
 skip_testing_variation="${DECLAREST_SKIP_TESTING_VARIATION:-0}"
 parse_common_flags
-resolve_repo_provider
-apply_repo_provider_env
+if [[ "$e2e_profile" == "reduced" ]]; then
+    skip_testing_metadata=1
+    skip_testing_openapi=1
+    skip_testing_variation=1
+fi
+
+load_repo_provider_component "$repo_provider"
+load_secret_provider_component "$secret_provider"
+repo_provider_apply_env
+secret_provider_apply_env
+
+repo_type="${REPO_PROVIDER_TYPE}"
 
 should_run_context=$((skip_testing_context == 0 ? 1 : 0))
 should_run_metadata=$((skip_testing_metadata == 0 ? 1 : 0))
 should_run_openapi=$((skip_testing_openapi == 0 ? 1 : 0))
 should_run_declarest=$((skip_testing_declarest == 0 ? 1 : 0))
-if [[ "$skip_testing_variation" -eq 0 && "$should_run_declarest" -eq 1 && "$e2e_profile" == "complete" ]]; then
+if [[ "$skip_testing_variation" -eq 0 && "$should_run_declarest" -eq 1 ]]; then
     should_run_variation=1
 else
     should_run_variation=0
@@ -42,7 +51,6 @@ source "$SCRIPTS_DIR/lib/logging.sh"
 source "$SCRIPTS_DIR/lib/cli.sh"
 
 REPO_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider/common"
-PROVIDER_SCRIPTS_DIR="$DECLAREST_TESTS_ROOT/repo-provider"
 
 resolve_container_runtime() {
     if [[ "${CONTAINER_RUNTIME:-}" == "podman" ]]; then
@@ -58,10 +66,6 @@ resolve_container_runtime() {
 }
 
 resolve_container_runtime
-
-if [[ "$repo_type" != "git-remote" ]]; then
-    clear_remote_repo_env
-fi
 
 if [[ -n "${COMPOSE_PROJECT_NAME:-}" && ( -z "${KEYCLOAK_CONTAINER_NAME:-}" || "$KEYCLOAK_CONTAINER_NAME" == "keycloak-declarest-test" ) ]]; then
     export KEYCLOAK_CONTAINER_NAME="${COMPOSE_PROJECT_NAME}_keycloak-declarest-test_1"
@@ -132,132 +136,18 @@ cleanup() {
 
 trap 'cleanup "$?"' EXIT INT TERM
 
-resolve_known_hosts() {
-    local candidate="$1"
-    if [[ -n "$candidate" ]]; then
-        printf "%s" "$candidate"
-        return 0
-    fi
-    local default_known_hosts="$HOME/.ssh/known_hosts"
-    if [[ -f "$default_known_hosts" ]]; then
-        printf "%s" "$default_known_hosts"
-        return 0
-    fi
-    printf "%s" ""
-}
-
 configure_repo_auth() {
     local auth="$1"
-    local resolved_hosts
-
-    export DECLAREST_REPO_AUTH_TYPE=""
-    export DECLAREST_REPO_AUTH=""
-    export DECLAREST_REPO_SSH_USER=""
-    export DECLAREST_REPO_SSH_KEY_FILE=""
-    export DECLAREST_REPO_SSH_PASSPHRASE=""
-    export DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE=""
-    export DECLAREST_REPO_SSH_INSECURE_IGNORE_HOST_KEY=""
-
     if [[ "$repo_type" != "git-remote" ]]; then
         export DECLAREST_REPO_REMOTE_URL=""
         return 0
     fi
-
-    export DECLAREST_REPO_PROVIDER="$repo_provider"
-    auth="${auth,,}"
-
-    case "$auth" in
-        pat)
-            export DECLAREST_REPO_AUTH_TYPE="pat"
-            case "$repo_provider" in
-                gitlab)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITLAB_PAT_URL"
-                    export DECLAREST_REPO_AUTH="$DECLAREST_GITLAB_PAT"
-                    ;;
-                gitea)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITEA_PAT_URL"
-                    export DECLAREST_REPO_AUTH="$DECLAREST_GITEA_PAT"
-                    ;;
-                github)
-                    export DECLAREST_REPO_REMOTE_URL="$github_https_url"
-                    export DECLAREST_REPO_AUTH="$github_pat"
-                    ;;
-            esac
-            ;;
-        basic)
-            export DECLAREST_REPO_AUTH_TYPE="basic"
-            case "$repo_provider" in
-                gitlab)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITLAB_BASIC_URL"
-                    export DECLAREST_REPO_AUTH="${DECLAREST_GITLAB_USER}:${DECLAREST_GITLAB_PASSWORD}"
-                    ;;
-                gitea)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITEA_BASIC_URL"
-                    export DECLAREST_REPO_AUTH="${DECLAREST_GITEA_USER}:${DECLAREST_GITEA_PASSWORD}"
-                    ;;
-                github)
-                    die "GitHub does not support basic auth in this harness"
-                    ;;
-            esac
-            ;;
-        ssh)
-            export DECLAREST_REPO_AUTH_TYPE="ssh"
-            case "$repo_provider" in
-                gitlab)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITLAB_SSH_URL"
-                    export DECLAREST_REPO_SSH_USER="git"
-                    export DECLAREST_REPO_SSH_KEY_FILE="$DECLAREST_GITLAB_SSH_KEY_FILE"
-                    export DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE="$DECLAREST_GITLAB_KNOWN_HOSTS_FILE"
-                    ;;
-                gitea)
-                    export DECLAREST_REPO_REMOTE_URL="$DECLAREST_GITEA_SSH_URL"
-                    export DECLAREST_REPO_SSH_USER="git"
-                    export DECLAREST_REPO_SSH_KEY_FILE="$DECLAREST_GITEA_SSH_KEY_FILE"
-                    export DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE="$DECLAREST_GITEA_KNOWN_HOSTS_FILE"
-                    ;;
-                github)
-                    export DECLAREST_REPO_REMOTE_URL="$github_ssh_url"
-                    export DECLAREST_REPO_SSH_KEY_FILE="$github_ssh_key_file"
-                    if [[ -n "$github_ssh_insecure" ]]; then
-                        export DECLAREST_REPO_SSH_INSECURE_IGNORE_HOST_KEY="$github_ssh_insecure"
-                    fi
-                    resolved_hosts="$(resolve_known_hosts "$github_ssh_known_hosts")"
-                    if [[ -n "$resolved_hosts" ]]; then
-                        export DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE="$resolved_hosts"
-                    fi
-                    if [[ -z "$DECLAREST_REPO_SSH_KNOWN_HOSTS_FILE" && -z "$DECLAREST_REPO_SSH_INSECURE_IGNORE_HOST_KEY" ]]; then
-                        die "GitHub SSH host verification requires DECLAREST_GITHUB_SSH_KNOWN_HOSTS_FILE or DECLAREST_GITHUB_SSH_INSECURE_IGNORE_HOST_KEY=1"
-                    fi
-                    ;;
-            esac
-            ;;
-        *)
-            die "Unsupported repo auth type: ${auth}"
-            ;;
-    esac
-
-    if [[ -z "${DECLAREST_REPO_REMOTE_URL:-}" ]]; then
-        die "Remote repository URL is not configured"
-    fi
-    if [[ "$DECLAREST_REPO_AUTH_TYPE" == "pat" || "$DECLAREST_REPO_AUTH_TYPE" == "basic" ]]; then
-        if [[ -z "${DECLAREST_REPO_AUTH:-}" ]]; then
-            die "Missing repository credentials for auth type ${DECLAREST_REPO_AUTH_TYPE}"
-        fi
-    fi
-    if [[ "$DECLAREST_REPO_AUTH_TYPE" == "ssh" ]]; then
-        if [[ -z "${DECLAREST_REPO_SSH_KEY_FILE:-}" || ! -f "$DECLAREST_REPO_SSH_KEY_FILE" ]]; then
-            die "SSH key file not found for repo auth"
-        fi
-    fi
+    repo_provider_configure_auth "$auth"
 }
 
 configure_secret_auth() {
     local auth="$1"
-    if [[ "$secret_provider" == "vault" ]]; then
-        export DECLAREST_VAULT_AUTH_TYPE="$auth"
-    else
-        export DECLAREST_VAULT_AUTH_TYPE=""
-    fi
+    secret_provider_configure_auth "$auth"
 }
 
 resolve_keycloak_port() {
@@ -333,31 +223,11 @@ set_context() {
 
 server_auth_primary="oauth2"
 server_auth_secondary=(bearer)
-secret_auth_primary=""
-secret_auth_secondary=()
-case "$secret_provider" in
-    vault)
-        secret_auth_primary="token"
-        secret_auth_secondary=(password approle)
-        ;;
-    file)
-        secret_auth_primary="file"
-        ;;
-    none)
-        secret_auth_primary="none"
-        ;;
-esac
+secret_auth_primary="$SECRET_PROVIDER_PRIMARY_AUTH"
+secret_auth_secondary=("${SECRET_PROVIDER_SECONDARY_AUTH[@]}")
 
-repo_auth_primary=""
-repo_auth_secondary=()
-if [[ "$repo_type" == "git-remote" ]]; then
-    repo_auth_primary="pat"
-    if [[ "$repo_provider" == "github" ]]; then
-        repo_auth_secondary=(ssh)
-    else
-        repo_auth_secondary=(basic ssh)
-    fi
-fi
+repo_auth_primary="$REPO_PROVIDER_PRIMARY_AUTH"
+repo_auth_secondary=("${REPO_PROVIDER_SECONDARY_AUTH[@]}")
 
 calculate_variant_count() {
     local array_name="$1"
@@ -494,39 +364,15 @@ run_preparing_workspace() {
     current_group=""
 }
 
+prepare_services() {
+    "$SCRIPTS_DIR/stack/prepare-services-e2e.sh"
+    repo_provider_prepare_services
+}
+
 run_preparing_services() {
     current_group="Preparing services"
     run_step "Starting stack" 1 "$SCRIPTS_DIR/stack/start-compose.sh"
-
-    local provider_label=""
-    local provider_env=""
-    local provider_setup=""
-    if [[ "$repo_type" == "git-remote" ]]; then
-        case "$repo_provider" in
-            gitlab)
-                provider_label="GitLab"
-                provider_env="$DECLAREST_WORK_DIR/gitlab.env"
-                provider_setup="$PROVIDER_SCRIPTS_DIR/gitlab/setup.sh"
-                ;;
-            gitea)
-                provider_label="Gitea"
-                provider_env="$DECLAREST_WORK_DIR/gitea.env"
-                provider_setup="$PROVIDER_SCRIPTS_DIR/gitea/setup.sh"
-                ;;
-            github)
-                provider_label="GitHub"
-                ;;
-        esac
-    fi
-
-    run_step "Preparing services" 1 "$SCRIPTS_DIR/stack/prepare-services-e2e.sh" "$provider_setup"
-
-    if [[ -n "$provider_setup" ]]; then
-        if [[ ! -f "$provider_env" ]]; then
-            die "${provider_label} env file missing: $provider_env"
-        fi
-        source "$provider_env"
-    fi
+    run_step "Preparing services" 1 prepare_services
     current_group=""
 }
 
@@ -615,6 +461,10 @@ run_testing_secret_check_metadata() {
 
 run_testing_variation_flows() {
     current_group="Testing variation flows"
+    if [[ "$should_run_variation" -eq 0 ]]; then
+        current_group=""
+        return 0
+    fi
     set_context "primary"
 
     configure_server_auth "$server_auth_primary"
@@ -701,7 +551,6 @@ run_finishing_execution() {
 current_step=0
 
 managed_server_bootstrap() {
-    ensure_github_pat_ssh_credentials
     log_line "Keycloak E2E run started"
     log_line "Container runtime: $CONTAINER_RUNTIME"
     log_line "E2E profile: $e2e_profile"

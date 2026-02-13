@@ -3,7 +3,7 @@ package reconciler
 import (
 	"errors"
 
-	gittransport "github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/crmarques/declarest/repository"
 )
 
 func (r *DefaultReconciler) CheckLocalRepositoryAccess() error {
@@ -17,11 +17,9 @@ func (r *DefaultReconciler) CheckRemoteAccess() (bool, bool, error) {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return false, false, errors.New("resource repository manager is not configured")
 	}
-	if checker, ok := r.ResourceRepositoryManager.(interface {
-		CheckRemoteAccess() (bool, error)
-	}); ok {
+	if checker, ok := r.ResourceRepositoryManager.(repository.RemoteAccessChecker); ok {
 		configured, err := checker.CheckRemoteAccess()
-		if err != nil && errors.Is(err, gittransport.ErrEmptyRemoteRepository) {
+		if err != nil && errors.Is(err, repository.ErrRemoteRepositoryEmpty) {
 			return configured, true, nil
 		}
 		return configured, false, err
@@ -33,9 +31,7 @@ func (r *DefaultReconciler) CheckLocalRepositoryInitialized() (bool, bool, error
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return false, false, errors.New("resource repository manager is not configured")
 	}
-	if checker, ok := r.ResourceRepositoryManager.(interface {
-		IsLocalRepositoryInitialized() (bool, error)
-	}); ok {
+	if checker, ok := r.ResourceRepositoryManager.(repository.LocalRepositoryStateChecker); ok {
 		initialized, err := checker.IsLocalRepositoryInitialized()
 		return true, initialized, err
 	}
@@ -46,9 +42,7 @@ func (r *DefaultReconciler) CheckRemoteSync() (bool, bool, error) {
 	if r == nil || r.ResourceRepositoryManager == nil {
 		return false, false, errors.New("resource repository manager is not configured")
 	}
-	if checker, ok := r.ResourceRepositoryManager.(interface {
-		CheckRemoteSync() (bool, bool, error)
-	}); ok {
+	if checker, ok := r.ResourceRepositoryManager.(repository.RemoteSyncChecker); ok {
 		return checker.CheckRemoteSync()
 	}
 	return false, false, nil

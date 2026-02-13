@@ -30,6 +30,15 @@ secrets_enabled=1
 if [[ "$secret_store_type" == "none" ]]; then
     secrets_enabled=0
 fi
+e2e_profile="${DECLAREST_E2E_PROFILE:-complete}"
+e2e_profile="${e2e_profile,,}"
+run_extended=1
+run_roundtrip=1
+if [[ "$e2e_profile" != "complete" ]]; then
+    run_extended=0
+    run_roundtrip=0
+fi
+reduced_path_limit=2
 
 require_jq() {
     if ! command -v jq >/dev/null 2>&1; then
@@ -61,6 +70,38 @@ resource_file_for_path() {
         printf "%s/resource.json" "$DECLAREST_REPO_DIR"
     else
         printf "%s/%s/resource.json" "$DECLAREST_REPO_DIR" "$trimmed"
+    fi
+}
+
+select_representative_paths() {
+    local -n in_paths="$1"
+    local -n out_paths="$2"
+    local -a preferred=("$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH" "/admin/realms/publico")
+    local path candidate
+    out_paths=()
+    for candidate in "${preferred[@]}"; do
+        for path in "${in_paths[@]}"; do
+            if [[ "$path" == "$candidate" ]]; then
+                out_paths+=("$path")
+                break
+            fi
+        done
+    done
+    if [[ ${#out_paths[@]} -eq 0 ]]; then
+        out_paths=("${in_paths[@]:0:$reduced_path_limit}")
+        return 0
+    fi
+    local -a unique=()
+    local -A seen=()
+    for path in "${out_paths[@]}"; do
+        if [[ -n "$path" && -z "${seen[$path]+x}" ]]; then
+            unique+=("$path")
+            seen["$path"]=1
+        fi
+    done
+    out_paths=("${unique[@]}")
+    if [[ "$reduced_path_limit" -gt 0 && ${#out_paths[@]} -gt "$reduced_path_limit" ]]; then
+        out_paths=("${out_paths[@]:0:$reduced_path_limit}")
     fi
 }
 
@@ -309,34 +350,41 @@ diff_all() {
 }
 
 log_line "Declarest workflow starting (context: $CONTEXT)"
+resource_add_enabled="$run_extended"
 
 if [[ $secrets_enabled -eq 1 ]]; then
     phase "Seeding secrets via CLI"
     seed_secrets_via_cli
 
-    phase "Secret export/import checks"
-    test_secret_export_import
+    if [[ $run_extended -eq 1 ]]; then
+        phase "Secret export/import checks"
+        test_secret_export_import
+    fi
 else
     log_line "Secret store disabled; skipping secret seed"
 fi
 
-phase "Testing resource add command"
-test_resource_add_command
+if [[ $run_extended -eq 1 ]]; then
+    phase "Testing resource add command"
+    test_resource_add_command
+fi
 
 phase "Discovering repository resources"
 local_output=$(capture_cli "list repository resources" resource list --repo)
 split_lines_nonempty local_paths "$local_output"
 found_resource_add=0
-for entry in "${local_paths[@]}"; do
-    if [[ "$entry" == "$RESOURCE_ADD_TARGET" ]]; then
-        found_resource_add=1
-        break
+if [[ "$resource_add_enabled" -eq 1 ]]; then
+    for entry in "${local_paths[@]}"; do
+        if [[ "$entry" == "$RESOURCE_ADD_TARGET" ]]; then
+            found_resource_add=1
+            break
+        fi
+    done
+    if [[ $found_resource_add -ne 1 ]]; then
+        log_line "Resource add command failed to add $RESOURCE_ADD_TARGET"
+        echo "Expected repository to contain $RESOURCE_ADD_TARGET after resource add" >&2
+        exit 1
     fi
-done
-if [[ $found_resource_add -ne 1 ]]; then
-    log_line "Resource add command failed to add $RESOURCE_ADD_TARGET"
-    echo "Expected repository to contain $RESOURCE_ADD_TARGET after resource add" >&2
-    exit 1
 fi
 if [[ ${#local_paths[@]} -eq 0 ]]; then
     log_line "No repository resources found; aborting."
@@ -344,7 +392,7 @@ if [[ ${#local_paths[@]} -eq 0 ]]; then
 fi
 
 local_paths_total=${#local_paths[@]}
-if [[ $found_resource_add -eq 1 ]]; then
+if [[ $resource_add_enabled -eq 1 && $found_resource_add -eq 1 ]]; then
     filtered_paths=()
     for entry in "${local_paths[@]}"; do
         if [[ "$entry" == "$RESOURCE_ADD_TARGET" ]]; then
@@ -358,11 +406,27 @@ else
     log_line "Found ${#local_paths[@]} repository resources"
 fi
 
+if [[ "$e2e_profile" == "reduced" ]]; then
+    reduced_paths=()
+    select_representative_paths local_paths reduced_paths
+    if [[ ${#reduced_paths[@]} -gt 0 ]]; then
+        log_line "Reduced profile selected ${#reduced_paths[@]} of ${#local_paths[@]} repository resources"
+        local_paths=("${reduced_paths[@]}")
+    fi
+fi
+
+if [[ ${#local_paths[@]} -eq 0 ]]; then
+    log_line "No repository resources selected; aborting."
+    exit 1
+fi
+
 sort_paths_by_depth local_paths local_paths_parent_first asc
 sort_paths_by_depth local_paths local_paths_child_first desc
 
-phase "Testing path completion fragments"
-test_completion_metadata_fragment
+if [[ $run_extended -eq 1 ]]; then
+    phase "Testing path completion fragments"
+    test_completion_metadata_fragment
+fi
 
 phase "Creating remote resources"
 for local in "${local_paths_parent_first[@]}"; do
@@ -393,171 +457,176 @@ for local in "${local_paths_parent_first[@]}"; do
 done
 log_line "Resources applied in Keycloak"
 
-phase "Deleting remote resources"
-for path in "${local_paths_child_first[@]}"; do
-    if ! run_cli_retry_transient "delete remote $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource delete --path "$path" --remote --yes --repo=false; then
-        log_line "Remote delete failed for $path"
-        exit 1
-    fi
-done
-log_line "Remote resources deleted"
-
-phase "Waiting for Keycloak after deletes"
-wait_for_keycloak || true
-
-phase "Re-creating resources in Keycloak"
-for local in "${local_paths_parent_first[@]}"; do
-    if ! create_with_retry "$local"; then
-        log_line "Recreate failed for $local"
-        exit 1
-    fi
-    refresh_master_if_needed "$local"
-done
-log_line "Remote resources recreated"
-
-phase "Deleting repository resources"
-for local in "${local_paths_child_first[@]}"; do
-    if ! run_cli "delete repository $local" resource delete --path "$local" --repo --remote=false --yes; then
-        log_line "Repository delete failed for $local"
-        exit 1
-    fi
-done
-log_line "Repository resources deleted"
-
-if [[ $found_resource_add -eq 1 ]]; then
-    phase "Cleaning resource add artifact"
-    if ! run_cli "delete added resource" resource delete --path "$RESOURCE_ADD_TARGET" --repo --remote=false --yes; then
-        log_line "Resource add artifact delete failed for $RESOURCE_ADD_TARGET"
-        exit 1
-    fi
-    log_line "Resource add artifact $RESOURCE_ADD_TARGET removed from repository"
-fi
-
-phase "Retrieving resources from Keycloak"
-for path in "${local_paths_parent_first[@]}"; do
-    if ! run_cli_retry_transient "get $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" --no-status resource save --path "$path" --force; then
-        log_line "Get failed for $path"
-        exit 1
-    fi
-done
-log_line "Resources re-downloaded"
-
-phase "Fetching collections"
-collections=(
-    "/admin/realms/publico/user-registry/ldap-test/mappers/"
-)
-for coll in "${collections[@]}"; do
-    if ! run_cli_retry_transient "get collection $coll" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$coll"; then
-        log_line "Collection get failed for $coll"
-        exit 1
-    fi
-done
-log_line "Collections saved"
-
-phase "Testing ad-hoc command"
-test_ad_hoc_command
-
-if [[ $secrets_enabled -eq 1 ]]; then
-    phase "Restoring secrets for diff"
-    for secret_path in "$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH"; do
-        if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$secret_path" --with-secrets --force; then
-            log_line "Secret restore failed for $secret_path"
+if [[ $run_roundtrip -eq 1 ]]; then
+    phase "Deleting remote resources"
+    for path in "${local_paths_child_first[@]}"; do
+        if ! run_cli_retry_transient "delete remote $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource delete --path "$path" --remote --yes --repo=false; then
+            log_line "Remote delete failed for $path"
             exit 1
         fi
     done
-fi
+    log_line "Remote resources deleted"
 
-phase "Final diff of all resources"
-diff_all "final"
-log_line "Resources are synced after final diff"
+    phase "Waiting for Keycloak after deletes"
+    wait_for_keycloak || true
 
-if [[ $secrets_enabled -eq 1 ]]; then
-    phase "Secret management checks"
-    require_jq
+    phase "Re-creating resources in Keycloak"
+    for local in "${local_paths_parent_first[@]}"; do
+        if ! create_with_retry "$local"; then
+            log_line "Recreate failed for $local"
+            exit 1
+        fi
+        refresh_master_if_needed "$local"
+    done
+    log_line "Remote resources recreated"
 
-    client_with_secrets=$(capture_cli "get client secret with secrets" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-    client_secret_value=$(jq -r '.secret // empty' <<<"$client_with_secrets")
-    if [[ -z "$client_secret_value" || "$client_secret_value" == "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: missing client secret"
-        echo "Expected client secret in remote payload" >&2
-        exit 1
+    phase "Deleting repository resources"
+    for local in "${local_paths_child_first[@]}"; do
+        if ! run_cli "delete repository $local" resource delete --path "$local" --repo --remote=false --yes; then
+            log_line "Repository delete failed for $local"
+            exit 1
+        fi
+    done
+    log_line "Repository resources deleted"
+
+    if [[ $found_resource_add -eq 1 ]]; then
+        phase "Cleaning resource add artifact"
+        if ! run_cli "delete added resource" resource delete --path "$RESOURCE_ADD_TARGET" --repo --remote=false --yes; then
+            log_line "Resource add artifact delete failed for $RESOURCE_ADD_TARGET"
+            exit 1
+        fi
+        log_line "Resource add artifact $RESOURCE_ADD_TARGET removed from repository"
     fi
 
-    run_cli "save client secret (no with-secrets)" resource save --path "$SECRET_CLIENT_PATH" --force
-    if [[ "${DECLAREST_SECRET_STORE_TYPE:-file}" == "file" ]]; then
-        if [[ ! -s "$DECLAREST_SECRETS_FILE" ]]; then
+    phase "Retrieving resources from Keycloak"
+    for path in "${local_paths_parent_first[@]}"; do
+        if ! run_cli_retry_transient "get $path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" --no-status resource save --path "$path" --force; then
+            log_line "Get failed for $path"
+            exit 1
+        fi
+    done
+    log_line "Resources re-downloaded"
+
+    phase "Fetching collections"
+    collections=(
+        "/admin/realms/publico/user-registry/ldap-test/mappers/"
+    )
+    for coll in "${collections[@]}"; do
+        if ! run_cli_retry_transient "get collection $coll" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$coll"; then
+            log_line "Collection get failed for $coll"
+            exit 1
+        fi
+    done
+    log_line "Collections saved"
+
+    if [[ $run_extended -eq 1 ]]; then
+        phase "Testing ad-hoc command"
+        test_ad_hoc_command
+    fi
+
+    if [[ $secrets_enabled -eq 1 ]]; then
+        phase "Restoring secrets for diff"
+        for secret_path in "$SECRET_CLIENT_PATH" "$SECRET_LDAP_PATH"; do
+            if ! run_cli_retry_transient "restore secret $secret_path" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource save --path "$secret_path" --with-secrets --force; then
+                log_line "Secret restore failed for $secret_path"
+                exit 1
+            fi
+        done
+    fi
+
+    phase "Final diff of all resources"
+    diff_all "final"
+    log_line "Resources are synced after final diff"
+
+    if [[ $secrets_enabled -eq 1 ]]; then
+        phase "Secret management checks"
+        require_jq
+
+        client_with_secrets=$(capture_cli "get client secret with secrets" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+        client_secret_value=$(jq -r '.secret // empty' <<<"$client_with_secrets")
+        if [[ -z "$client_secret_value" || "$client_secret_value" == "$SECRET_PLACEHOLDER" ]]; then
+            log_line "Secret check failed: missing client secret"
+            echo "Expected client secret in remote payload" >&2
+            exit 1
+        fi
+
+        if [[ "${DECLAREST_SECRET_STORE_TYPE:-file}" == "file" && ! -s "$DECLAREST_SECRETS_FILE" ]]; then
             log_line "Secret check failed: secrets file missing at $DECLAREST_SECRETS_FILE"
             echo "Expected secrets file at $DECLAREST_SECRETS_FILE" >&2
             exit 1
         fi
-    fi
 
-    client_file="$(resource_file_for_path "$SECRET_CLIENT_PATH")"
-    client_local_secret=$(jq -r '.secret // empty' "$client_file")
-    if [[ "$client_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: client secret not masked in repo"
-        echo "Expected placeholder in $client_file" >&2
-        exit 1
-    fi
+        run_cli "save client secret (no with-secrets)" resource save --path "$SECRET_CLIENT_PATH" --force
+        run_cli "save ldap bind credential (no with-secrets)" resource save --path "$SECRET_LDAP_PATH" --force
 
-    run_cli "save ldap bind credential (no with-secrets)" resource save --path "$SECRET_LDAP_PATH" --force
-    ldap_file="$(resource_file_for_path "$SECRET_LDAP_PATH")"
-    ldap_local_secret=$(jq -r '.config.bindCredential[0] // empty' "$ldap_file")
-    if [[ "$ldap_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: bindCredential not masked in repo"
-        echo "Expected placeholder in $ldap_file" >&2
-        exit 1
-    fi
+        if [[ $run_extended -eq 1 ]]; then
+            client_with_secrets_again=$(capture_cli "get client secret after save" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+            client_secret_again=$(jq -r '.secret // empty' <<<"$client_with_secrets_again")
+            if [[ -z "$client_secret_again" || "$client_secret_again" == "$SECRET_PLACEHOLDER" ]]; then
+                log_line "Secret check failed: with-secrets missing client secret"
+                echo "Expected client secret in with-secrets output" >&2
+                exit 1
+            fi
 
-    client_masked_output=$(capture_cli "get client secret masked" --no-status resource get --path "$SECRET_CLIENT_PATH")
-    client_masked_value=$(jq -r '.secret // empty' <<<"$client_masked_output")
-    if [[ "$client_masked_value" != "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: masked get returned unexpected value"
-        echo "Expected placeholder in masked output" >&2
-        exit 1
-    fi
+            set +e
+            save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource save --path "$SECRET_CLIENT_PATH" --with-secrets)
+            save_with_secrets_status=$?
+            set -e
+            if [[ $save_with_secrets_status -eq 0 ]]; then
+                log_line "Secret check failed: save with-secrets unexpectedly succeeded"
+                echo "Expected save with-secrets to fail without --force" >&2
+                exit 1
+            fi
+            if ! grep -q "refusing to save plaintext secrets" <<<"$save_with_secrets_output"; then
+                log_line "Secret check failed: missing refusal message"
+                echo "Expected refusal message when saving with --with-secrets" >&2
+                exit 1
+            fi
 
-    client_with_secrets_again=$(capture_cli "get client secret after save" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-    client_secret_again=$(jq -r '.secret // empty' <<<"$client_with_secrets_again")
-    if [[ -z "$client_secret_again" || "$client_secret_again" == "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: with-secrets missing client secret"
-        echo "Expected client secret in with-secrets output" >&2
-        exit 1
-    fi
+            if ! run_cli_retry_transient "apply client with secrets" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource apply --path "$SECRET_CLIENT_PATH" --sync; then
+                log_line "Apply failed for $SECRET_CLIENT_PATH after secret masking"
+                exit 1
+            fi
 
-    set +e
-    save_with_secrets_output=$(capture_cli_all "save with-secrets (expected fail)" --no-status resource save --path "$SECRET_CLIENT_PATH" --with-secrets)
-    save_with_secrets_status=$?
-    set -e
-    if [[ $save_with_secrets_status -eq 0 ]]; then
-        log_line "Secret check failed: save with-secrets unexpectedly succeeded"
-        echo "Expected save with-secrets to fail without --force" >&2
-        exit 1
-    fi
-    if ! grep -q "refusing to save plaintext secrets" <<<"$save_with_secrets_output"; then
-        log_line "Secret check failed: missing refusal message"
-        echo "Expected refusal message when saving with --with-secrets" >&2
-        exit 1
-    fi
+            client_after_apply=$(capture_cli "get client secret after apply" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
+            client_secret_after_apply=$(jq -r '.secret // empty' <<<"$client_after_apply")
+            if [[ -z "$client_secret_after_apply" || "$client_secret_after_apply" == "$SECRET_PLACEHOLDER" ]]; then
+                log_line "Secret check failed: with-secrets missing client secret after apply"
+                echo "Expected client secret after apply" >&2
+                exit 1
+            fi
+            if [[ "$client_secret_after_apply" != "$client_secret_again" ]]; then
+                log_line "Secret check failed: client secret changed after apply"
+                echo "Client secret changed after apply" >&2
+                exit 1
+            fi
+        fi
 
-    if ! run_cli_retry_transient "apply client with secrets" "${KEYCLOAK_RETRY_ATTEMPTS:-10}" "${KEYCLOAK_RETRY_DELAY:-2}" resource apply --path "$SECRET_CLIENT_PATH" --sync; then
-        log_line "Apply failed for $SECRET_CLIENT_PATH after secret masking"
-        exit 1
-    fi
+        client_file="$(resource_file_for_path "$SECRET_CLIENT_PATH")"
+        client_local_secret=$(jq -r '.secret // empty' "$client_file")
+        if [[ "$client_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
+            log_line "Secret check failed: client secret not masked in repo"
+            echo "Expected placeholder in $client_file" >&2
+            exit 1
+        fi
 
-    client_after_apply=$(capture_cli "get client secret after apply" --no-status resource get --path "$SECRET_CLIENT_PATH" --with-secrets)
-    client_secret_after_apply=$(jq -r '.secret // empty' <<<"$client_after_apply")
-    if [[ -z "$client_secret_after_apply" || "$client_secret_after_apply" == "$SECRET_PLACEHOLDER" ]]; then
-        log_line "Secret check failed: with-secrets missing client secret after apply"
-        echo "Expected client secret after apply" >&2
-        exit 1
-    fi
-    if [[ "$client_secret_after_apply" != "$client_secret_again" ]]; then
-        log_line "Secret check failed: client secret changed after apply"
-        echo "Client secret changed after apply" >&2
-        exit 1
-    fi
+        ldap_file="$(resource_file_for_path "$SECRET_LDAP_PATH")"
+        ldap_local_secret=$(jq -r '.config.bindCredential[0] // empty' "$ldap_file")
+        if [[ "$ldap_local_secret" != "$SECRET_PLACEHOLDER" ]]; then
+            log_line "Secret check failed: bindCredential not masked in repo"
+            echo "Expected placeholder in $ldap_file" >&2
+            exit 1
+        fi
 
-    log_line "Secret management checks completed"
+        client_masked_output=$(capture_cli "get client secret masked" --no-status resource get --path "$SECRET_CLIENT_PATH")
+        client_masked_value=$(jq -r '.secret // empty' <<<"$client_masked_output")
+        if [[ "$client_masked_value" != "$SECRET_PLACEHOLDER" ]]; then
+            log_line "Secret check failed: masked get returned unexpected value"
+            echo "Expected placeholder in masked output" >&2
+            exit 1
+        fi
+
+        log_line "Secret management checks completed"
+    fi
 fi
 log_line "Declarest resource run completed successfully"

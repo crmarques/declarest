@@ -43,7 +43,7 @@ CONTAINER_RUNTIME=podman ./tests/run-tests.sh --e2e --managed-server keycloak --
 
 ## Profiles & status output
 
-`./tests/run-tests.sh` defaults to the `--complete` profile, which exercises every group (context, metadata, OpenAPI, DeclaREST main flows, and auth variations). Use `--reduced` to run only the representative variants, and add `--skip-testing-context`, `--skip-testing-metadata`, `--skip-testing-openapi`, `--skip-testing-declarest`, or `--skip-testing-variation` to omit individual testing groups. The runner prints aligned `RUNNING`, `DONE`, `FAILED`, and `SKIPPED` statuses before each group.
+`./tests/run-tests.sh` defaults to the `--complete` profile, which exercises every group (context, metadata, OpenAPI, DeclaREST main flows, and auth variations). Use `--reduced` to run the primary flow only (representative resource subset with a trimmed lifecycle) and skip the metadata, OpenAPI, and variation groups, and add `--skip-testing-context`, `--skip-testing-metadata`, `--skip-testing-openapi`, `--skip-testing-declarest`, or `--skip-testing-variation` to omit individual testing groups. The runner prints aligned `RUNNING`, `DONE`, `FAILED`, and `SKIPPED` statuses before each group.
 
 Repository types:
 
@@ -75,7 +75,7 @@ The script will:
 1. Build the declarest CLI (placing the binary under `/tmp/declarest-keycloak-<run-id>/bin`).
 2. Launch a disposable Keycloak container with admin `admin/admin` credentials.
 3. Prepare the repository for the selected `--repo-provider` and adjust the context file to point at the running Keycloak.
-4. Execute a resource lifecycle (create/update/apply/get/list/delete) and secret store checks using the primary auth choices (oauth2/PAT/token), then validate other auth modes with lightweight checks. Remote providers also verify `repo check`/`repo push`/`repo refresh`/`repo reset` on the primary auth.
+4. Execute a resource lifecycle (create/update/apply/get/list/delete) and secret store checks using the primary auth choices (oauth2/PAT/token). Remote providers also verify `repo check`/`repo push`/`repo refresh`/`repo reset` on the primary auth. The complete profile then validates other auth modes with lightweight checks. The reduced profile scopes the lifecycle to a representative subset, skips the roundtrip phases (delete/recreate/save/diff) and extended secret checks, and omits metadata/OpenAPI/variation groups.
 5. Tear down the Keycloak container.
 
 By default the work directory is removed at the end of the run.
