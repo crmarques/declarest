@@ -51,10 +51,10 @@ Inputs:
 3. Metadata defines `update.path` and compare suppression.
 
 Execution:
-1. `Reconciler` loads resource and resolved metadata.
-2. `SecretManager` resolves placeholders.
-3. `ResourceServerManager` executes update request.
-4. `ResourceRepositoryManager` saves normalized payload with masked placeholders.
+1. `reconciler.Reconciler` loads resource and resolved metadata.
+2. `secrets.Manager` resolves placeholders.
+3. `server.Manager` executes update request.
+4. `repository.Manager` saves normalized payload with masked placeholders.
 
 Expected outputs:
 1. Remote update succeeds.
@@ -70,9 +70,9 @@ Inputs:
 
 Execution:
 1. Direct `get` returns 404.
-2. `Reconciler` runs bounded fallback via list operation.
+2. `reconciler.Reconciler` runs bounded fallback via list operation.
 3. Candidate matched by alias resolves correct remote ID.
-4. `ResourceInfo` updated with stable alias and remote path.
+4. `resource.Info` updated with stable alias and remote path.
 
 Expected outputs:
 1. Fetch succeeds without manual intervention.

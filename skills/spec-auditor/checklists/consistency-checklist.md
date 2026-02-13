@@ -1,7 +1,7 @@
 # Consistency Checklist
 
 ## Contract Integrity
-1. Every domain file references canonical interfaces from `new-agent-specs/agents/interfaces.md`.
+1. Every domain file references canonical interfaces from `agents/interfaces.md`.
 2. No file redefines interface names with conflicting semantics.
 3. Error categories align with taxonomy in `interfaces.md`.
 

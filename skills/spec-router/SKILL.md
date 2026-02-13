@@ -7,10 +7,10 @@ description: Route engineering requests to the minimum required files in new-age
 
 ## Workflow
 1. Read the user request and identify primary intent.
-2. Load `new-agent-specs/agents/interfaces.md` first.
+2. Load `agents/interfaces.md` first.
 3. Select minimal additional files from the routing table.
-4. Add `new-agent-specs/agents/quality.md` when behavior changes are requested.
-5. Add `new-agent-specs/agents/use-cases.md` when acceptance scenarios are needed.
+4. Add `agents/quality.md` when behavior changes are requested.
+5. Add `agents/use-cases.md` when acceptance scenarios are needed.
 6. Keep context small and avoid loading unrelated domains.
 
 ## Routing Table

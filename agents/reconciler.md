@@ -15,10 +15,10 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 3. CLI parsing details.
 
 ## Normative Rules
-1. `Reconciler` MUST be the only component that coordinates multiple managers in one workflow.
+1. `reconciler.Reconciler` MUST be the only component that coordinates multiple managers in one workflow.
 2. Workflows MUST declare mutation scope: local, remote, or both.
 3. Apply-like operations MUST resolve metadata and identity before remote mutations.
-4. Local state persistence after remote mutation MUST use normalized `ResourceInfo` and payload.
+4. Local state persistence after remote mutation MUST use normalized `resource.Info` and payload.
 5. Idempotent repeated apply with unchanged desired state MUST produce no additional mutations.
 6. Fallback behavior MUST be deterministic and bounded; no unbounded search loops.
 7. Conflict conditions MUST return typed `ConflictError` with actionable context.
@@ -32,7 +32,7 @@ Core reconciler workflows:
 4. Repository administration: init, refresh, push, reset, check.
 
 Resolution contract:
-1. Input path -> metadata resolution -> `ResourceInfo` identity resolution -> operation spec -> execution.
+1. Input path -> metadata resolution -> `resource.Info` identity resolution -> operation spec -> execution.
 2. Optional secret masking/resolution performed at boundaries.
 
 ## Failure Modes

@@ -18,7 +18,7 @@ State the intent of this domain file in one short paragraph.
 
 ## Data Contracts
 1. Define entities, fields, interfaces, and method families relevant to the domain.
-2. Reference `new-agent-specs/agents/interfaces.md` for canonical contract names.
+2. Reference `agents/interfaces.md` for canonical contract names.
 
 ## Failure Modes
 1. List predictable failure classes.

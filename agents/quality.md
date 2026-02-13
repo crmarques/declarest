@@ -38,7 +38,7 @@ Acceptance contracts:
 ## Required Scenario Coverage
 1. Metadata precedence with wildcard/literal collisions.
 2. Relative template resolution across nested paths.
-3. Alias/ID divergence handling in `ResourceInfo`.
+3. Alias/ID divergence handling in `resource.Info`.
 4. Secret placeholder behavior for valid and invalid scopes.
 5. Path traversal rejection in repository operations.
 6. Deterministic diff/compare with suppression/filter semantics.
@@ -48,6 +48,7 @@ Acceptance contracts:
 10. OpenAPI-assisted request construction with safe fallback behavior.
 11. Repository sync conflict classes and actionable outcomes.
 12. File-organization policy scenarios for split vs cohesive files.
+13. CLI package boundary checks rejecting direct adapter implementation imports.
 
 ## Failure Modes
 1. Tests pass locally but rely on non-deterministic ordering.

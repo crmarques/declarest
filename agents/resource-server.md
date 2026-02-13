@@ -15,13 +15,13 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 3. CLI completion internals.
 
 ## Normative Rules
-1. Remote operations MUST be executed through `ResourceServerManager` only.
+1. Remote operations MUST be executed through `server.Manager` only.
 2. Request method, path, query, and headers MUST derive from resolved metadata plus explicit overrides.
 3. Auth mode precedence MUST be deterministic and documented.
 4. TLS configuration errors MUST fail fast during initialization.
 5. HTTP response errors MUST preserve status code and response body context.
 6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
-7. List responses MUST be normalized into deterministic `ResourceInfo` ordering.
+7. List responses MUST be normalized into deterministic `resource.Info` ordering.
 
 ## Data Contracts
 Request spec fields:
@@ -59,4 +59,4 @@ Auth modes:
 ## Examples
 1. `Get` operation uses `operations.get.path` plus default `Accept: application/json`.
 2. `Update` operation resolves `ContentType` from metadata and sends normalized payload body.
-3. `List` operation hydrates `ResourceInfo` for each item with inferred alias and remote ID.
+3. `List` operation hydrates `resource.Info` for each item with inferred alias and remote ID.

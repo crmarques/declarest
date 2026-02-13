@@ -10,9 +10,9 @@ Define coding standards that produce maintainable, testable, and predictable imp
 4. Testing expectations at implementation time.
 
 ## Out of Scope
-1. Language formatter configuration details.
+1. Formatter configuration details.
 2. Runtime deployment topology.
-3. Non-functional SRE platform specifics.
+3. SRE platform specifics.
 
 ## Normative Rules
 1. Architecture and implementation decisions MUST meet senior software engineering best practices.
@@ -22,17 +22,21 @@ Define coding standards that produce maintainable, testable, and predictable imp
 5. Avoid file proliferation; keep cohesive modules unless split triggers apply.
 6. Split files when mixed concerns, unstable churn, review cognitive load, or complexity threshold are reached.
 7. New split files MUST be narrowly scoped and named by responsibility.
-8. Public contracts MUST be authored in `new-agent-specs/agents/interfaces.md` before implementation use.
-9. Code style from legacy disorganization MUST NOT be copied.
-10. Functions MUST prefer explicit inputs/outputs over implicit global state.
-11. Side effects MUST be isolated behind interface boundaries.
-12. Error paths MUST be handled explicitly and tested.
-13. Secret material MUST never be logged.
+8. Public contracts MUST be authored in `agents/interfaces.md` before implementation use.
+9. Functions MUST prefer explicit inputs/outputs over implicit global state.
+10. Side effects MUST be isolated behind interface boundaries.
+11. Error paths MUST be handled explicitly and tested.
+12. Secret material MUST never be logged.
+13. Code structure, naming, and API shape MUST follow the target language community standards for each changed file.
+14. Go code MUST follow idiomatic package naming, minimal exported API surface, `cmd/*` entrypoint conventions, and `internal/*` visibility rules for non-public implementation.
+15. Bash code used for tests/support MUST use shell community best practices, be ShellCheck-friendly, and apply robust error handling conventions.
+16. Dependency assembly MUST be centralized in one composition root package (`internal/app`), not distributed across CLI command handlers or adapters.
+17. Context YAML parsing MUST use strict decoding that rejects unknown keys and enforces one-of invariants.
 
 ## Data Contracts
 Implementation pattern requirements:
-1. Define boundary structs/types in domain contracts.
-2. Keep adapter-specific payloads at adapter boundaries.
+1. Define boundary structs/types in owner packages (`ctx`, `repository`, `metadata`, `server`, `secrets`, `reconciler`).
+2. Keep adapter-specific payloads at adapter boundaries (`internal/adapters/repository/*`, `internal/adapters/server/*`, `internal/adapters/secrets/*`).
 3. Normalize resource payloads before persistence or comparison.
 4. Use typed error wrappers aligned with `interfaces.md` taxonomy.
 
@@ -40,10 +44,11 @@ File organization guidance:
 1. Keep related contract + validator + mapper logic co-located when change cadence is aligned.
 2. Separate orchestration from pure transforms.
 3. Keep CLI parse/validation separate from execution side effects.
+4. Keep config loaders, validators, and path resolvers in focused files within the context adapter package.
 
 ## Failure Modes
 1. Hidden cross-module coupling through shared mutable state.
-2. Large god files mixing CLI, reconciliation, and adapter concerns.
+2. Large files mixing CLI, reconciliation, and adapter concerns.
 3. Unstable tests due to non-deterministic ordering.
 4. Error handling that drops root cause context.
 
@@ -54,6 +59,6 @@ File organization guidance:
 4. Retry logic accidentally replays non-idempotent mutation.
 
 ## Examples
-1. Preferred: pure function `ResolveOperationSpec(resourceInfo, metadata, openAPIHint)` with no side effects.
-2. Preferred: `Reconciler.Apply` orchestrates managers and returns typed errors without formatting concerns.
+1. Preferred: pure function `metadata.ResolveOperationSpec(ctx, metadata, operation, payload)` with no side effects.
+2. Preferred: `reconciler.Reconciler.Apply` orchestrates managers and returns typed errors without formatting concerns.
 3. Avoid: embedding path parsing and HTTP transport code in the same file as CLI argument parsing.

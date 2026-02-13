@@ -4,9 +4,9 @@
 This bootstrap file defines how coding agents operate in this repository rebuild. Follow this file first, then load only the domain files needed for the request.
 
 ## Startup Protocol
-1. Read `new-agent-specs/AGENTS.md`.
+1. Read `AGENTS.md`.
 2. Determine request intent and affected bounded contexts.
-3. Load `new-agent-specs/agents/interfaces.md` first for canonical contracts.
+3. Load `agents/interfaces.md` first for canonical contracts.
 4. Load only the minimal additional domain files from the matrix below.
 5. If authoring or revising specs, trigger `spec-writer`.
 6. If validating consistency or reviewing specs, trigger `spec-auditor`.
@@ -15,19 +15,19 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 ## Domain File Catalog
 | File | Domain | Load When |
 |---|---|---|
-| `new-agent-specs/agents/interfaces.md` | Canonical contracts | Always |
-| `new-agent-specs/agents/architecture.md` | Boundaries and dependency rules | Designing components, refactors |
-| `new-agent-specs/agents/code.md` | Code patterns and implementation standards | Implementing or reviewing code |
-| `new-agent-specs/agents/domain.md` | Vocabulary and invariants | Modeling behavior and data |
-| `new-agent-specs/agents/context-config.md` | Context and config semantics | Context loading, overrides, validation |
-| `new-agent-specs/agents/resource-repo.md` | Resource repository and Git/FS semantics | Storage, sync, path handling |
-| `new-agent-specs/agents/resource-server.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
-| `new-agent-specs/agents/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
-| `new-agent-specs/agents/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
-| `new-agent-specs/agents/reconciler.md` | Orchestration and reconciliation flows | Apply/refresh/diff/list workflows |
-| `new-agent-specs/agents/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
-| `new-agent-specs/agents/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
-| `new-agent-specs/agents/use-cases.md` | End-to-end examples and edge cases | Scenario design and acceptance tests |
+| `agents/interfaces.md` | Canonical contracts | Always |
+| `agents/architecture.md` | Boundaries and dependency rules | Designing components, refactors |
+| `agents/code.md` | Code patterns and implementation standards | Implementing or reviewing code |
+| `agents/domain.md` | Vocabulary and invariants | Modeling behavior and data |
+| `agents/context-config.md` | Context and config semantics | Context loading, overrides, validation |
+| `agents/resource-repo.md` | Resource repository and Git/FS semantics | Storage, sync, path handling |
+| `agents/resource-server.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
+| `agents/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
+| `agents/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
+| `agents/reconciler.md` | Orchestration and reconciliation flows | Apply/refresh/diff/list workflows |
+| `agents/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
+| `agents/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
+| `agents/use-cases.md` | End-to-end examples and edge cases | Scenario design and acceptance tests |
 
 ## Request-to-File Load Matrix
 | Request Type | Required Files |
@@ -41,9 +41,9 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 | Spec authoring only | `interfaces.md`, targeted domain file, `quality.md` |
 
 ## Skill Selection Rules
-1. Use `new-agent-specs/skills/spec-router/SKILL.md` to choose minimal files for context loading.
-2. Use `new-agent-specs/skills/spec-writer/SKILL.md` for creating or updating instruction/spec files.
-3. Use `new-agent-specs/skills/spec-auditor/SKILL.md` for consistency and coverage audits.
+1. Use `skills/spec-router/SKILL.md` to choose minimal files for context loading.
+2. Use `skills/spec-writer/SKILL.md` for creating or updating instruction/spec files.
+3. Use `skills/spec-auditor/SKILL.md` for consistency and coverage audits.
 4. If multiple skills apply, run them in order: `spec-router`, `spec-writer`, `spec-auditor`.
 
 ## Mandatory Engineering Rules
@@ -54,8 +54,12 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 5. Agents MUST avoid file proliferation and prefer cohesive files unless splitting is justified.
 6. Agents MUST split files when at least one trigger is true: mixed concerns, unstable churn from unrelated edits, growing review cognitive load, or exceeded size/complexity threshold.
 7. New files created due to splitting MUST be dedicated and narrowly scoped.
-8. Public interfaces and shared types MUST remain stable and centrally documented in `new-agent-specs/agents/interfaces.md`.
+8. Public interfaces and shared types MUST remain stable and centrally documented in `agents/interfaces.md`.
 9. Agents MUST not inherit style from legacy disorganization; only business intent, rules, and invariants are retained.
+10. Architecture, file structure, and code conventions MUST follow the target language's community best practices.
+11. Go changes MUST follow idiomatic Go module/package conventions, including `cmd/*` for executables and `internal/*` for non-public implementation packages.
+12. Bash changes (including test scripts) MUST follow community shell standards and be lintable with ShellCheck-friendly patterns and robust error-handling defaults.
+13. Context configuration MUST follow the canonical YAML contract documented in `agents/context-config.md`.
 
 ## File Organization Policy
 1. Keep one dominant reason to change per file.

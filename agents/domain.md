@@ -27,8 +27,8 @@ Define shared business language and non-negotiable invariants so behavior remain
 Domain entities:
 1. `Resource`: desired or observed payload.
 2. `ResourceMetadata`: operation and transform directives.
-3. `ResourceInfo`: identity, paths, metadata, and payload bundle.
-4. `Context`: active runtime managers and configuration identity.
+3. `resource.Info`: identity, paths, metadata, and payload bundle.
+4. `ctx.Runtime`: active runtime managers and configuration identity.
 
 Key terms:
 1. Logical Path: canonical repository path for a resource.

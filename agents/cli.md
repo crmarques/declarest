@@ -30,8 +30,9 @@ Command groups:
 3. `metadata`.
 4. `repo`.
 5. `secret`.
-6. `ad-hoc`.
-7. `version`.
+6. `completion`.
+7. `ad-hoc`.
+8. `version`.
 
 Global flags:
 1. `--context`.

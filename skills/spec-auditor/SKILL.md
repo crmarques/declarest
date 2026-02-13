@@ -6,8 +6,8 @@ description: Audit new-agent-specs for consistency, completeness, and testabilit
 # Spec Auditor
 
 ## Workflow
-1. Load changed files and `new-agent-specs/agents/interfaces.md`.
-2. Run checks from `new-agent-specs/skills/spec-auditor/checklists/consistency-checklist.md`.
+1. Load changed files and `agents/interfaces.md`.
+2. Run checks from `skills/spec-auditor/checklists/consistency-checklist.md`.
 3. Identify contradictions, missing contracts, and untested normative rules.
 4. Report findings ordered by severity with exact file references.
 5. Propose minimal corrective edits aligned with bounded contexts.
