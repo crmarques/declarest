@@ -1,10 +1,14 @@
 package completion
 
-import (
-	"github.com/crmarques/declarest/internal/cli/common"
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 func newFishCommand() *cobra.Command {
-	return common.NewPlaceholderCommand("fish")
+	return &cobra.Command{
+		Use:   "fish",
+		Short: "Generate Fish completion",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			return command.Root().GenFishCompletion(command.OutOrStdout(), true)
+		},
+	}
 }

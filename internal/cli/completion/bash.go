@@ -1,10 +1,14 @@
 package completion
 
-import (
-	"github.com/crmarques/declarest/internal/cli/common"
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 func newBashCommand() *cobra.Command {
-	return common.NewPlaceholderCommand("bash")
+	return &cobra.Command{
+		Use:   "bash",
+		Short: "Generate Bash completion",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			return command.Root().GenBashCompletion(command.OutOrStdout())
+		},
+	}
 }

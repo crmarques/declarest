@@ -1,6 +1,20 @@
 package metadata
 
-import "github.com/crmarques/declarest/core"
+type Operation string
+
+const (
+	OperationGet     Operation = "get"
+	OperationCreate  Operation = "create"
+	OperationUpdate  Operation = "update"
+	OperationDelete  Operation = "delete"
+	OperationList    Operation = "list"
+	OperationCompare Operation = "compare"
+)
+
+type InferenceRequest struct {
+	Apply     bool
+	Recursive bool
+}
 
 type ResourceMetadata struct {
 	IDFromAttribute    string
@@ -18,5 +32,5 @@ type OperationSpec struct {
 	Headers     map[string]string
 	Accept      string
 	ContentType string
-	Body        core.Resource
+	Body        any
 }

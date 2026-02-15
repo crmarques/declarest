@@ -1,29 +1,172 @@
 package repo
 
 import (
+	"fmt"
+	"io"
+
 	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring) *cobra.Command {
-	_ = deps
+func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "repo",
+		Short: "Manage local repository state",
+		Args:  cobra.NoArgs,
+	}
 
-	resetCommand := common.NewPlaceholderCommand("reset")
-	resetCommand.Flags().Bool("hard", false, common.PlaceholderMessage)
-
-	pushCommand := common.NewPlaceholderCommand("push")
-	pushCommand.Flags().Bool("force", false, common.PlaceholderMessage)
-
-	command := common.NewPlaceholderCommand("repo")
 	command.AddCommand(
-		common.NewPlaceholderCommand("init"),
-		common.NewPlaceholderCommand("refresh"),
-		resetCommand,
-		common.NewPlaceholderCommand("check"),
-		pushCommand,
-		common.NewPlaceholderCommand("force-push"),
-		common.NewPlaceholderCommand("pull-status"),
+		newInitCommand(deps),
+		newRefreshCommand(deps),
+		newResetCommand(deps),
+		newCheckCommand(deps),
+		newPushCommand(deps),
+		newStatusCommand(deps, globalFlags),
 	)
 
 	return command
+}
+
+func newInitCommand(deps common.CommandWiring) *cobra.Command {
+	return &cobra.Command{
+		Use:   "init",
+		Short: "Initialize repository",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+			return reconciler.RepoInit(command.Context())
+		},
+	}
+}
+
+func newRefreshCommand(deps common.CommandWiring) *cobra.Command {
+	return &cobra.Command{
+		Use:   "refresh",
+		Short: "Refresh repository",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+			return reconciler.RepoRefresh(command.Context())
+		},
+	}
+}
+
+func newResetCommand(deps common.CommandWiring) *cobra.Command {
+	var hard bool
+
+	command := &cobra.Command{
+		Use:   "reset",
+		Short: "Reset repository",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+			return reconciler.RepoReset(command.Context(), repository.ResetPolicy{Hard: hard})
+		},
+	}
+
+	command.Flags().BoolVarP(&hard, "hard", "H", false, "hard reset")
+	return command
+}
+
+func newCheckCommand(deps common.CommandWiring) *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Check repository health",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+			return reconciler.RepoCheck(command.Context())
+		},
+	}
+}
+
+func newPushCommand(deps common.CommandWiring) *cobra.Command {
+	var force bool
+
+	command := &cobra.Command{
+		Use:   "push",
+		Short: "Push repository changes",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+			return reconciler.RepoPush(command.Context(), repository.PushPolicy{Force: force})
+		},
+	}
+
+	command.Flags().BoolVarP(&force, "force", "y", false, "force push")
+	return command
+}
+
+func newStatusCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show repository sync status",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			reconciler, err := common.RequireReconciler(deps)
+			if err != nil {
+				return err
+			}
+
+			status, err := reconciler.RepoStatus(command.Context())
+			if err != nil {
+				return err
+			}
+
+			output := repoStatusOutput{
+				State:          status.State,
+				Ahead:          status.Ahead,
+				Behind:         status.Behind,
+				HasUncommitted: status.HasUncommitted,
+			}
+
+			format := resolveRepoStatusOutputFormat(globalFlags)
+			return common.WriteOutput(command, format, output, func(w io.Writer, value repoStatusOutput) error {
+				_, writeErr := fmt.Fprintf(
+					w,
+					"state=%s ahead=%d behind=%d hasUncommitted=%t\n",
+					value.State,
+					value.Ahead,
+					value.Behind,
+					value.HasUncommitted,
+				)
+				return writeErr
+			})
+		},
+	}
+}
+
+type repoStatusOutput struct {
+	State          repository.SyncState `json:"state" yaml:"state"`
+	Ahead          int                  `json:"ahead" yaml:"ahead"`
+	Behind         int                  `json:"behind" yaml:"behind"`
+	HasUncommitted bool                 `json:"hasUncommitted" yaml:"hasUncommitted"`
+}
+
+func resolveRepoStatusOutputFormat(globalFlags *common.GlobalFlags) string {
+	if globalFlags == nil {
+		return common.OutputText
+	}
+	switch globalFlags.Output {
+	case "", common.OutputAuto:
+		return common.OutputText
+	default:
+		return globalFlags.Output
+	}
 }

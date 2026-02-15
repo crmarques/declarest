@@ -5,7 +5,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring) *cobra.Command {
+func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	_ = deps
-	return common.NewPlaceholderCommand("ad-hoc")
+	_ = globalFlags
+
+	return &cobra.Command{
+		Use:   "ad-hoc",
+		Short: "Execute ad-hoc operations",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return common.NotImplementedError("AdHoc", "Run")
+		},
+	}
 }

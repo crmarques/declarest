@@ -5,10 +5,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring) *cobra.Command {
+func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	_ = deps
+	_ = globalFlags
 
-	command := common.NewPlaceholderCommand("completion")
+	command := &cobra.Command{
+		Use:   "completion",
+		Short: "Generate shell completion scripts",
+		Args:  cobra.NoArgs,
+	}
 	command.AddCommand(
 		newBashCommand(),
 		newZshCommand(),

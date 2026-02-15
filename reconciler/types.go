@@ -1,0 +1,9 @@
+package reconciler
+
+type DeletePolicy struct {
+	Recursive bool
+}
+
+type ListPolicy struct {
+	Recursive bool
+}
