@@ -8,7 +8,7 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-var _ secrets.SecretService = (*FileSecretService)(nil)
+var _ secrets.SecretProvider = (*FileSecretService)(nil)
 
 type FileSecretService struct{}
 

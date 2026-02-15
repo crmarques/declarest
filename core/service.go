@@ -5,21 +5,18 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
-	defaultreconciler "github.com/crmarques/declarest/internal/providers/reconciler/default"
-	"github.com/crmarques/declarest/repository"
 )
 
-func NewAppState(opts BootstrapConfig, selection config.ContextSelection) AppState {
+func NewDeclarestContext(opts BootstrapConfig, selection config.ContextSelection) (DeclarestContext, error) {
 	contextService := configfile.NewFileContextService(opts.ContextCatalogPath)
+	defaultReconciler, err := buildDefaultReconciler(context.Background(), contextService, selection)
 
-	return AppState{
-		Contexts: contextService,
-		Reconciler: defaultreconciler.NewResourceReconciler(func(ctx context.Context) (repository.ResourceRepository, error) {
-			runtime, err := BuildExecutionRuntime(ctx, contextService, selection)
-			if err != nil {
-				return nil, err
-			}
-			return runtime.Repository, nil
-		}),
+	if err != nil {
+		return DeclarestContext{}, err
 	}
+
+	return DeclarestContext{
+		Contexts:   contextService,
+		Reconciler: defaultReconciler,
+	}, nil
 }

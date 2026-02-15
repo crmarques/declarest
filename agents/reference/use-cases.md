@@ -53,9 +53,9 @@ Inputs:
 
 Execution:
 1. `reconciler.ResourceReconciler` loads resource and resolved metadata.
-2. `secrets.SecretService` resolves placeholders.
+2. `secrets.SecretProvider` resolves placeholders.
 3. `server.ResourceServerManager` executes update request.
-4. `repository.ResourceRepository` saves normalized payload with masked placeholders.
+4. `repository.ResourceRepositoryManager` saves normalized payload with masked placeholders.
 
 Expected outputs:
 1. Remote update succeeds.
@@ -134,8 +134,8 @@ Inputs:
 3. List policy and delete policy toggled between `Recursive=false` and `Recursive=true`.
 
 Execution:
-1. `repository.ResourceRepository.List` is called with `Recursive=false`.
-2. `repository.ResourceRepository.Delete` is called with `Recursive=false`.
+1. `repository.ResourceRepositoryManager.List` is called with `Recursive=false`.
+2. `repository.ResourceRepositoryManager.Delete` is called with `Recursive=false`.
 3. Repeat list/delete with `Recursive=true`.
 
 Expected outputs:
@@ -152,7 +152,7 @@ Inputs:
 
 Execution:
 1. CLI calls `reconciler.ResourceReconciler.RepoStatus`.
-2. Reconciler calls `repository.ResourceRepository.SyncStatus`.
+2. Reconciler calls `repository.ResourceRepositoryManager.SyncStatus`.
 3. CLI formats text for `auto` and structured output for `json`/`yaml`.
 
 Expected outputs:

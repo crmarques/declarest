@@ -12,16 +12,20 @@ import (
 )
 
 func main() {
-	appState := core.NewAppState(
+	declarestContext, err := core.NewDeclarestContext(
 		core.BootstrapConfig{},
 		config.ContextSelection{Name: contextNameFromArgs(os.Args[1:])},
 	)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	deps := common.CommandWiring{
-		Reconciler: appState.Reconciler,
-		Contexts:   appState.Contexts,
+		Reconciler: declarestContext.Reconciler,
+		Contexts:   declarestContext.Contexts,
 	}
 
-	if err := cli.Execute(deps); err != nil {
+	if err = cli.Execute(deps); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

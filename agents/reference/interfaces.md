@@ -32,7 +32,7 @@ Fields:
 1. `Name`: explicit context name, optional.
 2. `Overrides`: runtime key-value overrides.
 
-### Type: `core.AppState`
+### Type: `core.DeclarestContext`
 Represents client-facing application state assembled at startup.
 
 Required fields:
@@ -41,11 +41,12 @@ Required fields:
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
-2. clients MUST consume `core.AppState` as their primary dependency entrypoint.
+2. clients MUST consume `core.DeclarestContext` as their primary dependency entrypoint.
 
 Factory contract:
-1. `core.NewAppState` MUST assemble default provider implementations.
-2. clients MUST NOT instantiate provider implementations directly.
+1. `core.NewDeclarestContext` MUST assemble default provider implementations.
+2. `core.NewDeclarestContext` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
+3. clients MUST NOT instantiate provider implementations directly.
 
 ### Type: `core.BootstrapConfig`
 Represents startup wiring inputs.
@@ -53,16 +54,15 @@ Represents startup wiring inputs.
 Fields:
 1. `ContextCatalogPath`: optional explicit context catalog path.
 
-### Type: `core.ExecutionRuntime`
-Represents active runtime context assembled by the composition root.
+### Type: `reconciler.DefaultReconciler`
+Represents the default concrete reconciler assembled by the composition root.
 
 Required fields:
 1. `Name`: selected context name.
-2. `Environment`: normalized key-value overrides.
-3. `Repository`: `repository.ResourceRepository` instance.
-4. `Metadata`: `metadata.MetadataService` instance.
-5. `Server`: optional `server.ResourceServerManager` instance.
-6. `Secrets`: optional `secrets.SecretService` instance.
+2. `RepositoryManager`: `repository.ResourceRepositoryManager` instance.
+3. `MetadataService`: `metadata.MetadataService` instance.
+4. `ServerManager`: optional `server.ResourceServerManager` instance.
+5. `SecretsProvider`: optional `secrets.SecretProvider` instance.
 
 ### Type: `config.Context`
 Represents persisted context configuration.
@@ -235,7 +235,7 @@ Method families:
 3. `ResolveContext`.
 4. `Validate`.
 
-### Interface: `repository.ResourceRepository`
+### Interface: `repository.ResourceRepositoryManager`
 Responsibilities:
 1. Persist resources by logical path.
 2. Read/list/delete/move resources.
@@ -271,7 +271,7 @@ Method families:
 2. `GetOpenAPISpec`.
 3. `BuildRequestFromMetadata`.
 
-### Interface: `secrets.SecretService`
+### Interface: `secrets.SecretProvider`
 Responsibilities:
 1. Store and retrieve secrets.
 2. Mask/unmask payload values using placeholders.
@@ -338,5 +338,5 @@ Propagation rules:
 
 ## Examples
 1. A `reconciler.ResourceReconciler.Apply` call resolves metadata, builds request intent, executes remote mutation, and persists local state only after successful remote mutation.
-2. A `secrets.SecretService.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceRepository.Save`.
+2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceRepositoryManager.Save`.
 3. A `config.ContextService.ResolveContext` call merges persisted context and environment overrides, then validates and returns one resolved `config.Context`.

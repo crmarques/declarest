@@ -33,6 +33,8 @@ Define coding standards that produce maintainable, testable, and predictable imp
 16. Dependency assembly MUST be centralized in one composition root package (`core`), not distributed across CLI command handlers or providers.
 17. Context YAML parsing MUST use strict decoding that rejects unknown keys and enforces one-of invariants.
 18. Provider packages MUST implement owner contracts only and MUST NOT instantiate sibling provider implementations.
+19. Go sources MUST be formatted with `gofmt` so indentation uses tabs, import groups are grouped as `gofmt` emits, and tooling aligns with Go community expectations.
+20. Logical groups inside a Go function (initialization, validation, action, error handling, return) SHOULD be separated by exactly one blank line so readers can scan related statements without collapsing conceptual blocks.
 
 ## Data Contracts
 Implementation pattern requirements:

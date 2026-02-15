@@ -19,7 +19,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var _ repository.ResourceRepository = (*FSResourceRepository)(nil)
+var _ repository.ResourceRepositoryManager = (*FSResourceRepository)(nil)
 
 type FSResourceRepository struct {
 	baseDir        string

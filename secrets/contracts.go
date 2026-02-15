@@ -6,7 +6,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-type SecretService interface {
+type SecretProvider interface {
 	Init(ctx context.Context) error
 	Store(ctx context.Context, key string, value string) error
 	Get(ctx context.Context, key string) (string, error)

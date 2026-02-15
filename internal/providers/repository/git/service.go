@@ -19,7 +19,7 @@ import (
 	sshauth "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 )
 
-var _ repository.ResourceRepository = (*GitResourceRepository)(nil)
+var _ repository.ResourceRepositoryManager = (*GitResourceRepository)(nil)
 
 const (
 	defaultRemoteName = "origin"

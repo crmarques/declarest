@@ -14,7 +14,7 @@ import (
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
 )
 
-func TestBuildExecutionRuntimeWiring(t *testing.T) {
+func TestBuildDefaultReconcilerWiring(t *testing.T) {
 	t.Parallel()
 
 	t.Run("filesystem_context_without_optional_managers", func(t *testing.T) {
@@ -29,31 +29,28 @@ func TestBuildExecutionRuntimeWiring(t *testing.T) {
 			},
 		}
 
-		runtime, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{
+		defaultReconciler, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{
 			Name:      "fs",
 			Overrides: map[string]string{"repository.filesystem.base-dir": "/tmp/override"},
 		})
 		if err != nil {
-			t.Fatalf("BuildExecutionRuntime returned error: %v", err)
+			t.Fatalf("buildDefaultReconciler returned error: %v", err)
 		}
 
-		if runtime.Name != "fs" {
-			t.Fatalf("expected runtime name fs, got %q", runtime.Name)
+		if defaultReconciler.Name != "fs" {
+			t.Fatalf("expected reconciler name fs, got %q", defaultReconciler.Name)
 		}
-		if _, ok := runtime.Repository.(*fsrepository.FSResourceRepository); !ok {
-			t.Fatalf("expected FSResourceRepository, got %T", runtime.Repository)
+		if _, ok := defaultReconciler.RepositoryManager.(*fsrepository.FSResourceRepository); !ok {
+			t.Fatalf("expected FSResourceRepository, got %T", defaultReconciler.RepositoryManager)
 		}
-		if _, ok := runtime.Metadata.(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService, got %T", runtime.Metadata)
+		if _, ok := defaultReconciler.MetadataService.(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService, got %T", defaultReconciler.MetadataService)
 		}
-		if runtime.Server != nil {
-			t.Fatalf("expected nil server, got %T", runtime.Server)
+		if defaultReconciler.ServerManager != nil {
+			t.Fatalf("expected nil server manager, got %T", defaultReconciler.ServerManager)
 		}
-		if runtime.Secrets != nil {
-			t.Fatalf("expected nil secrets service, got %T", runtime.Secrets)
-		}
-		if runtime.Environment["repository.filesystem.base-dir"] != "/tmp/override" {
-			t.Fatalf("expected copied override, got %+v", runtime.Environment)
+		if defaultReconciler.SecretsProvider != nil {
+			t.Fatalf("expected nil secrets provider, got %T", defaultReconciler.SecretsProvider)
 		}
 	})
 
@@ -85,30 +82,30 @@ func TestBuildExecutionRuntimeWiring(t *testing.T) {
 			},
 		}
 
-		runtime, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
+		defaultReconciler, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
 		if err != nil {
-			t.Fatalf("BuildExecutionRuntime returned error: %v", err)
+			t.Fatalf("buildDefaultReconciler returned error: %v", err)
 		}
 
-		if _, ok := runtime.Repository.(*gitrepository.GitResourceRepository); !ok {
-			t.Fatalf("expected GitResourceRepository, got %T", runtime.Repository)
+		if _, ok := defaultReconciler.RepositoryManager.(*gitrepository.GitResourceRepository); !ok {
+			t.Fatalf("expected GitResourceRepository, got %T", defaultReconciler.RepositoryManager)
 		}
-		if _, ok := runtime.Server.(*httpserver.HTTPResourceServerGateway); !ok {
-			t.Fatalf("expected HTTPResourceServerGateway, got %T", runtime.Server)
+		if _, ok := defaultReconciler.ServerManager.(*httpserver.HTTPResourceServerGateway); !ok {
+			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultReconciler.ServerManager)
 		}
-		if _, ok := runtime.Secrets.(*filesecrets.FileSecretService); !ok {
-			t.Fatalf("expected FileSecretService, got %T", runtime.Secrets)
+		if _, ok := defaultReconciler.SecretsProvider.(*filesecrets.FileSecretService); !ok {
+			t.Fatalf("expected FileSecretService, got %T", defaultReconciler.SecretsProvider)
 		}
 	})
 }
 
-func TestBuildExecutionRuntimeValidationAndErrors(t *testing.T) {
+func TestBuildDefaultReconcilerValidationAndErrors(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil_context_service", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := BuildExecutionRuntime(context.Background(), nil, config.ContextSelection{})
+		_, err := buildDefaultReconciler(context.Background(), nil, config.ContextSelection{})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -122,7 +119,7 @@ func TestBuildExecutionRuntimeValidationAndErrors(t *testing.T) {
 		expected := faults.NewTypedError(faults.NotFoundError, "context not found", nil)
 		contextService := &fakeContextService{resolveErr: expected}
 
-		_, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{Name: "missing"})
+		_, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{Name: "missing"})
 		if !errors.Is(err, expected) {
 			t.Fatalf("expected propagated error %v, got %v", expected, err)
 		}
@@ -138,7 +135,7 @@ func TestBuildExecutionRuntimeValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
+		_, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -171,7 +168,7 @@ func TestBuildExecutionRuntimeValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
+		_, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

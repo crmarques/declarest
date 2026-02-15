@@ -185,6 +185,7 @@ current-ctx: xxx
 7. Secret file key source one-of violation.
 8. Config path resolution failure for home expansion or file access.
 9. Runtime override key not in the supported override-key list.
+10. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
@@ -200,3 +201,4 @@ current-ctx: xxx
 3. `Validate` rejects a config that defines both `repository.git` and `repository.filesystem`.
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
+6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.

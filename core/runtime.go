@@ -11,22 +11,26 @@ import (
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
+	"github.com/crmarques/declarest/reconciler"
 )
 
-func BuildExecutionRuntime(ctx context.Context, contextService config.ContextService, selection config.ContextSelection) (ExecutionRuntime, error) {
+func buildDefaultReconciler(
+	ctx context.Context,
+	contextService config.ContextService,
+	selection config.ContextSelection,
+) (*reconciler.DefaultReconciler, error) {
 	if contextService == nil {
-		return ExecutionRuntime{}, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
+		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
 	}
 
 	resolvedContext, err := contextService.ResolveContext(ctx, selection)
 	if err != nil {
-		return ExecutionRuntime{}, err
+		return nil, err
 	}
 
-	runtime := ExecutionRuntime{
-		Name:        resolvedContext.Name,
-		Environment: copyStringMap(selection.Overrides),
-		Metadata: fsmetadata.NewFSMetadataService(
+	defaultReconciler := &reconciler.DefaultReconciler{
+		Name: resolvedContext.Name,
+		MetadataService: fsmetadata.NewFSMetadataService(
 			resolveMetadataBaseDir(resolvedContext),
 			resolvedContext.Repository.ResourceFormat,
 		),
@@ -34,55 +38,42 @@ func BuildExecutionRuntime(ctx context.Context, contextService config.ContextSer
 
 	switch {
 	case resolvedContext.Repository.Filesystem != nil:
-		runtime.Repository = fsrepository.NewFSResourceRepository(
+		defaultReconciler.RepositoryManager = fsrepository.NewFSResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)
 	case resolvedContext.Repository.Git != nil:
-		runtime.Repository = gitrepository.NewGitResourceRepository(
+		defaultReconciler.RepositoryManager = gitrepository.NewGitResourceRepository(
 			*resolvedContext.Repository.Git,
 			resolvedContext.Repository.ResourceFormat,
 		)
 	default:
-		return ExecutionRuntime{}, faults.NewTypedError(faults.InternalError, "context repository provider is invalid", nil)
+		return nil, faults.NewTypedError(faults.InternalError, "context repository provider is invalid", nil)
 	}
 
 	if resolvedContext.ManagedServer != nil {
 		if resolvedContext.ManagedServer.HTTP == nil {
-			return ExecutionRuntime{}, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
+			return nil, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
 		}
 		serverManager, err := httpserver.NewHTTPResourceServerGateway(*resolvedContext.ManagedServer.HTTP)
 		if err != nil {
-			return ExecutionRuntime{}, err
+			return nil, err
 		}
-		runtime.Server = serverManager
+		defaultReconciler.ServerManager = serverManager
 	}
 
 	if resolvedContext.SecretStore != nil {
 		switch {
 		case resolvedContext.SecretStore.File != nil:
-			runtime.Secrets = &filesecrets.FileSecretService{}
+			defaultReconciler.SecretsProvider = &filesecrets.FileSecretService{}
 		case resolvedContext.SecretStore.Vault != nil:
-			runtime.Secrets = &vaultsecrets.VaultSecretService{}
+			defaultReconciler.SecretsProvider = &vaultsecrets.VaultSecretService{}
 		default:
-			return ExecutionRuntime{}, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
+			return nil, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
 		}
 	}
 
-	return runtime, nil
-}
-
-func copyStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-
-	return cloned
+	return defaultReconciler, nil
 }
 
 func resolveMetadataBaseDir(context config.Context) string {
