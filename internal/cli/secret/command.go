@@ -1,15 +1,14 @@
 package secret
 
 import (
+	"io"
+
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
 func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
-	_ = deps
-	_ = globalFlags
-
 	command := &cobra.Command{
 		Use:   "secret",
 		Short: "Manage secrets",
@@ -17,76 +16,124 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	}
 
 	command.AddCommand(
-		newInitCommand(),
-		newStoreCommand(),
-		newGetCommand(),
-		newDeleteCommand(),
-		newListCommand(),
-		newMaskCommand(),
-		newResolveCommand(),
-		newNormalizeCommand(),
-		newDetectCommand(),
+		newInitCommand(deps),
+		newStoreCommand(deps),
+		newGetCommand(deps, globalFlags),
+		newDeleteCommand(deps),
+		newListCommand(deps, globalFlags),
+		newMaskCommand(deps, globalFlags),
+		newResolveCommand(deps, globalFlags),
+		newNormalizeCommand(deps, globalFlags),
+		newDetectCommand(deps, globalFlags),
 	)
 
 	return command
 }
 
-func newInitCommand() *cobra.Command {
+func newInitCommand(deps common.CommandWiring) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize secret store",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("Secret", "Init")
+		RunE: func(command *cobra.Command, _ []string) error {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			return secretProvider.Init(command.Context())
 		},
 	}
 }
 
-func newStoreCommand() *cobra.Command {
+func newStoreCommand(deps common.CommandWiring) *cobra.Command {
 	return &cobra.Command{
 		Use:   "store <key> <value>",
 		Short: "Store a secret",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("Secret", "Store")
+		RunE: func(command *cobra.Command, args []string) error {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			return secretProvider.Store(command.Context(), args[0], args[1])
 		},
 	}
 }
 
-func newGetCommand() *cobra.Command {
+func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <key>",
 		Short: "Read a secret",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("Secret", "Get")
+		RunE: func(command *cobra.Command, args []string) error {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			value, err := secretProvider.Get(command.Context(), args[0])
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, value, func(w io.Writer, item string) error {
+				_, writeErr := io.WriteString(w, item+"\n")
+				return writeErr
+			})
 		},
 	}
 }
 
-func newDeleteCommand() *cobra.Command {
+func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <key>",
 		Short: "Delete a secret",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("Secret", "Delete")
+		RunE: func(command *cobra.Command, args []string) error {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			return secretProvider.Delete(command.Context(), args[0])
 		},
 	}
 }
 
-func newListCommand() *cobra.Command {
+func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List secrets",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("Secret", "List")
+		RunE: func(command *cobra.Command, _ []string) error {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			items, err := secretProvider.List(command.Context())
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, items, nil)
 		},
 	}
 }
 
-func newMaskCommand() *cobra.Command {
+func newMaskCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -94,10 +141,27 @@ func newMaskCommand() *cobra.Command {
 		Short: "Mask secret values in payload",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			if _, err := common.DecodeInput[resource.Value](command, input); err != nil {
+			value, err := common.DecodeInput[resource.Value](command, input)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Secret", "Mask")
+
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			masked, err := secretProvider.MaskPayload(command.Context(), value)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, masked, nil)
 		},
 	}
 
@@ -105,7 +169,7 @@ func newMaskCommand() *cobra.Command {
 	return command
 }
 
-func newResolveCommand() *cobra.Command {
+func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -113,10 +177,27 @@ func newResolveCommand() *cobra.Command {
 		Short: "Resolve secret placeholders in payload",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			if _, err := common.DecodeInput[resource.Value](command, input); err != nil {
+			value, err := common.DecodeInput[resource.Value](command, input)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Secret", "Resolve")
+
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			resolved, err := secretProvider.ResolvePayload(command.Context(), value)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, resolved, nil)
 		},
 	}
 
@@ -124,7 +205,7 @@ func newResolveCommand() *cobra.Command {
 	return command
 }
 
-func newNormalizeCommand() *cobra.Command {
+func newNormalizeCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -132,10 +213,27 @@ func newNormalizeCommand() *cobra.Command {
 		Short: "Normalize secret placeholders",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			if _, err := common.DecodeInput[resource.Value](command, input); err != nil {
+			value, err := common.DecodeInput[resource.Value](command, input)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Secret", "Normalize")
+
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			normalized, err := secretProvider.NormalizeSecretPlaceholders(command.Context(), value)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, normalized, nil)
 		},
 	}
 
@@ -143,7 +241,7 @@ func newNormalizeCommand() *cobra.Command {
 	return command
 }
 
-func newDetectCommand() *cobra.Command {
+func newDetectCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -151,10 +249,27 @@ func newDetectCommand() *cobra.Command {
 		Short: "Detect potential secrets in payload",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			if _, err := common.DecodeInput[resource.Value](command, input); err != nil {
+			value, err := common.DecodeInput[resource.Value](command, input)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Secret", "Detect")
+
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			keys, err := secretProvider.DetectSecretCandidates(command.Context(), value)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, keys, nil)
 		},
 	}
 

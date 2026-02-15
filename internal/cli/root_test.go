@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -11,9 +12,11 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/reconciler"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -203,13 +206,15 @@ func TestResourceDeleteRequiresForce(t *testing.T) {
 func TestMetadataPathCommands(t *testing.T) {
 	t.Parallel()
 
-	t.Run("resolve_with_path_returns_not_implemented", func(t *testing.T) {
+	t.Run("resolve_with_path_returns_metadata", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "resolve", "--path", "/customers/acme")
-		assertTypedCategory(t, err, faults.InternalError)
-		if !errors.Is(err, faults.ErrToBeImplemented) {
-			t.Fatalf("expected ErrToBeImplemented, got %v", err)
+		output, err := executeForTest(testDeps(), "", "metadata", "resolve", "--path", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected resolve error: %v", err)
+		}
+		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+			t.Fatalf("expected resolved metadata output, got %q", output)
 		}
 	})
 
@@ -223,15 +228,22 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("render_positional_path", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme", "get")
-		assertTypedCategory(t, err, faults.InternalError)
+		output, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme", "get")
+		if err != nil {
+			t.Fatalf("unexpected render error: %v", err)
+		}
+		if !strings.Contains(output, "\"path\": \"/api/customers/acme\"") {
+			t.Fatalf("expected rendered operation spec output, got %q", output)
+		}
 	})
 
 	t.Run("render_flag_path", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := executeForTest(testDeps(), "", "metadata", "render", "--path", "/customers/acme", "get")
-		assertTypedCategory(t, err, faults.InternalError)
+		if err != nil {
+			t.Fatalf("unexpected render error with --path: %v", err)
+		}
 	})
 
 	t.Run("render_mismatch_path", func(t *testing.T) {
@@ -246,6 +258,56 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		_, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme")
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestSecretCommands(t *testing.T) {
+	t.Parallel()
+
+	t.Run("store_get_and_delete_roundtrip", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "store", "apiToken", "token-123"); err != nil {
+			t.Fatalf("store returned error: %v", err)
+		}
+
+		output, err := executeForTest(deps, "", "secret", "get", "apiToken")
+		if err != nil {
+			t.Fatalf("get returned error: %v", err)
+		}
+		if !strings.Contains(output, "token-123") {
+			t.Fatalf("expected stored value in output, got %q", output)
+		}
+
+		if _, err := executeForTest(deps, "", "secret", "delete", "apiToken"); err != nil {
+			t.Fatalf("delete returned error: %v", err)
+		}
+
+		_, err = executeForTest(deps, "", "secret", "get", "apiToken")
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
+	t.Run("mask_and_resolve_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		payload := `{"apiToken":"token-abc","name":"acme"}`
+		masked, err := executeForTest(deps, payload, "secret", "mask")
+		if err != nil {
+			t.Fatalf("mask returned error: %v", err)
+		}
+		if !strings.Contains(masked, `{{secret \"apiToken\"}}`) {
+			t.Fatalf("expected masked placeholder, got %q", masked)
+		}
+
+		resolved, err := executeForTest(deps, masked, "secret", "resolve")
+		if err != nil {
+			t.Fatalf("resolve returned error: %v", err)
+		}
+		if !strings.Contains(resolved, "token-abc") {
+			t.Fatalf("expected resolved secret value, got %q", resolved)
+		}
 	})
 }
 
@@ -377,9 +439,15 @@ func joinPath(path []string) string {
 }
 
 func testDeps() common.CommandWiring {
+	metadataService := newTestMetadataService()
+	secretProvider := newTestSecretProvider()
+
 	return common.CommandWiring{
-		Reconciler: &testReconciler{},
-		Contexts:   &testContextService{},
+		Reconciler: &testReconciler{
+			metadataService: metadataService,
+			secretProvider:  secretProvider,
+		},
+		Contexts: &testContextService{},
 	}
 }
 
@@ -416,7 +484,10 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 }
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
-type testReconciler struct{}
+type testReconciler struct {
+	metadataService *testMetadataService
+	secretProvider  *testSecretProvider
+}
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
 	return map[string]any{"path": logicalPath}, nil
@@ -465,6 +536,151 @@ func (r *testReconciler) RepoStatus(context.Context) (repository.SyncReport, err
 		Behind:         0,
 		HasUncommitted: false,
 	}, nil
+}
+
+func (r *testReconciler) MetadataManager() metadatadomain.MetadataService {
+	if r == nil {
+		return nil
+	}
+	return r.metadataService
+}
+
+func (r *testReconciler) SecretManager() secretdomain.SecretProvider {
+	if r == nil {
+		return nil
+	}
+	return r.secretProvider
+}
+
+type testMetadataService struct {
+	items map[string]metadatadomain.ResourceMetadata
+}
+
+func newTestMetadataService() *testMetadataService {
+	return &testMetadataService{
+		items: map[string]metadatadomain.ResourceMetadata{
+			"/customers/acme": {
+				IDFromAttribute: "id",
+				Operations: map[string]metadatadomain.OperationSpec{
+					string(metadatadomain.OperationGet):     {Path: "/api/customers/acme"},
+					string(metadatadomain.OperationCompare): {Path: "/api/customers/acme"},
+				},
+			},
+		},
+	}
+}
+
+func (s *testMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	metadata, found := s.items[logicalPath]
+	if !found {
+		return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+	}
+	return metadata, nil
+}
+
+func (s *testMetadataService) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+	s.items[logicalPath] = metadata
+	return nil
+}
+
+func (s *testMetadataService) Unset(_ context.Context, logicalPath string) error {
+	delete(s.items, logicalPath)
+	return nil
+}
+
+func (s *testMetadataService) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	if metadata, found := s.items[logicalPath]; found {
+		return metadata, nil
+	}
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func (s *testMetadataService) RenderOperationSpec(
+	ctx context.Context,
+	logicalPath string,
+	operation metadatadomain.Operation,
+	value any,
+) (metadatadomain.OperationSpec, error) {
+	metadata, err := s.ResolveForPath(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.OperationSpec{}, err
+	}
+
+	return metadatadomain.ResolveOperationSpec(ctx, metadata, operation, value)
+}
+
+func (s *testMetadataService) Infer(
+	ctx context.Context,
+	logicalPath string,
+	request metadatadomain.InferenceRequest,
+) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.InferFromOpenAPI(ctx, logicalPath, request)
+}
+
+type testSecretProvider struct {
+	values map[string]string
+}
+
+func newTestSecretProvider() *testSecretProvider {
+	return &testSecretProvider{
+		values: map[string]string{},
+	}
+}
+
+func (s *testSecretProvider) Init(context.Context) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	return nil
+}
+
+func (s *testSecretProvider) Store(_ context.Context, key string, value string) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[key] = value
+	return nil
+}
+
+func (s *testSecretProvider) Get(_ context.Context, key string) (string, error) {
+	value, found := s.values[key]
+	if !found {
+		return "", faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("secret %q not found", key), nil)
+	}
+	return value, nil
+}
+
+func (s *testSecretProvider) Delete(_ context.Context, key string) error {
+	delete(s.values, key)
+	return nil
+}
+
+func (s *testSecretProvider) List(context.Context) ([]string, error) {
+	keys := make([]string, 0, len(s.values))
+	for key := range s.values {
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+func (s *testSecretProvider) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+	return secretdomain.MaskPayload(value, func(key string, secretValue string) error {
+		return s.Store(ctx, key, secretValue)
+	})
+}
+
+func (s *testSecretProvider) ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error) {
+	return secretdomain.ResolvePayload(value, func(key string) (string, error) {
+		return s.Get(ctx, key)
+	})
+}
+
+func (s *testSecretProvider) NormalizeSecretPlaceholders(_ context.Context, value resource.Value) (resource.Value, error) {
+	return secretdomain.NormalizePlaceholders(value)
+}
+
+func (s *testSecretProvider) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
+	return secretdomain.DetectSecretCandidates(value)
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

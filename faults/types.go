@@ -1,7 +1,5 @@
 package faults
 
-import "errors"
-
 type ErrorCategory string
 
 const (
@@ -49,5 +47,3 @@ func NewTypedError(category ErrorCategory, message string, cause error) *TypedEr
 		Cause:    cause,
 	}
 }
-
-var ErrToBeImplemented = errors.New("to be implemented")

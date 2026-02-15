@@ -7,9 +7,6 @@ import (
 )
 
 func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
-	_ = deps
-	_ = globalFlags
-
 	command := &cobra.Command{
 		Use:   "metadata",
 		Short: "Manage metadata",
@@ -17,29 +14,46 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	}
 
 	command.AddCommand(
-		newGetCommand(),
-		newSetCommand(),
-		newUnsetCommand(),
-		newResolveCommand(),
-		newRenderCommand(),
-		newInferCommand(),
+		newGetCommand(deps, globalFlags),
+		newSetCommand(deps),
+		newUnsetCommand(deps),
+		newResolveCommand(deps, globalFlags),
+		newRenderCommand(deps, globalFlags),
+		newInferCommand(deps, globalFlags),
 	)
 
 	return command
 }
 
-func newGetCommand() *cobra.Command {
+func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
 		Use:   "get [path]",
 		Short: "Read metadata",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if _, err := common.ResolvePathInput(pathFlag, args, true); err != nil {
+		RunE: func(command *cobra.Command, args []string) error {
+			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Metadata", "Get")
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			item, err := service.Get(command.Context(), resolvedPath)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
@@ -47,7 +61,7 @@ func newGetCommand() *cobra.Command {
 	return command
 }
 
-func newSetCommand() *cobra.Command {
+func newSetCommand(deps common.CommandWiring) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -56,13 +70,22 @@ func newSetCommand() *cobra.Command {
 		Short: "Set metadata",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			if _, err := common.ResolvePathInput(pathFlag, args, true); err != nil {
+			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
 				return err
 			}
-			if _, err := common.DecodeInput[metadatadomain.ResourceMetadata](command, input); err != nil {
+
+			item, err := common.DecodeInput[metadatadomain.ResourceMetadata](command, input)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Metadata", "Set")
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			return service.Set(command.Context(), resolvedPath, item)
 		},
 	}
 
@@ -71,18 +94,25 @@ func newSetCommand() *cobra.Command {
 	return command
 }
 
-func newUnsetCommand() *cobra.Command {
+func newUnsetCommand(deps common.CommandWiring) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
 		Use:   "unset [path]",
 		Short: "Unset metadata",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if _, err := common.ResolvePathInput(pathFlag, args, true); err != nil {
+		RunE: func(command *cobra.Command, args []string) error {
+			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Metadata", "Unset")
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			return service.Unset(command.Context(), resolvedPath)
 		},
 	}
 
@@ -90,18 +120,35 @@ func newUnsetCommand() *cobra.Command {
 	return command
 }
 
-func newResolveCommand() *cobra.Command {
+func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
 		Use:   "resolve [path]",
 		Short: "Resolve metadata for a path",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if _, err := common.ResolvePathInput(pathFlag, args, true); err != nil {
+		RunE: func(command *cobra.Command, args []string) error {
+			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
 				return err
 			}
-			return common.NotImplementedError("Metadata", "Resolve")
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			item, err := service.ResolveForPath(command.Context(), resolvedPath)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
@@ -109,26 +156,45 @@ func newResolveCommand() *cobra.Command {
 	return command
 }
 
-func newRenderCommand() *cobra.Command {
+func newRenderCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
 		Use:   "render [path] <operation>",
 		Short: "Render operation spec",
 		Args:  cobra.RangeArgs(1, 2),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(command *cobra.Command, args []string) error {
 			pathArgs, operationArg, err := extractRenderArgs(pathFlag, args)
 			if err != nil {
 				return err
 			}
-			if _, err := common.ResolvePathInput(pathFlag, pathArgs, true); err != nil {
-				return err
-			}
-			if _, err := parseOperation(operationArg); err != nil {
+
+			resolvedPath, err := common.ResolvePathInput(pathFlag, pathArgs, true)
+			if err != nil {
 				return err
 			}
 
-			return common.NotImplementedError("Metadata", "Render")
+			operation, err := parseOperation(operationArg)
+			if err != nil {
+				return err
+			}
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			item, err := service.RenderOperationSpec(command.Context(), resolvedPath, operation, map[string]any{})
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
@@ -136,7 +202,7 @@ func newRenderCommand() *cobra.Command {
 	return command
 }
 
-func newInferCommand() *cobra.Command {
+func newInferCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var apply bool
 	var recursive bool
@@ -145,12 +211,29 @@ func newInferCommand() *cobra.Command {
 		Use:   "infer [path]",
 		Short: "Infer metadata",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			if _, err := common.ResolvePathInput(pathFlag, args, true); err != nil {
+		RunE: func(command *cobra.Command, args []string) error {
+			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
 				return err
 			}
-			_ = metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
-			return common.NotImplementedError("Metadata", "Infer")
+
+			service, err := common.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+
+			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
+			item, err := service.Infer(command.Context(), resolvedPath, request)
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 

@@ -9,12 +9,14 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	_ = deps
 	_ = globalFlags
 
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "ad-hoc",
 		Short: "Execute ad-hoc operations",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return common.NotImplementedError("AdHoc", "Run")
+		RunE: func(command *cobra.Command, _ []string) error {
+			return command.Help()
 		},
 	}
+
+	return command
 }
