@@ -51,6 +51,11 @@ Acceptance contracts:
 13. CLI package boundary checks rejecting direct provider implementation imports.
 14. Repository list/delete recursion policy behavior and deterministic ordering.
 15. `repo status` output contract for auto text and structured JSON/YAML modes.
+16. Missing context catalog behavior (`list` empty vs `current/resolve` `NotFoundError`) is covered.
+17. `config create/update/validate` strict input decoding rejects unknown JSON/YAML fields.
+18. Interactive config flows (`create/use/rename/delete`) are covered for TTY success paths and non-TTY validation failures.
+19. `config show` is covered for `--context` selection, interactive fallback selection, non-interactive validation failure, and YAML output contract.
+20. Context persistence compacts `metadata.base-dir` when equal to repository base-dir, and `ResolveContext` restores the default value.
 
 ## Failure Modes
 1. Tests pass locally but rely on non-deterministic ordering.

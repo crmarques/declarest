@@ -60,6 +60,12 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 11. Go changes MUST follow idiomatic Go module/package conventions, including `cmd/*` for executables and `internal/*` for non-public implementation packages.
 12. Bash changes (including test scripts) MUST follow community shell standards and be lintable with ShellCheck-friendly patterns and robust error-handling defaults.
 13. Context configuration MUST follow the canonical YAML contract documented in `agents/reference/context-config.md`.
+14. Dependencies introduced on the agent’s behalf MUST originate from trustworthy, widely adopted, well-maintained packages; newly created, unmaintainable, or obscure libraries MUST be avoided.
+15. Before adding or updating a dependency, confirm the most recent stable release and target that version, ensuring `go.sum` (and any vendored artifacts) stay in sync.
+16. When imports change, verify `go.mod` keeps only explicitly used libraries as direct `require` entries and relegates transitive packages to indirect requirements, running `go mod tidy` or equivalent cleanup to enforce accuracy.
+14. Dependencies introduced on the agent’s behalf MUST originate from trustworthy, widely adopted, well-maintained packages; newly created, unmaintainable, or obscure libraries MUST be avoided.
+15. Before adding or updating a dependency, confirm the most recent stable release and target that version, ensuring `go.sum` (and any vendored artifacts) stay in sync.
+16. When imports change, verify `go.mod` keeps only explicitly used libraries as direct `require` entries and relegates transitive packages to indirect requirements, running `go mod tidy` or equivalent cleanup to enforce accuracy.
 
 ## File Organization Policy
 1. Keep one dominant reason to change per file.

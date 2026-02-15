@@ -15,8 +15,7 @@ type AppState struct {
 }
 
 type BootstrapConfig struct {
-	ConfigFilePath string
-	ContextName    string
+	ContextCatalogPath string
 }
 
 type ExecutionRuntime struct {

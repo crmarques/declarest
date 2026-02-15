@@ -22,6 +22,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 5. Human-readable output SHOULD be concise and deterministic.
 6. Command aliases MUST not introduce ambiguous behavior.
 7. Completion suggestions MUST be context-aware and deterministic.
+8. Interactive command flows MUST only run when stdin/stdout are interactive terminals and MUST preserve non-interactive automation behavior.
 
 ## Data Contracts
 Command groups:
@@ -57,17 +58,25 @@ Core resource commands:
 
 Selected command names:
 1. `config use`.
-2. `config current`.
-3. `config resolve`.
-4. `metadata resolve`.
-5. `metadata render`.
-6. `repo status`.
-7. `secret mask`.
-8. `secret resolve`.
-9. `secret normalize`.
-10. `secret detect`.
-11. `completion`.
-12. `version`.
+2. `config show`.
+3. `config current`.
+4. `config resolve`.
+5. `metadata resolve`.
+6. `metadata render`.
+7. `repo status`.
+8. `secret mask`.
+9. `secret resolve`.
+10. `secret normalize`.
+11. `secret detect`.
+12. `completion`.
+13. `version`.
+
+Interactive config commands:
+1. `config create` SHOULD support terminal prompts when no file/stdin input is provided.
+2. `config use` SHOULD support context selection when no name argument is provided.
+3. `config show` SHOULD support context selection when `--context` is omitted.
+4. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
+5. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
 
 ## CLI Input Grammar
 1. Resource targets MUST be logical absolute paths.
@@ -76,6 +85,8 @@ Selected command names:
 4. Option conflicts MUST produce usage errors.
 5. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
 6. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
+7. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
+8. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -84,6 +95,7 @@ Selected command names:
 4. Diff output MUST present deterministic ordering.
 5. When `--output` is `auto` (default), resource-oriented output MUST follow the active context `repository.resource-format` (`json` or `yaml`).
 6. `repo status` with `--output auto` MUST render deterministic text summary by default.
+7. `config show` MUST print the full selected context configuration as YAML to stdout.
 
 ## Failure Modes
 1. Missing required path argument.
@@ -96,6 +108,7 @@ Selected command names:
 2. `delete` invoked on collection without recursive force confirmation.
 3. `metadata infer` called with missing OpenAPI source.
 4. Completion for alias path when remote ID differs.
+5. Interactive config command invoked from non-TTY input/output.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -106,3 +119,5 @@ Selected command names:
 6. `declarest repo status` reports local/remote sync status without mutating repository state.
 7. `declarest completion bash` generates Bash completion output.
 8. `declarest version -o json` prints machine-readable version information.
+9. `declarest config use` opens interactive context selection when run in a terminal.
+10. `declarest config show --context dev` prints the selected context configuration as YAML.

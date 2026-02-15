@@ -9,9 +9,8 @@ import (
 	"github.com/crmarques/declarest/repository"
 )
 
-func NewAppState(opts BootstrapConfig) AppState {
-	contextService := configfile.NewFileContextService(opts.ConfigFilePath)
-	selection := config.ContextSelection{Name: opts.ContextName}
+func NewAppState(opts BootstrapConfig, selection config.ContextSelection) AppState {
+	contextService := configfile.NewFileContextService(opts.ContextCatalogPath)
 
 	return AppState{
 		Contexts: contextService,

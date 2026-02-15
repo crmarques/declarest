@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func decodeCatalogFile(path string) (config.ContextCatalog, error) {
@@ -21,19 +21,19 @@ func decodeCatalogFile(path string) (config.ContextCatalog, error) {
 }
 
 func decodeCatalog(data []byte) (config.ContextCatalog, error) {
-	var catalog config.ContextCatalog
+	var contextCatalog config.ContextCatalog
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
-	if err := decoder.Decode(&catalog); err != nil {
+	if err := decoder.Decode(&contextCatalog); err != nil {
 		return config.ContextCatalog{}, validationError("invalid context catalog yaml", err)
 	}
 
-	return catalog, nil
+	return contextCatalog, nil
 }
 
-func encodeCatalog(catalog config.ContextCatalog) ([]byte, error) {
-	data, err := yaml.Marshal(catalog)
+func encodeCatalog(contextCatalog config.ContextCatalog) ([]byte, error) {
+	data, err := yaml.Marshal(contextCatalog)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 		path = os.Getenv(config.ContextFileEnvVar)
 	}
 	if path == "" {
-		path = config.DefaultCatalogPath
+		path = config.DefaultContextCatalogPath
 	}
 
 	homeDir, err := os.UserHomeDir()

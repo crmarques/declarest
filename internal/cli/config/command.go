@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -12,6 +11,14 @@ import (
 )
 
 func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+	return newCommandWithPrompter(deps, globalFlags, terminalPrompter{})
+}
+
+func newCommandWithPrompter(
+	deps common.CommandWiring,
+	globalFlags *common.GlobalFlags,
+	prompter configPrompter,
+) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "config",
 		Short: "Manage contexts",
@@ -19,12 +26,13 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	}
 
 	command.AddCommand(
-		newCreateCommand(deps),
+		newCreateCommand(deps, prompter),
 		newUpdateCommand(deps),
-		newDeleteCommand(deps),
-		newRenameCommand(deps),
+		newDeleteCommand(deps, prompter),
+		newRenameCommand(deps, prompter),
 		newListCommand(deps, globalFlags),
-		newUseCommand(deps),
+		newUseCommand(deps, prompter),
+		newShowCommand(deps, globalFlags, prompter),
 		newCurrentCommand(deps, globalFlags),
 		newResolveCommand(deps, globalFlags),
 		newValidateCommand(deps),
@@ -33,23 +41,23 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	return command
 }
 
-func newCreateCommand(deps common.CommandWiring) *cobra.Command {
+func newCreateCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
 		Use:   "create",
-		Short: "Create a context from input",
+		Short: "Create a context from input or interactive prompts",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
-			cfg, err := common.DecodeInput[configdomain.Context](command, input)
+			cfg, err := resolveCreateContextInput(command, input, prompter)
 			if err != nil {
 				return err
 			}
-			return contexts.Create(context.Background(), cfg)
+			return contexts.Create(command.Context(), cfg)
 		},
 	}
 
@@ -69,11 +77,11 @@ func newUpdateCommand(deps common.CommandWiring) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := common.DecodeInput[configdomain.Context](command, input)
+			cfg, err := decodeContextStrict(command, input)
 			if err != nil {
 				return err
 			}
-			return contexts.Update(context.Background(), cfg)
+			return contexts.Update(command.Context(), cfg)
 		},
 	}
 
@@ -81,32 +89,77 @@ func newUpdateCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
+func newDeleteCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
-		Use:   "delete <name>",
-		Short: "Delete a context",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:   "delete [name]",
+		Short: "Delete a context (interactive when name is omitted)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
-			return contexts.Delete(context.Background(), args[0])
+
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			} else {
+				selected, err := selectContextForAction(command, contexts, prompter, "delete")
+				if err != nil {
+					return err
+				}
+				confirmed, err := prompter.Confirm(command, fmt.Sprintf("Delete context %q?", selected), false)
+				if err != nil {
+					return err
+				}
+				if !confirmed {
+					return common.WriteText(command, common.OutputText, "delete canceled")
+				}
+				name = selected
+			}
+			return contexts.Delete(command.Context(), name)
 		},
 	}
 }
 
-func newRenameCommand(deps common.CommandWiring) *cobra.Command {
+func newRenameCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
-		Use:   "rename <from> <to>",
-		Short: "Rename a context",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:   "rename [from] [to]",
+		Short: "Rename a context (interactive when args are omitted)",
+		Args:  cobra.MaximumNArgs(2),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
-			return contexts.Rename(context.Background(), args[0], args[1])
+
+			fromName := ""
+			toName := ""
+			switch len(args) {
+			case 2:
+				fromName = args[0]
+				toName = args[1]
+			case 1:
+				fromName = args[0]
+				if !prompter.IsInteractive(command) {
+					return common.ValidationError("new context name is required", nil)
+				}
+				toName, err = prompter.Input(command, "New context name: ", true)
+				if err != nil {
+					return err
+				}
+			default:
+				fromName, err = selectContextForAction(command, contexts, prompter, "rename")
+				if err != nil {
+					return err
+				}
+				toName, err = prompter.Input(command, "New context name: ", true)
+				if err != nil {
+					return err
+				}
+			}
+
+			return contexts.Rename(command.Context(), fromName, toName)
 		},
 	}
 }
@@ -121,7 +174,7 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 			if err != nil {
 				return err
 			}
-			items, err := contexts.List(context.Background())
+			items, err := contexts.List(command.Context())
 			if err != nil {
 				return err
 			}
@@ -137,17 +190,63 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	}
 }
 
-func newUseCommand(deps common.CommandWiring) *cobra.Command {
+func newUseCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
-		Use:   "use <name>",
-		Short: "Set current context",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		Use:   "use [name]",
+		Short: "Set current context (interactive when name is omitted)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
-			return contexts.SetCurrent(context.Background(), args[0])
+
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			} else {
+				name, err = selectContextForAction(command, contexts, prompter, "use")
+				if err != nil {
+					return err
+				}
+			}
+			return contexts.SetCurrent(command.Context(), name)
+		},
+	}
+}
+
+func newShowCommand(
+	deps common.CommandWiring,
+	globalFlags *common.GlobalFlags,
+	prompter configPrompter,
+) *cobra.Command {
+	return &cobra.Command{
+		Use:   "show",
+		Short: "Show a context from --context or interactive selection",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			contexts, err := common.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+
+			name := ""
+			if globalFlags != nil {
+				name = strings.TrimSpace(globalFlags.Context)
+			}
+			if name == "" {
+				name, err = selectContextForAction(command, contexts, prompter, "show --context")
+				if err != nil {
+					return err
+				}
+			}
+
+			shown, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{Name: name})
+			if err != nil {
+				return err
+			}
+
+			return common.WriteOutput(command, common.OutputYAML, shown, nil)
 		},
 	}
 }
@@ -162,7 +261,7 @@ func newCurrentCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 			if err != nil {
 				return err
 			}
-			current, err := contexts.GetCurrent(context.Background())
+			current, err := contexts.GetCurrent(command.Context())
 			if err != nil {
 				return err
 			}
@@ -192,7 +291,7 @@ func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 				return err
 			}
 
-			resolved, err := contexts.ResolveContext(context.Background(), configdomain.ContextSelection{
+			resolved, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{
 				Name:      globalFlags.Context,
 				Overrides: overridesMap,
 			})
@@ -223,11 +322,11 @@ func newValidateCommand(deps common.CommandWiring) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := common.DecodeInput[configdomain.Context](command, input)
+			cfg, err := decodeContextStrict(command, input)
 			if err != nil {
 				return err
 			}
-			return contexts.Validate(context.Background(), cfg)
+			return contexts.Validate(command.Context(), cfg)
 		},
 	}
 

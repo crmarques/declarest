@@ -5,15 +5,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/core"
 	"github.com/crmarques/declarest/internal/cli"
 	"github.com/crmarques/declarest/internal/cli/common"
 )
 
 func main() {
-	appState := core.NewAppState(core.BootstrapConfig{
-		ContextName: contextNameFromArgs(os.Args[1:]),
-	})
+	appState := core.NewAppState(
+		core.BootstrapConfig{},
+		config.ContextSelection{Name: contextNameFromArgs(os.Args[1:])},
+	)
 	deps := common.CommandWiring{
 		Reconciler: appState.Reconciler,
 		Contexts:   appState.Contexts,

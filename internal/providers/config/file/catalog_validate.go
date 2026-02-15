@@ -2,20 +2,22 @@ package file
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 
 	"github.com/crmarques/declarest/config"
 )
 
-func validateCatalog(catalog config.ContextCatalog) error {
-	if len(catalog.Contexts) == 0 {
-		if catalog.CurrentCtx != "" {
+func validateCatalog(contextCatalog config.ContextCatalog) error {
+	if len(contextCatalog.Contexts) == 0 {
+		if contextCatalog.CurrentCtx != "" {
 			return validationError("current-ctx must be empty when contexts list is empty", nil)
 		}
 		return nil
 	}
 
 	seen := map[string]struct{}{}
-	for _, item := range catalog.Contexts {
+	for _, item := range contextCatalog.Contexts {
 		if item.Name == "" {
 			return validationError("context name must not be empty", nil)
 		}
@@ -29,18 +31,20 @@ func validateCatalog(catalog config.ContextCatalog) error {
 		}
 	}
 
-	if catalog.CurrentCtx == "" {
+	if contextCatalog.CurrentCtx == "" {
 		return validationError("current-ctx must be set when contexts are defined", nil)
 	}
 
-	if _, exists := seen[catalog.CurrentCtx]; !exists {
-		return validationError(fmt.Sprintf("current-ctx %q does not match any context", catalog.CurrentCtx), nil)
+	if _, exists := seen[contextCatalog.CurrentCtx]; !exists {
+		return validationError(fmt.Sprintf("current-ctx %q does not match any context", contextCatalog.CurrentCtx), nil)
 	}
 
 	return nil
 }
 
 func validateConfig(cfg config.Context) error {
+	cfg = normalizeConfig(cfg)
+
 	if cfg.Name == "" {
 		return validationError("context name must not be empty", nil)
 	}
@@ -60,10 +64,53 @@ func validateConfig(cfg config.Context) error {
 	return nil
 }
 
-func validateRepository(repository config.Repository) error {
-	if repository.ResourceFormat == "" {
-		repository.ResourceFormat = config.ResourceFormatJSON
+func normalizeConfig(cfg config.Context) config.Context {
+	if cfg.Repository.ResourceFormat == "" {
+		cfg.Repository.ResourceFormat = config.ResourceFormatJSON
 	}
+	return cfg
+}
+
+func applyConfigDefaults(cfg config.Context) config.Context {
+	cfg = normalizeConfig(cfg)
+	if cfg.Metadata.BaseDir == "" {
+		cfg.Metadata.BaseDir = contextRepositoryBaseDir(cfg)
+	}
+	return cfg
+}
+
+func compactConfigForPersistence(cfg config.Context) config.Context {
+	if isDefaultMetadataBaseDir(cfg) {
+		cfg.Metadata.BaseDir = ""
+	}
+	return cfg
+}
+
+func isDefaultMetadataBaseDir(cfg config.Context) bool {
+	repoBaseDir := normalizeBaseDirPath(contextRepositoryBaseDir(cfg))
+	metadataBaseDir := normalizeBaseDirPath(cfg.Metadata.BaseDir)
+	return repoBaseDir != "" && metadataBaseDir != "" && repoBaseDir == metadataBaseDir
+}
+
+func contextRepositoryBaseDir(cfg config.Context) string {
+	switch {
+	case cfg.Repository.Git != nil:
+		return cfg.Repository.Git.Local.BaseDir
+	case cfg.Repository.Filesystem != nil:
+		return cfg.Repository.Filesystem.BaseDir
+	default:
+		return ""
+	}
+}
+
+func normalizeBaseDirPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
+}
+
+func validateRepository(repository config.Repository) error {
 	if repository.ResourceFormat != config.ResourceFormatJSON && repository.ResourceFormat != config.ResourceFormatYAML {
 		return validationError("repository.resource-format must be json or yaml", nil)
 	}
@@ -189,7 +236,8 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 }
 
 func applyOverrides(cfg config.Context, overrides map[string]string) (config.Context, error) {
-	for key, value := range overrides {
+	for _, key := range sortedOverrideKeys(overrides) {
+		value := overrides[key]
 		switch key {
 		case "repository.resource-format":
 			cfg.Repository.ResourceFormat = value
@@ -216,6 +264,15 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 	}
 
 	return cfg, nil
+}
+
+func sortedOverrideKeys(overrides map[string]string) []string {
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func countSet(values ...bool) int {

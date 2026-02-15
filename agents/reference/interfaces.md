@@ -51,7 +51,7 @@ Factory contract:
 Represents startup wiring inputs.
 
 Fields:
-1. `CatalogPath`: optional explicit context catalog path.
+1. `ContextCatalogPath`: optional explicit context catalog path.
 
 ### Type: `core.ExecutionRuntime`
 Represents active runtime context assembled by the composition root.

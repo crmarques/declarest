@@ -15,7 +15,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 3. CLI completion internals.
 
 ## Normative Rules
-1. Context catalogs MUST be stored at `~/declarest/config/contexts.yaml` by default.
+1. Context catalogs MUST be stored at `~/.declarest/configs/contexts.yaml` by default.
 2. Environment override `DECLAREST_CONTEXTS_FILE` MAY replace the default path.
 3. YAML keys MUST use kebab-case.
 4. Unknown YAML keys MUST fail parsing.
@@ -25,6 +25,9 @@ Define the canonical context catalog schema, file location, validation rules, an
 8. Validation MUST fail fast when one-of blocks are missing or ambiguous.
 9. Config precedence MUST be: runtime flags, environment overrides, persisted context values, engine defaults.
 10. Unknown override keys MUST fail validation.
+11. Missing context catalog files MUST be treated as an empty catalog state.
+12. `metadata.base-dir` MUST default to the selected repository base-dir when unset.
+13. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -36,7 +39,7 @@ Per-context fields:
 2. `repository`.
 3. optional `managed-server`.
 4. optional `secret-store`.
-5. optional `metadata`.
+5. optional `metadata` (omit when equivalent to default repository base-dir behavior).
 6. optional `preferences`.
 
 Repository one-of contract:
@@ -55,6 +58,13 @@ Context manager operations:
 2. `SetCurrent/GetCurrent`.
 3. `ResolveContext`.
 4. `Validate`.
+
+Runtime override keys:
+1. `repository.resource-format`.
+2. `repository.git.local.base-dir`.
+3. `repository.filesystem.base-dir`.
+4. `managed-server.http.base-url`.
+5. `metadata.base-dir`.
 
 ## Canonical YAML Template
 ```yaml
@@ -174,15 +184,19 @@ current-ctx: xxx
 6. Secret store one-of violation.
 7. Secret file key source one-of violation.
 8. Config path resolution failure for home expansion or file access.
+9. Runtime override key not in the supported override-key list.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
 2. Context with optional `managed-server` omitted.
 3. Context with optional `secret-store` omitted.
 4. Runtime override targets a missing optional block.
+5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
+6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
 2. `SetCurrent("yyy")` updates `current-ctx` and preserves context list order.
 3. `Validate` rejects a config that defines both `repository.git` and `repository.filesystem`.
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
+5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.

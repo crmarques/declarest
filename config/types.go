@@ -6,12 +6,12 @@ type ContextSelection struct {
 }
 
 const (
-	ContextFileEnvVar  = "DECLAREST_CONTEXTS_FILE"
-	DefaultCatalogPath = "~/declarest/config/contexts.yaml"
-	ResourceFormatJSON = "json"
-	ResourceFormatYAML = "yaml"
-	GitProviderGitHub  = "github"
-	OAuthClientCreds   = "client_credentials"
+	ContextFileEnvVar         = "DECLAREST_CONTEXTS_FILE"
+	DefaultContextCatalogPath = "~/.declarest/configs/contexts.yaml"
+	ResourceFormatJSON        = "json"
+	ResourceFormatYAML        = "yaml"
+	GitProviderGitHub         = "github"
+	OAuthClientCreds          = "client_credentials"
 )
 
 type ContextCatalog struct {

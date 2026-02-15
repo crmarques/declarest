@@ -2,26 +2,28 @@ package file
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 )
 
 func TestDecodeCatalogSuccess(t *testing.T) {
 	t.Parallel()
 
-	catalog, err := decodeCatalog([]byte(validCatalogYAML))
+	contextCatalog, err := decodeCatalog([]byte(validContextCatalogYAML))
 	if err != nil {
 		t.Fatalf("decodeCatalog returned error: %v", err)
 	}
-	if len(catalog.Contexts) != 1 {
-		t.Fatalf("expected 1 context, got %d", len(catalog.Contexts))
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected 1 context, got %d", len(contextCatalog.Contexts))
 	}
-	if catalog.CurrentCtx != "dev" {
-		t.Fatalf("expected current-ctx dev, got %q", catalog.CurrentCtx)
+	if contextCatalog.CurrentCtx != "dev" {
+		t.Fatalf("expected current-ctx dev, got %q", contextCatalog.CurrentCtx)
 	}
 }
 
@@ -46,12 +48,12 @@ current-ctx: dev
 func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 	t.Parallel()
 
-	catalog := config.ContextCatalog{
+	contextCatalog := config.ContextCatalog{
 		Contexts:   []config.Context{{Name: "dev", Repository: validFilesystemRepository()}},
 		CurrentCtx: "prod",
 	}
 
-	err := validateCatalog(catalog)
+	err := validateCatalog(contextCatalog)
 	if err == nil {
 		t.Fatal("expected current-ctx mismatch error")
 	}
@@ -60,7 +62,7 @@ func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 func TestValidateCatalogDuplicateContextNames(t *testing.T) {
 	t.Parallel()
 
-	catalog := config.ContextCatalog{
+	contextCatalog := config.ContextCatalog{
 		Contexts: []config.Context{
 			{Name: "dev", Repository: validFilesystemRepository()},
 			{Name: "dev", Repository: validFilesystemRepository()},
@@ -68,7 +70,7 @@ func TestValidateCatalogDuplicateContextNames(t *testing.T) {
 		CurrentCtx: "dev",
 	}
 
-	err := validateCatalog(catalog)
+	err := validateCatalog(contextCatalog)
 	if err == nil {
 		t.Fatal("expected duplicate name validation error")
 	}
@@ -131,12 +133,12 @@ func TestResolveCatalogPathDefaultAndEnv(t *testing.T) {
 		t.Fatalf("failed to resolve home dir: %v", err)
 	}
 
-	resolvedDefault, err := resolveCatalogPath(config.DefaultCatalogPath)
+	resolvedDefault, err := resolveCatalogPath(config.DefaultContextCatalogPath)
 	if err != nil {
 		t.Fatalf("resolveCatalogPath default failed: %v", err)
 	}
 
-	expectedDefault := filepath.Join(home, "declarest/config/contexts.yaml")
+	expectedDefault := filepath.Join(home, ".declarest/configs/contexts.yaml")
 	if resolvedDefault != expectedDefault {
 		t.Fatalf("expected %q, got %q", expectedDefault, resolvedDefault)
 	}
@@ -156,8 +158,8 @@ func TestResolveContextUnknownOverrideFails(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	if err := os.WriteFile(path, []byte(validCatalogYAML), 0o600); err != nil {
-		t.Fatalf("failed to write test catalog: %v", err)
+	if err := os.WriteFile(path, []byte(validContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
 	contextService := NewFileContextService(path)
@@ -177,8 +179,8 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	if err := os.WriteFile(path, []byte(providerSelectionCatalogYAML), 0o600); err != nil {
-		t.Fatalf("failed to write test catalog: %v", err)
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
 	contextService := NewFileContextService(path)
@@ -241,6 +243,384 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 	})
 }
 
+func TestContextServiceMissingCatalogBehaviors(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	items, err := contextService.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty list, got %d items", len(items))
+	}
+
+	_, err = contextService.GetCurrent(context.Background())
+	assertTypedCategory(t, err, faults.NotFoundError)
+	if !strings.Contains(err.Error(), "current context not set") {
+		t.Fatalf("unexpected get current error: %v", err)
+	}
+
+	_, err = contextService.ResolveContext(context.Background(), config.ContextSelection{})
+	assertTypedCategory(t, err, faults.NotFoundError)
+	if !strings.Contains(err.Error(), "current context not set") {
+		t.Fatalf("unexpected resolve error: %v", err)
+	}
+
+	if err := contextService.SetCurrent(context.Background(), "missing"); err == nil {
+		t.Fatal("expected SetCurrent on empty contextCatalog to fail")
+	} else {
+		assertTypedCategory(t, err, faults.NotFoundError)
+	}
+}
+
+func TestContextServiceCRUDLifecycle(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	dev := config.Context{
+		Name: "dev",
+		Repository: config.Repository{
+			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/dev"},
+		},
+	}
+	if err := contextService.Create(context.Background(), dev); err != nil {
+		t.Fatalf("Create(dev) returned error: %v", err)
+	}
+
+	prod := config.Context{
+		Name: "prod",
+		Repository: config.Repository{
+			ResourceFormat: config.ResourceFormatYAML,
+			Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/prod"},
+		},
+	}
+	if err := contextService.Create(context.Background(), prod); err != nil {
+		t.Fatalf("Create(prod) returned error: %v", err)
+	}
+
+	current, err := contextService.GetCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("GetCurrent returned error: %v", err)
+	}
+	if current.Name != "dev" {
+		t.Fatalf("expected current context dev, got %q", current.Name)
+	}
+
+	if err := contextService.SetCurrent(context.Background(), "prod"); err != nil {
+		t.Fatalf("SetCurrent(prod) returned error: %v", err)
+	}
+
+	current, err = contextService.GetCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("GetCurrent after SetCurrent returned error: %v", err)
+	}
+	if current.Name != "prod" {
+		t.Fatalf("expected current context prod, got %q", current.Name)
+	}
+
+	if err := contextService.Rename(context.Background(), "prod", "stage"); err != nil {
+		t.Fatalf("Rename(prod->stage) returned error: %v", err)
+	}
+
+	current, err = contextService.GetCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("GetCurrent after Rename returned error: %v", err)
+	}
+	if current.Name != "stage" {
+		t.Fatalf("expected current context stage after rename, got %q", current.Name)
+	}
+
+	if err := contextService.Update(context.Background(), config.Context{
+		Name: "stage",
+		Repository: config.Repository{
+			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/stage"},
+		},
+	}); err != nil {
+		t.Fatalf("Update(stage) returned error: %v", err)
+	}
+
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "stage"})
+	if err != nil {
+		t.Fatalf("ResolveContext(stage) returned error: %v", err)
+	}
+	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/stage" {
+		t.Fatalf("expected updated filesystem base-dir, got %#v", resolved.Repository.Filesystem)
+	}
+
+	if err := contextService.Delete(context.Background(), "stage"); err != nil {
+		t.Fatalf("Delete(stage) returned error: %v", err)
+	}
+
+	current, err = contextService.GetCurrent(context.Background())
+	if err != nil {
+		t.Fatalf("GetCurrent after deleting current context returned error: %v", err)
+	}
+	if current.Name != "dev" {
+		t.Fatalf("expected fallback current context dev, got %q", current.Name)
+	}
+
+	if err := contextService.Delete(context.Background(), "dev"); err != nil {
+		t.Fatalf("Delete(dev) returned error: %v", err)
+	}
+
+	items, err := contextService.List(context.Background())
+	if err != nil {
+		t.Fatalf("List after deleting all contexts returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty contextCatalog, got %#v", items)
+	}
+
+	if _, err := contextService.GetCurrent(context.Background()); err == nil {
+		t.Fatal("expected GetCurrent to fail when contextCatalog is empty")
+	} else {
+		assertTypedCategory(t, err, faults.NotFoundError)
+	}
+}
+
+func TestSetCurrentPreservesContextOrder(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	for _, name := range []string{"a", "b", "c"} {
+		if err := contextService.Create(context.Background(), config.Context{
+			Name: name,
+			Repository: config.Repository{
+				Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/" + name},
+			},
+		}); err != nil {
+			t.Fatalf("Create(%q) returned error: %v", name, err)
+		}
+	}
+
+	if err := contextService.SetCurrent(context.Background(), "b"); err != nil {
+		t.Fatalf("SetCurrent(b) returned error: %v", err)
+	}
+
+	items, err := contextService.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 contexts, got %d", len(items))
+	}
+	if items[0].Name != "a" || items[1].Name != "b" || items[2].Name != "c" {
+		t.Fatalf("expected preserved order [a b c], got [%s %s %s]", items[0].Name, items[1].Name, items[2].Name)
+	}
+}
+
+func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	if err := contextService.Create(context.Background(), config.Context{
+		Name: "dev",
+		Repository: config.Repository{
+			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+		},
+	}); err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	contextCatalog, err := decodeCatalogFile(path)
+	if err != nil {
+		t.Fatalf("decodeCatalogFile returned error: %v", err)
+	}
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
+	}
+	if contextCatalog.Contexts[0].Repository.ResourceFormat != config.ResourceFormatJSON {
+		t.Fatalf("expected default resource-format json, got %q", contextCatalog.Contexts[0].Repository.ResourceFormat)
+	}
+}
+
+func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	if err := contextService.Create(context.Background(), config.Context{
+		Name: "dev",
+		Repository: config.Repository{
+			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+		},
+		Metadata: config.Metadata{
+			BaseDir: "/tmp/repo",
+		},
+	}); err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved context catalog: %v", err)
+	}
+	if strings.Contains(string(raw), "metadata:") {
+		t.Fatalf("expected metadata block to be omitted when base-dir matches repository base-dir, got:\n%s", string(raw))
+	}
+
+	contextCatalog, err := decodeCatalogFile(path)
+	if err != nil {
+		t.Fatalf("decodeCatalogFile returned error: %v", err)
+	}
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
+	}
+	if contextCatalog.Contexts[0].Metadata.BaseDir != "" {
+		t.Fatalf("expected persisted metadata base-dir to be empty, got %q", contextCatalog.Contexts[0].Metadata.BaseDir)
+	}
+}
+
+func TestResolveContextDefaultsResourceFormatWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(contextCatalogWithoutResourceFormatYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
+	if err != nil {
+		t.Fatalf("ResolveContext returned error: %v", err)
+	}
+	if resolved.Repository.ResourceFormat != config.ResourceFormatJSON {
+		t.Fatalf("expected resolved default resource-format json, got %q", resolved.Repository.ResourceFormat)
+	}
+}
+
+func TestResolveContextDefaultsMetadataBaseDirWhenMissing(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(contextCatalogWithoutResourceFormatYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
+	if err != nil {
+		t.Fatalf("ResolveContext returned error: %v", err)
+	}
+	if resolved.Metadata.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected metadata base-dir default /tmp/repo, got %q", resolved.Metadata.BaseDir)
+	}
+}
+
+func TestResolveContextOverrideRequiresConfiguredOptionalBlock(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+		Name:      "fs",
+		Overrides: map[string]string{"managed-server.http.base-url": "https://override.example.com"},
+	})
+	if err == nil {
+		t.Fatal("expected managed-server override to fail when managed-server is missing")
+	}
+	if !strings.Contains(err.Error(), "requires managed-server.http to be configured") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveContextOverrideFailureIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+		Name: "fs",
+		Overrides: map[string]string{
+			"repository.git.local.base-dir": "/tmp/git",
+			"aaa.unknown":                   "x",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid overrides to fail")
+	}
+	if !strings.Contains(err.Error(), "unknown override key \"aaa.unknown\"") {
+		t.Fatalf("expected deterministic failure on alphabetically first invalid key, got: %v", err)
+	}
+}
+
+func TestMutationOnMissingCatalogReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewFileContextService(path)
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "update",
+			run: func() error {
+				return contextService.Update(context.Background(), config.Context{
+					Name: "missing",
+					Repository: config.Repository{
+						Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+					},
+				})
+			},
+		},
+		{
+			name: "delete",
+			run: func() error {
+				return contextService.Delete(context.Background(), "missing")
+			},
+		},
+		{
+			name: "rename",
+			run: func() error {
+				return contextService.Rename(context.Background(), "missing", "renamed")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			assertTypedCategory(t, err, faults.NotFoundError)
+		})
+	}
+}
+
+func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatalf("expected %q error, got nil", category)
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		t.Fatalf("expected typed error, got %T", err)
+	}
+	if typedErr.Category != category {
+		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
+	}
+}
+
 func validFilesystemRepository() config.Repository {
 	return config.Repository{
 		ResourceFormat: config.ResourceFormatJSON,
@@ -248,7 +628,7 @@ func validFilesystemRepository() config.Repository {
 	}
 }
 
-const validCatalogYAML = `
+const validContextCatalogYAML = `
 contexts:
   - name: dev
     repository:
@@ -270,7 +650,7 @@ contexts:
 current-ctx: dev
 `
 
-const providerSelectionCatalogYAML = `
+const providerSelectionContextCatalogYAML = `
 contexts:
   - name: fs
     repository:
@@ -319,4 +699,13 @@ contexts:
           token: s.xxxx
 
 current-ctx: fs
+`
+
+const contextCatalogWithoutResourceFormatYAML = `
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/repo
+current-ctx: dev
 `

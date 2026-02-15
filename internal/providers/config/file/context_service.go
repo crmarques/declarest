@@ -14,76 +14,78 @@ import (
 var _ config.ContextService = (*FileContextService)(nil)
 
 type FileContextService struct {
-	catalogPath string
+	contextCatalogPath string
 }
 
 func NewFileContextService(path string) *FileContextService {
-	return &FileContextService{catalogPath: path}
+	return &FileContextService{contextCatalogPath: path}
 }
 
 func (m *FileContextService) Create(_ context.Context, cfg config.Context) error {
+	cfg = normalizeConfig(cfg)
 	if err := validateConfig(cfg); err != nil {
 		return err
 	}
 
-	catalog, err := m.loadCatalogAllowMissing()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
 	}
 
-	if idx := findContextIndex(catalog.Contexts, cfg.Name); idx >= 0 {
+	if idx := findContextIndex(contextCatalog.Contexts, cfg.Name); idx >= 0 {
 		return validationError(fmt.Sprintf("context %q already exists", cfg.Name), nil)
 	}
 
-	catalog.Contexts = append(catalog.Contexts, cfg)
-	if catalog.CurrentCtx == "" {
-		catalog.CurrentCtx = cfg.Name
+	contextCatalog.Contexts = append(contextCatalog.Contexts, cfg)
+	if contextCatalog.CurrentCtx == "" {
+		contextCatalog.CurrentCtx = cfg.Name
 	}
 
-	return m.saveCatalog(catalog)
+	return m.saveCatalog(contextCatalog)
 }
 
 func (m *FileContextService) Update(_ context.Context, cfg config.Context) error {
+	cfg = normalizeConfig(cfg)
 	if err := validateConfig(cfg); err != nil {
 		return err
 	}
 
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
 	}
 
-	idx := findContextIndex(catalog.Contexts, cfg.Name)
+	idx := findContextIndex(contextCatalog.Contexts, cfg.Name)
 	if idx < 0 {
 		return notFoundError(fmt.Sprintf("context %q not found", cfg.Name))
 	}
 
-	catalog.Contexts[idx] = cfg
-	return m.saveCatalog(catalog)
+	contextCatalog.Contexts[idx] = cfg
+	return m.saveCatalog(contextCatalog)
 }
 
 func (m *FileContextService) Delete(_ context.Context, name string) error {
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
 	}
 
-	idx := findContextIndex(catalog.Contexts, name)
+	idx := findContextIndex(contextCatalog.Contexts, name)
 	if idx < 0 {
 		return notFoundError(fmt.Sprintf("context %q not found", name))
 	}
 
-	catalog.Contexts = append(catalog.Contexts[:idx], catalog.Contexts[idx+1:]...)
+	contextCatalog.Contexts = append(contextCatalog.Contexts[:idx], contextCatalog.Contexts[idx+1:]...)
 
-	if catalog.CurrentCtx == name {
-		if len(catalog.Contexts) == 0 {
-			catalog.CurrentCtx = ""
+	if contextCatalog.CurrentCtx == name {
+		if len(contextCatalog.Contexts) == 0 {
+			contextCatalog.CurrentCtx = ""
 		} else {
-			catalog.CurrentCtx = catalog.Contexts[0].Name
+			contextCatalog.CurrentCtx = contextCatalog.Contexts[0].Name
 		}
 	}
 
-	return m.saveCatalog(catalog)
+	return m.saveCatalog(contextCatalog)
 }
 
 func (m *FileContextService) Rename(_ context.Context, fromName string, toName string) error {
@@ -91,92 +93,93 @@ func (m *FileContextService) Rename(_ context.Context, fromName string, toName s
 		return validationError("context name must not be empty", nil)
 	}
 
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
 	}
 
-	fromIdx := findContextIndex(catalog.Contexts, fromName)
+	fromIdx := findContextIndex(contextCatalog.Contexts, fromName)
 	if fromIdx < 0 {
 		return notFoundError(fmt.Sprintf("context %q not found", fromName))
 	}
-	if findContextIndex(catalog.Contexts, toName) >= 0 {
+	if findContextIndex(contextCatalog.Contexts, toName) >= 0 {
 		return validationError(fmt.Sprintf("context %q already exists", toName), nil)
 	}
 
-	catalog.Contexts[fromIdx].Name = toName
-	if catalog.CurrentCtx == fromName {
-		catalog.CurrentCtx = toName
+	contextCatalog.Contexts[fromIdx].Name = toName
+	if contextCatalog.CurrentCtx == fromName {
+		contextCatalog.CurrentCtx = toName
 	}
 
-	return m.saveCatalog(catalog)
+	return m.saveCatalog(contextCatalog)
 }
 
 func (m *FileContextService) List(_ context.Context) ([]config.Context, error) {
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return nil, err
 	}
 
-	contexts := make([]config.Context, len(catalog.Contexts))
-	copy(contexts, catalog.Contexts)
+	contexts := make([]config.Context, len(contextCatalog.Contexts))
+	copy(contexts, contextCatalog.Contexts)
 	return contexts, nil
 }
 
 func (m *FileContextService) SetCurrent(_ context.Context, name string) error {
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
 	}
 
-	if findContextIndex(catalog.Contexts, name) < 0 {
+	if findContextIndex(contextCatalog.Contexts, name) < 0 {
 		return notFoundError(fmt.Sprintf("context %q not found", name))
 	}
 
-	catalog.CurrentCtx = name
-	return m.saveCatalog(catalog)
+	contextCatalog.CurrentCtx = name
+	return m.saveCatalog(contextCatalog)
 }
 
 func (m *FileContextService) GetCurrent(_ context.Context) (config.Context, error) {
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return config.Context{}, err
 	}
-	if catalog.CurrentCtx == "" {
+	if contextCatalog.CurrentCtx == "" {
 		return config.Context{}, notFoundError("current context not set")
 	}
 
-	idx := findContextIndex(catalog.Contexts, catalog.CurrentCtx)
+	idx := findContextIndex(contextCatalog.Contexts, contextCatalog.CurrentCtx)
 	if idx < 0 {
-		return config.Context{}, notFoundError(fmt.Sprintf("current context %q not found", catalog.CurrentCtx))
+		return config.Context{}, notFoundError(fmt.Sprintf("current context %q not found", contextCatalog.CurrentCtx))
 	}
 
-	return catalog.Contexts[idx], nil
+	return contextCatalog.Contexts[idx], nil
 }
 
 func (m *FileContextService) ResolveContext(_ context.Context, selection config.ContextSelection) (config.Context, error) {
-	catalog, err := m.loadCatalog()
+	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return config.Context{}, err
 	}
 
 	effectiveName := selection.Name
 	if effectiveName == "" {
-		effectiveName = catalog.CurrentCtx
+		effectiveName = contextCatalog.CurrentCtx
 	}
 	if effectiveName == "" {
 		return config.Context{}, notFoundError("current context not set")
 	}
 
-	idx := findContextIndex(catalog.Contexts, effectiveName)
+	idx := findContextIndex(contextCatalog.Contexts, effectiveName)
 	if idx < 0 {
 		return config.Context{}, notFoundError(fmt.Sprintf("context %q not found", effectiveName))
 	}
 
-	resolved, err := applyOverrides(catalog.Contexts[idx], selection.Overrides)
+	resolved, err := applyOverrides(normalizeConfig(contextCatalog.Contexts[idx]), selection.Overrides)
 	if err != nil {
 		return config.Context{}, err
 	}
+	resolved = applyConfigDefaults(resolved)
 	if err := validateConfig(resolved); err != nil {
 		return config.Context{}, err
 	}
@@ -185,11 +188,13 @@ func (m *FileContextService) ResolveContext(_ context.Context, selection config.
 }
 
 func (m *FileContextService) Validate(_ context.Context, cfg config.Context) error {
-	return validateConfig(cfg)
+	return validateConfig(normalizeConfig(cfg))
 }
 
-func (m *FileContextService) saveCatalog(catalog config.ContextCatalog) error {
-	if err := validateCatalog(catalog); err != nil {
+func (m *FileContextService) saveCatalog(contextCatalog config.ContextCatalog) error {
+	contextCatalog = compactContextCatalogForPersistence(contextCatalog)
+
+	if err := validateCatalog(contextCatalog); err != nil {
 		return err
 	}
 
@@ -198,7 +203,7 @@ func (m *FileContextService) saveCatalog(catalog config.ContextCatalog) error {
 		return err
 	}
 
-	encoded, err := encodeCatalog(catalog)
+	encoded, err := encodeCatalog(contextCatalog)
 	if err != nil {
 		return internalError("failed to encode context catalog", err)
 	}
@@ -225,28 +230,7 @@ func (m *FileContextService) loadCatalog() (config.ContextCatalog, error) {
 		return config.ContextCatalog{}, err
 	}
 
-	catalog, err := decodeCatalogFile(resolvedPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return config.ContextCatalog{}, notFoundError(fmt.Sprintf("context catalog not found: %s", resolvedPath))
-		}
-		return config.ContextCatalog{}, err
-	}
-
-	if err := validateCatalog(catalog); err != nil {
-		return config.ContextCatalog{}, err
-	}
-
-	return catalog, nil
-}
-
-func (m *FileContextService) loadCatalogAllowMissing() (config.ContextCatalog, error) {
-	resolvedPath, err := m.resolveCatalogPath()
-	if err != nil {
-		return config.ContextCatalog{}, err
-	}
-
-	catalog, err := decodeCatalogFile(resolvedPath)
+	contextCatalog, err := decodeCatalogFile(resolvedPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return config.ContextCatalog{}, nil
@@ -254,15 +238,15 @@ func (m *FileContextService) loadCatalogAllowMissing() (config.ContextCatalog, e
 		return config.ContextCatalog{}, err
 	}
 
-	if err := validateCatalog(catalog); err != nil {
+	if err := validateCatalog(contextCatalog); err != nil {
 		return config.ContextCatalog{}, err
 	}
 
-	return catalog, nil
+	return contextCatalog, nil
 }
 
 func (m *FileContextService) resolveCatalogPath() (string, error) {
-	return resolveCatalogPath(m.catalogPath)
+	return resolveCatalogPath(m.contextCatalogPath)
 }
 
 func findContextIndex(contexts []config.Context, name string) int {
@@ -276,6 +260,20 @@ func findContextIndex(contexts []config.Context, name string) int {
 
 func validationError(message string, cause error) error {
 	return faults.NewTypedError(faults.ValidationError, message, cause)
+}
+
+func compactContextCatalogForPersistence(contextCatalog config.ContextCatalog) config.ContextCatalog {
+	if len(contextCatalog.Contexts) == 0 {
+		return contextCatalog
+	}
+
+	compacted := contextCatalog
+	compacted.Contexts = make([]config.Context, len(contextCatalog.Contexts))
+	for idx, item := range contextCatalog.Contexts {
+		compacted.Contexts[idx] = compactConfigForPersistence(item)
+	}
+
+	return compacted
 }
 
 func notFoundError(message string) error {
