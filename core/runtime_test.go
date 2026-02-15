@@ -7,7 +7,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	metadatastub "github.com/crmarques/declarest/internal/providers/metadata/stub"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
@@ -43,8 +43,8 @@ func TestBuildExecutionRuntimeWiring(t *testing.T) {
 		if _, ok := runtime.Repository.(*fsrepository.FSResourceRepository); !ok {
 			t.Fatalf("expected FSResourceRepository, got %T", runtime.Repository)
 		}
-		if _, ok := runtime.Metadata.(*metadatastub.StubMetadataService); !ok {
-			t.Fatalf("expected StubMetadataService, got %T", runtime.Metadata)
+		if _, ok := runtime.Metadata.(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService, got %T", runtime.Metadata)
 		}
 		if runtime.Server != nil {
 			t.Fatalf("expected nil server, got %T", runtime.Server)
@@ -93,8 +93,8 @@ func TestBuildExecutionRuntimeWiring(t *testing.T) {
 		if _, ok := runtime.Repository.(*gitrepository.GitResourceRepository); !ok {
 			t.Fatalf("expected GitResourceRepository, got %T", runtime.Repository)
 		}
-		if _, ok := runtime.Server.(*httpserver.HTTPRemoteResourceGateway); !ok {
-			t.Fatalf("expected HTTPRemoteResourceGateway, got %T", runtime.Server)
+		if _, ok := runtime.Server.(*httpserver.HTTPResourceServerGateway); !ok {
+			t.Fatalf("expected HTTPResourceServerGateway, got %T", runtime.Server)
 		}
 		if _, ok := runtime.Secrets.(*filesecrets.FileSecretService); !ok {
 			t.Fatalf("expected FileSecretService, got %T", runtime.Secrets)
@@ -144,6 +144,39 @@ func TestBuildExecutionRuntimeValidationAndErrors(t *testing.T) {
 		}
 
 		assertTypedCategory(t, err, faults.InternalError)
+	})
+
+	t.Run("invalid_managed_server_provider_configuration", func(t *testing.T) {
+		t.Parallel()
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "invalid-managed-server",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+				},
+				ManagedServer: &config.ManagedServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com/api",
+						Auth: &config.HTTPAuth{
+							OAuth2: &config.OAuth2{
+								TokenURL:     "https://example.com/oauth/token",
+								GrantType:    "password",
+								ClientID:     "id",
+								ClientSecret: "secret",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err := BuildExecutionRuntime(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
 

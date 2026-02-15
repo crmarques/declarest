@@ -5,7 +5,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	metadatastub "github.com/crmarques/declarest/internal/providers/metadata/stub"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
@@ -26,7 +26,10 @@ func BuildExecutionRuntime(ctx context.Context, contextService config.ContextSer
 	runtime := ExecutionRuntime{
 		Name:        resolvedContext.Name,
 		Environment: copyStringMap(selection.Overrides),
-		Metadata:    &metadatastub.StubMetadataService{},
+		Metadata: fsmetadata.NewFSMetadataService(
+			resolveMetadataBaseDir(resolvedContext),
+			resolvedContext.Repository.ResourceFormat,
+		),
 	}
 
 	switch {
@@ -48,7 +51,11 @@ func BuildExecutionRuntime(ctx context.Context, contextService config.ContextSer
 		if resolvedContext.ManagedServer.HTTP == nil {
 			return ExecutionRuntime{}, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
 		}
-		runtime.Server = &httpserver.HTTPRemoteResourceGateway{}
+		serverManager, err := httpserver.NewHTTPResourceServerGateway(*resolvedContext.ManagedServer.HTTP)
+		if err != nil {
+			return ExecutionRuntime{}, err
+		}
+		runtime.Server = serverManager
 	}
 
 	if resolvedContext.SecretStore != nil {
@@ -76,4 +83,19 @@ func copyStringMap(values map[string]string) map[string]string {
 	}
 
 	return cloned
+}
+
+func resolveMetadataBaseDir(context config.Context) string {
+	if context.Metadata.BaseDir != "" {
+		return context.Metadata.BaseDir
+	}
+
+	switch {
+	case context.Repository.Filesystem != nil:
+		return context.Repository.Filesystem.BaseDir
+	case context.Repository.Git != nil:
+		return context.Repository.Git.Local.BaseDir
+	default:
+		return ""
+	}
 }

@@ -23,6 +23,6 @@ type ExecutionRuntime struct {
 	Environment map[string]string
 	Repository  repository.ResourceRepository
 	Metadata    metadata.MetadataService
-	Server      server.RemoteResourceGateway
+	Server      server.ResourceServerManager
 	Secrets     secrets.SecretService
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-type RemoteResourceGateway interface {
+type ResourceServerManager interface {
 	Get(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error)
 	Create(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error)
 	Update(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error)

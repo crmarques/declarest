@@ -91,6 +91,6 @@ Define component boundaries, dependency direction, and orchestration flows for a
 3. Metadata inference available while operation execution remains manual.
 
 ## Examples
-1. Correct: `reconciler` depends on `server.RemoteResourceGateway` interface and receives HTTP provider via dependency injection.
+1. Correct: `reconciler` depends on `server.ResourceServerManager` interface and receives HTTP provider via dependency injection.
 2. Incorrect: CLI command handler imports `internal/providers/server/http` and issues requests directly.
 3. Correct split trigger: one file defines path normalization, git push conflict handling, and metadata mapping; split by responsibility into repository path service, sync service, and metadata locator.

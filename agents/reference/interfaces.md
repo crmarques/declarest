@@ -61,7 +61,7 @@ Required fields:
 2. `Environment`: normalized key-value overrides.
 3. `Repository`: `repository.ResourceRepository` instance.
 4. `Metadata`: `metadata.MetadataService` instance.
-5. `Server`: optional `server.RemoteResourceGateway` instance.
+5. `Server`: optional `server.ResourceServerManager` instance.
 6. `Secrets`: optional `secrets.SecretService` instance.
 
 ### Type: `config.Context`
@@ -260,7 +260,7 @@ Method families:
 3. `RenderOperationSpec`.
 4. `Infer`.
 
-### Interface: `server.RemoteResourceGateway`
+### Interface: `server.ResourceServerManager`
 Responsibilities:
 1. Execute remote CRUD/list operations.
 2. Resolve OpenAPI hints for operations.

@@ -54,7 +54,7 @@ Inputs:
 Execution:
 1. `reconciler.ResourceReconciler` loads resource and resolved metadata.
 2. `secrets.SecretService` resolves placeholders.
-3. `server.RemoteResourceGateway` executes update request.
+3. `server.ResourceServerManager` executes update request.
 4. `repository.ResourceRepository` saves normalized payload with masked placeholders.
 
 Expected outputs:

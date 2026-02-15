@@ -17,20 +17,32 @@ type InferenceRequest struct {
 }
 
 type ResourceMetadata struct {
-	IDFromAttribute    string
-	AliasFromAttribute string
-	Operations         map[string]OperationSpec
-	Filter             []string
-	Suppress           []string
-	JQ                 string
+	IDFromAttribute    string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
+	AliasFromAttribute string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	Operations         map[string]OperationSpec `json:"operations" yaml:"operations"`
+	Filter             []string                 `json:"filter" yaml:"filter"`
+	Suppress           []string                 `json:"suppress" yaml:"suppress"`
+	JQ                 string                   `json:"jq,omitempty" yaml:"jq,omitempty"`
 }
 
 type OperationSpec struct {
-	Method      string
-	Path        string
-	Query       map[string]string
-	Headers     map[string]string
-	Accept      string
-	ContentType string
-	Body        any
+	Method      string            `json:"method,omitempty" yaml:"method,omitempty"`
+	Path        string            `json:"path,omitempty" yaml:"path,omitempty"`
+	Query       map[string]string `json:"query" yaml:"query"`
+	Headers     map[string]string `json:"headers" yaml:"headers"`
+	Accept      string            `json:"accept,omitempty" yaml:"accept,omitempty"`
+	ContentType string            `json:"contentType,omitempty" yaml:"contentType,omitempty"`
+	Body        any               `json:"body,omitempty" yaml:"body,omitempty"`
+	Filter      []string          `json:"filter" yaml:"filter"`
+	Suppress    []string          `json:"suppress" yaml:"suppress"`
+	JQ          string            `json:"jq,omitempty" yaml:"jq,omitempty"`
+}
+
+func (o Operation) IsValid() bool {
+	switch o {
+	case OperationGet, OperationCreate, OperationUpdate, OperationDelete, OperationList, OperationCompare:
+		return true
+	default:
+		return false
+	}
 }
