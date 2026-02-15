@@ -65,9 +65,17 @@ func buildDefaultReconciler(
 	if resolvedContext.SecretStore != nil {
 		switch {
 		case resolvedContext.SecretStore.File != nil:
-			defaultReconciler.SecretsProvider = &filesecrets.FileSecretService{}
+			secretService, err := filesecrets.NewFileSecretService(*resolvedContext.SecretStore.File)
+			if err != nil {
+				return nil, err
+			}
+			defaultReconciler.SecretsProvider = secretService
 		case resolvedContext.SecretStore.Vault != nil:
-			defaultReconciler.SecretsProvider = &vaultsecrets.VaultSecretService{}
+			secretService, err := vaultsecrets.NewVaultSecretService(*resolvedContext.SecretStore.Vault)
+			if err != nil {
+				return nil, err
+			}
+			defaultReconciler.SecretsProvider = secretService
 		default:
 			return nil, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
 		}

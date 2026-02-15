@@ -11,6 +11,7 @@ import (
 	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
+	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
 )
 
@@ -95,6 +96,39 @@ func TestBuildDefaultReconcilerWiring(t *testing.T) {
 		}
 		if _, ok := defaultReconciler.SecretsProvider.(*filesecrets.FileSecretService); !ok {
 			t.Fatalf("expected FileSecretService, got %T", defaultReconciler.SecretsProvider)
+		}
+	})
+
+	t.Run("filesystem_context_with_vault_secret_store", func(t *testing.T) {
+		t.Parallel()
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "fs-vault-secret",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+				},
+				SecretStore: &config.SecretStore{
+					Vault: &config.VaultSecretStore{
+						Address: "https://vault.example.com",
+						Auth: &config.VaultAuth{
+							Token: "root-token",
+						},
+					},
+				},
+			},
+		}
+
+		defaultReconciler, err := buildDefaultReconciler(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
+		if err != nil {
+			t.Fatalf("buildDefaultReconciler returned error: %v", err)
+		}
+
+		if _, ok := defaultReconciler.RepositoryManager.(*fsrepository.FSResourceRepository); !ok {
+			t.Fatalf("expected FSResourceRepository, got %T", defaultReconciler.RepositoryManager)
+		}
+		if _, ok := defaultReconciler.SecretsProvider.(*vaultsecrets.VaultSecretService); !ok {
+			t.Fatalf("expected VaultSecretService, got %T", defaultReconciler.SecretsProvider)
 		}
 	})
 }

@@ -1,0 +1,198 @@
+package secrets
+
+import (
+	"context"
+	"errors"
+	"reflect"
+	"testing"
+
+	"github.com/crmarques/declarest/faults"
+)
+
+func TestNormalizePlaceholders(t *testing.T) {
+	t.Parallel()
+
+	t.Run("normalizes_current_key_placeholders", func(t *testing.T) {
+		t.Parallel()
+
+		input := map[string]any{
+			"apiToken": "{{ secret . }}",
+			"nested": map[string]any{
+				"clientSecret": "{{secret \"clientSecret\"}}",
+			},
+			"literal": "prefix {{secret .}} suffix",
+		}
+
+		got, err := NormalizePlaceholders(input)
+		if err != nil {
+			t.Fatalf("NormalizePlaceholders returned error: %v", err)
+		}
+
+		expected := map[string]any{
+			"apiToken": "{{secret \"apiToken\"}}",
+			"nested": map[string]any{
+				"clientSecret": "{{secret \"clientSecret\"}}",
+			},
+			"literal": "prefix {{secret .}} suffix",
+		}
+
+		if !reflect.DeepEqual(got, expected) {
+			t.Fatalf("expected %#v, got %#v", expected, got)
+		}
+	})
+
+	t.Run("rejects_current_key_placeholder_without_scope", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := NormalizePlaceholders("{{secret .}}")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestMaskResolveAndDetect(t *testing.T) {
+	t.Parallel()
+
+	t.Run("masks_resolves_and_detects_candidates", func(t *testing.T) {
+		t.Parallel()
+
+		input := map[string]any{
+			"name":      "acme",
+			"apiToken":  "token-value",
+			"password":  "pass-value",
+			"notSecret": "{{secret \"already-masked\"}}",
+		}
+
+		stored := map[string]string{
+			"already-masked": "already-value",
+		}
+		masked, err := MaskPayload(input, func(key string, value string) error {
+			stored[key] = value
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("MaskPayload returned error: %v", err)
+		}
+
+		expectedMasked := map[string]any{
+			"name":      "acme",
+			"apiToken":  "{{secret \"apiToken\"}}",
+			"password":  "{{secret \"password\"}}",
+			"notSecret": "{{secret \"already-masked\"}}",
+		}
+		if !reflect.DeepEqual(masked, expectedMasked) {
+			t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
+		}
+
+		if !reflect.DeepEqual(stored, map[string]string{
+			"already-masked": "already-value",
+			"apiToken":       "token-value",
+			"password":       "pass-value",
+		}) {
+			t.Fatalf("unexpected stored secrets: %#v", stored)
+		}
+
+		candidates, err := DetectSecretCandidates(input)
+		if err != nil {
+			t.Fatalf("DetectSecretCandidates returned error: %v", err)
+		}
+		expectedCandidates := []string{"apiToken", "password"}
+		if !reflect.DeepEqual(candidates, expectedCandidates) {
+			t.Fatalf("expected candidates %#v, got %#v", expectedCandidates, candidates)
+		}
+
+		resolved, err := ResolvePayload(masked, func(key string) (string, error) {
+			value, ok := stored[key]
+			if !ok {
+				return "", faults.NewTypedError(faults.NotFoundError, "secret key not found", nil)
+			}
+			return value, nil
+		})
+		if err != nil {
+			t.Fatalf("ResolvePayload returned error: %v", err)
+		}
+
+		expectedResolved := map[string]any{
+			"name":      "acme",
+			"apiToken":  "token-value",
+			"password":  "pass-value",
+			"notSecret": "already-value",
+		}
+		if !reflect.DeepEqual(resolved, expectedResolved) {
+			t.Fatalf("expected resolved %#v, got %#v", expectedResolved, resolved)
+		}
+	})
+
+	t.Run("rejects_ambiguous_key_scope_for_masking", func(t *testing.T) {
+		t.Parallel()
+
+		input := map[string]any{
+			"source-a": map[string]any{"token": "a"},
+			"source-b": map[string]any{"token": "b"},
+		}
+
+		_, err := MaskPayload(input, func(string, string) error { return nil })
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("propagates_missing_key_when_resolving", func(t *testing.T) {
+		t.Parallel()
+
+		input := map[string]any{"apiToken": "{{secret \"apiToken\"}}"}
+		_, err := ResolvePayload(input, func(string) (string, error) {
+			return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+		})
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+}
+
+func TestSplitIdentifierTokens(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string][]string{
+		"apiToken":      {"api", "token"},
+		"client_secret": {"client", "secret"},
+		"private-key":   {"private", "key"},
+		"APIKey":        {"apikey"},
+	}
+
+	for input, expected := range cases {
+		input := input
+		expected := expected
+		t.Run(input, func(t *testing.T) {
+			t.Parallel()
+
+			got := splitIdentifierTokens(input)
+			if !reflect.DeepEqual(got, expected) {
+				t.Fatalf("expected %#v, got %#v", expected, got)
+			}
+		})
+	}
+}
+
+func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		t.Fatalf("expected typed error, got %T", err)
+	}
+	if typedErr.Category != category {
+		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
+	}
+}
+
+func TestHelpersRejectNilCallbacks(t *testing.T) {
+	t.Parallel()
+
+	_, err := MaskPayload(map[string]any{"token": "x"}, nil)
+	assertTypedCategory(t, err, faults.ValidationError)
+
+	_, err = ResolvePayload(map[string]any{"token": "{{secret \"token\"}}"}, nil)
+	assertTypedCategory(t, err, faults.ValidationError)
+
+	_, err = NormalizePlaceholders(context.Background())
+	assertTypedCategory(t, err, faults.ValidationError)
+}
