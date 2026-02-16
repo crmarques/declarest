@@ -348,7 +348,7 @@ e2e_cleanup_run_containers() {
   if [[ -f "${selected_file}" ]]; then
     while IFS= read -r component_key; do
       [[ -n "${component_key}" ]] || continue
-      [[ "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" == 'true' ]] || continue
+      e2e_component_runtime_is_compose "${component_key}" || continue
 
       local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
       [[ -f "${compose_file}" ]] || continue
@@ -371,7 +371,7 @@ e2e_cleanup_run_containers() {
 
   e2e_warn "run state missing selected/started component records for ${run_id}; falling back to all container components"
   for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
-    if [[ "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" != 'true' ]]; then
+    if ! e2e_component_runtime_is_compose "${component_key}"; then
       continue
     fi
 
@@ -500,6 +500,7 @@ step_initialize() {
   e2e_validate_profile_rules || return 1
 
   e2e_build_selected_components || return 1
+  e2e_validate_selected_component_dependencies || return 1
   e2e_build_capabilities || return 1
   e2e_preflight_requirements || return 1
 
@@ -540,7 +541,7 @@ step_prepare_runtime() {
 }
 
 step_prepare_components() {
-  e2e_components_run_hook_all 'init' || return 1
+  e2e_components_run_hook_all 'init' 'true' || return 1
 }
 
 step_start_components() {
@@ -549,17 +550,10 @@ step_start_components() {
 }
 
 step_configure_access() {
-  e2e_components_run_hook_all 'configure-auth' || return 1
+  e2e_components_run_hook_all 'configure-auth' 'true' || return 1
 
   mkdir -p "${E2E_CONTEXT_DIR}" || return 1
-
-  local component_key
-  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
-    local fragment_file
-    fragment_file="${E2E_CONTEXT_DIR}/$(e2e_component_type "${component_key}")-$(e2e_component_name "${component_key}").yaml"
-    export E2E_COMPONENT_CONTEXT_FRAGMENT="${fragment_file}"
-    e2e_component_run_hook "${component_key}" 'context' "${fragment_file}" || return 1
-  done
+  e2e_components_run_hook_all 'context' 'true' || return 1
 
   e2e_context_build || return 1
 

@@ -4,6 +4,8 @@ declare -Ag E2E_COMPONENT_PATH=()
 declare -Ag E2E_COMPONENT_CONNECTIONS=()
 declare -Ag E2E_COMPONENT_DEFAULT_CONNECTION=()
 declare -Ag E2E_COMPONENT_REQUIRES_DOCKER=()
+declare -Ag E2E_COMPONENT_RUNTIME_KIND=()
+declare -Ag E2E_COMPONENT_DEPENDS_ON=()
 declare -Ag E2E_COMPONENT_DESCRIPTION=()
 declare -Ag E2E_COMPONENT_PROJECT=()
 declare -Ag E2E_CAPABILITY_SET=()
@@ -61,8 +63,219 @@ e2e_component_state_file() {
   printf '%s/%s-%s.env\n' "${E2E_STATE_DIR}" "${component_type}" "${component_name}"
 }
 
+e2e_component_context_fragment_path() {
+  local component_key=$1
+
+  if [[ -z "${E2E_CONTEXT_DIR:-}" ]]; then
+    printf '\n'
+    return 0
+  fi
+
+  printf '%s/%s-%s.yaml\n' \
+    "${E2E_CONTEXT_DIR}" \
+    "$(e2e_component_type "${component_key}")" \
+    "$(e2e_component_name "${component_key}")"
+}
+
+e2e_component_validate_connections() {
+  local component_key=$1
+  local supported_connections=$2
+  local default_connection=$3
+  local connection
+  local default_supported=0
+
+  [[ -n "${supported_connections}" ]] || {
+    e2e_die "component ${component_key} must declare SUPPORTED_CONNECTIONS"
+    return 1
+  }
+
+  for connection in ${supported_connections}; do
+    case "${connection}" in
+      local|remote) ;;
+      *)
+        e2e_die "component ${component_key} has invalid connection value: ${connection}"
+        return 1
+        ;;
+    esac
+
+    if [[ "${connection}" == "${default_connection}" ]]; then
+      default_supported=1
+    fi
+  done
+
+  if ((default_supported == 0)); then
+    e2e_die "component ${component_key} default connection ${default_connection} is not in SUPPORTED_CONNECTIONS"
+    return 1
+  fi
+
+  return 0
+}
+
+e2e_component_validate_dependency_spec() {
+  local component_key=$1
+  local dependency_spec=$2
+  local token
+  local dependency_type
+  local dependency_name
+
+  for token in ${dependency_spec}; do
+    [[ -n "${token}" ]] || continue
+
+    if [[ "${token}" != *:* ]]; then
+      e2e_die "component ${component_key} has invalid dependency token: ${token} (expected type:name or type:*)"
+      return 1
+    fi
+
+    dependency_type=${token%%:*}
+    dependency_name=${token#*:}
+
+    [[ -n "${dependency_type}" && -n "${dependency_name}" ]] || {
+      e2e_die "component ${component_key} has invalid dependency token: ${token}"
+      return 1
+    }
+  done
+
+  return 0
+}
+
+e2e_component_validate_contract() {
+  local component_key=$1
+  local component_path=$2
+  local requires_docker=$3
+  local runtime_kind=$4
+  local has_requires_docker=$5
+  local has_runtime_kind=$6
+  local has_depends_on=$7
+
+  [[ -n "${COMPONENT_TYPE:-}" ]] || {
+    e2e_die "component metadata missing COMPONENT_TYPE in ${component_path}/component.env"
+    return 1
+  }
+  [[ -n "${COMPONENT_NAME:-}" ]] || {
+    e2e_die "component metadata missing COMPONENT_NAME in ${component_path}/component.env"
+    return 1
+  }
+
+  if [[ "${has_requires_docker}" != '1' ]]; then
+    e2e_die "component ${component_key} must declare REQUIRES_DOCKER in ${component_path}/component.env"
+    return 1
+  fi
+
+  if [[ "${has_runtime_kind}" != '1' ]]; then
+    e2e_die "component ${component_key} must declare COMPONENT_RUNTIME_KIND in ${component_path}/component.env"
+    return 1
+  fi
+
+  if [[ "${has_depends_on}" != '1' ]]; then
+    e2e_die "component ${component_key} must declare COMPONENT_DEPENDS_ON in ${component_path}/component.env"
+    return 1
+  fi
+
+  if [[ "${requires_docker}" != 'true' && "${requires_docker}" != 'false' ]]; then
+    e2e_die "component ${component_key} has invalid REQUIRES_DOCKER=${requires_docker} (allowed: true, false)"
+    return 1
+  fi
+
+  case "${runtime_kind}" in
+    native|compose) ;;
+    *)
+      e2e_die "component ${component_key} has invalid COMPONENT_RUNTIME_KIND=${runtime_kind} (allowed: native, compose)"
+      return 1
+      ;;
+  esac
+
+  if [[ "${runtime_kind}" == 'compose' && "${requires_docker}" != 'true' ]]; then
+    e2e_die "component ${component_key} uses COMPONENT_RUNTIME_KIND=compose but REQUIRES_DOCKER is not true"
+    return 1
+  fi
+
+  if [[ "${runtime_kind}" == 'native' && "${requires_docker}" == 'true' ]]; then
+    e2e_die "component ${component_key} uses COMPONENT_RUNTIME_KIND=native but REQUIRES_DOCKER=true"
+    return 1
+  fi
+
+  e2e_component_validate_connections "${component_key}" "${SUPPORTED_CONNECTIONS:-}" "${DEFAULT_CONNECTION:-}" || return 1
+  e2e_component_validate_dependency_spec "${component_key}" "${COMPONENT_DEPENDS_ON:-}" || return 1
+
+  local required_hook
+  for required_hook in init configure-auth context; do
+    if [[ ! -f "${component_path}/scripts/${required_hook}.sh" ]]; then
+      e2e_die "component ${component_key} missing required hook script: scripts/${required_hook}.sh"
+      return 1
+    fi
+  done
+
+  if [[ "${runtime_kind}" == 'compose' ]]; then
+    if [[ ! -f "${component_path}/compose.yaml" ]]; then
+      e2e_die "component ${component_key} missing compose.yaml for compose runtime"
+      return 1
+    fi
+    if [[ ! -f "${component_path}/scripts/health.sh" ]]; then
+      e2e_die "component ${component_key} missing required health hook for compose runtime"
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+e2e_validate_component_dependency_catalog() {
+  local component_key
+  local token
+  local dependency_type
+  local dependency_name
+  local dependency_key
+  local candidate
+  local found
+  local -A discovered=()
+
+  for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
+    discovered["${component_key}"]=1
+  done
+
+  for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
+    for token in ${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-}; do
+      [[ -n "${token}" ]] || continue
+
+      dependency_type=${token%%:*}
+      dependency_name=${token#*:}
+
+      if [[ "${dependency_name}" == '*' ]]; then
+        found=0
+        for candidate in "${E2E_COMPONENT_KEYS[@]}"; do
+          if [[ "$(e2e_component_type "${candidate}")" == "${dependency_type}" ]]; then
+            found=1
+            break
+          fi
+        done
+
+        if ((found == 0)); then
+          e2e_die "component ${component_key} dependency selector ${token} did not match any discovered component type"
+          return 1
+        fi
+        continue
+      fi
+
+      dependency_key=$(e2e_component_key "${dependency_type}" "${dependency_name}")
+      if [[ "${discovered[${dependency_key}]:-0}" != '1' ]]; then
+        e2e_die "component ${component_key} dependency ${dependency_key} is not a discovered component"
+        return 1
+      fi
+    done
+  done
+
+  return 0
+}
+
 e2e_discover_components() {
   E2E_COMPONENT_KEYS=()
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_CONNECTIONS=()
+  E2E_COMPONENT_DEFAULT_CONNECTION=()
+  E2E_COMPONENT_REQUIRES_DOCKER=()
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_DEPENDS_ON=()
+  E2E_COMPONENT_DESCRIPTION=()
 
   local component_file
   while IFS= read -r component_file; do
@@ -71,14 +284,48 @@ e2e_discover_components() {
     local metadata
     metadata=$(
       (
+        local sep=$'\x1f'
+
         # shellcheck disable=SC1090
         source "${component_file}"
-        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+
+        local requires_docker=${REQUIRES_DOCKER:-}
+        local runtime_kind=${COMPONENT_RUNTIME_KIND:-}
+        local has_requires_docker=0
+        local has_runtime_kind=0
+        local has_depends_on=0
+
+        if [[ -n "${REQUIRES_DOCKER+x}" ]]; then
+          has_requires_docker=1
+        fi
+        if [[ -n "${COMPONENT_RUNTIME_KIND+x}" ]]; then
+          has_runtime_kind=1
+        fi
+        if [[ -n "${COMPONENT_DEPENDS_ON+x}" ]]; then
+          has_depends_on=1
+        fi
+
+        printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
           "${COMPONENT_TYPE}" \
+          "${sep}" \
           "${COMPONENT_NAME}" \
+          "${sep}" \
           "${SUPPORTED_CONNECTIONS}" \
+          "${sep}" \
           "${DEFAULT_CONNECTION}" \
-          "${REQUIRES_DOCKER}" \
+          "${sep}" \
+          "${requires_docker}" \
+          "${sep}" \
+          "${runtime_kind}" \
+          "${sep}" \
+          "${COMPONENT_DEPENDS_ON:-}" \
+          "${sep}" \
+          "${has_requires_docker}" \
+          "${sep}" \
+          "${has_runtime_kind}" \
+          "${sep}" \
+          "${has_depends_on}" \
+          "${sep}" \
           "${DESCRIPTION:-}"
       )
     )
@@ -88,26 +335,54 @@ e2e_discover_components() {
     local supported_connections
     local default_connection
     local requires_docker
+    local runtime_kind
+    local depends_on
+    local has_requires_docker
+    local has_runtime_kind
+    local has_depends_on
     local description
 
-    IFS=$'\t' read -r component_type component_name supported_connections default_connection requires_docker description <<<"${metadata}"
+    IFS=$'\x1f' read -r component_type component_name supported_connections default_connection requires_docker runtime_kind depends_on has_requires_docker has_runtime_kind has_depends_on description <<<"${metadata}"
 
     local component_key
-    component_key=$(e2e_component_key "${component_type}" "${component_name}")
+    local component_path
 
-    E2E_COMPONENT_PATH["${component_key}"]=$(dirname "${component_file}")
+    component_key=$(e2e_component_key "${component_type}" "${component_name}")
+    component_path=$(dirname "${component_file}")
+
+    COMPONENT_TYPE="${component_type}" \
+    COMPONENT_NAME="${component_name}" \
+    SUPPORTED_CONNECTIONS="${supported_connections}" \
+    DEFAULT_CONNECTION="${default_connection}" \
+    REQUIRES_DOCKER="${requires_docker}" \
+    COMPONENT_RUNTIME_KIND="${runtime_kind}" \
+    COMPONENT_DEPENDS_ON="${depends_on}" \
+      e2e_component_validate_contract \
+        "${component_key}" \
+        "${component_path}" \
+        "${requires_docker}" \
+        "${runtime_kind}" \
+        "${has_requires_docker}" \
+        "${has_runtime_kind}" \
+        "${has_depends_on}" || return 1
+
+    E2E_COMPONENT_PATH["${component_key}"]="${component_path}"
     E2E_COMPONENT_CONNECTIONS["${component_key}"]="${supported_connections}"
     E2E_COMPONENT_DEFAULT_CONNECTION["${component_key}"]="${default_connection}"
     E2E_COMPONENT_REQUIRES_DOCKER["${component_key}"]="${requires_docker}"
+    E2E_COMPONENT_RUNTIME_KIND["${component_key}"]="${runtime_kind}"
+    E2E_COMPONENT_DEPENDS_ON["${component_key}"]="${depends_on}"
     E2E_COMPONENT_DESCRIPTION["${component_key}"]="${description}"
     E2E_COMPONENT_KEYS+=("${component_key}")
   done < <(find "${E2E_DIR}/components" -type f -name 'component.env' | sort)
+
+  e2e_validate_component_dependency_catalog || return 1
 }
 
 e2e_list_components() {
   printf 'Discovered e2e components\n'
   printf '%s\n' '------------------------'
-  printf '%-18s %-14s %-18s %-10s %s\n' 'TYPE' 'NAME' 'CONNECTIONS' 'RUNTIME' 'DESCRIPTION'
+  printf '%-18s %-14s %-18s %-10s %-20s %s\n' 'TYPE' 'NAME' 'CONNECTIONS' 'RUNTIME' 'DEPENDS-ON' 'DESCRIPTION'
 
   local component_key
   for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
@@ -117,11 +392,12 @@ e2e_list_components() {
     component_type=$(e2e_component_type "${component_key}")
     component_name=$(e2e_component_name "${component_key}")
 
-    printf '%-18s %-14s %-18s %-10s %s\n' \
+    printf '%-18s %-14s %-18s %-10s %-20s %s\n' \
       "${component_type}" \
       "${component_name}" \
       "${E2E_COMPONENT_CONNECTIONS[${component_key}]}" \
-      "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]}" \
+      "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]}" \
+      "${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-none}" \
       "${E2E_COMPONENT_DESCRIPTION[${component_key}]}"
   done
 }
@@ -248,15 +524,7 @@ e2e_validate_selection() {
     return 1
   fi
 
-  if [[ "${E2E_REPO_TYPE}" == 'git' && -z "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die '--repo-type git requires --git-provider'
-    return 1
-  fi
-
-  if [[ "${E2E_REPO_TYPE}" != 'git' && -n "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die '--git-provider requires --repo-type git'
-    return 1
-  fi
+  return 0
 }
 
 e2e_build_selected_components() {
@@ -275,6 +543,21 @@ e2e_build_selected_components() {
   fi
 
   E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")")
+}
+
+e2e_validate_selected_component_dependencies() {
+  local -A selected_set=()
+  local component_key
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    selected_set["${component_key}"]=1
+  done
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    e2e_component_dependency_keys "${component_key}" selected_set >/dev/null || return 1
+  done
+
+  return 0
 }
 
 e2e_build_capabilities() {
@@ -331,8 +614,11 @@ e2e_component_export_env() {
   export E2E_COMPONENT_DIR="${E2E_COMPONENT_PATH[${component_key}]}"
   export E2E_COMPONENT_HOOK="${hook_name}"
   export E2E_COMPONENT_CONNECTION="$(e2e_component_connection_for_key "${component_key}")"
+  export E2E_COMPONENT_RUNTIME_KIND="${E2E_COMPONENT_RUNTIME_KIND[${component_key}]:-native}"
+  export E2E_COMPONENT_DEPENDS_ON="${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-}"
   export E2E_COMPONENT_STATE_FILE="$(e2e_component_state_file "${component_key}")"
   export E2E_COMPONENT_PROJECT_NAME="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
+  export E2E_COMPONENT_CONTEXT_FRAGMENT="$(e2e_component_context_fragment_path "${component_key}")"
   export E2E_ROOT_DIR
   export E2E_DIR
   export E2E_RUN_DIR
@@ -350,6 +636,112 @@ e2e_component_export_env() {
   export E2E_SECRET_PROVIDER_CONNECTION
 }
 
+e2e_component_source_state_env() {
+  local state_file=$1
+
+  if [[ -f "${state_file}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${state_file}"
+    set +a
+  fi
+}
+
+e2e_component_runtime_is_compose() {
+  local component_key=$1
+  [[ "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]:-native}" == 'compose' ]]
+}
+
+e2e_sanitize_project_name() {
+  local value=$1
+  value=${value//[^a-zA-Z0-9]/-}
+  printf '%s\n' "${value,,}"
+}
+
+e2e_component_default_project_name() {
+  local component_key=$1
+  e2e_sanitize_project_name "declarest-${E2E_RUN_ID}-$(e2e_component_type "${component_key}")-$(e2e_component_name "${component_key}")"
+}
+
+e2e_component_builtin_start_compose() {
+  local component_key=$1
+  local connection
+  local compose_file
+  local state_file
+  local project_name
+
+  connection=$(e2e_component_connection_for_key "${component_key}")
+  if [[ "${connection}" != 'local' ]]; then
+    e2e_info "component start skipped key=${component_key} reason=connection:${connection}"
+    return 0
+  fi
+
+  if ! e2e_component_runtime_is_compose "${component_key}"; then
+    e2e_info "component start skipped key=${component_key} reason=runtime:native"
+    return 0
+  fi
+
+  compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+  if [[ ! -f "${compose_file}" ]]; then
+    e2e_die "missing compose file for ${component_key}: ${compose_file}"
+    return 1
+  fi
+
+  state_file=$(e2e_component_state_file "${component_key}")
+  project_name="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
+  if [[ -z "${project_name}" ]]; then
+    project_name=$(e2e_component_default_project_name "${component_key}")
+    E2E_COMPONENT_PROJECT["${component_key}"]="${project_name}"
+  fi
+
+  e2e_info "component start key=${component_key} project=${project_name} compose=${compose_file}"
+
+  (
+    e2e_component_source_state_env "${state_file}"
+    e2e_compose_cmd -f "${compose_file}" -p "${project_name}" up -d
+    e2e_compose_cmd -f "${compose_file}" -p "${project_name}" ps || true
+  ) || {
+    e2e_error "component start failed key=${component_key} project=${project_name}; collecting compose diagnostics"
+    (
+      e2e_component_source_state_env "${state_file}"
+      e2e_compose_cmd -f "${compose_file}" -p "${project_name}" ps || true
+      e2e_compose_cmd -f "${compose_file}" -p "${project_name}" logs || true
+    )
+    return 1
+  }
+
+  return 0
+}
+
+e2e_component_builtin_stop_compose() {
+  local component_key=$1
+  local compose_file
+  local state_file
+  local project_name
+
+  if ! e2e_component_runtime_is_compose "${component_key}"; then
+    return 0
+  fi
+
+  compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+  [[ -f "${compose_file}" ]] || return 0
+
+  project_name="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
+  if [[ -z "${project_name}" ]]; then
+    project_name=$(e2e_component_default_project_name "${component_key}")
+  fi
+
+  state_file=$(e2e_component_state_file "${component_key}")
+
+  e2e_info "component stop key=${component_key} project=${project_name}"
+  (
+    e2e_component_source_state_env "${state_file}"
+    e2e_compose_cmd -f "${compose_file}" -p "${project_name}" down -v --remove-orphans
+  ) || true
+
+  return 0
+}
+
 e2e_component_run_hook() {
   local component_key=$1
   local hook_name=$2
@@ -357,10 +749,6 @@ e2e_component_run_hook() {
 
   local script_path
   script_path=$(e2e_component_hook_script "${component_key}" "${hook_name}")
-
-  if [[ ! -f "${script_path}" ]]; then
-    return 0
-  fi
 
   local state_file
   state_file=$(e2e_component_state_file "${component_key}")
@@ -371,23 +759,245 @@ e2e_component_run_hook() {
   connection=$(e2e_component_connection_for_key "${component_key}")
 
   e2e_component_export_env "${component_key}" "${hook_name}"
-  e2e_info "component-hook start key=${component_key} hook=${hook_name} connection=${connection} script=${script_path}"
 
-  if ! bash "${script_path}" "$@"; then
-    e2e_error "component-hook failed key=${component_key} hook=${hook_name} script=${script_path}"
+  if [[ -f "${script_path}" ]]; then
+    e2e_info "component-hook start key=${component_key} hook=${hook_name} connection=${connection} script=${script_path}"
+
+    if ! bash "${script_path}" "$@"; then
+      e2e_error "component-hook failed key=${component_key} hook=${hook_name} script=${script_path}"
+      return 1
+    fi
+
+    e2e_info "component-hook done key=${component_key} hook=${hook_name}"
+    return 0
+  fi
+
+  case "${hook_name}" in
+    start)
+      e2e_component_builtin_start_compose "${component_key}" || return 1
+      ;;
+    stop)
+      e2e_component_builtin_stop_compose "${component_key}" || return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  return 0
+}
+
+e2e_component_dependency_keys() {
+  local component_key=$1
+  local -n selected_ref=$2
+  local dependency_spec
+  local token
+  local dependency_type
+  local dependency_name
+  local dependency_key
+  local candidate
+  local found
+  local -A resolved=()
+
+  dependency_spec="${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-}"
+  for token in ${dependency_spec}; do
+    [[ -n "${token}" ]] || continue
+
+    dependency_type=${token%%:*}
+    dependency_name=${token#*:}
+
+    if [[ "${dependency_name}" == '*' ]]; then
+      found=0
+      for candidate in "${!selected_ref[@]}"; do
+        if [[ "$(e2e_component_type "${candidate}")" != "${dependency_type}" ]]; then
+          continue
+        fi
+        if [[ "${selected_ref[${candidate}]:-0}" != '1' ]]; then
+          continue
+        fi
+        resolved["${candidate}"]=1
+        found=1
+      done
+
+      if ((found == 0)); then
+        e2e_die "component ${component_key} dependency selector ${token} did not match any selected component"
+        return 1
+      fi
+      continue
+    fi
+
+    dependency_key=$(e2e_component_key "${dependency_type}" "${dependency_name}")
+    if [[ "${selected_ref[${dependency_key}]:-0}" != '1' ]]; then
+      e2e_die "component ${component_key} dependency ${dependency_key} is not selected"
+      return 1
+    fi
+    resolved["${dependency_key}"]=1
+  done
+
+  for dependency_key in "${!resolved[@]}"; do
+    printf '%s\n' "${dependency_key}"
+  done | sort
+}
+
+e2e_components_run_hook_batch_parallel() {
+  local hook_name=$1
+  shift
+  local -a batch=("$@")
+
+  if ((${#batch[@]} == 0)); then
+    return 0
+  fi
+
+  local tmp_dir
+  tmp_dir=$(mktemp -d /tmp/declarest-e2e-hook-${hook_name}.XXXXXX)
+
+  local -a pids=()
+  local -a keys=()
+  local -a logs=()
+  local -a rcs=()
+  local component_key
+
+  for component_key in "${batch[@]}"; do
+    local safe_key
+    local log_file
+
+    safe_key=${component_key//[:\/]/-}
+    log_file="${tmp_dir}/${safe_key}.log"
+
+    (
+      e2e_component_run_hook "${component_key}" "${hook_name}"
+    ) >"${log_file}" 2>&1 &
+
+    pids+=("$!")
+    keys+=("${component_key}")
+    logs+=("${log_file}")
+  done
+
+  local failed=0
+  local idx
+  local pid
+  local rc
+
+  for idx in "${!pids[@]}"; do
+    pid=${pids[${idx}]}
+    set +e
+    wait "${pid}"
+    rc=$?
+    set -e
+
+    rcs[${idx}]="${rc}"
+    if ((rc != 0)); then
+      failed=1
+    fi
+  done
+
+  for idx in "${!keys[@]}"; do
+    component_key=${keys[${idx}]}
+    rc=${rcs[${idx}]}
+
+    if ((E2E_VERBOSE == 1 || rc != 0)); then
+      while IFS= read -r line; do
+        printf '[%s] %s\n' "${component_key}" "${line}"
+      done <"${logs[${idx}]}"
+    fi
+
+    if ((rc != 0)); then
+      e2e_error "component hook failed key=${component_key} hook=${hook_name}"
+    fi
+  done
+
+  rm -rf "${tmp_dir}" || true
+
+  if ((failed == 1)); then
     return 1
   fi
 
-  e2e_info "component-hook done key=${component_key} hook=${hook_name}"
+  return 0
+}
+
+e2e_components_run_hook_for_keys() {
+  local hook_name=$1
+  local parallel_mode=${2:-false}
+  shift 2
+  local -a target_keys=("$@")
+
+  if ((${#target_keys[@]} == 0)); then
+    return 0
+  fi
+
+  local -A selected_set=()
+  local -A target_set=()
+  local -A done_set=()
+  local component_key
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    selected_set["${component_key}"]=1
+  done
+
+  for component_key in "${target_keys[@]}"; do
+    target_set["${component_key}"]=1
+  done
+
+  local -a pending=("${target_keys[@]}")
+
+  while ((${#pending[@]} > 0)); do
+    local -a batch=()
+
+    for component_key in "${pending[@]}"; do
+      local -a dependencies=()
+      local dep
+      local ready=1
+
+      mapfile -t dependencies < <(e2e_component_dependency_keys "${component_key}" selected_set) || return 1
+
+      for dep in "${dependencies[@]}"; do
+        if [[ "${target_set[${dep}]:-0}" != '1' ]]; then
+          continue
+        fi
+        if [[ "${done_set[${dep}]:-0}" != '1' ]]; then
+          ready=0
+          break
+        fi
+      done
+
+      if ((ready == 1)); then
+        batch+=("${component_key}")
+      fi
+    done
+
+    if ((${#batch[@]} == 0)); then
+      e2e_die "dependency cycle detected while running hook ${hook_name} for components: ${pending[*]}"
+      return 1
+    fi
+
+    if [[ "${parallel_mode}" == 'true' ]] && ((${#batch[@]} > 1)); then
+      e2e_components_run_hook_batch_parallel "${hook_name}" "${batch[@]}" || return 1
+    else
+      for component_key in "${batch[@]}"; do
+        e2e_component_run_hook "${component_key}" "${hook_name}" || return 1
+      done
+    fi
+
+    for component_key in "${batch[@]}"; do
+      done_set["${component_key}"]=1
+    done
+
+    local -a next_pending=()
+    for component_key in "${pending[@]}"; do
+      if [[ "${done_set[${component_key}]:-0}" != '1' ]]; then
+        next_pending+=("${component_key}")
+      fi
+    done
+    pending=("${next_pending[@]}")
+  done
+
+  return 0
 }
 
 e2e_components_run_hook_all() {
   local hook_name=$1
-  local component_key
-
-  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
-    e2e_component_run_hook "${component_key}" "${hook_name}" || return 1
-  done
+  local parallel_mode=${2:-false}
+  e2e_components_run_hook_for_keys "${hook_name}" "${parallel_mode}" "${E2E_SELECTED_COMPONENT_KEYS[@]}"
 }
 
 e2e_component_collect_manual_info() {
@@ -408,85 +1018,62 @@ e2e_component_collect_manual_info() {
   bash "${script_path}"
 }
 
-e2e_sanitize_project_name() {
-  local value=$1
-  value=${value//[^a-zA-Z0-9]/-}
-  printf '%s\n' "${value,,}"
-}
-
 e2e_components_start_local() {
   E2E_STARTED_COMPONENT_KEYS=()
-  e2e_info "starting local container components with engine=${E2E_CONTAINER_ENGINE}"
+  e2e_info "starting local compose components with engine=${E2E_CONTAINER_ENGINE}"
+
   local started_components_file="${E2E_STATE_DIR}/started-components.tsv"
   : >"${started_components_file}"
 
+  local -a start_candidates=()
   local component_key
+
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
     local connection
     connection=$(e2e_component_connection_for_key "${component_key}")
+
     if [[ "${connection}" != 'local' ]]; then
       e2e_info "component start skipped key=${component_key} reason=connection:${connection}"
       continue
     fi
 
-    if [[ "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" != 'true' ]]; then
-      e2e_info "component start skipped key=${component_key} reason=non-container"
+    if ! e2e_component_runtime_is_compose "${component_key}"; then
+      e2e_info "component start skipped key=${component_key} reason=runtime:native"
       continue
     fi
 
-    local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
-    if [[ ! -f "${compose_file}" ]]; then
-      e2e_die "missing compose file for ${component_key}: ${compose_file}"
-      return 1
-    fi
-
-    local state_file
-    state_file=$(e2e_component_state_file "${component_key}")
-    if [[ -f "${state_file}" ]]; then
-      # shellcheck disable=SC1090
-      set -a; source "${state_file}"; set +a
-    fi
-
-    local project_name
-    project_name=$(e2e_sanitize_project_name "declarest-${E2E_RUN_ID}-$(e2e_component_type "${component_key}")-$(e2e_component_name "${component_key}")")
-    E2E_COMPONENT_PROJECT["${component_key}"]="${project_name}"
-    e2e_info "component start key=${component_key} project=${project_name} compose=${compose_file}"
-
-    if ! e2e_compose_cmd -f "${compose_file}" -p "${project_name}" up -d; then
-      e2e_error "component start failed key=${component_key} project=${project_name}; collecting compose diagnostics"
-      e2e_compose_cmd -f "${compose_file}" -p "${project_name}" ps || true
-      e2e_compose_cmd -f "${compose_file}" -p "${project_name}" logs || true
-      return 1
-    fi
-    e2e_compose_cmd -f "${compose_file}" -p "${project_name}" ps || true
-    E2E_STARTED_COMPONENT_KEYS+=("${component_key}")
-    printf '%s\t%s\n' "${component_key}" "${project_name}" >>"${started_components_file}"
+    E2E_COMPONENT_PROJECT["${component_key}"]=$(e2e_component_default_project_name "${component_key}")
+    start_candidates+=("${component_key}")
   done
+
+  if ((${#start_candidates[@]} == 0)); then
+    return 0
+  fi
+
+  e2e_components_run_hook_for_keys 'start' 'true' "${start_candidates[@]}" || return 1
+
+  for component_key in "${start_candidates[@]}"; do
+    E2E_STARTED_COMPONENT_KEYS+=("${component_key}")
+    printf '%s\t%s\n' "${component_key}" "${E2E_COMPONENT_PROJECT[${component_key}]}" >>"${started_components_file}"
+  done
+
+  return 0
 }
 
 e2e_components_healthcheck_local() {
-  local component_key
+  if ((${#E2E_STARTED_COMPONENT_KEYS[@]} == 0)); then
+    return 0
+  fi
 
-  for component_key in "${E2E_STARTED_COMPONENT_KEYS[@]}"; do
-    e2e_info "component healthcheck start key=${component_key}"
-    e2e_component_run_hook "${component_key}" 'health' || return 1
-    e2e_info "component healthcheck done key=${component_key}"
-  done
+  e2e_components_run_hook_for_keys 'health' 'true' "${E2E_STARTED_COMPONENT_KEYS[@]}"
 }
 
 e2e_components_stop_started() {
   local index
+
   for ((index = ${#E2E_STARTED_COMPONENT_KEYS[@]} - 1; index >= 0; index--)); do
     local component_key=${E2E_STARTED_COMPONENT_KEYS[index]}
-    local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
-    local project_name="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
-
-    if [[ -z "${project_name}" || ! -f "${compose_file}" ]]; then
-      continue
-    fi
-
-    e2e_info "component stop key=${component_key} project=${project_name}"
-    e2e_compose_cmd -f "${compose_file}" -p "${project_name}" down -v --remove-orphans || true
+    e2e_component_run_hook "${component_key}" 'stop' || true
   done
 }
 
@@ -503,7 +1090,7 @@ e2e_preflight_requirements() {
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
     local connection
     connection=$(e2e_component_connection_for_key "${component_key}")
-    if [[ "${connection}" == 'local' && "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" == 'true' ]]; then
+    if [[ "${connection}" == 'local' ]] && e2e_component_runtime_is_compose "${component_key}"; then
       needs_container_runtime=1
       break
     fi

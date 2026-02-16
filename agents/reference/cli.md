@@ -86,10 +86,12 @@ Interactive config commands:
 4. Option conflicts MUST produce usage errors.
 5. `resource get` MUST support mutually exclusive `--local` and `--remote` flags.
 6. `resource get` MUST default to `--remote` when neither source flag is provided.
-7. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
-8. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
-9. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
-10. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
+7. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
+8. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
+9. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
+10. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
+11. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
+12. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -107,6 +109,8 @@ Interactive config commands:
 3. Unsupported command/flag combination.
 4. Command requires configured manager not present in active context.
 5. `resource get` receives both `--local` and `--remote`.
+6. `resource save` receives both `--as-items` and `--as-one-resource`.
+7. `resource save --as-items` receives non-list input.
 
 ## Edge Cases
 1. `save` with secret masking requested but no secret manager configured.
@@ -120,11 +124,13 @@ Interactive config commands:
 2. `declarest resource apply --path /customers/acme` applies desired state for one resource using flag input.
 3. `declarest resource get /customers/acme` reads remote state by default.
 4. `declarest resource get /customers/acme --local` reads local repository state.
-5. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
-6. `declarest metadata render /customers/acme get` renders metadata operation spec.
-7. `declarest repo push --force` executes force push with explicit safety acknowledgment.
-8. `declarest repo status` reports local/remote sync status without mutating repository state.
-9. `declarest completion bash` generates Bash completion output.
-10. `declarest version -o json` prints machine-readable version information.
-11. `declarest config use` opens interactive context selection when run in a terminal.
-12. `declarest config show --context dev` prints the selected context configuration as YAML.
+5. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
+6. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
+7. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
+8. `declarest metadata render /customers/acme get` renders metadata operation spec.
+9. `declarest repo push --force` executes force push with explicit safety acknowledgment.
+10. `declarest repo status` reports local/remote sync status without mutating repository state.
+11. `declarest completion bash` generates Bash completion output.
+12. `declarest version -o json` prints machine-readable version information.
+13. `declarest config use` opens interactive context selection when run in a terminal.
+14. `declarest config show --context dev` prints the selected context configuration as YAML.

@@ -48,6 +48,7 @@ Acceptance contracts:
 10. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
 11. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.
 12. Resource-server fixtures: metadata identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
+13. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

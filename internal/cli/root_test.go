@@ -225,6 +225,100 @@ func TestResourceGetSourceSelection(t *testing.T) {
 	})
 }
 
+func TestResourceSaveInputModes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default_list_payload_saves_as_items", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			`[{"id":"acme","tier":"pro"},{"id":"beta","tier":"free"}]`,
+			"resource",
+			"save",
+			"/customers",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected first saved path /customers/acme, got %q", reconciler.saveCalls[0].logicalPath)
+		}
+		if reconciler.saveCalls[1].logicalPath != "/customers/beta" {
+			t.Fatalf("expected second saved path /customers/beta, got %q", reconciler.saveCalls[1].logicalPath)
+		}
+	})
+
+	t.Run("as_one_resource_overrides_list_item_save", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			`[{"id":"acme"},{"id":"beta"}]`,
+			"resource",
+			"save",
+			"/customers",
+			"--as-one-resource",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/customers" {
+			t.Fatalf("expected saved path /customers, got %q", reconciler.saveCalls[0].logicalPath)
+		}
+		if _, ok := reconciler.saveCalls[0].value.([]any); !ok {
+			t.Fatalf("expected single saved payload to be list, got %T", reconciler.saveCalls[0].value)
+		}
+	})
+
+	t.Run("as_items_requires_list_payload", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			`{"id":"acme"}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--as-items",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("as_items_and_as_one_resource_conflict", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			`[{"id":"acme"}]`,
+			"resource",
+			"save",
+			"/customers",
+			"--as-items",
+			"--as-one-resource",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
 func TestResourceDefaultOutputUsesContextResourceFormat(t *testing.T) {
 	t.Parallel()
 
@@ -580,17 +674,24 @@ func extractHelpSection(output string, heading string) string {
 
 func testDeps() Dependencies {
 	metadataService := newTestMetadata()
+	return testDepsWith(
+		&testReconciler{
+			metadataService: metadataService,
+		},
+		metadataService,
+	)
+}
+
+func testDepsWith(reconciler *testReconciler, metadataService *testMetadata) Dependencies {
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
 
 	return Dependencies{
-		Orchestrator: &testReconciler{
-			metadataService: metadataService,
-		},
-		Contexts:   &testContextService{},
-		Repository: repositoryService,
-		Metadata:   metadataService,
-		Secrets:    secretProvider,
+		Orchestrator: reconciler,
+		Contexts:     &testContextService{},
+		Repository:   repositoryService,
+		Metadata:     metadataService,
+		Secrets:      secretProvider,
 	}
 }
 
@@ -629,6 +730,13 @@ func (s *testContextService) Validate(context.Context, config.Context) error { r
 
 type testReconciler struct {
 	metadataService *testMetadata
+	saveCalls       []savedResource
+	saveErr         error
+}
+
+type savedResource struct {
+	logicalPath string
+	value       resource.Value
 }
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
@@ -640,7 +748,13 @@ func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resour
 func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
-func (r *testReconciler) Save(context.Context, string, resource.Value) error { return nil }
+func (r *testReconciler) Save(_ context.Context, logicalPath string, value resource.Value) error {
+	r.saveCalls = append(r.saveCalls, savedResource{
+		logicalPath: logicalPath,
+		value:       value,
+	})
+	return r.saveErr
+}
 func (r *testReconciler) Apply(_ context.Context, logicalPath string) (resource.Resource, error) {
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }

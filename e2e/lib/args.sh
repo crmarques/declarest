@@ -60,6 +60,41 @@ e2e_profile_from_cli_args() {
   printf '%s\n' "${profile}"
 }
 
+e2e_valid_component_name() {
+  local value=$1
+  [[ "${value}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+}
+
+e2e_validate_component_arg() {
+  local flag=$1
+  local value=$2
+  local allow_none=${3:-false}
+  local allow_empty=${4:-false}
+
+  if [[ -z "${value}" ]]; then
+    if [[ "${allow_empty}" == 'true' ]]; then
+      return 0
+    fi
+    e2e_die "invalid ${flag} value: empty"
+    return 1
+  fi
+
+  if [[ "${allow_none}" == 'true' && "${value}" == 'none' ]]; then
+    return 0
+  fi
+
+  if ! e2e_valid_component_name "${value}"; then
+    if [[ "${allow_none}" == 'true' ]]; then
+      e2e_die "invalid ${flag} value: ${value} (expected component name or none)"
+    else
+      e2e_die "invalid ${flag} value: ${value} (expected component name)"
+    fi
+    return 1
+  fi
+
+  return 0
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -74,12 +109,12 @@ Profiles:
     manual  Start local components, print context access info, and exit.
 
 Component selection:
-  --resource-server <keycloak|vault|rundeck|none> default: keycloak
+  --resource-server <name|none>                  default: keycloak
   --resource-server-connection <local|remote>
-  --repo-type <filesystem|git>                   default: filesystem
-  --git-provider <git|gitlab|github>
+  --repo-type <name>                             default: filesystem
+  --git-provider <name>
   --git-provider-connection <local|remote>
-  --secret-provider <file|vault|none>            default: file
+  --secret-provider <name|none>                  default: file
   --secret-provider-connection <local|remote>
 
 Runtime controls:
@@ -290,13 +325,7 @@ e2e_parse_args() {
       ;;
   esac
 
-  case "${E2E_RESOURCE_SERVER}" in
-    keycloak|vault|rundeck|none) ;;
-    *)
-      e2e_die "invalid resource server: ${E2E_RESOURCE_SERVER}"
-      return 1
-      ;;
-  esac
+  e2e_validate_component_arg '--resource-server' "${E2E_RESOURCE_SERVER}" 'true' || return 1
 
   case "${E2E_RESOURCE_SERVER_CONNECTION}" in
     local|remote) ;;
@@ -306,21 +335,8 @@ e2e_parse_args() {
       ;;
   esac
 
-  case "${E2E_REPO_TYPE}" in
-    filesystem|git) ;;
-    *)
-      e2e_die "invalid repo type: ${E2E_REPO_TYPE}"
-      return 1
-      ;;
-  esac
-
-  case "${E2E_GIT_PROVIDER}" in
-    ''|git|gitlab|github) ;;
-    *)
-      e2e_die "invalid git provider: ${E2E_GIT_PROVIDER}"
-      return 1
-      ;;
-  esac
+  e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
+  e2e_validate_component_arg '--git-provider' "${E2E_GIT_PROVIDER}" 'false' 'true' || return 1
 
   case "${E2E_GIT_PROVIDER_CONNECTION}" in
     local|remote) ;;
@@ -330,13 +346,7 @@ e2e_parse_args() {
       ;;
   esac
 
-  case "${E2E_SECRET_PROVIDER}" in
-    file|vault|none) ;;
-    *)
-      e2e_die "invalid secret provider: ${E2E_SECRET_PROVIDER}"
-      return 1
-      ;;
-  esac
+  e2e_validate_component_arg '--secret-provider' "${E2E_SECRET_PROVIDER}" 'true' || return 1
 
   case "${E2E_SECRET_PROVIDER_CONNECTION}" in
     local|remote) ;;
@@ -346,13 +356,5 @@ e2e_parse_args() {
       ;;
   esac
 
-  if [[ "${E2E_REPO_TYPE}" == 'git' && -z "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die '--repo-type git requires --git-provider'
-    return 1
-  fi
-
-  if [[ "${E2E_REPO_TYPE}" == 'filesystem' && -n "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die '--git-provider is only valid when --repo-type git'
-    return 1
-  fi
+  return 0
 }

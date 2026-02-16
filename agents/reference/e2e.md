@@ -28,17 +28,21 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 10. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
 11. Each component under `e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
 12. Local compose-backed components MUST also provide `compose.yaml` and `scripts/health.sh`.
-13. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
-14. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`.
-15. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
-16. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
-17. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
-18. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
-19. Runtime artifacts MUST be written under `e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
-20. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
-21. The runner MUST maintain one live execution log file and print its path at startup.
-22. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
-23. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
+13. `component.env` MUST declare `COMPONENT_RUNTIME_KIND` and `COMPONENT_DEPENDS_ON` explicitly.
+14. The runner MUST execute component hooks through one generic hook orchestration path (`init`, `start`, `health`, `configure-auth`, `context`, `stop`) rather than per-component ad hoc branching.
+15. Hook orchestration MUST be dependency-aware using `COMPONENT_DEPENDS_ON` and MUST run ready batches in parallel when no dependency edge blocks them.
+16. Missing dependency targets and dependency cycles MUST fail initialization or hook execution with actionable output.
+17. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
+18. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`.
+19. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
+20. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
+21. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
+22. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
+23. Runtime artifacts MUST be written under `e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
+24. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
+25. The runner MUST maintain one live execution log file and print its path at startup.
+26. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
+27. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
 
 ## Data Contracts
 Runner flags:
@@ -52,10 +56,13 @@ Runner flags:
 1. `COMPONENT_TYPE`, `COMPONENT_NAME`.
 2. `SUPPORTED_CONNECTIONS`, `DEFAULT_CONNECTION`.
 3. `REQUIRES_DOCKER`.
-4. `DESCRIPTION`.
+4. `COMPONENT_RUNTIME_KIND` (`native|compose`).
+5. `COMPONENT_DEPENDS_ON` (space-separated dependency selectors using `<type>:<name>` or `<type>:*`).
+6. `DESCRIPTION`.
 
 Optional component hook:
 1. `scripts/manual-info.sh` may emit plain-text operator access details for `manual` profile output.
+2. `scripts/start.sh` and `scripts/stop.sh` may override built-in compose runtime lifecycle adapters.
 
 Case requirements (`CASE_REQUIRES`):
 1. Selector format: `key=value`.
@@ -78,6 +85,8 @@ Manual handoff:
 3. Partial startup passes without health checks.
 4. Requirement filtering hides explicitly requested mandatory coverage.
 5. Summary output omits actionable failing-step log pointers.
+6. Component dependency selectors reference non-discovered components and fail late.
+7. Hook dependency cycles deadlock startup sequencing.
 
 ## Edge Cases
 1. `--list-components` short-circuits runtime startup but still yields deterministic summary.
@@ -86,7 +95,9 @@ Manual handoff:
 4. Remote-capable selections with missing env credentials fail fast with guidance.
 5. Nested fixture metadata patterns (for example `/x/_/y/_/_`) expand deterministically into concrete collection targets.
 6. Cleanup for unknown run ids returns actionable output and still attempts runner/compose teardown using deterministic project naming.
+7. Dependency selector wildcard (for example `git-provider:*`) resolves exactly one selected provider in some runs and multiple in others without changing correctness.
 
 ## Examples
 1. `./run-e2e.sh --profile basic --repo-type filesystem --resource-server none --secret-provider none` runs compatible main cases and reports deterministic summary.
 2. `./run-e2e.sh --profile manual --repo-type git --git-provider github --git-provider-connection remote` fails initialization because manual mode is local-instantiable only.
+3. `./run-e2e.sh --profile basic --repo-type git --git-provider gitlab --resource-server keycloak` runs dependency-aware parallel hooks while ensuring `repo-type:git` waits for `git-provider:*` initialization.

@@ -193,3 +193,47 @@ Expected outputs:
 
 Failure expectation:
 1. Step 3 fails with `ValidationError` before reconciler execution.
+
+### Example 10: Resource Save List Fanout
+Goal: persist collection payloads as one file per resource by default.
+
+Inputs:
+1. Path `/customers`.
+2. Input payload list (array or object containing `items` array).
+3. Optional flags `--as-items` and `--as-one-resource`.
+
+Execution:
+1. `declarest resource save /customers` receives a list payload.
+2. CLI resolves item aliases using metadata identity attributes.
+3. CLI saves one resource file per resolved item path.
+4. `declarest resource save /customers --as-one-resource` receives the same list payload.
+
+Expected outputs:
+1. Step 1 produces one local file per list item under `/customers/<alias>`.
+2. Step 4 persists the payload as a single resource file at `/customers`.
+
+Failure expectation:
+1. `--as-items` with non-list input fails with `ValidationError`.
+2. `--as-items --as-one-resource` fails with `ValidationError`.
+
+### Example 11: E2E Dependency-Aware Parallel Component Hooks
+Goal: run component hooks in parallel when possible without violating dependency constraints.
+
+Inputs:
+1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `resource-server=keycloak`, `secret-provider=file`.
+2. Component metadata where `repo-type:git` declares `COMPONENT_DEPENDS_ON="git-provider:*"`.
+
+Execution:
+1. `run-e2e.sh` executes `init` hooks using dependency-aware batching.
+2. `git-provider:gitlab` and `resource-server:keycloak` initialize in parallel.
+3. `repo-type:git` initializes only after `git-provider:*` completion.
+4. Runner executes `configure-auth` and `context` hooks through the same dependency graph.
+
+Expected outputs:
+1. Hook batches run in parallel where no dependency edge exists.
+2. Repository component reads provider state without race conditions.
+3. Final context assembly succeeds deterministically.
+
+Failure expectation:
+1. Dependency selector referencing a non-selected component fails with actionable dependency error.
+2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.

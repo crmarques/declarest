@@ -23,18 +23,20 @@ This repository uses a componentized Bash e2e harness.
 ## Main Flags
 
 - `--profile <basic|full|manual>`
-- `--resource-server <keycloak|vault|rundeck|none>`
+- `--resource-server <name|none>`
 - `--resource-server-connection <local|remote>`
-- `--repo-type <filesystem|git>`
-- `--git-provider <git|gitlab|github>`
+- `--repo-type <name>`
+- `--git-provider <name>`
 - `--git-provider-connection <local|remote>`
-- `--secret-provider <file|vault|none>`
+- `--secret-provider <name|none>`
 - `--secret-provider-connection <local|remote>`
 - `--list-components`
 - `--keep-runtime`
 - `--verbose`
 - `--clean <run-id>`
 - `--clean-all`
+
+Use `--list-components` to see currently available component names and metadata.
 
 Cleanup behavior:
 
@@ -104,16 +106,30 @@ Missing requirement behavior:
 
 ## Component Contract
 
-Each component directory under `e2e/components/<type>/<name>/` must contain:
+Component authoring is contract-driven. Use `e2e/components/STANDARD.md` as the canonical onboarding guide.
 
-- `component.env`
+Each component directory under `e2e/components/<type>/<name>/` must include:
+
+- `component.env` with explicit `COMPONENT_RUNTIME_KIND` and `COMPONENT_DEPENDS_ON`
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
 
-Optional manual-access contract:
+Compose-runtime components must also include:
 
-- `scripts/manual-info.sh`: when present, the runner executes it after `Configuring Access` in `manual` profile and prints its output for direct operator usage.
+- `compose.yaml`
+- `scripts/health.sh`
+
+Optional hooks:
+
+- `scripts/manual-info.sh`: printed after `Configuring Access` in `manual` profile
+- `scripts/start.sh` and `scripts/stop.sh`: override built-in compose start/stop behavior when needed
+
+Hook orchestration:
+
+- `run-e2e.sh` is the single orchestrator entrypoint.
+- Hook execution is dependency-aware by `COMPONENT_DEPENDS_ON`.
+- Components in the same ready batch run in parallel for `init`, `start`, `health`, `configure-auth`, and `context`.
 
 Resource-server components must also provide a fixture tree used by sync-oriented cases:
 
@@ -136,11 +152,6 @@ Keycloak repo-template currently covers:
 - `/admin/realms/_/clients`
 - `/admin/realms/_/identity-provider/instances`
 - `/admin/realms/_/organizations`
-
-Container-backed local components should also provide:
-
-- `compose.yaml`
-- `scripts/health.sh`
 
 ## Remote Environment Variables
 
