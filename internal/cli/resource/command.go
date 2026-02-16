@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/crmarques/declarest/internal/cli/common"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -50,6 +51,9 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			if err != nil {
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "resource get requested path=%q", resolvedPath)
+
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
@@ -61,8 +65,11 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			}
 			value, err := reconciler.Get(command.Context(), resolvedPath)
 			if err != nil {
+				debugctx.Printf(command.Context(), "resource get failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "resource get succeeded path=%q value_type=%T", resolvedPath, value)
 
 			return common.WriteOutput(command, outputFormat, value, func(w io.Writer, item resource.Value) error {
 				_, writeErr := fmt.Fprintln(w, item)

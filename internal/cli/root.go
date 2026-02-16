@@ -12,6 +12,7 @@ import (
 	resourcecmd "github.com/crmarques/declarest/internal/cli/resource"
 	"github.com/crmarques/declarest/internal/cli/secret"
 	"github.com/crmarques/declarest/internal/cli/version"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +31,22 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			if err := common.ValidateOutputFormat(globalFlags.Output); err != nil {
 				return err
 			}
-			command.SetContext(common.WithContextName(context.Background(), globalFlags.Context))
+
+			commandContext := context.Background()
+			commandContext = common.WithContextName(commandContext, globalFlags.Context)
+			commandContext = debugctx.WithEnabled(commandContext, globalFlags.Debug)
+			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
+			command.SetContext(commandContext)
+
+			debugctx.Printf(
+				command.Context(),
+				"root flags context=%q output=%q no_status=%t command=%q",
+				globalFlags.Context,
+				globalFlags.Output,
+				globalFlags.NoStatus,
+				command.CommandPath(),
+			)
+
 			return nil
 		},
 		SilenceUsage:  true,

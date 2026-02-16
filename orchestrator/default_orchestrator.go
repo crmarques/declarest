@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -32,7 +34,43 @@ func (r *DefaultOrchestrator) Get(ctx context.Context, logicalPath string) (reso
 	if err != nil {
 		return nil, err
 	}
-	return manager.Get(ctx, logicalPath)
+
+	localValue, err := manager.Get(ctx, logicalPath)
+	if err == nil {
+		debugctx.Printf(ctx, "orchestrator get local hit path=%q", logicalPath)
+		return localValue, nil
+	}
+	if !isTypedCategory(err, faults.NotFoundError) {
+		debugctx.Printf(ctx, "orchestrator get local error path=%q error=%v", logicalPath, err)
+		return nil, err
+	}
+
+	if r == nil || r.Server == nil {
+		debugctx.Printf(ctx, "orchestrator get local miss path=%q remote_fallback=false", logicalPath)
+		return nil, err
+	}
+
+	debugctx.Printf(ctx, "orchestrator get local miss path=%q remote_fallback=true", logicalPath)
+
+	resourceInfo, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
+	if infoErr != nil {
+		debugctx.Printf(ctx, "orchestrator get remote preparation failed path=%q error=%v", logicalPath, infoErr)
+		return nil, infoErr
+	}
+
+	serverManager, err := r.requireServer()
+	if err != nil {
+		return nil, err
+	}
+
+	remoteValue, err := serverManager.Get(ctx, resourceInfo)
+	if err != nil {
+		debugctx.Printf(ctx, "orchestrator get remote error path=%q error=%v", resourceInfo.LogicalPath, err)
+		return nil, err
+	}
+
+	debugctx.Printf(ctx, "orchestrator get remote hit path=%q", resourceInfo.LogicalPath)
+	return remoteValue, nil
 }
 
 func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, value resource.Value) error {
@@ -265,30 +303,56 @@ func (r *DefaultOrchestrator) requireServer() (server.ResourceServer, error) {
 	return r.Server, nil
 }
 
+func (r *DefaultOrchestrator) resolveMetadataForPath(
+	ctx context.Context,
+	normalizedPath string,
+	allowMissing bool,
+) (metadata.ResourceMetadata, error) {
+	if r == nil || r.Metadata == nil {
+		if allowMissing {
+			return metadata.ResourceMetadata{}, nil
+		}
+		return metadata.ResourceMetadata{}, faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
+	}
+
+	resolvedMetadata, err := r.Metadata.ResolveForPath(ctx, normalizedPath)
+	if err != nil {
+		if allowMissing && isTypedCategory(err, faults.NotFoundError) {
+			debugctx.Printf(ctx, "metadata missing for path=%q; using empty metadata fallback", normalizedPath)
+			return metadata.ResourceMetadata{}, nil
+		}
+		return metadata.ResourceMetadata{}, err
+	}
+
+	return resolvedMetadata, nil
+}
+
+func collectionPathFor(normalizedPath string) string {
+	if normalizedPath == "/" {
+		return "/"
+	}
+
+	collectionPath := path.Dir(normalizedPath)
+	if collectionPath == "." || collectionPath == "" {
+		return "/"
+	}
+
+	return collectionPath
+}
+
 func (r *DefaultOrchestrator) buildResourceInfo(
 	ctx context.Context,
 	logicalPath string,
 	value resource.Value,
 ) (resource.Resource, error) {
-	metadataService, err := r.requireMetadata()
-	if err != nil {
-		return resource.Resource{}, err
-	}
-
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	collectionPath := "/"
-	if normalizedPath != "/" {
-		collectionPath = path.Dir(normalizedPath)
-		if collectionPath == "." || collectionPath == "" {
-			collectionPath = "/"
-		}
-	}
+	collectionPath := collectionPathFor(normalizedPath)
 
-	resolvedMetadata, err := metadataService.ResolveForPath(ctx, normalizedPath)
+	resolvedMetadata, err := r.resolveMetadataForPath(ctx, normalizedPath, false)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -336,6 +400,49 @@ func (r *DefaultOrchestrator) buildResourceInfo(
 	return resource.Resource{
 		LogicalPath:    normalizedPath,
 		CollectionPath: collectionPath,
+		LocalAlias:     localAlias,
+		RemoteID:       remoteID,
+		Metadata:       resolvedMetadata,
+		Payload:        normalizedPayload,
+	}, nil
+}
+
+func (r *DefaultOrchestrator) buildResourceInfoForRemoteRead(
+	ctx context.Context,
+	logicalPath string,
+) (resource.Resource, error) {
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	resolvedMetadata, err := r.resolveMetadataForPath(ctx, normalizedPath, true)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	localAlias := path.Base(normalizedPath)
+	if normalizedPath == "/" {
+		localAlias = "/"
+	}
+	remoteID := localAlias
+
+	payload := map[string]any{}
+	if aliasAttribute := strings.TrimSpace(resolvedMetadata.AliasFromAttribute); aliasAttribute != "" {
+		payload[aliasAttribute] = localAlias
+	}
+	if idAttribute := strings.TrimSpace(resolvedMetadata.IDFromAttribute); idAttribute != "" {
+		payload[idAttribute] = remoteID
+	}
+
+	normalizedPayload, err := resource.Normalize(payload)
+	if err != nil {
+		return resource.Resource{}, err
+	}
+
+	return resource.Resource{
+		LogicalPath:    normalizedPath,
+		CollectionPath: collectionPathFor(normalizedPath),
 		LocalAlias:     localAlias,
 		RemoteID:       remoteID,
 		Metadata:       resolvedMetadata,
@@ -985,6 +1092,14 @@ func splitLogicalPathSegments(value string) []string {
 }
 
 func isTypedCategory(err error, category faults.ErrorCategory) bool {
-	typedErr, ok := err.(*faults.TypedError)
-	return ok && typedErr.Category == category
+	if err == nil {
+		return false
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+
+	return typedErr.Category == category
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 
@@ -103,6 +102,27 @@ func TestGlobalFlagsParse(t *testing.T) {
 	}
 	if !strings.Contains(output, "\"version\"") {
 		t.Fatalf("expected json version output, got %q", output)
+	}
+}
+
+func TestDebugFlagPrintsTraceOutput(t *testing.T) {
+	t.Parallel()
+
+	output, debugOutput, err := executeForTestWithStreams(testDeps(), "", "--debug", "resource", "get", "/customers/acme")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(output, "/customers/acme") {
+		t.Fatalf("expected output to contain path, got %q", output)
+	}
+	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" no_status=false command="declarest resource get"`) {
+		t.Fatalf("expected root debug trace, got %q", debugOutput)
+	}
+	if !strings.Contains(debugOutput, `debug: resource get requested path="/customers/acme"`) {
+		t.Fatalf("expected resource get debug trace, got %q", debugOutput)
+	}
+	if !strings.Contains(debugOutput, `debug: resource get succeeded path="/customers/acme" value_type=map[string]interface {}`) {
+		t.Fatalf("expected resource get success debug trace, got %q", debugOutput)
 	}
 }
 
@@ -401,15 +421,21 @@ func TestHelpSubcommandDisabled(t *testing.T) {
 }
 
 func executeForTest(deps Dependencies, stdin string, args ...string) (string, error) {
+	output, _, err := executeForTestWithStreams(deps, stdin, args...)
+	return output, err
+}
+
+func executeForTestWithStreams(deps Dependencies, stdin string, args ...string) (string, string, error) {
 	command := NewRootCommand(deps)
-	out := &bytes.Buffer{}
-	command.SetOut(out)
-	command.SetErr(io.Discard)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	command.SetOut(stdout)
+	command.SetErr(stderr)
 	command.SetIn(strings.NewReader(stdin))
 	command.SetArgs(args)
 
 	err := command.Execute()
-	return out.String(), err
+	return stdout.String(), stderr.String(), err
 }
 
 func registeredPaths(command *cobra.Command, prefix []string) [][]string {

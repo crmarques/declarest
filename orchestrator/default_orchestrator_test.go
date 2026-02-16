@@ -73,6 +73,77 @@ func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
+func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultOrchestrator{
+		Repository: &fakeRepository{
+			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		},
+		Metadata: &fakeMetadata{
+			resolveErr: faults.NewTypedError(faults.NotFoundError, "metadata not found", nil),
+		},
+		Server: &fakeServer{
+			getValue: map[string]any{"realm": "master"},
+		},
+	}
+
+	value, err := reconciler.Get(context.Background(), "/admin/realms/")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	serverManager := reconciler.Server.(*fakeServer)
+	if !serverManager.getCalled {
+		t.Fatal("expected remote fallback get call")
+	}
+	if got := serverManager.lastResource.LogicalPath; got != "/admin/realms" {
+		t.Fatalf("expected normalized remote logical path /admin/realms, got %q", got)
+	}
+	if got := serverManager.lastResource.CollectionPath; got != "/admin" {
+		t.Fatalf("expected remote collection path /admin, got %q", got)
+	}
+	if !reflect.DeepEqual(value, map[string]any{"realm": "master"}) {
+		t.Fatalf("unexpected remote payload: %#v", value)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultOrchestrator{
+		Repository: &fakeRepository{
+			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		},
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "realm",
+				AliasFromAttribute: "realm",
+			},
+		},
+		Server: &fakeServer{
+			getValue: map[string]any{"realm": "platform"},
+		},
+	}
+
+	_, err := reconciler.Get(context.Background(), "/admin/realms/platform")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	serverManager := reconciler.Server.(*fakeServer)
+	payload, ok := serverManager.lastResource.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload map, got %T", serverManager.lastResource.Payload)
+	}
+	if got := payload["realm"]; got != "platform" {
+		t.Fatalf("expected metadata-seeded realm identity, got %#v", got)
+	}
+	if got := serverManager.lastResource.RemoteID; got != "platform" {
+		t.Fatalf("expected remote id platform, got %q", got)
+	}
+}
+
 type fakeRepository struct {
 	getValue    resource.Value
 	getErr      error
@@ -315,7 +386,7 @@ func TestDefaultOrchestratorApplyUsesSecretsAndPersistsMaskedPayload(t *testing.
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
-		Secrets:   secretProvider,
+		Secrets:    secretProvider,
 	}
 
 	item, err := reconciler.Apply(context.Background(), "/customers/acme")
@@ -403,7 +474,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
-		Secrets:   secretProvider,
+		Secrets:    secretProvider,
 	}
 
 	items, err := reconciler.Diff(context.Background(), "/customers/acme")
