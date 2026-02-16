@@ -10,7 +10,7 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
-func TestFSMetadataServiceGetSetUnset(t *testing.T) {
+func TestFSMetadataGetSetUnset(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir(), "")
@@ -67,7 +67,7 @@ func TestFSMetadataServiceGetSetUnset(t *testing.T) {
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
-func TestFSMetadataServiceResolveForPathWildcardRules(t *testing.T) {
+func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir(), "")
@@ -152,7 +152,7 @@ func TestFSMetadataServiceResolveForPathWildcardRules(t *testing.T) {
 	}
 }
 
-func TestFSMetadataServiceRenderOperationSpec(t *testing.T) {
+func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir(), "")
@@ -188,7 +188,7 @@ func TestFSMetadataServiceRenderOperationSpec(t *testing.T) {
 	}
 }
 
-func TestFSMetadataServiceInferPreservesExplicitAndApply(t *testing.T) {
+func TestFSMetadataInferPreservesExplicitAndApply(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir(), "")
@@ -239,7 +239,7 @@ func TestFSMetadataServiceInferPreservesExplicitAndApply(t *testing.T) {
 	}
 }
 
-func TestFSMetadataServiceValidation(t *testing.T) {
+func TestFSMetadataValidation(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir(), "")

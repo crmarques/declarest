@@ -15,7 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand(deps common.CommandWiring) *cobra.Command {
+func NewRootCommand(deps Dependencies) *cobra.Command {
+	commandDeps := deps.commandDependencies()
 	var globalFlags common.GlobalFlags
 
 	root := &cobra.Command{
@@ -50,12 +51,12 @@ func NewRootCommand(deps common.CommandWiring) *cobra.Command {
 	)
 
 	basicCommands := []*cobra.Command{
-		adhoc.NewCommand(deps, &globalFlags),
-		config.NewCommand(deps, &globalFlags),
-		metadatacmd.NewCommand(deps, &globalFlags),
-		repo.NewCommand(deps, &globalFlags),
-		resourcecmd.NewCommand(deps, &globalFlags),
-		secret.NewCommand(deps, &globalFlags),
+		adhoc.NewCommand(commandDeps, &globalFlags),
+		config.NewCommand(commandDeps, &globalFlags),
+		metadatacmd.NewCommand(commandDeps, &globalFlags),
+		repo.NewCommand(commandDeps, &globalFlags),
+		resourcecmd.NewCommand(commandDeps, &globalFlags),
+		secret.NewCommand(commandDeps, &globalFlags),
 	}
 	for _, command := range basicCommands {
 		command.GroupID = "basic"
@@ -63,8 +64,8 @@ func NewRootCommand(deps common.CommandWiring) *cobra.Command {
 	}
 
 	otherCommands := []*cobra.Command{
-		completion.NewCommand(deps, &globalFlags),
-		version.NewCommand(deps, &globalFlags),
+		completion.NewCommand(commandDeps, &globalFlags),
+		version.NewCommand(commandDeps, &globalFlags),
 	}
 	for _, command := range otherCommands {
 		command.GroupID = "other"

@@ -8,7 +8,6 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/core"
 	"github.com/crmarques/declarest/internal/cli"
-	"github.com/crmarques/declarest/internal/cli/common"
 )
 
 func main() {
@@ -20,9 +19,12 @@ func main() {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	deps := common.CommandWiring{
-		Reconciler: declarestContext.Reconciler,
-		Contexts:   declarestContext.Contexts,
+	deps := cli.Dependencies{
+		Orchestrator: declarestContext.Orchestrator,
+		Contexts:     declarestContext.Contexts,
+		Repository:   declarestContext.Repository,
+		Metadata:     declarestContext.Metadata,
+		Secrets:      declarestContext.Secrets,
 	}
 
 	if err = cli.Execute(deps); err != nil {

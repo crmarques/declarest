@@ -22,7 +22,7 @@ const (
 	defaultMediaType   = "application/json"
 )
 
-var _ server.ResourceServerManager = (*HTTPResourceServerGateway)(nil)
+var _ server.ResourceServer = (*HTTPResourceServerGateway)(nil)
 
 type HTTPResourceServerGateway struct {
 	baseURL        *url.URL

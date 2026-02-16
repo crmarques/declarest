@@ -1,4 +1,4 @@
-package reconciler
+package orchestrator
 
 import (
 	"context"
@@ -17,48 +17,34 @@ import (
 	"github.com/crmarques/declarest/server"
 )
 
-var _ ResourceReconciler = (*DefaultReconciler)(nil)
+var _ Orchestrator = (*DefaultOrchestrator)(nil)
 
-type DefaultReconciler struct {
-	Name              string
-	RepositoryManager repository.ResourceRepositoryManager
-	MetadataService   metadata.MetadataService
-	ServerManager     server.ResourceServerManager
-	SecretsProvider   secrets.SecretProvider
+type DefaultOrchestrator struct {
+	Name       string
+	Repository repository.ResourceRepository
+	Metadata   metadata.MetadataService
+	Server     server.ResourceServer
+	Secrets    secrets.SecretProvider
 }
 
-func (r *DefaultReconciler) MetadataManager() metadata.MetadataService {
-	if r == nil {
-		return nil
-	}
-	return r.MetadataService
-}
-
-func (r *DefaultReconciler) SecretManager() secrets.SecretProvider {
-	if r == nil {
-		return nil
-	}
-	return r.SecretsProvider
-}
-
-func (r *DefaultReconciler) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return nil, err
 	}
 	return manager.Get(ctx, logicalPath)
 }
 
-func (r *DefaultReconciler) Save(ctx context.Context, logicalPath string, value resource.Value) error {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, value resource.Value) error {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return err
 	}
 	return manager.Save(ctx, logicalPath, value)
 }
 
-func (r *DefaultReconciler) Apply(ctx context.Context, logicalPath string) (resource.Resource, error) {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string) (resource.Resource, error) {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -79,7 +65,7 @@ func (r *DefaultReconciler) Apply(ctx context.Context, logicalPath string) (reso
 	}
 	resourceInfo.Payload = resolvedPayload
 
-	serverManager, err := r.serverManager()
+	serverManager, err := r.requireServer()
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -97,7 +83,7 @@ func (r *DefaultReconciler) Apply(ctx context.Context, logicalPath string) (reso
 	return r.executeRemoteMutation(ctx, resourceInfo, operation)
 }
 
-func (r *DefaultReconciler) Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *DefaultOrchestrator) Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
 	resourceInfo, err := r.buildResourceInfo(ctx, logicalPath, value)
 	if err != nil {
 		return resource.Resource{}, err
@@ -112,7 +98,7 @@ func (r *DefaultReconciler) Create(ctx context.Context, logicalPath string, valu
 	return r.executeRemoteMutation(ctx, resourceInfo, metadata.OperationCreate)
 }
 
-func (r *DefaultReconciler) Update(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *DefaultOrchestrator) Update(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
 	resourceInfo, err := r.buildResourceInfo(ctx, logicalPath, value)
 	if err != nil {
 		return resource.Resource{}, err
@@ -127,33 +113,33 @@ func (r *DefaultReconciler) Update(ctx context.Context, logicalPath string, valu
 	return r.executeRemoteMutation(ctx, resourceInfo, metadata.OperationUpdate)
 }
 
-func (r *DefaultReconciler) Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return err
 	}
 	return manager.Delete(ctx, logicalPath, repository.DeletePolicy{Recursive: policy.Recursive})
 }
 
-func (r *DefaultReconciler) ListLocal(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return nil, err
 	}
 	return manager.List(ctx, logicalPath, repository.ListPolicy{Recursive: policy.Recursive})
 }
 
-func (r *DefaultReconciler) ListRemote(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {
+func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return nil, err
 	}
 
-	metadataService, err := r.metadataService()
+	metadataService, err := r.requireMetadata()
 	if err != nil {
 		return nil, err
 	}
-	serverManager, err := r.serverManager()
+	serverManager, err := r.requireServer()
 	if err != nil {
 		return nil, err
 	}
@@ -185,12 +171,12 @@ func (r *DefaultReconciler) ListRemote(ctx context.Context, logicalPath string, 
 	return direct, nil
 }
 
-func (r *DefaultReconciler) Explain(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+func (r *DefaultOrchestrator) Explain(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	return r.Diff(ctx, logicalPath)
 }
 
-func (r *DefaultReconciler) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
-	manager, err := r.repositoryManager()
+func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+	manager, err := r.requireRepository()
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +226,7 @@ func (r *DefaultReconciler) Diff(ctx context.Context, logicalPath string) ([]res
 	return items, nil
 }
 
-func (r *DefaultReconciler) Template(ctx context.Context, logicalPath string, value resource.Value) (resource.Value, error) {
+func (r *DefaultOrchestrator) Template(ctx context.Context, logicalPath string, value resource.Value) (resource.Value, error) {
 	resourceInfo, err := r.buildResourceInfo(ctx, logicalPath, value)
 	if err != nil {
 		return nil, err
@@ -258,81 +244,33 @@ func (r *DefaultReconciler) Template(ctx context.Context, logicalPath string, va
 	return resource.Normalize(resourceInfo.Payload)
 }
 
-func (r *DefaultReconciler) RepoInit(ctx context.Context) error {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return err
-	}
-	return manager.Init(ctx)
-}
-
-func (r *DefaultReconciler) RepoRefresh(ctx context.Context) error {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return err
-	}
-	return manager.Refresh(ctx)
-}
-
-func (r *DefaultReconciler) RepoPush(ctx context.Context, policy repository.PushPolicy) error {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return err
-	}
-	return manager.Push(ctx, policy)
-}
-
-func (r *DefaultReconciler) RepoReset(ctx context.Context, policy repository.ResetPolicy) error {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return err
-	}
-	return manager.Reset(ctx, policy)
-}
-
-func (r *DefaultReconciler) RepoCheck(ctx context.Context) error {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return err
-	}
-	return manager.Check(ctx)
-}
-
-func (r *DefaultReconciler) RepoStatus(ctx context.Context) (repository.SyncReport, error) {
-	manager, err := r.repositoryManager()
-	if err != nil {
-		return repository.SyncReport{}, err
-	}
-	return manager.SyncStatus(ctx)
-}
-
-func (r *DefaultReconciler) repositoryManager() (repository.ResourceRepositoryManager, error) {
-	if r == nil || r.RepositoryManager == nil {
+func (r *DefaultOrchestrator) requireRepository() (repository.ResourceRepository, error) {
+	if r == nil || r.Repository == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "repository manager is not configured", nil)
 	}
-	return r.RepositoryManager, nil
+	return r.Repository, nil
 }
 
-func (r *DefaultReconciler) metadataService() (metadata.MetadataService, error) {
-	if r == nil || r.MetadataService == nil {
+func (r *DefaultOrchestrator) requireMetadata() (metadata.MetadataService, error) {
+	if r == nil || r.Metadata == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
 	}
-	return r.MetadataService, nil
+	return r.Metadata, nil
 }
 
-func (r *DefaultReconciler) serverManager() (server.ResourceServerManager, error) {
-	if r == nil || r.ServerManager == nil {
+func (r *DefaultOrchestrator) requireServer() (server.ResourceServer, error) {
+	if r == nil || r.Server == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "server manager is not configured", nil)
 	}
-	return r.ServerManager, nil
+	return r.Server, nil
 }
 
-func (r *DefaultReconciler) buildResourceInfo(
+func (r *DefaultOrchestrator) buildResourceInfo(
 	ctx context.Context,
 	logicalPath string,
 	value resource.Value,
 ) (resource.Resource, error) {
-	metadataService, err := r.metadataService()
+	metadataService, err := r.requireMetadata()
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -405,16 +343,16 @@ func (r *DefaultReconciler) buildResourceInfo(
 	}, nil
 }
 
-func (r *DefaultReconciler) executeRemoteMutation(
+func (r *DefaultOrchestrator) executeRemoteMutation(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	operation metadata.Operation,
 ) (resource.Resource, error) {
-	manager, err := r.repositoryManager()
+	manager, err := r.requireRepository()
 	if err != nil {
 		return resource.Resource{}, err
 	}
-	serverManager, err := r.serverManager()
+	serverManager, err := r.requireServer()
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -454,32 +392,32 @@ func (r *DefaultReconciler) executeRemoteMutation(
 	return resourceInfo, nil
 }
 
-func (r *DefaultReconciler) resolvePayloadForRemote(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (r *DefaultOrchestrator) resolvePayloadForRemote(ctx context.Context, value resource.Value) (resource.Value, error) {
 	if value == nil {
 		return nil, nil
 	}
 
-	if r == nil || r.SecretsProvider == nil {
+	if r == nil || r.Secrets == nil {
 		return resource.Normalize(value)
 	}
 
-	return r.SecretsProvider.ResolvePayload(ctx, value)
+	return r.Secrets.ResolvePayload(ctx, value)
 }
 
-func (r *DefaultReconciler) maskPayloadForLocal(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (r *DefaultOrchestrator) maskPayloadForLocal(ctx context.Context, value resource.Value) (resource.Value, error) {
 	if value == nil {
 		return nil, nil
 	}
 
-	if r == nil || r.SecretsProvider == nil {
+	if r == nil || r.Secrets == nil {
 		return resource.Normalize(value)
 	}
 
-	return r.SecretsProvider.MaskPayload(ctx, value)
+	return r.Secrets.MaskPayload(ctx, value)
 }
 
-func (r *DefaultReconciler) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error) {
-	serverManager, err := r.serverManager()
+func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error) {
+	serverManager, err := r.requireServer()
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +460,7 @@ func (r *DefaultReconciler) fetchRemoteValue(ctx context.Context, resourceInfo r
 	}
 }
 
-func (r *DefaultReconciler) renderOperationSpec(
+func (r *DefaultOrchestrator) renderOperationSpec(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	operation metadata.Operation,

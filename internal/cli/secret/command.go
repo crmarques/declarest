@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "secret",
 		Short: "Manage secrets",
@@ -30,7 +30,7 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	return command
 }
 
-func newInitCommand(deps common.CommandWiring) *cobra.Command {
+func newInitCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize secret store",
@@ -46,7 +46,7 @@ func newInitCommand(deps common.CommandWiring) *cobra.Command {
 	}
 }
 
-func newStoreCommand(deps common.CommandWiring) *cobra.Command {
+func newStoreCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "store <key> <value>",
 		Short: "Store a secret",
@@ -62,7 +62,7 @@ func newStoreCommand(deps common.CommandWiring) *cobra.Command {
 	}
 }
 
-func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <key>",
 		Short: "Read a secret",
@@ -91,7 +91,7 @@ func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *
 	}
 }
 
-func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
+func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <key>",
 		Short: "Delete a secret",
@@ -107,7 +107,7 @@ func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
 	}
 }
 
-func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List secrets",
@@ -133,7 +133,7 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	}
 }
 
-func newMaskCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newMaskCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -169,7 +169,7 @@ func newMaskCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	return command
 }
 
-func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -205,7 +205,7 @@ func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 	return command
 }
 
-func newNormalizeCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newNormalizeCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -241,7 +241,7 @@ func newNormalizeCommand(deps common.CommandWiring, globalFlags *common.GlobalFl
 	return command
 }
 
-func newDetectCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newDetectCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{

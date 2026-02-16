@@ -9,7 +9,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
-	reconcilerdomain "github.com/crmarques/declarest/reconciler"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 )
 
 func TestNewDeclarestContext(t *testing.T) {
@@ -31,15 +31,15 @@ func TestNewDeclarestContext(t *testing.T) {
 	if declarestContext.Contexts == nil {
 		t.Fatal("expected non-nil contexts service")
 	}
-	if declarestContext.Reconciler == nil {
+	if declarestContext.Orchestrator == nil {
 		t.Fatal("expected non-nil resource reconciler")
 	}
 
 	if _, ok := declarestContext.Contexts.(*configfile.FileContextService); !ok {
 		t.Fatalf("expected FileContextService, got %T", declarestContext.Contexts)
 	}
-	if _, ok := declarestContext.Reconciler.(*reconcilerdomain.DefaultReconciler); !ok {
-		t.Fatalf("expected DefaultReconciler, got %T", declarestContext.Reconciler)
+	if _, ok := declarestContext.Orchestrator.(*orchestratordomain.DefaultOrchestrator); !ok {
+		t.Fatalf("expected DefaultOrchestrator, got %T", declarestContext.Orchestrator)
 	}
 }
 
@@ -61,7 +61,7 @@ func TestNewDeclarestContextUsesContextCatalogPathAndSelection(t *testing.T) {
 		t.Fatalf("NewDeclarestContext returned error: %v", err)
 	}
 
-	if err := declarestContext.Reconciler.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"}); err != nil {
+	if err := declarestContext.Orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"}); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
 

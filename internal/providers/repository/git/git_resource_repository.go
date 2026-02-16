@@ -8,7 +8,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
+	"github.com/crmarques/declarest/internal/providers/repository/localfs"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	gogit "github.com/go-git/go-git/v5"
@@ -19,7 +19,7 @@ import (
 	sshauth "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 )
 
-var _ repository.ResourceRepositoryManager = (*GitResourceRepository)(nil)
+var _ repository.ResourceRepository = (*GitResourceRepository)(nil)
 
 const (
 	defaultRemoteName = "origin"
@@ -27,14 +27,14 @@ const (
 )
 
 type GitResourceRepository struct {
-	local   *fsrepository.FSResourceRepository
+	local   *localfs.LocalResourceRepository
 	baseDir string
 	remote  *config.GitRemote
 }
 
 func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string) *GitResourceRepository {
 	return &GitResourceRepository{
-		local:   fsrepository.NewFSResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
+		local:   localfs.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
 		baseDir: repoConfig.Local.BaseDir,
 		remote:  repoConfig.Remote,
 	}

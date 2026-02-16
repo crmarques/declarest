@@ -27,7 +27,7 @@ func ValidateOutputFormat(format string) error {
 	}
 }
 
-func ResolveContextOutputFormat(ctx context.Context, deps CommandWiring, globalFlags *GlobalFlags) (string, error) {
+func ResolveContextOutputFormat(ctx context.Context, deps CommandDependencies, globalFlags *GlobalFlags) (string, error) {
 	if globalFlags == nil || globalFlags.Output == "" {
 		return OutputJSON, nil
 	}

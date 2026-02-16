@@ -1,4 +1,4 @@
-package fs
+package localfs
 
 import (
 	"context"
@@ -19,15 +19,15 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var _ repository.ResourceRepositoryManager = (*FSResourceRepository)(nil)
+var _ repository.ResourceRepository = (*LocalResourceRepository)(nil)
 
-type FSResourceRepository struct {
+type LocalResourceRepository struct {
 	baseDir        string
 	resourceFormat string
 	extension      string
 }
 
-func NewFSResourceRepository(baseDir string, resourceFormat string) *FSResourceRepository {
+func NewLocalResourceRepository(baseDir string, resourceFormat string) *LocalResourceRepository {
 	format := resourceFormat
 	if format == "" {
 		format = config.ResourceFormatJSON
@@ -38,14 +38,14 @@ func NewFSResourceRepository(baseDir string, resourceFormat string) *FSResourceR
 		extension = ".yaml"
 	}
 
-	return &FSResourceRepository{
+	return &LocalResourceRepository{
 		baseDir:        filepath.Clean(baseDir),
 		resourceFormat: format,
 		extension:      extension,
 	}
 }
 
-func (r *FSResourceRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (r *FSResourceRepository) Save(_ context.Context, logicalPath string, value
 	return nil
 }
 
-func (r *FSResourceRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (r *FSResourceRepository) Get(_ context.Context, logicalPath string) (resou
 	return decoded, nil
 }
 
-func (r *FSResourceRepository) Delete(_ context.Context, logicalPath string, policy repository.DeletePolicy) error {
+func (r *LocalResourceRepository) Delete(_ context.Context, logicalPath string, policy repository.DeletePolicy) error {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (r *FSResourceRepository) Delete(_ context.Context, logicalPath string, pol
 	return r.deleteCollectionDirect(collectionPath)
 }
 
-func (r *FSResourceRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
+func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (r *FSResourceRepository) List(_ context.Context, logicalPath string, polic
 	return r.listDirect(normalizedPath, collectionPath)
 }
 
-func (r *FSResourceRepository) Exists(_ context.Context, logicalPath string) (bool, error) {
+func (r *LocalResourceRepository) Exists(_ context.Context, logicalPath string) (bool, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return false, err
@@ -211,7 +211,7 @@ func (r *FSResourceRepository) Exists(_ context.Context, logicalPath string) (bo
 	}
 }
 
-func (r *FSResourceRepository) Move(_ context.Context, fromPath string, toPath string) error {
+func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPath string) error {
 	fromNormalized, err := resource.NormalizeLogicalPath(fromPath)
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (r *FSResourceRepository) Move(_ context.Context, fromPath string, toPath s
 	return nil
 }
 
-func (r *FSResourceRepository) Init(_ context.Context) error {
+func (r *LocalResourceRepository) Init(_ context.Context) error {
 	if r.baseDir == "" {
 		return validationError("repository base directory must not be empty", nil)
 	}
@@ -262,15 +262,15 @@ func (r *FSResourceRepository) Init(_ context.Context) error {
 	return nil
 }
 
-func (r *FSResourceRepository) Refresh(context.Context) error {
+func (r *LocalResourceRepository) Refresh(context.Context) error {
 	return nil
 }
 
-func (r *FSResourceRepository) Reset(context.Context, repository.ResetPolicy) error {
+func (r *LocalResourceRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }
 
-func (r *FSResourceRepository) Check(_ context.Context) error {
+func (r *LocalResourceRepository) Check(_ context.Context) error {
 	info, err := os.Stat(r.baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -284,11 +284,11 @@ func (r *FSResourceRepository) Check(_ context.Context) error {
 	return nil
 }
 
-func (r *FSResourceRepository) Push(context.Context, repository.PushPolicy) error {
+func (r *LocalResourceRepository) Push(context.Context, repository.PushPolicy) error {
 	return validationError("push requires git repository with remote configuration", nil)
 }
 
-func (r *FSResourceRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
+func (r *LocalResourceRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
 	return repository.SyncReport{
 		State:          repository.SyncStateNoRemote,
 		Ahead:          0,
@@ -297,7 +297,7 @@ func (r *FSResourceRepository) SyncStatus(context.Context) (repository.SyncRepor
 	}, nil
 }
 
-func (r *FSResourceRepository) listDirect(baseLogicalPath string, collectionPath string) ([]resource.Resource, error) {
+func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionPath string) ([]resource.Resource, error) {
 	entries, err := os.ReadDir(collectionPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -329,7 +329,7 @@ func (r *FSResourceRepository) listDirect(baseLogicalPath string, collectionPath
 	return items, nil
 }
 
-func (r *FSResourceRepository) listRecursive(baseLogicalPath string, collectionPath string) ([]resource.Resource, error) {
+func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collectionPath string) ([]resource.Resource, error) {
 	items := make([]resource.Resource, 0)
 
 	err := filepath.WalkDir(collectionPath, func(filePath string, entry fs.DirEntry, walkErr error) error {
@@ -376,7 +376,7 @@ func (r *FSResourceRepository) listRecursive(baseLogicalPath string, collectionP
 	return items, nil
 }
 
-func (r *FSResourceRepository) deleteCollectionDirect(collectionPath string) error {
+func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) error {
 	entries, err := os.ReadDir(collectionPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -400,7 +400,7 @@ func (r *FSResourceRepository) deleteCollectionDirect(collectionPath string) err
 	return nil
 }
 
-func (r *FSResourceRepository) deleteCollectionRecursive(collectionPath string) error {
+func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath string) error {
 	err := filepath.WalkDir(collectionPath, func(filePath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -428,7 +428,7 @@ func (r *FSResourceRepository) deleteCollectionRecursive(collectionPath string) 
 	return nil
 }
 
-func (r *FSResourceRepository) payloadFilePath(logicalPath string) (string, error) {
+func (r *LocalResourceRepository) payloadFilePath(logicalPath string) (string, error) {
 	if r.baseDir == "" {
 		return "", validationError("repository base directory must not be empty", nil)
 	}
@@ -441,7 +441,11 @@ func (r *FSResourceRepository) payloadFilePath(logicalPath string) (string, erro
 	return filePath, nil
 }
 
-func (r *FSResourceRepository) collectionDirPath(logicalPath string) (string, error) {
+func (r *LocalResourceRepository) PayloadFilePath(logicalPath string) (string, error) {
+	return r.payloadFilePath(logicalPath)
+}
+
+func (r *LocalResourceRepository) collectionDirPath(logicalPath string) (string, error) {
 	if r.baseDir == "" {
 		return "", validationError("repository base directory must not be empty", nil)
 	}
@@ -457,7 +461,7 @@ func (r *FSResourceRepository) collectionDirPath(logicalPath string) (string, er
 	return dirPath, nil
 }
 
-func (r *FSResourceRepository) encodePayload(value resource.Value) ([]byte, error) {
+func (r *LocalResourceRepository) encodePayload(value resource.Value) ([]byte, error) {
 	switch r.resourceFormat {
 	case config.ResourceFormatYAML:
 		return yaml.Marshal(value)
@@ -468,7 +472,7 @@ func (r *FSResourceRepository) encodePayload(value resource.Value) ([]byte, erro
 	}
 }
 
-func (r *FSResourceRepository) decodePayload(data []byte) (resource.Value, error) {
+func (r *LocalResourceRepository) decodePayload(data []byte) (resource.Value, error) {
 	switch r.resourceFormat {
 	case config.ResourceFormatYAML:
 		var decoded any
@@ -490,7 +494,7 @@ func (r *FSResourceRepository) decodePayload(data []byte) (resource.Value, error
 	}
 }
 
-func (r *FSResourceRepository) cleanupEmptyParents(startDir string) error {
+func (r *LocalResourceRepository) cleanupEmptyParents(startDir string) error {
 	current := startDir
 	root := filepath.Clean(r.baseDir)
 
@@ -519,6 +523,10 @@ func (r *FSResourceRepository) cleanupEmptyParents(startDir string) error {
 
 		current = filepath.Dir(current)
 	}
+}
+
+func (r *LocalResourceRepository) CleanupEmptyParents(startDir string) error {
+	return r.cleanupEmptyParents(startDir)
 }
 
 func buildListedResource(logicalPath string) resource.Resource {

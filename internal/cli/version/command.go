@@ -20,7 +20,7 @@ type info struct {
 	BuildDate string `json:"build_date" yaml:"build_date"`
 }
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	_ = deps
 
 	command := &cobra.Command{

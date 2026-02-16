@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/support/paths"
 )
 
 func ResolveOperationSpec(_ context.Context, metadata ResourceMetadata, operation Operation, value any) (OperationSpec, error) {
@@ -55,7 +56,7 @@ func ResolveOperationSpec(_ context.Context, metadata ResourceMetadata, operatio
 }
 
 func InferFromOpenAPI(_ context.Context, logicalPath string, _ InferenceRequest) (ResourceMetadata, error) {
-	normalizedPath, err := normalizeLogicalPath(logicalPath)
+	normalizedPath, err := paths.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return ResourceMetadata{}, err
 	}
@@ -280,36 +281,4 @@ func cloneStringSlice(values []string) []string {
 	cloned := make([]string, len(values))
 	copy(cloned, values)
 	return cloned
-}
-
-func normalizeLogicalPath(value string) (string, error) {
-	if strings.TrimSpace(value) == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must not be empty", nil)
-	}
-
-	normalizedInput := strings.ReplaceAll(value, "\\", "/")
-	if !strings.HasPrefix(normalizedInput, "/") {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must be absolute", nil)
-	}
-
-	segments := strings.Split(normalizedInput, "/")
-	for _, segment := range segments {
-		if segment == ".." {
-			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain traversal segments", nil)
-		}
-		if segment == "_" {
-			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain reserved metadata segment \"_\"", nil)
-		}
-	}
-
-	cleaned := path.Clean(normalizedInput)
-	if !strings.HasPrefix(cleaned, "/") {
-		return "", faults.NewTypedError(faults.ValidationError, "logical path must be absolute", nil)
-	}
-
-	if cleaned != "/" {
-		cleaned = strings.TrimSuffix(cleaned, "/")
-	}
-
-	return cleaned, nil
 }

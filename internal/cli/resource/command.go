@@ -5,7 +5,7 @@ import (
 	"io"
 
 	"github.com/crmarques/declarest/internal/cli/common"
-	reconcilerdomain "github.com/crmarques/declarest/reconciler"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +15,7 @@ const (
 	sourceRemote = "remote"
 )
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "resource",
 		Short: "Manage resources",
@@ -38,7 +38,7 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	return command
 }
 
-func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -55,7 +55,7 @@ func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *
 	return command
 }
 
-func newSaveCommand(deps common.CommandWiring) *cobra.Command {
+func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -94,7 +94,7 @@ func newSaveCommand(deps common.CommandWiring) *cobra.Command {
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -108,7 +108,7 @@ func newSaveCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newApplyCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newApplyCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -125,7 +125,7 @@ func newApplyCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags)
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -145,7 +145,7 @@ func newApplyCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags)
 	return command
 }
 
-func newCreateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newCreateCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -168,7 +168,7 @@ func newCreateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -189,7 +189,7 @@ func newCreateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags
 	return command
 }
 
-func newUpdateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -212,7 +212,7 @@ func newUpdateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -233,7 +233,7 @@ func newUpdateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags
 	return command
 }
 
-func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
+func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var force bool
 	var recursive bool
@@ -251,11 +251,11 @@ func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.Delete(command.Context(), resolvedPath, reconcilerdomain.DeletePolicy{Recursive: recursive})
+			return reconciler.Delete(command.Context(), resolvedPath, orchestratordomain.DeletePolicy{Recursive: recursive})
 		},
 	}
 
@@ -265,7 +265,7 @@ func newDeleteCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newDiffCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -282,7 +282,7 @@ func newDiffCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -306,7 +306,7 @@ func newDiffCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	return command
 }
 
-func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var source string
 	var recursive bool
@@ -325,7 +325,7 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -333,9 +333,9 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 			var items []resource.Resource
 			switch source {
 			case sourceLocal:
-				items, err = reconciler.ListLocal(command.Context(), resolvedPath, reconcilerdomain.ListPolicy{Recursive: recursive})
+				items, err = reconciler.ListLocal(command.Context(), resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
 			case sourceRemote:
-				items, err = reconciler.ListRemote(command.Context(), resolvedPath, reconcilerdomain.ListPolicy{Recursive: recursive})
+				items, err = reconciler.ListRemote(command.Context(), resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
 			default:
 				return common.ValidationError("invalid source: use local or remote", nil)
 			}
@@ -360,7 +360,7 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	return command
 }
 
-func newExplainCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newExplainCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -377,7 +377,7 @@ func newExplainCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -401,7 +401,7 @@ func newExplainCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 	return command
 }
 
-func newTemplateCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newTemplateCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -424,7 +424,7 @@ func newTemplateCommand(deps common.CommandWiring, globalFlags *common.GlobalFla
 				return err
 			}
 
-			reconciler, err := common.RequireReconciler(deps)
+			reconciler, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}

@@ -11,14 +11,14 @@ import (
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
-	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/orchestrator"
 )
 
-func buildDefaultReconciler(
+func buildDefaultOrchestrator(
 	ctx context.Context,
 	contextService config.ContextService,
 	selection config.ContextSelection,
-) (*reconciler.DefaultReconciler, error) {
+) (*orchestrator.DefaultOrchestrator, error) {
 	if contextService == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
 	}
@@ -28,9 +28,9 @@ func buildDefaultReconciler(
 		return nil, err
 	}
 
-	defaultReconciler := &reconciler.DefaultReconciler{
+	defaultOrchestrator := &orchestrator.DefaultOrchestrator{
 		Name: resolvedContext.Name,
-		MetadataService: fsmetadata.NewFSMetadataService(
+		Metadata: fsmetadata.NewFSMetadataService(
 			resolveMetadataBaseDir(resolvedContext),
 			resolvedContext.Repository.ResourceFormat,
 		),
@@ -38,12 +38,12 @@ func buildDefaultReconciler(
 
 	switch {
 	case resolvedContext.Repository.Filesystem != nil:
-		defaultReconciler.RepositoryManager = fsrepository.NewFSResourceRepository(
+		defaultOrchestrator.Repository = fsrepository.NewFSResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)
 	case resolvedContext.Repository.Git != nil:
-		defaultReconciler.RepositoryManager = gitrepository.NewGitResourceRepository(
+		defaultOrchestrator.Repository = gitrepository.NewGitResourceRepository(
 			*resolvedContext.Repository.Git,
 			resolvedContext.Repository.ResourceFormat,
 		)
@@ -59,7 +59,7 @@ func buildDefaultReconciler(
 		if err != nil {
 			return nil, err
 		}
-		defaultReconciler.ServerManager = serverManager
+		defaultOrchestrator.Server = serverManager
 	}
 
 	if resolvedContext.SecretStore != nil {
@@ -69,19 +69,19 @@ func buildDefaultReconciler(
 			if err != nil {
 				return nil, err
 			}
-			defaultReconciler.SecretsProvider = secretService
+			defaultOrchestrator.Secrets = secretService
 		case resolvedContext.SecretStore.Vault != nil:
 			secretService, err := vaultsecrets.NewVaultSecretService(*resolvedContext.SecretStore.Vault)
 			if err != nil {
 				return nil, err
 			}
-			defaultReconciler.SecretsProvider = secretService
+			defaultOrchestrator.Secrets = secretService
 		default:
 			return nil, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
 		}
 	}
 
-	return defaultReconciler, nil
+	return defaultOrchestrator, nil
 }
 
 func resolveMetadataBaseDir(context config.Context) string {

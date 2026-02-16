@@ -1,4 +1,4 @@
-package reconciler
+package orchestrator
 
 type DeletePolicy struct {
 	Recursive bool

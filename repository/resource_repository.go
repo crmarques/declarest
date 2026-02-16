@@ -6,7 +6,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-type ResourceRepositoryManager interface {
+type ResourceRepository interface {
 	Save(ctx context.Context, logicalPath string, value resource.Value) error
 	Get(ctx context.Context, logicalPath string) (resource.Value, error)
 	Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error

@@ -479,7 +479,7 @@ func executeConfigCommand(
 ) (string, error) {
 	t.Helper()
 
-	command := NewCommand(common.CommandWiring{Contexts: contexts}, globalFlags)
+	command := NewCommand(common.CommandDependencies{Contexts: contexts}, globalFlags)
 	output := &bytes.Buffer{}
 	command.SetOut(output)
 	command.SetErr(io.Discard)
@@ -500,7 +500,7 @@ func executeConfigCommandWithPrompter(
 ) (string, error) {
 	t.Helper()
 
-	command := newCommandWithPrompter(common.CommandWiring{Contexts: contexts}, globalFlags, prompter)
+	command := newCommandWithPrompter(common.CommandDependencies{Contexts: contexts}, globalFlags, prompter)
 	output := &bytes.Buffer{}
 	command.SetOut(output)
 	command.SetErr(io.Discard)

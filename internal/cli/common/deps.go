@@ -3,69 +3,50 @@ package common
 import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
 )
 
-type CommandWiring struct {
-	Reconciler reconciler.ResourceReconciler
-	Contexts   config.ContextService
+type CommandDependencies struct {
+	Orchestrator orchestrator.Orchestrator
+	Contexts     config.ContextService
+	Repository   repository.ResourceRepository
+	Metadata     metadata.MetadataService
+	Secrets      secrets.SecretProvider
 }
 
-type MetadataServiceProvider interface {
-	MetadataManager() metadata.MetadataService
-}
-
-type SecretProviderManager interface {
-	SecretManager() secrets.SecretProvider
-}
-
-func RequireContexts(deps CommandWiring) (config.ContextService, error) {
+func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
 	if deps.Contexts == nil {
 		return nil, ValidationError("context service is not configured", nil)
 	}
 	return deps.Contexts, nil
 }
 
-func RequireReconciler(deps CommandWiring) (reconciler.ResourceReconciler, error) {
-	if deps.Reconciler == nil {
-		return nil, ValidationError("reconciler is not configured", nil)
+func RequireOrchestrator(deps CommandDependencies) (orchestrator.Orchestrator, error) {
+	if deps.Orchestrator == nil {
+		return nil, ValidationError("orchestrator is not configured", nil)
 	}
-	return deps.Reconciler, nil
+	return deps.Orchestrator, nil
 }
 
-func RequireMetadataService(deps CommandWiring) (metadata.MetadataService, error) {
-	reconciler, err := RequireReconciler(deps)
-	if err != nil {
-		return nil, err
+func RequireRepository(deps CommandDependencies) (repository.ResourceRepository, error) {
+	if deps.Repository == nil {
+		return nil, ValidationError("repository is not configured", nil)
 	}
-
-	provider, ok := reconciler.(MetadataServiceProvider)
-	if !ok {
-		return nil, ValidationError("metadata service is not configured", nil)
-	}
-
-	service := provider.MetadataManager()
-	if service == nil {
-		return nil, ValidationError("metadata service is not configured", nil)
-	}
-	return service, nil
+	return deps.Repository, nil
 }
 
-func RequireSecretProvider(deps CommandWiring) (secrets.SecretProvider, error) {
-	reconciler, err := RequireReconciler(deps)
-	if err != nil {
-		return nil, err
+func RequireMetadataService(deps CommandDependencies) (metadata.MetadataService, error) {
+	if deps.Metadata == nil {
+		return nil, ValidationError("metadata service is not configured", nil)
 	}
+	return deps.Metadata, nil
+}
 
-	provider, ok := reconciler.(SecretProviderManager)
-	if !ok {
+func RequireSecretProvider(deps CommandDependencies) (secrets.SecretProvider, error) {
+	if deps.Secrets == nil {
 		return nil, ValidationError("secret provider is not configured", nil)
 	}
-
-	secretProvider := provider.SecretManager()
-	if secretProvider == nil {
-		return nil, ValidationError("secret provider is not configured", nil)
-	}
-	return secretProvider, nil
+	return deps.Secrets, nil
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "repo",
 		Short: "Manage local repository state",
@@ -28,37 +28,37 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	return command
 }
 
-func newInitCommand(deps common.CommandWiring) *cobra.Command {
+func newInitCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.RepoInit(command.Context())
+			return repositoryService.Init(command.Context())
 		},
 	}
 }
 
-func newRefreshCommand(deps common.CommandWiring) *cobra.Command {
+func newRefreshCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "refresh",
 		Short: "Refresh repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.RepoRefresh(command.Context())
+			return repositoryService.Refresh(command.Context())
 		},
 	}
 }
 
-func newResetCommand(deps common.CommandWiring) *cobra.Command {
+func newResetCommand(deps common.CommandDependencies) *cobra.Command {
 	var hard bool
 
 	command := &cobra.Command{
@@ -66,11 +66,11 @@ func newResetCommand(deps common.CommandWiring) *cobra.Command {
 		Short: "Reset repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.RepoReset(command.Context(), repository.ResetPolicy{Hard: hard})
+			return repositoryService.Reset(command.Context(), repository.ResetPolicy{Hard: hard})
 		},
 	}
 
@@ -78,22 +78,22 @@ func newResetCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newCheckCommand(deps common.CommandWiring) *cobra.Command {
+func newCheckCommand(deps common.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check",
 		Short: "Check repository health",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.RepoCheck(command.Context())
+			return repositoryService.Check(command.Context())
 		},
 	}
 }
 
-func newPushCommand(deps common.CommandWiring) *cobra.Command {
+func newPushCommand(deps common.CommandDependencies) *cobra.Command {
 	var force bool
 
 	command := &cobra.Command{
@@ -101,11 +101,11 @@ func newPushCommand(deps common.CommandWiring) *cobra.Command {
 		Short: "Push repository changes",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
-			return reconciler.RepoPush(command.Context(), repository.PushPolicy{Force: force})
+			return repositoryService.Push(command.Context(), repository.PushPolicy{Force: force})
 		},
 	}
 
@@ -113,18 +113,18 @@ func newPushCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newStatusCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newStatusCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show repository sync status",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			reconciler, err := common.RequireReconciler(deps)
+			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
 			}
 
-			status, err := reconciler.RepoStatus(command.Context())
+			status, err := repositoryService.SyncStatus(command.Context())
 			if err != nil {
 				return err
 			}

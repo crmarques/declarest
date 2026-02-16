@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "metadata",
 		Short: "Manage metadata",
@@ -25,7 +25,7 @@ func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cob
 	return command
 }
 
-func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -61,7 +61,7 @@ func newGetCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *
 	return command
 }
 
-func newSetCommand(deps common.CommandWiring) *cobra.Command {
+func newSetCommand(deps common.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
 
@@ -94,7 +94,7 @@ func newSetCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newUnsetCommand(deps common.CommandWiring) *cobra.Command {
+func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -120,7 +120,7 @@ func newUnsetCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -156,7 +156,7 @@ func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 	return command
 }
 
-func newRenderCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newRenderCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -202,7 +202,7 @@ func newRenderCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags
 	return command
 }
 
-func newInferCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newInferCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var apply bool
 	var recursive bool

@@ -1,4 +1,4 @@
-package reconciler
+package orchestrator
 
 import (
 	"context"
@@ -14,19 +14,18 @@ import (
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
-func TestDefaultReconcilerDelegatesRepositoryMethods(t *testing.T) {
+func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	t.Parallel()
 
-	fakeRepo := &fakeRepositoryManager{
+	fakeRepo := &fakeRepository{
 		getValue: resource.Value(map[string]any{"id": int64(1)}),
 		listValue: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
 		},
-		statusValue: repository.SyncReport{State: repository.SyncStateNoRemote},
 	}
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: fakeRepo,
+	reconciler := &DefaultOrchestrator{
+		Repository: fakeRepo,
 	}
 
 	value, err := reconciler.Get(context.Background(), "/customers/acme")
@@ -53,14 +52,6 @@ func TestDefaultReconcilerDelegatesRepositoryMethods(t *testing.T) {
 		t.Fatalf("unexpected list output: %#v", items)
 	}
 
-	status, err := reconciler.RepoStatus(context.Background())
-	if err != nil {
-		t.Fatalf("RepoStatus returned error: %v", err)
-	}
-	if status.State != repository.SyncStateNoRemote {
-		t.Fatalf("unexpected status state: %q", status.State)
-	}
-
 	if !fakeRepo.deletePolicy.Recursive {
 		t.Fatal("expected delete policy recursion to be mapped")
 	}
@@ -69,12 +60,12 @@ func TestDefaultReconcilerDelegatesRepositoryMethods(t *testing.T) {
 	}
 }
 
-func TestDefaultReconcilerRequiresRepositoryManager(t *testing.T) {
+func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultReconciler{}
+	reconciler := &DefaultOrchestrator{}
 
-	_, err := reconciler.RepoStatus(context.Background())
+	_, err := reconciler.Get(context.Background(), "/customers/acme")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -82,7 +73,7 @@ func TestDefaultReconcilerRequiresRepositoryManager(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
-type fakeRepositoryManager struct {
+type fakeRepository struct {
 	getValue    resource.Value
 	getErr      error
 	listValue   []resource.Resource
@@ -95,69 +86,69 @@ type fakeRepositoryManager struct {
 	listPolicy   repository.ListPolicy
 }
 
-func (f *fakeRepositoryManager) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
 	f.savedPath = logicalPath
 	f.savedValue = value
 	return nil
 }
 
-func (f *fakeRepositoryManager) Get(context.Context, string) (resource.Value, error) {
+func (f *fakeRepository) Get(context.Context, string) (resource.Value, error) {
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
 	return f.getValue, nil
 }
 
-func (f *fakeRepositoryManager) Delete(_ context.Context, _ string, policy repository.DeletePolicy) error {
+func (f *fakeRepository) Delete(_ context.Context, _ string, policy repository.DeletePolicy) error {
 	f.deletePolicy = policy
 	return nil
 }
 
-func (f *fakeRepositoryManager) List(_ context.Context, _ string, policy repository.ListPolicy) ([]resource.Resource, error) {
+func (f *fakeRepository) List(_ context.Context, _ string, policy repository.ListPolicy) ([]resource.Resource, error) {
 	f.listPolicy = policy
 	return f.listValue, nil
 }
 
-func (f *fakeRepositoryManager) Exists(context.Context, string) (bool, error) { return false, nil }
-func (f *fakeRepositoryManager) Move(context.Context, string, string) error   { return nil }
-func (f *fakeRepositoryManager) Init(context.Context) error                   { return nil }
-func (f *fakeRepositoryManager) Refresh(context.Context) error                { return nil }
-func (f *fakeRepositoryManager) Reset(context.Context, repository.ResetPolicy) error {
+func (f *fakeRepository) Exists(context.Context, string) (bool, error) { return false, nil }
+func (f *fakeRepository) Move(context.Context, string, string) error   { return nil }
+func (f *fakeRepository) Init(context.Context) error                   { return nil }
+func (f *fakeRepository) Refresh(context.Context) error                { return nil }
+func (f *fakeRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }
-func (f *fakeRepositoryManager) Check(context.Context) error { return nil }
-func (f *fakeRepositoryManager) Push(context.Context, repository.PushPolicy) error {
+func (f *fakeRepository) Check(context.Context) error { return nil }
+func (f *fakeRepository) Push(context.Context, repository.PushPolicy) error {
 	return nil
 }
-func (f *fakeRepositoryManager) SyncStatus(context.Context) (repository.SyncReport, error) {
+func (f *fakeRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
 	return f.statusValue, nil
 }
 
-type fakeMetadataService struct {
+type fakeMetadata struct {
 	resolveValue metadatadomain.ResourceMetadata
 	resolveErr   error
 }
 
-func (f *fakeMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+func (f *fakeMetadata) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
 	return f.resolveValue, nil
 }
 
-func (f *fakeMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
+func (f *fakeMetadata) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
 	return nil
 }
 
-func (f *fakeMetadataService) Unset(context.Context, string) error {
+func (f *fakeMetadata) Unset(context.Context, string) error {
 	return nil
 }
 
-func (f *fakeMetadataService) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+func (f *fakeMetadata) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
 	if f.resolveErr != nil {
 		return metadatadomain.ResourceMetadata{}, f.resolveErr
 	}
 	return f.resolveValue, nil
 }
 
-func (f *fakeMetadataService) RenderOperationSpec(
+func (f *fakeMetadata) RenderOperationSpec(
 	ctx context.Context,
 	_ string,
 	operation metadatadomain.Operation,
@@ -166,11 +157,11 @@ func (f *fakeMetadataService) RenderOperationSpec(
 	return metadatadomain.ResolveOperationSpec(ctx, f.resolveValue, operation, value)
 }
 
-func (f *fakeMetadataService) Infer(context.Context, string, metadatadomain.InferenceRequest) (metadatadomain.ResourceMetadata, error) {
+func (f *fakeMetadata) Infer(context.Context, string, metadatadomain.InferenceRequest) (metadatadomain.ResourceMetadata, error) {
 	return f.resolveValue, nil
 }
 
-type fakeServerManager struct {
+type fakeServer struct {
 	getValue    resource.Value
 	getErr      error
 	createValue resource.Value
@@ -187,7 +178,7 @@ type fakeServerManager struct {
 	lastResource resource.Resource
 }
 
-func (f *fakeServerManager) Get(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
+func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
 	f.getCalled = true
 	f.lastResource = resourceInfo
 	if f.getErr != nil {
@@ -196,23 +187,23 @@ func (f *fakeServerManager) Get(_ context.Context, resourceInfo resource.Resourc
 	return f.getValue, nil
 }
 
-func (f *fakeServerManager) Create(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
+func (f *fakeServer) Create(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
 	f.createCalled = true
 	f.lastResource = resourceInfo
 	return f.createValue, nil
 }
 
-func (f *fakeServerManager) Update(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
+func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
 	f.updateCalled = true
 	f.lastResource = resourceInfo
 	return f.updateValue, nil
 }
 
-func (f *fakeServerManager) Delete(context.Context, resource.Resource) error {
+func (f *fakeServer) Delete(context.Context, resource.Resource) error {
 	return nil
 }
 
-func (f *fakeServerManager) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (f *fakeServer) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	f.listCalled = true
 	if f.listErr != nil {
 		return nil, f.listErr
@@ -220,18 +211,18 @@ func (f *fakeServerManager) List(context.Context, string, metadatadomain.Resourc
 	return f.listValue, nil
 }
 
-func (f *fakeServerManager) Exists(context.Context, resource.Resource) (bool, error) {
+func (f *fakeServer) Exists(context.Context, resource.Resource) (bool, error) {
 	if f.existsErr != nil {
 		return false, f.existsErr
 	}
 	return f.existsValue, nil
 }
 
-func (f *fakeServerManager) GetOpenAPISpec(context.Context) (resource.Value, error) {
+func (f *fakeServer) GetOpenAPISpec(context.Context) (resource.Value, error) {
 	return nil, nil
 }
 
-func (f *fakeServerManager) BuildRequestFromMetadata(context.Context, resource.Resource, metadatadomain.Operation) (metadatadomain.OperationSpec, error) {
+func (f *fakeServer) BuildRequestFromMetadata(context.Context, resource.Resource, metadatadomain.Operation) (metadatadomain.OperationSpec, error) {
 	return metadatadomain.OperationSpec{}, nil
 }
 
@@ -284,10 +275,10 @@ func (f *fakeSecretProvider) DetectSecretCandidates(_ context.Context, value res
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-func TestDefaultReconcilerApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T) {
+func TestDefaultOrchestratorApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T) {
 	t.Parallel()
 
-	repo := &fakeRepositoryManager{
+	repo := &fakeRepository{
 		getValue: map[string]any{
 			"id":       "42",
 			"alias":    "acme",
@@ -303,9 +294,9 @@ func TestDefaultReconcilerApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T)
 			string(metadatadomain.OperationCreate): {Path: "/api/customers"},
 		},
 	}
-	metadataService := &fakeMetadataService{resolveValue: md}
+	metadataService := &fakeMetadata{resolveValue: md}
 
-	serverManager := &fakeServerManager{
+	serverManager := &fakeServer{
 		existsValue: true,
 		updateValue: map[string]any{
 			"id":       "42",
@@ -320,11 +311,11 @@ func TestDefaultReconcilerApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T)
 		},
 	}
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: repo,
-		MetadataService:   metadataService,
-		ServerManager:     serverManager,
-		SecretsProvider:   secretProvider,
+	reconciler := &DefaultOrchestrator{
+		Repository: repo,
+		Metadata:   metadataService,
+		Server:     serverManager,
+		Secrets:   secretProvider,
 	}
 
 	item, err := reconciler.Apply(context.Background(), "/customers/acme")
@@ -360,10 +351,10 @@ func TestDefaultReconcilerApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T)
 	}
 }
 
-func TestDefaultReconcilerDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
+func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
 	t.Parallel()
 
-	repo := &fakeRepositoryManager{
+	repo := &fakeRepository{
 		getValue: map[string]any{
 			"id":        "42",
 			"alias":     "acme",
@@ -383,8 +374,8 @@ func TestDefaultReconcilerDiffUsesFallbackAndCompareSuppressRules(t *testing.T) 
 		},
 	}
 
-	metadataService := &fakeMetadataService{resolveValue: md}
-	serverManager := &fakeServerManager{
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		listValue: []resource.Resource{
 			{
@@ -408,11 +399,11 @@ func TestDefaultReconcilerDiffUsesFallbackAndCompareSuppressRules(t *testing.T) 
 		},
 	}
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: repo,
-		MetadataService:   metadataService,
-		ServerManager:     serverManager,
-		SecretsProvider:   secretProvider,
+	reconciler := &DefaultOrchestrator{
+		Repository: repo,
+		Metadata:   metadataService,
+		Server:     serverManager,
+		Secrets:   secretProvider,
 	}
 
 	items, err := reconciler.Diff(context.Background(), "/customers/acme")
@@ -428,10 +419,10 @@ func TestDefaultReconcilerDiffUsesFallbackAndCompareSuppressRules(t *testing.T) 
 	}
 }
 
-func TestDefaultReconcilerDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
+func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 	t.Parallel()
 
-	repo := &fakeRepositoryManager{
+	repo := &fakeRepository{
 		getValue: map[string]any{
 			"id":    "42",
 			"alias": "acme",
@@ -448,8 +439,8 @@ func TestDefaultReconcilerDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 		},
 	}
 
-	metadataService := &fakeMetadataService{resolveValue: md}
-	serverManager := &fakeServerManager{
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		listValue: []resource.Resource{
 			{LogicalPath: "/customers/acme-1", LocalAlias: "acme", RemoteID: "42", Payload: map[string]any{"id": "42"}},
@@ -457,23 +448,23 @@ func TestDefaultReconcilerDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 		},
 	}
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: repo,
-		MetadataService:   metadataService,
-		ServerManager:     serverManager,
+	reconciler := &DefaultOrchestrator{
+		Repository: repo,
+		Metadata:   metadataService,
+		Server:     serverManager,
 	}
 
 	_, err := reconciler.Diff(context.Background(), "/customers/acme")
 	assertTypedCategory(t, err, faults.ConflictError)
 }
 
-func TestDefaultReconcilerListRemoteSortsDeterministically(t *testing.T) {
+func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: &fakeRepositoryManager{},
-		MetadataService:   &fakeMetadataService{resolveValue: metadatadomain.ResourceMetadata{}},
-		ServerManager: &fakeServerManager{
+	reconciler := &DefaultOrchestrator{
+		Repository: &fakeRepository{},
+		Metadata:   &fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{}},
+		Server: &fakeServer{
 			listValue: []resource.Resource{
 				{LogicalPath: "/customers/zeta"},
 				{LogicalPath: "/customers/acme"},
@@ -494,12 +485,12 @@ func TestDefaultReconcilerListRemoteSortsDeterministically(t *testing.T) {
 	}
 }
 
-func TestDefaultReconcilerTemplateReturnsNormalizedPayload(t *testing.T) {
+func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultReconciler{
-		RepositoryManager: &fakeRepositoryManager{},
-		MetadataService: &fakeMetadataService{
+	reconciler := &DefaultOrchestrator{
+		Repository: &fakeRepository{},
+		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
@@ -526,10 +517,10 @@ func TestDefaultReconcilerTemplateReturnsNormalizedPayload(t *testing.T) {
 	}
 }
 
-func TestDefaultReconcilerRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
+func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultReconciler{}
+	reconciler := &DefaultOrchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",
@@ -553,10 +544,10 @@ func TestDefaultReconcilerRenderOperationSpecListUsesCollectionPathFallback(t *t
 	}
 }
 
-func TestDefaultReconcilerRenderOperationSpecCreateUsesLogicalPathFallback(t *testing.T) {
+func TestDefaultOrchestratorRenderOperationSpecCreateUsesLogicalPathFallback(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultReconciler{}
+	reconciler := &DefaultOrchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",

@@ -10,12 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return newCommandWithPrompter(deps, globalFlags, terminalPrompter{})
 }
 
 func newCommandWithPrompter(
-	deps common.CommandWiring,
+	deps common.CommandDependencies,
 	globalFlags *common.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
@@ -41,7 +41,7 @@ func newCommandWithPrompter(
 	return command
 }
 
-func newCreateCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
+func newCreateCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -65,7 +65,7 @@ func newCreateCommand(deps common.CommandWiring, prompter configPrompter) *cobra
 	return command
 }
 
-func newUpdateCommand(deps common.CommandWiring) *cobra.Command {
+func newUpdateCommand(deps common.CommandDependencies) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
@@ -89,7 +89,7 @@ func newUpdateCommand(deps common.CommandWiring) *cobra.Command {
 	return command
 }
 
-func newDeleteCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
+func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Delete a context (interactive when name is omitted)",
@@ -122,7 +122,7 @@ func newDeleteCommand(deps common.CommandWiring, prompter configPrompter) *cobra
 	}
 }
 
-func newRenameCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
+func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rename [from] [to]",
 		Short: "Rename a context (interactive when args are omitted)",
@@ -164,7 +164,7 @@ func newRenameCommand(deps common.CommandWiring, prompter configPrompter) *cobra
 	}
 }
 
-func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List contexts",
@@ -190,7 +190,7 @@ func newListCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) 
 	}
 }
 
-func newUseCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Command {
+func newUseCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
 	return &cobra.Command{
 		Use:   "use [name]",
 		Short: "Set current context (interactive when name is omitted)",
@@ -216,7 +216,7 @@ func newUseCommand(deps common.CommandWiring, prompter configPrompter) *cobra.Co
 }
 
 func newShowCommand(
-	deps common.CommandWiring,
+	deps common.CommandDependencies,
 	globalFlags *common.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
@@ -251,7 +251,7 @@ func newShowCommand(
 	}
 }
 
-func newCurrentCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newCurrentCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "current",
 		Short: "Get current context",
@@ -273,7 +273,7 @@ func newCurrentCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 	}
 }
 
-func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlags) *cobra.Command {
+func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var overrides []string
 
 	command := &cobra.Command{
@@ -310,7 +310,7 @@ func newResolveCommand(deps common.CommandWiring, globalFlags *common.GlobalFlag
 	return command
 }
 
-func newValidateCommand(deps common.CommandWiring) *cobra.Command {
+func newValidateCommand(deps common.CommandDependencies) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{

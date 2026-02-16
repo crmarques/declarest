@@ -11,9 +11,8 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/reconciler"
+	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -401,7 +400,7 @@ func TestHelpSubcommandDisabled(t *testing.T) {
 	}
 }
 
-func executeForTest(deps common.CommandWiring, stdin string, args ...string) (string, error) {
+func executeForTest(deps Dependencies, stdin string, args ...string) (string, error) {
 	command := NewRootCommand(deps)
 	out := &bytes.Buffer{}
 	command.SetOut(out)
@@ -438,16 +437,19 @@ func joinPath(path []string) string {
 	return joined
 }
 
-func testDeps() common.CommandWiring {
-	metadataService := newTestMetadataService()
+func testDeps() Dependencies {
+	metadataService := newTestMetadata()
 	secretProvider := newTestSecretProvider()
+	repositoryService := &testRepository{}
 
-	return common.CommandWiring{
-		Reconciler: &testReconciler{
+	return Dependencies{
+		Orchestrator: &testReconciler{
 			metadataService: metadataService,
-			secretProvider:  secretProvider,
 		},
-		Contexts: &testContextService{},
+		Contexts:   &testContextService{},
+		Repository: repositoryService,
+		Metadata:   metadataService,
+		Secrets:    secretProvider,
 	}
 }
 
@@ -485,8 +487,7 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
 type testReconciler struct {
-	metadataService *testMetadataService
-	secretProvider  *testSecretProvider
+	metadataService *testMetadata
 }
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
@@ -502,14 +503,14 @@ func (r *testReconciler) Create(_ context.Context, logicalPath string, _ resourc
 func (r *testReconciler) Update(_ context.Context, logicalPath string, _ resource.Value) (resource.Resource, error) {
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testReconciler) Delete(context.Context, string, reconciler.DeletePolicy) error { return nil }
-func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy reconciler.ListPolicy) ([]resource.Resource, error) {
+func (r *testReconciler) Delete(context.Context, string, orchestrator.DeletePolicy) error { return nil }
+func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	if policy.Recursive {
 		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
 	}
 	return []resource.Resource{{LogicalPath: logicalPath}}, nil
 }
-func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy reconciler.ListPolicy) ([]resource.Resource, error) {
+func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	if policy.Recursive {
 		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
 	}
@@ -524,40 +525,13 @@ func (r *testReconciler) Diff(_ context.Context, logicalPath string) ([]resource
 func (r *testReconciler) Template(_ context.Context, _ string, value resource.Value) (resource.Value, error) {
 	return value, nil
 }
-func (r *testReconciler) RepoInit(context.Context) error                          { return nil }
-func (r *testReconciler) RepoRefresh(context.Context) error                       { return nil }
-func (r *testReconciler) RepoPush(context.Context, repository.PushPolicy) error   { return nil }
-func (r *testReconciler) RepoReset(context.Context, repository.ResetPolicy) error { return nil }
-func (r *testReconciler) RepoCheck(context.Context) error                         { return nil }
-func (r *testReconciler) RepoStatus(context.Context) (repository.SyncReport, error) {
-	return repository.SyncReport{
-		State:          repository.SyncStateNoRemote,
-		Ahead:          0,
-		Behind:         0,
-		HasUncommitted: false,
-	}, nil
-}
 
-func (r *testReconciler) MetadataManager() metadatadomain.MetadataService {
-	if r == nil {
-		return nil
-	}
-	return r.metadataService
-}
-
-func (r *testReconciler) SecretManager() secretdomain.SecretProvider {
-	if r == nil {
-		return nil
-	}
-	return r.secretProvider
-}
-
-type testMetadataService struct {
+type testMetadata struct {
 	items map[string]metadatadomain.ResourceMetadata
 }
 
-func newTestMetadataService() *testMetadataService {
-	return &testMetadataService{
+func newTestMetadata() *testMetadata {
+	return &testMetadata{
 		items: map[string]metadatadomain.ResourceMetadata{
 			"/customers/acme": {
 				IDFromAttribute: "id",
@@ -570,7 +544,7 @@ func newTestMetadataService() *testMetadataService {
 	}
 }
 
-func (s *testMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+func (s *testMetadata) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	metadata, found := s.items[logicalPath]
 	if !found {
 		return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
@@ -578,24 +552,24 @@ func (s *testMetadataService) Get(_ context.Context, logicalPath string) (metada
 	return metadata, nil
 }
 
-func (s *testMetadataService) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+func (s *testMetadata) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
 	s.items[logicalPath] = metadata
 	return nil
 }
 
-func (s *testMetadataService) Unset(_ context.Context, logicalPath string) error {
+func (s *testMetadata) Unset(_ context.Context, logicalPath string) error {
 	delete(s.items, logicalPath)
 	return nil
 }
 
-func (s *testMetadataService) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+func (s *testMetadata) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	if metadata, found := s.items[logicalPath]; found {
 		return metadata, nil
 	}
 	return metadatadomain.ResourceMetadata{}, nil
 }
 
-func (s *testMetadataService) RenderOperationSpec(
+func (s *testMetadata) RenderOperationSpec(
 	ctx context.Context,
 	logicalPath string,
 	operation metadatadomain.Operation,
@@ -609,7 +583,7 @@ func (s *testMetadataService) RenderOperationSpec(
 	return metadatadomain.ResolveOperationSpec(ctx, metadata, operation, value)
 }
 
-func (s *testMetadataService) Infer(
+func (s *testMetadata) Infer(
 	ctx context.Context,
 	logicalPath string,
 	request metadatadomain.InferenceRequest,
@@ -681,6 +655,35 @@ func (s *testSecretProvider) NormalizeSecretPlaceholders(_ context.Context, valu
 
 func (s *testSecretProvider) DetectSecretCandidates(_ context.Context, value resource.Value) ([]string, error) {
 	return secretdomain.DetectSecretCandidates(value)
+}
+
+type testRepository struct{}
+
+func (r *testRepository) Save(context.Context, string, resource.Value) error { return nil }
+func (r *testRepository) Get(context.Context, string) (resource.Value, error) {
+	return map[string]any{"id": "acme"}, nil
+}
+func (r *testRepository) Delete(context.Context, string, repository.DeletePolicy) error { return nil }
+func (r *testRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
+	if policy.Recursive {
+		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
+	}
+	return []resource.Resource{{LogicalPath: logicalPath}}, nil
+}
+func (r *testRepository) Exists(context.Context, string) (bool, error)        { return true, nil }
+func (r *testRepository) Move(context.Context, string, string) error          { return nil }
+func (r *testRepository) Init(context.Context) error                          { return nil }
+func (r *testRepository) Refresh(context.Context) error                       { return nil }
+func (r *testRepository) Reset(context.Context, repository.ResetPolicy) error { return nil }
+func (r *testRepository) Check(context.Context) error                         { return nil }
+func (r *testRepository) Push(context.Context, repository.PushPolicy) error   { return nil }
+func (r *testRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
+	return repository.SyncReport{
+		State:          repository.SyncStateNoRemote,
+		Ahead:          0,
+		Behind:         0,
+		HasUncommitted: false,
+	}, nil
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
