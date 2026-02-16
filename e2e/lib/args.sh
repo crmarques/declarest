@@ -41,6 +41,25 @@ e2e_has_help_flag() {
   return 1
 }
 
+e2e_profile_from_cli_args() {
+  local profile='basic'
+
+  while (($# > 0)); do
+    case "$1" in
+      --profile)
+        [[ $# -ge 2 ]] || break
+        profile=$2
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  printf '%s\n' "${profile}"
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -52,7 +71,7 @@ Profiles:
   --profile <basic|full|manual>                  default: basic
     basic   Run compatible main cases only.
     full    Run compatible main and corner cases.
-    manual  Start local components and hand off control to you.
+    manual  Start local components, print context access info, and exit.
 
 Component selection:
   --resource-server <keycloak|vault|rundeck|none> default: keycloak

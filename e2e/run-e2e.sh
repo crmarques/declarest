@@ -25,6 +25,7 @@ E2E_BOOTSTRAP_LOG_DIR=''
 E2E_PID_FILE=''
 E2E_RUNNER_PID=$$
 E2E_SIGNAL_HANDLED=0
+E2E_MATCHED_RUNNER_PIDS=()
 
 e2e_validate_cleanup_run_id() {
   local run_id=$1
@@ -115,6 +116,72 @@ e2e_runner_pid_matches_run_id() {
   cat /proc/"${pid}"/environ 2>/dev/null | tr '\0' '\n' | grep -Fxq "E2E_RUN_ID=${run_id}"
 }
 
+e2e_runner_pids_for_run_id_from_ps() {
+  local run_id=$1
+  local pid
+  local ppid
+  local args
+  local cursor
+  local guard
+  local proc
+
+  local -a candidate_pids=()
+  declare -A ppid_by_pid=()
+  declare -A runner_by_pid=()
+  declare -A matched_runner=()
+  E2E_MATCHED_RUNNER_PIDS=()
+
+  while read -r pid ppid args; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    [[ "${ppid}" =~ ^[0-9]+$ ]] || continue
+
+    ppid_by_pid["${pid}"]="${ppid}"
+    if [[ "${args}" == *"${run_id}"* ]]; then
+      candidate_pids+=("${pid}")
+    fi
+  done < <(ps -eo pid=,ppid=,args= 2>/dev/null)
+
+  for proc in /proc/[0-9]*; do
+    pid=${proc#/proc/}
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    [[ "${pid}" != "${E2E_RUNNER_PID}" ]] || continue
+    e2e_is_live_pid "${pid}" || continue
+    e2e_runner_cmdline_matches "${pid}" || continue
+    runner_by_pid["${pid}"]=1
+  done
+
+  for pid in "${candidate_pids[@]}"; do
+    cursor=${pid}
+    guard=0
+
+    while [[ -n "${cursor}" && "${cursor}" != '0' && ${guard} -lt 256 ]]; do
+      if [[ "${runner_by_pid[${cursor}]:-0}" == '1' ]]; then
+        matched_runner["${cursor}"]=1
+        break
+      fi
+
+      cursor=${ppid_by_pid[${cursor}]:-0}
+      ((guard += 1))
+    done
+  done
+
+  if ((${#matched_runner[@]} == 0)); then
+    return 1
+  fi
+
+  for pid in "${!matched_runner[@]}"; do
+    [[ "${pid}" != "${E2E_RUNNER_PID}" ]] || continue
+    E2E_MATCHED_RUNNER_PIDS+=("${pid}")
+  done
+
+  if ((${#E2E_MATCHED_RUNNER_PIDS[@]} == 0)); then
+    return 1
+  fi
+
+  mapfile -t E2E_MATCHED_RUNNER_PIDS < <(printf '%s\n' "${E2E_MATCHED_RUNNER_PIDS[@]}" | sort -n)
+  return 0
+}
+
 e2e_wait_pid_gone() {
   local pid=$1
   local loops=${2:-50}
@@ -164,11 +231,14 @@ e2e_kill_runner_for_run_id() {
   local run_id=$1
   local pid_file
   local pid
+  local -A attempted=()
+  local remaining=0
 
   pid_file=$(e2e_runner_pid_file_for_run_id "${run_id}")
   if [[ -f "${pid_file}" ]]; then
     pid=$(head -n 1 "${pid_file}" 2>/dev/null || true)
     if [[ -n "${pid}" ]]; then
+      attempted["${pid}"]=1
       e2e_terminate_runner_pid "${pid}" || return 1
     fi
   fi
@@ -181,8 +251,29 @@ e2e_kill_runner_for_run_id() {
     e2e_is_live_pid "${pid}" || continue
     e2e_runner_cmdline_matches "${pid}" || continue
     e2e_runner_pid_matches_run_id "${pid}" "${run_id}" || continue
+    [[ "${attempted[${pid}]:-0}" == '1' ]] && continue
+    attempted["${pid}"]=1
     e2e_terminate_runner_pid "${pid}" || return 1
   done
+
+  if e2e_runner_pids_for_run_id_from_ps "${run_id}"; then
+    for pid in "${E2E_MATCHED_RUNNER_PIDS[@]}"; do
+      [[ "${attempted[${pid}]:-0}" == '1' ]] && continue
+      attempted["${pid}"]=1
+      e2e_terminate_runner_pid "${pid}" || return 1
+    done
+  fi
+
+  if e2e_runner_pids_for_run_id_from_ps "${run_id}"; then
+    for pid in "${E2E_MATCHED_RUNNER_PIDS[@]}"; do
+      e2e_warn "failed to stop active runner for run-id=${run_id} pid=${pid}"
+      remaining=1
+    done
+  fi
+
+  if ((remaining == 1)); then
+    return 1
+  fi
 
   return 0
 }
@@ -197,7 +288,7 @@ e2e_kill_all_runner_processes() {
     [[ "${pid}" =~ ^[0-9]+$ ]] || continue
     [[ "${pid}" != "${E2E_RUNNER_PID}" ]] || continue
     e2e_is_live_pid "${pid}" || continue
-    e2e_runner_pid_marker_matches "${pid}" || continue
+    e2e_runner_cmdline_matches "${pid}" || continue
     e2e_terminate_runner_pid "${pid}" || failed=1
   done
 
@@ -326,6 +417,7 @@ e2e_handle_termination_signal() {
   E2E_SIGNAL_HANDLED=1
 
   printf '\n' >&2
+  ui_spinner_stop || true
   e2e_warn "received ${signal_name}; stopping e2e run"
   step_finalize || true
   [[ -n "${E2E_PID_FILE}" && -f "${E2E_PID_FILE}" ]] && rm -f "${E2E_PID_FILE}" || true
@@ -434,7 +526,11 @@ step_finalize() {
   E2E_FINALIZED=1
 
   if ((E2E_KEEP_RUNTIME == 1)); then
-    e2e_info 'keeping runtime resources because --keep-runtime was set'
+    if [[ "${E2E_PROFILE:-}" == 'manual' ]]; then
+      e2e_info 'keeping runtime resources for manual profile'
+    else
+      e2e_info 'keeping runtime resources because --keep-runtime was set'
+    fi
   else
     e2e_components_stop_started || true
   fi
@@ -451,6 +547,7 @@ step_finalize() {
 main() {
   E2E_CLI_ARGS=("$@")
   local cleanup_parse_rc=0
+  local manual_handoff_needed=0
 
   if e2e_has_help_flag "${E2E_CLI_ARGS[@]}"; then
     e2e_usage
@@ -494,7 +591,13 @@ main() {
   E2E_LOG_DIR="${E2E_BOOTSTRAP_LOG_DIR}"
 
   ui_init
-  E2E_STEPS_TOTAL=7
+  local requested_profile='basic'
+  requested_profile=$(e2e_profile_from_cli_args "${E2E_CLI_ARGS[@]}")
+  if [[ "${requested_profile}" == 'manual' ]]; then
+    E2E_STEPS_TOTAL=5
+  else
+    E2E_STEPS_TOTAL=7
+  fi
 
   if ! ui_run_step 1 "${E2E_STEPS_TOTAL}" 'Initializing' step_initialize; then
     E2E_OVERALL_FAILED=1
@@ -507,7 +610,9 @@ main() {
       ui_run_step 3 "${E2E_STEPS_TOTAL}" 'Preparing Components' step_skip_not_requested || true
       ui_run_step 4 "${E2E_STEPS_TOTAL}" 'Starting Components' step_skip_not_requested || true
       ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_skip_not_requested || true
-      ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Workload' step_skip_not_requested || true
+      if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Workload' step_skip_not_requested || true
+      fi
     else
       ui_run_step 2 "${E2E_STEPS_TOTAL}" 'Preparing Runtime' step_prepare_runtime || E2E_OVERALL_FAILED=1
       if ((E2E_OVERALL_FAILED == 0)); then
@@ -519,14 +624,28 @@ main() {
       if ((E2E_OVERALL_FAILED == 0)); then
         ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_configure_access || E2E_OVERALL_FAILED=1
       fi
-      if ((E2E_OVERALL_FAILED == 0)); then
+      if ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" != 'manual' ]]; then
         ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Workload' step_run_workload || E2E_OVERALL_FAILED=1
       fi
     fi
   fi
 
-  ui_run_step 7 "${E2E_STEPS_TOTAL}" 'Finalizing' step_finalize || true
+  if [[ "${E2E_PROFILE}" == 'manual' ]]; then
+    if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
+      E2E_KEEP_RUNTIME=1
+      manual_handoff_needed=1
+    fi
+    step_finalize || true
+  else
+    ui_run_step 7 "${E2E_STEPS_TOTAL}" 'Finalizing' step_finalize || true
+  fi
+
   ui_print_summary
+
+  if ((manual_handoff_needed == 1)); then
+    printf '\n'
+    e2e_profile_manual_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1
+  fi
 
   if ((E2E_OVERALL_FAILED == 1 || E2E_CASE_FAILED > 0)); then
     exit 1

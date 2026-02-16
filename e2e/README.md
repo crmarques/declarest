@@ -12,9 +12,10 @@ This repository uses a componentized Bash e2e harness.
 
 - `basic` (default): runs all `main` cases that match the selected stack.
 - `full`: runs all `main` and `corner` cases that match the selected stack.
-- `manual`: starts local-instantiable components, writes a temporary context catalog, and waits for manual interaction.
+- `manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
   - remote component selections are rejected in Step 1
+  - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
 ## Main Flags
 
@@ -44,7 +45,9 @@ Cleanup behavior:
 
 ## Runtime Steps
 
-The runner reports progress in 7 grouped steps:
+The runner reports progress in grouped steps:
+
+- `basic`/`full`: 7 steps
 
 1. `Initializing`
 2. `Preparing Runtime`
@@ -53,6 +56,14 @@ The runner reports progress in 7 grouped steps:
 5. `Configuring Access`
 6. `Running Workload`
 7. `Finalizing`
+
+- `manual`: 5 steps
+
+1. `Initializing`
+2. `Preparing Runtime`
+3. `Preparing Components`
+4. `Starting Components`
+5. `Configuring Access`
 
 TTY mode renders dynamic spinner/status updates. Non-TTY mode emits structured plain step lines.
 The runner prints a live log pointer at startup so progress can be followed with `tail -f`.

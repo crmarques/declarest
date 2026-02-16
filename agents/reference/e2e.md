@@ -21,7 +21,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 3. `basic` MUST run `main` cases only; `full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
 4. `manual` MUST start selected local-instantiable components, generate temporary context config, and skip automated cases.
 5. `manual` MUST reject remote-only connection selections during initialization with actionable validation output.
-6. Runtime lifecycle MUST use seven grouped steps in order: `Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`, `Running Workload`, `Finalizing`.
+6. Runtime lifecycle MUST be profile-specific: `basic`/`full` use seven steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`, `Running Workload`, `Finalizing`); `manual` uses five steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`).
 7. Step statuses MUST be `RUNNING`, `OK`, `FAIL`, `SKIP`.
 8. Non-TTY mode MUST emit deterministic plain logs; TTY mode MAY use live spinner/color output.
 9. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
@@ -65,7 +65,7 @@ Case discovery order:
 Manual handoff:
 1. Emit temporary context catalog path.
 2. Print concrete follow-up `declarest` commands.
-3. Keep session active until user exit/interrupt; teardown unless `--keep-runtime`.
+3. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
 
 ## Failure Modes
 1. Manual profile accepts unsupported remote selections.

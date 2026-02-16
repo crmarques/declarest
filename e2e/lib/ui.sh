@@ -3,6 +3,7 @@
 E2E_UI_TTY=0
 E2E_UI_COLOR=0
 E2E_UI_SPINNER='|/-\\'
+E2E_UI_SPINNER_PID=''
 
 E2E_STEPS_TOTAL=0
 E2E_STEP_FAILED=0
@@ -176,6 +177,45 @@ ui_run_step_body() {
   "${step_fn}" "$@" >"${step_log}" 2>&1
 }
 
+ui_spinner_start() {
+  local step_number=$1
+  local step_total=$2
+  local step_title=$3
+
+  ui_spinner_stop
+
+  (
+    local spin_index=0
+    while true; do
+      local spinner_char=${E2E_UI_SPINNER:spin_index:1}
+      printf '\r%s Step %d/%d [%s] %s %s' \
+        "$(ui_colorize "${E2E_CLR_BLUE}" "${spinner_char}")" \
+        "${step_number}" \
+        "${step_total}" \
+        "$(ui_step_state_label "RUNNING")" \
+        "${step_title}" \
+        "$(ui_colorize "${E2E_CLR_DIM}" "...")"
+      spin_index=$(((spin_index + 1) % 4))
+      sleep 0.1
+    done
+  ) &
+  E2E_UI_SPINNER_PID=$!
+}
+
+ui_spinner_stop() {
+  local spinner_pid=${E2E_UI_SPINNER_PID:-}
+
+  if [[ -n "${spinner_pid}" && "${spinner_pid}" =~ ^[0-9]+$ ]]; then
+    kill "${spinner_pid}" >/dev/null 2>&1 || true
+    wait "${spinner_pid}" 2>/dev/null || true
+  fi
+
+  E2E_UI_SPINNER_PID=''
+  if ((E2E_UI_TTY == 1)); then
+    printf '\r%-120s\r' ''
+  fi
+}
+
 ui_run_step() {
   local step_number=$1
   local step_total=$2
@@ -206,31 +246,13 @@ ui_run_step() {
   fi
 
   if ((E2E_UI_TTY == 1)); then
-    (
-      local spin_index=0
-      while true; do
-        local spinner_char=${E2E_UI_SPINNER:spin_index:1}
-        printf '\r%s Step %d/%d [%s] %s %s' \
-          "$(ui_colorize "${E2E_CLR_BLUE}" "${spinner_char}")" \
-          "${step_number}" \
-          "${step_total}" \
-          "$(ui_step_state_label "RUNNING")" \
-          "${step_title}" \
-          "$(ui_colorize "${E2E_CLR_DIM}" "...")"
-        spin_index=$(((spin_index + 1) % 4))
-        sleep 0.1
-      done
-    ) &
-    local spinner_pid=$!
-
+    ui_spinner_start "${step_number}" "${step_total}" "${step_title}"
     set +e
     ui_run_step_body "${step_log}" "${step_fn}" "$@"
     rc=$?
     set -e
 
-    kill "${spinner_pid}" >/dev/null 2>&1 || true
-    wait "${spinner_pid}" 2>/dev/null || true
-    printf '\r%-120s\r' ''
+    ui_spinner_stop
   else
     ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "RUNNING" "0s"
     set +e

@@ -146,11 +146,12 @@ Inputs:
 Execution:
 1. Runner validates selected stack is local-instantiable.
 2. Runner starts components and emits temporary context catalog.
-3. Runner prints follow-up commands and waits for user exit.
+3. Runner prints follow-up commands, exits, and keeps runtime resources.
 
 Expected outputs:
 1. Temporary context config is usable.
-2. Remote selections fail validation with actionable guidance.
+2. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
+3. Remote selections fail validation with actionable guidance.
 
 ### Example 8: Resource-Server Fixture Identity and Metadata Expansion
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.

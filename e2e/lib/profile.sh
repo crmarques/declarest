@@ -54,35 +54,15 @@ To use it in another shell:
   ${E2E_BIN} --context ${context_name} repo status -o json
   ${E2E_BIN} --context ${context_name} resource list / --source local -o json
 
-Stop options:
-  Ctrl+C in this terminal
-  kill -INT ${E2E_RUNNER_PID:-$$}
+This execution finished and runtime resources were kept.
+To stop and remove this execution:
   ./run-e2e.sh --clean ${E2E_RUN_ID:-<run-id>}
-
-You can edit the context file above while components are running.
+To stop and remove all executions:
+  ./run-e2e.sh --clean-all
 EOFH
 }
 
 e2e_profile_manual_handoff() {
   local context_name=$1
-
-  if [[ -w /dev/tty ]]; then
-    e2e_manual_handoff_print "${context_name}" >/dev/tty
-  else
-    e2e_manual_handoff_print "${context_name}"
-  fi
-
-  if [[ -t 0 ]]; then
-    if [[ -w /dev/tty ]]; then
-      printf '\nPress ENTER to finish manual session (or Ctrl+C).\n' >/dev/tty
-    else
-      printf '\nPress ENTER to finish manual session (or Ctrl+C).\n'
-    fi
-    read -r _
-  else
-    e2e_warn 'manual profile running in non-interactive mode; waiting for interruption'
-    while true; do
-      sleep 3600
-    done
-  fi
+  e2e_manual_handoff_print "${context_name}"
 }
