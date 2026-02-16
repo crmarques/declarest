@@ -8,6 +8,8 @@ import (
 
 type Orchestrator interface {
 	Get(ctx context.Context, logicalPath string) (resource.Value, error)
+	GetLocal(ctx context.Context, logicalPath string) (resource.Value, error)
+	GetRemote(ctx context.Context, logicalPath string) (resource.Value, error)
 	Save(ctx context.Context, logicalPath string, value resource.Value) error
 	Apply(ctx context.Context, logicalPath string) (resource.Resource, error)
 	Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error)

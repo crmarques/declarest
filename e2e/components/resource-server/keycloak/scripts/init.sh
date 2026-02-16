@@ -9,8 +9,10 @@ state_file=${E2E_COMPONENT_STATE_FILE}
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   keycloak_port=$(e2e_pick_free_port)
-  admin_user='admin'
-  admin_password="admin-${RANDOM}${RANDOM}"
+  admin_user=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_USER' 'E2E_KEYCLOAK_ADMIN_USER' || true)
+  admin_password=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_PASSWORD' 'E2E_KEYCLOAK_ADMIN_PASSWORD' || true)
+  : "${admin_user:=admin}"
+  : "${admin_password:=admin}"
   realm='master'
   client_id='declarest-e2e-client'
   client_secret="client-${RANDOM}${RANDOM}${RANDOM}"

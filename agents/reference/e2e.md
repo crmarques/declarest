@@ -38,6 +38,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 20. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
 21. The runner MUST maintain one live execution log file and print its path at startup.
 22. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
+23. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
 
 ## Data Contracts
 Runner flags:
@@ -52,6 +53,9 @@ Runner flags:
 2. `SUPPORTED_CONNECTIONS`, `DEFAULT_CONNECTION`.
 3. `REQUIRES_DOCKER`.
 4. `DESCRIPTION`.
+
+Optional component hook:
+1. `scripts/manual-info.sh` may emit plain-text operator access details for `manual` profile output.
 
 Case requirements (`CASE_REQUIRES`):
 1. Selector format: `key=value`.

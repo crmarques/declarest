@@ -3,15 +3,14 @@ package http
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/internal/support/tlsconfig"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/server"
@@ -187,43 +186,7 @@ func parseBaseURL(raw string) (*url.URL, error) {
 }
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
-	if tlsSettings == nil {
-		return nil, nil
-	}
-
-	tlsConfig := &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: tlsSettings.InsecureSkipVerify,
-	}
-
-	if strings.TrimSpace(tlsSettings.CACertFile) != "" {
-		caBytes, err := os.ReadFile(tlsSettings.CACertFile)
-		if err != nil {
-			return nil, validationError("managed-server.http.tls.ca-cert-file could not be read", err)
-		}
-
-		pool := x509.NewCertPool()
-		if ok := pool.AppendCertsFromPEM(caBytes); !ok {
-			return nil, validationError("managed-server.http.tls.ca-cert-file is not valid PEM", nil)
-		}
-		tlsConfig.RootCAs = pool
-	}
-
-	clientCertFile := strings.TrimSpace(tlsSettings.ClientCertFile)
-	clientKeyFile := strings.TrimSpace(tlsSettings.ClientKeyFile)
-	if (clientCertFile == "") != (clientKeyFile == "") {
-		return nil, validationError("managed-server.http.tls requires both client-cert-file and client-key-file", nil)
-	}
-
-	if clientCertFile != "" {
-		certificate, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
-		if err != nil {
-			return nil, validationError("managed-server.http.tls client certificate pair is invalid", err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{certificate}
-	}
-
-	return tlsConfig, nil
+	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-server.http")
 }
 
 func cloneStringMap(values map[string]string) map[string]string {

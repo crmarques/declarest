@@ -16,6 +16,8 @@ This repository uses a componentized Bash e2e harness.
   - with no component flags, it uses the same component defaults as other profiles
   - remote component selections are rejected in Step 1
   - when a resource-server is selected, its `repo-template` tree is copied into the context repository directory
+  - component manual access details are printed after Step 5 (Configuring Access) when available
+  - keycloak local default admin credentials: `admin` / `admin` (override with `DECLAREST_E2E_KEYCLOAK_ADMIN_USER` and `DECLAREST_E2E_KEYCLOAK_ADMIN_PASSWORD`)
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
 ## Main Flags
@@ -108,6 +110,10 @@ Each component directory under `e2e/components/<type>/<name>/` must contain:
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
+
+Optional manual-access contract:
+
+- `scripts/manual-info.sh`: when present, the runner executes it after `Configuring Access` in `manual` profile and prints its output for direct operator usage.
 
 Resource-server components must also provide a fixture tree used by sync-oriented cases:
 

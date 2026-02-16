@@ -146,14 +146,16 @@ Inputs:
 Execution:
 1. Runner validates selected stack is local-instantiable.
 2. Runner starts components and emits temporary context catalog.
-3. Runner copies selected resource-server `repo-template` into the context repository directory.
-4. Runner prints follow-up commands, exits, and keeps runtime resources.
+3. Runner executes optional component `manual-info` hooks and prints access details.
+4. Runner copies selected resource-server `repo-template` into the context repository directory.
+5. Runner prints follow-up commands, exits, and keeps runtime resources.
 
 Expected outputs:
 1. Temporary context config is usable.
-2. Context repository directory contains seeded template resources and collection metadata.
-3. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
-4. Remote selections fail validation with actionable guidance.
+2. Access output includes component-specific details (for example, local keycloak admin console URL and credentials).
+3. Context repository directory contains seeded template resources and collection metadata.
+4. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
+5. Remote selections fail validation with actionable guidance.
 
 ### Example 8: Resource-Server Fixture Identity and Metadata Expansion
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.
@@ -172,3 +174,22 @@ Expected outputs:
 
 Failure expectation:
 1. Misconfigured route identifier mapping fails with typed validation/transport error and actionable path context.
+
+### Example 9: Resource Get Source Selection
+Goal: read either remote observed state or local desired state deterministically.
+
+Inputs:
+1. Path `/customers/acme`.
+2. CLI source flags `--local` or `--remote`.
+
+Execution:
+1. `declarest resource get /customers/acme` runs without source flags.
+2. `declarest resource get /customers/acme --local` runs with local override.
+3. `declarest resource get /customers/acme --local --remote` runs with conflicting flags.
+
+Expected outputs:
+1. Step 1 reads from remote source by default.
+2. Step 2 reads from repository local source.
+
+Failure expectation:
+1. Step 3 fails with `ValidationError` before reconciler execution.

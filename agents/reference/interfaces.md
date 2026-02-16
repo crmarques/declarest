@@ -292,7 +292,7 @@ Responsibilities:
 4. Compute explain/diff/list outputs.
 
 Method families:
-1. `Get/Save/Apply/Create/Update/Delete`.
+1. `Get/GetLocal/GetRemote/Save/Apply/Create/Update/Delete`.
 2. `ListLocal(policy)/ListRemote(policy)`.
 3. `Explain/Diff/Template`.
 4. `RepoInit/RepoRefresh/RepoPush/RepoReset/RepoCheck/RepoStatus`.

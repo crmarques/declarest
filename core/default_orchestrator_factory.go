@@ -29,7 +29,6 @@ func buildDefaultOrchestrator(
 	}
 
 	defaultOrchestrator := &orchestrator.DefaultOrchestrator{
-		Name: resolvedContext.Name,
 		Metadata: fsmetadata.NewFSMetadataService(
 			resolveMetadataBaseDir(resolvedContext),
 			resolvedContext.Repository.ResourceFormat,

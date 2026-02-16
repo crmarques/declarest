@@ -5,12 +5,18 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
+	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -171,6 +177,153 @@ func TestConfigOutputAcrossFormats(t *testing.T) {
 				t.Fatalf("expected output to contain %q, got %q", tt.expectedSnippet, output)
 			}
 		})
+	}
+}
+
+func TestCheckReportsConfiguredComponents(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	metadataDir := filepath.Join(repoDir, "metadata")
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory: %v", err)
+	}
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "dev",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
+			},
+			Metadata: configdomain.Metadata{BaseDir: metadataDir},
+		},
+	}
+
+	deps := common.CommandDependencies{
+		Contexts:   contextService,
+		Repository: &testRepositoryService{},
+		Metadata:   &testMetadataService{},
+	}
+	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+
+	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
+	if err != nil {
+		t.Fatalf("check returned error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		`Config check for context "dev"`,
+		"[OK] context",
+		"[OK] repository",
+		"[OK] metadata",
+		"[SKIP] managed-server",
+		"[SKIP] secret-store",
+		"Result: PASS",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected output to contain %q, got %q", snippet, output)
+		}
+	}
+}
+
+func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	metadataDir := filepath.Join(repoDir, "metadata")
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory: %v", err)
+	}
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "dev",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
+			},
+			Metadata: configdomain.Metadata{BaseDir: metadataDir},
+			ManagedServer: &configdomain.ManagedServer{
+				HTTP: &configdomain.HTTPServer{
+					BaseURL: "http://127.0.0.1:8080",
+					Auth: &configdomain.HTTPAuth{
+						BearerToken: &configdomain.BearerTokenAuth{Token: "x"},
+					},
+				},
+			},
+		},
+	}
+
+	deps := common.CommandDependencies{
+		Contexts:     contextService,
+		Repository:   &testRepositoryService{},
+		Metadata:     &testMetadataService{},
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+	}
+	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+
+	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
+	if err != nil {
+		t.Fatalf("check returned error: %v", err)
+	}
+	if !strings.Contains(output, "[WARN] managed-server") {
+		t.Fatalf("expected warn status for managed server probe, got %q", output)
+	}
+	if !strings.Contains(output, "Result: PASS") {
+		t.Fatalf("expected pass result when only warnings are present, got %q", output)
+	}
+}
+
+func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	metadataDir := filepath.Join(repoDir, "metadata")
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory: %v", err)
+	}
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "prod",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
+			},
+			Metadata: configdomain.Metadata{BaseDir: metadataDir},
+			ManagedServer: &configdomain.ManagedServer{
+				HTTP: &configdomain.HTTPServer{
+					BaseURL: "http://127.0.0.1:8080",
+					Auth: &configdomain.HTTPAuth{
+						BearerToken: &configdomain.BearerTokenAuth{Token: "x"},
+					},
+				},
+			},
+			SecretStore: &configdomain.SecretStore{
+				File: &configdomain.FileSecretStore{Path: "/tmp/secrets.json", Passphrase: "pass"},
+			},
+		},
+	}
+
+	deps := common.CommandDependencies{
+		Contexts:     contextService,
+		Repository:   &testRepositoryService{},
+		Metadata:     &testMetadataService{},
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
+		Secrets:      &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
+	}
+	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+
+	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
+	assertTypedCategory(t, err, faults.ValidationError)
+
+	if !strings.Contains(output, "[FAIL] managed-server") {
+		t.Fatalf("expected managed-server failure in output, got %q", output)
+	}
+	if !strings.Contains(output, "[FAIL] secret-store") {
+		t.Fatalf("expected secret-store failure in output, got %q", output)
+	}
+	if !strings.Contains(output, "Result: FAIL") {
+		t.Fatalf("expected fail result in output, got %q", output)
 	}
 }
 
@@ -479,7 +632,25 @@ func executeConfigCommand(
 ) (string, error) {
 	t.Helper()
 
-	command := NewCommand(common.CommandDependencies{Contexts: contexts}, globalFlags)
+	return executeConfigCommandWithDeps(
+		t,
+		common.CommandDependencies{Contexts: contexts},
+		globalFlags,
+		stdin,
+		args...,
+	)
+}
+
+func executeConfigCommandWithDeps(
+	t *testing.T,
+	deps common.CommandDependencies,
+	globalFlags *common.GlobalFlags,
+	stdin string,
+	args ...string,
+) (string, error) {
+	t.Helper()
+
+	command := NewCommand(deps, globalFlags)
 	output := &bytes.Buffer{}
 	command.SetOut(output)
 	command.SetErr(io.Discard)
@@ -500,7 +671,27 @@ func executeConfigCommandWithPrompter(
 ) (string, error) {
 	t.Helper()
 
-	command := newCommandWithPrompter(common.CommandDependencies{Contexts: contexts}, globalFlags, prompter)
+	return executeConfigCommandWithDepsAndPrompter(
+		t,
+		common.CommandDependencies{Contexts: contexts},
+		globalFlags,
+		prompter,
+		stdin,
+		args...,
+	)
+}
+
+func executeConfigCommandWithDepsAndPrompter(
+	t *testing.T,
+	deps common.CommandDependencies,
+	globalFlags *common.GlobalFlags,
+	prompter configPrompter,
+	stdin string,
+	args ...string,
+) (string, error) {
+	t.Helper()
+
+	command := newCommandWithPrompter(deps, globalFlags, prompter)
 	output := &bytes.Buffer{}
 	command.SetOut(output)
 	command.SetErr(io.Discard)
@@ -573,6 +764,149 @@ func (s *testContextService) ResolveContext(_ context.Context, selection configd
 func (s *testContextService) Validate(context.Context, configdomain.Context) error {
 	s.validateCalled = true
 	return nil
+}
+
+type testRepositoryService struct {
+	checkErr      error
+	syncStatusErr error
+	syncStatus    repository.SyncReport
+}
+
+func (s *testRepositoryService) Save(context.Context, string, resource.Value) error { return nil }
+func (s *testRepositoryService) Get(context.Context, string) (resource.Value, error) {
+	return map[string]any{}, nil
+}
+func (s *testRepositoryService) Delete(context.Context, string, repository.DeletePolicy) error {
+	return nil
+}
+func (s *testRepositoryService) List(context.Context, string, repository.ListPolicy) ([]resource.Resource, error) {
+	return nil, nil
+}
+func (s *testRepositoryService) Exists(context.Context, string) (bool, error) { return false, nil }
+func (s *testRepositoryService) Move(context.Context, string, string) error   { return nil }
+func (s *testRepositoryService) Init(context.Context) error                   { return nil }
+func (s *testRepositoryService) Refresh(context.Context) error                { return nil }
+func (s *testRepositoryService) Reset(context.Context, repository.ResetPolicy) error {
+	return nil
+}
+func (s *testRepositoryService) Check(context.Context) error { return s.checkErr }
+func (s *testRepositoryService) Push(context.Context, repository.PushPolicy) error {
+	return nil
+}
+func (s *testRepositoryService) SyncStatus(context.Context) (repository.SyncReport, error) {
+	if s.syncStatusErr != nil {
+		return repository.SyncReport{}, s.syncStatusErr
+	}
+	return s.syncStatus, nil
+}
+
+type testMetadataService struct {
+	resolveErr error
+}
+
+func (s *testMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, nil
+}
+func (s *testMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
+	return nil
+}
+func (s *testMetadataService) Unset(context.Context, string) error { return nil }
+func (s *testMetadataService) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	if s.resolveErr != nil {
+		return metadatadomain.ResourceMetadata{}, s.resolveErr
+	}
+	return metadatadomain.ResourceMetadata{}, nil
+}
+func (s *testMetadataService) RenderOperationSpec(
+	context.Context,
+	string,
+	metadatadomain.Operation,
+	any,
+) (metadatadomain.OperationSpec, error) {
+	return metadatadomain.OperationSpec{}, nil
+}
+func (s *testMetadataService) Infer(
+	context.Context,
+	string,
+	metadatadomain.InferenceRequest,
+) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+type testOrchestratorService struct {
+	listRemoteErr error
+}
+
+func (s *testOrchestratorService) Get(context.Context, string) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) Save(context.Context, string, resource.Value) error {
+	return nil
+}
+func (s *testOrchestratorService) Apply(context.Context, string) (resource.Resource, error) {
+	return resource.Resource{}, nil
+}
+func (s *testOrchestratorService) Create(context.Context, string, resource.Value) (resource.Resource, error) {
+	return resource.Resource{}, nil
+}
+func (s *testOrchestratorService) Update(context.Context, string, resource.Value) (resource.Resource, error) {
+	return resource.Resource{}, nil
+}
+func (s *testOrchestratorService) Delete(context.Context, string, orchestratordomain.DeletePolicy) error {
+	return nil
+}
+func (s *testOrchestratorService) ListLocal(context.Context, string, orchestratordomain.ListPolicy) ([]resource.Resource, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) ListRemote(context.Context, string, orchestratordomain.ListPolicy) ([]resource.Resource, error) {
+	return nil, s.listRemoteErr
+}
+func (s *testOrchestratorService) Explain(context.Context, string) ([]resource.DiffEntry, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) Diff(context.Context, string) ([]resource.DiffEntry, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) Template(context.Context, string, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+
+type testSecretProviderService struct {
+	listErr error
+	keys    []string
+}
+
+func (s *testSecretProviderService) Init(context.Context) error { return nil }
+func (s *testSecretProviderService) Store(context.Context, string, string) error {
+	return nil
+}
+func (s *testSecretProviderService) Get(context.Context, string) (string, error) {
+	return "", nil
+}
+func (s *testSecretProviderService) Delete(context.Context, string) error { return nil }
+func (s *testSecretProviderService) List(context.Context) ([]string, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.keys, nil
+}
+func (s *testSecretProviderService) MaskPayload(context.Context, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testSecretProviderService) ResolvePayload(context.Context, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testSecretProviderService) NormalizeSecretPlaceholders(context.Context, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testSecretProviderService) DetectSecretCandidates(context.Context, resource.Value) ([]string, error) {
+	return nil, nil
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

@@ -30,7 +30,7 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			},
 		}
 
-		defaultReconciler, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{
 			Name:      "fs",
 			Overrides: map[string]string{"repository.filesystem.base-dir": "/tmp/override"},
 		})
@@ -38,20 +38,17 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if defaultReconciler.Name != "fs" {
-			t.Fatalf("expected reconciler name fs, got %q", defaultReconciler.Name)
+		if _, ok := defaultOrchestrator.Repository.(*fsrepository.FSResourceRepository); !ok {
+			t.Fatalf("expected FSResourceRepository, got %T", defaultOrchestrator.Repository)
 		}
-		if _, ok := defaultReconciler.Repository.(*fsrepository.FSResourceRepository); !ok {
-			t.Fatalf("expected FSResourceRepository, got %T", defaultReconciler.Repository)
+		if _, ok := defaultOrchestrator.Metadata.(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.Metadata)
 		}
-		if _, ok := defaultReconciler.Metadata.(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService, got %T", defaultReconciler.Metadata)
+		if defaultOrchestrator.Server != nil {
+			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.Server)
 		}
-		if defaultReconciler.Server != nil {
-			t.Fatalf("expected nil server manager, got %T", defaultReconciler.Server)
-		}
-		if defaultReconciler.Secrets != nil {
-			t.Fatalf("expected nil secrets provider, got %T", defaultReconciler.Secrets)
+		if defaultOrchestrator.Secrets != nil {
+			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.Secrets)
 		}
 	})
 
@@ -83,19 +80,19 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			},
 		}
 
-		defaultReconciler, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultReconciler.Repository.(*gitrepository.GitResourceRepository); !ok {
-			t.Fatalf("expected GitResourceRepository, got %T", defaultReconciler.Repository)
+		if _, ok := defaultOrchestrator.Repository.(*gitrepository.GitResourceRepository); !ok {
+			t.Fatalf("expected GitResourceRepository, got %T", defaultOrchestrator.Repository)
 		}
-		if _, ok := defaultReconciler.Server.(*httpserver.HTTPResourceServerGateway); !ok {
-			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultReconciler.Server)
+		if _, ok := defaultOrchestrator.Server.(*httpserver.HTTPResourceServerGateway); !ok {
+			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultOrchestrator.Server)
 		}
-		if _, ok := defaultReconciler.Secrets.(*filesecrets.FileSecretService); !ok {
-			t.Fatalf("expected FileSecretService, got %T", defaultReconciler.Secrets)
+		if _, ok := defaultOrchestrator.Secrets.(*filesecrets.FileSecretService); !ok {
+			t.Fatalf("expected FileSecretService, got %T", defaultOrchestrator.Secrets)
 		}
 	})
 
@@ -119,16 +116,16 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			},
 		}
 
-		defaultReconciler, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultReconciler.Repository.(*fsrepository.FSResourceRepository); !ok {
-			t.Fatalf("expected FSResourceRepository, got %T", defaultReconciler.Repository)
+		if _, ok := defaultOrchestrator.Repository.(*fsrepository.FSResourceRepository); !ok {
+			t.Fatalf("expected FSResourceRepository, got %T", defaultOrchestrator.Repository)
 		}
-		if _, ok := defaultReconciler.Secrets.(*vaultsecrets.VaultSecretService); !ok {
-			t.Fatalf("expected VaultSecretService, got %T", defaultReconciler.Secrets)
+		if _, ok := defaultOrchestrator.Secrets.(*vaultsecrets.VaultSecretService); !ok {
+			t.Fatalf("expected VaultSecretService, got %T", defaultOrchestrator.Secrets)
 		}
 	})
 }

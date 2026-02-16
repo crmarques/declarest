@@ -27,6 +27,7 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"config create",
 		"config use",
 		"config current",
+		"config check",
 		"config resolve",
 		"resource",
 		"resource get",
@@ -173,6 +174,53 @@ func TestResourceGetDualPathInput(t *testing.T) {
 		t.Parallel()
 
 		_, err := executeForTest(testDeps(), "", "resource", "get")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestResourceGetSourceSelection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default_uses_remote", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"source\": \"remote\"") {
+			t.Fatalf("expected remote source output by default, got %q", output)
+		}
+	})
+
+	t.Run("local_flag_uses_local", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--local")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"source\": \"local\"") {
+			t.Fatalf("expected local source output, got %q", output)
+		}
+	})
+
+	t.Run("remote_flag_uses_remote", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--remote")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"source\": \"remote\"") {
+			t.Fatalf("expected remote source output, got %q", output)
+		}
+	})
+
+	t.Run("local_and_remote_flags_conflict", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--local", "--remote")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
@@ -420,6 +468,39 @@ func TestHelpSubcommandDisabled(t *testing.T) {
 	}
 }
 
+func TestHelpFlagAppearsInGlobalFlagsForAllCommands(t *testing.T) {
+	t.Parallel()
+
+	command := NewRootCommand(testDeps())
+	paths := append([][]string{{}}, registeredPaths(command, nil)...)
+
+	for _, path := range paths {
+		pathCopy := append([]string{}, path...)
+		testName := joinPath(pathCopy)
+		if testName == "root" {
+			testName = "declarest"
+		}
+
+		t.Run(testName, func(t *testing.T) {
+			args := append(pathCopy, "--help")
+			output, err := executeForTest(testDeps(), "", args...)
+			if err != nil {
+				t.Fatalf("expected help output, got error: %v", err)
+			}
+
+			globalFlags := extractHelpSection(output, "Global Flags:")
+			if !strings.Contains(globalFlags, "--help") {
+				t.Fatalf("expected --help in Global Flags section, got %q", output)
+			}
+
+			localFlags := extractHelpSection(output, "Flags:")
+			if strings.Contains(localFlags, "--help") {
+				t.Fatalf("expected --help to be absent from local Flags section, got %q", output)
+			}
+		})
+	}
+}
+
 func executeForTest(deps Dependencies, stdin string, args ...string) (string, error) {
 	output, _, err := executeForTestWithStreams(deps, stdin, args...)
 	return output, err
@@ -461,6 +542,40 @@ func joinPath(path []string) string {
 		joined += " " + path[i]
 	}
 	return joined
+}
+
+func extractHelpSection(output string, heading string) string {
+	lines := strings.Split(output, "\n")
+	start := -1
+	for index, line := range lines {
+		if strings.TrimSpace(line) == heading {
+			start = index + 1
+			break
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+
+	section := make([]string, 0)
+	for index := start; index < len(lines); index++ {
+		line := lines[index]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			if len(section) > 0 {
+				break
+			}
+			continue
+		}
+
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && strings.HasSuffix(trimmed, ":") {
+			break
+		}
+
+		section = append(section, line)
+	}
+
+	return strings.Join(section, "\n")
 }
 
 func testDeps() Dependencies {
@@ -517,7 +632,13 @@ type testReconciler struct {
 }
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
-	return map[string]any{"path": logicalPath}, nil
+	return map[string]any{"path": logicalPath, "source": "get"}, nil
+}
+func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
+	return map[string]any{"path": logicalPath, "source": "local"}, nil
+}
+func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
+	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
 func (r *testReconciler) Save(context.Context, string, resource.Value) error { return nil }
 func (r *testReconciler) Apply(_ context.Context, logicalPath string) (resource.Resource, error) {

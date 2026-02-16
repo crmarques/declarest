@@ -575,6 +575,28 @@ step_run_workload() {
   e2e_run_cases || return 1
 }
 
+e2e_manual_print_component_access_info() {
+  local component_key
+  local section_printed=0
+  local details
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    details=$(e2e_component_collect_manual_info "${component_key}" || true)
+    if [[ -z "${details//[$'\t\r\n ']}" ]]; then
+      continue
+    fi
+
+    if ((section_printed == 0)); then
+      printf '\nManual Component Access\n'
+      printf '%s\n' '-----------------------'
+      section_printed=1
+    fi
+
+    printf '%s\n' "${component_key}"
+    printf '%s\n' "${details}" | sed 's/^/  /'
+  done
+}
+
 e2e_manual_seed_repo_from_template() {
   if [[ "${E2E_PROFILE}" != 'manual' ]]; then
     return 0
@@ -742,6 +764,7 @@ main() {
 
   if [[ "${E2E_PROFILE}" == 'manual' ]]; then
     if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
+      e2e_manual_print_component_access_info || true
       e2e_manual_seed_repo_from_template || E2E_OVERALL_FAILED=1
       if ((E2E_OVERALL_FAILED == 0)); then
         E2E_KEEP_RUNTIME=1

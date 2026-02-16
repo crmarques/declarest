@@ -1,12 +1,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +39,7 @@ func newCommandWithPrompter(
 		newShowCommand(deps, globalFlags, prompter),
 		newCurrentCommand(deps, globalFlags),
 		newResolveCommand(deps, globalFlags),
+		newCheckCommand(deps, globalFlags),
 		newValidateCommand(deps),
 	)
 
@@ -332,6 +337,325 @@ func newValidateCommand(deps common.CommandDependencies) *cobra.Command {
 
 	common.BindInputFlags(command, &input)
 	return command
+}
+
+func newCheckCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Check configured component availability and connectivity",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			contexts, err := common.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+
+			resolvedContext, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{
+				Name: selectedContextName(globalFlags),
+			})
+			if err != nil {
+				return err
+			}
+
+			report := runConfigCheck(command, deps, resolvedContext)
+			if err := common.WriteOutput(command, selectedOutputFormat(globalFlags), report, renderConfigCheckText); err != nil {
+				return err
+			}
+
+			if report.Summary.Fail > 0 {
+				return common.ValidationError(
+					fmt.Sprintf("config check failed for context %q: %d component(s) unavailable", report.Context, report.Summary.Fail),
+					nil,
+				)
+			}
+			return nil
+		},
+	}
+}
+
+type configCheckStatus string
+
+const (
+	configCheckOK   configCheckStatus = "ok"
+	configCheckWarn configCheckStatus = "warn"
+	configCheckFail configCheckStatus = "fail"
+	configCheckSkip configCheckStatus = "skip"
+)
+
+type configCheckResult struct {
+	Component string            `json:"component" yaml:"component"`
+	Status    configCheckStatus `json:"status" yaml:"status"`
+	Details   string            `json:"details,omitempty" yaml:"details,omitempty"`
+	Error     string            `json:"error,omitempty" yaml:"error,omitempty"`
+}
+
+type configCheckSummary struct {
+	OK   int `json:"ok" yaml:"ok"`
+	Warn int `json:"warn" yaml:"warn"`
+	Fail int `json:"fail" yaml:"fail"`
+	Skip int `json:"skip" yaml:"skip"`
+}
+
+type configCheckReport struct {
+	Context    string              `json:"context" yaml:"context"`
+	Passed     bool                `json:"passed" yaml:"passed"`
+	Summary    configCheckSummary  `json:"summary" yaml:"summary"`
+	Components []configCheckResult `json:"components" yaml:"components"`
+}
+
+func runConfigCheck(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckReport {
+	items := []configCheckResult{
+		{
+			Component: "context",
+			Status:    configCheckOK,
+			Details:   "context resolved successfully",
+		},
+		checkRepository(command, deps, cfg),
+		checkMetadata(command, deps, cfg),
+		checkManagedServer(command, deps, cfg),
+		checkSecretStore(command, deps, cfg),
+	}
+
+	summary := configCheckSummary{}
+	for _, item := range items {
+		switch item.Status {
+		case configCheckOK:
+			summary.OK++
+		case configCheckWarn:
+			summary.Warn++
+		case configCheckFail:
+			summary.Fail++
+		case configCheckSkip:
+			summary.Skip++
+		}
+	}
+
+	return configCheckReport{
+		Context:    cfg.Name,
+		Passed:     summary.Fail == 0,
+		Summary:    summary,
+		Components: items,
+	}
+}
+
+func checkRepository(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+	result := configCheckResult{
+		Component: "repository",
+	}
+
+	repositoryService, err := common.RequireRepository(deps)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	if err := repositoryService.Check(command.Context()); err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	switch {
+	case cfg.Repository.Filesystem != nil:
+		result.Status = configCheckOK
+		result.Details = "filesystem repository is accessible"
+		return result
+	case cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil:
+		status, err := repositoryService.SyncStatus(command.Context())
+		if err != nil {
+			result.Status = configCheckFail
+			result.Error = err.Error()
+			return result
+		}
+		result.Status = configCheckOK
+		result.Details = fmt.Sprintf("git repository is accessible (state=%s ahead=%d behind=%d)", status.State, status.Ahead, status.Behind)
+		return result
+	case cfg.Repository.Git != nil:
+		result.Status = configCheckOK
+		result.Details = "git repository is accessible (remote not configured)"
+		return result
+	default:
+		result.Status = configCheckFail
+		result.Error = "repository configuration is missing"
+		return result
+	}
+}
+
+func checkMetadata(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+	result := configCheckResult{
+		Component: "metadata",
+	}
+
+	metadataService, err := common.RequireMetadataService(deps)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	if _, err := metadataService.ResolveForPath(command.Context(), "/"); err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	baseDir := strings.TrimSpace(cfg.Metadata.BaseDir)
+	if baseDir == "" {
+		result.Status = configCheckFail
+		result.Error = "metadata.base-dir is empty"
+		return result
+	}
+
+	info, err := os.Stat(baseDir)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = fmt.Sprintf("metadata base-dir check failed: %v", err)
+		return result
+	}
+	if !info.IsDir() {
+		result.Status = configCheckFail
+		result.Error = "metadata base-dir is not a directory"
+		return result
+	}
+
+	result.Status = configCheckOK
+	result.Details = "metadata service is accessible"
+	return result
+}
+
+func checkManagedServer(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+	result := configCheckResult{
+		Component: "managed-server",
+	}
+
+	if cfg.ManagedServer == nil {
+		result.Status = configCheckSkip
+		result.Details = "not configured"
+		return result
+	}
+
+	orchestratorService, err := common.RequireOrchestrator(deps)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	_, err = orchestratorService.ListRemote(command.Context(), "/", orchestratordomain.ListPolicy{Recursive: false})
+	if err == nil {
+		result.Status = configCheckOK
+		result.Details = "remote server probe succeeded"
+		return result
+	}
+
+	switch typedCategory(err) {
+	case faults.NotFoundError, faults.ValidationError, faults.ConflictError:
+		result.Status = configCheckWarn
+		result.Details = fmt.Sprintf("probe reached server but returned %s", typedCategory(err))
+		result.Error = err.Error()
+		return result
+	default:
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+}
+
+func checkSecretStore(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+	result := configCheckResult{
+		Component: "secret-store",
+	}
+
+	if cfg.SecretStore == nil {
+		result.Status = configCheckSkip
+		result.Details = "not configured"
+		return result
+	}
+
+	secretProvider, err := common.RequireSecretProvider(deps)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	keys, err := secretProvider.List(command.Context())
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	result.Status = configCheckOK
+	result.Details = fmt.Sprintf("secret store is accessible (keys=%d)", len(keys))
+	return result
+}
+
+func renderConfigCheckText(writer io.Writer, report configCheckReport) error {
+	if _, err := fmt.Fprintf(writer, "Config check for context %q\n", report.Context); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(writer, strings.Repeat("-", 80)); err != nil {
+		return err
+	}
+
+	for _, item := range report.Components {
+		line := fmt.Sprintf("[%s] %-14s %s", strings.ToUpper(string(item.Status)), item.Component, item.Details)
+		if strings.TrimSpace(item.Details) == "" {
+			line = fmt.Sprintf("[%s] %-14s", strings.ToUpper(string(item.Status)), item.Component)
+		}
+		if _, err := fmt.Fprintln(writer, line); err != nil {
+			return err
+		}
+		if strings.TrimSpace(item.Error) != "" {
+			if _, err := fmt.Fprintf(writer, "       %-14s %s\n", "error:", item.Error); err != nil {
+				return err
+			}
+		}
+	}
+
+	if _, err := fmt.Fprintln(writer, strings.Repeat("-", 80)); err != nil {
+		return err
+	}
+
+	state := "PASS"
+	if !report.Passed {
+		state = "FAIL"
+	}
+
+	_, err := fmt.Fprintf(
+		writer,
+		"Result: %s (ok=%d warn=%d fail=%d skip=%d)\n",
+		state,
+		report.Summary.OK,
+		report.Summary.Warn,
+		report.Summary.Fail,
+		report.Summary.Skip,
+	)
+	return err
+}
+
+func selectedContextName(globalFlags *common.GlobalFlags) string {
+	if globalFlags == nil {
+		return ""
+	}
+	return strings.TrimSpace(globalFlags.Context)
+}
+
+func selectedOutputFormat(globalFlags *common.GlobalFlags) string {
+	if globalFlags == nil || strings.TrimSpace(globalFlags.Output) == "" {
+		return common.OutputAuto
+	}
+	return globalFlags.Output
+}
+
+func typedCategory(err error) faults.ErrorCategory {
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return ""
+	}
+	return typedErr.Category
 }
 
 func parseOverrides(values []string) (map[string]string, error) {

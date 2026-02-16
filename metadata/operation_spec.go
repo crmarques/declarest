@@ -13,7 +13,20 @@ import (
 	"github.com/crmarques/declarest/internal/support/paths"
 )
 
-func ResolveOperationSpec(_ context.Context, metadata ResourceMetadata, operation Operation, value any) (OperationSpec, error) {
+func ResolveOperationSpec(ctx context.Context, metadata ResourceMetadata, operation Operation, value any) (OperationSpec, error) {
+	scope, err := buildTemplateScopeFromValue(value)
+	if err != nil {
+		return OperationSpec{}, err
+	}
+	return ResolveOperationSpecWithScope(ctx, metadata, operation, scope)
+}
+
+func ResolveOperationSpecWithScope(
+	_ context.Context,
+	metadata ResourceMetadata,
+	operation Operation,
+	scope map[string]any,
+) (OperationSpec, error) {
 	if !operation.IsValid() {
 		return OperationSpec{}, faults.NewTypedError(
 			faults.ValidationError,
@@ -30,13 +43,8 @@ func ResolveOperationSpec(_ context.Context, metadata ResourceMetadata, operatio
 
 	if metadata.Operations != nil {
 		if operationSpec, found := metadata.Operations[string(operation)]; found {
-			spec = mergeOperationSpec(spec, operationSpec)
+			spec = MergeOperationSpec(spec, operationSpec)
 		}
-	}
-
-	scope, err := buildTemplateScope(value)
-	if err != nil {
-		return OperationSpec{}, err
 	}
 
 	rendered, err := renderOperationSpecTemplates(spec, scope)
@@ -94,74 +102,6 @@ func InferFromOpenAPI(_ context.Context, logicalPath string, _ InferenceRequest)
 			},
 		},
 	}, nil
-}
-
-func mergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec {
-	merged := OperationSpec{
-		Method:      base.Method,
-		Path:        base.Path,
-		Query:       cloneStringMap(base.Query),
-		Headers:     cloneStringMap(base.Headers),
-		Accept:      base.Accept,
-		ContentType: base.ContentType,
-		Body:        base.Body,
-		Filter:      cloneStringSlice(base.Filter),
-		Suppress:    cloneStringSlice(base.Suppress),
-		JQ:          base.JQ,
-	}
-
-	if overlay.Method != "" {
-		merged.Method = overlay.Method
-	}
-	if overlay.Path != "" {
-		merged.Path = overlay.Path
-	}
-	if overlay.Query != nil {
-		if len(overlay.Query) == 0 {
-			merged.Query = map[string]string{}
-		} else {
-			if merged.Query == nil {
-				merged.Query = make(map[string]string, len(overlay.Query))
-			}
-			keys := sortedMapKeys(overlay.Query)
-			for _, key := range keys {
-				merged.Query[key] = overlay.Query[key]
-			}
-		}
-	}
-	if overlay.Headers != nil {
-		if len(overlay.Headers) == 0 {
-			merged.Headers = map[string]string{}
-		} else {
-			if merged.Headers == nil {
-				merged.Headers = make(map[string]string, len(overlay.Headers))
-			}
-			keys := sortedMapKeys(overlay.Headers)
-			for _, key := range keys {
-				merged.Headers[key] = overlay.Headers[key]
-			}
-		}
-	}
-	if overlay.Accept != "" {
-		merged.Accept = overlay.Accept
-	}
-	if overlay.ContentType != "" {
-		merged.ContentType = overlay.ContentType
-	}
-	if overlay.Body != nil {
-		merged.Body = overlay.Body
-	}
-	if overlay.Filter != nil {
-		merged.Filter = cloneStringSlice(overlay.Filter)
-	}
-	if overlay.Suppress != nil {
-		merged.Suppress = cloneStringSlice(overlay.Suppress)
-	}
-	if overlay.JQ != "" {
-		merged.JQ = overlay.JQ
-	}
-
-	return merged
 }
 
 func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (OperationSpec, error) {
@@ -239,7 +179,7 @@ func renderTemplateString(field string, raw string, scope map[string]any) (strin
 	return buffer.String(), nil
 }
 
-func buildTemplateScope(value any) (map[string]any, error) {
+func buildTemplateScopeFromValue(value any) (map[string]any, error) {
 	scope := make(map[string]any)
 	if payload, ok := value.(map[string]any); ok {
 		for key, item := range payload {
@@ -261,24 +201,4 @@ func sortedMapKeys(values map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
-}
-
-func cloneStringSlice(values []string) []string {
-	if values == nil {
-		return nil
-	}
-	cloned := make([]string, len(values))
-	copy(cloned, values)
-	return cloned
 }

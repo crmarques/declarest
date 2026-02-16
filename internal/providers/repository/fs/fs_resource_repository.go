@@ -67,11 +67,3 @@ func (r *FSResourceRepository) Push(ctx context.Context, policy repository.PushP
 func (r *FSResourceRepository) SyncStatus(ctx context.Context) (repository.SyncReport, error) {
 	return r.local.SyncStatus(ctx)
 }
-
-func (r *FSResourceRepository) payloadFilePath(logicalPath string) (string, error) {
-	return r.local.PayloadFilePath(logicalPath)
-}
-
-func (r *FSResourceRepository) cleanupEmptyParents(startDir string) error {
-	return r.local.CleanupEmptyParents(startDir)
-}

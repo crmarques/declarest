@@ -3,7 +3,6 @@ package fs
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
@@ -208,19 +207,4 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 	if typed.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typed.Category)
 	}
-}
-
-func TestFSRepositorySafeJoinPreventsTraversal(t *testing.T) {
-	t.Parallel()
-
-	repoRoot := t.TempDir()
-	repo := NewFSResourceRepository(repoRoot, config.ResourceFormatJSON)
-
-	// Valid check as baseline.
-	if _, err := repo.payloadFilePath("/customers/acme"); err != nil {
-		t.Fatalf("payloadFilePath returned error: %v", err)
-	}
-
-	// Guard for root cleanup behavior.
-	_ = repo.cleanupEmptyParents(filepath.Join(repoRoot, "customers"))
 }

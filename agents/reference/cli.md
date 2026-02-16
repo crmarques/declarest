@@ -34,6 +34,7 @@ Global flags:
 2. `--debug`, `-d`.
 3. `--no-status`, `-n`.
 4. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
+5. `--help`, `-h`.
 
 Input flags:
 1. `--file`, `-f`.
@@ -83,10 +84,12 @@ Interactive config commands:
 2. Metadata targets accept collection and resource scopes with positional path and `--path`.
 3. Mutations from stdin MUST validate payload format before side effects.
 4. Option conflicts MUST produce usage errors.
-5. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
-6. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
-7. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
-8. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
+5. `resource get` MUST support mutually exclusive `--local` and `--remote` flags.
+6. `resource get` MUST default to `--remote` when neither source flag is provided.
+7. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
+8. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
+9. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
+10. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -96,12 +99,14 @@ Interactive config commands:
 5. When `--output` is `auto` (default), resource-oriented output MUST follow the active context `repository.resource-format` (`json` or `yaml`).
 6. `repo status` with `--output auto` MUST render deterministic text summary by default.
 7. `config show` MUST print the full selected context configuration as YAML to stdout.
+8. Command help output MUST present `--help` in the `Global Flags` section.
 
 ## Failure Modes
 1. Missing required path argument.
 2. Invalid payload format.
 3. Unsupported command/flag combination.
 4. Command requires configured manager not present in active context.
+5. `resource get` receives both `--local` and `--remote`.
 
 ## Edge Cases
 1. `save` with secret masking requested but no secret manager configured.
@@ -113,11 +118,13 @@ Interactive config commands:
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
 2. `declarest resource apply --path /customers/acme` applies desired state for one resource using flag input.
-3. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
-4. `declarest metadata render /customers/acme get` renders metadata operation spec.
-5. `declarest repo push --force` executes force push with explicit safety acknowledgment.
-6. `declarest repo status` reports local/remote sync status without mutating repository state.
-7. `declarest completion bash` generates Bash completion output.
-8. `declarest version -o json` prints machine-readable version information.
-9. `declarest config use` opens interactive context selection when run in a terminal.
-10. `declarest config show --context dev` prints the selected context configuration as YAML.
+3. `declarest resource get /customers/acme` reads remote state by default.
+4. `declarest resource get /customers/acme --local` reads local repository state.
+5. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
+6. `declarest metadata render /customers/acme get` renders metadata operation spec.
+7. `declarest repo push --force` executes force push with explicit safety acknowledgment.
+8. `declarest repo status` reports local/remote sync status without mutating repository state.
+9. `declarest completion bash` generates Bash completion output.
+10. `declarest version -o json` prints machine-readable version information.
+11. `declarest config use` opens interactive context selection when run in a terminal.
+12. `declarest config show --context dev` prints the selected context configuration as YAML.

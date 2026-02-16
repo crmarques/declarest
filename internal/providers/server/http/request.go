@@ -10,9 +10,10 @@ import (
 	"net/url"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 
+	"github.com/crmarques/declarest/internal/support/identity"
+	"github.com/crmarques/declarest/internal/support/templatescope"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -75,26 +76,9 @@ func resolveOperationSpecTemplates(
 	spec metadata.OperationSpec,
 	resourceInfo resource.Resource,
 ) (metadata.OperationSpec, error) {
-	templateScope := map[string]any{
-		"logicalPath":    resourceInfo.LogicalPath,
-		"collectionPath": resourceInfo.CollectionPath,
-		"alias":          resourceInfo.LocalAlias,
-		"remoteID":       resourceInfo.RemoteID,
-	}
-	if strings.TrimSpace(resourceInfo.RemoteID) != "" {
-		templateScope["id"] = resourceInfo.RemoteID
-	}
-
-	switch payload := resourceInfo.Payload.(type) {
-	case map[string]any:
-		for key, value := range payload {
-			templateScope[key] = value
-		}
-		templateScope["payload"] = payload
-		templateScope["value"] = payload
-	default:
-		templateScope["payload"] = resourceInfo.Payload
-		templateScope["value"] = resourceInfo.Payload
+	templateScope, err := templatescope.BuildResourceScope(resourceInfo)
+	if err != nil {
+		return metadata.OperationSpec{}, err
 	}
 
 	templateMetadata := metadata.ResourceMetadata{
@@ -106,7 +90,7 @@ func resolveOperationSpecTemplates(
 		JQ:       md.JQ,
 	}
 
-	rendered, err := metadata.ResolveOperationSpec(ctx, templateMetadata, operation, templateScope)
+	rendered, err := metadata.ResolveOperationSpecWithScope(ctx, templateMetadata, operation, templateScope)
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
@@ -242,7 +226,7 @@ func (g *HTTPResourceServerGateway) decodeListResponse(collectionPath string, md
 			return nil, validationError("list payload entry normalization failed", nil)
 		}
 
-		alias, remoteID, err := resolveAliasAndRemoteID(payloadMap, md)
+		alias, remoteID, err := identity.ResolveAliasAndRemoteIDForListItem(payloadMap, md)
 		if err != nil {
 			return nil, err
 		}
@@ -472,82 +456,6 @@ func extractListItems(payload any) ([]any, error) {
 		return values, nil
 	default:
 		return nil, validationError("list response must be an array or an object with an \"items\" array", nil)
-	}
-}
-
-func resolveAliasAndRemoteID(payload map[string]any, md metadata.ResourceMetadata) (string, string, error) {
-	var alias string
-	if strings.TrimSpace(md.AliasFromAttribute) != "" {
-		alias, _ = lookupScalarAttribute(payload, md.AliasFromAttribute)
-	}
-	if alias == "" && strings.TrimSpace(md.IDFromAttribute) != "" {
-		alias, _ = lookupScalarAttribute(payload, md.IDFromAttribute)
-	}
-	if alias == "" {
-		return "", "", validationError("list item alias could not be resolved from metadata attributes", nil)
-	}
-
-	remoteID := alias
-	if strings.TrimSpace(md.IDFromAttribute) != "" {
-		if value, ok := lookupScalarAttribute(payload, md.IDFromAttribute); ok && value != "" {
-			remoteID = value
-		}
-	}
-	return alias, remoteID, nil
-}
-
-func lookupScalarAttribute(payload map[string]any, attribute string) (string, bool) {
-	current := any(payload)
-	for _, segment := range strings.Split(attribute, ".") {
-		mapValue, ok := current.(map[string]any)
-		if !ok {
-			return "", false
-		}
-
-		next, exists := mapValue[segment]
-		if !exists {
-			return "", false
-		}
-		current = next
-	}
-
-	return scalarString(current)
-}
-
-func scalarString(value any) (string, bool) {
-	switch typed := value.(type) {
-	case string:
-		return typed, typed != ""
-	case json.Number:
-		return typed.String(), true
-	case int:
-		return strconv.Itoa(typed), true
-	case int8:
-		return strconv.FormatInt(int64(typed), 10), true
-	case int16:
-		return strconv.FormatInt(int64(typed), 10), true
-	case int32:
-		return strconv.FormatInt(int64(typed), 10), true
-	case int64:
-		return strconv.FormatInt(typed, 10), true
-	case uint:
-		return strconv.FormatUint(uint64(typed), 10), true
-	case uint8:
-		return strconv.FormatUint(uint64(typed), 10), true
-	case uint16:
-		return strconv.FormatUint(uint64(typed), 10), true
-	case uint32:
-		return strconv.FormatUint(uint64(typed), 10), true
-	case uint64:
-		return strconv.FormatUint(typed, 10), true
-	case float32:
-		return strconv.FormatFloat(float64(typed), 'f', -1, 32), true
-	case float64:
-		return strconv.FormatFloat(typed, 'f', -1, 64), true
-	case bool:
-		return strconv.FormatBool(typed), true
-	default:
-		return "", false
 	}
 }
 

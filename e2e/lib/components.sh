@@ -390,6 +390,24 @@ e2e_components_run_hook_all() {
   done
 }
 
+e2e_component_collect_manual_info() {
+  local component_key=$1
+  local script_path
+
+  script_path=$(e2e_component_hook_script "${component_key}" 'manual-info')
+  if [[ ! -f "${script_path}" ]]; then
+    return 0
+  fi
+
+  local state_file
+  state_file=$(e2e_component_state_file "${component_key}")
+  mkdir -p -- "$(dirname -- "${state_file}")"
+  [[ -f "${state_file}" ]] || : >"${state_file}"
+
+  e2e_component_export_env "${component_key}" 'manual-info'
+  bash "${script_path}"
+}
+
 e2e_sanitize_project_name() {
   local value=$1
   value=${value//[^a-zA-Z0-9]/-}

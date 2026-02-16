@@ -16,6 +16,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const usageTemplate = `Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
+
+Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
+
+{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
+
+Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .LocalNonPersistentFlags.HasAvailableFlags}}
+
+Flags:
+{{.LocalNonPersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if or .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
+
+Global Flags:
+{{if .HasAvailableInheritedFlags}}{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if and .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
+{{end}}{{if .HasAvailablePersistentFlags}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}`
+
 func NewRootCommand(deps Dependencies) *cobra.Command {
 	commandDeps := deps.commandDependencies()
 	var globalFlags common.GlobalFlags
@@ -52,6 +83,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.SetUsageTemplate(usageTemplate)
 
 	root.SetHelpCommand(&cobra.Command{
 		Use:     "__help",
@@ -60,6 +92,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 	})
 
 	common.BindGlobalFlags(root, &globalFlags)
+	root.PersistentFlags().BoolP("help", "h", false, "help for command")
 
 	root.AddGroup(
 		&cobra.Group{ID: "basic", Title: "Basic Commands:"},
