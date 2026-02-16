@@ -301,6 +301,9 @@ e2e_kill_all_runner_processes() {
 
 e2e_cleanup_run_containers() {
   local run_id=$1
+  local run_dir="${E2E_RUNS_DIR}/${run_id}"
+  local selected_file="${run_dir}/state/selected-components.txt"
+  local started_file="${run_dir}/state/started-components.tsv"
   local component_key
 
   e2e_discover_components || return 1
@@ -311,6 +314,62 @@ e2e_cleanup_run_containers() {
     return 0
   fi
 
+  if [[ -f "${started_file}" ]]; then
+    local line
+    local project_name
+    local compose_file
+    while IFS=$'\t' read -r component_key project_name; do
+      [[ -n "${component_key}" ]] || continue
+
+      if [[ -z "${E2E_COMPONENT_PATH[${component_key}]:-}" ]]; then
+        continue
+      fi
+
+      compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+      [[ -f "${compose_file}" ]] || continue
+
+      if [[ -z "${project_name}" ]]; then
+        project_name=$(e2e_sanitize_project_name "declarest-${run_id}-$(e2e_component_type "${component_key}")-$(e2e_component_name "${component_key}")")
+      fi
+
+      e2e_info "cleanup container project=${project_name}"
+      set +e
+      "${E2E_CONTAINER_ENGINE}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      local rc=$?
+      set -e
+
+      if ((rc != 0 && E2E_VERBOSE == 1)); then
+        e2e_warn "container cleanup returned rc=${rc} for project=${project_name}"
+      fi
+    done <"${started_file}"
+    return 0
+  fi
+
+  if [[ -f "${selected_file}" ]]; then
+    while IFS= read -r component_key; do
+      [[ -n "${component_key}" ]] || continue
+      [[ "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" == 'true' ]] || continue
+
+      local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+      [[ -f "${compose_file}" ]] || continue
+
+      local project_name
+      project_name=$(e2e_sanitize_project_name "declarest-${run_id}-$(e2e_component_type "${component_key}")-$(e2e_component_name "${component_key}")")
+      e2e_info "cleanup container project=${project_name}"
+
+      set +e
+      "${E2E_CONTAINER_ENGINE}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      local rc=$?
+      set -e
+
+      if ((rc != 0 && E2E_VERBOSE == 1)); then
+        e2e_warn "container cleanup returned rc=${rc} for project=${project_name}"
+      fi
+    done <"${selected_file}"
+    return 0
+  fi
+
+  e2e_warn "run state missing selected/started component records for ${run_id}; falling back to all container components"
   for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
     if [[ "${E2E_COMPONENT_REQUIRES_DOCKER[${component_key}]:-false}" != 'true' ]]; then
       continue
@@ -467,6 +526,8 @@ step_prepare_runtime() {
   e2e_info "runtime paths run-dir=${E2E_RUN_DIR} state-dir=${E2E_STATE_DIR} log-dir=${E2E_LOG_DIR} context-file=${E2E_CONTEXT_FILE}"
   e2e_info "runtime binary path=${E2E_BIN}"
 
+  printf '%s\n' "${E2E_SELECTED_COMPONENT_KEYS[@]}" >"${E2E_STATE_DIR}/selected-components.txt"
+
   if [[ -n "${E2E_BOOTSTRAP_LOG_DIR}" && -d "${E2E_BOOTSTRAP_LOG_DIR}" ]]; then
     cp -a "${E2E_BOOTSTRAP_LOG_DIR}/." "${E2E_LOG_DIR}/" 2>/dev/null || true
   fi
@@ -512,6 +573,55 @@ step_run_workload() {
   fi
 
   e2e_run_cases || return 1
+}
+
+e2e_manual_seed_repo_from_template() {
+  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+    return 0
+  fi
+
+  if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
+    e2e_info 'manual profile repo-template sync skipped: resource-server=none'
+    return 0
+  fi
+
+  local repo_component_key
+  local resource_component_key
+  local repo_state_file
+  local repo_base_dir
+  local template_dir
+  local file_count
+
+  repo_component_key=$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")
+  resource_component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+  repo_state_file=$(e2e_component_state_file "${repo_component_key}")
+
+  repo_base_dir=$(e2e_state_get "${repo_state_file}" 'REPO_BASE_DIR' || true)
+  if [[ -z "${repo_base_dir}" ]]; then
+    e2e_die "manual profile repo-template sync failed: missing REPO_BASE_DIR in ${repo_state_file}"
+    return 1
+  fi
+
+  template_dir="${E2E_COMPONENT_PATH[${resource_component_key}]:-}/repo-template"
+  if [[ ! -d "${template_dir}" ]]; then
+    e2e_die "manual profile repo-template sync failed: template dir not found: ${template_dir}"
+    return 1
+  fi
+
+  mkdir -p "${repo_base_dir}" || {
+    e2e_die "manual profile repo-template sync failed: cannot create repo dir: ${repo_base_dir}"
+    return 1
+  }
+
+  e2e_info "manual profile repo-template sync source=${template_dir} target=${repo_base_dir}"
+  cp -a "${template_dir}/." "${repo_base_dir}/" || {
+    e2e_die "manual profile repo-template sync failed while copying from ${template_dir} to ${repo_base_dir}"
+    return 1
+  }
+
+  file_count=$(find "${template_dir}" -type f | wc -l | tr -d ' ')
+  e2e_info "manual profile repo-template sync copied-files=${file_count}"
+  return 0
 }
 
 step_skip_not_requested() {
@@ -632,8 +742,11 @@ main() {
 
   if [[ "${E2E_PROFILE}" == 'manual' ]]; then
     if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
-      E2E_KEEP_RUNTIME=1
-      manual_handoff_needed=1
+      e2e_manual_seed_repo_from_template || E2E_OVERALL_FAILED=1
+      if ((E2E_OVERALL_FAILED == 0)); then
+        E2E_KEEP_RUNTIME=1
+        manual_handoff_needed=1
+      fi
     fi
     step_finalize || true
   else

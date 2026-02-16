@@ -399,6 +399,8 @@ e2e_sanitize_project_name() {
 e2e_components_start_local() {
   E2E_STARTED_COMPONENT_KEYS=()
   e2e_info "starting local container components with engine=${E2E_CONTAINER_ENGINE}"
+  local started_components_file="${E2E_STATE_DIR}/started-components.tsv"
+  : >"${started_components_file}"
 
   local component_key
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
@@ -440,6 +442,7 @@ e2e_components_start_local() {
     fi
     e2e_compose_cmd -f "${compose_file}" -p "${project_name}" ps || true
     E2E_STARTED_COMPONENT_KEYS+=("${component_key}")
+    printf '%s\t%s\n' "${component_key}" "${project_name}" >>"${started_components_file}"
   done
 }
 

@@ -20,23 +20,24 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 2. Supported profiles MUST be `basic`, `full`, and `manual`; default is `basic`.
 3. `basic` MUST run `main` cases only; `full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
 4. `manual` MUST start selected local-instantiable components, generate temporary context config, and skip automated cases.
-5. `manual` MUST reject remote-only connection selections during initialization with actionable validation output.
-6. Runtime lifecycle MUST be profile-specific: `basic`/`full` use seven steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`, `Running Workload`, `Finalizing`); `manual` uses five steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`).
-7. Step statuses MUST be `RUNNING`, `OK`, `FAIL`, `SKIP`.
-8. Non-TTY mode MUST emit deterministic plain logs; TTY mode MAY use live spinner/color output.
-9. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
-10. Each component under `e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
-11. Local compose-backed components MUST also provide `compose.yaml` and `scripts/health.sh`.
-12. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
-13. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`.
-14. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
-15. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
-16. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
-17. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
-18. Runtime artifacts MUST be written under `e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
-19. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
-20. The runner MUST maintain one live execution log file and print its path at startup.
-21. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources.
+5. `manual` MUST seed the selected context repository directory with the selected resource-server `repo-template` tree when `resource-server != none`.
+6. `manual` MUST reject remote-only connection selections during initialization with actionable validation output.
+7. Runtime lifecycle MUST be profile-specific: `basic`/`full` use seven steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`, `Running Workload`, `Finalizing`); `manual` uses five steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`).
+8. Step statuses MUST be `RUNNING`, `OK`, `FAIL`, `SKIP`.
+9. Non-TTY mode MUST emit deterministic plain logs; TTY mode MAY use live spinner/color output.
+10. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
+11. Each component under `e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
+12. Local compose-backed components MUST also provide `compose.yaml` and `scripts/health.sh`.
+13. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
+14. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`.
+15. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
+16. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
+17. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
+18. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
+19. Runtime artifacts MUST be written under `e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
+20. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
+21. The runner MUST maintain one live execution log file and print its path at startup.
+22. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
 
 ## Data Contracts
 Runner flags:

@@ -146,12 +146,14 @@ Inputs:
 Execution:
 1. Runner validates selected stack is local-instantiable.
 2. Runner starts components and emits temporary context catalog.
-3. Runner prints follow-up commands, exits, and keeps runtime resources.
+3. Runner copies selected resource-server `repo-template` into the context repository directory.
+4. Runner prints follow-up commands, exits, and keeps runtime resources.
 
 Expected outputs:
 1. Temporary context config is usable.
-2. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
-3. Remote selections fail validation with actionable guidance.
+2. Context repository directory contains seeded template resources and collection metadata.
+3. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
+4. Remote selections fail validation with actionable guidance.
 
 ### Example 8: Resource-Server Fixture Identity and Metadata Expansion
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.

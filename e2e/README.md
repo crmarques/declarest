@@ -15,6 +15,7 @@ This repository uses a componentized Bash e2e harness.
 - `manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
   - remote component selections are rejected in Step 1
+  - when a resource-server is selected, its `repo-template` tree is copied into the context repository directory
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
 ## Main Flags
@@ -35,7 +36,7 @@ This repository uses a componentized Bash e2e harness.
 
 Cleanup behavior:
 
-- `--clean <run-id>` stops the referenced `e2e/run-e2e.sh` process (when running), tears down local compose projects for that run id, and removes `e2e/.runs/<run-id>`.
+- `--clean <run-id>` stops the referenced `e2e/run-e2e.sh` process (when running), tears down local compose projects recorded for that run id, and removes `e2e/.runs/<run-id>`.
 - `--clean-all` stops all running `e2e/run-e2e.sh` processes and applies the same cleanup to every run directory under `e2e/.runs/`.
 
 ## Runtime Environment Variables
