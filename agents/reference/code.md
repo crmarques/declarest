@@ -1,67 +1,55 @@
 # Code Patterns and Implementation Standards
 
 ## Purpose
-Define coding standards that produce maintainable, testable, and predictable implementations across modules.
+Define implementation patterns that keep behavior predictable, testable, and maintainable.
 
 ## In Scope
 1. Module and file design rules.
-2. Error handling and logging patterns.
-3. Mutation boundaries and idempotency patterns.
-4. Testing expectations at implementation time.
+2. Error handling and side-effect boundaries.
+3. Data-shape normalization rules.
+4. Implementation-time testing expectations.
 
 ## Out of Scope
-1. Formatter configuration details.
-2. Runtime deployment topology.
-3. SRE platform specifics.
+1. Formatter tool configuration details.
+2. Deployment topology.
+3. CI vendor specifics.
 
 ## Normative Rules
-1. Architecture and implementation decisions MUST meet senior software engineering best practices.
-2. Directory structure MUST remain human-legible from the repository tree.
-3. Files MUST have a single scoped responsibility and explicit ownership.
-4. Files MUST be sufficiently informative and self-contained so a human can understand module intent by reading file names and localized content.
-5. Avoid file proliferation; keep cohesive modules unless split triggers apply.
-6. Split files when mixed concerns, unstable churn, review cognitive load, or complexity threshold are reached.
-7. New split files MUST be narrowly scoped and named by responsibility.
-8. Public contracts MUST be authored in `agents/reference/interfaces.md` before implementation use.
-9. Functions MUST prefer explicit inputs/outputs over implicit global state.
-10. Side effects MUST be isolated behind interface boundaries.
-11. Error paths MUST be handled explicitly and tested.
-12. Secret material MUST never be logged.
-13. Code structure, naming, and API shape MUST follow the target language community standards for each changed file.
-14. Go code MUST follow idiomatic package naming, minimal exported API surface, `cmd/*` entrypoint conventions, and `internal/*` visibility rules for non-public implementation.
-15. Bash code used for tests/support MUST use shell community best practices, be ShellCheck-friendly, and apply robust error handling conventions.
-16. Dependency assembly MUST be centralized in one composition root package (`core`), not distributed across CLI command handlers or providers.
-17. Context YAML parsing MUST use strict decoding that rejects unknown keys and enforces one-of invariants.
-18. Provider packages MUST implement owner contracts only and MUST NOT instantiate sibling provider implementations.
-19. Go sources MUST be formatted with `gofmt` so indentation uses tabs, import groups are grouped as `gofmt` emits, and tooling aligns with Go community expectations.
-20. Logical groups inside a Go function (initialization, validation, action, error handling, return) SHOULD be separated by exactly one blank line so readers can scan related statements without collapsing conceptual blocks.
+1. Global engineering and organization policies in `AGENTS.md` apply to all code changes.
+2. Functions MUST prefer explicit inputs/outputs over implicit global state.
+3. Side effects MUST be isolated behind interfaces declared in owner packages.
+4. Error paths MUST preserve root cause context and map to canonical error taxonomy.
+5. Secret material MUST never be logged or included in error messages.
+6. Dependency wiring MUST remain centralized in `core`.
+7. Context YAML parsing MUST be strict (unknown keys rejected; one-of invariants enforced).
+8. Provider packages MUST implement owner contracts and MUST NOT instantiate sibling providers.
+9. Go sources MUST be `gofmt`-formatted and follow idiomatic package/export conventions.
 
 ## Data Contracts
-Implementation pattern requirements:
-1. Define boundary structs/types in owner packages (`config`, `repository`, `metadata`, `server`, `secrets`, `reconciler`).
-2. Keep provider-specific payloads at provider boundaries (`internal/providers/repository/*`, `internal/providers/server/*`, `internal/providers/secrets/*`).
-3. Normalize resource payloads before persistence or comparison.
-4. Use typed error wrappers aligned with `interfaces.md` taxonomy.
+Implementation structure:
+1. Keep boundary types in owner packages (`config`, `repository`, `metadata`, `server`, `secrets`, `reconciler`).
+2. Keep provider-specific payloads inside provider boundaries (`internal/providers/*`).
+3. Normalize resource payloads before persistence and comparison.
+4. Use typed error wrappers aligned with `agents/reference/interfaces.md`.
 
-File organization guidance:
-1. Keep related contract + validator + mapper logic co-located when change cadence is aligned.
+File design guidance:
+1. Co-locate contract/validator/mapper logic when change cadence is shared.
 2. Separate orchestration from pure transforms.
-3. Keep CLI parse/validation separate from execution side effects.
-4. Keep config loaders, validators, and path resolvers in focused files within the context provider package.
+3. Separate CLI parsing/validation from execution side effects.
 
 ## Failure Modes
-1. Hidden cross-module coupling through shared mutable state.
-2. Large files mixing CLI, reconciliation, and provider concerns.
-3. Unstable tests due to non-deterministic ordering.
-4. Error handling that drops root cause context.
+1. Hidden coupling through shared mutable state.
+2. Mixed-concern files that combine CLI, reconciliation, and provider logic.
+3. Non-deterministic tests due to unstable ordering.
+4. Error wrappers that drop actionable context.
 
 ## Edge Cases
-1. Empty payload vs null payload normalization.
-2. Numeric equality across string-number mismatch from external APIs.
-3. Partial update behavior when metadata suppresses fields.
-4. Retry logic accidentally replays non-idempotent mutation.
+1. Empty object vs `null` payload normalization.
+2. Numeric equality across string/number representations from external APIs.
+3. Partial updates with metadata suppression/filter directives.
+4. Retry logic replaying non-idempotent mutations.
 
 ## Examples
-1. Preferred: pure function `metadata.ResolveOperationSpec(ctx, metadata, operation, payload)` with no side effects.
-2. Preferred: `reconciler.ResourceReconciler.Apply` orchestrates managers and returns typed errors without formatting concerns.
-3. Avoid: embedding path parsing and HTTP transport code in the same file as CLI argument parsing.
+1. Preferred: pure `metadata.ResolveOperationSpec(...)` with no side effects.
+2. Preferred: `reconciler.ResourceReconciler.Apply` orchestrates managers and returns typed errors.
+3. Avoid: CLI parsing file also contains HTTP transport and filesystem path logic.

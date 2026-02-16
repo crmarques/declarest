@@ -2,6 +2,20 @@
 
 E2E_CASE_FILES=()
 
+e2e_collect_scope_case_files() {
+  local scope=$1
+  local base_dir=$2
+  local scope_dir="${base_dir}/${scope}"
+  local file
+
+  [[ -d "${scope_dir}" ]] || return 0
+
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    printf '%s\n' "${file}"
+  done < <(find "${scope_dir}" -maxdepth 1 -type f -name '*.sh' | sort)
+}
+
 case_selected_value_for_key() {
   local key=$1
   case "${key}" in
@@ -77,6 +91,7 @@ case_requirement_requested_explicitly() {
 
 e2e_collect_case_files() {
   E2E_CASE_FILES=()
+  local -A seen=()
 
   local scope
   while IFS= read -r scope; do
@@ -85,8 +100,25 @@ e2e_collect_case_files() {
     local file
     while IFS= read -r file; do
       [[ -n "${file}" ]] || continue
+      if [[ -n "${seen[${file}]:-}" ]]; then
+        continue
+      fi
+      seen["${file}"]=1
       E2E_CASE_FILES+=("${file}")
-    done < <(find "${E2E_DIR}/cases/${scope}" -maxdepth 1 -type f -name '*.sh' | sort)
+    done < <(e2e_collect_scope_case_files "${scope}" "${E2E_DIR}/cases")
+
+    local component_key
+    for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+      local component_cases_root="${E2E_COMPONENT_PATH[${component_key}]}/cases"
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] || continue
+        if [[ -n "${seen[${file}]:-}" ]]; then
+          continue
+        fi
+        seen["${file}"]=1
+        E2E_CASE_FILES+=("${file}")
+      done < <(e2e_collect_scope_case_files "${scope}" "${component_cases_root}")
+    done
   done < <(e2e_profile_scopes)
 }
 
@@ -149,6 +181,26 @@ e2e_run_single_case() {
   local case_log="${E2E_LOG_DIR}/case-${case_id}.log"
   mkdir -p "${case_dir}"
 
+  {
+    printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}"
+    printf '[%s] CASE requires=%s\n' "$(e2e_now_utc)" "${case_requires:-<none>}"
+    printf '[%s] CASE stack profile=%s repo-type=%s resource-server=%s(%s) git-provider=%s(%s) secret-provider=%s(%s)\n' \
+      "$(e2e_now_utc)" \
+      "${E2E_PROFILE}" \
+      "${E2E_REPO_TYPE}" \
+      "${E2E_RESOURCE_SERVER}" \
+      "${E2E_RESOURCE_SERVER_CONNECTION}" \
+      "${E2E_GIT_PROVIDER:-none}" \
+      "${E2E_GIT_PROVIDER_CONNECTION}" \
+      "${E2E_SECRET_PROVIDER}" \
+      "${E2E_SECRET_PROVIDER_CONNECTION}"
+    printf '[%s] CASE tmp-dir=%s\n' "$(e2e_now_utc)" "${case_dir}"
+  } >"${case_log}"
+
+  if [[ -n "${E2E_EXECUTION_LOG:-}" ]]; then
+    printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}" >>"${E2E_EXECUTION_LOG}"
+  fi
+
   set +e
   (
     set -euo pipefail
@@ -161,9 +213,16 @@ e2e_run_single_case() {
     source "${case_file}"
 
     case_run
-  ) >"${case_log}" 2>&1
+  ) >>"${case_log}" 2>&1
   local rc=$?
   set -e
+
+  {
+    printf '[%s] CASE END id=%s rc=%d\n' "$(e2e_now_utc)" "${case_id}" "${rc}"
+  } >>"${case_log}"
+  if [[ -n "${E2E_EXECUTION_LOG:-}" ]]; then
+    printf '[%s] CASE END id=%s rc=%d log=%s\n' "$(e2e_now_utc)" "${case_id}" "${rc}" "${case_log}" >>"${E2E_EXECUTION_LOG}"
+  fi
 
   if ((rc == 0)); then
     ui_case_result "${case_id}" 'PASS'

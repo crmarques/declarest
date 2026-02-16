@@ -1,0 +1,21 @@
+{
+  "idFromAttribute": "id",
+  "aliasFromAttribute": "name",
+  "operations": {
+    "create": {
+      "path": "/project/{{.project}}/jobs"
+    },
+    "get": {
+      "path": "/job/{{.id}}"
+    },
+    "update": {
+      "path": "/job/{{.id}}"
+    },
+    "delete": {
+      "path": "/job/{{.id}}"
+    },
+    "compare": {
+      "path": "/job/{{.id}}"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "idFromAttribute": "name",
+  "aliasFromAttribute": "name",
+  "operations": {
+    "create": {
+      "path": "/projects"
+    },
+    "get": {
+      "path": "/project/{{.name}}"
+    },
+    "update": {
+      "path": "/project/{{.name}}"
+    },
+    "delete": {
+      "path": "/project/{{.name}}"
+    },
+    "list": {
+      "path": "/projects"
+    },
+    "compare": {
+      "path": "/project/{{.name}}"
+    }
+  }
+}

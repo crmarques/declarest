@@ -13,10 +13,10 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 {
   printf 'managed-server:\n'
   printf '  http:\n'
-  printf '    base-url: %s\n' "${RESOURCE_API_BASE_URL}"
+  printf '    base-url: %s\n' "${KEYCLOAK_BASE_URL}"
   printf '    auth:\n'
   printf '      oauth2:\n'
-  printf '        token-url: %s\n' "${KEYCLOAK_TOKEN_URL}"
+    printf '        token-url: %s\n' "${KEYCLOAK_TOKEN_URL}"
   printf '        grant-type: client_credentials\n'
   printf '        client-id: %s\n' "${KEYCLOAK_CLIENT_ID}"
   printf '        client-secret: %s\n' "${KEYCLOAK_CLIENT_SECRET}"

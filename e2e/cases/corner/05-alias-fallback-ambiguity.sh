@@ -11,7 +11,7 @@ case_run() {
   local local_payload="${E2E_CASE_TMP_DIR}/local.json"
 
   case_write_json "${metadata_file}" '{
-    "idFromAttribute": "id",
+    "idFromAttribute": "uuid",
     "aliasFromAttribute": "alias",
     "operations": {
       "create": {"method": "POST", "path": "/customers"},
@@ -22,11 +22,11 @@ case_run() {
     "suppress": []
   }'
 
-  case_write_json "${item_one}" '{"id": "dup-1", "alias": "duplicate-alias", "name": "One"}'
-  case_write_json "${item_two}" '{"id": "dup-2", "alias": "duplicate-alias", "name": "Two"}'
-  case_write_json "${local_payload}" '{"id": "missing-id", "alias": "duplicate-alias", "name": "Local"}'
+  case_write_json "${item_one}" '{"id": "cust-1", "uuid": "uuid-1", "alias": "duplicate-alias", "name": "One"}'
+  case_write_json "${item_two}" '{"id": "cust-2", "uuid": "uuid-2", "alias": "other-alias", "name": "Two"}'
+  case_write_json "${local_payload}" '{"id": "missing-id", "uuid": "uuid-2", "alias": "duplicate-alias", "name": "Local"}'
 
-  case_run_declarest metadata set /customers-ambiguity -f "${metadata_file}" -i json
+  case_run_declarest metadata set /customers-ambiguity/_ -f "${metadata_file}" -i json
   case_expect_success
 
   case_run_declarest resource create /customers-ambiguity/one -f "${item_one}" -i json

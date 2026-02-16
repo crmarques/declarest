@@ -13,6 +13,8 @@ E2E_PROFILE='basic'
 E2E_LIST_COMPONENTS=0
 E2E_KEEP_RUNTIME=0
 E2E_VERBOSE=0
+E2E_CLEAN_RUN_ID=''
+E2E_CLEAN_ALL=0
 
 # shellcheck disable=SC2034
 E2E_SELECTED_BY_PROFILE_DEFAULT=0
@@ -27,28 +29,139 @@ e2e_is_explicit() {
   [[ "${E2E_EXPLICIT[${key}]:-0}" == '1' ]]
 }
 
+e2e_has_help_flag() {
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+      -h|--help)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
 
+Objective:
+  Run Declarest end-to-end workloads against a selected component stack.
+
 Profiles:
-  --profile <basic|full|manual>            default: basic
+  --profile <basic|full|manual>                  default: basic
+    basic   Run compatible main cases only.
+    full    Run compatible main and corner cases.
+    manual  Start local components and hand off control to you.
 
 Component selection:
-  --resource-server <keycloak|none>        default: keycloak
+  --resource-server <keycloak|vault|rundeck|none> default: keycloak
   --resource-server-connection <local|remote>
-  --repo-type <filesystem|git>             default: filesystem
+  --repo-type <filesystem|git>                   default: filesystem
   --git-provider <git|gitlab|github>
   --git-provider-connection <local|remote>
-  --secret-provider <file|vault|none>      default: file
+  --secret-provider <file|vault|none>            default: file
   --secret-provider-connection <local|remote>
 
-General:
-  --list-components
-  --keep-runtime
-  --verbose
-  -h, --help
+Runtime controls:
+  --list-components   List discovered components and exit.
+  --keep-runtime      Skip teardown to keep runtime resources available.
+  --verbose           Print extra per-step log details.
+  --clean <run-id>    Stop referenced run process and remove its containers/files.
+  --clean-all         Stop all run processes and remove all executions under e2e/.runs.
+  -h, --help          Show this help and exit.
+
+Environment:
+  DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker> default: podman
+  DECLAREST_E2E_EXECUTION_LOG=<path>             optional execution log path
+
+Examples:
+  ./run-e2e.sh --profile basic --repo-type filesystem --resource-server none --secret-provider none
+  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server keycloak
+  ./run-e2e.sh --profile manual --keep-runtime
+  ./run-e2e.sh --clean 20260216-141148-216353
+  ./run-e2e.sh --clean-all
 USAGE
+}
+
+e2e_parse_cleanup_args() {
+  local has_cleanup_flag=0
+  local has_workload_flag=0
+
+  E2E_CLEAN_RUN_ID=''
+  E2E_CLEAN_ALL=0
+
+  while (($# > 0)); do
+    case "$1" in
+      --clean)
+        has_cleanup_flag=1
+        [[ $# -ge 2 ]] || {
+          e2e_die '--clean requires a run-id value'
+          return 2
+        }
+        [[ "${2}" != -* ]] || {
+          e2e_die '--clean requires a run-id value'
+          return 2
+        }
+        [[ -z "${E2E_CLEAN_RUN_ID}" ]] || {
+          e2e_die '--clean may only be provided once'
+          return 2
+        }
+        E2E_CLEAN_RUN_ID=$2
+        shift 2
+        ;;
+      --clean-all)
+        has_cleanup_flag=1
+        ((E2E_CLEAN_ALL == 0)) || {
+          e2e_die '--clean-all may only be provided once'
+          return 2
+        }
+        E2E_CLEAN_ALL=1
+        shift
+        ;;
+      -h|--help)
+        shift
+        ;;
+      --verbose)
+        E2E_VERBOSE=1
+        shift
+        ;;
+      --profile|--resource-server|--resource-server-connection|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+        has_workload_flag=1
+        shift
+        [[ $# -gt 0 ]] && shift || true
+        ;;
+      --list-components|--keep-runtime)
+        has_workload_flag=1
+        shift
+        ;;
+      *)
+        has_workload_flag=1
+        shift
+        ;;
+    esac
+  done
+
+  if ((has_cleanup_flag == 0)); then
+    return 1
+  fi
+
+  if ((has_workload_flag == 1)); then
+    e2e_die '--clean/--clean-all cannot be combined with workload flags'
+    return 2
+  fi
+
+  if [[ -n "${E2E_CLEAN_RUN_ID}" && ${E2E_CLEAN_ALL} -eq 1 ]]; then
+    e2e_die '--clean and --clean-all are mutually exclusive'
+    return 2
+  fi
+
+  if [[ -z "${E2E_CLEAN_RUN_ID}" && ${E2E_CLEAN_ALL} -eq 0 ]]; then
+    e2e_die 'cleanup mode requires --clean <run-id> or --clean-all'
+    return 2
+  fi
+
+  return 0
 }
 
 e2e_parse_args() {
@@ -139,8 +252,9 @@ e2e_parse_args() {
         shift
         ;;
       -h|--help)
+        # main handles help before runtime setup; keep parser behavior non-exiting.
         e2e_usage
-        exit 0
+        return 0
         ;;
       *)
         e2e_die "unknown argument: $1"
@@ -158,7 +272,7 @@ e2e_parse_args() {
   esac
 
   case "${E2E_RESOURCE_SERVER}" in
-    keycloak|none) ;;
+    keycloak|vault|rundeck|none) ;;
     *)
       e2e_die "invalid resource server: ${E2E_RESOURCE_SERVER}"
       return 1

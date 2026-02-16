@@ -1,0 +1,24 @@
+{
+  "config": {
+    "always.read.value.from.ldap": [
+      "true"
+    ],
+    "is.mandatory.in.ldap": [
+      "false"
+    ],
+    "ldap.attribute": [
+      "whenChanged"
+    ],
+    "read.only": [
+      "true"
+    ],
+    "user.model.attribute": [
+      "modifyTimestamp"
+    ]
+  },
+  "id": "57b9ef81-f97f-4c57-8908-cbf138f90d43",
+  "name": "modify date",
+  "parentId": "ldlOe2kYR2G5PSnSqDz9cg",
+  "providerId": "user-attribute-ldap-mapper",
+  "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+}

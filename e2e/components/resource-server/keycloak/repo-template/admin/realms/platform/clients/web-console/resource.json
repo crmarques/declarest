@@ -1,0 +1,8 @@
+{
+  "id": "client-0002",
+  "clientId": "web-console",
+  "realm": "platform",
+  "name": "Web Console",
+  "enabled": true,
+  "publicClient": true
+}

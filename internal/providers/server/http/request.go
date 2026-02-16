@@ -23,6 +23,11 @@ func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context
 	if strings.TrimSpace(spec.Path) == "" {
 		spec.Path = fallbackOperationPath(resourceInfo, operation)
 	}
+	var err error
+	spec, err = resolveOperationSpecTemplates(ctx, resourceInfo.Metadata, operation, spec, resourceInfo)
+	if err != nil {
+		return metadata.OperationSpec{}, err
+	}
 	spec.Path = normalizeRequestPath(spec.Path)
 	if spec.Path == "" {
 		return metadata.OperationSpec{}, validationError("resolved operation path is empty", nil)
@@ -61,6 +66,51 @@ func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context
 	}
 
 	return spec, nil
+}
+
+func resolveOperationSpecTemplates(
+	ctx context.Context,
+	md metadata.ResourceMetadata,
+	operation metadata.Operation,
+	spec metadata.OperationSpec,
+	resourceInfo resource.Resource,
+) (metadata.OperationSpec, error) {
+	templateScope := map[string]any{
+		"logicalPath":    resourceInfo.LogicalPath,
+		"collectionPath": resourceInfo.CollectionPath,
+		"alias":          resourceInfo.LocalAlias,
+		"remoteID":       resourceInfo.RemoteID,
+	}
+	if strings.TrimSpace(resourceInfo.RemoteID) != "" {
+		templateScope["id"] = resourceInfo.RemoteID
+	}
+
+	switch payload := resourceInfo.Payload.(type) {
+	case map[string]any:
+		for key, value := range payload {
+			templateScope[key] = value
+		}
+		templateScope["payload"] = payload
+		templateScope["value"] = payload
+	default:
+		templateScope["payload"] = resourceInfo.Payload
+		templateScope["value"] = resourceInfo.Payload
+	}
+
+	templateMetadata := metadata.ResourceMetadata{
+		Operations: map[string]metadata.OperationSpec{
+			string(operation): spec,
+		},
+		Filter:   cloneStringSlice(md.Filter),
+		Suppress: cloneStringSlice(md.Suppress),
+		JQ:       md.JQ,
+	}
+
+	rendered, err := metadata.ResolveOperationSpec(ctx, templateMetadata, operation, templateScope)
+	if err != nil {
+		return metadata.OperationSpec{}, err
+	}
+	return rendered, nil
 }
 
 func (g *HTTPResourceServerGateway) execute(ctx context.Context, spec metadata.OperationSpec) ([]byte, http.Header, error) {
@@ -296,6 +346,16 @@ func mergeHeaders(defaultHeaders map[string]string, operationHeaders map[string]
 		merged[key] = value
 	}
 	return merged
+}
+
+func cloneStringSlice(values []string) []string {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+	return cloned
 }
 
 func joinBaseAndRequestPath(basePath string, requestPath string) string {

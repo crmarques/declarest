@@ -97,6 +97,85 @@ ui_print_step_line() {
   printf '\n'
 }
 
+ui_selected_components_summary() {
+  if ! declare -p E2E_SELECTED_COMPONENT_KEYS >/dev/null 2>&1 || ((${#E2E_SELECTED_COMPONENT_KEYS[@]} == 0)); then
+    printf 'none\n'
+    return
+  fi
+
+  local component_key
+  local connection
+  local -a labels=()
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    connection=$(e2e_component_connection_for_key "${component_key}")
+    labels+=("${component_key}@${connection}")
+  done
+
+  printf '%s\n' "${labels[*]}"
+}
+
+ui_write_step_log_header() {
+  local step_log=$1
+  local step_number=$2
+  local step_total=$3
+  local step_title=$4
+
+  {
+    printf '[%s] STEP %d/%d START %s\n' "$(e2e_now_utc)" "${step_number}" "${step_total}" "${step_title}"
+    printf '[%s] run-id=%s profile=%s keep-runtime=%s verbose=%s\n' \
+      "$(e2e_now_utc)" \
+      "${E2E_RUN_ID:-n/a}" \
+      "${E2E_PROFILE:-n/a}" \
+      "${E2E_KEEP_RUNTIME:-0}" \
+      "${E2E_VERBOSE:-0}"
+    printf '[%s] stack repo-type=%s resource-server=%s(%s) git-provider=%s(%s) secret-provider=%s(%s)\n' \
+      "$(e2e_now_utc)" \
+      "${E2E_REPO_TYPE:-n/a}" \
+      "${E2E_RESOURCE_SERVER:-n/a}" \
+      "${E2E_RESOURCE_SERVER_CONNECTION:-n/a}" \
+      "${E2E_GIT_PROVIDER:-none}" \
+      "${E2E_GIT_PROVIDER_CONNECTION:-n/a}" \
+      "${E2E_SECRET_PROVIDER:-n/a}" \
+      "${E2E_SECRET_PROVIDER_CONNECTION:-n/a}"
+    printf '[%s] selected-components: %s\n' "$(e2e_now_utc)" "$(ui_selected_components_summary)"
+    printf '[%s] log-path=%s\n' "$(e2e_now_utc)" "${step_log}"
+  } >>"${step_log}"
+}
+
+ui_write_step_log_footer() {
+  local step_log=$1
+  local step_number=$2
+  local step_total=$3
+  local step_title=$4
+  local step_state=$5
+  local step_rc=$6
+  local step_elapsed=$7
+
+  {
+    printf '[%s] STEP %d/%d END %s state=%s rc=%d elapsed=%s\n' \
+      "$(e2e_now_utc)" \
+      "${step_number}" \
+      "${step_total}" \
+      "${step_title}" \
+      "${step_state}" \
+      "${step_rc}" \
+      "${step_elapsed}"
+  } >>"${step_log}"
+}
+
+ui_run_step_body() {
+  local step_log=$1
+  local step_fn=$2
+  shift 2
+
+  if [[ -n "${E2E_EXECUTION_LOG:-}" ]]; then
+    "${step_fn}" "$@" > >(tee -a "${step_log}" "${E2E_EXECUTION_LOG}" >/dev/null) 2> >(tee -a "${step_log}" "${E2E_EXECUTION_LOG}" >/dev/null)
+    return
+  fi
+
+  "${step_fn}" "$@" >"${step_log}" 2>&1
+}
+
 ui_run_step() {
   local step_number=$1
   local step_total=$2
@@ -116,30 +195,48 @@ ui_run_step() {
   : >"${step_log}"
 
   step_start=$(e2e_epoch_now)
+  ui_write_step_log_header "${step_log}" "${step_number}" "${step_total}" "${step_title}"
+
+  if [[ -n "${E2E_EXECUTION_LOG:-}" ]]; then
+    printf '\n[%s] STEP %d/%d START %s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "${step_number}" \
+      "${step_total}" \
+      "${step_title}" >>"${E2E_EXECUTION_LOG}"
+  fi
 
   if ((E2E_UI_TTY == 1)); then
-    "${step_fn}" "$@" >"${step_log}" 2>&1 &
-    local pid=$!
-    local spin_index=0
+    (
+      local spin_index=0
+      while true; do
+        local spinner_char=${E2E_UI_SPINNER:spin_index:1}
+        printf '\r%s Step %d/%d [%s] %s %s' \
+          "$(ui_colorize "${E2E_CLR_BLUE}" "${spinner_char}")" \
+          "${step_number}" \
+          "${step_total}" \
+          "$(ui_step_state_label "RUNNING")" \
+          "${step_title}" \
+          "$(ui_colorize "${E2E_CLR_DIM}" "...")"
+        spin_index=$(((spin_index + 1) % 4))
+        sleep 0.1
+      done
+    ) &
+    local spinner_pid=$!
 
-    while kill -0 "${pid}" >/dev/null 2>&1; do
-      local spinner_char=${E2E_UI_SPINNER:spin_index:1}
-      printf '\r%s Step %d/%d [%s] %s %s' \
-        "$(ui_colorize "${E2E_CLR_BLUE}" "${spinner_char}")" \
-        "${step_number}" \
-        "${step_total}" \
-        "$(ui_step_state_label "RUNNING")" \
-        "${step_title}" \
-        "$(ui_colorize "${E2E_CLR_DIM}" "...")"
-      spin_index=$(((spin_index + 1) % 4))
-      sleep 0.1
-    done
+    set +e
+    ui_run_step_body "${step_log}" "${step_fn}" "$@"
+    rc=$?
+    set -e
 
-    wait "${pid}" || rc=$?
+    kill "${spinner_pid}" >/dev/null 2>&1 || true
+    wait "${spinner_pid}" 2>/dev/null || true
     printf '\r%-120s\r' ''
   else
     ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "RUNNING" "0s"
-    "${step_fn}" "$@" >"${step_log}" 2>&1 || rc=$?
+    set +e
+    ui_run_step_body "${step_log}" "${step_fn}" "$@"
+    rc=$?
+    set -e
   fi
 
   step_end=$(e2e_epoch_now)
@@ -157,6 +254,18 @@ ui_run_step() {
 
   E2E_STEP_STATUSES[step_number]="${state}"
   E2E_STEP_DURATIONS[step_number]="${elapsed}"
+  ui_write_step_log_footer "${step_log}" "${step_number}" "${step_total}" "${step_title}" "${state}" "${rc}" "$(e2e_format_duration "${elapsed}")"
+
+  if [[ -n "${E2E_EXECUTION_LOG:-}" ]]; then
+    printf '[%s] STEP %d/%d END %s state=%s rc=%d elapsed=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "${step_number}" \
+      "${step_total}" \
+      "${step_title}" \
+      "${state}" \
+      "${rc}" \
+      "$(e2e_format_duration "${elapsed}")" >>"${E2E_EXECUTION_LOG}"
+  fi
 
   ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "${state}" "$(e2e_format_duration "${elapsed}")"
 
@@ -233,6 +342,7 @@ ui_print_summary() {
   printf '  duration: %s\n' "$(e2e_format_duration "${total_elapsed}")"
   printf '  context:  %s\n' "${E2E_CONTEXT_FILE:-n/a}"
   printf '  logs:     %s\n' "${E2E_LOG_DIR:-n/a}"
+  printf '  execution-log: %s\n' "${E2E_EXECUTION_LOG:-n/a}"
 
   if [[ -n "${E2E_STEP_LAST_LOG}" ]]; then
     printf '  last-fail-log: %s\n' "${E2E_STEP_LAST_LOG}"

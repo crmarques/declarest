@@ -1,0 +1,9 @@
+{
+  "id": "client-0001",
+  "clientId": "declarest-cli",
+  "realm": "platform",
+  "name": "Declarest CLI",
+  "enabled": true,
+  "publicClient": false,
+  "secret": "declarest-cli-secret"
+}

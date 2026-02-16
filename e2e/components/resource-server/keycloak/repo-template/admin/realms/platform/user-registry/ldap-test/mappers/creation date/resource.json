@@ -1,0 +1,24 @@
+{
+  "config": {
+    "always.read.value.from.ldap": [
+      "true"
+    ],
+    "is.mandatory.in.ldap": [
+      "false"
+    ],
+    "ldap.attribute": [
+      "whenCreated"
+    ],
+    "read.only": [
+      "true"
+    ],
+    "user.model.attribute": [
+      "createTimestamp"
+    ]
+  },
+  "id": "6f521115-2cae-4323-a403-72fee7383cf8",
+  "name": "creation date",
+  "parentId": "ldlOe2kYR2G5PSnSqDz9cg",
+  "providerId": "user-attribute-ldap-mapper",
+  "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+}

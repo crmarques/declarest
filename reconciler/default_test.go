@@ -526,6 +526,60 @@ func TestDefaultReconcilerTemplateReturnsNormalizedPayload(t *testing.T) {
 	}
 }
 
+func TestDefaultReconcilerRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultReconciler{}
+	resourceInfo := resource.Resource{
+		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
+		CollectionPath: "/admin/realms/platform/clients",
+		Metadata: metadatadomain.ResourceMetadata{
+			Operations: map[string]metadatadomain.OperationSpec{},
+		},
+	}
+
+	spec, err := reconciler.renderOperationSpec(
+		context.Background(),
+		resourceInfo,
+		metadatadomain.OperationList,
+		map[string]any{"realm": "platform", "clientId": "declarest-cli"},
+	)
+	if err != nil {
+		t.Fatalf("renderOperationSpec returned error: %v", err)
+	}
+
+	if spec.Path != "/admin/realms/platform/clients" {
+		t.Fatalf("expected list fallback path /admin/realms/platform/clients, got %q", spec.Path)
+	}
+}
+
+func TestDefaultReconcilerRenderOperationSpecCreateUsesLogicalPathFallback(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultReconciler{}
+	resourceInfo := resource.Resource{
+		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
+		CollectionPath: "/admin/realms/platform/clients",
+		Metadata: metadatadomain.ResourceMetadata{
+			Operations: map[string]metadatadomain.OperationSpec{},
+		},
+	}
+
+	spec, err := reconciler.renderOperationSpec(
+		context.Background(),
+		resourceInfo,
+		metadatadomain.OperationCreate,
+		map[string]any{"realm": "platform", "clientId": "declarest-cli"},
+	)
+	if err != nil {
+		t.Fatalf("renderOperationSpec returned error: %v", err)
+	}
+
+	if spec.Path != "/admin/realms/platform/clients/declarest-cli/resource" {
+		t.Fatalf("expected create fallback path to use logical path, got %q", spec.Path)
+	}
+}
+
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	t.Helper()
 

@@ -136,6 +136,46 @@ func TestBuildRequestFromMetadataDefaultsAndHeaders(t *testing.T) {
 	}
 }
 
+func TestBuildRequestFromMetadataRendersTemplates(t *testing.T) {
+	t.Parallel()
+
+	gateway := mustGateway(t, config.HTTPServer{
+		BaseURL: "https://example.com/api",
+		Auth: &config.HTTPAuth{
+			BearerToken: &config.BearerTokenAuth{Token: "token"},
+		},
+	})
+
+	spec, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+		LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+		CollectionPath: "/admin/realms/platform/clients",
+		Payload: map[string]any{
+			"realm":    "platform",
+			"clientId": "declarest-cli",
+		},
+		Metadata: metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationCreate): {
+					Path: "/admin/realms/{{.realm}}/clients",
+					Query: map[string]string{
+						"clientId": "{{.clientId}}",
+					},
+				},
+			},
+		},
+	}, metadata.OperationCreate)
+	if err != nil {
+		t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+	}
+
+	if spec.Path != "/admin/realms/platform/clients" {
+		t.Fatalf("expected rendered path /admin/realms/platform/clients, got %q", spec.Path)
+	}
+	if spec.Query["clientId"] != "declarest-cli" {
+		t.Fatalf("expected rendered query clientId=declarest-cli, got %+v", spec.Query)
+	}
+}
+
 func TestOpenAPIFallbackAndValidation(t *testing.T) {
 	t.Parallel()
 

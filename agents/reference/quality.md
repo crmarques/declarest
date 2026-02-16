@@ -1,83 +1,67 @@
 # Testing, Quality, and Security
 
 ## Purpose
-Define quality gates, security invariants, and acceptance criteria for changes across the system.
+Define quality gates and security invariants so behavior changes are verifiable and safe.
 
 ## In Scope
-1. Test strategy and coverage expectations.
-2. Security controls and safety checks.
-3. Regression and acceptance criteria.
-4. Release readiness checklist.
+1. Test strategy by risk level.
+2. Security and safety controls.
+3. Required regression/acceptance coverage.
+4. Release-readiness checks.
 
 ## Out of Scope
-1. CI vendor-specific setup files.
-2. Runtime infrastructure monitoring implementation.
-3. UI design concerns.
+1. CI vendor configuration.
+2. Runtime observability platform setup.
+3. UI style concerns.
 
 ## Normative Rules
-1. Every behavioral change MUST include tests at the lowest effective layer.
-2. High-risk orchestration changes MUST include integration coverage.
-3. CLI contract changes MUST include command-level tests for success and failure paths.
+1. Every behavior change MUST add tests at the lowest effective layer.
+2. High-risk orchestration or integration changes MUST include integration coverage.
+3. CLI contract changes MUST include command-level success and failure tests.
 4. Security-sensitive flows MUST include negative tests.
-5. Deterministic ordering guarantees MUST be asserted in tests.
+5. Deterministic ordering guarantees MUST be asserted.
 6. Path traversal protections MUST be tested for repository and metadata access.
-7. Secret values MUST never appear in logs or snapshots.
-8. Merge requests SHOULD fail if required test categories are missing.
+7. Secret values MUST never appear in logs, errors, or snapshots.
+8. New normative rules SHOULD include an explicit matching test expectation.
 
 ## Data Contracts
 Test layers:
-1. Unit: pure transforms, path normalization, metadata merge/render, secret placeholder normalization.
-2. Integration: reconciler with fake providers and conflict handling.
-3. E2E: CLI workflows with representative contexts and fixtures.
-4. E2E profiles:
-   `basic`: all `main` cases with matched capabilities.
-   `full`: all `main` + `corner` cases with matched capabilities.
-   `manual`: environment bring-up and interactive handoff without automated assertions.
+1. Unit: pure transforms, normalization, metadata layering/template rendering, secret placeholder normalization.
+2. Integration: reconciler workflows with fake providers and conflict handling.
+3. E2E: CLI workflows using representative stacks and fixture trees.
 
 Acceptance contracts:
 1. Reconciler idempotency for repeated apply.
-2. Stable diff ordering.
-3. Typed error categories for all failure classes.
+2. Stable diff ordering for equivalent inputs.
+3. Typed error categories for all major failure classes.
 
 ## Required Scenario Coverage
-1. Metadata precedence with wildcard/literal collisions.
-2. Relative template resolution across nested paths.
-3. Alias/ID divergence handling in `resource.Resource`.
-4. Secret placeholder behavior for valid and invalid scopes.
-5. Path traversal rejection in repository operations.
-6. Deterministic diff/compare with suppression/filter semantics.
-7. CLI validation errors and destructive-operation safeguards.
-8. Reconciler idempotency under repeated apply.
-9. Context config precedence and invalid override handling.
-10. OpenAPI-assisted request construction with safe fallback behavior.
-11. Repository sync conflict classes and actionable outcomes.
-12. File-organization policy scenarios for split vs cohesive files.
-13. CLI package boundary checks rejecting direct provider implementation imports.
-14. Repository list/delete recursion policy behavior and deterministic ordering.
-15. `repo status` output contract for auto text and structured JSON/YAML modes.
-16. Missing context catalog behavior (`list` empty vs `current/resolve` `NotFoundError`) is covered.
-17. `config create/update/validate` strict input decoding rejects unknown JSON/YAML fields.
-18. Interactive config flows (`create/use/rename/delete`) are covered for TTY success paths and non-TTY validation failures.
-19. `config show` is covered for `--context` selection, interactive fallback selection, non-interactive validation failure, and YAML output contract.
-20. Context persistence compacts `metadata.base-dir` when equal to repository base-dir, and `ResolveContext` restores the default value.
-21. E2E profile selection (`basic|full|manual`) maps to expected workload scope and step flow.
-22. Manual profile rejects remote-only selections and emits a temporary context config for manual interaction.
-23. E2E runtime output reports grouped progress steps with deterministic status transitions (`RUNNING`, `OK`, `FAIL`, `SKIP`).
-24. Case requirement filtering skips unsupported cases unless explicitly mandatory for the selected stack.
+1. Metadata precedence: wildcard/literal collisions and template resolution (including relative references).
+2. Repository safety: traversal rejection and deterministic list/delete recursion behavior.
+3. Identity handling: alias/ID divergence and ambiguity conflict detection.
+4. Secrets lifecycle: detect/mask/resolve/normalize behavior and non-disclosure guarantees.
+5. Compare/diff semantics: suppression/filter rules and stable output.
+6. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
+7. Context config: strict decode, one-of validation, overrides precedence, and missing-catalog behavior.
+8. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
+9. Repository sync: conflict classes, actionable outcomes, and `repo status` output contract.
+10. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
+11. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.
+12. Resource-server fixtures: metadata identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
 
 ## Failure Modes
-1. Tests pass locally but rely on non-deterministic ordering.
-2. Missing regression tests for changed metadata behavior.
-3. Security checks bypassed by direct provider calls.
-4. Snapshot tests containing secrets.
+1. Tests pass locally with hidden non-determinism.
+2. Changed behavior lacks regression coverage.
+3. Security-sensitive paths bypass required safeguards.
+4. Snapshot/log artifacts leak secret values.
 
 ## Edge Cases
-1. Empty payload comparison after suppression removes all fields.
-2. Secret normalization across equivalent placeholders.
-3. Non-unique alias conflict during apply.
-4. Refresh flow with partially configured server context.
+1. Suppression removes all comparable fields.
+2. Equivalent secret placeholders normalize differently.
+3. Non-unique alias appears during apply/refresh.
+4. Remote workflow runs with partially configured context.
 
 ## Examples
-1. Unit test verifies metadata merge order across wildcard and literal candidates.
-2. Integration test asserts `ConflictError` category when push detects divergence.
-3. E2E test validates `resource delete` requires explicit force for collection targets.
+1. Unit test verifies deterministic metadata merge order across wildcard and literal layers.
+2. Integration test asserts `ConflictError` when repository sync detects divergence.
+3. E2E test validates collection delete safety gates and deterministic summary output.

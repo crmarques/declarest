@@ -1,0 +1,4 @@
+{
+  "name": "declarest-readonly",
+  "policy": "path \"secret/data/declarest/*\" { capabilities = [\"read\", \"list\"] }"
+}

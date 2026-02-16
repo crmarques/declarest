@@ -1,0 +1,8 @@
+{
+  "id": "idp-0001",
+  "alias": "github-sso",
+  "realm": "platform",
+  "providerId": "oidc",
+  "enabled": true,
+  "displayName": "GitHub SSO"
+}

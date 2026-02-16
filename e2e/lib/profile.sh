@@ -1,30 +1,9 @@
 #!/usr/bin/env bash
 
 e2e_apply_profile_defaults() {
-  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
-    return 0
-  fi
-
-  if e2e_is_explicit 'resource-server' || \
-    e2e_is_explicit 'resource-server-connection' || \
-    e2e_is_explicit 'repo-type' || \
-    e2e_is_explicit 'git-provider' || \
-    e2e_is_explicit 'git-provider-connection' || \
-    e2e_is_explicit 'secret-provider' || \
-    e2e_is_explicit 'secret-provider-connection'; then
-    return 0
-  fi
-
-  E2E_SELECTED_BY_PROFILE_DEFAULT=1
-
-  # Manual profile default: maximal local-instantiable stack.
-  E2E_RESOURCE_SERVER='keycloak'
-  E2E_RESOURCE_SERVER_CONNECTION='local'
-  E2E_REPO_TYPE='git'
-  E2E_GIT_PROVIDER='gitlab'
-  E2E_GIT_PROVIDER_CONNECTION='local'
-  E2E_SECRET_PROVIDER='vault'
-  E2E_SECRET_PROVIDER_CONNECTION='local'
+  # Profiles share the same component defaults from args parsing.
+  # Manual mode only changes workload behavior (handoff vs automated cases).
+  return 0
 }
 
 e2e_validate_profile_rules() {
@@ -61,9 +40,8 @@ e2e_profile_scopes() {
   esac
 }
 
-e2e_profile_manual_handoff() {
+e2e_manual_handoff_print() {
   local context_name=$1
-
   cat <<EOFH
 Manual profile is ready.
 
@@ -76,11 +54,30 @@ To use it in another shell:
   ${E2E_BIN} --context ${context_name} repo status -o json
   ${E2E_BIN} --context ${context_name} resource list / --source local -o json
 
+Stop options:
+  Ctrl+C in this terminal
+  kill -INT ${E2E_RUNNER_PID:-$$}
+  ./run-e2e.sh --clean ${E2E_RUN_ID:-<run-id>}
+
 You can edit the context file above while components are running.
 EOFH
+}
+
+e2e_profile_manual_handoff() {
+  local context_name=$1
+
+  if [[ -w /dev/tty ]]; then
+    e2e_manual_handoff_print "${context_name}" >/dev/tty
+  else
+    e2e_manual_handoff_print "${context_name}"
+  fi
 
   if [[ -t 0 ]]; then
-    printf '\nPress ENTER to finish manual session (or Ctrl+C).\n'
+    if [[ -w /dev/tty ]]; then
+      printf '\nPress ENTER to finish manual session (or Ctrl+C).\n' >/dev/tty
+    else
+      printf '\nPress ENTER to finish manual session (or Ctrl+C).\n'
+    fi
     read -r _
   else
     e2e_warn 'manual profile running in non-interactive mode; waiting for interruption'

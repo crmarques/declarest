@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # shellcheck disable=SC1091
+source "${E2E_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
 source "${E2E_COMPONENT_STATE_FILE}"
 
 if [[ "${E2E_COMPONENT_CONNECTION}" != 'local' ]]; then
@@ -23,8 +25,14 @@ wait_for() {
   done
 
   printf 'healthcheck failed for %s: %s\n' "${name}" "${url}" >&2
+  if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
+    local compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+    if [[ -f "${compose_file}" ]]; then
+      e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
+      e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs keycloak >&2 || true
+    fi
+  fi
   return 1
 }
 
 wait_for 'keycloak' "${KEYCLOAK_BASE_URL}/realms/master"
-wait_for 'resource-api' "${RESOURCE_API_BASE_URL}/healthz"

@@ -1,0 +1,24 @@
+{
+  "idFromAttribute": "name",
+  "aliasFromAttribute": "name",
+  "operations": {
+    "create": {
+      "path": "{{.logicalPath}}"
+    },
+    "get": {
+      "path": "{{.logicalPath}}"
+    },
+    "update": {
+      "path": "{{.logicalPath}}"
+    },
+    "delete": {
+      "path": "{{.logicalPath}}"
+    },
+    "list": {
+      "path": "{{.collectionPath}}"
+    },
+    "compare": {
+      "path": "{{.logicalPath}}"
+    }
+  }
+}

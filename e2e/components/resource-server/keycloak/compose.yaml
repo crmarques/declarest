@@ -1,20 +1,9 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.2.5
     command: ["start-dev", "--http-port=8080"]
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "${KEYCLOAK_HOST_PORT}:8080"
-
-  resource-api:
-    image: python:3.12-alpine
-    command: ["python", "/app/resource_api.py"]
-    environment:
-      RESOURCE_API_PORT: "8080"
-      RESOURCE_API_REQUIRE_AUTH: "true"
-    volumes:
-      - ./fixtures/resource_api.py:/app/resource_api.py:ro
-    ports:
-      - "${RESOURCE_API_HOST_PORT}:8080"

@@ -1,0 +1,8 @@
+{
+  "id": "idp-0002",
+  "alias": "gitlab-sso",
+  "realm": "platform",
+  "providerId": "oidc",
+  "enabled": true,
+  "displayName": "GitLab SSO"
+}

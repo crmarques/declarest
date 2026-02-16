@@ -1,0 +1,9 @@
+{
+  "idFromAttribute": "realm",
+  "aliasFromAttribute": "realm",
+  "operations": {
+    "create": {
+      "path": "/admin/realms"
+    }
+  }
+}

@@ -9,40 +9,40 @@ state_file=${E2E_COMPONENT_STATE_FILE}
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   keycloak_port=$(e2e_pick_free_port)
-  api_port=$(e2e_pick_free_port)
-
   admin_user='admin'
   admin_password="admin-${RANDOM}${RANDOM}"
-  realm='declarest-e2e'
+  realm='master'
   client_id='declarest-e2e-client'
   client_secret="client-${RANDOM}${RANDOM}${RANDOM}"
 
   e2e_write_state_value "${state_file}" KEYCLOAK_HOST_PORT "${keycloak_port}"
-  e2e_write_state_value "${state_file}" RESOURCE_API_HOST_PORT "${api_port}"
   e2e_write_state_value "${state_file}" KEYCLOAK_ADMIN_USER "${admin_user}"
   e2e_write_state_value "${state_file}" KEYCLOAK_ADMIN_PASSWORD "${admin_password}"
   e2e_write_state_value "${state_file}" KEYCLOAK_REALM "${realm}"
   e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_ID "${client_id}"
   e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_SECRET "${client_secret}"
   e2e_write_state_value "${state_file}" KEYCLOAK_BASE_URL "http://127.0.0.1:${keycloak_port}"
-  e2e_write_state_value "${state_file}" RESOURCE_API_BASE_URL "http://127.0.0.1:${api_port}"
+  e2e_write_state_value "${state_file}" RESOURCE_SERVER_BASE_URL "http://127.0.0.1:${keycloak_port}"
   e2e_write_state_value "${state_file}" KEYCLOAK_TOKEN_URL "http://127.0.0.1:${keycloak_port}/realms/${realm}/protocol/openid-connect/token"
   exit 0
 fi
 
-: "${E2E_RESOURCE_SERVER_BASE_URL:?missing env E2E_RESOURCE_SERVER_BASE_URL}"
-: "${E2E_KEYCLOAK_TOKEN_URL:?missing env E2E_KEYCLOAK_TOKEN_URL}"
-: "${E2E_KEYCLOAK_CLIENT_ID:?missing env E2E_KEYCLOAK_CLIENT_ID}"
-: "${E2E_KEYCLOAK_CLIENT_SECRET:?missing env E2E_KEYCLOAK_CLIENT_SECRET}"
+resource_server_base_url=$(e2e_require_env 'DECLAREST_E2E_RESOURCE_SERVER_BASE_URL' 'E2E_RESOURCE_SERVER_BASE_URL') || exit 1
+keycloak_token_url=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_TOKEN_URL' 'E2E_KEYCLOAK_TOKEN_URL') || exit 1
+keycloak_client_id=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_ID' 'E2E_KEYCLOAK_CLIENT_ID') || exit 1
+keycloak_client_secret=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET' 'E2E_KEYCLOAK_CLIENT_SECRET') || exit 1
+keycloak_scope=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_SCOPE' 'E2E_KEYCLOAK_SCOPE' || true)
+keycloak_audience=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_AUDIENCE' 'E2E_KEYCLOAK_AUDIENCE' || true)
 
-e2e_write_state_value "${state_file}" RESOURCE_API_BASE_URL "${E2E_RESOURCE_SERVER_BASE_URL}"
-e2e_write_state_value "${state_file}" KEYCLOAK_TOKEN_URL "${E2E_KEYCLOAK_TOKEN_URL}"
-e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_ID "${E2E_KEYCLOAK_CLIENT_ID}"
-e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_SECRET "${E2E_KEYCLOAK_CLIENT_SECRET}"
+e2e_write_state_value "${state_file}" KEYCLOAK_BASE_URL "${resource_server_base_url}"
+e2e_write_state_value "${state_file}" RESOURCE_SERVER_BASE_URL "${resource_server_base_url}"
+e2e_write_state_value "${state_file}" KEYCLOAK_TOKEN_URL "${keycloak_token_url}"
+e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_ID "${keycloak_client_id}"
+e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_SECRET "${keycloak_client_secret}"
 
-if [[ -n "${E2E_KEYCLOAK_SCOPE:-}" ]]; then
-  e2e_write_state_value "${state_file}" KEYCLOAK_SCOPE "${E2E_KEYCLOAK_SCOPE}"
+if [[ -n "${keycloak_scope}" ]]; then
+  e2e_write_state_value "${state_file}" KEYCLOAK_SCOPE "${keycloak_scope}"
 fi
-if [[ -n "${E2E_KEYCLOAK_AUDIENCE:-}" ]]; then
-  e2e_write_state_value "${state_file}" KEYCLOAK_AUDIENCE "${E2E_KEYCLOAK_AUDIENCE}"
+if [[ -n "${keycloak_audience}" ]]; then
+  e2e_write_state_value "${state_file}" KEYCLOAK_AUDIENCE "${keycloak_audience}"
 fi
