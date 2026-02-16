@@ -159,3 +159,37 @@ Expected outputs:
 1. `auto` prints deterministic text summary.
 2. `json` and `yaml` include stable `state`, `ahead`, `behind`, `hasUncommitted`.
 3. Operation does not mutate repository state.
+
+### Example 8: Profile-Scoped E2E Execution
+Goal: ensure profile selection controls case scope without overriding component stack flags.
+
+Inputs:
+1. Command `run-e2e.sh --profile basic --repo-type filesystem`.
+2. Command `run-e2e.sh --profile full --repo-type filesystem`.
+
+Execution:
+1. `basic` resolves and runs only `main` cases whose requirements match the selected stack.
+2. `full` resolves and runs `main` plus `corner` cases whose requirements match the selected stack.
+3. Runner reports grouped steps with deterministic status transitions.
+
+Expected outputs:
+1. `basic` excludes `corner` cases.
+2. `full` includes `corner` cases.
+3. Both commands keep explicit component selections unchanged.
+
+### Example 9: Manual Profile Interactive Handoff
+Goal: start components and expose a temporary context catalog for user-driven verification.
+
+Inputs:
+1. Command `run-e2e.sh --profile manual`.
+2. Optional explicit local component flags.
+
+Execution:
+1. Runner initializes selected local-instantiable components.
+2. Runner generates temporary `contexts.yaml` under run artifacts.
+3. Runner prints export and sample CLI commands, then waits for user exit.
+
+Expected outputs:
+1. Temporary context config exists and is usable by CLI commands.
+2. Remote selections are rejected for manual profile with actionable validation output.
+3. Teardown runs only after manual session exits (unless keep-runtime is enabled).

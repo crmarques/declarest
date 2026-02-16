@@ -59,3 +59,6 @@ Thumbs.db
 .env
 .env.*
 .venv/
+
+# E2E runtime artifacts
+e2e/.runs/

@@ -26,6 +26,7 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 | `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
 | `agents/reference/reconciler.md` | Orchestration and reconciliation flows | Apply/refresh/diff/list workflows |
 | `agents/reference/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
+| `agents/reference/e2e.md` | E2E harness and component contracts | E2E profile logic, component onboarding, runtime step orchestration |
 | `agents/reference/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
 | `agents/reference/use-cases.md` | End-to-end examples and edge cases | Scenario design and acceptance tests |
 
@@ -37,6 +38,7 @@ This bootstrap file defines how coding agents operate in this repository rebuild
 | Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/resource-server.md`, `agents/reference/quality.md` |
 | Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/reconciler.md`, `agents/reference/quality.md` |
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
+| E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 | Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
 | Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/quality.md` |
 

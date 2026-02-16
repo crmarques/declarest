@@ -22,6 +22,7 @@ description: Route engineering requests to the minimum required files in new-age
 6. Secret lifecycle request: load `agents/reference/secrets.md`, `agents/reference/reconciler.md`, `agents/reference/quality.md`.
 7. CLI behavior request: load `agents/reference/cli.md`, `agents/reference/reconciler.md`, `agents/reference/quality.md`.
 8. Spec-authoring request: load target file and `agents/reference/code.md` for writing standards.
+9. E2E harness or stack-orchestration request: load `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md`.
 
 ## Guardrails
 1. Prefer explicit bounded-context file selection.

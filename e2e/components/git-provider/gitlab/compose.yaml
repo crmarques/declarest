@@ -1,0 +1,11 @@
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:17.5.1-ce.0
+    hostname: gitlab.local
+    shm_size: '256m'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://127.0.0.1:${GITLAB_HTTP_PORT}'
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD}
+    ports:
+      - "${GITLAB_HTTP_PORT}:80"

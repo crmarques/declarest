@@ -29,6 +29,10 @@ Test layers:
 1. Unit: pure transforms, path normalization, metadata merge/render, secret placeholder normalization.
 2. Integration: reconciler with fake providers and conflict handling.
 3. E2E: CLI workflows with representative contexts and fixtures.
+4. E2E profiles:
+   `basic`: all `main` cases with matched capabilities.
+   `full`: all `main` + `corner` cases with matched capabilities.
+   `manual`: environment bring-up and interactive handoff without automated assertions.
 
 Acceptance contracts:
 1. Reconciler idempotency for repeated apply.
@@ -56,6 +60,10 @@ Acceptance contracts:
 18. Interactive config flows (`create/use/rename/delete`) are covered for TTY success paths and non-TTY validation failures.
 19. `config show` is covered for `--context` selection, interactive fallback selection, non-interactive validation failure, and YAML output contract.
 20. Context persistence compacts `metadata.base-dir` when equal to repository base-dir, and `ResolveContext` restores the default value.
+21. E2E profile selection (`basic|full|manual`) maps to expected workload scope and step flow.
+22. Manual profile rejects remote-only selections and emits a temporary context config for manual interaction.
+23. E2E runtime output reports grouped progress steps with deterministic status transitions (`RUNNING`, `OK`, `FAIL`, `SKIP`).
+24. Case requirement filtering skips unsupported cases unless explicitly mandatory for the selected stack.
 
 ## Failure Modes
 1. Tests pass locally but rely on non-deterministic ordering.

@@ -7,10 +7,11 @@ GOFLAGS ?= -mod=readonly
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/declarest
 TEST_FLAGS ?= -race
+E2E_FLAGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test check build run install clean tidy
+.PHONY: help fmt vet lint test e2e check build run install clean tidy
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -33,6 +34,9 @@ lint: ## Run golangci-lint if available, otherwise fall back to go vet
 
 test: ## Run the test suite with race detection
 	$(GO) test $(TEST_FLAGS) ./...
+
+e2e: ## Run end-to-end tests (supports E2E_FLAGS='--profile full ...')
+	bash ./run-e2e.sh $(E2E_FLAGS)
 
 check: fmt lint test ## Run formatting, linting, and tests
 
