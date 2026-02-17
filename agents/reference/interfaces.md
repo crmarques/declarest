@@ -115,9 +115,10 @@ Holds behavior directives for a resource or collection.
 
 Contract groups:
 1. identity mapping (`idFromAttribute`, `aliasFromAttribute`).
-2. operation directives (`path`, `method`, `query`, `headers`).
-3. transforms (`filter`, `suppress`, `jq`).
-4. template directives and defaults.
+2. secret mapping (`secretsFromAttributes`).
+3. operation directives (`path`, `method`, `query`, `headers`).
+4. transforms (`filter`, `suppress`, `jq`).
+5. template directives and defaults.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.

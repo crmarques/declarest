@@ -1,8 +1,7 @@
 package resource
 
 import (
-	"fmt"
-	"io"
+	"context"
 
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/resource"
@@ -11,6 +10,7 @@ import (
 
 func newApplyCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
+	var recursive bool
 
 	command := &cobra.Command{
 		Use:   "apply [path]",
@@ -30,20 +30,29 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 			if err != nil {
 				return err
 			}
-			item, err := orchestratorService.Apply(command.Context(), resolvedPath)
+
+			targets, err := listLocalMutationTargets(command.Context(), orchestratorService, resolvedPath, recursive)
+			if err != nil {
+				return err
+			}
+			items, err := executeMutationForTargets(
+				command.Context(),
+				targets,
+				func(ctx context.Context, logicalPath string) (resource.Resource, error) {
+					return orchestratorService.Apply(ctx, logicalPath)
+				},
+			)
 			if err != nil {
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, item, func(w io.Writer, value resource.Resource) error {
-				_, writeErr := fmt.Fprintln(w, value.LogicalPath)
-				return writeErr
-			})
+			return writeCollectionMutationOutput(command, outputFormat, resolvedPath, items)
 		},
 	}
 
 	common.BindPathFlag(command, &pathFlag)
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	return command
 }

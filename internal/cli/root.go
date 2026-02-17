@@ -36,23 +36,16 @@ Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCo
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .LocalNonPersistentFlags.HasAvailableFlags}}
 
 Flags:
-{{.LocalNonPersistentFlags.FlagUsages | trimTrailingWhitespaces}}
-{{end}}
-{{if or .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
+{{.LocalNonPersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if or .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
 
 Global Flags:
 {{if .HasAvailableInheritedFlags}}{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}
 {{end}}{{if and .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
-{{end}}{{if .HasAvailablePersistentFlags}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}
-{{end}}
-{{end}}
-{{if .HasHelpSubCommands}}
+{{end}}{{if .HasAvailablePersistentFlags}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{end}}{{if .HasHelpSubCommands}}
 
 Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}
-{{if .HasAvailableSubCommands}}
-
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+{{if .HasAvailableSubCommands}}Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
 
 func NewRootCommand(deps Dependencies) *cobra.Command {
@@ -92,12 +85,6 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.SetUsageTemplate(usageTemplate)
-
-	root.SetHelpCommand(&cobra.Command{
-		Use:     "__help",
-		Hidden:  true,
-		GroupID: "other",
-	})
 
 	common.BindGlobalFlags(root, &globalFlags)
 	common.RegisterContextFlagCompletion(root, commandDeps)

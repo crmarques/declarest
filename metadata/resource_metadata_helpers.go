@@ -4,12 +4,13 @@ import "sort"
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
-		IDFromAttribute:    value.IDFromAttribute,
-		AliasFromAttribute: value.AliasFromAttribute,
-		Operations:         make(map[string]OperationSpec, len(value.Operations)),
-		Filter:             cloneStringSlice(value.Filter),
-		Suppress:           cloneStringSlice(value.Suppress),
-		JQ:                 value.JQ,
+		IDFromAttribute:       value.IDFromAttribute,
+		AliasFromAttribute:    value.AliasFromAttribute,
+		SecretsFromAttributes: cloneStringSlice(value.SecretsFromAttributes),
+		Operations:            make(map[string]OperationSpec, len(value.Operations)),
+		Filter:                cloneStringSlice(value.Filter),
+		Suppress:              cloneStringSlice(value.Suppress),
+		JQ:                    value.JQ,
 	}
 
 	for key, operationSpec := range value.Operations {
@@ -32,12 +33,13 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 
 func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) ResourceMetadata {
 	merged := ResourceMetadata{
-		IDFromAttribute:    base.IDFromAttribute,
-		AliasFromAttribute: base.AliasFromAttribute,
-		Operations:         cloneOperationMap(base.Operations),
-		Filter:             cloneStringSlice(base.Filter),
-		Suppress:           cloneStringSlice(base.Suppress),
-		JQ:                 base.JQ,
+		IDFromAttribute:       base.IDFromAttribute,
+		AliasFromAttribute:    base.AliasFromAttribute,
+		SecretsFromAttributes: cloneStringSlice(base.SecretsFromAttributes),
+		Operations:            cloneOperationMap(base.Operations),
+		Filter:                cloneStringSlice(base.Filter),
+		Suppress:              cloneStringSlice(base.Suppress),
+		JQ:                    base.JQ,
 	}
 
 	if overlay.IDFromAttribute != "" {
@@ -45,6 +47,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 	if overlay.AliasFromAttribute != "" {
 		merged.AliasFromAttribute = overlay.AliasFromAttribute
+	}
+	if overlay.SecretsFromAttributes != nil {
+		merged.SecretsFromAttributes = cloneStringSlice(overlay.SecretsFromAttributes)
 	}
 	if overlay.Operations != nil {
 		if merged.Operations == nil {

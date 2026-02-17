@@ -17,6 +17,7 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 	ctx := context.Background()
 
 	resourceMetadata := metadatadomain.ResourceMetadata{
+		SecretsFromAttributes: []string{"credentials.authValue"},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {Path: "/api/customers/{{.id}}"},
 		},
@@ -149,6 +150,32 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	}
 	if headers["X-Root"] != "true" || headers["X-Literal"] != "true" || headers["X-Resource"] != "true" {
 		t.Fatalf("expected merged headers from all layers, got %+v", headers)
+	}
+}
+
+func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir(), "")
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
+		SecretsFromAttributes: []string{"credentials.rootSecret"},
+	})
+	mustSetMetadata(t, service, ctx, "/customers/*", metadatadomain.ResourceMetadata{
+		SecretsFromAttributes: []string{"credentials.wildcardSecret"},
+	})
+	mustSetMetadata(t, service, ctx, "/customers/acme/_", metadatadomain.ResourceMetadata{
+		SecretsFromAttributes: []string{"credentials.literalSecret"},
+	})
+
+	resolved, err := service.ResolveForPath(ctx, "/customers/acme")
+	if err != nil {
+		t.Fatalf("ResolveForPath returned error: %v", err)
+	}
+	expected := []string{"credentials.literalSecret"}
+	if !reflect.DeepEqual(expected, resolved.SecretsFromAttributes) {
+		t.Fatalf("expected literal layer to replace secret attributes, got %#v", resolved.SecretsFromAttributes)
 	}
 }
 

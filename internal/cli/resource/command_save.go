@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
@@ -13,6 +14,7 @@ import (
 	"github.com/crmarques/declarest/internal/support/identity"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +23,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	var input common.InputFlags
 	var asItems bool
 	var asOneResource bool
+	var insecure bool
 
 	command := &cobra.Command{
 		Use:   "save [path]",
@@ -51,6 +54,9 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 			}
 
 			if asOneResource || (!asItems && !isListPayload) {
+				if err := enforceSaveSecretSafety(command.Context(), deps, resolvedPath, value, insecure); err != nil {
+					return err
+				}
 				return orchestratorService.Save(command.Context(), resolvedPath, value)
 			}
 			if !isListPayload {
@@ -60,6 +66,11 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 			entries, err := resolveSaveEntriesForItems(command.Context(), deps, resolvedPath, items)
 			if err != nil {
 				return err
+			}
+			for _, entry := range entries {
+				if err := enforceSaveSecretSafety(command.Context(), deps, entry.LogicalPath, entry.Payload, insecure); err != nil {
+					return err
+				}
 			}
 			for _, entry := range entries {
 				if err := orchestratorService.Save(command.Context(), entry.LogicalPath, entry.Payload); err != nil {
@@ -77,6 +88,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	common.BindInputFlags(command, &input)
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
+	command.Flags().BoolVar(&insecure, "insecure", false, "allow saving potential plaintext secrets")
 	return command
 }
 
@@ -223,6 +235,167 @@ func buildLogicalPathForSave(collectionPath string, alias string) (string, error
 		joined = "/" + joined
 	}
 	return resource.NormalizeLogicalPath(joined)
+}
+
+func enforceSaveSecretSafety(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+	value resource.Value,
+	insecure bool,
+) error {
+	if insecure {
+		return nil
+	}
+
+	candidates, err := detectSaveSecretCandidates(ctx, deps, logicalPath, value)
+	if err != nil {
+		return err
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	return common.ValidationError(
+		fmt.Sprintf(
+			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --insecure",
+			logicalPath,
+			strings.Join(candidates, ", "),
+		),
+		nil,
+	)
+}
+
+func detectSaveSecretCandidates(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+	value resource.Value,
+) ([]string, error) {
+	normalizedValue, err := resource.Normalize(value)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates := make(map[string]struct{})
+
+	heuristicCandidates, err := detectHeuristicSecretCandidates(ctx, deps, normalizedValue)
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range heuristicCandidates {
+		candidates[candidate] = struct{}{}
+	}
+
+	resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, logicalPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range detectMetadataSecretCandidates(normalizedValue, resolvedMetadata.SecretsFromAttributes) {
+		candidates[candidate] = struct{}{}
+	}
+
+	result := make([]string, 0, len(candidates))
+	for candidate := range candidates {
+		result = append(result, candidate)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func detectHeuristicSecretCandidates(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	value resource.Value,
+) ([]string, error) {
+	if deps.Secrets != nil {
+		return deps.Secrets.DetectSecretCandidates(ctx, value)
+	}
+
+	return secretdomain.DetectSecretCandidates(value)
+}
+
+func resolveMetadataForSecretCheck(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+) (metadatadomain.ResourceMetadata, error) {
+	if deps.Metadata == nil {
+		return metadatadomain.ResourceMetadata{}, nil
+	}
+
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+
+	resolvedMetadata, err := deps.Metadata.ResolveForPath(ctx, normalizedPath)
+	if err != nil {
+		if isTypedErrorCategory(err, faults.NotFoundError) {
+			return metadatadomain.ResourceMetadata{}, nil
+		}
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	return resolvedMetadata, nil
+}
+
+func detectMetadataSecretCandidates(value resource.Value, attributes []string) []string {
+	payload, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	candidates := make([]string, 0)
+	seenAttributes := make(map[string]struct{})
+	for _, rawAttribute := range attributes {
+		attribute := strings.TrimSpace(rawAttribute)
+		if attribute == "" {
+			continue
+		}
+		if _, seen := seenAttributes[attribute]; seen {
+			continue
+		}
+		seenAttributes[attribute] = struct{}{}
+
+		fieldValue, found := identity.LookupScalarAttribute(payload, attribute)
+		if !found || strings.TrimSpace(fieldValue) == "" {
+			continue
+		}
+		if isSecretPlaceholderValue(fieldValue) {
+			continue
+		}
+		candidates = append(candidates, attribute)
+	}
+
+	sort.Strings(candidates)
+	return candidates
+}
+
+func isSecretPlaceholderValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if !strings.HasPrefix(trimmed, "{{") || !strings.HasSuffix(trimmed, "}}") {
+		return false
+	}
+
+	inner := strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}")
+	inner = strings.TrimSpace(inner)
+	if !strings.HasPrefix(inner, "secret") {
+		return false
+	}
+
+	argument := strings.TrimSpace(strings.TrimPrefix(inner, "secret"))
+	if argument == "." {
+		return true
+	}
+	if !strings.HasPrefix(argument, "\"") {
+		return false
+	}
+
+	parsed, err := strconv.Unquote(argument)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(parsed) != ""
 }
 
 func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {

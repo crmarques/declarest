@@ -17,12 +17,13 @@ type InferenceRequest struct {
 }
 
 type ResourceMetadata struct {
-	IDFromAttribute    string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
-	Operations         map[string]OperationSpec `json:"operations" yaml:"operations"`
-	Filter             []string                 `json:"filter" yaml:"filter"`
-	Suppress           []string                 `json:"suppress" yaml:"suppress"`
-	JQ                 string                   `json:"jq,omitempty" yaml:"jq,omitempty"`
+	IDFromAttribute       string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
+	AliasFromAttribute    string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	SecretsFromAttributes []string                 `json:"secretsFromAttributes" yaml:"secretsFromAttributes"`
+	Operations            map[string]OperationSpec `json:"operations" yaml:"operations"`
+	Filter                []string                 `json:"filter" yaml:"filter"`
+	Suppress              []string                 `json:"suppress" yaml:"suppress"`
+	JQ                    string                   `json:"jq,omitempty" yaml:"jq,omitempty"`
 }
 
 type OperationSpec struct {

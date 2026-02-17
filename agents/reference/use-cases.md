@@ -302,3 +302,30 @@ Expected outputs:
 
 Failure expectation:
 1. Selecting both `--resource-server-basic-auth=true` and `--resource-server-oauth2=true` fails run selection before startup.
+
+### Example 15: Secret Detect Metadata Autofix
+Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.
+
+Inputs:
+1. Local repository resources under `/customers` containing potential secret-like attributes.
+2. Optional payload input with detected keys (for example `apiToken`, `password`).
+3. `declarest secret detect` (repository-scan mode, whole repo scope).
+4. `declarest secret detect /customers --fix` (repository-scan scoped metadata autofix).
+5. `declarest secret detect /customers/acme --fix < payload.json` (payload mode metadata autofix).
+6. Optional `--secret-attribute password`.
+
+Execution:
+1. Without payload input, CLI scans local repository resources recursively under requested path (or `/` when path omitted).
+2. With payload input, CLI detects secret candidates from payload content.
+3. When `--secret-attribute` is provided, CLI filters to exactly one detected attribute.
+4. In `--fix` mode, CLI loads existing metadata for each target path (or initializes empty metadata when missing).
+5. CLI merges filtered detected attributes into `secretsFromAttributes` and persists metadata.
+
+Expected outputs:
+1. Repository-scan output groups detected attributes by logical resource path with deterministic ordering.
+2. Metadata for fixed paths contains deterministic, deduplicated `secretsFromAttributes`.
+3. Existing metadata directives remain preserved.
+
+Failure expectation:
+1. `declarest secret detect --fix < payload.json` without path fails with `ValidationError`.
+2. `declarest secret detect /customers --secret-attribute unknown` fails with `ValidationError`.

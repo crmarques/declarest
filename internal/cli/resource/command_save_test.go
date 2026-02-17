@@ -3,11 +3,13 @@ package resource
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	resourcedomain "github.com/crmarques/declarest/resource"
 )
 
 func TestExtractSaveListItems(t *testing.T) {
@@ -148,6 +150,125 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	})
 }
 
+func TestDetectSaveSecretCandidates(t *testing.T) {
+	t.Parallel()
+
+	t.Run("metadata_secrets_from_attributes_detects_plaintext", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"credentials.authValue"},
+				},
+			},
+			Secrets: &fakeSaveSecretProvider{},
+		}
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), deps, "/customers/acme", map[string]any{
+			"credentials": map[string]any{"authValue": "plain-secret"},
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+
+		if len(candidates) != 1 || candidates[0] != "credentials.authValue" {
+			t.Fatalf("expected metadata candidate, got %#v", candidates)
+		}
+	})
+
+	t.Run("metadata_secrets_from_attributes_ignores_placeholders", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"credentials.authValue"},
+				},
+			},
+			Secrets: &fakeSaveSecretProvider{},
+		}
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), deps, "/customers/acme", map[string]any{
+			"credentials": map[string]any{"authValue": `{{secret "authValue"}}`},
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+		if len(candidates) != 0 {
+			t.Fatalf("expected no candidates for placeholder, got %#v", candidates)
+		}
+	})
+
+	t.Run("falls_back_to_builtin_detection_without_secret_provider", func(t *testing.T) {
+		t.Parallel()
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), common.CommandDependencies{}, "/customers/acme", map[string]any{
+			"password": "plain-secret",
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+		if len(candidates) != 1 || candidates[0] != "password" {
+			t.Fatalf("expected password candidate, got %#v", candidates)
+		}
+	})
+
+	t.Run("secret_provider_error_is_returned", func(t *testing.T) {
+		t.Parallel()
+
+		expectedErr := faults.NewTypedError(faults.TransportError, "detect failed", nil)
+		deps := common.CommandDependencies{
+			Secrets: &fakeSaveSecretProvider{detectErr: expectedErr},
+		}
+
+		_, err := detectSaveSecretCandidates(context.Background(), deps, "/customers/acme", map[string]any{
+			"password": "plain-secret",
+		})
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected detect error %v, got %v", expectedErr, err)
+		}
+	})
+}
+
+func TestEnforceSaveSecretSafety(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fails_without_insecure_when_plaintext_secret_detected", func(t *testing.T) {
+		t.Parallel()
+
+		err := enforceSaveSecretSafety(
+			context.Background(),
+			common.CommandDependencies{},
+			"/customers/acme",
+			map[string]any{"password": "plain-secret"},
+			false,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "warning: potential plaintext secrets detected") {
+			t.Fatalf("expected warning in error message, got %q", err.Error())
+		}
+		if !strings.Contains(err.Error(), "--insecure") {
+			t.Fatalf("expected --insecure hint in error message, got %q", err.Error())
+		}
+	})
+
+	t.Run("allows_plaintext_secret_when_insecure_is_enabled", func(t *testing.T) {
+		t.Parallel()
+
+		err := enforceSaveSecretSafety(
+			context.Background(),
+			common.CommandDependencies{},
+			"/customers/acme",
+			map[string]any{"password": "plain-secret"},
+			true,
+		)
+		if err != nil {
+			t.Fatalf("enforceSaveSecretSafety returned error: %v", err)
+		}
+	})
+}
+
 func TestIsTypedErrorCategory(t *testing.T) {
 	t.Parallel()
 
@@ -205,6 +326,34 @@ func (f *fakeSaveMetadataService) Infer(
 	metadatadomain.InferenceRequest,
 ) (metadatadomain.ResourceMetadata, error) {
 	return metadatadomain.ResourceMetadata{}, nil
+}
+
+type fakeSaveSecretProvider struct {
+	detectedCandidates []string
+	detectErr          error
+}
+
+func (f *fakeSaveSecretProvider) Init(context.Context) error { return nil }
+func (f *fakeSaveSecretProvider) Store(context.Context, string, string) error {
+	return nil
+}
+func (f *fakeSaveSecretProvider) Get(context.Context, string) (string, error) { return "", nil }
+func (f *fakeSaveSecretProvider) Delete(context.Context, string) error        { return nil }
+func (f *fakeSaveSecretProvider) List(context.Context) ([]string, error)      { return nil, nil }
+func (f *fakeSaveSecretProvider) MaskPayload(context.Context, resourcedomain.Value) (resourcedomain.Value, error) {
+	return nil, nil
+}
+func (f *fakeSaveSecretProvider) ResolvePayload(context.Context, resourcedomain.Value) (resourcedomain.Value, error) {
+	return nil, nil
+}
+func (f *fakeSaveSecretProvider) NormalizeSecretPlaceholders(context.Context, resourcedomain.Value) (resourcedomain.Value, error) {
+	return nil, nil
+}
+func (f *fakeSaveSecretProvider) DetectSecretCandidates(context.Context, resourcedomain.Value) ([]string, error) {
+	if f.detectErr != nil {
+		return nil, f.detectErr
+	}
+	return f.detectedCandidates, nil
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

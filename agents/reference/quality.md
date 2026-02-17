@@ -54,6 +54,9 @@ Acceptance contracts:
 16. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
 17. Ad-hoc CLI routing: `ad-hoc <method>` maps to managed-server requests with positional/flag path validation and payload decoding from `--file` or stdin.
 18. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
+19. Resource save secret safeguard: `resource save` fails on potential plaintext secrets unless `--insecure` is provided, including metadata-driven `secretsFromAttributes` detection.
+20. Secret detect metadata fix flow: `secret detect` scans repository scope when no payload input is provided (default scope `/`), `secret detect --fix` merges detected attributes into metadata `secretsFromAttributes`, and `--secret-attribute` filtering has negative validation coverage for payload and repository-scan modes.
+21. Resource collection mutations: `resource apply|create|update` execute direct-child collection targets by default, include descendants with `--recursive`, and reject `create|update --recursive` when explicit input payload is provided.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

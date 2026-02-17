@@ -11,23 +11,27 @@ import (
 )
 
 func main() {
-	declarestContext, err := core.NewDeclarestContext(
-		core.BootstrapConfig{},
-		config.ContextSelection{Name: contextNameFromArgs(os.Args[1:])},
-	)
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	deps := cli.Dependencies{
-		Orchestrator: declarestContext.Orchestrator,
-		Contexts:     declarestContext.Contexts,
-		Repository:   declarestContext.Repository,
-		Metadata:     declarestContext.Metadata,
-		Secrets:      declarestContext.Secrets,
+	args := os.Args[1:]
+	deps := cli.Dependencies{}
+	if !shouldSkipContextBootstrap(args) {
+		declarestContext, err := core.NewDeclarestContext(
+			core.BootstrapConfig{},
+			config.ContextSelection{Name: contextNameFromArgs(args)},
+		)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		deps = cli.Dependencies{
+			Orchestrator: declarestContext.Orchestrator,
+			Contexts:     declarestContext.Contexts,
+			Repository:   declarestContext.Repository,
+			Metadata:     declarestContext.Metadata,
+			Secrets:      declarestContext.Secrets,
+		}
 	}
 
-	if err = cli.Execute(deps); err != nil {
+	if err := cli.Execute(deps); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -49,4 +53,64 @@ func contextNameFromArgs(args []string) string {
 	}
 
 	return ""
+}
+
+func isHelpInvocation(args []string) bool {
+	if len(args) == 0 {
+		return true
+	}
+	if args[0] == "help" {
+		return true
+	}
+
+	for _, current := range args {
+		if current == "--" {
+			break
+		}
+		if current == "--help" || current == "-h" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isCompletionInvocation(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+
+	switch args[0] {
+	case "completion", "__complete", "__completeNoDesc":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldSkipContextBootstrap(args []string) bool {
+	return isHelpInvocation(args) || isCompletionInvocation(args) || isHelpFallbackInvocation(args)
+}
+
+func isHelpFallbackInvocation(args []string) bool {
+	probe := cli.NewRootCommand(cli.Dependencies{})
+	command, remainingArgs, err := probe.Find(args)
+	if err != nil {
+		return true
+	}
+	if command == nil {
+		return true
+	}
+	if !command.Runnable() {
+		return true
+	}
+
+	if err := command.ParseFlags(remainingArgs); err != nil {
+		return true
+	}
+	if err := command.ValidateArgs(command.Flags().Args()); err != nil {
+		return true
+	}
+
+	return false
 }

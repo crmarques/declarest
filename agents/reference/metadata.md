@@ -27,10 +27,11 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 
 ## Data Contracts
 Supported metadata groups:
-1. `resourceInfo`: identity and collection directives.
+1. `resourceInfo`: identity, secret-attribute, and collection directives.
 2. `operations.get/create/update/delete/list/compare`: operation-specific directives.
 3. Operation fields: `path`, `method`, `query`, `headers`, `contentType`, `accept`.
 4. Transform fields: `filter`, `suppress`, `jq`.
+5. Resource-level secret detection fields: `secretsFromAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -64,6 +65,7 @@ Template context contract:
 2. Relative template references exceed available ancestor depth.
 3. Compare suppression removes all fields and yields empty normalized payload.
 4. Explicit null directive intended to clear inherited field.
+5. `secretsFromAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
 
 ## Examples
 1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
