@@ -47,5 +47,7 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }

@@ -28,6 +28,7 @@ type HTTPResourceServerGateway struct {
 	defaultHeaders map[string]string
 	auth           authConfig
 	client         *http.Client
+	tlsDebug       tlsDebugInfo
 	openAPISource  string
 
 	openapiMu     sync.Mutex
@@ -71,6 +72,7 @@ func NewHTTPResourceServerGateway(cfg config.HTTPServer) (*HTTPResourceServerGat
 			Timeout:   defaultHTTPTimeout,
 			Transport: transport,
 		},
+		tlsDebug:      newTLSDebugInfo(cfg.TLS),
 		openAPISource: strings.TrimSpace(cfg.OpenAPI),
 	}, nil
 }

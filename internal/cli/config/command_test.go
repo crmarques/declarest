@@ -70,6 +70,296 @@ unknown: true
 	})
 }
 
+func TestAddImportsSingleContextAndSupportsRename(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+name: dev
+repository:
+  filesystem:
+    base-dir: /tmp/dev
+metadata:
+  base-dir: /tmp/meta
+`,
+		"add",
+		"--format", "yaml",
+		"--context-name", "dev-imported",
+	)
+	if err != nil {
+		t.Fatalf("add returned error: %v", err)
+	}
+
+	if len(service.createdContexts) != 1 {
+		t.Fatalf("expected one created context, got %d", len(service.createdContexts))
+	}
+	if got := service.createdContexts[0].Name; got != "dev-imported" {
+		t.Fatalf("expected imported context name dev-imported, got %q", got)
+	}
+	if service.setCurrentName != "" {
+		t.Fatalf("set current should not be called, got %q", service.setCurrentName)
+	}
+}
+
+func TestAddImportsCatalogContexts(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+  - name: prod
+    repository:
+      filesystem:
+        base-dir: /tmp/prod
+current-ctx: prod
+`,
+		"add",
+	)
+	if err != nil {
+		t.Fatalf("add returned error: %v", err)
+	}
+
+	if len(service.createdContexts) != 2 {
+		t.Fatalf("expected two created contexts, got %d", len(service.createdContexts))
+	}
+	if service.createdContexts[0].Name != "dev" || service.createdContexts[1].Name != "prod" {
+		t.Fatalf("unexpected created contexts: %#v", service.createdContexts)
+	}
+}
+
+func TestAddSetCurrentForSingleContext(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+name: dev
+repository:
+  filesystem:
+    base-dir: /tmp/dev
+`,
+		"add",
+		"--format", "yaml",
+		"--context-name", "dev-active",
+		"--set-current",
+	)
+	if err != nil {
+		t.Fatalf("add returned error: %v", err)
+	}
+
+	if len(service.createdContexts) != 1 {
+		t.Fatalf("expected one created context, got %d", len(service.createdContexts))
+	}
+	if got := service.createdContexts[0].Name; got != "dev-active" {
+		t.Fatalf("expected imported context name dev-active, got %q", got)
+	}
+	if service.setCurrentName != "dev-active" {
+		t.Fatalf("expected set current dev-active, got %q", service.setCurrentName)
+	}
+}
+
+func TestAddCatalogContextSelectionAndSetCurrent(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+  - name: prod
+    repository:
+      filesystem:
+        base-dir: /tmp/prod
+current-ctx: prod
+`,
+		"add",
+		"--format", "yaml",
+		"--context-name", "prod",
+		"--set-current",
+	)
+	if err != nil {
+		t.Fatalf("add returned error: %v", err)
+	}
+
+	if len(service.createdContexts) != 1 {
+		t.Fatalf("expected one created context, got %d", len(service.createdContexts))
+	}
+	if got := service.createdContexts[0].Name; got != "prod" {
+		t.Fatalf("expected imported context prod, got %q", got)
+	}
+	if service.setCurrentName != "prod" {
+		t.Fatalf("expected set current prod, got %q", service.setCurrentName)
+	}
+}
+
+func TestAddSetCurrentFromCatalogCurrentCtxForMultiImport(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+  - name: prod
+    repository:
+      filesystem:
+        base-dir: /tmp/prod
+current-ctx: prod
+`,
+		"add",
+		"--format", "yaml",
+		"--set-current",
+	)
+	if err != nil {
+		t.Fatalf("add returned error: %v", err)
+	}
+
+	if len(service.createdContexts) != 2 {
+		t.Fatalf("expected two created contexts, got %d", len(service.createdContexts))
+	}
+	if service.setCurrentName != "prod" {
+		t.Fatalf("expected set current prod from catalog current-ctx, got %q", service.setCurrentName)
+	}
+}
+
+func TestAddSetCurrentRequiresResolvableTarget(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+  - name: prod
+    repository:
+      filesystem:
+        base-dir: /tmp/prod
+`,
+		"add",
+		"--format", "yaml",
+		"--set-current",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if service.createCalled {
+		t.Fatal("expected create to be skipped when set-current target is ambiguous")
+	}
+}
+
+func TestAddRejectsUnknownCatalogContextName(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+`,
+		"add",
+		"--format", "yaml",
+		"--context-name", "prod",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if service.createCalled {
+		t.Fatal("expected create to be skipped when selected catalog context is missing")
+	}
+}
+
+func TestAddRejectsCollisionsBeforeCreate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("existing_context_name", func(t *testing.T) {
+		t.Parallel()
+
+		service := &testContextService{
+			listValue: []configdomain.Context{{Name: "dev"}},
+		}
+		_, err := executeConfigCommand(
+			t,
+			service,
+			&common.GlobalFlags{},
+			`
+name: dev
+repository:
+  filesystem:
+    base-dir: /tmp/dev
+`,
+			"add",
+			"--format", "yaml",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if service.createCalled {
+			t.Fatal("expected create to be skipped when imported context already exists")
+		}
+	})
+
+	t.Run("duplicate_names_in_input_catalog", func(t *testing.T) {
+		t.Parallel()
+
+		service := &testContextService{}
+		_, err := executeConfigCommand(
+			t,
+			service,
+			&common.GlobalFlags{},
+			`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/dev2
+`,
+			"add",
+			"--format", "yaml",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if service.createCalled {
+			t.Fatal("expected create to be skipped when input catalog has duplicate names")
+		}
+	})
+}
+
 func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 	t.Parallel()
 
@@ -708,11 +998,12 @@ type testContextService struct {
 	resolveValue     configdomain.Context
 	resolveSelection configdomain.ContextSelection
 
-	createdContext configdomain.Context
-	setCurrentName string
-	deletedName    string
-	renameFrom     string
-	renameTo       string
+	createdContext  configdomain.Context
+	createdContexts []configdomain.Context
+	setCurrentName  string
+	deletedName     string
+	renameFrom      string
+	renameTo        string
 
 	createCalled   bool
 	updateCalled   bool
@@ -723,6 +1014,7 @@ type testContextService struct {
 func (s *testContextService) Create(_ context.Context, cfg configdomain.Context) error {
 	s.createCalled = true
 	s.createdContext = cfg
+	s.createdContexts = append(s.createdContexts, cfg)
 	return nil
 }
 
@@ -844,6 +1136,12 @@ func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Va
 	return nil, nil
 }
 func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) AdHoc(context.Context, string, string, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Value, error) {
 	return nil, nil
 }
 func (s *testOrchestratorService) Save(context.Context, string, resource.Value) error {

@@ -72,6 +72,8 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")

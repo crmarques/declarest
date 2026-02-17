@@ -31,6 +31,7 @@ func newCommandWithPrompter(
 
 	command.AddCommand(
 		newCreateCommand(deps, prompter),
+		newAddCommand(deps),
 		newUpdateCommand(deps),
 		newDeleteCommand(deps, prompter),
 		newRenameCommand(deps, prompter),
@@ -68,6 +69,168 @@ func newCreateCommand(deps common.CommandDependencies, prompter configPrompter) 
 
 	common.BindInputFlags(command, &input)
 	return command
+}
+
+type addContextSelection struct {
+	Contexts   []configdomain.Context
+	CurrentCtx string
+}
+
+func newAddCommand(deps common.CommandDependencies) *cobra.Command {
+	var input common.InputFlags
+	var contextName string
+	var setCurrent bool
+
+	command := &cobra.Command{
+		Use:   "add",
+		Short: "Add context definitions from input",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			contexts, err := common.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+
+			decoded, err := decodeContextImportInputStrict(command, input)
+			if err != nil {
+				return err
+			}
+
+			selection, err := selectContextsForAdd(decoded, contextName)
+			if err != nil {
+				return err
+			}
+
+			currentName := ""
+			if setCurrent {
+				currentName, err = resolveSetCurrentContext(selection)
+				if err != nil {
+					return err
+				}
+			}
+
+			if err := validateAddTargets(command, contexts, selection.Contexts); err != nil {
+				return err
+			}
+
+			for _, cfg := range selection.Contexts {
+				if err := contexts.Create(command.Context(), cfg); err != nil {
+					return err
+				}
+			}
+
+			if !setCurrent {
+				return nil
+			}
+
+			return contexts.SetCurrent(command.Context(), currentName)
+		},
+	}
+
+	command.Flags().StringVarP(&input.File, "file", "f", "", "input file path")
+	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
+	command.Flags().StringVar(&contextName, "context-name", "", "context name to import (catalog) or assign (single context)")
+	command.Flags().BoolVar(&setCurrent, "set-current", false, "set imported context as current")
+	common.RegisterInputFormatFlagCompletion(command)
+	return command
+}
+
+func selectContextsForAdd(input contextImportInput, contextName string) (addContextSelection, error) {
+	trimmedContextName := strings.TrimSpace(contextName)
+	switch input.Kind {
+	case contextImportInputContext:
+		cfg := input.Context
+		if trimmedContextName != "" {
+			cfg.Name = trimmedContextName
+		}
+		return addContextSelection{
+			Contexts: []configdomain.Context{cfg},
+		}, nil
+	case contextImportInputCatalog:
+		if len(input.Catalog.Contexts) == 0 {
+			return addContextSelection{}, common.ValidationError("input context catalog has no contexts", nil)
+		}
+
+		if trimmedContextName == "" {
+			contexts := make([]configdomain.Context, len(input.Catalog.Contexts))
+			copy(contexts, input.Catalog.Contexts)
+			return addContextSelection{
+				Contexts:   contexts,
+				CurrentCtx: strings.TrimSpace(input.Catalog.CurrentCtx),
+			}, nil
+		}
+
+		for _, item := range input.Catalog.Contexts {
+			if item.Name == trimmedContextName {
+				return addContextSelection{
+					Contexts: []configdomain.Context{item},
+				}, nil
+			}
+		}
+
+		return addContextSelection{}, common.ValidationError(
+			fmt.Sprintf("context %q not found in input catalog", trimmedContextName),
+			nil,
+		)
+	default:
+		return addContextSelection{}, common.ValidationError("unsupported config input shape", nil)
+	}
+}
+
+func resolveSetCurrentContext(selection addContextSelection) (string, error) {
+	if len(selection.Contexts) == 1 {
+		return selection.Contexts[0].Name, nil
+	}
+
+	if selection.CurrentCtx != "" {
+		for _, item := range selection.Contexts {
+			if item.Name == selection.CurrentCtx {
+				return selection.CurrentCtx, nil
+			}
+		}
+		return "", common.ValidationError(
+			fmt.Sprintf("input current-ctx %q is not present in imported contexts", selection.CurrentCtx),
+			nil,
+		)
+	}
+
+	return "", common.ValidationError(
+		"set-current requires a single imported context or a catalog current-ctx value",
+		nil,
+	)
+}
+
+func validateAddTargets(command *cobra.Command, contexts configdomain.ContextService, items []configdomain.Context) error {
+	if len(items) == 0 {
+		return common.ValidationError("no contexts found in input", nil)
+	}
+
+	existing, err := contexts.List(command.Context())
+	if err != nil {
+		return err
+	}
+
+	existingNames := make(map[string]struct{}, len(existing))
+	for _, item := range existing {
+		existingNames[item.Name] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return common.ValidationError("context name is required", nil)
+		}
+		if _, duplicated := seen[name]; duplicated {
+			return common.ValidationError(fmt.Sprintf("input contains duplicate context %q", name), nil)
+		}
+		if _, exists := existingNames[name]; exists {
+			return common.ValidationError(fmt.Sprintf("context %q already exists", name), nil)
+		}
+		seen[name] = struct{}{}
+	}
+
+	return nil
 }
 
 func newUpdateCommand(deps common.CommandDependencies) *cobra.Command {

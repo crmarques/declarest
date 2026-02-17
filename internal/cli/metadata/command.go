@@ -1,6 +1,8 @@
 package metadata
 
 import (
+	"strings"
+
 	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/spf13/cobra"
@@ -58,6 +60,8 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }
 
@@ -90,6 +94,8 @@ func newSetCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
 	return command
 }
@@ -117,6 +123,8 @@ func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }
 
@@ -153,6 +161,8 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }
 
@@ -199,6 +209,36 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	operationValues := []string{
+		string(metadatadomain.OperationGet),
+		string(metadatadomain.OperationCreate),
+		string(metadatadomain.OperationUpdate),
+		string(metadatadomain.OperationDelete),
+		string(metadatadomain.OperationList),
+		string(metadatadomain.OperationCompare),
+	}
+	command.ValidArgsFunction = func(
+		command *cobra.Command,
+		args []string,
+		toComplete string,
+	) ([]string, cobra.ShellCompDirective) {
+		if strings.TrimSpace(pathFlag) != "" {
+			if len(args) > 0 {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return common.CompleteValues(operationValues, toComplete)
+		}
+
+		switch len(args) {
+		case 0:
+			return common.CompleteLogicalPaths(command, deps, toComplete)
+		case 1:
+			return common.CompleteValues(operationValues, toComplete)
+		default:
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+	}
 	return command
 }
 
@@ -238,6 +278,8 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&apply, "apply", "a", false, "apply inferred metadata")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "infer recursively")
 	return command

@@ -33,6 +33,8 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&force, "force", "y", false, "confirm deletion")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete recursively")
 	return command

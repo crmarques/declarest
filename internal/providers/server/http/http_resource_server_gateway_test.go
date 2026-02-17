@@ -1,10 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +19,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -445,6 +450,249 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 			t.Fatalf("expected one oauth token request, got %d", got)
 		}
 	})
+
+	t.Run("oauth2_debug_logs_include_token_request", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/oauth/token":
+				_, _ = fmt.Fprint(w, `{"access_token":"oauth-token","expires_in":3600}`)
+			case "/resource":
+				_, _ = fmt.Fprint(w, `{"ok":true}`)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				OAuth2: &config.OAuth2{
+					TokenURL:     server.URL + "/oauth/token",
+					GrantType:    config.OAuthClientCreds,
+					ClientID:     "client",
+					ClientSecret: "secret-value",
+				},
+			},
+		})
+
+		resourceInfo := resource.Resource{
+			LogicalPath: "/customers/acme",
+			Metadata: metadata.ResourceMetadata{
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationGet): {Path: "/resource"},
+				},
+			},
+		}
+
+		var debugOutput bytes.Buffer
+		ctx := debugctx.WithEnabled(context.Background(), true)
+		ctx = debugctx.WithWriter(ctx, &debugOutput)
+
+		if _, err := gateway.Get(ctx, resourceInfo); err != nil {
+			t.Fatalf("Get returned error: %v", err)
+		}
+
+		contents := debugOutput.String()
+		if !strings.Contains(contents, `purpose="oauth2-token"`) {
+			t.Fatalf("expected oauth2 token request in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, "/oauth/token") {
+			t.Fatalf("expected oauth2 token URL in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, `purpose="resource"`) {
+			t.Fatalf("expected resource request in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, `tls_enabled=false`) {
+			t.Fatalf("expected tls debug flag in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, `mtls_enabled=false`) {
+			t.Fatalf("expected mtls debug flag in debug output, got %q", contents)
+		}
+		if strings.Contains(contents, "secret-value") {
+			t.Fatalf("debug output leaked client secret: %q", contents)
+		}
+	})
+
+	t.Run("debug_logs_include_mtls_configuration", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `{"ok":true}`)
+		}))
+		t.Cleanup(server.Close)
+
+		caCertFile, clientCertFile, clientKeyFile := writeTLSClientPairFiles(t)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+			TLS: &config.TLS{
+				CACertFile:         caCertFile,
+				ClientCertFile:     clientCertFile,
+				ClientKeyFile:      clientKeyFile,
+				InsecureSkipVerify: true,
+			},
+		})
+
+		var debugOutput bytes.Buffer
+		ctx := debugctx.WithEnabled(context.Background(), true)
+		ctx = debugctx.WithWriter(ctx, &debugOutput)
+
+		_, err := gateway.Get(ctx, resource.Resource{
+			LogicalPath: "/customers/acme",
+			Metadata: metadata.ResourceMetadata{
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationGet): {Path: "/resource"},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("Get returned error: %v", err)
+		}
+
+		contents := debugOutput.String()
+		if !strings.Contains(contents, `tls_enabled=true`) {
+			t.Fatalf("expected tls enabled in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, `mtls_enabled=true`) {
+			t.Fatalf("expected mtls enabled in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, `tls_insecure_skip_verify=true`) {
+			t.Fatalf("expected tls insecure skip verify in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, fmt.Sprintf(`tls_ca_cert_file=%q`, caCertFile)) {
+			t.Fatalf("expected tls ca cert file in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, fmt.Sprintf(`tls_client_cert_file=%q`, clientCertFile)) {
+			t.Fatalf("expected tls client cert file in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, fmt.Sprintf(`tls_client_key_file=%q`, clientKeyFile)) {
+			t.Fatalf("expected tls client key file in debug output, got %q", contents)
+		}
+	})
+}
+
+func TestAdHocRequests(t *testing.T) {
+	t.Parallel()
+
+	t.Run("get_json_response", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Fatalf("expected GET method, got %s", r.Method)
+			}
+			if r.URL.Path != "/test" {
+				t.Fatalf("expected /test path, got %s", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(w, `{"id":"a"}`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		value, err := gateway.AdHoc(context.Background(), http.MethodGet, "/test", nil)
+		if err != nil {
+			t.Fatalf("AdHoc returned error: %v", err)
+		}
+
+		output, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map response, got %T", value)
+		}
+		if output["id"] != "a" {
+			t.Fatalf("expected id=a response, got %#v", output)
+		}
+	})
+
+	t.Run("post_json_body", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("expected POST method, got %s", r.Method)
+			}
+			if got := r.Header.Get("Content-Type"); got != "application/json" {
+				t.Fatalf("expected content type application/json, got %q", got)
+			}
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read request body: %v", err)
+			}
+			if string(data) != `{"id":"a","name":"alpha"}` {
+				t.Fatalf("unexpected request body: %s", string(data))
+			}
+			_, _ = fmt.Fprint(w, `{"ok":true}`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.AdHoc(context.Background(), http.MethodPost, "/test", map[string]any{
+			"id":   "a",
+			"name": "alpha",
+		})
+		if err != nil {
+			t.Fatalf("AdHoc returned error: %v", err)
+		}
+	})
+
+	t.Run("non_json_response_falls_back_to_text", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = fmt.Fprint(w, "pong")
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		value, err := gateway.AdHoc(context.Background(), http.MethodGet, "/health", nil)
+		if err != nil {
+			t.Fatalf("AdHoc returned error: %v", err)
+		}
+		if value != "pong" {
+			t.Fatalf("expected text fallback response, got %#v", value)
+		}
+	})
+
+	t.Run("validates_method_and_path", func(t *testing.T) {
+		t.Parallel()
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: "https://example.com",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.AdHoc(context.Background(), "", "/test", nil)
+		assertTypedCategory(t, err, faults.ValidationError)
+
+		_, err = gateway.AdHoc(context.Background(), http.MethodGet, "", nil)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
 }
 
 func TestStatusMappingAndExists(t *testing.T) {
@@ -631,6 +879,56 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
+}
+
+func writeTLSClientPairFiles(t *testing.T) (string, string, string) {
+	t.Helper()
+
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	tlsServer.Close()
+
+	if len(tlsServer.TLS.Certificates) == 0 {
+		t.Fatal("expected test TLS server certificate")
+	}
+	certificate := tlsServer.TLS.Certificates[0]
+	if len(certificate.Certificate) == 0 {
+		t.Fatal("expected test TLS certificate chain")
+	}
+
+	certBuffer := bytes.NewBuffer(nil)
+	for _, certDER := range certificate.Certificate {
+		if err := pem.Encode(certBuffer, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+			t.Fatalf("failed to encode certificate pem: %v", err)
+		}
+	}
+
+	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(certificate.PrivateKey)
+	if err != nil {
+		t.Fatalf("failed to marshal private key: %v", err)
+	}
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateKeyDER})
+	if len(privateKeyPEM) == 0 {
+		t.Fatal("expected private key pem bytes")
+	}
+
+	tempDir := t.TempDir()
+	caCertFile := filepath.Join(tempDir, "ca-cert.pem")
+	clientCertFile := filepath.Join(tempDir, "client-cert.pem")
+	clientKeyFile := filepath.Join(tempDir, "client-key.pem")
+
+	if err := os.WriteFile(caCertFile, certBuffer.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write ca cert file: %v", err)
+	}
+	if err := os.WriteFile(clientCertFile, certBuffer.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write client cert file: %v", err)
+	}
+	if err := os.WriteFile(clientKeyFile, privateKeyPEM, 0o600); err != nil {
+		t.Fatalf("failed to write client key file: %v", err)
+	}
+
+	return caCertFile, clientCertFile, clientKeyFile
 }
 
 func mustGateway(t *testing.T, cfg config.HTTPServer) *HTTPResourceServerGateway {

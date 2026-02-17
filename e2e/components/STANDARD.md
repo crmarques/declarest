@@ -49,6 +49,10 @@ REQUIRES_DOCKER=true
 COMPONENT_RUNTIME_KIND=compose
 COMPONENT_DEPENDS_ON=""
 DESCRIPTION="Human-readable summary"
+# Required only for COMPONENT_TYPE=resource-server:
+SUPPORTED_SECURITY_FEATURES="oauth2 mtls"
+# Optional only for COMPONENT_TYPE=resource-server:
+REQUIRED_SECURITY_FEATURES="oauth2"
 ```
 
 Field rules:
@@ -66,6 +70,9 @@ Field rules:
   - wildcard by type: `<type>:*` (for example `git-provider:*`)
   - use empty string when no dependencies (`COMPONENT_DEPENDS_ON=""`).
 - `DESCRIPTION`: short operator-facing description.
+- `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `basic-auth oauth2 mtls`; use empty string when none are supported.
+- `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; each listed feature MUST be enabled by runner selection.
+- Runner selection enforces `basic-auth` and `oauth2` as mutually exclusive because context `managed-server.http.auth` is a one-of contract.
 
 ## Hook Contract
 
@@ -101,6 +108,7 @@ Common exported variables:
 - `E2E_COMPONENT_DIR`, `E2E_COMPONENT_HOOK`
 - `E2E_COMPONENT_CONNECTION`
 - `E2E_COMPONENT_RUNTIME_KIND`, `E2E_COMPONENT_DEPENDS_ON`
+- `E2E_RESOURCE_SERVER_BASIC_AUTH`, `E2E_RESOURCE_SERVER_OAUTH2`, `E2E_RESOURCE_SERVER_MTLS`
 - `E2E_COMPONENT_STATE_FILE`
 - `E2E_COMPONENT_PROJECT_NAME` (compose project when applicable)
 - `E2E_COMPONENT_CONTEXT_FRAGMENT`

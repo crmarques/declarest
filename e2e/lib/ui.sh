@@ -129,11 +129,14 @@ ui_write_step_log_header() {
       "${E2E_PROFILE:-n/a}" \
       "${E2E_KEEP_RUNTIME:-0}" \
       "${E2E_VERBOSE:-0}"
-    printf '[%s] stack repo-type=%s resource-server=%s(%s) git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] stack repo-type=%s resource-server=%s(%s) resource-server-security=basic-auth:%s oauth2:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_REPO_TYPE:-n/a}" \
       "${E2E_RESOURCE_SERVER:-n/a}" \
       "${E2E_RESOURCE_SERVER_CONNECTION:-n/a}" \
+      "${E2E_RESOURCE_SERVER_BASIC_AUTH:-false}" \
+      "${E2E_RESOURCE_SERVER_OAUTH2:-true}" \
+      "${E2E_RESOURCE_SERVER_MTLS:-false}" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION:-n/a}" \
       "${E2E_SECRET_PROVIDER:-n/a}" \

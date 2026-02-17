@@ -19,11 +19,13 @@ func BindGlobalFlags(command *cobra.Command, flags *GlobalFlags) {
 	command.PersistentFlags().BoolVarP(&flags.Debug, "debug", "d", false, "enable debug output")
 	command.PersistentFlags().BoolVarP(&flags.NoStatus, "no-status", "n", false, "hide status output")
 	command.PersistentFlags().StringVarP(&flags.Output, "output", "o", OutputAuto, "output format: auto|text|json|yaml")
+	RegisterOutputFlagCompletion(command)
 }
 
 func BindInputFlags(command *cobra.Command, flags *InputFlags) {
 	command.Flags().StringVarP(&flags.File, "file", "f", "", "input file path")
 	command.Flags().StringVarP(&flags.Format, "format", "i", OutputJSON, "input format: json|yaml")
+	RegisterInputFormatFlagCompletion(command)
 }
 
 func BindPathFlag(command *cobra.Command, path *string) {

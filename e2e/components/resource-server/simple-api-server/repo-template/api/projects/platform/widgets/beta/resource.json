@@ -1,0 +1,7 @@
+{
+  "id": "beta",
+  "slug": "beta",
+  "project": "platform",
+  "enabled": true,
+  "version": 2
+}

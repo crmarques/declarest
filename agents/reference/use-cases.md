@@ -220,12 +220,12 @@ Failure expectation:
 Goal: run component hooks in parallel when possible without violating dependency constraints.
 
 Inputs:
-1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `resource-server=keycloak`, `secret-provider=file`.
+1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `resource-server=simple-api-server`, `secret-provider=file`.
 2. Component metadata where `repo-type:git` declares `COMPONENT_DEPENDS_ON="git-provider:*"`.
 
 Execution:
 1. `run-e2e.sh` executes `init` hooks using dependency-aware batching.
-2. `git-provider:gitlab` and `resource-server:keycloak` initialize in parallel.
+2. `git-provider:gitlab` and `resource-server:simple-api-server` initialize in parallel.
 3. `repo-type:git` initializes only after `git-provider:*` completion.
 4. Runner executes `configure-auth` and `context` hooks through the same dependency graph.
 
@@ -237,3 +237,68 @@ Expected outputs:
 Failure expectation:
 1. Dependency selector referencing a non-selected component fails with actionable dependency error.
 2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
+
+### Example 12: Simple API OAuth2 Guardrail (Corner)
+Goal: ensure `simple-api-server` denies resource operations without a valid bearer token.
+
+Inputs:
+1. Local stack with `resource-server=simple-api-server`.
+2. Client credentials configured in component state.
+
+Execution:
+1. Call a non-token endpoint (for example `GET /api/projects`) without `Authorization: Bearer`.
+2. Call `/token` with valid `grant_type=client_credentials` and configured client credentials.
+3. Retry `GET /api/projects` with the issued bearer token.
+
+Expected outputs:
+1. Step 1 fails with HTTP `401` and OAuth2 `invalid_token`.
+2. Step 2 returns JSON containing `access_token` and `token_type=Bearer`.
+3. Step 3 succeeds and returns deterministic JSON (`[]` or list payload, based on stored resources).
+
+Failure expectation:
+1. Invalid client credentials at `/token` fail with OAuth2 `invalid_client` and HTTP `401`.
+
+### Example 13: Simple API mTLS Client Certificate Allowlist
+Goal: ensure `simple-api-server` accepts only configured client certificates during TLS handshake when mTLS is enabled.
+
+Inputs:
+1. `resource-server=simple-api-server`.
+2. `ENABLE_MTLS=true`.
+3. One or more allowed client public certificates mounted into the configured cert directory.
+
+Execution:
+1. Start the component with `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS=true`.
+2. Run one request with the configured client cert/key and CA trust settings.
+3. Run one request with an untrusted client certificate.
+4. Remove all trusted cert files from the configured allowlist directory while the server is running and retry with the previously trusted client certificate.
+5. Add the trusted client cert file back to the allowlist directory and retry again.
+
+Expected outputs:
+1. Step 2 succeeds and the request reaches normal API handling.
+2. Step 3 fails during TLS handshake before API request processing.
+3. Step 4 fails without restarting the service because no client certificates are currently trusted.
+4. Step 5 succeeds again without restarting the service.
+
+Failure expectation:
+1. Missing TLS server cert/key material causes startup/configuration failure with actionable error.
+
+### Example 14: Simple API Basic Auth Guardrail
+Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts configured basic-auth credentials when basic-auth mode is selected.
+
+Inputs:
+1. `resource-server=simple-api-server`.
+2. `--resource-server-basic-auth=true`.
+3. Basic auth username/password configured in component state.
+
+Execution:
+1. Call `GET /health` without `Authorization`.
+2. Call `GET /health` with wrong basic credentials.
+3. Call `GET /health` with configured basic credentials.
+
+Expected outputs:
+1. Step 1 fails with HTTP `401`.
+2. Step 2 fails with HTTP `401`.
+3. Step 3 succeeds with HTTP `200`.
+
+Failure expectation:
+1. Selecting both `--resource-server-basic-auth=true` and `--resource-server-oauth2=true` fails run selection before startup.

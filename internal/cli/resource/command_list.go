@@ -59,7 +59,10 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	command.Flags().StringVarP(&source, "source", "s", sourceLocal, "list source: local|remote")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
+	common.RegisterFlagValueCompletions(command, "source", []string{sourceLocal, sourceRemote})
 	return command
 }

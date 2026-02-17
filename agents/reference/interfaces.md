@@ -263,13 +263,15 @@ Method families:
 ### Interface: `server.ResourceServerManager`
 Responsibilities:
 1. Execute remote CRUD/list operations.
-2. Resolve OpenAPI hints for operations.
-3. Expose typed transport failures.
+2. Execute ad-hoc HTTP operations against managed-server endpoints.
+3. Resolve OpenAPI hints for operations.
+4. Expose typed transport failures.
 
 Method families:
 1. `Get/Create/Update/Delete/List/Exists`.
-2. `GetOpenAPISpec`.
-3. `BuildRequestFromMetadata`.
+2. `AdHoc`.
+3. `GetOpenAPISpec`.
+4. `BuildRequestFromMetadata`.
 
 ### Interface: `secrets.SecretProvider`
 Responsibilities:
@@ -292,7 +294,7 @@ Responsibilities:
 4. Compute explain/diff/list outputs.
 
 Method families:
-1. `Get/GetLocal/GetRemote/Save/Apply/Create/Update/Delete`.
+1. `Get/GetLocal/GetRemote/AdHoc/Save/Apply/Create/Update/Delete`.
 2. `ListLocal(policy)/ListRemote(policy)`.
 3. `Explain/Diff/Template`.
 4. `RepoInit/RepoRefresh/RepoPush/RepoReset/RepoCheck/RepoStatus`.

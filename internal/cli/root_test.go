@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,8 +25,18 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 
 	requiredPaths := []string{
 		"ad-hoc",
+		"ad-hoc get",
+		"ad-hoc post",
+		"ad-hoc put",
+		"ad-hoc patch",
+		"ad-hoc delete",
+		"ad-hoc head",
+		"ad-hoc options",
+		"ad-hoc trace",
+		"ad-hoc connect",
 		"config",
 		"config create",
+		"config add",
 		"config use",
 		"config current",
 		"config check",
@@ -221,6 +233,68 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--local", "--remote")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestAdHocMethodCommands(t *testing.T) {
+	t.Parallel()
+
+	t.Run("get_positional_path", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "get", "/test")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"GET\"") {
+			t.Fatalf("expected GET method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"path\": \"/test\"") {
+			t.Fatalf("expected path output, got %q", output)
+		}
+	})
+
+	t.Run("post_reads_stdin_body", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), `{"id":"a","name":"alpha"}`, "ad-hoc", "post", "/items")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"POST\"") {
+			t.Fatalf("expected POST method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"name\": \"alpha\"") {
+			t.Fatalf("expected stdin payload to be forwarded, got %q", output)
+		}
+	})
+
+	t.Run("put_reads_file_body", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		payloadPath := filepath.Join(tempDir, "payload.json")
+		if err := os.WriteFile(payloadPath, []byte(`{"id":"a","name":"beta"}`), 0o600); err != nil {
+			t.Fatalf("failed to write payload file: %v", err)
+		}
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "put", "/items/a", "--file", payloadPath)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"PUT\"") {
+			t.Fatalf("expected PUT method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"name\": \"beta\"") {
+			t.Fatalf("expected file payload to be forwarded, got %q", output)
+		}
+	})
+
+	t.Run("path_mismatch_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/a", "--path", "/b")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
@@ -524,6 +598,106 @@ func TestCompletionBashGeneratesScript(t *testing.T) {
 	}
 }
 
+func TestPathCompletionMergesLocalRemoteAndOpenAPI(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.localList = []resource.Resource{
+		{LogicalPath: "/customers/local"},
+	}
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/customers/remote"},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/customers/{id}": map[string]any{},
+			"/health":         map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/customers")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/customers/local") {
+		t.Fatalf("expected local path completion, got %q", output)
+	}
+	if !strings.Contains(output, "/customers/remote") {
+		t.Fatalf("expected remote path completion, got %q", output)
+	}
+	if !strings.Contains(output, "/customers/{id}") {
+		t.Fatalf("expected OpenAPI path completion, got %q", output)
+	}
+	if !strings.Contains(output, ":4") {
+		t.Fatalf("expected no-file completion directive, got %q", output)
+	}
+}
+
+func TestContextFlagCompletionShowsContextNames(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "__complete", "resource", "get", "--context", "")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "dev") || !strings.Contains(output, "prod") {
+		t.Fatalf("expected context names in completion output, got %q", output)
+	}
+}
+
+func TestOutputFlagCompletionShowsSupportedValues(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "__complete", "resource", "get", "--output", "")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	expected := []string{"auto", "text", "json", "yaml"}
+	for _, value := range expected {
+		if !strings.Contains(output, value) {
+			t.Fatalf("expected %q output completion value, got %q", value, output)
+		}
+	}
+}
+
+func TestResourceListSourceCompletionShowsSupportedValues(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "__complete", "resource", "list", "--source", "")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "local") || !strings.Contains(output, "remote") {
+		t.Fatalf("expected source completion values, got %q", output)
+	}
+}
+
+func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "__complete", "metadata", "render", "/customers", "")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	expected := []string{"get", "create", "update", "delete", "list", "compare"}
+	for _, value := range expected {
+		if !strings.Contains(output, value) {
+			t.Fatalf("expected operation completion value %q, got %q", value, output)
+		}
+	}
+
+	withPathFlagOutput, err := executeForTest(testDeps(), "", "__complete", "metadata", "render", "--path", "/customers", "")
+	if err != nil {
+		t.Fatalf("unexpected completion error with --path: %v", err)
+	}
+	for _, value := range expected {
+		if !strings.Contains(withPathFlagOutput, value) {
+			t.Fatalf("expected operation completion value %q with --path, got %q", value, withPathFlagOutput)
+		}
+	}
+}
+
 func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 	t.Parallel()
 
@@ -732,6 +906,9 @@ type testReconciler struct {
 	metadataService *testMetadata
 	saveCalls       []savedResource
 	saveErr         error
+	localList       []resource.Resource
+	remoteList      []resource.Resource
+	openAPISpec     resource.Value
 }
 
 type savedResource struct {
@@ -747,6 +924,16 @@ func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resour
 }
 func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
+}
+func (r *testReconciler) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+	return map[string]any{
+		"method": method,
+		"path":   endpointPath,
+		"body":   body,
+	}, nil
+}
+func (r *testReconciler) GetOpenAPISpec(_ context.Context) (resource.Value, error) {
+	return r.openAPISpec, nil
 }
 func (r *testReconciler) Save(_ context.Context, logicalPath string, value resource.Value) error {
 	r.saveCalls = append(r.saveCalls, savedResource{
@@ -766,12 +953,22 @@ func (r *testReconciler) Update(_ context.Context, logicalPath string, _ resourc
 }
 func (r *testReconciler) Delete(context.Context, string, orchestrator.DeletePolicy) error { return nil }
 func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+	if policy.Recursive && len(r.localList) > 0 {
+		items := make([]resource.Resource, len(r.localList))
+		copy(items, r.localList)
+		return items, nil
+	}
 	if policy.Recursive {
 		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
 	}
 	return []resource.Resource{{LogicalPath: logicalPath}}, nil
 }
 func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+	if policy.Recursive && len(r.remoteList) > 0 {
+		items := make([]resource.Resource, len(r.remoteList))
+		copy(items, r.remoteList)
+		return items, nil
+	}
 	if policy.Recursive {
 		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
 	}

@@ -49,6 +49,11 @@ Acceptance contracts:
 11. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.
 12. Resource-server fixtures: metadata identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
 13. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
+14. OAuth2 component auth: `client_credentials` token issuance and bearer-token rejection when auth is missing or invalid.
+15. mTLS component auth: only configured client certificates are accepted when mTLS is enabled.
+16. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
+17. Ad-hoc CLI routing: `ad-hoc <method>` maps to managed-server requests with positional/flag path validation and payload decoding from `--file` or stdin.
+18. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

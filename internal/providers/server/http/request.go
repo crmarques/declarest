@@ -69,6 +69,40 @@ func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context
 	return spec, nil
 }
 
+func (g *HTTPResourceServerGateway) AdHoc(
+	ctx context.Context,
+	method string,
+	endpointPath string,
+	body resource.Value,
+) (resource.Value, error) {
+	resolvedMethod := strings.ToUpper(strings.TrimSpace(method))
+	if resolvedMethod == "" {
+		return nil, validationError("ad-hoc method is required", nil)
+	}
+
+	resolvedPath := normalizeRequestPath(endpointPath)
+	if resolvedPath == "" {
+		return nil, validationError("ad-hoc path is required", nil)
+	}
+
+	spec := metadata.OperationSpec{
+		Method: resolvedMethod,
+		Path:   resolvedPath,
+		Accept: defaultMediaType,
+		Body:   body,
+	}
+	if body != nil {
+		spec.ContentType = defaultMediaType
+	}
+
+	responseBody, _, err := g.execute(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeAdHocResponse(responseBody)
+}
+
 func resolveOperationSpecTemplates(
 	ctx context.Context,
 	md metadata.ResourceMetadata,
@@ -103,7 +137,7 @@ func (g *HTTPResourceServerGateway) execute(ctx context.Context, spec metadata.O
 		return nil, nil, err
 	}
 
-	response, err := g.client.Do(request)
+	response, err := g.doRequest(ctx, "resource", request)
 	if err != nil {
 		return nil, nil, transportError("remote request failed", err)
 	}
@@ -409,6 +443,19 @@ func decodeJSONResponse(body []byte) (resource.Value, error) {
 		return nil, err
 	}
 	return normalized, nil
+}
+
+func decodeAdHocResponse(body []byte) (resource.Value, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
+
+	value, err := decodeJSONResponse(body)
+	if err == nil {
+		return value, nil
+	}
+
+	return string(body), nil
 }
 
 func classifyStatusError(statusCode int, body []byte) error {

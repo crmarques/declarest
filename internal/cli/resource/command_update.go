@@ -49,6 +49,8 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
 	return command
 }

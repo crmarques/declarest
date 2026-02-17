@@ -72,6 +72,8 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&local, "local", false, "read from local repository")
 	command.Flags().BoolVar(&remote, "remote", false, "read from remote server (default)")
 	return command

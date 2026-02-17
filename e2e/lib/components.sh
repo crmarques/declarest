@@ -8,11 +8,39 @@ declare -Ag E2E_COMPONENT_RUNTIME_KIND=()
 declare -Ag E2E_COMPONENT_DEPENDS_ON=()
 declare -Ag E2E_COMPONENT_DESCRIPTION=()
 declare -Ag E2E_COMPONENT_PROJECT=()
+declare -Ag E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
+declare -Ag E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
 declare -Ag E2E_CAPABILITY_SET=()
 
 declare -ag E2E_COMPONENT_KEYS=()
 declare -ag E2E_SELECTED_COMPONENT_KEYS=()
 declare -ag E2E_STARTED_COMPONENT_KEYS=()
+
+e2e_resource_server_feature_enabled() {
+  local feature=$1
+
+  case "${feature}" in
+    basic-auth)
+      [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]
+      ;;
+    oauth2)
+      [[ "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]
+      ;;
+    mtls)
+      [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+e2e_resource_server_feature_spec_supports() {
+  local feature_spec=$1
+  local feature=$2
+  local supported=" ${feature_spec} "
+  [[ "${supported}" == *" ${feature} "* ]]
+}
 
 e2e_component_key() {
   local component_type=$1
@@ -138,6 +166,54 @@ e2e_component_validate_dependency_spec() {
   return 0
 }
 
+e2e_component_validate_security_feature_spec() {
+  local component_key=$1
+  local field_name=$2
+  local feature_spec=$3
+  local feature
+
+  for feature in ${feature_spec}; do
+    case "${feature}" in
+      basic-auth|oauth2|mtls) ;;
+      *)
+        e2e_die "component ${component_key} has invalid ${field_name} value: ${feature} (allowed: basic-auth, oauth2, mtls)"
+        return 1
+        ;;
+    esac
+  done
+
+  return 0
+}
+
+e2e_component_validate_resource_server_security_contract() {
+  local component_key=$1
+  local supported_features=$2
+  local required_features=$3
+  local has_supported_features=$4
+  local has_required_features=$5
+
+  if [[ "${has_supported_features}" != '1' ]]; then
+    e2e_die "resource-server component ${component_key} must declare SUPPORTED_SECURITY_FEATURES in component.env"
+    return 1
+  fi
+
+  e2e_component_validate_security_feature_spec "${component_key}" 'SUPPORTED_SECURITY_FEATURES' "${supported_features}" || return 1
+
+  if [[ "${has_required_features}" == '1' ]]; then
+    e2e_component_validate_security_feature_spec "${component_key}" 'REQUIRED_SECURITY_FEATURES' "${required_features}" || return 1
+
+    local feature
+    for feature in ${required_features}; do
+      if ! e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
+        e2e_die "component ${component_key} has REQUIRED_SECURITY_FEATURES entry not listed in SUPPORTED_SECURITY_FEATURES: ${feature}"
+        return 1
+      fi
+    done
+  fi
+
+  return 0
+}
+
 e2e_component_validate_contract() {
   local component_key=$1
   local component_path=$2
@@ -146,6 +222,10 @@ e2e_component_validate_contract() {
   local has_requires_docker=$5
   local has_runtime_kind=$6
   local has_depends_on=$7
+  local supported_security_features=$8
+  local required_security_features=$9
+  local has_supported_security_features=${10}
+  local has_required_security_features=${11}
 
   [[ -n "${COMPONENT_TYPE:-}" ]] || {
     e2e_die "component metadata missing COMPONENT_TYPE in ${component_path}/component.env"
@@ -196,6 +276,15 @@ e2e_component_validate_contract() {
 
   e2e_component_validate_connections "${component_key}" "${SUPPORTED_CONNECTIONS:-}" "${DEFAULT_CONNECTION:-}" || return 1
   e2e_component_validate_dependency_spec "${component_key}" "${COMPONENT_DEPENDS_ON:-}" || return 1
+
+  if [[ "${COMPONENT_TYPE}" == 'resource-server' ]]; then
+    e2e_component_validate_resource_server_security_contract \
+      "${component_key}" \
+      "${supported_security_features}" \
+      "${required_security_features}" \
+      "${has_supported_security_features}" \
+      "${has_required_security_features}" || return 1
+  fi
 
   local required_hook
   for required_hook in init configure-auth context; do
@@ -276,6 +365,8 @@ e2e_discover_components() {
   E2E_COMPONENT_RUNTIME_KIND=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_DESCRIPTION=()
+  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
+  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
 
   local component_file
   while IFS= read -r component_file; do
@@ -291,9 +382,13 @@ e2e_discover_components() {
 
         local requires_docker=${REQUIRES_DOCKER:-}
         local runtime_kind=${COMPONENT_RUNTIME_KIND:-}
+        local supported_security_features=${SUPPORTED_SECURITY_FEATURES:-}
+        local required_security_features=${REQUIRED_SECURITY_FEATURES:-}
         local has_requires_docker=0
         local has_runtime_kind=0
         local has_depends_on=0
+        local has_supported_security_features=0
+        local has_required_security_features=0
 
         if [[ -n "${REQUIRES_DOCKER+x}" ]]; then
           has_requires_docker=1
@@ -304,8 +399,14 @@ e2e_discover_components() {
         if [[ -n "${COMPONENT_DEPENDS_ON+x}" ]]; then
           has_depends_on=1
         fi
+        if [[ -n "${SUPPORTED_SECURITY_FEATURES+x}" ]]; then
+          has_supported_security_features=1
+        fi
+        if [[ -n "${REQUIRED_SECURITY_FEATURES+x}" ]]; then
+          has_required_security_features=1
+        fi
 
-        printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
+        printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
           "${COMPONENT_TYPE}" \
           "${sep}" \
           "${COMPONENT_NAME}" \
@@ -326,6 +427,14 @@ e2e_discover_components() {
           "${sep}" \
           "${has_depends_on}" \
           "${sep}" \
+          "${supported_security_features}" \
+          "${sep}" \
+          "${required_security_features}" \
+          "${sep}" \
+          "${has_supported_security_features}" \
+          "${sep}" \
+          "${has_required_security_features}" \
+          "${sep}" \
           "${DESCRIPTION:-}"
       )
     )
@@ -340,9 +449,13 @@ e2e_discover_components() {
     local has_requires_docker
     local has_runtime_kind
     local has_depends_on
+    local supported_security_features
+    local required_security_features
+    local has_supported_security_features
+    local has_required_security_features
     local description
 
-    IFS=$'\x1f' read -r component_type component_name supported_connections default_connection requires_docker runtime_kind depends_on has_requires_docker has_runtime_kind has_depends_on description <<<"${metadata}"
+    IFS=$'\x1f' read -r component_type component_name supported_connections default_connection requires_docker runtime_kind depends_on has_requires_docker has_runtime_kind has_depends_on supported_security_features required_security_features has_supported_security_features has_required_security_features description <<<"${metadata}"
 
     local component_key
     local component_path
@@ -364,7 +477,11 @@ e2e_discover_components() {
         "${runtime_kind}" \
         "${has_requires_docker}" \
         "${has_runtime_kind}" \
-        "${has_depends_on}" || return 1
+        "${has_depends_on}" \
+        "${supported_security_features}" \
+        "${required_security_features}" \
+        "${has_supported_security_features}" \
+        "${has_required_security_features}" || return 1
 
     E2E_COMPONENT_PATH["${component_key}"]="${component_path}"
     E2E_COMPONENT_CONNECTIONS["${component_key}"]="${supported_connections}"
@@ -373,6 +490,8 @@ e2e_discover_components() {
     E2E_COMPONENT_RUNTIME_KIND["${component_key}"]="${runtime_kind}"
     E2E_COMPONENT_DEPENDS_ON["${component_key}"]="${depends_on}"
     E2E_COMPONENT_DESCRIPTION["${component_key}"]="${description}"
+    E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
+    E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
     E2E_COMPONENT_KEYS+=("${component_key}")
   done < <(find "${E2E_DIR}/components" -type f -name 'component.env' | sort)
 
@@ -382,22 +501,34 @@ e2e_discover_components() {
 e2e_list_components() {
   printf 'Discovered e2e components\n'
   printf '%s\n' '------------------------'
-  printf '%-18s %-14s %-18s %-10s %-20s %s\n' 'TYPE' 'NAME' 'CONNECTIONS' 'RUNTIME' 'DEPENDS-ON' 'DESCRIPTION'
+  printf '%-18s %-14s %-18s %-10s %-20s %-30s %s\n' 'TYPE' 'NAME' 'CONNECTIONS' 'RUNTIME' 'DEPENDS-ON' 'SECURITY' 'DESCRIPTION'
 
   local component_key
   for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
     local component_type
     local component_name
+    local security='-'
 
     component_type=$(e2e_component_type "${component_key}")
     component_name=$(e2e_component_name "${component_key}")
 
-    printf '%-18s %-14s %-18s %-10s %-20s %s\n' \
+    if [[ "${component_type}" == 'resource-server' ]]; then
+      local supported_features=${E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES[${component_key}]:-}
+      local required_features=${E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
+
+      security=${supported_features:-none}
+      if [[ -n "${required_features}" ]]; then
+        security="${security} (required: ${required_features})"
+      fi
+    fi
+
+    printf '%-18s %-14s %-18s %-10s %-20s %-30s %s\n' \
       "${component_type}" \
       "${component_name}" \
       "${E2E_COMPONENT_CONNECTIONS[${component_key}]}" \
       "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]}" \
       "${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-none}" \
+      "${security}" \
       "${E2E_COMPONENT_DESCRIPTION[${component_key}]}"
   done
 }
@@ -484,6 +615,59 @@ e2e_validate_resource_server_fixture_tree() {
   done
 }
 
+e2e_validate_resource_server_security_selection() {
+  if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
+    if e2e_is_explicit 'resource-server-basic-auth' && [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]; then
+      e2e_die '--resource-server-basic-auth requires a selected resource-server component'
+      return 1
+    fi
+    if e2e_is_explicit 'resource-server-oauth2' && [[ "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
+      e2e_die '--resource-server-oauth2 requires a selected resource-server component'
+      return 1
+    fi
+    if e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
+      e2e_die '--resource-server-mtls requires a selected resource-server component'
+      return 1
+    fi
+    return 0
+  fi
+
+  if [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' && "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
+    e2e_die '--resource-server-basic-auth and --resource-server-oauth2 cannot both be true (managed-server auth is one-of)'
+    return 1
+  fi
+
+  local component_key
+  component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+
+  local supported_features=${E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES[${component_key}]:-}
+  local required_features=${E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
+  local feature
+  local selected
+
+  for feature in basic-auth oauth2 mtls; do
+    if e2e_resource_server_feature_enabled "${feature}"; then
+      if ! e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
+        e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected security feature: ${feature}"
+        return 1
+      fi
+    fi
+  done
+
+  for feature in ${required_features}; do
+    selected='false'
+    if e2e_resource_server_feature_enabled "${feature}"; then
+      selected='true'
+    fi
+    if [[ "${selected}" != 'true' ]]; then
+      e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires security feature ${feature}=true"
+      return 1
+    fi
+  done
+
+  return 0
+}
+
 e2e_validate_selection() {
   if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]] && ! e2e_component_exists 'resource-server' "${E2E_RESOURCE_SERVER}"; then
     e2e_die "unknown resource-server component: ${E2E_RESOURCE_SERVER}"
@@ -509,6 +693,8 @@ e2e_validate_selection() {
     e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support connection ${E2E_RESOURCE_SERVER_CONNECTION}"
     return 1
   fi
+
+  e2e_validate_resource_server_security_selection || return 1
 
   if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
     e2e_validate_resource_server_fixture_tree "${E2E_RESOURCE_SERVER}" || return 1
@@ -567,6 +753,9 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["repo-type=${E2E_REPO_TYPE}"]=1
   E2E_CAPABILITY_SET["resource-server=${E2E_RESOURCE_SERVER}"]=1
   E2E_CAPABILITY_SET["resource-server-connection=${E2E_RESOURCE_SERVER_CONNECTION}"]=1
+  E2E_CAPABILITY_SET["resource-server-basic-auth=${E2E_RESOURCE_SERVER_BASIC_AUTH}"]=1
+  E2E_CAPABILITY_SET["resource-server-oauth2=${E2E_RESOURCE_SERVER_OAUTH2}"]=1
+  E2E_CAPABILITY_SET["resource-server-mtls=${E2E_RESOURCE_SERVER_MTLS}"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
   E2E_CAPABILITY_SET["secret-provider-connection=${E2E_SECRET_PROVIDER_CONNECTION}"]=1
 
@@ -581,6 +770,16 @@ e2e_build_capabilities() {
 
   if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
     E2E_CAPABILITY_SET['has-resource-server']=1
+  fi
+
+  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]; then
+    E2E_CAPABILITY_SET['has-resource-server-basic-auth']=1
+  fi
+  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
+    E2E_CAPABILITY_SET['has-resource-server-oauth2']=1
+  fi
+  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
+    E2E_CAPABILITY_SET['has-resource-server-mtls']=1
   fi
 
   if [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' || "${E2E_RESOURCE_SERVER_CONNECTION}" == 'remote' || "${E2E_SECRET_PROVIDER_CONNECTION}" == 'remote' ]]; then
@@ -629,6 +828,9 @@ e2e_component_export_env() {
 
   export E2E_RESOURCE_SERVER
   export E2E_RESOURCE_SERVER_CONNECTION
+  export E2E_RESOURCE_SERVER_BASIC_AUTH
+  export E2E_RESOURCE_SERVER_OAUTH2
+  export E2E_RESOURCE_SERVER_MTLS
   export E2E_REPO_TYPE
   export E2E_GIT_PROVIDER
   export E2E_GIT_PROVIDER_CONNECTION

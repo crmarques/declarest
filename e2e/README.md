@@ -14,10 +14,13 @@ This repository uses a componentized Bash e2e harness.
 - `full`: runs all `main` and `corner` cases that match the selected stack.
 - `manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
+  - default stack includes `resource-server=simple-api-server`
   - remote component selections are rejected in Step 1
   - when a resource-server is selected, its `repo-template` tree is copied into the context repository directory
   - component manual access details are printed after Step 5 (Configuring Access) when available
-  - keycloak local default admin credentials: `admin` / `admin` (override with `DECLAREST_E2E_KEYCLOAK_ADMIN_USER` and `DECLAREST_E2E_KEYCLOAK_ADMIN_PASSWORD`)
+  - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
+  - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `e2e/.runs/<run-id>/certs/resource-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
+  - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
 ## Main Flags
@@ -25,6 +28,9 @@ This repository uses a componentized Bash e2e harness.
 - `--profile <basic|full|manual>`
 - `--resource-server <name|none>`
 - `--resource-server-connection <local|remote>`
+- `--resource-server-basic-auth [<true|false>]` (default: `false`)
+- `--resource-server-oauth2 [<true|false>]` (default: `true`)
+- `--resource-server-mtls [<true|false>]` (default: `false`)
 - `--repo-type <name>`
 - `--git-provider <name>`
 - `--git-provider-connection <local|remote>`
@@ -37,6 +43,8 @@ This repository uses a componentized Bash e2e harness.
 - `--clean-all`
 
 Use `--list-components` to see currently available component names and metadata.
+`--resource-server-basic-auth` and `--resource-server-oauth2` are mutually exclusive because context auth config is one-of.
+Selections are validated against each resource-server capability contract; for components without OAuth2 support, pass `--resource-server-oauth2 false`.
 
 Cleanup behavior:
 
@@ -111,6 +119,7 @@ Component authoring is contract-driven. Use `e2e/components/STANDARD.md` as the 
 Each component directory under `e2e/components/<type>/<name>/` must include:
 
 - `component.env` with explicit `COMPONENT_RUNTIME_KIND` and `COMPONENT_DEPENDS_ON`
+- `resource-server` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
@@ -154,6 +163,17 @@ Keycloak repo-template currently covers:
 - `/admin/realms/_/organizations`
 
 ## Remote Environment Variables
+
+### Resource Server (`simple-api-server`, remote)
+
+- `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
+- optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
+  - defaults come from runner selection flags: `--resource-server-basic-auth`, `--resource-server-oauth2`, `--resource-server-mtls`
+- when basic-auth is enabled: `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_USERNAME`, `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_PASSWORD`
+- when oauth2 is enabled: `DECLAREST_E2E_SIMPLE_API_CLIENT_ID`, `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
+- optional oauth2: `DECLAREST_E2E_SIMPLE_API_TOKEN_URL`, `DECLAREST_E2E_SIMPLE_API_SCOPE`, `DECLAREST_E2E_SIMPLE_API_AUDIENCE`
+- when mTLS is enabled: `DECLAREST_E2E_SIMPLE_API_TLS_CA_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_KEY_FILE`
+- local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `e2e/.runs/<run-id>/certs/resource-server-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
 
 ### Resource Server (`keycloak`, remote)
 

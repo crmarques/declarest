@@ -58,19 +58,32 @@ Core resource commands:
 10. `template`.
 
 Selected command names:
-1. `config use`.
-2. `config show`.
-3. `config current`.
-4. `config resolve`.
-5. `metadata resolve`.
-6. `metadata render`.
-7. `repo status`.
-8. `secret mask`.
-9. `secret resolve`.
-10. `secret normalize`.
-11. `secret detect`.
-12. `completion`.
-13. `version`.
+1. `config create`.
+2. `config add`.
+3. `config use`.
+4. `config show`.
+5. `config current`.
+6. `config resolve`.
+7. `metadata resolve`.
+8. `metadata render`.
+9. `repo status`.
+10. `secret mask`.
+11. `secret resolve`.
+12. `secret normalize`.
+13. `secret detect`.
+14. `completion`.
+15. `version`.
+
+Ad-hoc command methods:
+1. `ad-hoc get`.
+2. `ad-hoc head`.
+3. `ad-hoc options`.
+4. `ad-hoc post`.
+5. `ad-hoc put`.
+6. `ad-hoc patch`.
+7. `ad-hoc delete`.
+8. `ad-hoc trace`.
+9. `ad-hoc connect`.
 
 Interactive config commands:
 1. `config create` SHOULD support terminal prompts when no file/stdin input is provided.
@@ -92,6 +105,16 @@ Interactive config commands:
 10. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
 11. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 12. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
+13. `ad-hoc <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`.
+14. `ad-hoc <method>` MUST accept optional request payload from `--file` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
+15. `config add` MUST accept input from `--file` or stdin.
+16. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
+17. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
+18. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
+19. When `config add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
+20. `config add --set-current` MUST set current context to the imported context when exactly one context is imported.
+21. `config add --set-current` with multiple imported contexts MUST require catalog `current-ctx` or fail with `ValidationError`.
+22. `config add` SHOULD default `--format` to `yaml` while continuing to accept explicit `json`.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -102,6 +125,7 @@ Interactive config commands:
 6. `repo status` with `--output auto` MUST render deterministic text summary by default.
 7. `config show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
+9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
 
 ## Failure Modes
 1. Missing required path argument.
@@ -111,6 +135,8 @@ Interactive config commands:
 5. `resource get` receives both `--local` and `--remote`.
 6. `resource save` receives both `--as-items` and `--as-one-resource`.
 7. `resource save --as-items` receives non-list input.
+8. `config add --context-name` does not match any catalog context.
+9. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
 
 ## Edge Cases
 1. `save` with secret masking requested but no secret manager configured.
@@ -134,3 +160,11 @@ Interactive config commands:
 12. `declarest version -o json` prints machine-readable version information.
 13. `declarest config use` opens interactive context selection when run in a terminal.
 14. `declarest config show --context dev` prints the selected context configuration as YAML.
+15. `declarest ad-hoc get /health` executes a direct managed-server GET request.
+16. `declarest ad-hoc post /customers --file payload.json` executes a direct managed-server POST request with JSON body.
+17. `echo '{"id":"acme"}' | declarest ad-hoc put /customers/acme` executes a direct managed-server PUT request from stdin.
+18. `declarest ad-hoc delete /customers/a --path /customers/b` fails with `ValidationError` due to path mismatch.
+19. `declarest config create` opens interactive prompts to build one context configuration.
+20. `declarest config add --file contexts.yaml --format yaml` imports all contexts defined in a catalog file.
+21. `declarest config add --file contexts.yaml --format yaml --context-name prod --set-current` imports only `prod` and sets it as current.
+22. `declarest config add --file contexts.yaml --format yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.

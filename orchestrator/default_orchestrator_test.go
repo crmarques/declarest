@@ -144,6 +144,47 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 	}
 }
 
+func TestDefaultOrchestratorAdHocDelegatesToServer(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		adHocValue: map[string]any{"ok": true},
+	}
+	reconciler := &DefaultOrchestrator{
+		Server: serverManager,
+	}
+
+	body := resource.Value(map[string]any{"id": "a"})
+	value, err := reconciler.AdHoc(context.Background(), "POST", "/test", body)
+	if err != nil {
+		t.Fatalf("AdHoc returned error: %v", err)
+	}
+
+	if !serverManager.adHocCalled {
+		t.Fatal("expected ad-hoc request to be delegated to server")
+	}
+	if serverManager.adHocMethod != "POST" {
+		t.Fatalf("expected method POST, got %q", serverManager.adHocMethod)
+	}
+	if serverManager.adHocPath != "/test" {
+		t.Fatalf("expected path /test, got %q", serverManager.adHocPath)
+	}
+	if !reflect.DeepEqual(serverManager.adHocBody, body) {
+		t.Fatalf("unexpected ad-hoc body: %#v", serverManager.adHocBody)
+	}
+	if !reflect.DeepEqual(value, map[string]any{"ok": true}) {
+		t.Fatalf("unexpected ad-hoc response: %#v", value)
+	}
+}
+
+func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultOrchestrator{}
+	_, err := reconciler.AdHoc(context.Background(), "GET", "/test", nil)
+	assertTypedCategory(t, err, faults.ValidationError)
+}
+
 type fakeRepository struct {
 	getValue    resource.Value
 	getErr      error
@@ -241,11 +282,17 @@ type fakeServer struct {
 	listErr     error
 	existsValue bool
 	existsErr   error
+	adHocValue  resource.Value
+	adHocErr    error
 
 	createCalled bool
 	updateCalled bool
 	getCalled    bool
 	listCalled   bool
+	adHocCalled  bool
+	adHocMethod  string
+	adHocPath    string
+	adHocBody    resource.Value
 	lastResource resource.Resource
 }
 
@@ -287,6 +334,17 @@ func (f *fakeServer) Exists(context.Context, resource.Resource) (bool, error) {
 		return false, f.existsErr
 	}
 	return f.existsValue, nil
+}
+
+func (f *fakeServer) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+	f.adHocCalled = true
+	f.adHocMethod = method
+	f.adHocPath = endpointPath
+	f.adHocBody = body
+	if f.adHocErr != nil {
+		return nil, f.adHocErr
+	}
+	return f.adHocValue, nil
 }
 
 func (f *fakeServer) GetOpenAPISpec(context.Context) (resource.Value, error) {

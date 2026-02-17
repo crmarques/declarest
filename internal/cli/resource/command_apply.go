@@ -43,5 +43,7 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }

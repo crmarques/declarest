@@ -47,5 +47,7 @@ func newExplainCommand(deps common.CommandDependencies, globalFlags *common.Glob
 	}
 
 	common.BindPathFlag(command, &pathFlag)
+	common.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
 }

@@ -45,14 +45,20 @@ e2e_manual_handoff_print() {
   cat <<EOFH
 Manual profile is ready.
 
+Run ID:
+  ${E2E_RUN_ID:-n/a}
+
 Context file:
   ${E2E_CONTEXT_FILE}
 
 To use it in another shell:
-  export DECLAREST_CONTEXTS_FILE=${E2E_CONTEXT_FILE@Q}
-  ${E2E_BIN} --context ${context_name} config show
-  ${E2E_BIN} --context ${context_name} repo status -o json
-  ${E2E_BIN} --context ${context_name} resource list / --source local -o json
+  export DECLAREST_E2E_RUN_DIR=${E2E_RUN_DIR@Q}
+  export DECLAREST_CONTEXTS_FILE="\${DECLAREST_E2E_RUN_DIR}/contexts.yaml"
+  export PATH="\${DECLAREST_E2E_RUN_DIR}/bin:\$PATH"
+  export DECLAREST_E2E_CONTEXT=${context_name@Q}
+  declarest --context "\${DECLAREST_E2E_CONTEXT}" config show
+  declarest --context "\${DECLAREST_E2E_CONTEXT}" repo status -o json
+  declarest --context "\${DECLAREST_E2E_CONTEXT}" resource list / --source local -o json
 
 This execution finished and runtime resources were kept.
 To stop and remove this execution:

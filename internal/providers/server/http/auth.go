@@ -146,7 +146,7 @@ func (g *HTTPResourceServerGateway) oauthToken(ctx context.Context) (string, err
 	request.Header.Set("Accept", defaultMediaType)
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	response, err := g.client.Do(request)
+	response, err := g.doRequest(ctx, "oauth2-token", request)
 	if err != nil {
 		return "", transportError("oauth2 token request failed", err)
 	}

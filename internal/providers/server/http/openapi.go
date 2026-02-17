@@ -99,7 +99,7 @@ func (g *HTTPResourceServerGateway) loadOpenAPIDocument(ctx context.Context) (ma
 			return nil, err
 		}
 
-		response, err := g.client.Do(request)
+		response, err := g.doRequest(ctx, "openapi", request)
 		if err != nil {
 			return nil, transportError("failed to fetch OpenAPI document", err)
 		}

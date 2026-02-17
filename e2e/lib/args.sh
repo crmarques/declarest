@@ -2,8 +2,11 @@
 
 declare -Ag E2E_EXPLICIT
 
-E2E_RESOURCE_SERVER='keycloak'
+E2E_RESOURCE_SERVER='simple-api-server'
 E2E_RESOURCE_SERVER_CONNECTION='local'
+E2E_RESOURCE_SERVER_BASIC_AUTH='false'
+E2E_RESOURCE_SERVER_OAUTH2='true'
+E2E_RESOURCE_SERVER_MTLS='false'
 E2E_REPO_TYPE='filesystem'
 E2E_GIT_PROVIDER=''
 E2E_GIT_PROVIDER_CONNECTION='local'
@@ -95,6 +98,24 @@ e2e_validate_component_arg() {
   return 0
 }
 
+e2e_parse_bool_value() {
+  local flag=$1
+  local raw_value=$2
+
+  case "${raw_value,,}" in
+    true|1|yes|on)
+      printf 'true\n'
+      ;;
+    false|0|no|off)
+      printf 'false\n'
+      ;;
+    *)
+      e2e_die "invalid ${flag} value: ${raw_value} (allowed: true, false)"
+      return 1
+      ;;
+  esac
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -109,8 +130,11 @@ Profiles:
     manual  Start local components, print context access info, and exit.
 
 Component selection:
-  --resource-server <name|none>                  default: keycloak
+  --resource-server <name|none>                  default: simple-api-server
   --resource-server-connection <local|remote>
+  --resource-server-basic-auth [<true|false>]    default: false
+  --resource-server-oauth2 [<true|false>]        default: true
+  --resource-server-mtls [<true|false>]          default: false
   --repo-type <name>                             default: filesystem
   --git-provider <name>
   --git-provider-connection <local|remote>
@@ -131,7 +155,9 @@ Environment:
 
 Examples:
   ./run-e2e.sh --profile basic --repo-type filesystem --resource-server none --secret-provider none
-  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server keycloak
+  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
+  ./run-e2e.sh --resource-server keycloak --resource-server-oauth2 true --resource-server-basic-auth false
+  ./run-e2e.sh --resource-server simple-api-server --resource-server-oauth2 false --resource-server-basic-auth true --resource-server-mtls true
   ./run-e2e.sh --profile manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
@@ -184,6 +210,13 @@ e2e_parse_cleanup_args() {
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
+        ;;
+      --resource-server-basic-auth|--resource-server-oauth2|--resource-server-mtls)
+        has_workload_flag=1
+        shift
+        if [[ $# -gt 0 && "${1}" != -* ]]; then
+          shift
+        fi
         ;;
       --list-components|--keep-runtime)
         has_workload_flag=1
@@ -247,6 +280,39 @@ e2e_parse_args() {
         E2E_RESOURCE_SERVER_CONNECTION=$2
         e2e_mark_explicit 'resource-server-connection'
         shift 2
+        ;;
+      --resource-server-basic-auth)
+        local basic_auth_value='true'
+        if [[ $# -ge 2 && "${2}" != -* ]]; then
+          basic_auth_value=$2
+          shift 2
+        else
+          shift
+        fi
+        E2E_RESOURCE_SERVER_BASIC_AUTH=$(e2e_parse_bool_value '--resource-server-basic-auth' "${basic_auth_value}") || return 1
+        e2e_mark_explicit 'resource-server-basic-auth'
+        ;;
+      --resource-server-oauth2)
+        local oauth2_value='true'
+        if [[ $# -ge 2 && "${2}" != -* ]]; then
+          oauth2_value=$2
+          shift 2
+        else
+          shift
+        fi
+        E2E_RESOURCE_SERVER_OAUTH2=$(e2e_parse_bool_value '--resource-server-oauth2' "${oauth2_value}") || return 1
+        e2e_mark_explicit 'resource-server-oauth2'
+        ;;
+      --resource-server-mtls)
+        local mtls_value='true'
+        if [[ $# -ge 2 && "${2}" != -* ]]; then
+          mtls_value=$2
+          shift 2
+        else
+          shift
+        fi
+        E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${mtls_value}") || return 1
+        e2e_mark_explicit 'resource-server-mtls'
         ;;
       --repo-type)
         [[ $# -ge 2 ]] || {
@@ -334,6 +400,10 @@ e2e_parse_args() {
       return 1
       ;;
   esac
+
+  E2E_RESOURCE_SERVER_BASIC_AUTH=$(e2e_parse_bool_value '--resource-server-basic-auth' "${E2E_RESOURCE_SERVER_BASIC_AUTH}") || return 1
+  E2E_RESOURCE_SERVER_OAUTH2=$(e2e_parse_bool_value '--resource-server-oauth2' "${E2E_RESOURCE_SERVER_OAUTH2}") || return 1
+  E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
   e2e_validate_component_arg '--git-provider' "${E2E_GIT_PROVIDER}" 'false' 'true' || return 1

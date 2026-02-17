@@ -36,16 +36,24 @@ Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCo
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .LocalNonPersistentFlags.HasAvailableFlags}}
 
 Flags:
-{{.LocalNonPersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if or .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
+{{.LocalNonPersistentFlags.FlagUsages | trimTrailingWhitespaces}}
+{{end}}
+{{if or .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
 
 Global Flags:
-{{if .HasAvailableInheritedFlags}}{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if and .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
-{{end}}{{if .HasAvailablePersistentFlags}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{end}}{{if .HasHelpSubCommands}}
+{{if .HasAvailableInheritedFlags}}{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}
+{{end}}{{if and .HasAvailableInheritedFlags .HasAvailablePersistentFlags}}
+{{end}}{{if .HasAvailablePersistentFlags}}{{.PersistentFlags.FlagUsages | trimTrailingWhitespaces}}
+{{end}}
+{{end}}
+{{if .HasHelpSubCommands}}
 
 Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}
+{{if .HasAvailableSubCommands}}
 
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}`
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
 
 func NewRootCommand(deps Dependencies) *cobra.Command {
 	commandDeps := deps.commandDependencies()
@@ -92,6 +100,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 	})
 
 	common.BindGlobalFlags(root, &globalFlags)
+	common.RegisterContextFlagCompletion(root, commandDeps)
 	root.PersistentFlags().BoolP("help", "h", false, "help for command")
 
 	root.AddGroup(
