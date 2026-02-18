@@ -73,13 +73,13 @@ e2e_runner_cmdline_matches() {
   ((${#argv[@]} > 0)) || return 1
 
   case "${argv[0]}" in
-    */run-e2e.sh|run-e2e.sh|./e2e/run-e2e.sh|e2e/run-e2e.sh)
+    */run-e2e.sh|run-e2e.sh|./test/e2e/run-e2e.sh|test/e2e/run-e2e.sh)
       return 0
       ;;
     */bash|bash|*/sh|sh)
       if ((${#argv[@]} >= 2)); then
         case "${argv[1]}" in
-          */run-e2e.sh|run-e2e.sh|./e2e/run-e2e.sh|e2e/run-e2e.sh)
+          */run-e2e.sh|run-e2e.sh|./test/e2e/run-e2e.sh|test/e2e/run-e2e.sh)
             return 0
             ;;
         esac
@@ -90,7 +90,7 @@ e2e_runner_cmdline_matches() {
         case "${argv[1]}" in
           */bash|bash|*/sh|sh)
             case "${argv[2]}" in
-              */run-e2e.sh|run-e2e.sh|./e2e/run-e2e.sh|e2e/run-e2e.sh)
+              */run-e2e.sh|run-e2e.sh|./test/e2e/run-e2e.sh|test/e2e/run-e2e.sh)
                 return 0
                 ;;
             esac

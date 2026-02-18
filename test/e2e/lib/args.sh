@@ -146,7 +146,7 @@ Runtime controls:
   --keep-runtime      Skip teardown to keep runtime resources available.
   --verbose           Print extra per-step log details.
   --clean <run-id>    Stop referenced run process and remove its containers/files.
-  --clean-all         Stop all run processes and remove all executions under e2e/.runs.
+  --clean-all         Stop all run processes and remove all executions under test/e2e/.runs.
   -h, --help          Show this help and exit.
 
 Environment:

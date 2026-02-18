@@ -61,4 +61,4 @@ Thumbs.db
 .venv/
 
 # E2E runtime artifacts
-e2e/.runs/
+test/e2e/.runs/

@@ -22,7 +22,7 @@ description: Select and execute the smallest verification set that protects chan
 1. Prefer package-scoped checks first: `go test ./<package>/...`.
 2. Use repository-wide regression gate when needed: `go test ./...`.
 3. Use `make check` when formatting/lint/tests all need reconfirmation.
-4. Use focused E2E runs before full profiles: `./e2e/run-e2e.sh --profile basic ...` (or `make e2e E2E_FLAGS='...'`).
+4. Use focused E2E runs before full profiles: `./test/e2e/run-e2e.sh --profile basic ...` (or `make e2e E2E_FLAGS='...'`).
 5. Avoid redundant reruns when unchanged areas are already validated.
 
 ## Guardrails

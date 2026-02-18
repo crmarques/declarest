@@ -16,7 +16,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 3. Host/container runtime tuning.
 
 ## Normative Rules
-1. The harness MUST expose repository entrypoint `run-e2e.sh` and delegate orchestration to `e2e/run-e2e.sh`.
+1. The harness MUST expose repository entrypoint `run-e2e.sh` and delegate orchestration to `test/e2e/run-e2e.sh`.
 2. Supported profiles MUST be `basic`, `full`, and `manual`; default is `basic`.
 3. Default component selections MUST be `resource-server=simple-api-server`, `repo-type=filesystem`, and `secret-provider=file`.
 4. `basic` MUST run `main` cases only; `full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
@@ -27,7 +27,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 9. Step statuses MUST be `RUNNING`, `OK`, `FAIL`, `SKIP`.
 10. Non-TTY mode MUST emit deterministic plain logs; TTY mode MAY use live spinner/color output.
 11. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
-12. Each component under `e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
+12. Each component under `test/e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
 13. Local compose-backed components MUST also provide `compose.yaml` and `scripts/health.sh`.
 14. `component.env` MUST declare `COMPONENT_RUNTIME_KIND` and `COMPONENT_DEPENDS_ON` explicitly.
 15. The runner MUST execute component hooks through one generic hook orchestration path (`init`, `start`, `health`, `configure-auth`, `context`, `stop`) rather than per-component ad hoc branching.
@@ -39,7 +39,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 21. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
 22. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
 23. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
-24. Runtime artifacts MUST be written under `e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
+24. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
 25. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
 26. The runner MUST maintain one live execution log file and print its path at startup.
 27. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
@@ -79,8 +79,8 @@ Case requirements (`CASE_REQUIRES`):
 3. All requirements are AND-combined.
 
 Case discovery order:
-1. Global cases first: `e2e/cases/<scope>/`.
-2. Selected component cases next: `e2e/components/<type>/<name>/cases/<scope>/`.
+1. Global cases first: `test/e2e/cases/<scope>/`.
+2. Selected component cases next: `test/e2e/components/<type>/<name>/cases/<scope>/`.
 3. Discovery MUST be deterministic and deduplicated.
 
 Manual handoff:

@@ -1,6 +1,6 @@
 # E2E Component Standard
 
-This document defines the component contract used by `e2e/run-e2e.sh`.
+This document defines the component contract used by `test/e2e/run-e2e.sh`.
 
 ## Scope
 
@@ -16,7 +16,7 @@ Use this standard for all component groups:
 Each component lives at:
 
 ```text
-e2e/components/<type>/<name>/
+test/e2e/components/<type>/<name>/
 ```
 
 Required files:
@@ -122,6 +122,6 @@ Common exported variables:
 4. Add `compose.yaml` and `health.sh` for `compose` runtime.
 5. Add component-specific `cases/main` and `cases/corner` when behavior differs.
 6. Run:
-   - `bash -n e2e/run-e2e.sh e2e/lib/*.sh`
-   - `./e2e/run-e2e.sh --list-components`
+  - `bash -n test/e2e/run-e2e.sh test/e2e/lib/*.sh`
+  - `./test/e2e/run-e2e.sh --list-components`
 7. Validate one local and one remote path when both connections are supported.
