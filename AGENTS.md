@@ -7,9 +7,11 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 1. Read `AGENTS.md`.
 2. Identify request intent and affected bounded contexts.
 3. Load `agents/reference/interfaces.md` first.
-4. Load only the minimal additional files from the matrix below.
-5. If authoring/revising specs, run `spec-writer`; if reviewing/auditing specs, run `spec-auditor`.
-6. Before final response, run the completion checklist.
+4. Run `agents/skills/spec-router/SKILL.md` and load the minimal additional files from the matrix below.
+5. If authoring/revising specs or instruction files, run `agents/skills/spec-writer/SKILL.md`.
+6. If behavior or verification expectations changed, run `agents/skills/quality-gate/SKILL.md`.
+7. If reviewing/auditing specs, or after substantial spec/instruction edits, run `agents/skills/spec-auditor/SKILL.md`.
+8. Before final response, run the completion checklist and report unmet items.
 
 ## Domain File Catalog
 | File | Domain | Load When |
@@ -39,13 +41,16 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
 | E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 | Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
-| Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/quality.md` |
+| Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/code.md`, `agents/reference/quality.md` |
+| Instruction/skill workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` plus affected `AGENTS.md`/`agents/skills/*` files |
+| Quality strategy/test-policy change | `agents/reference/interfaces.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 
 ## Skill Selection Rules
 1. Use `agents/skills/spec-router/SKILL.md` to choose minimal context.
 2. Use `agents/skills/spec-writer/SKILL.md` when editing specs or instruction files.
-3. Use `agents/skills/spec-auditor/SKILL.md` when validating consistency and coverage.
-4. If multiple skills apply, run in order: `spec-router`, `spec-writer`, `spec-auditor`.
+3. Use `agents/skills/quality-gate/SKILL.md` when selecting verification scope for behavior, contract, or security changes.
+4. Use `agents/skills/spec-auditor/SKILL.md` when validating consistency and coverage.
+5. If multiple skills apply, run in order: `spec-router`, `spec-writer`, `quality-gate`, `spec-auditor`.
 
 ## Engineering Rules
 1. Keep architecture and implementation aligned with senior engineering practices.
@@ -60,10 +65,14 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 10. Keep context configuration aligned with `agents/reference/context-config.md`.
 11. Add or update dependencies only when they are trusted, widely adopted, and actively maintained.
 12. When dependencies/imports change, align `go.mod`/`go.sum` and run `go mod tidy`.
+13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
+14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
 
 ## Completion Checklist
 1. Changed behavior is captured in the correct domain files.
 2. Interface references match `agents/reference/interfaces.md` exactly.
 3. Updated examples include at least one corner case.
 4. Quality/security impacts are reflected in `agents/reference/quality.md` when applicable.
-5. No unnecessary file fragmentation was introduced.
+5. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
+6. Verification scope is documented (commands run, blockers, and residual risks).
+7. No unnecessary file fragmentation was introduced.

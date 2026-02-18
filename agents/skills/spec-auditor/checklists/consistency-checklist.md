@@ -22,12 +22,19 @@
 2. Validation and destructive-operation safeguards are explicit.
 3. Structured output expectations are stable.
 
+## Routing and Skill Integrity
+1. `AGENTS.md` request matrix and `agents/skills/spec-router/SKILL.md` route map are consistent for overlapping request types.
+2. Skill order and trigger guidance are consistent between `AGENTS.md` and each `agents/skills/*/SKILL.md`.
+3. All skill references point to existing files and use stable paths.
+
 ## Quality Coverage Integrity
 1. `quality.md` includes required scenario coverage for all high-risk behaviors.
 2. Every new normative rule has a corresponding test expectation.
 3. Security-sensitive scenarios include negative tests.
+4. Verification guidance remains risk-based and proportional to change impact.
 
 ## File Organization Integrity
 1. Files are scoped by single dominant responsibility.
 2. Split triggers are documented and applied consistently.
 3. No unnecessary placeholder or duplicate files exist.
+4. Completion checklist requirements are achievable from the documented workflows.
