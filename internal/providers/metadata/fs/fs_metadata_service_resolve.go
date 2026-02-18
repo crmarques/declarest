@@ -84,32 +84,50 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 	}
 
 	segments := splitPathSegments(targetPath)
-	parentSelector := "/"
+	parentSelectors := []string{"/"}
 	for _, segment := range segments {
-		wildcards, literals, err := s.matchingCollectionCandidates(parentSelector, segment)
-		if err != nil {
-			debugctx.Printf(
-				ctx,
-				"metadata fs resolve match failed parent=%q segment=%q error=%v",
-				parentSelector,
-				segment,
-				err,
-			)
-			return metadatadomain.ResourceMetadata{}, err
+		wildcardCandidates := make(map[string]struct{})
+		literalCandidates := make(map[string]struct{})
+		nextParents := make(map[string]struct{})
+
+		for _, parentSelector := range parentSelectors {
+			wildcards, literals, err := s.matchingCollectionCandidates(parentSelector, segment)
+			if err != nil {
+				debugctx.Printf(
+					ctx,
+					"metadata fs resolve match failed parent=%q segment=%q error=%v",
+					parentSelector,
+					segment,
+					err,
+				)
+				return metadatadomain.ResourceMetadata{}, err
+			}
+
+			for _, selector := range wildcards {
+				wildcardCandidates[selector] = struct{}{}
+				nextParents[selector] = struct{}{}
+			}
+			for _, selector := range literals {
+				literalCandidates[selector] = struct{}{}
+				nextParents[selector] = struct{}{}
+			}
 		}
 
-		for _, selector := range wildcards {
+		for _, selector := range sortedSelectorKeys(wildcardCandidates) {
 			if err := apply(selector, metadataPathCollection); err != nil {
 				return metadatadomain.ResourceMetadata{}, err
 			}
 		}
-		for _, selector := range literals {
+		for _, selector := range sortedSelectorKeys(literalCandidates) {
 			if err := apply(selector, metadataPathCollection); err != nil {
 				return metadatadomain.ResourceMetadata{}, err
 			}
 		}
 
-		parentSelector = joinSelector(parentSelector, segment)
+		parentSelectors = sortedSelectorKeys(nextParents)
+		if len(parentSelectors) == 0 {
+			break
+		}
 	}
 
 	if targetPath != "/" {
@@ -139,22 +157,17 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 	wildcards := make([]string, 0)
 	literals := make([]string, 0)
 	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == "_" {
+		if !entry.IsDir() {
 			continue
 		}
 
 		childName := entry.Name()
 		childSelector := joinSelector(parentSelector, childName)
 
-		collectionMetadataPath, pathErr := s.metadataFilePath(childSelector, metadataPathCollection)
-		if pathErr != nil {
-			return nil, nil, pathErr
-		}
-		if _, statErr := os.Stat(collectionMetadataPath); statErr != nil {
-			if errors.Is(statErr, os.ErrNotExist) {
-				continue
-			}
-			return nil, nil, internalError("failed to inspect metadata selector file", statErr)
+		// "_" is used in repository templates as an intermediary wildcard selector.
+		if childName == "_" {
+			wildcards = append(wildcards, childSelector)
+			continue
 		}
 
 		if hasWildcardPattern(childName) {
@@ -179,6 +192,19 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 	sort.Strings(wildcards)
 	sort.Strings(literals)
 	return wildcards, literals, nil
+}
+
+func sortedSelectorKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func normalizeResolvePath(logicalPath string) (string, error) {

@@ -296,6 +296,32 @@ func TestAdHocMethodCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("get_not_found_falls_back_to_metadata_aware_resource_get", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.adHocErr = faults.NewTypedError(faults.NotFoundError, "ad-hoc path not found", nil)
+		reconciler.getRemoteValue = map[string]any{
+			"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+			"clientId": "account",
+		}
+
+		output, err := executeForTest(deps, "", "ad-hoc", "get", "/admin/realms/master/clients/account")
+		if err != nil {
+			t.Fatalf("unexpected fallback error: %v", err)
+		}
+		if len(reconciler.getRemoteCalls) != 1 {
+			t.Fatalf("expected one metadata-aware fallback read, got %d", len(reconciler.getRemoteCalls))
+		}
+		if reconciler.getRemoteCalls[0] != "/admin/realms/master/clients/account" {
+			t.Fatalf("expected fallback path to match request, got %q", reconciler.getRemoteCalls[0])
+		}
+		if !strings.Contains(output, "\"clientId\": \"account\"") {
+			t.Fatalf("expected fallback payload output, got %q", output)
+		}
+	})
+
 	t.Run("post_reads_stdin_body", func(t *testing.T) {
 		t.Parallel()
 
@@ -465,6 +491,40 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		if saved["source"] != "remote" {
 			t.Fatalf("expected saved payload to come from remote source, got %#v", saved)
+		}
+	})
+
+	t.Run("without_input_remote_list_falls_back_to_common_item_identity_attributes", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
+			AliasFromAttribute: "clientId",
+		}
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			getRemoteValue: []any{
+				map[string]any{"id": "app-a-id", "enabled": true},
+				map[string]any{"id": "app-b-id", "enabled": false},
+			},
+		}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"resource",
+			"save",
+			"/admin/realms/master/clients/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/app-a-id" {
+			t.Fatalf("expected first saved path to use id fallback, got %q", reconciler.saveCalls[0].logicalPath)
+		}
+		if reconciler.saveCalls[1].logicalPath != "/admin/realms/master/clients/app-b-id" {
+			t.Fatalf("expected second saved path to use id fallback, got %q", reconciler.saveCalls[1].logicalPath)
 		}
 	})
 
@@ -660,6 +720,264 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		if len(reconciler.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+	})
+
+	t.Run("handle_secrets_masks_payload_updates_metadata_and_stores_secret_values", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute:       "id",
+			SecretsFromAttributes: []string{"credentials.authValue", "existingSecret"},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := testDepsWith(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
+
+		_, err := executeForTest(
+			deps,
+			`{"apiToken":"token-abc","credentials":{"authValue":"plain-secret"}}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--handle-secrets",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error with --handle-secrets: %v", err)
+		}
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+
+		saved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		if got := saved["apiToken"]; got != `{{secret "/customers/acme:apiToken"}}` {
+			t.Fatalf("expected apiToken placeholder, got %#v", got)
+		}
+		credentials, ok := saved["credentials"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected nested credentials payload, got %T", saved["credentials"])
+		}
+		if got := credentials["authValue"]; got != `{{secret "/customers/acme:credentials.authValue"}}` {
+			t.Fatalf("expected authValue placeholder, got %#v", got)
+		}
+
+		if secretProvider.values["/customers/acme:apiToken"] != "token-abc" {
+			t.Fatalf("expected stored apiToken value, got %#v", secretProvider.values)
+		}
+		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+			t.Fatalf("expected stored authValue value, got %#v", secretProvider.values)
+		}
+
+		updatedMetadata := metadataService.items["/customers/acme"]
+		expected := []string{"apiToken", "credentials.authValue", "existingSecret"}
+		if !reflect.DeepEqual(updatedMetadata.SecretsFromAttributes, expected) {
+			t.Fatalf("expected merged metadata attributes %#v, got %#v", expected, updatedMetadata.SecretsFromAttributes)
+		}
+	})
+
+	t.Run("handle_secrets_list_payload_uses_path_scoped_secret_keys", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := testDepsWith(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
+
+		_, err := executeForTest(
+			deps,
+			`[{"id":"acme","password":"alpha-secret"},{"id":"beta","password":"beta-secret"}]`,
+			"resource",
+			"save",
+			"/customers",
+			"--handle-secrets",
+		)
+		if err != nil {
+			t.Fatalf("unexpected list save error with --handle-secrets: %v", err)
+		}
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+
+		firstSaved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected first saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		secondSaved, ok := reconciler.saveCalls[1].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected second saved payload map, got %T", reconciler.saveCalls[1].value)
+		}
+		if got := firstSaved["password"]; got != `{{secret "/customers/acme:password"}}` {
+			t.Fatalf("expected first path-scoped placeholder, got %#v", got)
+		}
+		if got := secondSaved["password"]; got != `{{secret "/customers/beta:password"}}` {
+			t.Fatalf("expected second path-scoped placeholder, got %#v", got)
+		}
+
+		if secretProvider.values["/customers/acme:password"] != "alpha-secret" {
+			t.Fatalf("expected /customers/acme password stored, got %#v", secretProvider.values)
+		}
+		if secretProvider.values["/customers/beta:password"] != "beta-secret" {
+			t.Fatalf("expected /customers/beta password stored, got %#v", secretProvider.values)
+		}
+	})
+
+	t.Run("handle_secrets_requires_secret_provider_when_candidates_exist", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := testDepsWith(reconciler, metadataService)
+		deps.Secrets = nil
+
+		_, err := executeForTest(
+			deps,
+			`{"password":"plain-secret"}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--handle-secrets",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "secret provider is not configured") {
+			t.Fatalf("expected missing secret provider error, got %q", err.Error())
+		}
+	})
+
+	t.Run("handle_secrets_with_subset_fails_on_remaining_candidates_after_handling_requested", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := testDepsWith(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
+
+		_, err := executeForTest(
+			deps,
+			`{"apiToken":"token-abc","password":"pw-123"}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--handle-secrets=password",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
+			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
+		}
+		if len(reconciler.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(reconciler.saveCalls))
+		}
+		if secretProvider.values["/customers/acme:password"] != "pw-123" {
+			t.Fatalf("expected requested secret candidate to be stored, got %#v", secretProvider.values)
+		}
+		if _, found := secretProvider.values["/customers/acme:apiToken"]; found {
+			t.Fatalf("expected unhandled candidate to not be stored, got %#v", secretProvider.values)
+		}
+	})
+
+	t.Run("handle_secrets_with_unknown_candidate_fails_validation", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			`{"password":"pw-123"}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--handle-secrets=apiToken",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "apiToken" was not detected`) {
+			t.Fatalf("expected unknown requested candidate error, got %q", err.Error())
+		}
+	})
+
+	t.Run("remote_list_handle_secrets_subset_updates_wildcard_metadata_then_fails_on_unhandled", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			getRemoteValue: []any{
+				map[string]any{"id": "app-a", "secret": "sec-a", "apiToken": "tok-a"},
+				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
+			},
+		}
+		deps := testDepsWith(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/master/clients",
+			"--handle-secrets=secret",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
+			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
+		}
+		if len(reconciler.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(reconciler.saveCalls))
+		}
+
+		wildcardMetadata := metadataService.items["/admin/realms/*/clients"]
+		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
+			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
+		}
+		if secretProvider.values["/admin/realms/master/clients/app-a:secret"] != "sec-a" {
+			t.Fatalf("expected app-a secret to be stored, got %#v", secretProvider.values)
+		}
+		if _, found := secretProvider.values["/admin/realms/master/clients/app-a:apiToken"]; found {
+			t.Fatalf("expected unhandled apiToken to not be stored, got %#v", secretProvider.values)
+		}
+	})
+
+	t.Run("remote_list_handle_secrets_subset_with_ignore_saves_items", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			getRemoteValue: []any{
+				map[string]any{"id": "app-a", "secret": "sec-a", "apiToken": "tok-a"},
+				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
+			},
+		}
+		deps := testDepsWith(reconciler, metadataService)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/master/clients",
+			"--handle-secrets=secret",
+			"--ignore",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error with --handle-secrets and --ignore: %v", err)
+		}
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+
+		firstPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected first saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		if got := firstPayload["secret"]; got != `{{secret "/admin/realms/master/clients/app-a:secret"}}` {
+			t.Fatalf("expected first secret placeholder, got %#v", got)
+		}
+		if got := firstPayload["apiToken"]; got != "tok-a" {
+			t.Fatalf("expected unhandled apiToken to remain plaintext, got %#v", got)
+		}
+
+		wildcardMetadata := metadataService.items["/admin/realms/*/clients"]
+		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
+			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
 	})
 }
@@ -1491,6 +1809,44 @@ func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 	}
 }
 
+func TestResourceCollectionMutationsFallbackToSingleResourceLookupWhenListIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	const idPath = "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c"
+
+	reconciler := &testReconciler{
+		metadataService: newTestMetadata(),
+		localList: []resource.Resource{
+			{LogicalPath: "/admin/realms/master/clients/account"},
+		},
+		getLocalValues: map[string]resource.Value{
+			idPath: map[string]any{"id": "f88c68f3-3253-49f9-94a9-fe7553d33b5c", "clientId": "account"},
+		},
+	}
+	deps := testDepsWith(reconciler, reconciler.metadataService)
+
+	_, err := executeForTest(deps, "", "resource", "apply", idPath)
+	if err != nil {
+		t.Fatalf("unexpected apply fallback error: %v", err)
+	}
+	if len(reconciler.applyCalls) != 1 || reconciler.applyCalls[0] != idPath {
+		t.Fatalf("expected apply to execute fallback single target %q, got %#v", idPath, reconciler.applyCalls)
+	}
+
+	reconciler.updateCalls = nil
+	reconciler.getLocalCalls = nil
+	_, err = executeForTest(deps, "", "resource", "update", idPath)
+	if err != nil {
+		t.Fatalf("unexpected update fallback error: %v", err)
+	}
+	if len(reconciler.updateCalls) != 1 || reconciler.updateCalls[0].logicalPath != idPath {
+		t.Fatalf("expected update to execute fallback single target %q, got %#v", idPath, reconciler.updateCalls)
+	}
+	if len(reconciler.getLocalCalls) == 0 || reconciler.getLocalCalls[0] != idPath {
+		t.Fatalf("expected getLocal fallback lookup for %q, got %#v", idPath, reconciler.getLocalCalls)
+	}
+}
+
 func TestResourceCollectionMutationsFailWhenNoLocalResourcesMatch(t *testing.T) {
 	t.Parallel()
 
@@ -1694,6 +2050,18 @@ func TestHelpSubcommandEnabled(t *testing.T) {
 	}
 	if !strings.Contains(output, "Read a resource") {
 		t.Fatalf("expected command help output, got %q", output)
+	}
+}
+
+func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "resource", "save", "--help")
+	if err != nil {
+		t.Fatalf("expected resource save help output, got error: %v", err)
+	}
+	if !strings.Contains(output, "--handle-secrets") {
+		t.Fatalf("expected --handle-secrets in resource save help output, got %q", output)
 	}
 }
 
@@ -1929,6 +2297,10 @@ type testReconciler struct {
 	saveCalls       []savedResource
 	deleteCalls     []deleteCall
 	saveErr         error
+	getRemoteValue  resource.Value
+	getRemoteErr    error
+	getRemoteCalls  []string
+	adHocErr        error
 	getLocalCalls   []string
 	listLocalCalls  []string
 	applyCalls      []string
@@ -1963,9 +2335,19 @@ func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resour
 	return map[string]any{"path": logicalPath, "source": "local"}, nil
 }
 func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
+	r.getRemoteCalls = append(r.getRemoteCalls, logicalPath)
+	if r.getRemoteErr != nil {
+		return nil, r.getRemoteErr
+	}
+	if r.getRemoteValue != nil {
+		return r.getRemoteValue, nil
+	}
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
 func (r *testReconciler) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+	if r.adHocErr != nil {
+		return nil, r.adHocErr
+	}
 	return map[string]any{
 		"method": method,
 		"path":   endpointPath,

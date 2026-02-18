@@ -1,11 +1,13 @@
 package adhoc
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/resource"
@@ -90,6 +92,26 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 
 			value, err := orchestratorService.AdHoc(command.Context(), method, resolvedPath, body)
 			if err != nil {
+				if method == http.MethodGet && body == nil && isNotFoundError(err) {
+					if _, normalizeErr := resource.NormalizeLogicalPath(resolvedPath); normalizeErr == nil {
+						fallbackValue, fallbackErr := orchestratorService.GetRemote(command.Context(), resolvedPath)
+						if fallbackErr == nil {
+							debugctx.Printf(
+								command.Context(),
+								"ad-hoc request fallback succeeded method=%q path=%q value_type=%T",
+								method,
+								resolvedPath,
+								fallbackValue,
+							)
+							value = fallbackValue
+							err = nil
+						} else {
+							err = fallbackErr
+						}
+					}
+				}
+			}
+			if err != nil {
 				debugctx.Printf(
 					command.Context(),
 					"ad-hoc request failed method=%q path=%q error=%v",
@@ -154,4 +176,12 @@ func decodeOptionalBody(command *cobra.Command, flags common.InputFlags, payload
 	}
 
 	return common.DecodeInputData[resource.Value](data, flags.Format)
+}
+
+func isNotFoundError(err error) bool {
+	var typedErr *faults.TypedError
+	if errors.As(err, &typedErr) {
+		return typedErr.Category == faults.NotFoundError
+	}
+	return false
 }

@@ -2,7 +2,10 @@ package fsmetadata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -211,6 +214,46 @@ func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
 	}
 }
 
+func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	writeRawMetadataFile(t, filepath.Join(baseDir, "admin", "realms", "_", "metadata.json"), metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "realm",
+		AliasFromAttribute: "realm",
+	})
+	writeRawMetadataFile(t, filepath.Join(baseDir, "admin", "realms", "_", "clients", "_", "metadata.json"), metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "clientId",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCreate): {
+				Path: "/admin/realms/{{.realm}}/clients",
+			},
+		},
+	})
+
+	resolved, err := service.ResolveForPath(ctx, "/admin/realms/master/clients/broker")
+	if err != nil {
+		t.Fatalf("ResolveForPath returned error: %v", err)
+	}
+	if resolved.IDFromAttribute != "id" {
+		t.Fatalf("expected clients idFromAttribute from intermediary placeholder metadata, got %q", resolved.IDFromAttribute)
+	}
+	if resolved.AliasFromAttribute != "clientId" {
+		t.Fatalf(
+			"expected clients aliasFromAttribute from intermediary placeholder metadata, got %q",
+			resolved.AliasFromAttribute,
+		)
+	}
+	createPath := resolved.Operations[string(metadatadomain.OperationCreate)].Path
+	if createPath != "/admin/realms/{{.realm}}/clients" {
+		t.Fatalf("expected create path from clients metadata, got %q", createPath)
+	}
+}
+
 func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	t.Parallel()
 
@@ -326,6 +369,24 @@ func mustSetMetadata(
 
 	if err := service.Set(ctx, logicalPath, metadata); err != nil {
 		t.Fatalf("failed to set metadata %q: %v", logicalPath, err)
+	}
+}
+
+func writeRawMetadataFile(t *testing.T, filePath string, metadata metadatadomain.ResourceMetadata) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory %q: %v", filepath.Dir(filePath), err)
+	}
+
+	encoded, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to encode metadata for %q: %v", filePath, err)
+	}
+	encoded = append(encoded, '\n')
+
+	if err := os.WriteFile(filePath, encoded, 0o644); err != nil {
+		t.Fatalf("failed to write metadata file %q: %v", filePath, err)
 	}
 }
 

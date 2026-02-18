@@ -377,28 +377,78 @@ func isLikelySecretKey(key string) bool {
 		return false
 	}
 
-	for _, token := range tokens {
-		switch token {
-		case "password", "passwd", "pwd", "passphrase", "secret", "token":
-			return true
-		}
+	if hasStrongSecretPair(tokens) {
+		return true
 	}
 
-	for idx := 0; idx < len(tokens)-1; idx++ {
-		pair := tokens[idx] + "_" + tokens[idx+1]
-		switch pair {
-		case "api_key", "client_secret", "access_key", "access_token", "private_key", "bearer_token", "refresh_token":
-			return true
-		}
-	}
-
-	collapsed := strings.Join(tokens, "")
-	switch collapsed {
+	switch strings.Join(tokens, "") {
 	case "apikey", "clientsecret", "accesskey", "accesstoken", "privatekey", "bearertoken", "refreshtoken":
 		return true
 	}
 
+	for idx, token := range tokens {
+		if !isSecretCoreToken(token) {
+			continue
+		}
+		if isStandaloneSecretToken(tokens, idx) {
+			return true
+		}
+	}
+
 	return false
+}
+
+func hasStrongSecretPair(tokens []string) bool {
+	for idx := 0; idx < len(tokens)-1; idx++ {
+		pair := tokens[idx] + "_" + tokens[idx+1]
+		switch pair {
+		case "api_key", "client_secret", "access_key", "access_token", "private_key", "bearer_token", "refresh_token":
+		default:
+			continue
+		}
+
+		if idx+1 == len(tokens)-1 {
+			return true
+		}
+
+		if isNonSecretQualifierToken(tokens[idx+2]) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isSecretCoreToken(token string) bool {
+	switch token {
+	case "password", "passwd", "pwd", "passphrase", "secret", "token":
+		return true
+	default:
+		return false
+	}
+}
+
+func isStandaloneSecretToken(tokens []string, idx int) bool {
+	if idx < 0 || idx >= len(tokens) {
+		return false
+	}
+	if idx == len(tokens)-1 {
+		return true
+	}
+	return !isNonSecretQualifierToken(tokens[idx+1])
+}
+
+func isNonSecretQualifierToken(token string) bool {
+	switch token {
+	case "mode", "type", "policy", "method", "strategy", "preference", "delivery", "conveyance",
+		"endpoint", "url", "uri", "path", "lifetime", "ttl", "timeout", "duration",
+		"expiry", "expires", "expiration", "validity", "issuer", "name", "id", "length",
+		"size", "count", "min", "max", "enabled", "required", "supported", "allowed",
+		"algorithm", "alg", "version", "scheme", "file", "ref", "reference":
+		return true
+	default:
+		return false
+	}
 }
 
 func splitIdentifierTokens(value string) []string {

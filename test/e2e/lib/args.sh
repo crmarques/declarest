@@ -121,40 +121,66 @@ e2e_usage() {
 Usage: ./run-e2e.sh [flags]
 
 Objective:
-  Run Declarest end-to-end workloads against a selected component stack.
+  Run Declarest end-to-end workloads against a selectable component stack and profile to verify resource workflows.
 
-Profiles:
-  --profile <basic|full|manual>                  default: basic
-    basic   Run compatible main cases only.
-    full    Run compatible main and corner cases.
-    manual  Start local components, generate setup/reset handoff scripts, and exit.
+Profiles (required, defaults to basic when omitted):
+  --profile <basic|full|manual>                   default: basic
+    basic   : For automated ci-style runs, execute cases tagged "main" against the default stack.
+    full    : Also include "corner" cases that exercise less-common paths and additional components.
+    manual  : Only boot the selected components, emit setup/reset shell scripts, and exit so you can drive Declarest commands interactively (requires all connections to stay local and the selected resource/secret components to support local execution).
 
-Component selection:
-  --resource-server <name|none>                  default: simple-api-server
-  --resource-server-connection <local|remote>
-  --resource-server-basic-auth [<true|false>]    default: false
-  --resource-server-oauth2 [<true|false>]        default: true
-  --resource-server-mtls [<true|false>]          default: false
-  --repo-type <name>                             default: filesystem
-  --git-provider <name>
-  --git-provider-connection <local|remote>
-  --secret-provider <name|none>                  default: file
-  --secret-provider-connection <local|remote>
+Component selection (choose values for each flag; see notes below):
+  --resource-server <simple-api-server|keycloak|rundeck|vault|none>    default: simple-api-server
+    simple-api-server : Lightweight JSON API with optional basic-auth, OAuth2, and mTLS enforcement.
+    keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
+    rundeck           : Rundeck HTTP API surface.
+    vault             : HashiCorp Vault HTTP API acting as the managed resource.
+    none              : Skip provisioning any resource server; remote operations become no-ops or are validated against the repository only.
+  --resource-server-connection <local|remote>           default: local
+    local  : Start the chosen resource server locally via the E2E compose/runtime fixtures.
+    remote : Assume the server already exists and is reachable via the configured connection details.
+  --resource-server-basic-auth [<true|false>]         default: false
+    true  : Enable HTTP basic authentication on the resource server (supported by components that publish basic-auth support, such as simple-api-server).
+    false : Disable the feature, useful when the stack enforces other auth flows.
+  --resource-server-oauth2 [<true|false>]             default: true
+    true  : Enable OAuth2 token issuance for the server.
+    false : Disable OAuth2 so the stack can rely on alternate auth paths.
+  --resource-server-mtls [<true|false>]               default: false
+    true  : Require client certificate authentication when the component advertises mTLS support.
+    false : Run without client certificate validation.
+  --repo-type <filesystem|git>                        default: filesystem
+    filesystem : Use the local filesystem repository backend.
+    git        : Use the git repository backend (requires a git provider).
+  --git-provider <git|github|gitlab>                  default: git when --repo-type git (none otherwise)
+    git    : Local file:// git remote provider (bundled in the repo fixture).
+    github : Remote GitHub provider.
+    gitlab : GitLab provider that can run locally or reach a remote instance.
+  --git-provider-connection <local|remote>             default: local
+    local  : Run the provider inside this environment (supports git and gitlab).
+    remote : Reach an existing remote provider (required for github).
+  --secret-provider <file|vault|none>                 default: file
+    file  : Encrypted local file-based secret provider.
+    vault : HashiCorp Vault secret provider (runs locally or targets remote Vault).
+    none  : Skip secret provider integration and rely on plaintext placeholders.
+  --secret-provider-connection <local|remote>          default: local
+    local  : Launch the secret provider inside the E2E workspace.
+    remote : Connect to an already running provider.
 
 Runtime controls:
-  --list-components   List discovered components and exit.
-  --keep-runtime      Skip teardown to keep runtime resources available.
-  --verbose           Print extra per-step log details.
-  --clean <run-id>    Stop referenced run process and remove its containers/files.
-  --clean-all         Stop all run processes and remove all executions under test/e2e/.runs.
-  -h, --help          Show this help and exit.
+  --list-components            Enumerate every component defined under test/e2e/components and exit.
+  --keep-runtime               Skip runtime teardown so containers/files remain for post-run inspection.
+  --verbose                    Stream additional per-step logs for debugging.
+  --clean <run-id>             Stop the referenced run process (run IDs live under test/e2e/.runs/<run-id>) and delete its containers/files; run-id must match [A-Za-z0-9._-]+.
+  --clean-all                  Stop every recorded run process and remove all test/e2e/.runs executions.
+                               (Clean commands cannot be combined with workload flags or with each other.)
+  -h, --help                   Show this help text and exit immediately.
 
-Environment:
-  DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker> default: podman
-  DECLAREST_E2E_EXECUTION_LOG=<path>             optional execution log path
+Environment overrides:
+  DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker>       default: podman
+  DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
 
 Examples:
-  ./run-e2e.sh --profile basic --repo-type filesystem --resource-server none --secret-provider none
+  ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
   ./run-e2e.sh --resource-server keycloak --resource-server-oauth2 true --resource-server-basic-auth false
   ./run-e2e.sh --resource-server simple-api-server --resource-server-oauth2 false --resource-server-basic-auth true --resource-server-mtls true
@@ -406,6 +432,11 @@ e2e_parse_args() {
   E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
+
+  if [[ "${E2E_REPO_TYPE}" == 'git' && -z "${E2E_GIT_PROVIDER}" ]]; then
+    E2E_GIT_PROVIDER='git'
+  fi
+
   e2e_validate_component_arg '--git-provider' "${E2E_GIT_PROVIDER}" 'false' 'true' || return 1
 
   case "${E2E_GIT_PROVIDER_CONNECTION}" in

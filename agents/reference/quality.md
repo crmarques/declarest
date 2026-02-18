@@ -54,9 +54,12 @@ Acceptance contracts:
 16. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
 17. Ad-hoc CLI routing: `ad-hoc <method>` maps to managed-server requests with positional/flag path validation and payload decoding from `--file` or stdin, and `ad-hoc post|put --payload` inline decoding with source-conflict validation.
 18. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
-19. Resource save secret safeguard: `resource save` fails on potential plaintext secrets unless `--ignore` is provided, including metadata-driven `secretsFromAttributes` detection.
+19. Resource save secret safeguard: `resource save` fails on potential plaintext secrets unless `--ignore` is provided, and `resource save --handle-secrets[=<comma-separated-attributes>]` handles selected candidates, updates metadata, and fails with warning when unhandled candidates remain unless `--ignore` is set.
 20. Secret detect metadata fix flow: `secret detect` scans repository scope when no payload input is provided (default scope `/`), `secret detect --fix` merges detected attributes into metadata `secretsFromAttributes`, and `--secret-attribute` filtering has negative validation coverage for payload and repository-scan modes.
 21. Resource mutation scope: `resource apply|update` execute direct-child collection targets by default and include descendants with `--recursive`; `resource create` requires explicit payload input (`--file`, stdin, or `--payload`) and executes a single remote mutation.
+22. Resource save list identity fallback: when list entries omit metadata-defined alias/id attributes, `resource save` falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before returning alias-resolution errors.
+23. Metadata-aware read fallback: `resource get` and `resource save` (no input) attempt literal remote read first and then collection list/filter fallback by metadata alias/id when `NotFound`; `ad-hoc get` mirrors this behavior after a `NotFound` literal request.
+24. Metadata-aware path fallback breadth: repository-backed single-resource workflows (`resource get --repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) use literal local lookup then bounded metadata `idFromAttribute` fallback; remote delete retries with metadata-aware identity after literal `NotFound`.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

@@ -1,11 +1,14 @@
 package resource
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
+	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -59,6 +62,10 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			}
 			if err != nil {
 				debugctx.Printf(command.Context(), "resource get failed path=%q source=%q error=%v", resolvedPath, source, err)
+				if source == sourceRepository && isNotFoundError(err) {
+					debugctx.Printf(command.Context(), "resource get treating %q as collection listing", resolvedPath)
+					return renderRepositoryCollection(command, outputFormat, orchestratorService, resolvedPath)
+				}
 				return err
 			}
 
@@ -77,4 +84,33 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 	command.Flags().BoolVar(&fromRepository, "repository", false, "read from repository")
 	command.Flags().BoolVar(&fromRemoteServer, "remote-server", false, "read from remote server (default)")
 	return command
+}
+
+func isNotFoundError(err error) bool {
+	var typedErr *faults.TypedError
+	if errors.As(err, &typedErr) {
+		return typedErr.Category == faults.NotFoundError
+	}
+	return false
+}
+
+func renderRepositoryCollection(command *cobra.Command, outputFormat string, orchestratorService orchestrator.Orchestrator, logicalPath string) error {
+	items, err := orchestratorService.ListLocal(command.Context(), logicalPath, orchestrator.ListPolicy{})
+	if err != nil {
+		return err
+	}
+
+	payloads := make([]resource.Value, len(items))
+	for idx, item := range items {
+		payloads[idx] = item.Payload
+	}
+
+	return common.WriteOutput(command, outputFormat, payloads, func(w io.Writer, _ []resource.Value) error {
+		for _, item := range items {
+			if _, writeErr := fmt.Fprintln(w, item.LogicalPath); writeErr != nil {
+				return writeErr
+			}
+		}
+		return nil
+	})
 }

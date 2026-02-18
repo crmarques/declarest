@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
@@ -36,6 +37,17 @@ func listLocalMutationTargets(
 	items, err := orchestratorService.ListLocal(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: recursive})
 	if err != nil {
 		return nil, err
+	}
+	if len(items) == 0 && !recursive && logicalPathDepth(logicalPath) > 1 {
+		localValue, getErr := orchestratorService.GetLocal(ctx, logicalPath)
+		if getErr == nil {
+			items = []resource.Resource{{
+				LogicalPath: logicalPath,
+				Payload:     localValue,
+			}}
+		} else if !isTypedErrorCategory(getErr, faults.NotFoundError) {
+			return nil, getErr
+		}
 	}
 	if len(items) == 0 {
 		return nil, faults.NewTypedError(
@@ -105,4 +117,12 @@ func isMissingInputError(err error) bool {
 		return false
 	}
 	return typedErr.Category == faults.ValidationError && typedErr.Message == missingInputMessage
+}
+
+func logicalPathDepth(logicalPath string) int {
+	trimmed := strings.Trim(strings.TrimSpace(logicalPath), "/")
+	if trimmed == "" {
+		return 0
+	}
+	return len(strings.Split(trimmed, "/"))
 }

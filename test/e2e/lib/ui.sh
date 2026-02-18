@@ -11,6 +11,11 @@ E2E_STEP_LAST_LOG=''
 E2E_STEP_STATUSES=()
 E2E_STEP_TITLES=()
 E2E_STEP_DURATIONS=()
+E2E_STEP_LABEL_WIDTH=5
+E2E_STEP_TITLE_WIDTH=24
+E2E_STEP_DURATION_WIDTH=7
+E2E_STEP_STATUS_WIDTH=10
+E2E_STEP_TABLE_HEADER_PRINTED=0
 
 E2E_CASE_TOTAL=0
 E2E_CASE_PASSED=0
@@ -50,26 +55,128 @@ ui_colorize() {
 
 ui_step_state_label() {
   local state=$1
+  local cell_width=${2:-0}
+  local plain_label
+  local color=''
+
   case "${state}" in
-    PASS)
-      ui_colorize "${E2E_CLR_GREEN}" "PASS"
-      ;;
-    OK)
-      ui_colorize "${E2E_CLR_GREEN}" "OK"
+    PASS|OK)
+      plain_label='[OK]'
+      color="${E2E_CLR_GREEN}"
       ;;
     FAIL)
-      ui_colorize "${E2E_CLR_RED}" "FAIL"
+      plain_label='[FAILED]'
+      color="${E2E_CLR_RED}"
       ;;
     SKIP)
-      ui_colorize "${E2E_CLR_YELLOW}" "SKIP"
+      plain_label='[SKIP]'
+      color="${E2E_CLR_YELLOW}"
       ;;
     RUNNING)
-      ui_colorize "${E2E_CLR_BLUE}" "RUNNING"
+      plain_label='[RUNNING]'
+      color="${E2E_CLR_BLUE}"
       ;;
     *)
-      printf '%s' "${state}"
+      plain_label="[${state}]"
       ;;
   esac
+
+  local rendered_label="${plain_label}"
+  if ((cell_width > 0)); then
+    rendered_label=$(ui_center_text "${cell_width}" "${plain_label}")
+  fi
+
+  if [[ -n "${color}" ]]; then
+    ui_colorize "${color}" "${rendered_label}"
+  else
+    printf '%s' "${rendered_label}"
+  fi
+}
+
+ui_step_table_total_width() {
+  printf '%d\n' $((E2E_STEP_LABEL_WIDTH + E2E_STEP_TITLE_WIDTH + E2E_STEP_DURATION_WIDTH + E2E_STEP_STATUS_WIDTH + 3 * 3))
+}
+
+ui_center_text() {
+  local width=$1
+  local text=$2
+  local text_length=${#text}
+  if ((text_length >= width)); then
+    printf '%s' "${text}"
+    return 0
+  fi
+
+  local left_padding=$(((width - text_length) / 2))
+  local right_padding=$((width - text_length - left_padding))
+  printf '%*s%s%*s' "${left_padding}" '' "${text}" "${right_padding}" ''
+}
+
+ui_step_title_with_indicator() {
+  local step_title=$1
+  local indicator=$2
+  if [[ -n "${indicator}" ]]; then
+    printf '%s %s' "${indicator}" "${step_title}"
+    return 0
+  fi
+  printf '%s' "${step_title}"
+}
+
+ui_print_step_table_header() {
+  local force=${1:-0}
+  if ((force == 0 && E2E_STEP_TABLE_HEADER_PRINTED == 1)); then
+    return 0
+  fi
+
+  local step_header
+  local title_header
+  local span_header
+  local status_header
+  local divider
+  step_header=$(ui_center_text "${E2E_STEP_LABEL_WIDTH}" 'STEP')
+  title_header=$(ui_center_text "${E2E_STEP_TITLE_WIDTH}" 'ACTION')
+  span_header=$(ui_center_text "${E2E_STEP_DURATION_WIDTH}" 'SPAN')
+  status_header=$(ui_center_text "${E2E_STEP_STATUS_WIDTH}" 'STATUS')
+
+  local total_width
+  total_width=$(ui_step_table_total_width)
+  divider=$(printf '%*s' "${total_width}" '' | tr ' ' '-')
+
+  printf '%s\n' "${divider}"
+
+  printf '%s | %s | %s | %s\n' \
+    "${step_header}" \
+    "${title_header}" \
+    "${span_header}" \
+    "${status_header}"
+  printf '%s\n' "${divider}"
+
+  E2E_STEP_TABLE_HEADER_PRINTED=1
+}
+
+ui_step_line_render() {
+  local step_number=$1
+  local step_total=$2
+  local step_title=$3
+  local step_state=$4
+  local indicator=$5
+  local duration=$6
+
+  local step_label
+  step_label=$(ui_center_text "${E2E_STEP_LABEL_WIDTH}" "$(printf '%d/%d' "${step_number}" "${step_total}")")
+  local title_label
+  title_label=$(ui_step_title_with_indicator "${step_title}" "${indicator}")
+  local span_label
+  span_label=$(ui_center_text "${E2E_STEP_DURATION_WIDTH}" "${duration}")
+
+  local status_label
+  status_label=$(ui_step_state_label "${step_state}" "${E2E_STEP_STATUS_WIDTH}")
+
+  printf '%s | %-*s | %s | %s' \
+    "${step_label}" \
+    "${E2E_STEP_TITLE_WIDTH}" \
+    "${title_label}" \
+    "${span_label}" \
+    "${status_label}"
 }
 
 ui_print_step_line() {
@@ -78,24 +185,21 @@ ui_print_step_line() {
   local step_title=$3
   local step_state=$4
   local elapsed=$5
-  local suffix=${6:-}
+
+  local duration=''
+  if [[ "${step_state}" != 'RUNNING' ]]; then
+    duration=$(e2e_format_duration "${elapsed}")
+  fi
 
   if ((E2E_UI_TTY == 1)); then
-    printf '\r%-120s\r' ''
+    local width
+    width=$(ui_step_table_total_width)
+    printf '\r%-*s\r' "${width}" ''
   fi
 
-  printf 'Step %d/%d [%s] %s %s' \
-    "${step_number}" \
-    "${step_total}" \
-    "$(ui_step_state_label "${step_state}")" \
-    "${step_title}" \
-    "$(ui_colorize "${E2E_CLR_DIM}" "(${elapsed})")"
-
-  if [[ -n "${suffix}" ]]; then
-    printf ' %s' "${suffix}"
-  fi
-
-  printf '\n'
+  local line
+  line=$(ui_step_line_render "${step_number}" "${step_total}" "${step_title}" "${step_state}" '' "${duration}")
+  printf '%s\n' "${line}"
 }
 
 ui_selected_components_summary() {
@@ -191,13 +295,9 @@ ui_spinner_start() {
     local spin_index=0
     while true; do
       local spinner_char=${E2E_UI_SPINNER:spin_index:1}
-      printf '\r%s Step %d/%d [%s] %s %s' \
-        "$(ui_colorize "${E2E_CLR_BLUE}" "${spinner_char}")" \
-        "${step_number}" \
-        "${step_total}" \
-        "$(ui_step_state_label "RUNNING")" \
-        "${step_title}" \
-        "$(ui_colorize "${E2E_CLR_DIM}" "...")"
+      local line
+      line=$(ui_step_line_render "${step_number}" "${step_total}" "${step_title}" "RUNNING" "${spinner_char}" '')
+      printf '\r%s' "${line}"
       spin_index=$(((spin_index + 1) % 4))
       sleep 0.1
     done
@@ -215,7 +315,9 @@ ui_spinner_stop() {
 
   E2E_UI_SPINNER_PID=''
   if ((E2E_UI_TTY == 1)); then
-    printf '\r%-120s\r' ''
+    local width
+    width=$(ui_step_table_total_width)
+    printf '\r%-*s\r' "${width}" ''
   fi
 }
 
@@ -249,6 +351,7 @@ ui_run_step() {
   fi
 
   if ((E2E_UI_TTY == 1)); then
+    ui_print_step_table_header
     ui_spinner_start "${step_number}" "${step_total}" "${step_title}"
     set +e
     ui_run_step_body "${step_log}" "${step_fn}" "$@"
@@ -257,7 +360,8 @@ ui_run_step() {
 
     ui_spinner_stop
   else
-    ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "RUNNING" "0s"
+    ui_print_step_table_header
+    ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "RUNNING" 0
     set +e
     ui_run_step_body "${step_log}" "${step_fn}" "$@"
     rc=$?
@@ -292,7 +396,7 @@ ui_run_step() {
       "$(e2e_format_duration "${elapsed}")" >>"${E2E_EXECUTION_LOG}"
   fi
 
-  ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "${state}" "$(e2e_format_duration "${elapsed}")"
+  ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "${state}" "${elapsed}"
 
   if ((rc != 0)); then
     printf '  log: %s\n' "${step_log}"

@@ -163,6 +163,234 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 	}
 }
 
+func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "clientId",
+			},
+		},
+		Server: &fakeServer{
+			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			listValue: []resource.Resource{
+				{
+					LogicalPath: "/admin/realms/master/clients/account",
+					LocalAlias:  "account",
+					RemoteID:    "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+					Payload: map[string]any{
+						"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+						"clientId": "account",
+					},
+				},
+			},
+		},
+	}
+
+	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/clients/account")
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	serverManager := reconciler.Server.(*fakeServer)
+	if !serverManager.listCalled {
+		t.Fatal("expected fallback list call after not found get")
+	}
+	if got := serverManager.lastListPath; got != "/admin/realms/master/clients" {
+		t.Fatalf("expected fallback list path /admin/realms/master/clients, got %q", got)
+	}
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload from fallback list item, got %T", value)
+	}
+	if payload["clientId"] != "account" {
+		t.Fatalf("expected alias-matched payload, got %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T) {
+	t.Parallel()
+
+	repositoryManager := &fakeRepository{
+		getValues: map[string]resource.Value{
+			"/admin/realms/master/clients/account": map[string]any{
+				"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				"clientId": "account",
+			},
+		},
+		listValue: []resource.Resource{
+			{LogicalPath: "/admin/realms/master/clients/account"},
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Repository: repositoryManager,
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "clientId",
+			},
+		},
+	}
+
+	value, err := reconciler.GetLocal(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
+	if err != nil {
+		t.Fatalf("GetLocal returned error: %v", err)
+	}
+
+	if len(repositoryManager.listCalls) != 1 || repositoryManager.listCalls[0] != "/admin/realms/master/clients" {
+		t.Fatalf("expected fallback list call for collection path, got %#v", repositoryManager.listCalls)
+	}
+	if len(repositoryManager.getCalls) != 2 {
+		t.Fatalf("expected literal and fallback get calls, got %#v", repositoryManager.getCalls)
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload from local fallback, got %T", value)
+	}
+	if payload["clientId"] != "account" {
+		t.Fatalf("expected id-based local fallback payload, got %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUsesAlias(t *testing.T) {
+	t.Parallel()
+
+	repositoryManager := &fakeRepository{
+		getValues: map[string]resource.Value{
+			"/admin/realms/platform/clients/web-console": map[string]any{
+				"id":       "client-0002",
+				"clientId": "web-console",
+			},
+		},
+		listValue: []resource.Resource{
+			{LogicalPath: "/admin/realms/platform/clients/web-console"},
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Repository: repositoryManager,
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "clientId",
+				AliasFromAttribute: "clientId",
+			},
+		},
+	}
+
+	value, err := reconciler.GetLocal(context.Background(), "/admin/realms/platform/clients/client-0002")
+	if err != nil {
+		t.Fatalf("GetLocal returned error: %v", err)
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload from local fallback, got %T", value)
+	}
+	if payload["clientId"] != "web-console" || payload["id"] != "client-0002" {
+		t.Fatalf("expected common-id fallback payload, got %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testing.T) {
+	t.Parallel()
+
+	repositoryManager := &fakeRepository{
+		getValues: map[string]resource.Value{
+			"/admin/realms/master/clients/account": map[string]any{
+				"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				"clientId": "account",
+			},
+		},
+		listValue: []resource.Resource{
+			{LogicalPath: "/admin/realms/master/clients/account"},
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Repository: repositoryManager,
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "clientId",
+			},
+		},
+		Server: &fakeServer{
+			existsValue: true,
+			updateValue: map[string]any{
+				"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				"clientId": "account",
+			},
+		},
+	}
+
+	item, err := reconciler.Apply(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	serverManager := reconciler.Server.(*fakeServer)
+	if !serverManager.updateCalled {
+		t.Fatal("expected update mutation after local id fallback")
+	}
+	if got := serverManager.lastResource.RemoteID; got != "f88c68f3-3253-49f9-94a9-fe7553d33b5c" {
+		t.Fatalf("expected resolved remote id from payload, got %q", got)
+	}
+	if got := item.LogicalPath; got != "/admin/realms/master/clients/account" {
+		t.Fatalf("expected apply to operate on resolved local alias path, got %q", got)
+	}
+}
+
+func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		deleteErrs: []error{
+			faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			nil,
+		},
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listValue: []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master/clients/account",
+				LocalAlias:  "account",
+				RemoteID:    "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				Payload: map[string]any{
+					"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+					"clientId": "account",
+				},
+			},
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Server: serverManager,
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "clientId",
+			},
+		},
+	}
+
+	if err := reconciler.Delete(context.Background(), "/admin/realms/master/clients/account", DeletePolicy{}); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+
+	if len(serverManager.deleteResources) != 2 {
+		t.Fatalf("expected two delete attempts, got %d", len(serverManager.deleteResources))
+	}
+	if got := serverManager.deleteResources[0].RemoteID; got != "account" {
+		t.Fatalf("expected first delete attempt to use literal remote id, got %q", got)
+	}
+	if got := serverManager.deleteResources[1].RemoteID; got != "f88c68f3-3253-49f9-94a9-fe7553d33b5c" {
+		t.Fatalf("expected second delete attempt to use resolved metadata id, got %q", got)
+	}
+}
+
 func TestDefaultOrchestratorAdHocDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
@@ -209,11 +437,13 @@ type fakeRepository struct {
 	getValues   map[string]resource.Value
 	getErr      error
 	listValue   []resource.Resource
+	listErr     error
 	statusValue repository.SyncReport
 
 	savedPath  string
 	savedValue resource.Value
 	getCalls   []string
+	listCalls  []string
 
 	deletePolicy repository.DeletePolicy
 	listPolicy   repository.ListPolicy
@@ -247,8 +477,12 @@ func (f *fakeRepository) Delete(_ context.Context, _ string, policy repository.D
 	return nil
 }
 
-func (f *fakeRepository) List(_ context.Context, _ string, policy repository.ListPolicy) ([]resource.Resource, error) {
+func (f *fakeRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
+	f.listCalls = append(f.listCalls, logicalPath)
 	f.listPolicy = policy
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return f.listValue, nil
 }
 
@@ -316,17 +550,20 @@ type fakeServer struct {
 	adHocValue  resource.Value
 	adHocErr    error
 	deleteErr   error
+	deleteErrs  []error
 
-	createCalled bool
-	updateCalled bool
-	deleteCalled bool
-	getCalled    bool
-	listCalled   bool
-	adHocCalled  bool
-	adHocMethod  string
-	adHocPath    string
-	adHocBody    resource.Value
-	lastResource resource.Resource
+	createCalled    bool
+	updateCalled    bool
+	deleteCalled    bool
+	getCalled       bool
+	listCalled      bool
+	adHocCalled     bool
+	adHocMethod     string
+	adHocPath       string
+	adHocBody       resource.Value
+	lastResource    resource.Resource
+	lastListPath    string
+	deleteResources []resource.Resource
 }
 
 func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
@@ -353,11 +590,18 @@ func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource) (
 func (f *fakeServer) Delete(_ context.Context, resourceInfo resource.Resource) error {
 	f.deleteCalled = true
 	f.lastResource = resourceInfo
+	f.deleteResources = append(f.deleteResources, resourceInfo)
+	if len(f.deleteErrs) > 0 {
+		err := f.deleteErrs[0]
+		f.deleteErrs = f.deleteErrs[1:]
+		return err
+	}
 	return f.deleteErr
 }
 
-func (f *fakeServer) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (f *fakeServer) List(_ context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	f.listCalled = true
+	f.lastListPath = logicalPath
 	if f.listErr != nil {
 		return nil, f.listErr
 	}

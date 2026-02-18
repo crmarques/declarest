@@ -169,6 +169,39 @@ func TestSplitIdentifierTokens(t *testing.T) {
 	}
 }
 
+func TestIsLikelySecretKey(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		key      string
+		expected bool
+	}{
+		{name: "plain password key", key: "password", expected: true},
+		{name: "plain token key", key: "token", expected: true},
+		{name: "api token suffix", key: "apiToken", expected: true},
+		{name: "client secret suffix", key: "clientSecret", expected: true},
+		{name: "token value suffix", key: "tokenValue", expected: true},
+		{name: "ciba delivery mode", key: "cibaBackchannelTokenDeliveryMode", expected: false},
+		{name: "webauthn passwordless preference", key: "webAuthnPolicyPasswordlessAttestationConveyancePreference", expected: false},
+		{name: "token endpoint", key: "tokenEndpoint", expected: false},
+		{name: "password policy", key: "passwordPolicy", expected: false},
+		{name: "refresh token expiry", key: "refreshTokenExpiresIn", expected: false},
+		{name: "private key pem", key: "privateKeyPem", expected: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isLikelySecretKey(tc.key); got != tc.expected {
+				t.Fatalf("expected %v for %q, got %v", tc.expected, tc.key, got)
+			}
+		})
+	}
+}
+
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	t.Helper()
 	if err == nil {

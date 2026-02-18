@@ -30,12 +30,7 @@ func (r *DefaultOrchestrator) Get(ctx context.Context, logicalPath string) (reso
 }
 
 func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) (resource.Value, error) {
-	manager, err := r.requireRepository()
-	if err != nil {
-		return nil, err
-	}
-
-	localValue, err := manager.Get(ctx, logicalPath)
+	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		if isTypedCategory(err, faults.NotFoundError) {
 			debugctx.Printf(ctx, "orchestrator get local miss path=%q", logicalPath)
@@ -46,22 +41,17 @@ func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) 
 	}
 
 	debugctx.Printf(ctx, "orchestrator get local hit path=%q", logicalPath)
-	return localValue, nil
+	return localResource.Payload, nil
 }
 
 func (r *DefaultOrchestrator) GetRemote(ctx context.Context, logicalPath string) (resource.Value, error) {
-	serverManager, err := r.requireServer()
-	if err != nil {
-		return nil, err
-	}
-
 	resourceInfo, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
 	if infoErr != nil {
 		debugctx.Printf(ctx, "orchestrator get remote preparation failed path=%q error=%v", logicalPath, infoErr)
 		return nil, infoErr
 	}
 
-	remoteValue, err := serverManager.Get(ctx, resourceInfo)
+	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo)
 	if err != nil {
 		debugctx.Printf(ctx, "orchestrator get remote error path=%q error=%v", resourceInfo.LogicalPath, err)
 		return nil, err
@@ -80,17 +70,12 @@ func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, valu
 }
 
 func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string) (resource.Resource, error) {
-	manager, err := r.requireRepository()
+	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	localValue, err := manager.Get(ctx, logicalPath)
-	if err != nil {
-		return resource.Resource{}, err
-	}
-
-	resourceInfo, err := r.buildResourceInfo(ctx, logicalPath, localValue)
+	resourceInfo, err := r.buildResourceInfo(ctx, localResource.LogicalPath, localResource.Payload)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -161,6 +146,33 @@ func (r *DefaultOrchestrator) Delete(ctx context.Context, logicalPath string, po
 	if err != nil {
 		return err
 	}
+
+	deleteErr := serverManager.Delete(ctx, resourceInfo)
+	if deleteErr == nil || !isTypedCategory(deleteErr, faults.NotFoundError) {
+		return deleteErr
+	}
+
+	remoteValue, fetchErr := r.fetchRemoteValue(ctx, resourceInfo)
+	if fetchErr != nil {
+		return fetchErr
+	}
+
+	normalizedPayload, normalizeErr := resource.Normalize(remoteValue)
+	if normalizeErr != nil {
+		return normalizeErr
+	}
+	resourceInfo.Payload = normalizedPayload
+
+	localAlias, remoteID, identityErr := resolveResourceIdentity(
+		resourceInfo.LogicalPath,
+		resourceInfo.Metadata,
+		normalizedPayload,
+	)
+	if identityErr != nil {
+		return identityErr
+	}
+	resourceInfo.LocalAlias = localAlias
+	resourceInfo.RemoteID = remoteID
 
 	return serverManager.Delete(ctx, resourceInfo)
 }
@@ -239,17 +251,12 @@ func (r *DefaultOrchestrator) Explain(ctx context.Context, logicalPath string) (
 }
 
 func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
-	manager, err := r.requireRepository()
+	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		return nil, err
 	}
 
-	localValue, err := manager.Get(ctx, logicalPath)
-	if err != nil {
-		return nil, err
-	}
-
-	resourceInfo, err := r.buildResourceInfo(ctx, logicalPath, localValue)
+	resourceInfo, err := r.buildResourceInfo(ctx, localResource.LogicalPath, localResource.Payload)
 	if err != nil {
 		return nil, err
 	}

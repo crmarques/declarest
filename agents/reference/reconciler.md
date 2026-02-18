@@ -23,6 +23,8 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 6. Fallback behavior MUST be deterministic and bounded; no unbounded search loops.
 7. Conflict conditions MUST return typed `ConflictError` with actionable context.
 8. Compare/diff output MUST be stable for identical inputs.
+9. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
+10. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
 
 ## Data Contracts
 Core reconciler workflows:
@@ -43,14 +45,17 @@ Resolution contract:
 2. Remote fetch/mutation succeeds but local persist fails in workflows that write repository state.
 3. Remote fallback candidates are ambiguous.
 4. Repository sync conflict blocks local persistence workflows after successful remote operations.
+5. Local metadata-id fallback yields multiple candidates for one path segment.
 
 ## Edge Cases
 1. Direct get path fails and alias-based fallback succeeds.
 2. Alias changes between local and remote while remote ID remains stable.
 3. Remote list returns duplicate alias candidates.
 4. Dry-run explain differs from live apply due to dynamic template context drift.
+5. Local path segment is an ID while repository uses metadata alias for stored logical paths.
 
 ## Examples
 1. `Apply(/customers/acme)` resolves metadata, builds update path, resolves secrets, and performs a remote create/update mutation from repository desired state.
 2. `Refresh(/customers)` lists remote collection, maps each item to deterministic alias paths, and writes local files.
 3. `Diff(/customers/acme)` loads local and remote payloads, applies compare transforms, and returns deterministic operations.
+4. `Apply(/admin/realms/master/clients/<uuid>)` resolves the local resource by metadata ID fallback when only alias-based repository paths exist.

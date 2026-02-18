@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	resourcedomain "github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 func TestExtractSaveListItems(t *testing.T) {
@@ -140,6 +142,57 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
+	t.Run("falls_back_to_common_identity_attributes_when_metadata_is_missing", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{},
+			},
+		}
+
+		entries, err := resolveSaveEntriesForItems(context.Background(), deps, "/admin/realms/master/clients", []any{
+			map[string]any{"id": "uuid-a", "clientId": "alpha"},
+			map[string]any{"id": "uuid-b", "clientId": "beta"},
+		})
+		if err != nil {
+			t.Fatalf("resolveSaveEntriesForItems returned error: %v", err)
+		}
+
+		if len(entries) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(entries))
+		}
+		if entries[0].LogicalPath != "/admin/realms/master/clients/alpha" {
+			t.Fatalf("expected first resolved path to use clientId fallback, got %q", entries[0].LogicalPath)
+		}
+		if entries[1].LogicalPath != "/admin/realms/master/clients/beta" {
+			t.Fatalf("expected second resolved path to use clientId fallback, got %q", entries[1].LogicalPath)
+		}
+	})
+
+	t.Run("falls_back_to_id_when_metadata_attribute_is_missing_in_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "clientId"},
+			},
+		}
+
+		entries, err := resolveSaveEntriesForItems(context.Background(), deps, "/customers", []any{
+			map[string]any{"id": "acme"},
+		})
+		if err != nil {
+			t.Fatalf("resolveSaveEntriesForItems returned error: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if entries[0].LogicalPath != "/customers/acme" {
+			t.Fatalf("expected id fallback path /customers/acme, got %q", entries[0].LogicalPath)
+		}
+	})
+
 	t.Run("resource_entry_shape_missing_payload_fails", func(t *testing.T) {
 		t.Parallel()
 
@@ -231,6 +284,52 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	})
 }
 
+func TestDetectSaveSecretCandidatesForCollection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unions_detected_candidates_across_collection_items", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"credentials.authValue"},
+				},
+			},
+		}
+
+		candidates, err := detectSaveSecretCandidatesForCollection(
+			context.Background(),
+			deps,
+			"/customers",
+			[]saveEntry{
+				{
+					LogicalPath: "/customers/acme",
+					Payload: map[string]any{
+						"id":          "acme",
+						"credentials": map[string]any{"authValue": "plain-secret"},
+					},
+				},
+				{
+					LogicalPath: "/customers/beta",
+					Payload: map[string]any{
+						"id":       "beta",
+						"password": "pw-123",
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidatesForCollection returned error: %v", err)
+		}
+
+		expected := []string{"credentials.authValue", "password"}
+		if !reflect.DeepEqual(candidates, expected) {
+			t.Fatalf("expected candidates %#v, got %#v", expected, candidates)
+		}
+	})
+}
+
 func TestEnforceSaveSecretSafety(t *testing.T) {
 	t.Parallel()
 
@@ -269,6 +368,273 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 	})
 }
 
+func TestHandleSaveSecrets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("masks_payload_stores_secrets_and_updates_metadata", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := &fakeSaveMetadataService{
+			resolved: metadatadomain.ResourceMetadata{
+				SecretsFromAttributes: []string{"credentials.authValue"},
+			},
+			items: map[string]metadatadomain.ResourceMetadata{
+				"/customers/acme": {
+					IDFromAttribute:       "id",
+					SecretsFromAttributes: []string{"existingSecret"},
+				},
+			},
+		}
+		secretProvider := &fakeSaveSecretProvider{
+			detectedCandidates: []string{"apiToken"},
+		}
+		deps := common.CommandDependencies{
+			Metadata: metadataService,
+			Secrets:  secretProvider,
+		}
+
+		updatedValue, unhandled, err := handleSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{
+				"apiToken": "token-123",
+				"credentials": map[string]any{
+					"authValue": "plain-secret",
+				},
+			},
+			"",
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("handleSaveSecrets returned error: %v", err)
+		}
+		if len(unhandled) != 0 {
+			t.Fatalf("expected all candidates handled, got unhandled %#v", unhandled)
+		}
+
+		payload, ok := updatedValue.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map payload, got %T", updatedValue)
+		}
+		if got := payload["apiToken"]; got != `{{secret "/customers/acme:apiToken"}}` {
+			t.Fatalf("expected apiToken placeholder, got %#v", got)
+		}
+		credentials, ok := payload["credentials"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected nested credentials map, got %T", payload["credentials"])
+		}
+		if got := credentials["authValue"]; got != `{{secret "/customers/acme:credentials.authValue"}}` {
+			t.Fatalf("expected metadata-path placeholder, got %#v", got)
+		}
+
+		if secretProvider.values["/customers/acme:apiToken"] != "token-123" {
+			t.Fatalf("expected apiToken stored, got %#v", secretProvider.values)
+		}
+		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+			t.Fatalf("expected credentials.authValue stored, got %#v", secretProvider.values)
+		}
+
+		updatedMetadata := metadataService.items["/customers/acme"]
+		expectedAttributes := []string{"apiToken", "credentials.authValue", "existingSecret"}
+		if !reflect.DeepEqual(updatedMetadata.SecretsFromAttributes, expectedAttributes) {
+			t.Fatalf("expected merged metadata attributes %#v, got %#v", expectedAttributes, updatedMetadata.SecretsFromAttributes)
+		}
+		if updatedMetadata.IDFromAttribute != "id" {
+			t.Fatalf("expected existing metadata fields to be preserved, got %#v", updatedMetadata)
+		}
+	})
+
+	t.Run("no_candidates_returns_input_and_skips_metadata_write", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := &fakeSaveMetadataService{
+			items: map[string]metadatadomain.ResourceMetadata{},
+		}
+		secretProvider := &fakeSaveSecretProvider{}
+		deps := common.CommandDependencies{
+			Metadata: metadataService,
+			Secrets:  secretProvider,
+		}
+
+		updatedValue, unhandled, err := handleSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{
+				"name": "acme",
+			},
+			"",
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("handleSaveSecrets returned error: %v", err)
+		}
+		if len(unhandled) != 0 {
+			t.Fatalf("expected no unhandled candidates, got %#v", unhandled)
+		}
+		payload, ok := updatedValue.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map payload, got %T", updatedValue)
+		}
+		if got := payload["name"]; got != "acme" {
+			t.Fatalf("expected unchanged payload, got %#v", payload)
+		}
+		if len(secretProvider.values) != 0 {
+			t.Fatalf("expected no stored secrets, got %#v", secretProvider.values)
+		}
+		if len(metadataService.items) != 0 {
+			t.Fatalf("expected no metadata writes, got %#v", metadataService.items)
+		}
+	})
+
+	t.Run("non_object_payload_with_candidates_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{},
+			Secrets: &fakeSaveSecretProvider{
+				detectedCandidates: []string{"password"},
+			},
+		}
+
+		_, _, err := handleSaveSecrets(context.Background(), deps, "/customers", []any{
+			map[string]any{"password": "plain-secret"},
+		}, "", nil)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "--handle-secrets requires object payloads") {
+			t.Fatalf("expected non-object validation message, got %q", err.Error())
+		}
+	})
+
+	t.Run("requested_subset_handles_only_selected_and_returns_unhandled", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := &fakeSaveMetadataService{
+			items: map[string]metadatadomain.ResourceMetadata{},
+		}
+		secretProvider := &fakeSaveSecretProvider{
+			detectedCandidates: []string{"apiToken", "password"},
+		}
+		deps := common.CommandDependencies{
+			Metadata: metadataService,
+			Secrets:  secretProvider,
+		}
+
+		updatedValue, unhandled, err := handleSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{
+				"apiToken": "token-123",
+				"password": "pw-123",
+			},
+			"",
+			[]string{"password"},
+		)
+		if err != nil {
+			t.Fatalf("handleSaveSecrets returned error: %v", err)
+		}
+
+		if !reflect.DeepEqual(unhandled, []string{"apiToken"}) {
+			t.Fatalf("expected unhandled candidates [apiToken], got %#v", unhandled)
+		}
+
+		payload, ok := updatedValue.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map payload, got %T", updatedValue)
+		}
+		if got := payload["password"]; got != `{{secret "/customers/acme:password"}}` {
+			t.Fatalf("expected handled password placeholder, got %#v", got)
+		}
+		if got := payload["apiToken"]; got != "token-123" {
+			t.Fatalf("expected unhandled apiToken to remain plaintext, got %#v", got)
+		}
+	})
+
+	t.Run("requested_candidate_not_detected_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				items: map[string]metadatadomain.ResourceMetadata{},
+			},
+			Secrets: &fakeSaveSecretProvider{
+				detectedCandidates: []string{"password"},
+			},
+		}
+
+		_, _, err := handleSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{"password": "pw-123"},
+			"",
+			[]string{"apiToken"},
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "apiToken" was not detected`) {
+			t.Fatalf("expected unknown requested candidate error, got %q", err.Error())
+		}
+	})
+
+	t.Run("list_metadata_target_override_persists_attributes_to_collection_metadata", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := &fakeSaveMetadataService{
+			items: map[string]metadatadomain.ResourceMetadata{},
+		}
+		deps := common.CommandDependencies{
+			Metadata: metadataService,
+			Secrets: &fakeSaveSecretProvider{
+				detectedCandidates: []string{"secret"},
+			},
+		}
+
+		_, unhandled, err := handleSaveSecrets(
+			context.Background(),
+			deps,
+			"/admin/realms/master/clients/app-a",
+			map[string]any{"secret": "s-1"},
+			"/admin/realms/*/clients",
+			[]string{"secret"},
+		)
+		if err != nil {
+			t.Fatalf("handleSaveSecrets returned error: %v", err)
+		}
+		if len(unhandled) != 0 {
+			t.Fatalf("expected no unhandled candidates, got %#v", unhandled)
+		}
+
+		metadata := metadataService.items["/admin/realms/*/clients"]
+		if !reflect.DeepEqual(metadata.SecretsFromAttributes, []string{"secret"}) {
+			t.Fatalf("expected metadata override path to be updated, got %#v", metadata.SecretsFromAttributes)
+		}
+	})
+}
+
+func TestSaveSecretMetadataPathForCollection(t *testing.T) {
+	t.Parallel()
+
+	t.Run("keycloak_realm_collection_path_uses_wildcard", func(t *testing.T) {
+		t.Parallel()
+
+		got := saveSecretMetadataPathForCollection("/admin/realms/master/clients")
+		if got != "/admin/realms/*/clients" {
+			t.Fatalf("expected wildcard metadata path, got %q", got)
+		}
+	})
+
+	t.Run("non_realm_collection_path_is_unchanged", func(t *testing.T) {
+		t.Parallel()
+
+		got := saveSecretMetadataPathForCollection("/customers")
+		if got != "/customers" {
+			t.Fatalf("expected unchanged collection metadata path, got %q", got)
+		}
+	})
+}
+
 func TestIsTypedErrorCategory(t *testing.T) {
 	t.Parallel()
 
@@ -292,13 +658,23 @@ func TestIsTypedErrorCategory(t *testing.T) {
 type fakeSaveMetadataService struct {
 	resolved   metadatadomain.ResourceMetadata
 	resolveErr error
+	items      map[string]metadatadomain.ResourceMetadata
 }
 
-func (f *fakeSaveMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
-	return metadatadomain.ResourceMetadata{}, nil
+func (f *fakeSaveMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	if f.items != nil {
+		if metadata, found := f.items[logicalPath]; found {
+			return metadata, nil
+		}
+	}
+	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
 }
 
-func (f *fakeSaveMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
+func (f *fakeSaveMetadataService) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+	if f.items == nil {
+		f.items = map[string]metadatadomain.ResourceMetadata{}
+	}
+	f.items[logicalPath] = metadata
 	return nil
 }
 
@@ -331,17 +707,30 @@ func (f *fakeSaveMetadataService) Infer(
 type fakeSaveSecretProvider struct {
 	detectedCandidates []string
 	detectErr          error
+	values             map[string]string
 }
 
 func (f *fakeSaveSecretProvider) Init(context.Context) error { return nil }
-func (f *fakeSaveSecretProvider) Store(context.Context, string, string) error {
+func (f *fakeSaveSecretProvider) Store(_ context.Context, key string, value string) error {
+	if f.values == nil {
+		f.values = map[string]string{}
+	}
+	f.values[key] = value
 	return nil
 }
-func (f *fakeSaveSecretProvider) Get(context.Context, string) (string, error) { return "", nil }
-func (f *fakeSaveSecretProvider) Delete(context.Context, string) error        { return nil }
-func (f *fakeSaveSecretProvider) List(context.Context) ([]string, error)      { return nil, nil }
-func (f *fakeSaveSecretProvider) MaskPayload(context.Context, resourcedomain.Value) (resourcedomain.Value, error) {
-	return nil, nil
+func (f *fakeSaveSecretProvider) Get(_ context.Context, key string) (string, error) {
+	value, found := f.values[key]
+	if !found {
+		return "", faults.NewTypedError(faults.NotFoundError, "secret not found", nil)
+	}
+	return value, nil
+}
+func (f *fakeSaveSecretProvider) Delete(context.Context, string) error   { return nil }
+func (f *fakeSaveSecretProvider) List(context.Context) ([]string, error) { return nil, nil }
+func (f *fakeSaveSecretProvider) MaskPayload(ctx context.Context, value resourcedomain.Value) (resourcedomain.Value, error) {
+	return secretdomain.MaskPayload(value, func(key string, secretValue string) error {
+		return f.Store(ctx, key, secretValue)
+	})
 }
 func (f *fakeSaveSecretProvider) ResolvePayload(context.Context, resourcedomain.Value) (resourcedomain.Value, error) {
 	return nil, nil
