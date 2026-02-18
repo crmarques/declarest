@@ -55,7 +55,7 @@ Execution:
 1. `reconciler.ResourceReconciler` loads resource and resolved metadata.
 2. `secrets.SecretProvider` resolves placeholders.
 3. `server.ResourceServerManager` executes update.
-4. `repository.ResourceRepositoryManager` persists normalized masked state.
+4. Reconciler returns normalized remote mutation output without implicit local persistence.
 
 Expected outputs:
 1. Remote update succeeds.
@@ -148,14 +148,15 @@ Execution:
 2. Runner starts components and emits temporary context catalog.
 3. Runner executes optional component `manual-info` hooks and prints access details.
 4. Runner copies selected resource-server `repo-template` into the context repository directory.
-5. Runner prints follow-up commands, exits, and keeps runtime resources.
+5. Runner generates setup/reset shell scripts and prints follow-up `declarest-e2e` commands, exits, and keeps runtime resources.
 
 Expected outputs:
-1. Temporary context config is usable.
+1. Temporary context config is usable after sourcing the generated setup script.
 2. Access output includes component-specific details (for example, local keycloak admin console URL and credentials).
 3. Context repository directory contains seeded template resources and collection metadata.
-4. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
-5. Remote selections fail validation with actionable guidance.
+4. Setup script exports runtime env vars and defines alias `declarest-e2e`; reset script unsets these vars and removes the alias.
+5. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
+6. Remote selections fail validation with actionable guidance.
 
 ### Example 8: Resource-Server Fixture Identity and Metadata Expansion
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.
@@ -180,12 +181,12 @@ Goal: read either remote observed state or local desired state deterministically
 
 Inputs:
 1. Path `/customers/acme`.
-2. CLI source flags `--local` or `--remote`.
+2. CLI source flags `--repository` or `--remote-server`.
 
 Execution:
 1. `declarest resource get /customers/acme` runs without source flags.
-2. `declarest resource get /customers/acme --local` runs with local override.
-3. `declarest resource get /customers/acme --local --remote` runs with conflicting flags.
+2. `declarest resource get /customers/acme --repository` runs with repository override.
+3. `declarest resource get /customers/acme --repository --remote-server` runs with conflicting flags.
 
 Expected outputs:
 1. Step 1 reads from remote source by default.

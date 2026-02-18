@@ -12,7 +12,8 @@ import (
 
 func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
-	var source string
+	var fromRepository bool
+	var fromRemoteServer bool
 	var recursive bool
 
 	command := &cobra.Command{
@@ -24,6 +25,10 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			if err != nil {
 				return err
 			}
+			if fromRepository && fromRemoteServer {
+				return common.ValidationError("flags --repository and --remote-server cannot be used together", nil)
+			}
+
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
@@ -35,20 +40,25 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			}
 
 			var items []resource.Resource
-			switch source {
-			case sourceLocal:
+			switch {
+			case fromRepository:
 				items, err = orchestratorService.ListLocal(command.Context(), resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
-			case sourceRemote:
-				items, err = orchestratorService.ListRemote(command.Context(), resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
+			case fromRemoteServer:
+				fallthrough
 			default:
-				return common.ValidationError("invalid source: use local or remote", nil)
+				items, err = orchestratorService.ListRemote(command.Context(), resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
 			}
 			if err != nil {
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.Resource) error {
-				for _, item := range value {
+			payloads := make([]resource.Value, 0, len(items))
+			for _, item := range items {
+				payloads = append(payloads, item.Payload)
+			}
+
+			return common.WriteOutput(command, outputFormat, payloads, func(w io.Writer, _ []resource.Value) error {
+				for _, item := range items {
 					if _, writeErr := fmt.Fprintln(w, item.LogicalPath); writeErr != nil {
 						return writeErr
 					}
@@ -61,8 +71,8 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 	common.BindPathFlag(command, &pathFlag)
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
-	command.Flags().StringVarP(&source, "source", "s", sourceLocal, "list source: local|remote")
+	command.Flags().BoolVar(&fromRepository, "repository", false, "list from repository")
+	command.Flags().BoolVar(&fromRemoteServer, "remote-server", false, "list from remote server (default)")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
-	common.RegisterFlagValueCompletions(command, "source", []string{sourceLocal, sourceRemote})
 	return command
 }

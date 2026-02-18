@@ -18,6 +18,7 @@ This repository uses a componentized Bash e2e harness.
   - remote component selections are rejected in Step 1
   - when a resource-server is selected, its `repo-template` tree is copied into the context repository directory
   - component manual access details are printed after Step 5 (Configuring Access) when available
+  - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
   - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `e2e/.runs/<run-id>/certs/resource-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
@@ -226,3 +227,5 @@ Each run writes artifacts under `e2e/.runs/<run-id>/`:
 - `state/`
 - `contexts.yaml`
 - `cases/`
+- `declarest-e2e-env.sh`
+- `declarest-e2e-env-reset.sh`

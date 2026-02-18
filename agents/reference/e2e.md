@@ -20,7 +20,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 2. Supported profiles MUST be `basic`, `full`, and `manual`; default is `basic`.
 3. Default component selections MUST be `resource-server=simple-api-server`, `repo-type=filesystem`, and `secret-provider=file`.
 4. `basic` MUST run `main` cases only; `full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
-5. `manual` MUST start selected local-instantiable components, generate temporary context config, and skip automated cases.
+5. `manual` MUST start selected local-instantiable components, generate temporary context config, generate shell setup/reset scripts for handoff, and skip automated cases.
 6. `manual` MUST seed the selected context repository directory with the selected resource-server `repo-template` tree when `resource-server != none`.
 7. `manual` MUST reject remote-only connection selections during initialization with actionable validation output.
 8. Runtime lifecycle MUST be profile-specific: `basic`/`full` use seven steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`, `Running Workload`, `Finalizing`); `manual` uses five steps in order (`Initializing`, `Preparing Runtime`, `Preparing Components`, `Starting Components`, `Configuring Access`).
@@ -85,8 +85,9 @@ Case discovery order:
 
 Manual handoff:
 1. Emit temporary context catalog path.
-2. Print concrete follow-up `declarest` commands.
-3. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
+2. Emit setup/reset shell script paths; setup script MUST export runtime vars and define alias `declarest-e2e` to the run-local binary, and reset script MUST unset those vars and remove the alias.
+3. Print concrete follow-up `declarest-e2e` commands.
+4. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
 
 ## Failure Modes
 1. Manual profile accepts unsupported remote selections.

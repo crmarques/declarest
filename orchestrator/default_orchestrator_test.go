@@ -40,10 +40,6 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
-	if err := reconciler.Delete(context.Background(), "/customers", DeletePolicy{Recursive: true}); err != nil {
-		t.Fatalf("Delete returned error: %v", err)
-	}
-
 	items, err := reconciler.ListLocal(context.Background(), "/customers", ListPolicy{Recursive: true})
 	if err != nil {
 		t.Fatalf("ListLocal returned error: %v", err)
@@ -51,12 +47,35 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	if len(items) != 1 || items[0].LogicalPath != "/customers/acme" {
 		t.Fatalf("unexpected list output: %#v", items)
 	}
-
-	if !fakeRepo.deletePolicy.Recursive {
-		t.Fatal("expected delete policy recursion to be mapped")
+	payload, ok := items[0].Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected list item payload map, got %T", items[0].Payload)
 	}
+	if payload["id"] != int64(1) {
+		t.Fatalf("expected hydrated payload id=1, got %#v", payload["id"])
+	}
+
 	if !fakeRepo.listPolicy.Recursive {
 		t.Fatal("expected list policy recursion to be mapped")
+	}
+}
+
+func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{}
+	reconciler := &DefaultOrchestrator{
+		Server: serverManager,
+	}
+
+	if err := reconciler.Delete(context.Background(), "/customers/acme", DeletePolicy{}); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+	if !serverManager.deleteCalled {
+		t.Fatal("expected delete call to be delegated to server")
+	}
+	if got := serverManager.lastResource.LogicalPath; got != "/customers/acme" {
+		t.Fatalf("expected normalized delete logical path /customers/acme, got %q", got)
 	}
 }
 
@@ -187,12 +206,14 @@ func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
 
 type fakeRepository struct {
 	getValue    resource.Value
+	getValues   map[string]resource.Value
 	getErr      error
 	listValue   []resource.Resource
 	statusValue repository.SyncReport
 
 	savedPath  string
 	savedValue resource.Value
+	getCalls   []string
 
 	deletePolicy repository.DeletePolicy
 	listPolicy   repository.ListPolicy
@@ -204,10 +225,20 @@ func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resou
 	return nil
 }
 
-func (f *fakeRepository) Get(context.Context, string) (resource.Value, error) {
+func (f *fakeRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+	f.getCalls = append(f.getCalls, logicalPath)
+
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
+
+	if f.getValues != nil {
+		if value, found := f.getValues[logicalPath]; found {
+			return value, nil
+		}
+		return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	}
+
 	return f.getValue, nil
 }
 
@@ -284,9 +315,11 @@ type fakeServer struct {
 	existsErr   error
 	adHocValue  resource.Value
 	adHocErr    error
+	deleteErr   error
 
 	createCalled bool
 	updateCalled bool
+	deleteCalled bool
 	getCalled    bool
 	listCalled   bool
 	adHocCalled  bool
@@ -317,8 +350,10 @@ func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource) (
 	return f.updateValue, nil
 }
 
-func (f *fakeServer) Delete(context.Context, resource.Resource) error {
-	return nil
+func (f *fakeServer) Delete(_ context.Context, resourceInfo resource.Resource) error {
+	f.deleteCalled = true
+	f.lastResource = resourceInfo
+	return f.deleteErr
 }
 
 func (f *fakeServer) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
@@ -404,7 +439,7 @@ func (f *fakeSecretProvider) DetectSecretCandidates(_ context.Context, value res
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-func TestDefaultOrchestratorApplyUsesSecretsAndPersistsMaskedPayload(t *testing.T) {
+func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -464,19 +499,12 @@ func TestDefaultOrchestratorApplyUsesSecretsAndPersistsMaskedPayload(t *testing.
 		t.Fatalf("expected resolved secret for remote payload, got %#v", got)
 	}
 
-	savedPayload, ok := repo.savedValue.(map[string]any)
-	if !ok {
-		t.Fatalf("expected saved payload map, got %T", repo.savedValue)
-	}
-	if got := savedPayload["apiToken"]; got != "{{secret \"apiToken\"}}" {
-		t.Fatalf("expected masked local secret placeholder, got %#v", got)
-	}
-	if repo.savedPath != "/customers/acme" {
-		t.Fatalf("expected save path /customers/acme, got %q", repo.savedPath)
+	if repo.savedValue != nil {
+		t.Fatalf("expected apply to avoid implicit local persistence, got %#v", repo.savedValue)
 	}
 
-	if !reflect.DeepEqual(item.Payload, repo.savedValue) {
-		t.Fatalf("expected returned payload to match persisted payload, got %#v", item.Payload)
+	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
+		t.Fatalf("expected returned payload to match remote mutation payload, got %#v", item.Payload)
 	}
 }
 

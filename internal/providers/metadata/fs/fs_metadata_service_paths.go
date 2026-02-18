@@ -64,6 +64,7 @@ func parseMetadataPath(logicalPath string) (string, metadataPathKind, error) {
 	if !strings.HasPrefix(normalizedInput, "/") {
 		return "", metadataPathResource, validationError("metadata path must be absolute", nil)
 	}
+	trailingCollectionMarker := strings.HasSuffix(normalizedInput, "/")
 
 	rawSegments := strings.Split(normalizedInput, "/")
 	segments := make([]string, 0, len(rawSegments))
@@ -81,6 +82,9 @@ func parseMetadataPath(logicalPath string) (string, metadataPathKind, error) {
 	if len(segments) > 0 && segments[len(segments)-1] == "_" {
 		kind = metadataPathCollection
 		segments = segments[:len(segments)-1]
+	}
+	if trailingCollectionMarker {
+		kind = metadataPathCollection
 	}
 
 	for _, segment := range segments {

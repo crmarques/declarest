@@ -390,7 +390,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource create "${logical_path}" -f "${resource_file}" -i json
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote -o json
+    case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
     if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
@@ -421,7 +421,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource delete "${logical_path}" -y
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote -o json
+    case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
     if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list after delete for %s\n' "${case_label}" "${collection_path}" >&2

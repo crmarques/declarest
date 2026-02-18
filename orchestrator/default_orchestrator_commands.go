@@ -150,11 +150,19 @@ func (r *DefaultOrchestrator) Update(ctx context.Context, logicalPath string, va
 }
 
 func (r *DefaultOrchestrator) Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error {
-	manager, err := r.requireRepository()
+	_ = policy
+
+	serverManager, err := r.requireServer()
 	if err != nil {
 		return err
 	}
-	return manager.Delete(ctx, logicalPath, repository.DeletePolicy{Recursive: policy.Recursive})
+
+	resourceInfo, err := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
+	if err != nil {
+		return err
+	}
+
+	return serverManager.Delete(ctx, resourceInfo)
 }
 
 func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {
@@ -162,7 +170,26 @@ func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string,
 	if err != nil {
 		return nil, err
 	}
-	return manager.List(ctx, logicalPath, repository.ListPolicy{Recursive: policy.Recursive})
+
+	items, err := manager.List(ctx, logicalPath, repository.ListPolicy{Recursive: policy.Recursive})
+	if err != nil {
+		return nil, err
+	}
+
+	// Keep local list output parity with remote list by including each resource payload.
+	for idx := range items {
+		if items[idx].Payload != nil {
+			continue
+		}
+
+		value, getErr := manager.Get(ctx, items[idx].LogicalPath)
+		if getErr != nil {
+			return nil, getErr
+		}
+		items[idx].Payload = value
+	}
+
+	return items, nil
 }
 
 func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error) {

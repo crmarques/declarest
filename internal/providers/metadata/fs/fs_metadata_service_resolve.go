@@ -9,27 +9,73 @@ import (
 	"sort"
 	"strings"
 
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
-func (s *FSMetadataService) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	debugctx.Printf(ctx, "metadata fs resolve start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
 	targetPath, err := normalizeResolvePath(logicalPath)
 	if err != nil {
+		debugctx.Printf(ctx, "metadata fs resolve invalid logical_path=%q error=%v", logicalPath, err)
 		return metadatadomain.ResourceMetadata{}, err
 	}
+	debugctx.Printf(ctx, "metadata fs resolve normalized logical_path=%q normalized=%q", logicalPath, targetPath)
 
 	merged := metadatadomain.ResourceMetadata{}
 
 	apply := func(selector string, kind metadataPathKind) error {
+		targetMetadataPath, pathErr := s.metadataFilePath(selector, kind)
+		if pathErr != nil {
+			debugctx.Printf(
+				ctx,
+				"metadata fs resolve resolve-path failed selector=%q kind=%q error=%v",
+				selector,
+				metadataPathKindName(kind),
+				pathErr,
+			)
+			return pathErr
+		}
+		debugctx.Printf(
+			ctx,
+			"metadata fs resolve lookup selector=%q kind=%q file=%q",
+			selector,
+			metadataPathKindName(kind),
+			targetMetadataPath,
+		)
+
 		item, found, err := s.tryReadMetadata(selector, kind)
 		if err != nil {
+			debugctx.Printf(
+				ctx,
+				"metadata fs resolve failed selector=%q kind=%q file=%q error=%v",
+				selector,
+				metadataPathKindName(kind),
+				targetMetadataPath,
+				err,
+			)
 			return err
 		}
 		if !found {
+			debugctx.Printf(
+				ctx,
+				"metadata fs resolve miss selector=%q kind=%q file=%q",
+				selector,
+				metadataPathKindName(kind),
+				targetMetadataPath,
+			)
 			return nil
 		}
 		merged = metadatadomain.MergeResourceMetadata(merged, item)
+		debugctx.Printf(
+			ctx,
+			"metadata fs resolve hit selector=%q kind=%q file=%q",
+			selector,
+			metadataPathKindName(kind),
+			targetMetadataPath,
+		)
 		return nil
 	}
 
@@ -42,6 +88,13 @@ func (s *FSMetadataService) ResolveForPath(_ context.Context, logicalPath string
 	for _, segment := range segments {
 		wildcards, literals, err := s.matchingCollectionCandidates(parentSelector, segment)
 		if err != nil {
+			debugctx.Printf(
+				ctx,
+				"metadata fs resolve match failed parent=%q segment=%q error=%v",
+				parentSelector,
+				segment,
+				err,
+			)
 			return metadatadomain.ResourceMetadata{}, err
 		}
 
@@ -65,6 +118,7 @@ func (s *FSMetadataService) ResolveForPath(_ context.Context, logicalPath string
 		}
 	}
 
+	debugctx.Printf(ctx, "metadata fs resolve done logical_path=%q normalized=%q", logicalPath, targetPath)
 	return merged, nil
 }
 

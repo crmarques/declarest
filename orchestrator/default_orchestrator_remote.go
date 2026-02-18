@@ -15,10 +15,6 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 	resourceInfo resource.Resource,
 	operation metadata.Operation,
 ) (resource.Resource, error) {
-	manager, err := r.requireRepository()
-	if err != nil {
-		return resource.Resource{}, err
-	}
 	serverManager, err := r.requireServer()
 	if err != nil {
 		return resource.Resource{}, err
@@ -41,21 +37,16 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 		return resource.Resource{}, err
 	}
 
-	payloadForLocal := resourceInfo.Payload
+	payload := resourceInfo.Payload
 	if remotePayload != nil {
-		payloadForLocal = remotePayload
+		payload = remotePayload
 	}
-
-	maskedPayload, err := r.maskPayloadForLocal(ctx, payloadForLocal)
+	normalizedPayload, err := resource.Normalize(payload)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	if err := manager.Save(ctx, resourceInfo.LogicalPath, maskedPayload); err != nil {
-		return resource.Resource{}, err
-	}
-
-	resourceInfo.Payload = maskedPayload
+	resourceInfo.Payload = normalizedPayload
 	return resourceInfo, nil
 }
 

@@ -127,7 +127,7 @@ Profiles:
   --profile <basic|full|manual>                  default: basic
     basic   Run compatible main cases only.
     full    Run compatible main and corner cases.
-    manual  Start local components, print context access info, and exit.
+    manual  Start local components, generate setup/reset handoff scripts, and exit.
 
 Component selection:
   --resource-server <name|none>                  default: simple-api-server

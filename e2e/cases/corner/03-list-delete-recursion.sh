@@ -20,21 +20,21 @@ case_run() {
   case_run_declarest resource save /customers-recursion/east/zen -f "${payload_nested}" -i json
   case_expect_success
 
-  case_run_declarest resource list /customers-recursion --source local -o json
+  case_run_declarest resource list /customers-recursion --repository -o json
   case_expect_success
   case_expect_output_contains '/customers-recursion/acme'
 
   case_run_declarest resource delete /customers-recursion -y
   case_expect_success
 
-  case_run_declarest resource list /customers-recursion --source local -r -o json
+  case_run_declarest resource list /customers-recursion --repository -r -o json
   case_expect_success
   case_expect_output_contains '/customers-recursion/east/zen'
 
   case_run_declarest resource delete /customers-recursion -y -r
   case_expect_success
 
-  case_run_declarest resource list /customers-recursion --source local -r -o json
+  case_run_declarest resource list /customers-recursion --repository -r -o json
   case_expect_success
   case_expect_output_not_contains '/customers-recursion/east/zen'
 }

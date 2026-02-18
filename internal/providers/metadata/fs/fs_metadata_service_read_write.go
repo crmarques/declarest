@@ -12,62 +12,137 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/crmarques/declarest/config"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
-func (s *FSMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) Get(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	debugctx.Printf(ctx, "metadata fs get start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
 	selector, kind, err := parseMetadataPath(logicalPath)
 	if err != nil {
+		debugctx.Printf(ctx, "metadata fs get invalid logical_path=%q error=%v", logicalPath, err)
 		return metadatadomain.ResourceMetadata{}, err
 	}
+
+	targetPath, err := s.metadataFilePath(selector, kind)
+	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs get resolve-path failed logical_path=%q selector=%q kind=%q error=%v",
+			logicalPath,
+			selector,
+			metadataPathKindName(kind),
+			err,
+		)
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	debugctx.Printf(
+		ctx,
+		"metadata fs get lookup logical_path=%q selector=%q kind=%q file=%q",
+		logicalPath,
+		selector,
+		metadataPathKindName(kind),
+		targetPath,
+	)
 
 	metadata, found, err := s.tryReadMetadata(selector, kind)
 	if err != nil {
+		debugctx.Printf(ctx, "metadata fs get failed logical_path=%q file=%q error=%v", logicalPath, targetPath, err)
 		return metadatadomain.ResourceMetadata{}, err
 	}
 	if !found {
+		debugctx.Printf(ctx, "metadata fs get miss logical_path=%q file=%q", logicalPath, targetPath)
 		return metadatadomain.ResourceMetadata{}, notFoundError(fmt.Sprintf("metadata %q not found", logicalPath))
 	}
+	debugctx.Printf(ctx, "metadata fs get hit logical_path=%q file=%q", logicalPath, targetPath)
 	return metadata, nil
 }
 
-func (s *FSMetadataService) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+func (s *FSMetadataService) Set(ctx context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+	debugctx.Printf(ctx, "metadata fs set start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
 	if err := validateResourceMetadata(metadata); err != nil {
+		debugctx.Printf(ctx, "metadata fs set invalid logical_path=%q error=%v", logicalPath, err)
 		return err
 	}
 
 	selector, kind, err := parseMetadataPath(logicalPath)
 	if err != nil {
+		debugctx.Printf(ctx, "metadata fs set invalid logical_path=%q error=%v", logicalPath, err)
 		return err
 	}
 
 	targetPath, err := s.metadataFilePath(selector, kind)
 	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs set resolve-path failed logical_path=%q selector=%q kind=%q error=%v",
+			logicalPath,
+			selector,
+			metadataPathKindName(kind),
+			err,
+		)
 		return err
 	}
+	debugctx.Printf(
+		ctx,
+		"metadata fs set write logical_path=%q selector=%q kind=%q file=%q",
+		logicalPath,
+		selector,
+		metadataPathKindName(kind),
+		targetPath,
+	)
 
-	return s.writeMetadataFile(targetPath, metadata)
+	if err := s.writeMetadataFile(targetPath, metadata); err != nil {
+		debugctx.Printf(ctx, "metadata fs set failed logical_path=%q file=%q error=%v", logicalPath, targetPath, err)
+		return err
+	}
+	debugctx.Printf(ctx, "metadata fs set done logical_path=%q file=%q", logicalPath, targetPath)
+	return nil
 }
 
-func (s *FSMetadataService) Unset(_ context.Context, logicalPath string) error {
+func (s *FSMetadataService) Unset(ctx context.Context, logicalPath string) error {
+	debugctx.Printf(ctx, "metadata fs unset start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
 	selector, kind, err := parseMetadataPath(logicalPath)
 	if err != nil {
+		debugctx.Printf(ctx, "metadata fs unset invalid logical_path=%q error=%v", logicalPath, err)
 		return err
 	}
 
 	targetPath, err := s.metadataFilePath(selector, kind)
 	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs unset resolve-path failed logical_path=%q selector=%q kind=%q error=%v",
+			logicalPath,
+			selector,
+			metadataPathKindName(kind),
+			err,
+		)
 		return err
 	}
+	debugctx.Printf(
+		ctx,
+		"metadata fs unset delete logical_path=%q selector=%q kind=%q file=%q",
+		logicalPath,
+		selector,
+		metadataPathKindName(kind),
+		targetPath,
+	)
 
 	if err := os.Remove(targetPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			debugctx.Printf(ctx, "metadata fs unset no-op logical_path=%q file=%q", logicalPath, targetPath)
 			return nil
 		}
+		debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, targetPath, err)
 		return internalError("failed to remove metadata file", err)
 	}
 
 	_ = cleanupEmptyParents(filepath.Dir(targetPath), s.baseDir)
+	debugctx.Printf(ctx, "metadata fs unset done logical_path=%q file=%q", logicalPath, targetPath)
 	return nil
 }
 

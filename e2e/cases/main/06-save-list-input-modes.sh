@@ -27,7 +27,7 @@ case_run() {
   case_run_declarest resource save "${as_items_collection}" -f "${list_payload_file}" -i json --as-items
   case_expect_success
 
-  case_run_declarest resource list "${as_items_collection}" --source local -r -o json
+  case_run_declarest resource list "${as_items_collection}" --repository -r -o json
   case_expect_success
   if ! jq -e 'map(.LogicalPath) == ["/save-input-modes-items/alpha", "/save-input-modes-items/zeta"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
     printf 'expected --as-items to fan out list payload into deterministic resource paths\n' >&2

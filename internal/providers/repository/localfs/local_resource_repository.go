@@ -61,11 +61,22 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 		return err
 	}
 
-	if _, err := os.Stat(fromFile); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
+	if _, statErr := os.Stat(fromFile); statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
+			legacyFromFile, legacyErr := r.legacyPayloadFilePath(fromNormalized)
+			if legacyErr != nil {
+				return legacyErr
+			}
+			if _, legacyStatErr := os.Stat(legacyFromFile); legacyStatErr != nil {
+				if errors.Is(legacyStatErr, os.ErrNotExist) {
+					return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
+				}
+				return internalError("failed to access source resource", legacyStatErr)
+			}
+			fromFile = legacyFromFile
+		} else {
+			return internalError("failed to access source resource", statErr)
 		}
-		return internalError("failed to access source resource", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(toFile), 0o755); err != nil {

@@ -52,3 +52,14 @@ func notFoundError(message string) error {
 func internalError(message string, cause error) error {
 	return faults.NewTypedError(faults.InternalError, message, cause)
 }
+
+func metadataPathKindName(kind metadataPathKind) string {
+	switch kind {
+	case metadataPathCollection:
+		return "collection"
+	case metadataPathResource:
+		return "resource"
+	default:
+		return "unknown"
+	}
+}

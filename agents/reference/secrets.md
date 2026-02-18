@@ -22,7 +22,7 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 5. Secret operations on collection payloads MUST be rejected when key scope is ambiguous.
 6. Secret normalization MUST occur before compare/diff to avoid false drift.
 7. Secret store initialization MUST validate required credentials and encryption configuration.
-8. `resource save` MUST fail by default when potential plaintext secrets are detected and MUST require explicit `--insecure` override to proceed.
+8. `resource save` MUST fail by default when potential plaintext secrets are detected and MUST require explicit `--ignore` override to proceed.
 9. Metadata `secretsFromAttributes` entries MUST be treated as explicit secret candidates in save-time plaintext checks.
 10. `secret detect` without payload input (`--file` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
 11. `secret detect --fix` MUST merge detected attributes into metadata `secretsFromAttributes` for detected resource paths in scope.
@@ -62,6 +62,6 @@ Store contracts:
 1. Save with masking enabled stores `apiToken` in secret store and writes `{{secret "apiToken"}}` in resource payload.
 2. Apply operation resolves placeholders at execution time and keeps repository content masked.
 3. Compare operation normalizes equivalent placeholders with different key naming conventions.
-4. Save rejects plaintext at `credentials.authValue` when `secretsFromAttributes` includes that attribute and user omits `--insecure`.
+4. Save rejects plaintext at `credentials.authValue` when `secretsFromAttributes` includes that attribute and user omits `--ignore`.
 5. `secret detect /customers/acme --fix` writes detected attributes into `/customers/acme` metadata `secretsFromAttributes`.
 6. `secret detect` without path scans the whole local repository and returns detected attributes grouped by logical resource path.

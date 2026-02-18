@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/common"
+	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/spf13/cobra"
 )
@@ -40,20 +41,27 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 				return err
 			}
 
+			debugctx.Printf(command.Context(), "metadata get requested path=%q", resolvedPath)
+
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			item, err := service.Get(command.Context(), resolvedPath)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
 
 			return common.WriteOutput(command, outputFormat, item, nil)
 		},
@@ -79,17 +87,26 @@ func newSetCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
+			debugctx.Printf(command.Context(), "metadata set requested path=%q", resolvedPath)
+
 			item, err := common.DecodeInput[metadatadomain.ResourceMetadata](command, input)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata set failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata set failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			return service.Set(command.Context(), resolvedPath, item)
+			if err := service.Set(command.Context(), resolvedPath, item); err != nil {
+				debugctx.Printf(command.Context(), "metadata set failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+			debugctx.Printf(command.Context(), "metadata set succeeded path=%q", resolvedPath)
+			return nil
 		},
 	}
 
@@ -113,12 +130,20 @@ func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
+			debugctx.Printf(command.Context(), "metadata unset requested path=%q", resolvedPath)
+
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata unset failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			return service.Unset(command.Context(), resolvedPath)
+			if err := service.Unset(command.Context(), resolvedPath); err != nil {
+				debugctx.Printf(command.Context(), "metadata unset failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+			debugctx.Printf(command.Context(), "metadata unset succeeded path=%q", resolvedPath)
+			return nil
 		},
 	}
 
@@ -141,20 +166,27 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 				return err
 			}
 
+			debugctx.Printf(command.Context(), "metadata resolve requested path=%q", resolvedPath)
+
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata resolve failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata resolve failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			item, err := service.ResolveForPath(command.Context(), resolvedPath)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata resolve failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "metadata resolve succeeded path=%q", resolvedPath)
 
 			return common.WriteOutput(command, outputFormat, item, nil)
 		},
@@ -186,23 +218,31 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 
 			operation, err := parseOperation(operationArg)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operationArg, err)
 				return err
 			}
 
+			debugctx.Printf(command.Context(), "metadata render requested path=%q operation=%q", resolvedPath, operation)
+
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
 			}
 
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
 			}
 
 			item, err := service.RenderOperationSpec(command.Context(), resolvedPath, operation, map[string]any{})
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "metadata render succeeded path=%q operation=%q", resolvedPath, operation)
 
 			return common.WriteOutput(command, outputFormat, item, nil)
 		},
@@ -257,21 +297,34 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 				return err
 			}
 
+			debugctx.Printf(
+				command.Context(),
+				"metadata infer requested path=%q apply=%t recursive=%t",
+				resolvedPath,
+				apply,
+				recursive,
+			)
+
 			service, err := common.RequireMetadataService(deps)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
 			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
 			item, err := service.Infer(command.Context(), resolvedPath, request)
 			if err != nil {
+				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
+
+			debugctx.Printf(command.Context(), "metadata infer succeeded path=%q", resolvedPath)
 
 			return common.WriteOutput(command, outputFormat, item, nil)
 		},

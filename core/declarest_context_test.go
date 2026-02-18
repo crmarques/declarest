@@ -65,12 +65,12 @@ func TestNewDeclarestContextUsesContextCatalogPathAndSelection(t *testing.T) {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
-	prodPath := filepath.Join(prodRepo, "customers", "acme.json")
+	prodPath := filepath.Join(prodRepo, "customers", "acme", "resource.json")
 	if _, err := os.Stat(prodPath); err != nil {
 		t.Fatalf("expected resource in selected context repository %q: %v", prodPath, err)
 	}
 
-	devPath := filepath.Join(devRepo, "customers", "acme.json")
+	devPath := filepath.Join(devRepo, "customers", "acme", "resource.json")
 	if _, err := os.Stat(devPath); err == nil {
 		t.Fatalf("resource should not be written to non-selected repository %q", devPath)
 	}

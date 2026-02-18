@@ -12,8 +12,8 @@ import (
 
 func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
-	var local bool
-	var remote bool
+	var fromRepository bool
+	var fromRemoteServer bool
 
 	command := &cobra.Command{
 		Use:   "get [path]",
@@ -25,15 +25,15 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 				return err
 			}
 
-			if local && remote {
-				return common.ValidationError("flags --local and --remote cannot be used together", nil)
+			if fromRepository && fromRemoteServer {
+				return common.ValidationError("flags --repository and --remote-server cannot be used together", nil)
 			}
 
-			source := sourceRemote
-			if local {
-				source = sourceLocal
-			} else if remote {
-				source = sourceRemote
+			source := sourceRemoteServer
+			if fromRepository {
+				source = sourceRepository
+			} else if fromRemoteServer {
+				source = sourceRemoteServer
 			}
 
 			debugctx.Printf(command.Context(), "resource get requested path=%q source=%q", resolvedPath, source)
@@ -50,12 +50,12 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 
 			var value resource.Value
 			switch source {
-			case sourceLocal:
+			case sourceRepository:
 				value, err = orchestratorService.GetLocal(command.Context(), resolvedPath)
-			case sourceRemote:
+			case sourceRemoteServer:
 				value, err = orchestratorService.GetRemote(command.Context(), resolvedPath)
 			default:
-				return common.ValidationError("invalid source: use --local or --remote", nil)
+				return common.ValidationError("invalid source: use --repository or --remote-server", nil)
 			}
 			if err != nil {
 				debugctx.Printf(command.Context(), "resource get failed path=%q source=%q error=%v", resolvedPath, source, err)
@@ -74,7 +74,7 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 	common.BindPathFlag(command, &pathFlag)
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
-	command.Flags().BoolVar(&local, "local", false, "read from local repository")
-	command.Flags().BoolVar(&remote, "remote", false, "read from remote server (default)")
+	command.Flags().BoolVar(&fromRepository, "repository", false, "read from repository")
+	command.Flags().BoolVar(&fromRemoteServer, "remote-server", false, "read from remote server (default)")
 	return command
 }

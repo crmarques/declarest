@@ -14,6 +14,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -141,6 +142,44 @@ func TestDebugFlagPrintsTraceOutput(t *testing.T) {
 	}
 }
 
+func TestMetadataDebugTraceIncludesLookupPath(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	metadataService := fsmetadata.NewFSMetadataService(baseDir, config.ResourceFormatJSON)
+	if err := metadataService.Set(context.Background(), "/admin/realms/_", metadatadomain.ResourceMetadata{
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationList): {Path: "/api/admin/realms"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed metadata fixture: %v", err)
+	}
+
+	deps := Dependencies{
+		Contexts: &testContextService{},
+		Metadata: metadataService,
+	}
+
+	output, debugOutput, err := executeForTestWithStreams(deps, "", "--debug", "metadata", "get", "/admin/realms/")
+	if err != nil {
+		t.Fatalf("unexpected metadata get error: %v", err)
+	}
+	if !strings.Contains(output, "\"path\": \"/api/admin/realms\"") {
+		t.Fatalf("expected metadata get output payload, got %q", output)
+	}
+
+	expectedMetadataPath := filepath.Join(baseDir, "admin", "realms", "_", "metadata.json")
+	if !strings.Contains(debugOutput, `debug: metadata get requested path="/admin/realms/"`) {
+		t.Fatalf("expected metadata get debug trace, got %q", debugOutput)
+	}
+	if !strings.Contains(debugOutput, `debug: metadata fs get lookup logical_path="/admin/realms/" selector="/admin/realms" kind="collection"`) {
+		t.Fatalf("expected metadata filesystem lookup trace, got %q", debugOutput)
+	}
+	if !strings.Contains(debugOutput, expectedMetadataPath) {
+		t.Fatalf("expected metadata lookup path %q in debug output, got %q", expectedMetadataPath, debugOutput)
+	}
+}
+
 func TestResourceGetDualPathInput(t *testing.T) {
 	t.Parallel()
 
@@ -207,22 +246,22 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("local_flag_uses_local", func(t *testing.T) {
+	t.Run("repository_flag_uses_repository", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--local")
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--repository")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(output, "\"source\": \"local\"") {
-			t.Fatalf("expected local source output, got %q", output)
+			t.Fatalf("expected repository source output, got %q", output)
 		}
 	})
 
-	t.Run("remote_flag_uses_remote", func(t *testing.T) {
+	t.Run("remote_server_flag_uses_remote", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--remote")
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--remote-server")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -231,10 +270,10 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("local_and_remote_flags_conflict", func(t *testing.T) {
+	t.Run("repository_and_remote_server_flags_conflict", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--local", "--remote")
+		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--repository", "--remote-server")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
@@ -293,16 +332,141 @@ func TestAdHocMethodCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("post_reads_payload_flag_body", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "post", "/items", "--payload", `{"id":"a","name":"gamma"}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"POST\"") {
+			t.Fatalf("expected POST method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"name\": \"gamma\"") {
+			t.Fatalf("expected payload flag body to be forwarded, got %q", output)
+		}
+	})
+
+	t.Run("put_reads_payload_flag_body", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "put", "/items/a", "--payload", `{"id":"a","name":"delta"}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"PUT\"") {
+			t.Fatalf("expected PUT method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"name\": \"delta\"") {
+			t.Fatalf("expected payload flag body to be forwarded, got %q", output)
+		}
+	})
+
+	t.Run("payload_conflicts_with_file", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		payloadPath := filepath.Join(tempDir, "payload.json")
+		if err := os.WriteFile(payloadPath, []byte(`{"id":"a","name":"beta"}`), 0o600); err != nil {
+			t.Fatalf("failed to write payload file: %v", err)
+		}
+
+		_, err := executeForTest(
+			testDeps(),
+			"",
+			"ad-hoc",
+			"post",
+			"/items",
+			"--payload",
+			`{"id":"a","name":"gamma"}`,
+			"--file",
+			payloadPath,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("payload_conflicts_with_stdin", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(
+			testDeps(),
+			`{"id":"a","name":"from-stdin"}`,
+			"ad-hoc",
+			"post",
+			"/items",
+			"--payload",
+			`{"id":"a","name":"from-flag"}`,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("delete_requires_force", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/items/a")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "--force") {
+			t.Fatalf("expected --force validation message, got %v", err)
+		}
+		if !strings.Contains(strings.ToLower(err.Error()), "are you sure") {
+			t.Fatalf("expected confirmation-style validation message, got %v", err)
+		}
+	})
+
+	t.Run("delete_with_force", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/items/a", "--force")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"DELETE\"") {
+			t.Fatalf("expected DELETE method output, got %q", output)
+		}
+		if !strings.Contains(output, "\"path\": \"/items/a\"") {
+			t.Fatalf("expected delete path output, got %q", output)
+		}
+	})
+
 	t.Run("path_mismatch_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/a", "--path", "/b")
+		_, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/a", "--path", "/b", "--force")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
 
 func TestResourceSaveInputModes(t *testing.T) {
 	t.Parallel()
+
+	t.Run("without_input_fetches_remote_and_saves_locally", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"resource",
+			"save",
+			"/customers/acme",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected save path /customers/acme, got %q", reconciler.saveCalls[0].logicalPath)
+		}
+		saved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		if saved["source"] != "remote" {
+			t.Fatalf("expected saved payload to come from remote source, got %#v", saved)
+		}
+	})
 
 	t.Run("default_list_payload_saves_as_items", func(t *testing.T) {
 		metadataService := newTestMetadata()
@@ -394,7 +558,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("plaintext_secret_is_blocked_without_insecure", func(t *testing.T) {
+	t.Run("plaintext_secret_is_blocked_without_ignore", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
@@ -406,8 +570,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"/customers/acme",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "--insecure") {
-			t.Fatalf("expected --insecure hint, got %q", err.Error())
+		if !strings.Contains(err.Error(), "--ignore") {
+			t.Fatalf("expected --ignore hint, got %q", err.Error())
 		}
 		if len(reconciler.saveCalls) != 0 {
 			t.Fatalf("expected no save calls after safety failure, got %d", len(reconciler.saveCalls))
@@ -479,7 +643,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("insecure_flag_allows_plaintext_secret", func(t *testing.T) {
+	t.Run("ignore_flag_allows_plaintext_secret", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
@@ -489,10 +653,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--insecure",
+			"--ignore",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --insecure: %v", err)
+			t.Fatalf("unexpected error with --ignore: %v", err)
 		}
 		if len(reconciler.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
@@ -531,18 +695,84 @@ func TestResourceDefaultOutputUsesContextResourceFormat(t *testing.T) {
 func TestResourceDeleteRequiresForce(t *testing.T) {
 	t.Parallel()
 
-	output, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme")
-	if err != nil {
-		t.Fatalf("expected help output when --force is missing, got error: %v", err)
-	}
-	if !strings.Contains(output, "confirm deletion") {
-		t.Fatalf("expected delete help output, got %q", output)
+	_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme")
+	assertTypedCategory(t, err, faults.ValidationError)
+	if !strings.Contains(err.Error(), "flag --force is required") {
+		t.Fatalf("expected --force validation message, got %v", err)
 	}
 
 	_, err = executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--force")
 	if err != nil {
 		t.Fatalf("unexpected error with --force: %v", err)
 	}
+}
+
+func TestResourceDeleteSourceFlags(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default_deletes_from_remote_server", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		repositoryService := deps.Repository.(*testRepository)
+
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force")
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(reconciler.deleteCalls) != 1 {
+			t.Fatalf("expected 1 remote delete call, got %d", len(reconciler.deleteCalls))
+		}
+		if len(repositoryService.deleteCalls) != 0 {
+			t.Fatalf("expected 0 repository delete calls, got %d", len(repositoryService.deleteCalls))
+		}
+	})
+
+	t.Run("repository_flag_deletes_only_from_repository", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		repositoryService := deps.Repository.(*testRepository)
+
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--repository")
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(reconciler.deleteCalls) != 0 {
+			t.Fatalf("expected 0 remote delete calls, got %d", len(reconciler.deleteCalls))
+		}
+		if len(repositoryService.deleteCalls) != 1 {
+			t.Fatalf("expected 1 repository delete call, got %d", len(repositoryService.deleteCalls))
+		}
+	})
+
+	t.Run("both_flag_deletes_from_remote_and_repository", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		repositoryService := deps.Repository.(*testRepository)
+
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--both")
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(reconciler.deleteCalls) != 1 {
+			t.Fatalf("expected 1 remote delete call, got %d", len(reconciler.deleteCalls))
+		}
+		if len(repositoryService.deleteCalls) != 1 {
+			t.Fatalf("expected 1 repository delete call, got %d", len(repositoryService.deleteCalls))
+		}
+	})
+
+	t.Run("source_flags_are_mutually_exclusive", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--force", "--repository", "--both")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
 }
 
 func TestMetadataPathCommands(t *testing.T) {
@@ -970,17 +1200,103 @@ func TestResourceListRecursiveFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected direct list error: %v", err)
 	}
-	if !strings.Contains(directOutput, "\"LogicalPath\": \"/customers\"") {
-		t.Fatalf("expected direct list payload, got %q", directOutput)
+	if !strings.Contains(directOutput, "\"path\": \"/customers\"") {
+		t.Fatalf("expected direct list payload output, got %q", directOutput)
+	}
+	if strings.Contains(directOutput, "\"LogicalPath\"") {
+		t.Fatalf("expected payload-only direct list output, got %q", directOutput)
 	}
 
 	recursiveOutput, err := executeForTest(testDeps(), "", "resource", "list", "/customers", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive list error: %v", err)
 	}
-	if !strings.Contains(recursiveOutput, "\"LogicalPath\": \"/customers/nested\"") {
-		t.Fatalf("expected recursive list payload, got %q", recursiveOutput)
+	if !strings.Contains(recursiveOutput, "\"path\": \"/customers/nested\"") {
+		t.Fatalf("expected recursive list payload output, got %q", recursiveOutput)
 	}
+	if strings.Contains(recursiveOutput, "\"LogicalPath\"") {
+		t.Fatalf("expected payload-only recursive list output, got %q", recursiveOutput)
+	}
+}
+
+func TestResourceListSourceFlags(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default_lists_from_remote_server", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+		}
+		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/")
+		if err != nil {
+			t.Fatalf("unexpected list error: %v", err)
+		}
+		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected remote-server output by default, got %q", output)
+		}
+		if strings.Contains(output, "\"id\": \"repo-only\"") {
+			t.Fatalf("expected repository output to be absent by default, got %q", output)
+		}
+		if strings.Contains(output, "\"LogicalPath\"") {
+			t.Fatalf("expected payload-only list output, got %q", output)
+		}
+	})
+
+	t.Run("remote_server_flag_lists_from_remote_server", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+		}
+		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/", "--remote-server")
+		if err != nil {
+			t.Fatalf("unexpected list error: %v", err)
+		}
+		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected remote-server output with --remote-server, got %q", output)
+		}
+		if strings.Contains(output, "\"id\": \"repo-only\"") {
+			t.Fatalf("expected repository output to be absent with --remote-server, got %q", output)
+		}
+		if strings.Contains(output, "\"LogicalPath\"") {
+			t.Fatalf("expected payload-only list output, got %q", output)
+		}
+	})
+
+	t.Run("repository_flag_lists_from_repository", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+		}
+		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/", "--repository")
+		if err != nil {
+			t.Fatalf("unexpected list error: %v", err)
+		}
+		if !strings.Contains(output, "\"id\": \"repo-only\"") {
+			t.Fatalf("expected repository output, got %q", output)
+		}
+		if strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected remote output to be absent with --repository, got %q", output)
+		}
+		if strings.Contains(output, "\"LogicalPath\"") {
+			t.Fatalf("expected payload-only list output, got %q", output)
+		}
+	})
+
+	t.Run("repository_and_remote_server_flags_conflict", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "resource", "list", "/", "--repository", "--remote-server")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
 }
 
 func TestResourceApplyCollectionPath(t *testing.T) {
@@ -1026,54 +1342,103 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 	}
 }
 
-func TestResourceCreateCollectionPathWithoutInputUsesLocalPayloads(t *testing.T) {
+func TestResourceCreateRequiresInputAndRunsSingleMutation(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
-		metadataService: newTestMetadata(),
-		localList: []resource.Resource{
-			{LogicalPath: "/customers/acme"},
-			{LogicalPath: "/customers/nested/gamma"},
-		},
-		getLocalValues: map[string]resource.Value{
-			"/customers/acme":         map[string]any{"id": "acme", "tier": "pro"},
-			"/customers/nested/gamma": map[string]any{"id": "gamma", "tier": "free"},
-		},
-	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	t.Run("create_with_input", func(t *testing.T) {
+		t.Parallel()
 
-	output, err := executeForTest(deps, "", "resource", "create", "/customers", "--recursive")
-	if err != nil {
-		t.Fatalf("unexpected create collection error: %v", err)
-	}
-	if len(reconciler.createCalls) != 2 {
-		t.Fatalf("expected 2 create calls, got %d", len(reconciler.createCalls))
-	}
-	if len(reconciler.getLocalCalls) != 2 {
-		t.Fatalf("expected 2 get local calls, got %d", len(reconciler.getLocalCalls))
-	}
-	if reconciler.createCalls[0].logicalPath != "/customers/acme" {
-		t.Fatalf("expected first create call path /customers/acme, got %q", reconciler.createCalls[0].logicalPath)
-	}
-	if reconciler.createCalls[1].logicalPath != "/customers/nested/gamma" {
-		t.Fatalf(
-			"expected second create call path /customers/nested/gamma, got %q",
-			reconciler.createCalls[1].logicalPath,
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "create", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected create error: %v", err)
+		}
+		if len(reconciler.createCalls) != 1 {
+			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
+		}
+		if reconciler.createCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected create path /customers/acme, got %q", reconciler.createCalls[0].logicalPath)
+		}
+		if !strings.Contains(output, "/customers/acme") {
+			t.Fatalf("expected create output to contain /customers/acme, got %q", output)
+		}
+	})
+
+	t.Run("create_without_input_fails", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		_, err := executeForTest(deps, "", "resource", "create", "/customers/acme")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("create_with_payload_flag", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "create", "/customers/acme", "--payload", `{"id":"acme","tier":"startup"}`)
+		if err != nil {
+			t.Fatalf("unexpected create error: %v", err)
+		}
+		if len(reconciler.createCalls) != 1 {
+			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
+		}
+		if !strings.Contains(output, "/customers/acme") {
+			t.Fatalf("expected create output to contain /customers/acme, got %q", output)
+		}
+	})
+
+	t.Run("create_payload_conflicts_with_file", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+		tempDir := t.TempDir()
+		payloadPath := filepath.Join(tempDir, "payload.json")
+		if err := os.WriteFile(payloadPath, []byte(`{"id":"acme","tier":"pro"}`), 0o600); err != nil {
+			t.Fatalf("failed to write payload file: %v", err)
+		}
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"create",
+			"/customers/acme",
+			"--payload",
+			`{"id":"acme","tier":"startup"}`,
+			"--file",
+			payloadPath,
 		)
-	}
-	if !reflect.DeepEqual(reconciler.createCalls[0].value, reconciler.getLocalValues["/customers/acme"]) {
-		t.Fatalf("expected create payload to come from local resource for /customers/acme")
-	}
-	if !reflect.DeepEqual(reconciler.createCalls[1].value, reconciler.getLocalValues["/customers/nested/gamma"]) {
-		t.Fatalf("expected create payload to come from local resource for /customers/nested/gamma")
-	}
-	if !strings.Contains(output, "\"LogicalPath\": \"/customers/acme\"") ||
-		!strings.Contains(output, "\"LogicalPath\": \"/customers/nested/gamma\"") {
-		t.Fatalf("expected create collection output to include all created resources, got %q", output)
-	}
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("create_payload_conflicts_with_stdin", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		_, err := executeForTest(
+			deps,
+			`{"id":"acme","tier":"from-stdin"}`,
+			"resource",
+			"create",
+			"/customers/acme",
+			"--payload",
+			`{"id":"acme","tier":"from-flag"}`,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
 }
 
-func TestResourceUpdateCollectionPathWithoutInputUsesLocalPayloads(t *testing.T) {
+func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 	t.Parallel()
 
 	reconciler := &testReconciler{
@@ -1111,94 +1476,19 @@ func TestResourceUpdateCollectionPathWithoutInputUsesLocalPayloads(t *testing.T)
 	if strings.Contains(output, "/customers/nested/gamma") {
 		t.Fatalf("expected non-recursive update output to exclude nested resources, got %q", output)
 	}
-}
 
-func TestResourceCreateUpdateWithInputStillRunSingleMutation(t *testing.T) {
-	t.Parallel()
-
-	t.Run("create_with_input", func(t *testing.T) {
-		t.Parallel()
-
-		reconciler := &testReconciler{
-			metadataService: newTestMetadata(),
-			localList: []resource.Resource{
-				{LogicalPath: "/customers/acme"},
-				{LogicalPath: "/customers/beta"},
-			},
-		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
-
-		output, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "create", "/customers/acme")
-		if err != nil {
-			t.Fatalf("unexpected create with input error: %v", err)
-		}
-		if len(reconciler.createCalls) != 1 {
-			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
-		}
-		if reconciler.createCalls[0].logicalPath != "/customers/acme" {
-			t.Fatalf("expected create path /customers/acme, got %q", reconciler.createCalls[0].logicalPath)
-		}
-		if len(reconciler.getLocalCalls) != 0 {
-			t.Fatalf("expected create with input to bypass local payload lookup, got %#v", reconciler.getLocalCalls)
-		}
-		if !strings.Contains(output, "/customers/acme") {
-			t.Fatalf("expected create output to contain /customers/acme, got %q", output)
-		}
-	})
-
-	t.Run("update_with_input", func(t *testing.T) {
-		t.Parallel()
-
-		reconciler := &testReconciler{
-			metadataService: newTestMetadata(),
-			localList: []resource.Resource{
-				{LogicalPath: "/customers/acme"},
-				{LogicalPath: "/customers/beta"},
-			},
-		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
-
-		output, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "update", "/customers/acme")
-		if err != nil {
-			t.Fatalf("unexpected update with input error: %v", err)
-		}
-		if len(reconciler.updateCalls) != 1 {
-			t.Fatalf("expected single update call, got %d", len(reconciler.updateCalls))
-		}
-		if reconciler.updateCalls[0].logicalPath != "/customers/acme" {
-			t.Fatalf("expected update path /customers/acme, got %q", reconciler.updateCalls[0].logicalPath)
-		}
-		if len(reconciler.getLocalCalls) != 0 {
-			t.Fatalf("expected update with input to bypass local payload lookup, got %#v", reconciler.getLocalCalls)
-		}
-		if !strings.Contains(output, "/customers/acme") {
-			t.Fatalf("expected update output to contain /customers/acme, got %q", output)
-		}
-	})
-}
-
-func TestResourceCreateUpdateRejectRecursiveWhenInputProvided(t *testing.T) {
-	t.Parallel()
-
-	t.Run("create_rejects_recursive_with_input", func(t *testing.T) {
-		t.Parallel()
-
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
-
-		_, err := executeForTest(deps, `{"id":"acme"}`, "resource", "create", "/customers/acme", "--recursive")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
-	t.Run("update_rejects_recursive_with_input", func(t *testing.T) {
-		t.Parallel()
-
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
-
-		_, err := executeForTest(deps, `{"id":"acme"}`, "resource", "update", "/customers/acme", "--recursive")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
+	reconciler.updateCalls = nil
+	reconciler.getLocalCalls = nil
+	recursiveOutput, err := executeForTest(deps, "", "resource", "update", "/customers", "--recursive")
+	if err != nil {
+		t.Fatalf("unexpected recursive update error: %v", err)
+	}
+	if len(reconciler.updateCalls) != 2 {
+		t.Fatalf("expected 2 update calls for recursive update, got %d", len(reconciler.updateCalls))
+	}
+	if !strings.Contains(recursiveOutput, "/customers/nested/gamma") {
+		t.Fatalf("expected recursive update output to include nested resources, got %q", recursiveOutput)
+	}
 }
 
 func TestResourceCollectionMutationsFailWhenNoLocalResourcesMatch(t *testing.T) {
@@ -1216,7 +1506,7 @@ func TestResourceCollectionMutationsFailWhenNoLocalResourcesMatch(t *testing.T) 
 	assertTypedCategory(t, err, faults.NotFoundError)
 
 	_, err = executeForTest(deps, "", "resource", "create", "/orders")
-	assertTypedCategory(t, err, faults.NotFoundError)
+	assertTypedCategory(t, err, faults.ValidationError)
 
 	_, err = executeForTest(deps, "", "resource", "update", "/orders")
 	assertTypedCategory(t, err, faults.NotFoundError)
@@ -1297,15 +1587,15 @@ func TestOutputFlagCompletionShowsSupportedValues(t *testing.T) {
 	}
 }
 
-func TestResourceListSourceCompletionShowsSupportedValues(t *testing.T) {
+func TestResourceListCompletionShowsSourceFlags(t *testing.T) {
 	t.Parallel()
 
-	output, err := executeForTest(testDeps(), "", "__complete", "resource", "list", "--source", "")
+	output, err := executeForTest(testDeps(), "", "__complete", "resource", "list", "--")
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "local") || !strings.Contains(output, "remote") {
-		t.Fatalf("expected source completion values, got %q", output)
+	if !strings.Contains(output, "--repository") || !strings.Contains(output, "--remote-server") {
+		t.Fatalf("expected source flag completion values, got %q", output)
 	}
 }
 
@@ -1337,12 +1627,33 @@ func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
 func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 	t.Parallel()
 
-	output, err := executeForTest(testDeps(), "", "resource")
-	if err != nil {
-		t.Fatalf("expected help output for missing subcommand, got error: %v", err)
+	testCases := []struct {
+		name            string
+		args            []string
+		expectedSnippet string
+	}{
+		{name: "ad-hoc", args: []string{"ad-hoc"}, expectedSnippet: "Execute ad-hoc HTTP requests against managed server API"},
+		{name: "config", args: []string{"config"}, expectedSnippet: "Manage contexts"},
+		{name: "metadata", args: []string{"metadata"}, expectedSnippet: "Manage metadata"},
+		{name: "repo", args: []string{"repo"}, expectedSnippet: "Manage local repository state"},
+		{name: "resource", args: []string{"resource"}, expectedSnippet: "Manage resources"},
+		{name: "secret", args: []string{"secret"}, expectedSnippet: "Manage secrets"},
+		{name: "completion", args: []string{"completion"}, expectedSnippet: "Generate shell completion scripts"},
 	}
-	if !strings.Contains(output, "Manage resources") {
-		t.Fatalf("expected resource help output, got %q", output)
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			output, err := executeForTest(testDeps(), "", testCase.args...)
+			if err != nil {
+				t.Fatalf("expected help output for missing subcommand, got error: %v", err)
+			}
+			if !strings.Contains(output, testCase.expectedSnippet) {
+				t.Fatalf("expected help output to contain %q, got %q", testCase.expectedSnippet, output)
+			}
+		})
 	}
 }
 
@@ -1435,12 +1746,29 @@ func TestHelpFlagAppearsInGlobalFlagsForAllCommands(t *testing.T) {
 }
 
 func TestHelpOutputDoesNotContainExcessiveBlankLines(t *testing.T) {
-	output, err := executeForTest(testDeps(), "", "resource", "--help")
-	if err != nil {
-		t.Fatalf("expected help output, got error: %v", err)
-	}
-	if strings.Contains(output, "\n\n\n") {
-		t.Fatalf("expected help output without excessive blank lines, got %q", output)
+	t.Parallel()
+
+	command := NewRootCommand(testDeps())
+	paths := append([][]string{{}}, registeredPaths(command, nil)...)
+
+	for _, path := range paths {
+		pathCopy := append([]string{}, path...)
+		testName := joinPath(pathCopy)
+		if testName == "root" {
+			testName = "declarest"
+		}
+
+		t.Run(testName, func(t *testing.T) {
+			args := append(pathCopy, "--help")
+			output, err := executeForTest(testDeps(), "", args...)
+			if err != nil {
+				t.Fatalf("expected help output, got error: %v", err)
+			}
+
+			if got := trailingBlankLineCount(output); got != 0 {
+				t.Fatalf("expected no trailing blank lines in help output, got %d for %q", got, joinPath(pathCopy))
+			}
+		})
 	}
 }
 
@@ -1521,6 +1849,25 @@ func extractHelpSection(output string, heading string) string {
 	return strings.Join(section, "\n")
 }
 
+func trailingBlankLineCount(value string) int {
+	lines := strings.Split(value, "\n")
+	emptySuffix := 0
+	for index := len(lines) - 1; index >= 0; index-- {
+		if lines[index] != "" {
+			break
+		}
+		emptySuffix++
+	}
+	if emptySuffix == 0 {
+		return 0
+	}
+	// Account for the expected terminal newline in help output.
+	if emptySuffix == 1 {
+		return 0
+	}
+	return emptySuffix - 1
+}
+
 func testDeps() Dependencies {
 	metadataService := newTestMetadata()
 	return testDepsWith(
@@ -1580,6 +1927,7 @@ func (s *testContextService) Validate(context.Context, config.Context) error { r
 type testReconciler struct {
 	metadataService *testMetadata
 	saveCalls       []savedResource
+	deleteCalls     []deleteCall
 	saveErr         error
 	getLocalCalls   []string
 	listLocalCalls  []string
@@ -1595,6 +1943,11 @@ type testReconciler struct {
 type savedResource struct {
 	logicalPath string
 	value       resource.Value
+}
+
+type deleteCall struct {
+	logicalPath string
+	recursive   bool
 }
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
@@ -1647,7 +2000,13 @@ func (r *testReconciler) Update(_ context.Context, logicalPath string, value res
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testReconciler) Delete(context.Context, string, orchestrator.DeletePolicy) error { return nil }
+func (r *testReconciler) Delete(_ context.Context, logicalPath string, policy orchestrator.DeletePolicy) error {
+	r.deleteCalls = append(r.deleteCalls, deleteCall{
+		logicalPath: logicalPath,
+		recursive:   policy.Recursive,
+	})
+	return nil
+}
 func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listLocalCalls = append(r.listLocalCalls, logicalPath)
 	if len(r.localList) > 0 {
@@ -1665,20 +2024,41 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 		return items, nil
 	}
 	if policy.Recursive {
-		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
+		return []resource.Resource{{
+			LogicalPath: logicalPath + "/nested",
+			Payload:     map[string]any{"path": logicalPath + "/nested"},
+		}}, nil
 	}
-	return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	return []resource.Resource{{
+		LogicalPath: logicalPath,
+		Payload:     map[string]any{"path": logicalPath},
+	}}, nil
 }
 func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
-	if policy.Recursive && len(r.remoteList) > 0 {
+	if len(r.remoteList) > 0 {
 		items := make([]resource.Resource, len(r.remoteList))
 		copy(items, r.remoteList)
+		if !policy.Recursive {
+			filtered := make([]resource.Resource, 0, len(items))
+			for _, item := range items {
+				if isDirectChildPath(logicalPath, item.LogicalPath) {
+					filtered = append(filtered, item)
+				}
+			}
+			return filtered, nil
+		}
 		return items, nil
 	}
 	if policy.Recursive {
-		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil
+		return []resource.Resource{{
+			LogicalPath: logicalPath + "/nested",
+			Payload:     map[string]any{"path": logicalPath + "/nested"},
+		}}, nil
 	}
-	return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	return []resource.Resource{{
+		LogicalPath: logicalPath,
+		Payload:     map[string]any{"path": logicalPath},
+	}}, nil
 }
 func (r *testReconciler) Explain(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	return []resource.DiffEntry{{Path: logicalPath, Operation: "noop"}}, nil
@@ -1841,13 +2221,21 @@ func (s *testSecretProvider) DetectSecretCandidates(_ context.Context, value res
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-type testRepository struct{}
+type testRepository struct {
+	deleteCalls []deleteCall
+}
 
 func (r *testRepository) Save(context.Context, string, resource.Value) error { return nil }
 func (r *testRepository) Get(context.Context, string) (resource.Value, error) {
 	return map[string]any{"id": "acme"}, nil
 }
-func (r *testRepository) Delete(context.Context, string, repository.DeletePolicy) error { return nil }
+func (r *testRepository) Delete(_ context.Context, logicalPath string, policy repository.DeletePolicy) error {
+	r.deleteCalls = append(r.deleteCalls, deleteCall{
+		logicalPath: logicalPath,
+		recursive:   policy.Recursive,
+	})
+	return nil
+}
 func (r *testRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
 	if policy.Recursive {
 		return []resource.Resource{{LogicalPath: logicalPath + "/nested"}}, nil

@@ -340,6 +340,6 @@ Propagation rules:
 4. Partial context configuration with optional managers absent.
 
 ## Examples
-1. A `reconciler.ResourceReconciler.Apply` call resolves metadata, builds request intent, executes remote mutation, and persists local state only after successful remote mutation.
+1. A `reconciler.ResourceReconciler.Apply` call resolves metadata, builds request intent, and executes a remote create/update mutation derived from repository desired state.
 2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceRepositoryManager.Save`.
 3. A `config.ContextService.ResolveContext` call merges persisted context and environment overrides, then validates and returns one resolved `config.Context`.

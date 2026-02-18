@@ -63,6 +63,18 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, va
 		return internalError("failed to replace payload file", err)
 	}
 
+	legacyPath, err := r.legacyPayloadFilePath(normalizedPath)
+	if err == nil && legacyPath != targetPath {
+		if _, statErr := os.Stat(legacyPath); statErr == nil {
+			if removeErr := os.Remove(legacyPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return internalError("failed to remove legacy payload file", removeErr)
+			}
+			_ = r.cleanupEmptyParents(filepath.Dir(legacyPath))
+		} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return internalError("failed to inspect legacy payload file", statErr)
+		}
+	}
+
 	return nil
 }
 
@@ -83,9 +95,20 @@ func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (re
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+			legacyPayloadPath, pathErr := r.legacyPayloadFilePath(normalizedPath)
+			if pathErr != nil {
+				return nil, pathErr
+			}
+			data, err = os.ReadFile(legacyPayloadPath)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					return nil, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+				}
+				return nil, internalError("failed to read resource payload", err)
+			}
+		} else {
+			return nil, internalError("failed to read resource payload", err)
 		}
-		return nil, internalError("failed to read resource payload", err)
 	}
 
 	decoded, err := r.decodePayload(data)

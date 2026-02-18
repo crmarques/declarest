@@ -34,7 +34,7 @@ case_run() {
     case_run_declarest resource create "${realm_path}" -f "${resource_file}" -i json
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote -o json
+    case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
     if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf 'keycloak-sync expected deterministic sorted remote list for %s\n' "${collection_path}" >&2
@@ -64,7 +64,7 @@ case_run() {
     case_run_declarest resource delete "${realm_path}" -y
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote -o json
+    case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
     if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf 'keycloak-sync expected deterministic sorted remote list after delete for %s\n' "${collection_path}" >&2

@@ -68,6 +68,38 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
+func TestFSMetadataCollectionPathWithTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir(), "")
+	ctx := context.Background()
+
+	metadata := metadatadomain.ResourceMetadata{
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationList): {Path: "/api/realms"},
+		},
+	}
+
+	if err := service.Set(ctx, "/admin/realms/", metadata); err != nil {
+		t.Fatalf("Set trailing-slash collection metadata returned error: %v", err)
+	}
+
+	got, err := service.Get(ctx, "/admin/realms/")
+	if err != nil {
+		t.Fatalf("Get trailing-slash collection metadata returned error: %v", err)
+	}
+	if !reflect.DeepEqual(metadata, got) {
+		t.Fatalf("unexpected metadata for trailing-slash collection path: %+v", got)
+	}
+
+	if err := service.Unset(ctx, "/admin/realms/"); err != nil {
+		t.Fatalf("Unset trailing-slash collection metadata returned error: %v", err)
+	}
+
+	_, err = service.Get(ctx, "/admin/realms/")
+	assertTypedCategory(t, err, faults.NotFoundError)
+}
+
 func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	t.Parallel()
 

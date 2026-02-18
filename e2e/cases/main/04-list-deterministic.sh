@@ -19,7 +19,7 @@ case_run() {
     case_repo_template_create_resource_path "${logical_path}"
   done < <(case_repo_template_collection_resource_paths "${target_collection_path}")
 
-  case_run_declarest resource list "${target_collection_path}" --source remote -o json
+  case_run_declarest resource list "${target_collection_path}" --remote-server -o json
   case_expect_success
 
   if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then

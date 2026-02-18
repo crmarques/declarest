@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	sourceLocal  = "local"
-	sourceRemote = "remote"
+	sourceRepository   = "repository"
+	sourceRemoteServer = "remote-server"
 )
 
 func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {

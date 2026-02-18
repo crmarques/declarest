@@ -234,7 +234,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 func TestEnforceSaveSecretSafety(t *testing.T) {
 	t.Parallel()
 
-	t.Run("fails_without_insecure_when_plaintext_secret_detected", func(t *testing.T) {
+	t.Run("fails_without_ignore_when_plaintext_secret_detected", func(t *testing.T) {
 		t.Parallel()
 
 		err := enforceSaveSecretSafety(
@@ -248,12 +248,12 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 		if !strings.Contains(err.Error(), "warning: potential plaintext secrets detected") {
 			t.Fatalf("expected warning in error message, got %q", err.Error())
 		}
-		if !strings.Contains(err.Error(), "--insecure") {
-			t.Fatalf("expected --insecure hint in error message, got %q", err.Error())
+		if !strings.Contains(err.Error(), "--ignore") {
+			t.Fatalf("expected --ignore hint in error message, got %q", err.Error())
 		}
 	})
 
-	t.Run("allows_plaintext_secret_when_insecure_is_enabled", func(t *testing.T) {
+	t.Run("allows_plaintext_secret_when_ignore_is_enabled", func(t *testing.T) {
 		t.Parallel()
 
 		err := enforceSaveSecretSafety(

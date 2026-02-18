@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/adhoc"
 	"github.com/crmarques/declarest/internal/cli/common"
@@ -85,6 +88,26 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.SetUsageTemplate(usageTemplate)
+	defaultHelpFunc := root.HelpFunc()
+	root.SetHelpFunc(func(command *cobra.Command, args []string) {
+		originalOut := command.OutOrStdout()
+		originalErr := command.ErrOrStderr()
+
+		buffer := &bytes.Buffer{}
+		command.SetOut(buffer)
+		command.SetErr(buffer)
+		defaultHelpFunc(command, args)
+		command.SetOut(originalOut)
+		command.SetErr(originalErr)
+
+		rendered := strings.TrimRight(buffer.String(), "\n")
+		if rendered == "" {
+			_, _ = fmt.Fprintln(originalOut)
+			return
+		}
+
+		_, _ = fmt.Fprintln(originalOut, rendered)
+	})
 
 	common.BindGlobalFlags(root, &globalFlags)
 	common.RegisterContextFlagCompletion(root, commandDeps)

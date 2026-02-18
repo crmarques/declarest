@@ -23,19 +23,14 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	var input common.InputFlags
 	var asItems bool
 	var asOneResource bool
-	var insecure bool
+	var ignore bool
 
 	command := &cobra.Command{
 		Use:   "save [path]",
-		Short: "Save local resource value",
+		Short: "Save resource value into repository",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
-			if err != nil {
-				return err
-			}
-
-			value, err := common.DecodeInput[resource.Value](command, input)
 			if err != nil {
 				return err
 			}
@@ -48,13 +43,28 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
+			value, hasInput, err := decodeOptionalResourceInput(command, input)
+			if err != nil {
+				return err
+			}
+			if !hasInput {
+				remoteValue, err := orchestratorService.GetRemote(command.Context(), resolvedPath)
+				if err != nil {
+					return err
+				}
+				if err := enforceSaveSecretSafety(command.Context(), deps, resolvedPath, remoteValue, ignore); err != nil {
+					return err
+				}
+				return orchestratorService.Save(command.Context(), resolvedPath, remoteValue)
+			}
+
 			items, isListPayload, err := extractSaveListItems(value)
 			if err != nil {
 				return err
 			}
 
 			if asOneResource || (!asItems && !isListPayload) {
-				if err := enforceSaveSecretSafety(command.Context(), deps, resolvedPath, value, insecure); err != nil {
+				if err := enforceSaveSecretSafety(command.Context(), deps, resolvedPath, value, ignore); err != nil {
 					return err
 				}
 				return orchestratorService.Save(command.Context(), resolvedPath, value)
@@ -68,7 +78,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 			for _, entry := range entries {
-				if err := enforceSaveSecretSafety(command.Context(), deps, entry.LogicalPath, entry.Payload, insecure); err != nil {
+				if err := enforceSaveSecretSafety(command.Context(), deps, entry.LogicalPath, entry.Payload, ignore); err != nil {
 					return err
 				}
 			}
@@ -88,7 +98,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	common.BindInputFlags(command, &input)
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
-	command.Flags().BoolVar(&insecure, "insecure", false, "allow saving potential plaintext secrets")
+	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
 	return command
 }
 
@@ -242,9 +252,9 @@ func enforceSaveSecretSafety(
 	deps common.CommandDependencies,
 	logicalPath string,
 	value resource.Value,
-	insecure bool,
+	ignore bool,
 ) error {
-	if insecure {
+	if ignore {
 		return nil
 	}
 
@@ -258,7 +268,7 @@ func enforceSaveSecretSafety(
 
 	return common.ValidationError(
 		fmt.Sprintf(
-			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --insecure",
+			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --ignore",
 			logicalPath,
 			strings.Join(candidates, ", "),
 		),

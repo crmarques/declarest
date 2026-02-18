@@ -1,19 +1,15 @@
 package adhoc
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
 )
 
 var supportedHTTPMethods = []string{
@@ -48,6 +44,8 @@ func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags
 func newMethodCommand(method string, deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var input common.InputFlags
+	var payload string
+	var force bool
 	methodLower := strings.ToLower(method)
 
 	command := &cobra.Command{
@@ -55,12 +53,19 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 		Short: fmt.Sprintf("Execute HTTP %s request", method),
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
+			if method == http.MethodDelete && !force {
+				return common.ValidationError(
+					"delete request is destructive: are you sure you want to remove this resource? rerun with --force to confirm",
+					nil,
+				)
+			}
+
 			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
-			body, err := decodeOptionalBody(command, input)
+			body, err := decodeOptionalBody(command, input, payload)
 			if err != nil {
 				return err
 			}
@@ -114,11 +119,33 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
+	if method == http.MethodPost || method == http.MethodPut {
+		command.Flags().StringVar(&payload, "payload", "", "inline request payload")
+	}
+	if method == http.MethodDelete {
+		command.Flags().BoolVarP(&force, "force", "y", false, "confirm deletion")
+	}
 	return command
 }
 
-func decodeOptionalBody(command *cobra.Command, flags common.InputFlags) (resource.Value, error) {
-	data, err := readOptionalInput(command, flags)
+func decodeOptionalBody(command *cobra.Command, flags common.InputFlags, payload string) (resource.Value, error) {
+	if strings.TrimSpace(payload) != "" {
+		if flags.File != "" {
+			return nil, common.ValidationError("flag --payload cannot be used with --file", nil)
+		}
+
+		stdinData, err := common.ReadOptionalInput(command, common.InputFlags{})
+		if err != nil {
+			return nil, err
+		}
+		if len(stdinData) > 0 {
+			return nil, common.ValidationError("flag --payload cannot be used with stdin input", nil)
+		}
+
+		return common.DecodeInputData[resource.Value]([]byte(payload), flags.Format)
+	}
+
+	data, err := common.ReadOptionalInput(command, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -126,50 +153,5 @@ func decodeOptionalBody(command *cobra.Command, flags common.InputFlags) (resour
 		return nil, nil
 	}
 
-	var value resource.Value
-	switch flags.Format {
-	case "", common.OutputJSON:
-		if err := json.Unmarshal(data, &value); err != nil {
-			return nil, common.ValidationError("invalid json input", err)
-		}
-	case common.OutputYAML:
-		if err := yaml.Unmarshal(data, &value); err != nil {
-			return nil, common.ValidationError("invalid yaml input", err)
-		}
-	default:
-		return nil, common.ValidationError("invalid input format: use json or yaml", nil)
-	}
-
-	return value, nil
-}
-
-func readOptionalInput(command *cobra.Command, flags common.InputFlags) ([]byte, error) {
-	if flags.File != "" {
-		data, err := os.ReadFile(flags.File)
-		if err != nil {
-			return nil, err
-		}
-		if len(bytes.TrimSpace(data)) == 0 {
-			return nil, common.ValidationError("input is empty", nil)
-		}
-		return data, nil
-	}
-
-	inputReader := command.InOrStdin()
-	if stdinFile, ok := inputReader.(*os.File); ok {
-		info, err := stdinFile.Stat()
-		if err == nil && (info.Mode()&os.ModeCharDevice) != 0 {
-			return nil, nil
-		}
-	}
-
-	data, err := io.ReadAll(inputReader)
-	if err != nil {
-		return nil, err
-	}
-	if len(bytes.TrimSpace(data)) == 0 {
-		return nil, nil
-	}
-
-	return data, nil
+	return common.DecodeInputData[resource.Value](data, flags.Format)
 }

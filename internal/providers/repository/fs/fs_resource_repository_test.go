@@ -3,6 +3,8 @@ package fs
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
@@ -49,6 +51,81 @@ func TestFSRepositorySaveGetByFormat(t *testing.T) {
 				t.Fatalf("expected name=acme, got %#v", gotMap["name"])
 			}
 		})
+	}
+}
+
+func TestFSRepositorySaveUsesResourceFileLayout(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	repo := NewFSResourceRepository(baseDir, config.ResourceFormatJSON)
+	if err := repo.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	if err := repo.Save(context.Background(), "/admin/realms/master", map[string]any{"realm": "master"}); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	resourceFile := filepath.Join(baseDir, "admin", "realms", "master", "resource.json")
+	if _, err := os.Stat(resourceFile); err != nil {
+		t.Fatalf("expected canonical resource payload file %q, got error: %v", resourceFile, err)
+	}
+
+	legacyFile := filepath.Join(baseDir, "admin", "realms", "master.json")
+	if _, err := os.Stat(legacyFile); err == nil {
+		t.Fatalf("did not expect legacy payload file %q", legacyFile)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed to inspect legacy payload file %q: %v", legacyFile, err)
+	}
+}
+
+func TestFSRepositoryReadsCanonicalAndLegacyLayouts(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	repo := NewFSResourceRepository(baseDir, config.ResourceFormatJSON)
+	if err := repo.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	legacyPayloadPath := filepath.Join(baseDir, "admin", "realms", "master.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPayloadPath), 0o755); err != nil {
+		t.Fatalf("failed to create legacy payload directory: %v", err)
+	}
+	if err := os.WriteFile(legacyPayloadPath, []byte(`{"realm":"master"}`), 0o600); err != nil {
+		t.Fatalf("failed to seed legacy payload: %v", err)
+	}
+
+	canonicalPayloadPath := filepath.Join(baseDir, "admin", "realms", "platform", "resource.json")
+	if err := os.MkdirAll(filepath.Dir(canonicalPayloadPath), 0o755); err != nil {
+		t.Fatalf("failed to create canonical payload directory: %v", err)
+	}
+	if err := os.WriteFile(canonicalPayloadPath, []byte(`{"realm":"platform"}`), 0o600); err != nil {
+		t.Fatalf("failed to seed canonical payload: %v", err)
+	}
+
+	value, err := repo.Get(context.Background(), "/admin/realms/platform")
+	if err != nil {
+		t.Fatalf("Get returned error for canonical payload: %v", err)
+	}
+	valueMap, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload, got %T", value)
+	}
+	if valueMap["realm"] != "platform" {
+		t.Fatalf("expected canonical payload value realm=platform, got %#v", valueMap["realm"])
+	}
+
+	items, err := repo.List(context.Background(), "/admin/realms/", repository.ListPolicy{})
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 direct resources, got %d", len(items))
+	}
+	if items[0].LogicalPath != "/admin/realms/master" || items[1].LogicalPath != "/admin/realms/platform" {
+		t.Fatalf("unexpected list output: %#v", items)
 	}
 }
 
