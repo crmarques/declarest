@@ -117,3 +117,5 @@ Manual handoff:
 3. `./run-e2e.sh --profile basic --repo-type git --git-provider gitlab --resource-server simple-api-server` runs dependency-aware parallel hooks while ensuring `repo-type:git` waits for `git-provider:*` initialization.
 4. `./run-e2e.sh --resource-server keycloak --resource-server-oauth2 false` fails selection because keycloak requires oauth2 security support.
 5. `./run-e2e.sh --profile full --resource-server simple-api-server --resource-server-mtls true` validates runtime mTLS trust reload by removing and re-adding trusted client certificates without restarting the server.
+6. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --resource-server simple-api-server --secret-provider file` runs git main-case coverage against a local compose-backed Gitea provider.
+7. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --git-provider-connection remote --resource-server none --secret-provider none` fails `Preparing Components` when required `DECLAREST_E2E_GITEA_*` remote credentials are missing.

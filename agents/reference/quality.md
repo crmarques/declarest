@@ -62,6 +62,8 @@ Acceptance contracts:
 24. Metadata-aware path fallback breadth: repository-backed single-resource workflows (`resource get --repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) use literal local lookup then bounded metadata `idFromAttribute` fallback; remote delete retries with metadata-aware identity after literal `NotFound`.
 25. Resource secret placeholder resolution: remote workflows resolve `{{secret .}}` to logical-path scoped keys, resolve `{{secret <custom-key>}}` overrides, and remain compatible with legacy absolute key placeholders.
 26. Metadata persistence normalization: metadata writes omit nil fields (no `null` serialization) while preserving explicit empty arrays/maps used for merge replacement behavior.
+27. Resource save override guard: saving to an already-present logical path must fail without `--force` and succeed when `--force` is provided so repository state cannot be overwritten accidentally.
+28. Resource save wildcard expansion: `resource save` must expand `_` path segments via remote direct-child list traversal, persist all matched collection/resource targets, reject wildcard+payload input, and return `NotFound` when no concrete matches are resolved.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

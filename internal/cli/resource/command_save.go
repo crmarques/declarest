@@ -13,6 +13,8 @@ import (
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/internal/support/identity"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
@@ -27,6 +29,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	var asOneResource bool
 	var ignore bool
 	var handleSecrets string
+	var force bool
 
 	command := &cobra.Command{
 		Use:   "save [path]",
@@ -34,6 +37,10 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
+				return err
+			}
+			normalizedPath, hasWildcard, err := normalizeSavePathPattern(resolvedPath)
 			if err != nil {
 				return err
 			}
@@ -50,116 +57,86 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			repositoryService, err := common.RequireRepository(deps)
+			if err != nil {
+				return err
+			}
 
 			value, hasInput, err := decodeOptionalResourceInput(command, input)
 			if err != nil {
 				return err
 			}
-			if !hasInput {
-				remoteValue, err := orchestratorService.GetRemote(command.Context(), resolvedPath)
+			if hasWildcard {
+				if hasInput {
+					return common.ValidationError("wildcard save paths are supported only when reading from remote server", nil)
+				}
+
+				targets, err := expandSaveWildcardPaths(command.Context(), orchestratorService, normalizedPath)
 				if err != nil {
 					return err
 				}
-				value = remoteValue
-				hasInput = true
-			}
 
-			items, isListPayload, err := extractSaveListItems(value)
-			if err != nil {
-				return err
-			}
-
-			if asOneResource || (!asItems && !isListPayload) {
-				if handleSecretsEnabled {
-					value, unhandled, err := handleSaveSecrets(
-						command.Context(),
-						deps,
-						resolvedPath,
-						value,
-						"",
-						requestedSecretCandidates,
-					)
+				matchedCount := 0
+				for _, targetPath := range targets {
+					remoteValue, err := orchestratorService.GetRemote(command.Context(), targetPath)
 					if err != nil {
-						return err
-					}
-					if len(unhandled) > 0 && !ignore {
-						return saveSecretSafetyError(resolvedPath, unhandled)
-					}
-					return orchestratorService.Save(command.Context(), resolvedPath, value)
-				} else if err := enforceSaveSecretSafety(command.Context(), deps, resolvedPath, value, ignore); err != nil {
-					return err
-				}
-				return orchestratorService.Save(command.Context(), resolvedPath, value)
-			}
-			if !isListPayload {
-				return common.ValidationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
-			}
-
-			entries, err := resolveSaveEntriesForItems(command.Context(), deps, resolvedPath, items)
-			if err != nil {
-				return err
-			}
-			collectionCandidates := make([]string, 0)
-			if handleSecretsEnabled || !ignore {
-				collectionCandidates, err = detectSaveSecretCandidatesForCollection(command.Context(), deps, resolvedPath, entries)
-				if err != nil {
-					return err
-				}
-			}
-			if handleSecretsEnabled {
-				selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(collectionCandidates, requestedSecretCandidates)
-				if err != nil {
-					return err
-				}
-
-				if len(selectedCandidates) > 0 {
-					secretProvider, err := common.RequireSecretProvider(deps)
-					if err != nil {
-						return err
-					}
-
-					updatedEntries := make([]saveEntry, 0, len(entries))
-					for _, entry := range entries {
-						processedPayload, _, err := applySaveSecretCandidates(
-							command.Context(),
-							secretProvider,
-							entry.LogicalPath,
-							entry.Payload,
-							selectedCandidates,
-						)
-						if err != nil {
-							return err
+						if isTypedErrorCategory(err, faults.NotFoundError) {
+							continue
 						}
-						updatedEntries = append(updatedEntries, saveEntry{
-							LogicalPath: entry.LogicalPath,
-							Payload:     processedPayload,
-						})
+						return err
 					}
-					entries = updatedEntries
+					matchedCount++
 
-					if err := persistSaveSecretAttributes(
+					if err := saveResolvedPathPayload(
 						command.Context(),
 						deps,
-						saveSecretMetadataPathForCollection(resolvedPath),
-						selectedCandidates,
+						orchestratorService,
+						repositoryService,
+						targetPath,
+						remoteValue,
+						asItems,
+						asOneResource,
+						ignore,
+						handleSecretsEnabled,
+						requestedSecretCandidates,
+						force,
 					); err != nil {
 						return err
 					}
 				}
 
-				if len(unhandledCandidates) > 0 && !ignore {
-					return saveSecretSafetyError(resolvedPath, unhandledCandidates)
+				if matchedCount == 0 {
+					return faults.NewTypedError(
+						faults.NotFoundError,
+						fmt.Sprintf("no remote resources matched wildcard path %q", normalizedPath),
+						nil,
+					)
 				}
-			} else if len(collectionCandidates) > 0 && !ignore {
-				return saveSecretSafetyError(resolvedPath, collectionCandidates)
-			}
-			for _, entry := range entries {
-				if err := orchestratorService.Save(command.Context(), entry.LogicalPath, entry.Payload); err != nil {
-					return err
-				}
+				return nil
 			}
 
-			return nil
+			if !hasInput {
+				remoteValue, err := orchestratorService.GetRemote(command.Context(), normalizedPath)
+				if err != nil {
+					return err
+				}
+				value = remoteValue
+			}
+
+			return saveResolvedPathPayload(
+				command.Context(),
+				deps,
+				orchestratorService,
+				repositoryService,
+				normalizedPath,
+				value,
+				asItems,
+				asOneResource,
+				ignore,
+				handleSecretsEnabled,
+				requestedSecretCandidates,
+				force,
+			)
 		},
 	}
 
@@ -171,9 +148,287 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
 	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
 	command.Flags().StringVar(&handleSecrets, "handle-secrets", "", "detect, store, and mask plaintext secrets while saving (optional comma-separated attributes)")
+	command.Flags().BoolVar(&force, "force", false, "override existing repository resources")
 	handleSecretsFlag := command.Flags().Lookup("handle-secrets")
 	handleSecretsFlag.NoOptDefVal = handleSecretsAllSentinel
 	return command
+}
+
+func saveResolvedPathPayload(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	orchestratorService orchestratordomain.Orchestrator,
+	repositoryService repository.ResourceRepository,
+	resolvedPath string,
+	value resource.Value,
+	asItems bool,
+	asOneResource bool,
+	ignore bool,
+	handleSecretsEnabled bool,
+	requestedSecretCandidates []string,
+	force bool,
+) error {
+	items, isListPayload, err := extractSaveListItems(value)
+	if err != nil {
+		return err
+	}
+
+	if asOneResource || (!asItems && !isListPayload) {
+		if err := ensureSaveTargetAllowed(ctx, repositoryService, resolvedPath, force); err != nil {
+			return err
+		}
+		if handleSecretsEnabled {
+			value, unhandled, err := handleSaveSecrets(
+				ctx,
+				deps,
+				resolvedPath,
+				value,
+				"",
+				requestedSecretCandidates,
+			)
+			if err != nil {
+				return err
+			}
+			if len(unhandled) > 0 && !ignore {
+				return saveSecretSafetyError(resolvedPath, unhandled)
+			}
+			return orchestratorService.Save(ctx, resolvedPath, value)
+		}
+		if err := enforceSaveSecretSafety(ctx, deps, resolvedPath, value, ignore); err != nil {
+			return err
+		}
+		return orchestratorService.Save(ctx, resolvedPath, value)
+	}
+	if !isListPayload {
+		return common.ValidationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
+	}
+
+	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)
+	if err != nil {
+		return err
+	}
+	if err := ensureSaveEntriesWritable(ctx, repositoryService, entries, force); err != nil {
+		return err
+	}
+	collectionCandidates := make([]string, 0)
+	if handleSecretsEnabled || !ignore {
+		collectionCandidates, err = detectSaveSecretCandidatesForCollection(ctx, deps, resolvedPath, entries)
+		if err != nil {
+			return err
+		}
+	}
+	if handleSecretsEnabled {
+		selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(collectionCandidates, requestedSecretCandidates)
+		if err != nil {
+			return err
+		}
+
+		if len(selectedCandidates) > 0 {
+			secretProvider, err := common.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			updatedEntries := make([]saveEntry, 0, len(entries))
+			for _, entry := range entries {
+				processedPayload, _, err := applySaveSecretCandidates(
+					ctx,
+					secretProvider,
+					entry.LogicalPath,
+					entry.Payload,
+					selectedCandidates,
+				)
+				if err != nil {
+					return err
+				}
+				updatedEntries = append(updatedEntries, saveEntry{
+					LogicalPath: entry.LogicalPath,
+					Payload:     processedPayload,
+				})
+			}
+			entries = updatedEntries
+
+			if err := persistSaveSecretAttributes(
+				ctx,
+				deps,
+				saveSecretMetadataPathForCollection(resolvedPath),
+				selectedCandidates,
+			); err != nil {
+				return err
+			}
+		}
+
+		if len(unhandledCandidates) > 0 && !ignore {
+			return saveSecretSafetyError(resolvedPath, unhandledCandidates)
+		}
+	} else if len(collectionCandidates) > 0 && !ignore {
+		return saveSecretSafetyError(resolvedPath, collectionCandidates)
+	}
+	for _, entry := range entries {
+		if err := orchestratorService.Save(ctx, entry.LogicalPath, entry.Payload); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func normalizeSavePathPattern(rawPath string) (string, bool, error) {
+	trimmedPath := strings.TrimSpace(rawPath)
+	if trimmedPath == "" {
+		return "", false, common.ValidationError("path is required", nil)
+	}
+
+	normalizedInput := strings.ReplaceAll(trimmedPath, "\\", "/")
+	if !strings.HasPrefix(normalizedInput, "/") {
+		return "", false, common.ValidationError("logical path must be absolute", nil)
+	}
+
+	for _, segment := range strings.Split(normalizedInput, "/") {
+		if segment == ".." {
+			return "", false, common.ValidationError("logical path must not contain traversal segments", nil)
+		}
+	}
+
+	normalizedPath := path.Clean(normalizedInput)
+	if !strings.HasPrefix(normalizedPath, "/") {
+		return "", false, common.ValidationError("logical path must be absolute", nil)
+	}
+	if normalizedPath != "/" {
+		normalizedPath = strings.TrimSuffix(normalizedPath, "/")
+	}
+
+	hasWildcard := false
+	for _, segment := range splitSavePathSegments(normalizedPath) {
+		if segment == "_" {
+			hasWildcard = true
+			break
+		}
+	}
+
+	return normalizedPath, hasWildcard, nil
+}
+
+func splitSavePathSegments(logicalPath string) []string {
+	trimmed := strings.Trim(strings.TrimSpace(logicalPath), "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
+}
+
+func expandSaveWildcardPaths(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	wildcardPath string,
+) ([]string, error) {
+	segments := splitSavePathSegments(wildcardPath)
+	if len(segments) == 0 {
+		return nil, common.ValidationError("wildcard save path must target a collection or resource", nil)
+	}
+
+	currentPaths := []string{"/"}
+	for _, segment := range segments {
+		nextPaths := make(map[string]struct{})
+
+		if segment == "_" {
+			for _, parentPath := range currentPaths {
+				items, err := orchestratorService.ListRemote(ctx, parentPath, orchestratordomain.ListPolicy{Recursive: false})
+				if err != nil {
+					return nil, err
+				}
+
+				for _, item := range items {
+					childSegment, ok := directChildSegment(parentPath, item.LogicalPath)
+					if !ok {
+						continue
+					}
+					childPath, err := appendSavePathSegment(parentPath, childSegment)
+					if err != nil {
+						return nil, err
+					}
+					nextPaths[childPath] = struct{}{}
+				}
+			}
+		} else {
+			for _, parentPath := range currentPaths {
+				childPath, err := appendSavePathSegment(parentPath, segment)
+				if err != nil {
+					return nil, err
+				}
+				nextPaths[childPath] = struct{}{}
+			}
+		}
+
+		if len(nextPaths) == 0 {
+			return nil, faults.NewTypedError(
+				faults.NotFoundError,
+				fmt.Sprintf("no remote resources matched wildcard path %q", wildcardPath),
+				nil,
+			)
+		}
+
+		currentPaths = sortedPathKeys(nextPaths)
+	}
+
+	return currentPaths, nil
+}
+
+func appendSavePathSegment(parentPath string, segment string) (string, error) {
+	trimmedSegment := strings.TrimSpace(segment)
+	if trimmedSegment == "" {
+		return "", common.ValidationError("wildcard path contains an empty segment", nil)
+	}
+
+	joined := path.Join(parentPath, trimmedSegment)
+	if !strings.HasPrefix(joined, "/") {
+		joined = "/" + joined
+	}
+	return resource.NormalizeLogicalPath(joined)
+}
+
+func directChildSegment(parentPath string, candidatePath string) (string, bool) {
+	normalizedParentPath, err := resource.NormalizeLogicalPath(parentPath)
+	if err != nil {
+		return "", false
+	}
+	normalizedCandidatePath, err := resource.NormalizeLogicalPath(candidatePath)
+	if err != nil {
+		return "", false
+	}
+
+	if normalizedParentPath == "/" {
+		remaining := strings.TrimPrefix(normalizedCandidatePath, "/")
+		if remaining == "" || strings.Contains(remaining, "/") {
+			return "", false
+		}
+		return remaining, true
+	}
+
+	parentPrefix := strings.TrimSuffix(normalizedParentPath, "/")
+	if !strings.HasPrefix(normalizedCandidatePath, parentPrefix+"/") {
+		return "", false
+	}
+
+	remaining := strings.TrimPrefix(normalizedCandidatePath, parentPrefix+"/")
+	if remaining == "" || strings.Contains(remaining, "/") {
+		return "", false
+	}
+
+	return remaining, true
+}
+
+func sortedPathKeys(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type saveEntry struct {
@@ -808,6 +1063,61 @@ func mergeSaveSecretAttributes(existing []string, detected []string) []string {
 
 	sort.Strings(merged)
 	return merged
+}
+
+func ensureSaveTargetAllowed(
+	ctx context.Context,
+	repositoryService repository.ResourceRepository,
+	logicalPath string,
+	force bool,
+) error {
+	if force {
+		return nil
+	}
+
+	exists, err := resourceExists(ctx, repositoryService, logicalPath)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.ValidationError(
+			fmt.Sprintf("resource %q already exists; rerun with --force to override", logicalPath),
+			nil,
+		)
+	}
+	return nil
+}
+
+func ensureSaveEntriesWritable(
+	ctx context.Context,
+	repositoryService repository.ResourceRepository,
+	entries []saveEntry,
+	force bool,
+) error {
+	if force {
+		return nil
+	}
+	for _, entry := range entries {
+		if err := ensureSaveTargetAllowed(ctx, repositoryService, entry.LogicalPath, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resourceExists(
+	ctx context.Context,
+	repositoryService repository.ResourceRepository,
+	logicalPath string,
+) (bool, error) {
+	_, err := repositoryService.Get(ctx, logicalPath)
+	if err == nil {
+		return true, nil
+	}
+	if isTypedErrorCategory(err, faults.NotFoundError) {
+		return false, nil
+	}
+	return false, err
 }
 
 func dedupeAndSortSaveSecretAttributes(values []string) []string {

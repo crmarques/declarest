@@ -208,6 +208,12 @@ Keycloak repo-template currently covers:
 - `DECLAREST_E2E_GITHUB_TOKEN`
 - optional: `DECLAREST_E2E_GITHUB_REMOTE_BRANCH`
 
+### Git Provider (`gitea`, remote)
+
+- `DECLAREST_E2E_GITEA_REMOTE_URL`
+- `DECLAREST_E2E_GITEA_TOKEN`
+- optional: `DECLAREST_E2E_GITEA_REMOTE_BRANCH`
+
 ### Secret Provider (`vault`, remote)
 
 - `DECLAREST_E2E_VAULT_ADDRESS`

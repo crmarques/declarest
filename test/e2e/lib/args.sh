@@ -154,14 +154,15 @@ Component selection (choose values for each flag; see notes below):
   --repo-type <filesystem|git>                        default: filesystem
     filesystem : Use the local filesystem repository backend.
     git        : Use the git repository backend (requires a git provider selection).
-  --git-provider <git|github|gitlab>                  default: git when --repo-type git (none otherwise)
+  --git-provider <git|github|gitlab|gitea>            default: git when --repo-type git (none otherwise)
     git    : Built-in file:// git provider supplied with the fixtures.
     github : Remote GitHub provider (requires --git-provider-connection remote).
     gitlab : GitLab provider that can run locally or remote, depending on the connection flag.
+    gitea  : Gitea provider that can run locally or remote, depending on the connection flag.
     Selecting --repo-type git without an explicit --git-provider forces --git-provider=git.
   --git-provider-connection <local|remote>             default: local
     local  : Launch the git provider inside this workspace.
-    remote : Reach an existing provider instance (required for github).
+    remote : Reach an existing provider instance (required for github; optional for gitlab/gitea).
   --secret-provider <file|vault|none>                 default: file
     file  : Encrypted local file-based secret provider backed by fixtures.
     vault : HashiCorp Vault provider that can run locally or connect to a remote Vault.
@@ -190,6 +191,7 @@ Environment overrides:
 Examples:
   ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
+  ./run-e2e.sh --profile full --repo-type git --git-provider gitea --resource-server simple-api-server
   ./run-e2e.sh --resource-server keycloak --resource-server-oauth2 true --resource-server-basic-auth false
   ./run-e2e.sh --resource-server simple-api-server --resource-server-oauth2 false --resource-server-basic-auth true --resource-server-mtls true
   ./run-e2e.sh --profile manual --keep-runtime

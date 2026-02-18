@@ -118,7 +118,7 @@ Interactive config commands:
 18. `resource save` without payload input (`--file` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 19. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 20. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
-21. `resource save` MUST reject potential plaintext secret values and fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set.
+21. `resource save` MUST reject potential plaintext secret values and fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
 22. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
 23. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `secretsFromAttributes` for the saved logical path.
 24. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>`, resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`, and remain compatible with legacy absolute key placeholders.
@@ -149,6 +149,9 @@ Interactive config commands:
 49. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
 50. `resource delete --remote-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
 51. `ad-hoc delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
+52. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
+53. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
+54. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -172,7 +175,7 @@ Interactive config commands:
 7. `resource delete` receives conflicting source flags (`--repository`, `--remote-server`, `--both`).
 8. `resource save` receives both `--as-items` and `--as-one-resource`.
 9. `resource save --as-items` receives non-list input.
-10. `resource save` detects potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set.
+10. `resource save` detects potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, or the command attempts to overwrite an existing repository resource without `--force`.
 11. `resource save --handle-secrets=<attr-list>` includes one or more attributes that are not detected in the payload.
 12. `resource create` is invoked without payload input and no matching local resources exist under the target path.
 13. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
@@ -184,6 +187,7 @@ Interactive config commands:
 19. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
 20. `ad-hoc delete` is invoked without `--force`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
+22. `resource save` wildcard path is combined with payload input.
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
@@ -201,6 +205,7 @@ Interactive config commands:
 13. `resource apply`, `resource create`, or `resource update` is invoked on a collection that has only nested descendants and omits `--recursive`.
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
 15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
+16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -257,3 +262,5 @@ Interactive config commands:
 52. `declarest ad-hoc delete /customers --force --recursive` issues delete requests for all repository resources under `/customers`.
 53. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idFromAttribute` matches the provided path segment when no literal repository resource exists.
 54. `declarest resource delete /admin/realms/master/clients/account --force --remote-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
+55. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
+56. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.

@@ -525,8 +525,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			"",
 			"resource",
 			"save",
@@ -563,8 +564,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 			},
 		}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			"",
 			"resource",
 			"save",
@@ -591,8 +593,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`[{"id":"acme","tier":"pro"},{"id":"beta","tier":"free"}]`,
 			"resource",
 			"save",
@@ -620,8 +623,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`[{"id":"acme"},{"id":"beta"}]`,
 			"resource",
 			"save",
@@ -647,8 +651,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"id":"acme"}`,
 			"resource",
 			"save",
@@ -662,8 +667,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`[{"id":"acme"}]`,
 			"resource",
 			"save",
@@ -678,8 +684,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"password":"plain-secret"}`,
 			"resource",
 			"save",
@@ -701,8 +708,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`[{"id":"acme","tier":"pro"},{"id":"beta","password":"plain-secret"}]`,
 			"resource",
 			"save",
@@ -721,8 +729,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"credentials":{"authValue":"plain-secret"}}`,
 			"resource",
 			"save",
@@ -744,8 +753,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"credentials":{"authValue":"{{secret \"authValue\"}}"}}`,
 			"resource",
 			"save",
@@ -763,8 +773,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"password":"plain-secret"}`,
 			"resource",
 			"save",
@@ -786,7 +797,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			SecretsFromAttributes: []string{"credentials.authValue", "existingSecret"},
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -839,7 +850,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			IDFromAttribute: "id",
 		}
 		reconciler := &testReconciler{metadataService: metadataService}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -883,7 +894,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("handle_secrets_requires_secret_provider_when_candidates_exist", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		deps.Secrets = nil
 
 		_, err := executeForTest(
@@ -903,7 +914,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("handle_secrets_with_subset_fails_on_remaining_candidates_after_handling_requested", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -933,8 +944,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		reconciler := &testReconciler{metadataService: metadataService}
 
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			deps,
 			`{"password":"pw-123"}`,
 			"resource",
 			"save",
@@ -959,7 +971,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
 			},
 		}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1002,7 +1014,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
 			},
 		}
-		deps := testDepsWith(reconciler, metadataService)
+		deps := newResourceSaveDeps(reconciler, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1035,6 +1047,118 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
+	})
+}
+
+func TestResourceSaveWildcardPaths(t *testing.T) {
+	t.Parallel()
+
+	t.Run("collection_wildcard_saves_items_from_all_matched_collections", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			remoteList: []resource.Resource{
+				{LogicalPath: "/admin/realms/master"},
+				{LogicalPath: "/admin/realms/tenant-a"},
+			},
+			getRemoteValues: map[string]resource.Value{
+				"/admin/realms/master/clients": []any{
+					map[string]any{"id": "master-client", "enabled": true},
+				},
+				"/admin/realms/tenant-a/clients": []any{
+					map[string]any{"id": "tenant-client", "enabled": true},
+				},
+			},
+		}
+		deps := newResourceSaveDeps(reconciler, metadataService)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/_/clients/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected wildcard collection save error: %v", err)
+		}
+
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/master-client" &&
+			reconciler.saveCalls[1].logicalPath != "/admin/realms/master/clients/master-client" {
+			t.Fatalf("expected master collection item to be saved, got %#v", reconciler.saveCalls)
+		}
+		if reconciler.saveCalls[0].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" &&
+			reconciler.saveCalls[1].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" {
+			t.Fatalf("expected tenant collection item to be saved, got %#v", reconciler.saveCalls)
+		}
+	})
+
+	t.Run("resource_wildcard_saves_only_existing_matches", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			remoteList: []resource.Resource{
+				{LogicalPath: "/admin/realms/master"},
+				{LogicalPath: "/admin/realms/tenant-a"},
+			},
+			getRemoteValues: map[string]resource.Value{
+				"/admin/realms/master/clients/test": map[string]any{"id": "test", "realm": "master"},
+			},
+		}
+		deps := newResourceSaveDeps(reconciler, metadataService)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/_/clients/test",
+		)
+		if err != nil {
+			t.Fatalf("unexpected wildcard resource save error: %v", err)
+		}
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 saved match, got %d", len(reconciler.saveCalls))
+		}
+		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/test" {
+			t.Fatalf("expected /admin/realms/master/clients/test save path, got %q", reconciler.saveCalls[0].logicalPath)
+		}
+	})
+
+	t.Run("wildcard_path_rejects_inline_payload", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := newResourceSaveDeps(reconciler, metadataService)
+
+		_, err := executeForTest(
+			deps,
+			`{"id":"test"}`,
+			"resource",
+			"save",
+			"/admin/realms/_/clients/test",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "wildcard save paths") {
+			t.Fatalf("expected wildcard payload validation error, got %q", err.Error())
+		}
+	})
+
+	t.Run("wildcard_path_returns_not_found_when_no_remote_matches_exist", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{metadataService: metadataService}
+		deps := newResourceSaveDeps(reconciler, metadataService)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/_/clients",
+		)
+		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 }
 
@@ -2281,6 +2405,9 @@ func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
 	if !strings.Contains(output, "--handle-secrets") {
 		t.Fatalf("expected --handle-secrets in resource save help output, got %q", output)
 	}
+	if !strings.Contains(output, "--force") {
+		t.Fatalf("expected --force in resource save help output, got %q", output)
+	}
 }
 
 func TestRootCompletionShowsCanonicalHelpCommand(t *testing.T) {
@@ -2477,6 +2604,12 @@ func testDepsWith(reconciler *testReconciler, metadataService *testMetadata) Dep
 	}
 }
 
+func newResourceSaveDeps(reconciler *testReconciler, metadataService *testMetadata) Dependencies {
+	deps := testDepsWith(reconciler, metadataService)
+	deps.Repository = &resourceSaveTestRepository{}
+	return deps
+}
+
 type testContextService struct{}
 
 func (s *testContextService) Create(context.Context, config.Context) error { return nil }
@@ -2516,6 +2649,7 @@ type testReconciler struct {
 	deleteCalls     []deleteCall
 	saveErr         error
 	getRemoteValue  resource.Value
+	getRemoteValues map[string]resource.Value
 	getRemoteErr    error
 	getRemoteCalls  []string
 	adHocCalls      []adHocCall
@@ -2563,6 +2697,12 @@ func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resou
 	r.getRemoteCalls = append(r.getRemoteCalls, logicalPath)
 	if r.getRemoteErr != nil {
 		return nil, r.getRemoteErr
+	}
+	if r.getRemoteValues != nil {
+		if value, ok := r.getRemoteValues[logicalPath]; ok {
+			return value, nil
+		}
+		return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 	if r.getRemoteValue != nil {
 		return r.getRemoteValue, nil
@@ -2877,6 +3017,54 @@ func (r *testRepository) Reset(context.Context, repository.ResetPolicy) error { 
 func (r *testRepository) Check(context.Context) error                         { return nil }
 func (r *testRepository) Push(context.Context, repository.PushPolicy) error   { return nil }
 func (r *testRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
+	return repository.SyncReport{
+		State:          repository.SyncStateNoRemote,
+		Ahead:          0,
+		Behind:         0,
+		HasUncommitted: false,
+	}, nil
+}
+
+type resourceSaveTestRepository struct {
+	values map[string]resource.Value
+}
+
+func (r *resourceSaveTestRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
+	if r.values == nil {
+		r.values = map[string]resource.Value{}
+	}
+	r.values[logicalPath] = value
+	return nil
+}
+
+func (r *resourceSaveTestRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+	if r.values != nil {
+		if value, found := r.values[logicalPath]; found {
+			return value, nil
+		}
+	}
+	return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+}
+
+func (r *resourceSaveTestRepository) Delete(_ context.Context, _ string, _ repository.DeletePolicy) error {
+	return nil
+}
+
+func (r *resourceSaveTestRepository) List(_ context.Context, _ string, _ repository.ListPolicy) ([]resource.Resource, error) {
+	return nil, nil
+}
+
+func (r *resourceSaveTestRepository) Exists(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (r *resourceSaveTestRepository) Move(context.Context, string, string) error          { return nil }
+func (r *resourceSaveTestRepository) Init(context.Context) error                          { return nil }
+func (r *resourceSaveTestRepository) Refresh(context.Context) error                       { return nil }
+func (r *resourceSaveTestRepository) Reset(context.Context, repository.ResetPolicy) error { return nil }
+func (r *resourceSaveTestRepository) Check(context.Context) error                         { return nil }
+func (r *resourceSaveTestRepository) Push(context.Context, repository.PushPolicy) error   { return nil }
+func (r *resourceSaveTestRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
 	return repository.SyncReport{
 		State:          repository.SyncStateNoRemote,
 		Ahead:          0,

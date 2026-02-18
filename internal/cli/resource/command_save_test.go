@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	repositorydomain "github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
@@ -658,6 +660,59 @@ func TestSaveSecretMetadataPathForCollection(t *testing.T) {
 	})
 }
 
+func TestEnsureSaveTargetAllowed(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeSaveRepository{
+		values: map[string]resourcedomain.Value{
+			"/customers/acme": map[string]any{"id": "acme"},
+		},
+	}
+
+	err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", false)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("expected --force hint, got %v", err)
+	}
+
+	if err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", true); err != nil {
+		t.Fatalf("expected force override to succeed, got %v", err)
+	}
+}
+
+func TestEnsureSaveEntriesWritable(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeSaveRepository{
+		values: map[string]resourcedomain.Value{
+			"/customers/acme": map[string]any{"id": "acme"},
+		},
+	}
+
+	entries := []saveEntry{
+		{LogicalPath: "/customers/acme"},
+	}
+
+	err := ensureSaveEntriesWritable(context.Background(), repo, entries, false)
+	assertTypedCategory(t, err, faults.ValidationError)
+
+	if err := ensureSaveEntriesWritable(context.Background(), repo, entries, true); err != nil {
+		t.Fatalf("expected force override to succeed, got %v", err)
+	}
+}
+
+func TestResourceExistsPropagatesErrors(t *testing.T) {
+	t.Parallel()
+
+	expectedErr := faults.NewTypedError(faults.TransportError, "backend", nil)
+	repo := &fakeSaveRepository{err: expectedErr}
+
+	_, err := resourceExists(context.Background(), repo, "/customers/acme")
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected transport error, got %v", err)
+	}
+}
+
 func TestIsTypedErrorCategory(t *testing.T) {
 	t.Parallel()
 
@@ -766,6 +821,61 @@ func (f *fakeSaveSecretProvider) DetectSecretCandidates(context.Context, resourc
 		return nil, f.detectErr
 	}
 	return f.detectedCandidates, nil
+}
+
+type fakeSaveRepository struct {
+	values map[string]resourcedomain.Value
+	err    error
+}
+
+func (f *fakeSaveRepository) Save(_ context.Context, logicalPath string, value resourcedomain.Value) error {
+	if f.values == nil {
+		f.values = map[string]resourcedomain.Value{}
+	}
+	f.values[logicalPath] = value
+	return nil
+}
+
+func (f *fakeSaveRepository) Get(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.values != nil {
+		if value, found := f.values[logicalPath]; found {
+			return value, nil
+		}
+	}
+	return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+}
+
+func (f *fakeSaveRepository) Delete(_ context.Context, _ string, _ repositorydomain.DeletePolicy) error {
+	return nil
+}
+
+func (f *fakeSaveRepository) List(_ context.Context, _ string, _ repositorydomain.ListPolicy) ([]resourcedomain.Resource, error) {
+	return nil, nil
+}
+
+func (f *fakeSaveRepository) Exists(_ context.Context, logicalPath string) (bool, error) {
+	if f.values == nil {
+		return false, nil
+	}
+	_, found := f.values[logicalPath]
+	return found, nil
+}
+
+func (f *fakeSaveRepository) Move(context.Context, string, string) error { return nil }
+func (f *fakeSaveRepository) Init(context.Context) error                 { return nil }
+func (f *fakeSaveRepository) Refresh(context.Context) error              { return nil }
+func (f *fakeSaveRepository) Reset(context.Context, repositorydomain.ResetPolicy) error {
+	return nil
+}
+func (f *fakeSaveRepository) Check(context.Context) error { return nil }
+func (f *fakeSaveRepository) Push(context.Context, repositorydomain.PushPolicy) error {
+	return nil
+}
+func (f *fakeSaveRepository) SyncStatus(context.Context) (repositorydomain.SyncReport, error) {
+	return repositorydomain.SyncReport{}, nil
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
