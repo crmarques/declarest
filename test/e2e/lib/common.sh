@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2034
 E2E_LIB_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-E2E_ROOT_DIR=$(cd -- "${E2E_LIB_DIR}/../.." && pwd)
+E2E_ROOT_DIR=$(cd -- "${E2E_LIB_DIR}/../../.." && pwd)
 E2E_DIR="${E2E_ROOT_DIR}/test/e2e"
 E2E_RUNS_DIR="${E2E_DIR}/.runs"
 
