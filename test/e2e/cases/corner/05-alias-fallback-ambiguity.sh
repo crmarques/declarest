@@ -37,9 +37,9 @@ case_run() {
   case_run_declarest resource create "/admin/realms/master/clients/${client_two}" -f "${item_two}" -i json
   case_expect_success
 
-  case_run_declarest resource list /admin/realms/master/clients --remote-server -o json
+  case_run_declarest resource get "/admin/realms/master/clients/${client_two}" --remote-server -o json
   case_expect_success
-  remote_id_two=$(jq -r --arg client_id "${client_two}" '.[] | select(.LocalAlias==$client_id) | .RemoteID' <<<"${CASE_LAST_OUTPUT}")
+  remote_id_two=$(jq -r '.id // empty' <<<"${CASE_LAST_OUTPUT}")
   if [[ -z "${remote_id_two}" || "${remote_id_two}" == 'null' ]]; then
     printf 'could not resolve remote id for %s\n' "${client_two}" >&2
     return 1

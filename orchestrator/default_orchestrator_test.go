@@ -690,7 +690,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 		getValue: map[string]any{
 			"id":       "42",
 			"alias":    "acme",
-			"apiToken": "{{ secret \"apiToken\" }}",
+			"apiToken": "{{ secret . }}",
 		},
 	}
 
@@ -715,7 +715,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 
 	secretProvider := &fakeSecretProvider{
 		values: map[string]string{
-			"apiToken": "super-secret",
+			"/customers/acme:apiToken": "super-secret",
 		},
 	}
 
@@ -760,7 +760,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 			"id":        "42",
 			"alias":     "acme",
 			"name":      "ACME",
-			"apiToken":  "{{ secret \"apiToken\" }}",
+			"apiToken":  "{{ secret . }}",
 			"updatedAt": "2026-02-10T10:00:00Z",
 		},
 	}
@@ -796,7 +796,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 
 	secretProvider := &fakeSecretProvider{
 		values: map[string]string{
-			"apiToken": "super-secret",
+			"/customers/acme:apiToken": "super-secret",
 		},
 	}
 

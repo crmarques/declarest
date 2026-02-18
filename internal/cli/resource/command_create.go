@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -14,6 +15,7 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	var pathFlag string
 	var input common.InputFlags
 	var payload string
+	var recursive bool
 
 	command := &cobra.Command{
 		Use:   "create [path]",
@@ -34,20 +36,49 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			value, err := decodeCreateInput(command, input, payload)
+			value, hasExplicitInput, err := decodeCreateInput(command, input, payload)
+			if err != nil {
+				return err
+			}
+			if hasExplicitInput {
+				if recursive {
+					return common.ValidationError(
+						"flag --recursive cannot be combined with explicit input; remove input to create resources from repository",
+						nil,
+					)
+				}
+
+				item, createErr := orchestratorService.Create(command.Context(), resolvedPath, value)
+				if createErr != nil {
+					return createErr
+				}
+
+				return common.WriteOutput(command, outputFormat, item, func(w io.Writer, output resource.Resource) error {
+					_, writeErr := fmt.Fprintln(w, output.LogicalPath)
+					return writeErr
+				})
+			}
+
+			targets, err := listLocalMutationTargets(command.Context(), orchestratorService, resolvedPath, recursive)
+			if err != nil {
+				return err
+			}
+			items, err := executeMutationForTargets(
+				command.Context(),
+				targets,
+				func(ctx context.Context, logicalPath string) (resource.Resource, error) {
+					localValue, getErr := orchestratorService.GetLocal(ctx, logicalPath)
+					if getErr != nil {
+						return resource.Resource{}, getErr
+					}
+					return orchestratorService.Create(ctx, logicalPath, localValue)
+				},
+			)
 			if err != nil {
 				return err
 			}
 
-			item, err := orchestratorService.Create(command.Context(), resolvedPath, value)
-			if err != nil {
-				return err
-			}
-
-			return common.WriteOutput(command, outputFormat, item, func(w io.Writer, output resource.Resource) error {
-				_, writeErr := fmt.Fprintln(w, output.LogicalPath)
-				return writeErr
-			})
+			return writeCollectionMutationOutput(command, outputFormat, resolvedPath, items)
 		},
 	}
 
@@ -56,24 +87,30 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
 	command.Flags().StringVar(&payload, "payload", "", "inline input payload")
+	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	return command
 }
 
-func decodeCreateInput(command *cobra.Command, input common.InputFlags, payload string) (resource.Value, error) {
+func decodeCreateInput(command *cobra.Command, input common.InputFlags, payload string) (resource.Value, bool, error) {
 	if strings.TrimSpace(payload) == "" {
-		return common.DecodeInput[resource.Value](command, input)
+		value, hasInput, err := decodeOptionalResourceInput(command, input)
+		return value, hasInput, err
 	}
 	if input.File != "" {
-		return nil, common.ValidationError("flag --payload cannot be used with --file", nil)
+		return nil, false, common.ValidationError("flag --payload cannot be used with --file", nil)
 	}
 
 	stdinData, err := common.ReadOptionalInput(command, common.InputFlags{})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(stdinData) > 0 {
-		return nil, common.ValidationError("flag --payload cannot be used with stdin input", nil)
+		return nil, false, common.ValidationError("flag --payload cannot be used with stdin input", nil)
 	}
 
-	return common.DecodeInputData[resource.Value]([]byte(payload), input.Format)
+	value, err := common.DecodeInputData[resource.Value]([]byte(payload), input.Format)
+	if err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
 }

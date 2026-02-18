@@ -1,9 +1,4 @@
 {
-  "idFromAttribute": "clientId",
-  "aliasFromAttribute": "clientId",
-  "operations": {
-    "create": {
-      "path": "/admin/realms/{{.realm}}/clients"
-    }
-  }
+  "idFromAttribute": "id",
+  "aliasFromAttribute": "clientId"
 }

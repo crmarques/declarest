@@ -737,7 +737,7 @@ main() {
       ui_run_step 4 "${E2E_STEPS_TOTAL}" 'Starting Components' step_skip_not_requested || true
       ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_skip_not_requested || true
       if [[ "${E2E_PROFILE}" != 'manual' ]]; then
-        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Workload' step_skip_not_requested || true
+        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_skip_not_requested || true
       fi
     else
       ui_run_step 2 "${E2E_STEPS_TOTAL}" 'Preparing Runtime' step_prepare_runtime || E2E_OVERALL_FAILED=1
@@ -751,7 +751,7 @@ main() {
         ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_configure_access || E2E_OVERALL_FAILED=1
       fi
       if ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" != 'manual' ]]; then
-        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Workload' step_run_workload || E2E_OVERALL_FAILED=1
+        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_run_workload || E2E_OVERALL_FAILED=1
       fi
     fi
   fi

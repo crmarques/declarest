@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/internal/support/identity"
+	"github.com/crmarques/declarest/internal/support/templatescope"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -72,6 +73,15 @@ func (r *DefaultOrchestrator) buildResourceInfoForRemoteRead(
 	}
 	if idAttribute := strings.TrimSpace(resolvedMetadata.IDFromAttribute); idAttribute != "" {
 		payload[idAttribute] = remoteID
+	}
+	for key, value := range templatescope.DerivePathTemplateFields(normalizedPath, resolvedMetadata) {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		if _, exists := payload[key]; exists {
+			continue
+		}
+		payload[key] = value
 	}
 
 	normalizedPayload, err := resource.Normalize(payload)

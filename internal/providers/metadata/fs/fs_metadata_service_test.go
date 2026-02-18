@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
@@ -221,11 +222,11 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	service := NewFSMetadataService(baseDir, "")
 	ctx := context.Background()
 
-	writeRawMetadataFile(t, filepath.Join(baseDir, "admin", "realms", "_", "metadata.json"), metadatadomain.ResourceMetadata{
+	mustSetMetadata(t, service, ctx, "/admin/realms/_", metadatadomain.ResourceMetadata{
 		IDFromAttribute:    "realm",
 		AliasFromAttribute: "realm",
 	})
-	writeRawMetadataFile(t, filepath.Join(baseDir, "admin", "realms", "_", "clients", "_", "metadata.json"), metadatadomain.ResourceMetadata{
+	mustSetMetadata(t, service, ctx, "/admin/realms/_/clients", metadatadomain.ResourceMetadata{
 		IDFromAttribute:    "id",
 		AliasFromAttribute: "clientId",
 		Operations: map[string]metadatadomain.OperationSpec{
@@ -356,6 +357,121 @@ func TestFSMetadataValidation(t *testing.T) {
 
 	_, err = service.ResolveForPath(ctx, "/customers/*")
 	assertTypedCategory(t, err, faults.ValidationError)
+}
+
+func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	metadata := metadatadomain.ResourceMetadata{
+		IDFromAttribute:       "id",
+		AliasFromAttribute:    "clientId",
+		SecretsFromAttributes: []string{"secret"},
+	}
+
+	if err := service.Set(ctx, "/admin/realms/_/clients/_", metadata); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	filePath := filepath.Join(baseDir, "admin", "realms", "_", "clients", "_", "metadata.json")
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read metadata file %q: %v", filePath, err)
+	}
+
+	if strings.Contains(string(content), "null") {
+		t.Fatalf("expected metadata file without null values, got %s", string(content))
+	}
+
+	decoded := map[string]any{}
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		t.Fatalf("failed to decode metadata file: %v", err)
+	}
+
+	if _, found := decoded["operations"]; found {
+		t.Fatalf("expected operations key to be omitted when nil, got %v", decoded["operations"])
+	}
+	if _, found := decoded["filter"]; found {
+		t.Fatalf("expected filter key to be omitted when nil, got %v", decoded["filter"])
+	}
+	if _, found := decoded["suppress"]; found {
+		t.Fatalf("expected suppress key to be omitted when nil, got %v", decoded["suppress"])
+	}
+}
+
+func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	metadata := metadatadomain.ResourceMetadata{
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path:     "/api/customers/{{.id}}",
+				Query:    map[string]string{},
+				Headers:  map[string]string{},
+				Filter:   []string{},
+				Suppress: []string{},
+			},
+		},
+		Filter:   []string{},
+		Suppress: []string{},
+	}
+
+	if err := service.Set(ctx, "/customers/acme", metadata); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	filePath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read metadata file %q: %v", filePath, err)
+	}
+
+	decoded := map[string]any{}
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		t.Fatalf("failed to decode metadata file: %v", err)
+	}
+
+	filter, hasFilter := decoded["filter"].([]any)
+	if !hasFilter || len(filter) != 0 {
+		t.Fatalf("expected explicit empty filter array, got %#v", decoded["filter"])
+	}
+	suppress, hasSuppress := decoded["suppress"].([]any)
+	if !hasSuppress || len(suppress) != 0 {
+		t.Fatalf("expected explicit empty suppress array, got %#v", decoded["suppress"])
+	}
+
+	operations, hasOperations := decoded["operations"].(map[string]any)
+	if !hasOperations {
+		t.Fatalf("expected operations object, got %#v", decoded["operations"])
+	}
+	getSpec, hasGet := operations[string(metadatadomain.OperationGet)].(map[string]any)
+	if !hasGet {
+		t.Fatalf("expected get operation metadata, got %#v", operations[string(metadatadomain.OperationGet)])
+	}
+
+	query, hasQuery := getSpec["query"].(map[string]any)
+	if !hasQuery || len(query) != 0 {
+		t.Fatalf("expected explicit empty query object, got %#v", getSpec["query"])
+	}
+	headers, hasHeaders := getSpec["headers"].(map[string]any)
+	if !hasHeaders || len(headers) != 0 {
+		t.Fatalf("expected explicit empty headers object, got %#v", getSpec["headers"])
+	}
+	specFilter, hasSpecFilter := getSpec["filter"].([]any)
+	if !hasSpecFilter || len(specFilter) != 0 {
+		t.Fatalf("expected explicit empty operation filter array, got %#v", getSpec["filter"])
+	}
+	specSuppress, hasSpecSuppress := getSpec["suppress"].([]any)
+	if !hasSpecSuppress || len(specSuppress) != 0 {
+		t.Fatalf("expected explicit empty operation suppress array, got %#v", getSpec["suppress"])
+	}
 }
 
 func mustSetMetadata(

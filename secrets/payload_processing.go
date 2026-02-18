@@ -34,7 +34,8 @@ func MaskPayload(value resource.Value, storeFn func(key string, value string) er
 	}
 
 	candidates := make(map[string]string)
-	if err := collectMaskCandidates(normalized, candidates); err != nil {
+	scopeByKey := make(map[string]string)
+	if err := collectMaskCandidates(normalized, "", candidates, scopeByKey); err != nil {
 		return nil, err
 	}
 
@@ -50,7 +51,7 @@ func MaskPayload(value resource.Value, storeFn func(key string, value string) er
 		}
 	}
 
-	output, err := applyMask(normalized, candidates)
+	output, err := applyMask(normalized, "", candidates)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +59,22 @@ func MaskPayload(value resource.Value, storeFn func(key string, value string) er
 }
 
 func ResolvePayload(value resource.Value, getFn func(key string) (string, error)) (resource.Value, error) {
+	return resolvePayloadWithResourceScope(value, "", getFn)
+}
+
+func ResolvePayloadForResource(
+	value resource.Value,
+	logicalPath string,
+	getFn func(key string) (string, error),
+) (resource.Value, error) {
+	return resolvePayloadWithResourceScope(value, logicalPath, getFn)
+}
+
+func resolvePayloadWithResourceScope(
+	value resource.Value,
+	logicalPath string,
+	getFn func(key string) (string, error),
+) (resource.Value, error) {
 	if getFn == nil {
 		return nil, validationError("secret get function must not be nil", nil)
 	}
@@ -68,7 +85,7 @@ func ResolvePayload(value resource.Value, getFn func(key string) (string, error)
 	}
 
 	cache := make(map[string]string)
-	output, err := resolvePayloadValue(normalized, "", cache, getFn)
+	output, err := resolvePayloadValue(normalized, "", strings.TrimSpace(logicalPath), cache, getFn)
 	if err != nil {
 		return nil, err
 	}
@@ -95,12 +112,13 @@ func DetectSecretCandidates(value resource.Value) ([]string, error) {
 	return keys, nil
 }
 
-func normalizePlaceholdersValue(value any, currentKey string) (any, error) {
+func normalizePlaceholdersValue(value any, currentPath string) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
-			child, err := normalizePlaceholdersValue(typed[key], key)
+			attributePath := joinAttributePath(currentPath, key)
+			child, err := normalizePlaceholdersValue(typed[key], attributePath)
 			if err != nil {
 				return nil, err
 			}
@@ -125,20 +143,29 @@ func normalizePlaceholdersValue(value any, currentKey string) (any, error) {
 		if !isPlaceholder {
 			return typed, nil
 		}
-		resolvedKey, err := resolvePlaceholderKey(key, isCurrent, currentKey)
+		resolvedKey, err := resolvePlaceholderAttribute(key, isCurrent, currentPath)
 		if err != nil {
 			return nil, err
 		}
-		return secretPlaceholder(resolvedKey), nil
+		if resolvedKey == currentPath {
+			return currentScopeSecretPlaceholder(), nil
+		}
+		return explicitSecretPlaceholder(resolvedKey), nil
 	default:
 		return typed, nil
 	}
 }
 
-func collectMaskCandidates(value any, candidates map[string]string) error {
+func collectMaskCandidates(
+	value any,
+	currentPath string,
+	candidates map[string]string,
+	scopeByKey map[string]string,
+) error {
 	switch typed := value.(type) {
 	case map[string]any:
 		for _, key := range sortedKeys(typed) {
+			attributePath := joinAttributePath(currentPath, key)
 			field := typed[key]
 			if isLikelySecretKey(key) {
 				stringValue, isString := field.(string)
@@ -152,21 +179,26 @@ func collectMaskCandidates(value any, candidates map[string]string) error {
 						return err
 					}
 					if !isPlaceholder {
-						if _, found := candidates[key]; found {
+						if existingPath, found := scopeByKey[key]; found && existingPath != attributePath {
 							return validationError("secret masking key scope is ambiguous", nil)
 						}
-						candidates[key] = stringValue
+						scopeByKey[key] = attributePath
+
+						if _, found := candidates[attributePath]; found {
+							return validationError("secret masking key scope is ambiguous", nil)
+						}
+						candidates[attributePath] = stringValue
 					}
 				}
 			}
 
-			if err := collectMaskCandidates(field, candidates); err != nil {
+			if err := collectMaskCandidates(field, attributePath, candidates, scopeByKey); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for idx := range typed {
-			if err := collectMaskCandidates(typed[idx], candidates); err != nil {
+			if err := collectMaskCandidates(typed[idx], currentPath, candidates, scopeByKey); err != nil {
 				return err
 			}
 		}
@@ -175,13 +207,14 @@ func collectMaskCandidates(value any, candidates map[string]string) error {
 	return nil
 }
 
-func applyMask(value any, candidates map[string]string) (any, error) {
+func applyMask(value any, currentPath string, candidates map[string]string) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
+			attributePath := joinAttributePath(currentPath, key)
 			field := typed[key]
-			if _, shouldMask := candidates[key]; shouldMask {
+			if _, shouldMask := candidates[attributePath]; shouldMask {
 				stringValue, isString := field.(string)
 				if isString {
 					_, _, isPlaceholder, err := parseSecretPlaceholder(stringValue)
@@ -189,13 +222,13 @@ func applyMask(value any, candidates map[string]string) (any, error) {
 						return nil, err
 					}
 					if !isPlaceholder {
-						result[key] = secretPlaceholder(key)
+						result[key] = currentScopeSecretPlaceholder()
 						continue
 					}
 				}
 			}
 
-			child, err := applyMask(field, candidates)
+			child, err := applyMask(field, attributePath, candidates)
 			if err != nil {
 				return nil, err
 			}
@@ -205,7 +238,7 @@ func applyMask(value any, candidates map[string]string) (any, error) {
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := applyMask(typed[idx], candidates)
+			child, err := applyMask(typed[idx], currentPath, candidates)
 			if err != nil {
 				return nil, err
 			}
@@ -219,7 +252,8 @@ func applyMask(value any, candidates map[string]string) (any, error) {
 
 func resolvePayloadValue(
 	value any,
-	currentKey string,
+	currentPath string,
+	resourcePath string,
 	cache map[string]string,
 	getFn func(key string) (string, error),
 ) (any, error) {
@@ -227,7 +261,8 @@ func resolvePayloadValue(
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
-			child, err := resolvePayloadValue(typed[key], key, cache, getFn)
+			attributePath := joinAttributePath(currentPath, key)
+			child, err := resolvePayloadValue(typed[key], attributePath, resourcePath, cache, getFn)
 			if err != nil {
 				return nil, err
 			}
@@ -237,7 +272,7 @@ func resolvePayloadValue(
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := resolvePayloadValue(typed[idx], "", cache, getFn)
+			child, err := resolvePayloadValue(typed[idx], "", resourcePath, cache, getFn)
 			if err != nil {
 				return nil, err
 			}
@@ -253,7 +288,7 @@ func resolvePayloadValue(
 			return typed, nil
 		}
 
-		resolvedKey, err := resolvePlaceholderKey(key, isCurrent, currentKey)
+		resolvedKey, err := resolvePlaceholderStoreKey(key, isCurrent, currentPath, resourcePath)
 		if err != nil {
 			return nil, err
 		}
@@ -318,6 +353,12 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 	if !strings.HasPrefix(inner, "secret") {
 		return "", false, false, nil
 	}
+	if len(inner) > len("secret") {
+		next := rune(inner[len("secret")])
+		if !unicode.IsSpace(next) {
+			return "", false, false, nil
+		}
+	}
 
 	argument := strings.TrimSpace(strings.TrimPrefix(inner, "secret"))
 	if argument == "" {
@@ -328,29 +369,58 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 		return "", true, true, nil
 	}
 
-	if !strings.HasPrefix(argument, "\"") {
-		return "", false, true, validationError("secret placeholder must use current key or quoted key", nil)
+	if strings.HasPrefix(argument, "\"") {
+		parsed, parseErr := strconv.Unquote(argument)
+		if parseErr != nil {
+			return "", false, true, validationError("secret placeholder key is invalid", parseErr)
+		}
+
+		parsed = strings.TrimSpace(parsed)
+		if parsed == "" {
+			return "", false, true, validationError("secret placeholder key must not be empty", nil)
+		}
+		return parsed, false, true, nil
 	}
 
-	parsed, parseErr := strconv.Unquote(argument)
-	if parseErr != nil {
-		return "", false, true, validationError("secret placeholder key is invalid", parseErr)
+	if strings.ContainsAny(argument, " \t\r\n") {
+		return "", false, true, validationError("secret placeholder key with spaces must be quoted", nil)
 	}
 
-	parsed = strings.TrimSpace(parsed)
-	if parsed == "" {
-		return "", false, true, validationError("secret placeholder key must not be empty", nil)
-	}
-
-	return parsed, false, true, nil
+	return argument, false, true, nil
 }
 
-func resolvePlaceholderKey(key string, isCurrent bool, currentKey string) (string, error) {
-	if !isCurrent {
-		return key, nil
+func resolvePlaceholderStoreKey(
+	key string,
+	isCurrent bool,
+	currentPath string,
+	resourcePath string,
+) (string, error) {
+	resolvedAttribute, err := resolvePlaceholderAttribute(key, isCurrent, currentPath)
+	if err != nil {
+		return "", err
 	}
 
-	resolved := strings.TrimSpace(currentKey)
+	if strings.TrimSpace(resourcePath) == "" {
+		return resolvedAttribute, nil
+	}
+
+	if isAbsoluteSecretKey(resolvedAttribute) {
+		return resolvedAttribute, nil
+	}
+
+	return strings.TrimSpace(resourcePath) + ":" + resolvedAttribute, nil
+}
+
+func resolvePlaceholderAttribute(key string, isCurrent bool, currentPath string) (string, error) {
+	if !isCurrent {
+		resolved := strings.TrimSpace(key)
+		if resolved == "" {
+			return "", validationError("secret placeholder key must not be empty", nil)
+		}
+		return resolved, nil
+	}
+
+	resolved := strings.TrimSpace(currentPath)
 	if resolved == "" {
 		return "", validationError("secret placeholder {{secret .}} requires map field scope", nil)
 	}
@@ -358,8 +428,31 @@ func resolvePlaceholderKey(key string, isCurrent bool, currentKey string) (strin
 	return resolved, nil
 }
 
-func secretPlaceholder(key string) string {
+func isAbsoluteSecretKey(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	return strings.HasPrefix(trimmed, "/") || strings.Contains(trimmed, ":")
+}
+
+func currentScopeSecretPlaceholder() string {
+	return "{{secret .}}"
+}
+
+func explicitSecretPlaceholder(key string) string {
 	return "{{secret " + strconv.Quote(key) + "}}"
+}
+
+func joinAttributePath(prefix string, key string) string {
+	trimmedKey := strings.TrimSpace(key)
+	if trimmedKey == "" {
+		return ""
+	}
+	if strings.TrimSpace(prefix) == "" {
+		return trimmedKey
+	}
+	return prefix + "." + trimmedKey
 }
 
 func sortedKeys(values map[string]any) []string {

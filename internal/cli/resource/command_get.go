@@ -62,7 +62,7 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			}
 			if err != nil {
 				debugctx.Printf(command.Context(), "resource get failed path=%q source=%q error=%v", resolvedPath, source, err)
-				if source == sourceRepository && isNotFoundError(err) {
+				if source == sourceRepository && (isNotFoundError(err) || isRootResourceError(err)) {
 					debugctx.Printf(command.Context(), "resource get treating %q as collection listing", resolvedPath)
 					return renderRepositoryCollection(command, outputFormat, orchestratorService, resolvedPath)
 				}
@@ -90,6 +90,14 @@ func isNotFoundError(err error) bool {
 	var typedErr *faults.TypedError
 	if errors.As(err, &typedErr) {
 		return typedErr.Category == faults.NotFoundError
+	}
+	return false
+}
+
+func isRootResourceError(err error) bool {
+	var typedErr *faults.TypedError
+	if errors.As(err, &typedErr) {
+		return typedErr.Category == faults.ValidationError && typedErr.Message == "logical path must target a resource, not root"
 	}
 	return false
 }

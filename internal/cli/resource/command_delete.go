@@ -50,8 +50,24 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := orchestratorService.Delete(command.Context(), resolvedPath, orchestratordomain.DeletePolicy{Recursive: recursive}); err != nil {
+
+				targets, err := listLocalMutationTargetsOrFallbackPath(
+					command.Context(),
+					orchestratorService,
+					resolvedPath,
+					recursive,
+				)
+				if err != nil {
 					return err
+				}
+
+				for _, target := range targets {
+					policy := orchestratordomain.DeletePolicy{
+						Recursive: recursive && target.LogicalPath == resolvedPath,
+					}
+					if err := orchestratorService.Delete(command.Context(), target.LogicalPath, policy); err != nil {
+						return err
+					}
 				}
 			}
 

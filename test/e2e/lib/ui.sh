@@ -13,8 +13,8 @@ E2E_STEP_TITLES=()
 E2E_STEP_DURATIONS=()
 E2E_STEP_LABEL_WIDTH=5
 E2E_STEP_TITLE_WIDTH=24
-E2E_STEP_DURATION_WIDTH=7
-E2E_STEP_STATUS_WIDTH=10
+E2E_STEP_DURATION_WIDTH=6
+E2E_STEP_STATUS_WIDTH=12
 E2E_STEP_TABLE_HEADER_PRINTED=0
 
 E2E_CASE_TOTAL=0
@@ -94,7 +94,30 @@ ui_step_state_label() {
 }
 
 ui_step_table_total_width() {
-  printf '%d\n' $((E2E_STEP_LABEL_WIDTH + E2E_STEP_TITLE_WIDTH + E2E_STEP_DURATION_WIDTH + E2E_STEP_STATUS_WIDTH + 3 * 3))
+  printf '%d\n' $((E2E_STEP_LABEL_WIDTH + E2E_STEP_TITLE_WIDTH + E2E_STEP_DURATION_WIDTH + E2E_STEP_STATUS_WIDTH + 13))
+}
+
+ui_step_table_border_line() {
+  local column_widths=(
+    "${E2E_STEP_LABEL_WIDTH}"
+    "${E2E_STEP_TITLE_WIDTH}"
+    "${E2E_STEP_DURATION_WIDTH}"
+    "${E2E_STEP_STATUS_WIDTH}"
+  )
+  local line='+'
+  local width
+
+  for width in "${column_widths[@]}"; do
+    local segment
+    segment=$(printf '%*s' $((width + 2)) '' | tr ' ' '-')
+    line+="${segment}+"
+  done
+
+  printf '%s\n' "${line}"
+}
+
+ui_print_step_table_footer() {
+  ui_step_table_border_line
 }
 
 ui_center_text() {
@@ -106,7 +129,7 @@ ui_center_text() {
     return 0
   fi
 
-  local left_padding=$(((width - text_length) / 2))
+  local left_padding=$(((width - text_length + 1) / 2))
   local right_padding=$((width - text_length - left_padding))
   printf '%*s%s%*s' "${left_padding}" '' "${text}" "${right_padding}" ''
 }
@@ -131,24 +154,19 @@ ui_print_step_table_header() {
   local title_header
   local span_header
   local status_header
-  local divider
   step_header=$(ui_center_text "${E2E_STEP_LABEL_WIDTH}" 'STEP')
   title_header=$(ui_center_text "${E2E_STEP_TITLE_WIDTH}" 'ACTION')
   span_header=$(ui_center_text "${E2E_STEP_DURATION_WIDTH}" 'SPAN')
   status_header=$(ui_center_text "${E2E_STEP_STATUS_WIDTH}" 'STATUS')
+  ui_step_table_border_line
 
-  local total_width
-  total_width=$(ui_step_table_total_width)
-  divider=$(printf '%*s' "${total_width}" '' | tr ' ' '-')
-
-  printf '%s\n' "${divider}"
-
-  printf '%s | %s | %s | %s\n' \
+  printf '| %s | %s | %s | %s |\n' \
     "${step_header}" \
     "${title_header}" \
     "${span_header}" \
     "${status_header}"
-  printf '%s\n' "${divider}"
+
+  ui_step_table_border_line
 
   E2E_STEP_TABLE_HEADER_PRINTED=1
 }
@@ -171,7 +189,7 @@ ui_step_line_render() {
   local status_label
   status_label=$(ui_step_state_label "${step_state}" "${E2E_STEP_STATUS_WIDTH}")
 
-  printf '%s | %-*s | %s | %s' \
+  printf '| %s | %-*s | %s | %s |' \
     "${step_label}" \
     "${E2E_STEP_TITLE_WIDTH}" \
     "${title_label}" \
@@ -185,6 +203,7 @@ ui_print_step_line() {
   local step_title=$3
   local step_state=$4
   local elapsed=$5
+  local should_print_footer=${6:-0}
 
   local duration=''
   if [[ "${step_state}" != 'RUNNING' ]]; then
@@ -200,6 +219,10 @@ ui_print_step_line() {
   local line
   line=$(ui_step_line_render "${step_number}" "${step_total}" "${step_title}" "${step_state}" '' "${duration}")
   printf '%s\n' "${line}"
+
+  if ((should_print_footer == 1)); then
+    ui_print_step_table_footer
+  fi
 }
 
 ui_selected_components_summary() {
@@ -396,7 +419,12 @@ ui_run_step() {
       "$(e2e_format_duration "${elapsed}")" >>"${E2E_EXECUTION_LOG}"
   fi
 
-  ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "${state}" "${elapsed}"
+  local should_print_footer=0
+  if ((step_number == step_total || rc != 0)); then
+    should_print_footer=1
+  fi
+
+  ui_print_step_line "${step_number}" "${step_total}" "${step_title}" "${state}" "${elapsed}" "${should_print_footer}"
 
   if ((rc != 0)); then
     printf '  log: %s\n' "${step_log}"

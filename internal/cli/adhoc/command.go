@@ -1,15 +1,18 @@
 package adhoc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -48,6 +51,7 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 	var input common.InputFlags
 	var payload string
 	var force bool
+	var recursive bool
 	methodLower := strings.ToLower(method)
 
 	command := &cobra.Command{
@@ -80,6 +84,61 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 			orchestratorService, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
+			}
+
+			if method == http.MethodDelete {
+				targets, err := listAdHocDeleteTargets(command.Context(), orchestratorService, resolvedPath, recursive)
+				if err != nil {
+					return err
+				}
+
+				values := make([]resource.Value, 0, len(targets))
+				for _, target := range targets {
+					debugctx.Printf(
+						command.Context(),
+						"ad-hoc request method=%q path=%q has_body=%t",
+						method,
+						target.LogicalPath,
+						body != nil,
+					)
+
+					value, requestErr := orchestratorService.AdHoc(command.Context(), method, target.LogicalPath, body)
+					if requestErr != nil {
+						debugctx.Printf(
+							command.Context(),
+							"ad-hoc request failed method=%q path=%q error=%v",
+							method,
+							target.LogicalPath,
+							requestErr,
+						)
+						return requestErr
+					}
+
+					debugctx.Printf(
+						command.Context(),
+						"ad-hoc request succeeded method=%q path=%q value_type=%T",
+						method,
+						target.LogicalPath,
+						value,
+					)
+					values = append(values, value)
+				}
+
+				if len(values) == 1 && targets[0].LogicalPath == resolvedPath {
+					return common.WriteOutput(command, outputFormat, values[0], func(w io.Writer, item resource.Value) error {
+						_, writeErr := fmt.Fprintln(w, item)
+						return writeErr
+					})
+				}
+
+				return common.WriteOutput(command, outputFormat, values, func(w io.Writer, items []resource.Value) error {
+					for _, item := range items {
+						if _, writeErr := fmt.Fprintln(w, item); writeErr != nil {
+							return writeErr
+						}
+					}
+					return nil
+				})
 			}
 
 			debugctx.Printf(
@@ -146,6 +205,7 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 	}
 	if method == http.MethodDelete {
 		command.Flags().BoolVarP(&force, "force", "y", false, "confirm deletion")
+		command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	}
 	return command
 }
@@ -184,4 +244,27 @@ func isNotFoundError(err error) bool {
 		return typedErr.Category == faults.NotFoundError
 	}
 	return false
+}
+
+func listAdHocDeleteTargets(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPath string,
+	recursive bool,
+) ([]resource.Resource, error) {
+	items, err := orchestratorService.ListLocal(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: recursive})
+	if err != nil {
+		if isNotFoundError(err) {
+			return []resource.Resource{{LogicalPath: logicalPath}}, nil
+		}
+		return nil, err
+	}
+	if len(items) == 0 {
+		return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	}
+
+	sort.Slice(items, func(i int, j int) bool {
+		return items[i].LogicalPath < items[j].LogicalPath
+	})
+	return items, nil
 }

@@ -62,7 +62,7 @@ func TestVaultSecretServiceKV2TokenAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MaskPayload returned error: %v", err)
 	}
-	expectedMasked := map[string]any{"apiToken": "{{secret \"apiToken\"}}"}
+	expectedMasked := map[string]any{"apiToken": "{{secret .}}"}
 	if !reflect.DeepEqual(masked, expectedMasked) {
 		t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
 	}

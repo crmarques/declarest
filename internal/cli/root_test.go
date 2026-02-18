@@ -454,6 +454,62 @@ func TestAdHocMethodCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("delete_collection_path_targets_direct_children", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/items/a"},
+				{LogicalPath: "/items/b"},
+				{LogicalPath: "/items/nested/c"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force")
+		if err != nil {
+			t.Fatalf("unexpected collection delete error: %v", err)
+		}
+		if len(reconciler.adHocCalls) != 2 {
+			t.Fatalf("expected 2 ad-hoc delete calls, got %#v", reconciler.adHocCalls)
+		}
+		if reconciler.adHocCalls[0].path != "/items/a" || reconciler.adHocCalls[1].path != "/items/b" {
+			t.Fatalf("expected direct-child delete paths [/items/a /items/b], got %#v", reconciler.adHocCalls)
+		}
+		if strings.Contains(output, "/items/nested/c") {
+			t.Fatalf("expected non-recursive delete output to exclude nested resources, got %q", output)
+		}
+	})
+
+	t.Run("delete_collection_path_recursive_targets_full_tree", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/items/a"},
+				{LogicalPath: "/items/b"},
+				{LogicalPath: "/items/nested/c"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force", "--recursive")
+		if err != nil {
+			t.Fatalf("unexpected recursive collection delete error: %v", err)
+		}
+		if len(reconciler.adHocCalls) != 3 {
+			t.Fatalf("expected 3 ad-hoc delete calls, got %#v", reconciler.adHocCalls)
+		}
+		if reconciler.adHocCalls[2].path != "/items/nested/c" {
+			t.Fatalf("expected recursive delete to include nested path, got %#v", reconciler.adHocCalls)
+		}
+		if !strings.Contains(output, "\"path\": \"/items/nested/c\"") {
+			t.Fatalf("expected recursive delete output to include nested path, got %q", output)
+		}
+	})
+
 	t.Run("path_mismatch_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
@@ -752,14 +808,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
 		}
-		if got := saved["apiToken"]; got != `{{secret "/customers/acme:apiToken"}}` {
+		if got := saved["apiToken"]; got != `{{secret .}}` {
 			t.Fatalf("expected apiToken placeholder, got %#v", got)
 		}
 		credentials, ok := saved["credentials"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected nested credentials payload, got %T", saved["credentials"])
 		}
-		if got := credentials["authValue"]; got != `{{secret "/customers/acme:credentials.authValue"}}` {
+		if got := credentials["authValue"]; got != `{{secret .}}` {
 			t.Fatalf("expected authValue placeholder, got %#v", got)
 		}
 
@@ -809,10 +865,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected second saved payload map, got %T", reconciler.saveCalls[1].value)
 		}
-		if got := firstSaved["password"]; got != `{{secret "/customers/acme:password"}}` {
+		if got := firstSaved["password"]; got != `{{secret .}}` {
 			t.Fatalf("expected first path-scoped placeholder, got %#v", got)
 		}
-		if got := secondSaved["password"]; got != `{{secret "/customers/beta:password"}}` {
+		if got := secondSaved["password"]; got != `{{secret .}}` {
 			t.Fatalf("expected second path-scoped placeholder, got %#v", got)
 		}
 
@@ -922,7 +978,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(reconciler.saveCalls))
 		}
 
-		wildcardMetadata := metadataService.items["/admin/realms/*/clients"]
+		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
 		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
@@ -968,14 +1024,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected first saved payload map, got %T", reconciler.saveCalls[0].value)
 		}
-		if got := firstPayload["secret"]; got != `{{secret "/admin/realms/master/clients/app-a:secret"}}` {
+		if got := firstPayload["secret"]; got != `{{secret .}}` {
 			t.Fatalf("expected first secret placeholder, got %#v", got)
 		}
 		if got := firstPayload["apiToken"]; got != "tok-a" {
 			t.Fatalf("expected unhandled apiToken to remain plaintext, got %#v", got)
 		}
 
-		wildcardMetadata := metadataService.items["/admin/realms/*/clients"]
+		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
 		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
@@ -1093,6 +1149,81 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 	})
 }
 
+func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &testReconciler{
+		metadataService: newTestMetadata(),
+		localList: []resource.Resource{
+			{LogicalPath: "/customers/acme"},
+			{LogicalPath: "/customers/beta"},
+			{LogicalPath: "/customers/nested/gamma"},
+		},
+	}
+	deps := testDepsWith(reconciler, reconciler.metadataService)
+
+	_, err := executeForTest(deps, "", "resource", "delete", "/customers", "--force")
+	if err != nil {
+		t.Fatalf("unexpected non-recursive delete error: %v", err)
+	}
+	if len(reconciler.deleteCalls) != 2 {
+		t.Fatalf("expected 2 remote delete calls for non-recursive collection delete, got %d", len(reconciler.deleteCalls))
+	}
+	if reconciler.deleteCalls[0].logicalPath != "/customers/acme" || reconciler.deleteCalls[1].logicalPath != "/customers/beta" {
+		t.Fatalf(
+			"expected non-recursive remote delete paths [/customers/acme /customers/beta], got [%s %s]",
+			reconciler.deleteCalls[0].logicalPath,
+			reconciler.deleteCalls[1].logicalPath,
+		)
+	}
+	if reconciler.deleteCalls[0].recursive || reconciler.deleteCalls[1].recursive {
+		t.Fatalf("expected expanded non-recursive delete targets to use recursive=false, got %#v", reconciler.deleteCalls)
+	}
+
+	reconciler.deleteCalls = nil
+	_, err = executeForTest(deps, "", "resource", "delete", "/customers", "--force", "--recursive")
+	if err != nil {
+		t.Fatalf("unexpected recursive delete error: %v", err)
+	}
+	if len(reconciler.deleteCalls) != 3 {
+		t.Fatalf("expected 3 remote delete calls for recursive collection delete, got %d", len(reconciler.deleteCalls))
+	}
+	if reconciler.deleteCalls[2].logicalPath != "/customers/nested/gamma" {
+		t.Fatalf("expected recursive delete to include nested path, got %#v", reconciler.deleteCalls)
+	}
+	for _, call := range reconciler.deleteCalls {
+		if call.recursive {
+			t.Fatalf("expected expanded recursive delete targets to execute as single-resource deletes, got %#v", reconciler.deleteCalls)
+		}
+	}
+}
+
+func TestResourceDeleteFallsBackToRequestedPathWhenNoLocalTargetsMatch(t *testing.T) {
+	t.Parallel()
+
+	reconciler := &testReconciler{
+		metadataService: newTestMetadata(),
+		localList: []resource.Resource{
+			{LogicalPath: "/customers/acme"},
+		},
+	}
+	deps := testDepsWith(reconciler, reconciler.metadataService)
+
+	_, err := executeForTest(deps, "", "resource", "delete", "/orders", "--force", "--recursive")
+	if err != nil {
+		t.Fatalf("unexpected delete fallback error: %v", err)
+	}
+	if len(reconciler.deleteCalls) != 1 {
+		t.Fatalf("expected one fallback delete call, got %#v", reconciler.deleteCalls)
+	}
+	if reconciler.deleteCalls[0].logicalPath != "/orders" {
+		t.Fatalf("expected fallback delete path /orders, got %q", reconciler.deleteCalls[0].logicalPath)
+	}
+	if !reconciler.deleteCalls[0].recursive {
+		t.Fatalf("expected fallback delete to preserve recursive=true policy")
+	}
+}
+
 func TestMetadataPathCommands(t *testing.T) {
 	t.Parallel()
 
@@ -1187,7 +1318,7 @@ func TestSecretCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("mask returned error: %v", err)
 		}
-		if !strings.Contains(masked, `{{secret \"apiToken\"}}`) {
+		if !strings.Contains(masked, `{{secret .}}`) {
 			t.Fatalf("expected masked placeholder, got %q", masked)
 		}
 
@@ -1660,7 +1791,7 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 	}
 }
 
-func TestResourceCreateRequiresInputAndRunsSingleMutation(t *testing.T) {
+func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Parallel()
 
 	t.Run("create_with_input", func(t *testing.T) {
@@ -1684,13 +1815,100 @@ func TestResourceCreateRequiresInputAndRunsSingleMutation(t *testing.T) {
 		}
 	})
 
-	t.Run("create_without_input_fails", func(t *testing.T) {
+	t.Run("create_without_input_uses_repository_targets", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+				{LogicalPath: "/customers/beta"},
+				{LogicalPath: "/customers/nested/gamma"},
+			},
+			getLocalValues: map[string]resource.Value{
+				"/customers/acme":         map[string]any{"id": "acme", "tier": "pro"},
+				"/customers/beta":         map[string]any{"id": "beta", "tier": "free"},
+				"/customers/nested/gamma": map[string]any{"id": "gamma", "tier": "enterprise"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "create", "/customers")
+		if err != nil {
+			t.Fatalf("unexpected create collection error: %v", err)
+		}
+		if len(reconciler.createCalls) != 2 {
+			t.Fatalf("expected 2 create calls for non-recursive collection create, got %d", len(reconciler.createCalls))
+		}
+		if reconciler.createCalls[0].logicalPath != "/customers/acme" || reconciler.createCalls[1].logicalPath != "/customers/beta" {
+			t.Fatalf("expected non-recursive create paths [/customers/acme /customers/beta], got [%s %s]", reconciler.createCalls[0].logicalPath, reconciler.createCalls[1].logicalPath)
+		}
+		if len(reconciler.getLocalCalls) != 2 {
+			t.Fatalf("expected 2 local payload lookups, got %#v", reconciler.getLocalCalls)
+		}
+		if !reflect.DeepEqual(reconciler.createCalls[0].value, reconciler.getLocalValues["/customers/acme"]) {
+			t.Fatalf("expected create payload to come from local resource for /customers/acme")
+		}
+		if !reflect.DeepEqual(reconciler.createCalls[1].value, reconciler.getLocalValues["/customers/beta"]) {
+			t.Fatalf("expected create payload to come from local resource for /customers/beta")
+		}
+		if strings.Contains(output, "/customers/nested/gamma") {
+			t.Fatalf("expected non-recursive create output to exclude nested resources, got %q", output)
+		}
+	})
+
+	t.Run("create_without_input_recursive_includes_descendants", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+				{LogicalPath: "/customers/beta"},
+				{LogicalPath: "/customers/nested/gamma"},
+			},
+			getLocalValues: map[string]resource.Value{
+				"/customers/acme":         map[string]any{"id": "acme"},
+				"/customers/beta":         map[string]any{"id": "beta"},
+				"/customers/nested/gamma": map[string]any{"id": "gamma"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "create", "/customers", "--recursive")
+		if err != nil {
+			t.Fatalf("unexpected recursive create error: %v", err)
+		}
+		if len(reconciler.createCalls) != 3 {
+			t.Fatalf("expected 3 create calls for recursive create, got %d", len(reconciler.createCalls))
+		}
+		if !strings.Contains(output, "/customers/nested/gamma") {
+			t.Fatalf("expected recursive create output to include nested resource, got %q", output)
+		}
+	})
+
+	t.Run("create_without_input_fails_when_no_local_resources_match", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		_, err := executeForTest(deps, "", "resource", "create", "/orders")
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
+	t.Run("create_recursive_rejects_explicit_input", func(t *testing.T) {
 		t.Parallel()
 
 		reconciler := &testReconciler{metadataService: newTestMetadata()}
 		deps := testDepsWith(reconciler, reconciler.metadataService)
 
-		_, err := executeForTest(deps, "", "resource", "create", "/customers/acme")
+		_, err := executeForTest(deps, `{"id":"acme"}`, "resource", "create", "/customers/acme", "--recursive")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -1862,7 +2080,7 @@ func TestResourceCollectionMutationsFailWhenNoLocalResourcesMatch(t *testing.T) 
 	assertTypedCategory(t, err, faults.NotFoundError)
 
 	_, err = executeForTest(deps, "", "resource", "create", "/orders")
-	assertTypedCategory(t, err, faults.ValidationError)
+	assertTypedCategory(t, err, faults.NotFoundError)
 
 	_, err = executeForTest(deps, "", "resource", "update", "/orders")
 	assertTypedCategory(t, err, faults.NotFoundError)
@@ -2300,6 +2518,7 @@ type testReconciler struct {
 	getRemoteValue  resource.Value
 	getRemoteErr    error
 	getRemoteCalls  []string
+	adHocCalls      []adHocCall
 	adHocErr        error
 	getLocalCalls   []string
 	listLocalCalls  []string
@@ -2320,6 +2539,12 @@ type savedResource struct {
 type deleteCall struct {
 	logicalPath string
 	recursive   bool
+}
+
+type adHocCall struct {
+	method string
+	path   string
+	body   resource.Value
 }
 
 func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
@@ -2345,6 +2570,11 @@ func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resou
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
 func (r *testReconciler) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+	r.adHocCalls = append(r.adHocCalls, adHocCall{
+		method: method,
+		path:   endpointPath,
+		body:   body,
+	})
 	if r.adHocErr != nil {
 		return nil, r.adHocErr
 	}
@@ -2394,16 +2624,17 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 	if len(r.localList) > 0 {
 		items := make([]resource.Resource, len(r.localList))
 		copy(items, r.localList)
-		if !policy.Recursive {
-			filtered := make([]resource.Resource, 0, len(items))
-			for _, item := range items {
-				if isDirectChildPath(logicalPath, item.LogicalPath) {
-					filtered = append(filtered, item)
-				}
+		filtered := make([]resource.Resource, 0, len(items))
+		for _, item := range items {
+			if policy.Recursive && isPathOrDescendant(logicalPath, item.LogicalPath) {
+				filtered = append(filtered, item)
+				continue
 			}
-			return filtered, nil
+			if !policy.Recursive && isDirectChildPath(logicalPath, item.LogicalPath) {
+				filtered = append(filtered, item)
+			}
 		}
-		return items, nil
+		return filtered, nil
 	}
 	if policy.Recursive {
 		return []resource.Resource{{
@@ -2420,16 +2651,17 @@ func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, polic
 	if len(r.remoteList) > 0 {
 		items := make([]resource.Resource, len(r.remoteList))
 		copy(items, r.remoteList)
-		if !policy.Recursive {
-			filtered := make([]resource.Resource, 0, len(items))
-			for _, item := range items {
-				if isDirectChildPath(logicalPath, item.LogicalPath) {
-					filtered = append(filtered, item)
-				}
+		filtered := make([]resource.Resource, 0, len(items))
+		for _, item := range items {
+			if policy.Recursive && isPathOrDescendant(logicalPath, item.LogicalPath) {
+				filtered = append(filtered, item)
+				continue
 			}
-			return filtered, nil
+			if !policy.Recursive && isDirectChildPath(logicalPath, item.LogicalPath) {
+				filtered = append(filtered, item)
+			}
 		}
-		return items, nil
+		return filtered, nil
 	}
 	if policy.Recursive {
 		return []resource.Resource{{
@@ -2470,6 +2702,19 @@ func isDirectChildPath(basePath string, candidatePath string) bool {
 
 	remaining := strings.TrimPrefix(candidate, basePrefix+"/")
 	return remaining != "" && !strings.Contains(remaining, "/")
+}
+
+func isPathOrDescendant(basePath string, candidatePath string) bool {
+	base := path.Clean(basePath)
+	candidate := path.Clean(candidatePath)
+	if base == "/" {
+		return strings.HasPrefix(candidate, "/")
+	}
+	if base == candidate {
+		return true
+	}
+	basePrefix := strings.TrimSuffix(base, "/")
+	return strings.HasPrefix(candidate, basePrefix+"/")
 }
 
 type testMetadata struct {

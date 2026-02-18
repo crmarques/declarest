@@ -63,6 +63,22 @@ func listLocalMutationTargets(
 	return items, nil
 }
 
+func listLocalMutationTargetsOrFallbackPath(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPath string,
+	recursive bool,
+) ([]resource.Resource, error) {
+	items, err := listLocalMutationTargets(ctx, orchestratorService, logicalPath, recursive)
+	if err == nil {
+		return items, nil
+	}
+	if isTypedErrorCategory(err, faults.NotFoundError) {
+		return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	}
+	return nil, err
+}
+
 func executeMutationForTargets(
 	ctx context.Context,
 	targets []resource.Resource,

@@ -38,7 +38,7 @@ case_run() {
 
   case_run_declarest secret normalize -f "${normalize_payload_file}" -i json -o json
   case_expect_success
-  if ! jq -e '.apiToken == "{{secret \"apiToken\"}}" and .nested.clientSecret == "{{secret \"clientSecret\"}}"' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '.apiToken == "{{secret .}}" and .nested.clientSecret == "{{secret .}}"' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
     printf 'expected normalized placeholders with resolved keys\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1

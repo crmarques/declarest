@@ -29,7 +29,7 @@ func TestNormalizePlaceholders(t *testing.T) {
 		}
 
 		expected := map[string]any{
-			"apiToken": "{{secret \"apiToken\"}}",
+			"apiToken": "{{secret .}}",
 			"nested": map[string]any{
 				"clientSecret": "{{secret \"clientSecret\"}}",
 			},
@@ -46,6 +46,24 @@ func TestNormalizePlaceholders(t *testing.T) {
 
 		_, err := NormalizePlaceholders("{{secret .}}")
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("accepts_unquoted_explicit_key", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := NormalizePlaceholders(map[string]any{
+			"apiToken": "{{ secret apiToken }}",
+		})
+		if err != nil {
+			t.Fatalf("NormalizePlaceholders returned error: %v", err)
+		}
+
+		expected := map[string]any{
+			"apiToken": "{{secret .}}",
+		}
+		if !reflect.DeepEqual(got, expected) {
+			t.Fatalf("expected %#v, got %#v", expected, got)
+		}
 	})
 }
 
@@ -75,8 +93,8 @@ func TestMaskResolveAndDetect(t *testing.T) {
 
 		expectedMasked := map[string]any{
 			"name":      "acme",
-			"apiToken":  "{{secret \"apiToken\"}}",
-			"password":  "{{secret \"password\"}}",
+			"apiToken":  "{{secret .}}",
+			"password":  "{{secret .}}",
 			"notSecret": "{{secret \"already-masked\"}}",
 		}
 		if !reflect.DeepEqual(masked, expectedMasked) {
@@ -143,6 +161,90 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		})
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
+
+	t.Run("supports_nested_attribute_paths_for_dot_placeholders", func(t *testing.T) {
+		t.Parallel()
+
+		input := map[string]any{
+			"credentials": map[string]any{
+				"clientSecret": "super-secret",
+			},
+		}
+
+		stored := map[string]string{}
+		masked, err := MaskPayload(input, func(key string, value string) error {
+			stored[key] = value
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("MaskPayload returned error: %v", err)
+		}
+
+		expectedMasked := map[string]any{
+			"credentials": map[string]any{
+				"clientSecret": "{{secret .}}",
+			},
+		}
+		if !reflect.DeepEqual(masked, expectedMasked) {
+			t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
+		}
+		if got := stored["credentials.clientSecret"]; got != "super-secret" {
+			t.Fatalf("expected stored nested key credentials.clientSecret, got %#v", stored)
+		}
+
+		resolved, err := ResolvePayload(masked, func(key string) (string, error) {
+			value, found := stored[key]
+			if !found {
+				return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+			}
+			return value, nil
+		})
+		if err != nil {
+			t.Fatalf("ResolvePayload returned error: %v", err)
+		}
+		if !reflect.DeepEqual(resolved, input) {
+			t.Fatalf("expected resolved %#v, got %#v", input, resolved)
+		}
+	})
+}
+
+func TestResolvePayloadForResource(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"apiToken": "{{secret .}}",
+		"credentials": map[string]any{
+			"authValue": "{{secret custom-auth}}",
+			"legacy":    "{{secret \"/customers/acme:legacy\"}}",
+		},
+	}
+
+	resolved, err := ResolvePayloadForResource(input, "/customers/acme", func(key string) (string, error) {
+		switch key {
+		case "/customers/acme:apiToken":
+			return "api-token-value", nil
+		case "/customers/acme:custom-auth":
+			return "custom-auth-value", nil
+		case "/customers/acme:legacy":
+			return "legacy-value", nil
+		default:
+			return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
+		}
+	})
+	if err != nil {
+		t.Fatalf("ResolvePayloadForResource returned error: %v", err)
+	}
+
+	expected := map[string]any{
+		"apiToken": "api-token-value",
+		"credentials": map[string]any{
+			"authValue": "custom-auth-value",
+			"legacy":    "legacy-value",
+		},
+	}
+	if !reflect.DeepEqual(resolved, expected) {
+		t.Fatalf("expected %#v, got %#v", expected, resolved)
+	}
 }
 
 func TestSplitIdentifierTokens(t *testing.T) {

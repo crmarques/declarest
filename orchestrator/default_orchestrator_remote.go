@@ -8,6 +8,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 )
 
 func (r *DefaultOrchestrator) executeRemoteMutation(
@@ -50,7 +51,11 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 	return resourceInfo, nil
 }
 
-func (r *DefaultOrchestrator) resolvePayloadForRemote(ctx context.Context, value resource.Value) (resource.Value, error) {
+func (r *DefaultOrchestrator) resolvePayloadForRemote(
+	ctx context.Context,
+	logicalPath string,
+	value resource.Value,
+) (resource.Value, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -59,7 +64,14 @@ func (r *DefaultOrchestrator) resolvePayloadForRemote(ctx context.Context, value
 		return resource.Normalize(value)
 	}
 
-	return r.Secrets.ResolvePayload(ctx, value)
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return secrets.ResolvePayloadForResource(value, normalizedPath, func(key string) (string, error) {
+		return r.Secrets.Get(ctx, key)
+	})
 }
 
 func (r *DefaultOrchestrator) maskPayloadForLocal(ctx context.Context, value resource.Value) (resource.Value, error) {

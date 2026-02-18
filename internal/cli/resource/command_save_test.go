@@ -253,6 +253,29 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		}
 	})
 
+	t.Run("metadata_secrets_from_attributes_ignores_unquoted_placeholders", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"credentials.authValue"},
+				},
+			},
+			Secrets: &fakeSaveSecretProvider{},
+		}
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), deps, "/customers/acme", map[string]any{
+			"credentials": map[string]any{"authValue": `{{secret custom-auth-key}}`},
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+		if len(candidates) != 0 {
+			t.Fatalf("expected no candidates for placeholder, got %#v", candidates)
+		}
+	})
+
 	t.Run("falls_back_to_builtin_detection_without_secret_provider", func(t *testing.T) {
 		t.Parallel()
 
@@ -417,14 +440,14 @@ func TestHandleSaveSecrets(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected map payload, got %T", updatedValue)
 		}
-		if got := payload["apiToken"]; got != `{{secret "/customers/acme:apiToken"}}` {
+		if got := payload["apiToken"]; got != `{{secret .}}` {
 			t.Fatalf("expected apiToken placeholder, got %#v", got)
 		}
 		credentials, ok := payload["credentials"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected nested credentials map, got %T", payload["credentials"])
 		}
-		if got := credentials["authValue"]; got != `{{secret "/customers/acme:credentials.authValue"}}` {
+		if got := credentials["authValue"]; got != `{{secret .}}` {
 			t.Fatalf("expected metadata-path placeholder, got %#v", got)
 		}
 
@@ -544,7 +567,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected map payload, got %T", updatedValue)
 		}
-		if got := payload["password"]; got != `{{secret "/customers/acme:password"}}` {
+		if got := payload["password"]; got != `{{secret .}}` {
 			t.Fatalf("expected handled password placeholder, got %#v", got)
 		}
 		if got := payload["apiToken"]; got != "token-123" {
@@ -596,7 +619,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			deps,
 			"/admin/realms/master/clients/app-a",
 			map[string]any{"secret": "s-1"},
-			"/admin/realms/*/clients",
+			"/admin/realms/_/clients",
 			[]string{"secret"},
 		)
 		if err != nil {
@@ -606,7 +629,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			t.Fatalf("expected no unhandled candidates, got %#v", unhandled)
 		}
 
-		metadata := metadataService.items["/admin/realms/*/clients"]
+		metadata := metadataService.items["/admin/realms/_/clients"]
 		if !reflect.DeepEqual(metadata.SecretsFromAttributes, []string{"secret"}) {
 			t.Fatalf("expected metadata override path to be updated, got %#v", metadata.SecretsFromAttributes)
 		}
@@ -616,12 +639,12 @@ func TestHandleSaveSecrets(t *testing.T) {
 func TestSaveSecretMetadataPathForCollection(t *testing.T) {
 	t.Parallel()
 
-	t.Run("keycloak_realm_collection_path_uses_wildcard", func(t *testing.T) {
+	t.Run("keycloak_realm_collection_path_uses_intermediary_placeholder", func(t *testing.T) {
 		t.Parallel()
 
 		got := saveSecretMetadataPathForCollection("/admin/realms/master/clients")
-		if got != "/admin/realms/*/clients" {
-			t.Fatalf("expected wildcard metadata path, got %q", got)
+		if got != "/admin/realms/_/clients" {
+			t.Fatalf("expected intermediary placeholder metadata path, got %q", got)
 		}
 	})
 

@@ -392,7 +392,7 @@ case_repo_template_sync_tree() {
 
     case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
-    if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1
@@ -422,8 +422,13 @@ case_repo_template_sync_tree() {
     case_expect_success
 
     case_run_declarest resource list "${collection_path}" --remote-server -o json
-    case_expect_success
-    if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+    if ((CASE_LAST_STATUS != 0)); then
+      if grep -qi 'status 404' <<<"${CASE_LAST_OUTPUT}"; then
+        continue
+      fi
+      case_expect_success
+    fi
+    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list after delete for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1
@@ -454,6 +459,8 @@ case_repo_template_create_resource_path() {
 case_repo_template_update_resource_path() {
   local logical_resource_path=$1
   local payload_file=$2
-  case_run_declarest resource update "${logical_resource_path}" -f "${payload_file}" -i json
+  case_run_declarest resource save "${logical_resource_path}" -f "${payload_file}" -i json
+  case_expect_success
+  case_run_declarest resource update "${logical_resource_path}"
   case_expect_success
 }

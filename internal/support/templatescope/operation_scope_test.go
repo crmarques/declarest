@@ -1,6 +1,10 @@
 package templatescope
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/crmarques/declarest/metadata"
+)
 
 func TestBuildOperationScopePreservesPayloadBinding(t *testing.T) {
 	t.Parallel()
@@ -47,5 +51,49 @@ func TestBuildOperationScopePreservesPayloadBinding(t *testing.T) {
 	payloadMap["tenant"] = "south"
 	if valueMap["tenant"] != "south" {
 		t.Fatal("expected payload and value to reference the same map scope")
+	}
+}
+
+func TestDerivePathTemplateFields(t *testing.T) {
+	t.Parallel()
+
+	fields := DerivePathTemplateFields(
+		"/api/projects/platform/widgets/beta",
+		metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {
+					Path: "/api/projects/{{.project}}/widgets/{{.id}}",
+				},
+				string(metadata.OperationDelete): {
+					Path: "/api/projects/{{.project}}/widgets/{{.id}}",
+				},
+			},
+		},
+	)
+
+	if fields["project"] != "platform" {
+		t.Fatalf("expected project field to be derived, got %#v", fields["project"])
+	}
+	if fields["id"] != "beta" {
+		t.Fatalf("expected id field to be derived, got %#v", fields["id"])
+	}
+}
+
+func TestDerivePathTemplateFieldsSkipsMismatchedTemplate(t *testing.T) {
+	t.Parallel()
+
+	fields := DerivePathTemplateFields(
+		"/api/projects/platform/widgets/beta",
+		metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {
+					Path: "/customers/{{.id}}",
+				},
+			},
+		},
+	)
+
+	if len(fields) != 0 {
+		t.Fatalf("expected no derived fields for mismatched template, got %#v", fields)
 	}
 }

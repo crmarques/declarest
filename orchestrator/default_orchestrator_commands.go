@@ -80,7 +80,7 @@ func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string) (re
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.Payload)
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, resourceInfo.Payload)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -110,7 +110,7 @@ func (r *DefaultOrchestrator) Create(ctx context.Context, logicalPath string, va
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.Payload)
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, resourceInfo.Payload)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -125,7 +125,7 @@ func (r *DefaultOrchestrator) Update(ctx context.Context, logicalPath string, va
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.Payload)
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, resourceInfo.Payload)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -261,7 +261,7 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 		return nil, err
 	}
 
-	localForCompare, err := r.resolvePayloadForRemote(ctx, resourceInfo.Payload)
+	localForCompare, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, resourceInfo.Payload)
 	if err != nil {
 		return nil, err
 	}

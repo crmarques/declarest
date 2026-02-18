@@ -86,7 +86,7 @@ func TestFileSecretServicePayloadOperations(t *testing.T) {
 	}
 	expectedMasked := map[string]any{
 		"name":     "acme",
-		"apiToken": "{{secret \"apiToken\"}}",
+		"apiToken": "{{secret .}}",
 	}
 	if !reflect.DeepEqual(masked, expectedMasked) {
 		t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
@@ -106,7 +106,7 @@ func TestFileSecretServicePayloadOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NormalizeSecretPlaceholders returned error: %v", err)
 	}
-	expectedNormalized := map[string]any{"apiToken": "{{secret \"apiToken\"}}"}
+	expectedNormalized := map[string]any{"apiToken": "{{secret .}}"}
 	if !reflect.DeepEqual(normalized, expectedNormalized) {
 		t.Fatalf("expected normalized %#v, got %#v", expectedNormalized, normalized)
 	}

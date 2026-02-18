@@ -20,14 +20,14 @@ case_run() {
   case_expect_output_contains 'potential plaintext secrets detected'
   case_expect_output_contains '--ignore'
 
-  case_run_declarest resource get "${heuristic_path}" --local
+  case_run_declarest resource get "${heuristic_path}" --repository
   case_expect_failure
   case_expect_output_contains 'not found'
 
   case_run_declarest resource save "${heuristic_path}" -f "${plaintext_payload_file}" -i json --ignore
   case_expect_success
 
-  case_run_declarest resource get "${heuristic_path}" --local -o json
+  case_run_declarest resource get "${heuristic_path}" --repository -o json
   case_expect_success
   if ! jq -e '.password == "plain-secret" and .name == "acme"' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
     printf 'expected --ignore save to persist plaintext payload\n' >&2
@@ -55,14 +55,14 @@ case_run() {
 
   case_write_json "${metadata_placeholder_payload_file}" '{
     "credentials": {
-      "authValue": "{{secret \"authValue\"}}"
+      "authValue": "{{secret .}}"
     }
   }'
 
   case_run_declarest resource save "${metadata_path}" -f "${metadata_placeholder_payload_file}" -i json
   case_expect_success
 
-  case_run_declarest resource get "${metadata_path}" --local -o json
+  case_run_declarest resource get "${metadata_path}" --repository -o json
   case_expect_success
-  case_expect_output_contains '{{secret \"authValue\"}}'
+  case_expect_output_contains '{{secret .}}'
 }

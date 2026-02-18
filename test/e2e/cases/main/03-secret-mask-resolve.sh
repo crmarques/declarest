@@ -17,9 +17,9 @@ case_run() {
 
   case_run_declarest secret mask -f "${payload_file}" -i json -o json
   case_expect_success
-  case_expect_output_contains '{{secret "apiToken"}}'
+  case_expect_output_contains '{{secret .}}'
 
-  case_write_json "${payload_file}" '{"apiToken": "{{secret \"apiToken\"}}", "name": "acme"}'
+  case_write_json "${payload_file}" '{"apiToken": "{{secret .}}", "name": "acme"}'
 
   case_run_declarest secret resolve -f "${payload_file}" -i json -o json
   case_expect_success

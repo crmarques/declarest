@@ -68,7 +68,7 @@ The runner reports progress in grouped steps:
 3. `Preparing Components`
 4. `Starting Components`
 5. `Configuring Access`
-6. `Running Workload`
+6. `Running Test Cases`
 7. `Finalizing`
 
 - `manual`: 5 steps

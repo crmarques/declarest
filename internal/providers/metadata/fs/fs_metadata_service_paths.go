@@ -89,10 +89,9 @@ func parseMetadataPath(logicalPath string) (string, metadataPathKind, error) {
 
 	for _, segment := range segments {
 		if segment == "_" {
-			return "", metadataPathResource, validationError(
-				"metadata path must not contain reserved segment \"_\" except as terminal collection marker",
-				nil,
-			)
+			// "_" is used as an intermediary wildcard selector in repository templates.
+			kind = metadataPathCollection
+			continue
 		}
 		if hasWildcardPattern(segment) {
 			if _, err := path.Match(segment, "sample"); err != nil {

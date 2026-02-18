@@ -354,8 +354,8 @@ func saveSecretMetadataPathForCollection(collectionPath string) string {
 			continue
 		}
 		next := strings.TrimSpace(segments[idx+1])
-		if next != "" && next != "*" {
-			segments[idx+1] = "*"
+		if next != "" && next != "_" {
+			segments[idx+1] = "_"
 		}
 		break
 	}
@@ -853,7 +853,7 @@ func storeAndMaskAttribute(
 		return err
 	}
 
-	parent[leafKey] = secretPlaceholderValue(secretKey)
+	parent[leafKey] = secretPlaceholderValue()
 	return nil
 }
 
@@ -892,8 +892,8 @@ func findAttributeParentMap(payload map[string]any, attribute string) (map[strin
 	return current, leafKey, true
 }
 
-func secretPlaceholderValue(key string) string {
-	return "{{secret " + strconv.Quote(key) + "}}"
+func secretPlaceholderValue() string {
+	return "{{secret .}}"
 }
 
 func buildSaveSecretKey(logicalPath string, attribute string) string {
@@ -916,15 +916,17 @@ func isSecretPlaceholderValue(value string) bool {
 	if argument == "." {
 		return true
 	}
-	if !strings.HasPrefix(argument, "\"") {
+	if strings.HasPrefix(argument, "\"") {
+		parsed, err := strconv.Unquote(argument)
+		if err != nil {
+			return false
+		}
+		return strings.TrimSpace(parsed) != ""
+	}
+	if strings.ContainsAny(argument, " \t\r\n") {
 		return false
 	}
-
-	parsed, err := strconv.Unquote(argument)
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(parsed) != ""
+	return strings.TrimSpace(argument) != ""
 }
 
 func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
