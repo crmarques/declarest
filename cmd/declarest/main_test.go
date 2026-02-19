@@ -167,6 +167,8 @@ func TestIsCompletionInvocation(t *testing.T) {
 }
 
 func TestShouldSkipContextBootstrap(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		args []string
@@ -192,6 +194,36 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			args: []string{"resource", "save", "/customers/acme"},
 			want: false,
 		},
+		{
+			name: "version command does not require context bootstrap",
+			args: []string{"version"},
+			want: true,
+		},
+		{
+			name: "config create command does not require context bootstrap",
+			args: []string{"config", "create"},
+			want: true,
+		},
+		{
+			name: "config list command does not require context bootstrap",
+			args: []string{"config", "list"},
+			want: true,
+		},
+		{
+			name: "config check command requires context bootstrap",
+			args: []string{"config", "check"},
+			want: false,
+		},
+		{
+			name: "ad-hoc group help path does not require context bootstrap",
+			args: []string{"ad-hoc"},
+			want: true,
+		},
+		{
+			name: "ad-hoc method command requires context bootstrap",
+			args: []string{"ad-hoc", "get", "/health"},
+			want: false,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -200,6 +232,74 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			got := shouldSkipContextBootstrap(testCase.args)
 			if got != testCase.want {
 				t.Fatalf("shouldSkipContextBootstrap() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestRequiresContextBootstrap(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		commandPath string
+		want        bool
+	}{
+		{
+			name:        "resource commands require context",
+			commandPath: "declarest resource list",
+			want:        true,
+		},
+		{
+			name:        "metadata commands require context",
+			commandPath: "declarest metadata resolve",
+			want:        true,
+		},
+		{
+			name:        "repo commands require context",
+			commandPath: "declarest repo status",
+			want:        true,
+		},
+		{
+			name:        "secret commands require context",
+			commandPath: "declarest secret resolve",
+			want:        true,
+		},
+		{
+			name:        "ad-hoc method requires context",
+			commandPath: "declarest ad-hoc get",
+			want:        true,
+		},
+		{
+			name:        "ad-hoc root does not require context",
+			commandPath: "declarest ad-hoc",
+			want:        false,
+		},
+		{
+			name:        "config check requires context",
+			commandPath: "declarest config check",
+			want:        true,
+		},
+		{
+			name:        "version does not require context",
+			commandPath: "declarest version",
+			want:        false,
+		},
+		{
+			name:        "config list does not require context",
+			commandPath: "declarest config list",
+			want:        false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := requiresContextBootstrap(testCase.commandPath)
+			if got != testCase.want {
+				t.Fatalf("requiresContextBootstrap() = %t, want %t", got, testCase.want)
 			}
 		})
 	}

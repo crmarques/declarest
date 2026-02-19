@@ -26,8 +26,9 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 9. Help invocations (`--help`, `-h`, or `help`) and completion-script invocations (`completion`, `__complete`, `__completeNoDesc`) MUST render without requiring active-context resolution.
 10. Shell completion output MUST expose canonical command names and MUST NOT leak internal command placeholders.
 11. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
-12. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
-13. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing local and remote collection children with metadata-aware path semantics.
+12. Non-runtime commands (`version`, `config create|add|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
+13. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
+14. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing local and remote collection children with metadata-aware path semantics.
 
 ## Data Contracts
 Command groups:
@@ -94,10 +95,11 @@ Ad-hoc command methods:
 
 Interactive config commands:
 1. `config create` SHOULD support terminal prompts when no file/stdin input is provided.
-2. `config use` SHOULD support context selection when no name argument is provided.
-3. `config show` SHOULD support context selection when `--context` is omitted.
-4. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
-5. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
+2. `config create` SHOULD accept optional context name from positional `[new-context-name]` or global `--context` and skip name prompting when provided.
+3. `config use` SHOULD support context selection when no name argument is provided.
+4. `config show` SHOULD support context selection when `--context` is omitted.
+5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
+6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
 
 ## CLI Input Grammar
 1. Resource targets MUST be logical absolute paths.
@@ -133,28 +135,31 @@ Interactive config commands:
 31. `secret detect --secret-attribute <attr>` MUST apply only that detected attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
 32. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 33. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
-34. `ad-hoc <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `ad-hoc get` MUST attempt metadata-aware remote read fallback when the literal ad-hoc request returns `NotFound`.
-35. `ad-hoc <method>` MUST accept optional request payload from `--file` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
-36. `ad-hoc post` and `ad-hoc put` MUST also support optional `--payload` inline input, decoded according to `--format`, and `--payload` MUST be mutually exclusive with `--file` and stdin input.
-37. `config add` MUST accept input from `--file` or stdin.
-38. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
-39. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
-40. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
-41. When `config add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
-42. `config add --set-current` MUST set current context to the imported context when exactly one context is imported.
-43. `config add --set-current` with multiple imported contexts MUST require catalog `current-ctx` or fail with `ValidationError`.
-44. `config add` SHOULD default `--format` to `yaml` while continuing to accept explicit `json`.
-45. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
-46. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
-47. `ad-hoc delete` MUST require `--force` and fail with `ValidationError` when confirmation is not explicit.
-48. Repository-backed single-resource reads (`resource get --repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idFromAttribute`.
-49. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
-50. `resource delete --remote-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
-51. `ad-hoc delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
-52. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
-53. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
-54. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
-55. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
+34. `config create` MUST default `--format` to `yaml` while continuing to accept explicit `json`.
+35. `config create` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
+36. `config create` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
+37. `ad-hoc <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `ad-hoc get` MUST attempt metadata-aware remote read fallback when the literal ad-hoc request returns `NotFound`.
+38. `ad-hoc <method>` MUST accept optional request payload from `--file` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
+39. `ad-hoc post` and `ad-hoc put` MUST also support optional `--payload` inline input, decoded according to `--format`, and `--payload` MUST be mutually exclusive with `--file` and stdin input.
+40. `config add` MUST accept input from `--file` or stdin.
+41. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
+42. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
+43. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
+44. When `config add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
+45. `config add --set-current` MUST set current context to the imported context when exactly one context is imported.
+46. `config add --set-current` with multiple imported contexts MUST require catalog `current-ctx` or fail with `ValidationError`.
+47. `config add` SHOULD default `--format` to `yaml` while continuing to accept explicit `json`.
+48. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
+49. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
+50. `ad-hoc delete` MUST require `--force` and fail with `ValidationError` when confirmation is not explicit.
+51. Repository-backed single-resource reads (`resource get --repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idFromAttribute`.
+52. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
+53. `resource delete --remote-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
+54. `ad-hoc delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
+55. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
+56. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
+57. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
+58. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -199,6 +204,7 @@ Interactive config commands:
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
 22. `resource save` wildcard path is combined with payload input.
 23. `resource diff` targets a collection path with no local resources.
+24. `config create` receives both positional context name and `--context` with different values.
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
@@ -219,6 +225,7 @@ Interactive config commands:
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and otherwise returns the template path candidate.
+19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -288,3 +295,5 @@ Interactive config commands:
 65. `declarest ad-hoc delete /customers --force --recursive` prints no response bodies by default and only the final status footer.
 66. `declarest ad-hoc delete /customers --force --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
 67. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
+68. `declarest config create dev` skips context-name prompt and starts interactive prompts at repository settings.
+69. `declarest config create --context dev` skips context-name prompt and starts interactive prompts at repository settings.

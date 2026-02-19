@@ -7,8 +7,12 @@ import (
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
 )
 
+func NewContextService(opts BootstrapConfig) config.ContextService {
+	return configfile.NewFileContextService(opts.ContextCatalogPath)
+}
+
 func NewDeclarestContext(opts BootstrapConfig, selection config.ContextSelection) (DeclarestContext, error) {
-	contextService := configfile.NewFileContextService(opts.ContextCatalogPath)
+	contextService := NewContextService(opts)
 	defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, selection)
 
 	if err != nil {

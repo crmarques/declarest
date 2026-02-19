@@ -66,6 +66,8 @@ Acceptance contracts:
 28. Resource save override guard: saving to an already-present logical path must fail without `--force` and succeed when `--force` is provided so repository state cannot be overwritten accidentally.
 29. Resource save wildcard expansion: `resource save` must expand `_` path segments via remote direct-child list traversal, persist all matched collection/resource targets, reject wildcard+payload input, and return `NotFound` when no concrete matches are resolved.
 30. CLI path completion: completion merges repository paths, remote paths, and OpenAPI paths; templated OpenAPI segments resolve concrete values through local/remote collection listings and keep deterministic bounded suggestion ordering.
+31. CLI startup bootstrap gating: `version` and context-catalog commands (`config create|add|update|delete|rename|list|use|show|current|resolve|validate`) execute without active-context resolution, while runtime commands (`resource/*`, `repo/*`, `metadata/*`, `secret/*`, `ad-hoc <method>`, `config check`) still fail fast when no active context is available.
+32. Config create input contract: `config create` defaults `--format` to `yaml`, accepts context name from positional arg or global `--context`, skips interactive name prompt when provided, and returns `ValidationError` when both names differ.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

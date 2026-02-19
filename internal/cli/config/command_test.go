@@ -105,6 +105,34 @@ metadata:
 	}
 }
 
+func TestCreateDefaultsInputFormatToYAML(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+name: dev
+repository:
+  filesystem:
+    base-dir: /tmp/dev
+`,
+		"create",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if !service.createCalled {
+		t.Fatal("expected create to be called")
+	}
+	if service.createdContext.Name != "dev" {
+		t.Fatalf("expected context name dev, got %q", service.createdContext.Name)
+	}
+}
+
 func TestAddImportsCatalogContexts(t *testing.T) {
 	t.Parallel()
 
@@ -688,6 +716,97 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	}
 	if got := prompter.inputPrompts[2]; got != "Metadata base-dir (defaults to /tmp/repo): " {
 		t.Fatalf("expected metadata prompt with repository base-dir value, got %q", got)
+	}
+}
+
+func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs:      []string{"/tmp/repo", "/tmp/meta"},
+		selects:     []string{"filesystem"},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&common.GlobalFlags{},
+		prompter,
+		"",
+		"create",
+		"dev-from-arg",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if !service.createCalled {
+		t.Fatal("expected create to be called")
+	}
+	if service.createdContext.Name != "dev-from-arg" {
+		t.Fatalf("expected context name dev-from-arg, got %q", service.createdContext.Name)
+	}
+	if len(prompter.inputPrompts) < 1 {
+		t.Fatal("expected input prompts for repository settings")
+	}
+	if got := prompter.inputPrompts[0]; got != "Repository base-dir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", got)
+	}
+}
+
+func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs:      []string{"/tmp/repo", "/tmp/meta"},
+		selects:     []string{"filesystem"},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&common.GlobalFlags{Context: "dev-from-flag"},
+		prompter,
+		"",
+		"create",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if !service.createCalled {
+		t.Fatal("expected create to be called")
+	}
+	if service.createdContext.Name != "dev-from-flag" {
+		t.Fatalf("expected context name dev-from-flag, got %q", service.createdContext.Name)
+	}
+	if len(prompter.inputPrompts) < 1 {
+		t.Fatal("expected input prompts for repository settings")
+	}
+	if got := prompter.inputPrompts[0]; got != "Repository base-dir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", got)
+	}
+}
+
+func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{Context: "dev-flag"},
+		"",
+		"create",
+		"dev-arg",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if service.createCalled {
+		t.Fatal("expected create call to be skipped on context name conflict")
 	}
 }
 

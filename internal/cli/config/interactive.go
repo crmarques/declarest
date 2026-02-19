@@ -2,17 +2,33 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/spf13/cobra"
 )
 
-func resolveCreateContextInput(command *cobra.Command, input common.InputFlags, prompter configPrompter) (configdomain.Context, error) {
+func resolveCreateContextInput(
+	command *cobra.Command,
+	input common.InputFlags,
+	prompter configPrompter,
+	contextName string,
+) (configdomain.Context, error) {
 	if shouldUseInteractiveCreate(command, input, prompter) {
-		return promptCreateContext(command, prompter)
+		return promptCreateContext(command, prompter, contextName)
 	}
-	return decodeContextStrict(command, input)
+
+	cfg, err := decodeContextStrict(command, input)
+	if err != nil {
+		return configdomain.Context{}, err
+	}
+
+	if strings.TrimSpace(contextName) != "" {
+		cfg.Name = strings.TrimSpace(contextName)
+	}
+
+	return cfg, nil
 }
 
 func shouldUseInteractiveCreate(command *cobra.Command, input common.InputFlags, prompter configPrompter) bool {
@@ -25,10 +41,14 @@ func shouldUseInteractiveCreate(command *cobra.Command, input common.InputFlags,
 	return prompter.IsInteractive(command)
 }
 
-func promptCreateContext(command *cobra.Command, prompter configPrompter) (configdomain.Context, error) {
-	name, err := prompter.Input(command, "Context name: ", true)
-	if err != nil {
-		return configdomain.Context{}, err
+func promptCreateContext(command *cobra.Command, prompter configPrompter, contextName string) (configdomain.Context, error) {
+	name := strings.TrimSpace(contextName)
+	if name == "" {
+		var err error
+		name, err = prompter.Input(command, "Context name: ", true)
+		if err != nil {
+			return configdomain.Context{}, err
+		}
 	}
 
 	repositoryType, err := prompter.Select(command, "Select repository type", []string{"filesystem", "git"})

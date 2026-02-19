@@ -12,7 +12,9 @@ import (
 
 func main() {
 	args := os.Args[1:]
-	deps := cli.Dependencies{}
+	deps := cli.Dependencies{
+		Contexts: core.NewContextService(core.BootstrapConfig{}),
+	}
 	if !shouldSkipContextBootstrap(args) {
 		declarestContext, err := core.NewDeclarestContext(
 			core.BootstrapConfig{},
@@ -88,27 +90,61 @@ func isCompletionInvocation(args []string) bool {
 }
 
 func shouldSkipContextBootstrap(args []string) bool {
-	return isHelpInvocation(args) || isCompletionInvocation(args) || isHelpFallbackInvocation(args)
+	if isHelpInvocation(args) || isCompletionInvocation(args) {
+		return true
+	}
+
+	commandPath, ok := resolveRunnableCommandPath(args)
+	if !ok {
+		return true
+	}
+
+	return !requiresContextBootstrap(commandPath)
 }
 
 func isHelpFallbackInvocation(args []string) bool {
+	_, ok := resolveRunnableCommandPath(args)
+	return !ok
+}
+
+func resolveRunnableCommandPath(args []string) (string, bool) {
 	probe := cli.NewRootCommand(cli.Dependencies{})
 	command, remainingArgs, err := probe.Find(args)
 	if err != nil {
-		return true
+		return "", false
 	}
 	if command == nil {
-		return true
+		return "", false
 	}
 	if !command.Runnable() {
-		return true
+		return "", false
 	}
 
 	if err := command.ParseFlags(remainingArgs); err != nil {
-		return true
+		return "", false
 	}
 	if err := command.ValidateArgs(command.Flags().Args()); err != nil {
+		return "", false
+	}
+
+	return strings.TrimSpace(command.CommandPath()), true
+}
+
+func requiresContextBootstrap(commandPath string) bool {
+	normalized := strings.TrimSpace(commandPath)
+	switch {
+	case normalized == "declarest config check":
 		return true
+	case strings.HasPrefix(normalized, "declarest resource "):
+		return true
+	case strings.HasPrefix(normalized, "declarest metadata "):
+		return true
+	case strings.HasPrefix(normalized, "declarest repo "):
+		return true
+	case strings.HasPrefix(normalized, "declarest secret "):
+		return true
+	case strings.HasPrefix(normalized, "declarest ad-hoc "):
+		return normalized != "declarest ad-hoc"
 	}
 
 	return false

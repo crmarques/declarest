@@ -30,7 +30,7 @@ func newCommandWithPrompter(
 	}
 
 	command.AddCommand(
-		newCreateCommand(deps, prompter),
+		newCreateCommand(deps, globalFlags, prompter),
 		newAddCommand(deps),
 		newUpdateCommand(deps),
 		newDeleteCommand(deps, prompter),
@@ -47,19 +47,28 @@ func newCommandWithPrompter(
 	return command
 }
 
-func newCreateCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
+func newCreateCommand(
+	deps common.CommandDependencies,
+	globalFlags *common.GlobalFlags,
+	prompter configPrompter,
+) *cobra.Command {
 	var input common.InputFlags
 
 	command := &cobra.Command{
-		Use:   "create",
+		Use:   "create [new-context-name]",
 		Short: "Create a context from input or interactive prompts",
-		Args:  cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
-			cfg, err := resolveCreateContextInput(command, input, prompter)
+			contextName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
+			if err != nil {
+				return err
+			}
+
+			cfg, err := resolveCreateContextInput(command, input, prompter, contextName)
 			if err != nil {
 				return err
 			}
@@ -67,7 +76,9 @@ func newCreateCommand(deps common.CommandDependencies, prompter configPrompter) 
 		},
 	}
 
-	common.BindInputFlags(command, &input)
+	command.Flags().StringVarP(&input.File, "file", "f", "", "input file path")
+	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
+	common.RegisterInputFormatFlagCompletion(command)
 	return command
 }
 
@@ -198,6 +209,26 @@ func resolveSetCurrentContext(selection addContextSelection) (string, error) {
 		"set-current requires a single imported context or a catalog current-ctx value",
 		nil,
 	)
+}
+
+func resolveCreateContextName(args []string, contextFlagName string) (string, error) {
+	positionalName := ""
+	if len(args) > 0 {
+		positionalName = strings.TrimSpace(args[0])
+	}
+
+	flagName := strings.TrimSpace(contextFlagName)
+	if positionalName != "" && flagName != "" && positionalName != flagName {
+		return "", common.ValidationError(
+			fmt.Sprintf("context name conflict: positional %q differs from --context %q", positionalName, flagName),
+			nil,
+		)
+	}
+
+	if positionalName != "" {
+		return positionalName, nil
+	}
+	return flagName, nil
 }
 
 func validateAddTargets(command *cobra.Command, contexts configdomain.ContextService, items []configdomain.Context) error {
