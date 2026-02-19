@@ -73,7 +73,8 @@ Acceptance contracts:
 35. Repo command repository-type awareness: `repo push` fails fast with `ValidationError` on filesystem contexts, and `repo status` default text output differs by repository type while preserving stable structured (`json|yaml`) sync fields.
 36. Context validation contract: all context-catalog mutation and resolve flows fail with `ValidationError` when `managed-server` is missing, and interactive `config create` always prompts managed-server configuration.
 37. Secret-candidate false-positive guard: detection and save-time checks ignore numeric-only and boolean-like policy/toggle values for secret-like keys/attributes (for example action-token lifespan maps and token-claim toggles) while preserving detection for real plaintext secret strings.
-38. Metadata selector-path contract: `metadata infer|render|get` accept intermediary selector paths (for example `/admin/realms/_/clients/`), `metadata render` defaults operation by target kind, infer uses OpenAPI hints when available, and structured metadata output omits nil directive fields.
+38. Metadata selector-path contract: `metadata infer|render|get` accept intermediary selector paths (for example `/admin/realms/_/clients/`), `metadata render` defaults operation by target kind, infer uses OpenAPI hints when available, structured metadata output omits nil directive fields, and infer output omits directives equal to deterministic fallback defaults.
+39. Resource get secret-output contract: `resource get` redacts metadata-declared secret attributes to `{{secret .}}` for `--repository` and `--remote-server` by default, and `--show-secrets` restores plaintext output for those attributes.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

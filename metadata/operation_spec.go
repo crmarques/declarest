@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -77,6 +78,7 @@ func InferFromOpenAPISpec(
 	if err != nil {
 		return ResourceMetadata{}, err
 	}
+	target = promoteInferTargetFromOpenAPI(target, openAPISpec)
 
 	fallbackMetadata := inferFallbackMetadata(target)
 	openAPIMetadata, openAPIIdentityAttribute := inferMetadataFromOpenAPISpec(target, openAPISpec)
@@ -96,6 +98,32 @@ func InferFromOpenAPISpec(
 	}
 
 	return inferred, nil
+}
+
+func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetadata, openAPISpec any) (ResourceMetadata, error) {
+	target, err := parseInferTarget(logicalPath)
+	if err != nil {
+		return ResourceMetadata{}, err
+	}
+	target = promoteInferTargetFromOpenAPI(target, openAPISpec)
+
+	defaults := inferFallbackMetadata(target)
+	compact := ResourceMetadata{
+		IDFromAttribute:       inferred.IDFromAttribute,
+		AliasFromAttribute:    inferred.AliasFromAttribute,
+		SecretsFromAttributes: cloneStringSlice(inferred.SecretsFromAttributes),
+		Operations:            cloneOperationMap(inferred.Operations),
+		Filter:                cloneStringSlice(inferred.Filter),
+		Suppress:              cloneStringSlice(inferred.Suppress),
+		JQ:                    inferred.JQ,
+	}
+
+	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
+	if len(compact.Operations) == 0 {
+		compact.Operations = nil
+	}
+
+	return compact, nil
 }
 
 func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (OperationSpec, error) {
@@ -413,6 +441,126 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 		return ResourceMetadata{}, resourceIdentityAttribute
 	}
 	return ResourceMetadata{Operations: operations}, resourceIdentityAttribute
+}
+
+func promoteInferTargetFromOpenAPI(target inferTarget, openAPISpec any) inferTarget {
+	if target.Collection {
+		return target
+	}
+
+	pathDefinitions := openAPIPathDefinitions(openAPISpec)
+	if len(pathDefinitions) == 0 {
+		return target
+	}
+
+	exactMethods, found := pathDefinitions[target.Selector]
+	if !found {
+		return target
+	}
+	if !hasOpenAPIMethod(exactMethods, "get") && !hasOpenAPIMethod(exactMethods, "post") {
+		return target
+	}
+
+	keys := make([]string, 0, len(pathDefinitions))
+	for pathKey := range pathDefinitions {
+		keys = append(keys, pathKey)
+	}
+	sort.Strings(keys)
+
+	for _, pathKey := range keys {
+		segments := splitPathSegments(pathKey)
+		if len(segments) != len(target.Segments)+1 {
+			continue
+		}
+		if !matchesExactSegmentPrefix(segments, target.Segments) {
+			continue
+		}
+
+		lastSegment := segments[len(segments)-1]
+		if _, isVariable := templateVariableName(lastSegment); !isVariable {
+			continue
+		}
+
+		childMethods := pathDefinitions[pathKey]
+		if hasOpenAPIMethod(childMethods, "get") ||
+			hasOpenAPIMethod(childMethods, "put") ||
+			hasOpenAPIMethod(childMethods, "patch") ||
+			hasOpenAPIMethod(childMethods, "delete") {
+			target.Collection = true
+			return target
+		}
+	}
+
+	return target
+}
+
+func matchesExactSegmentPrefix(candidate []string, prefix []string) bool {
+	if len(prefix) > len(candidate) {
+		return false
+	}
+	for idx := range prefix {
+		if candidate[idx] != prefix[idx] {
+			return false
+		}
+	}
+	return true
+}
+
+func removeDefaultOperationSpecs(
+	operations map[string]OperationSpec,
+	defaults map[string]OperationSpec,
+) map[string]OperationSpec {
+	if len(operations) == 0 {
+		return nil
+	}
+
+	filtered := make(map[string]OperationSpec, len(operations))
+	keys := sortedOperationKeys(operations)
+	for _, key := range keys {
+		spec := operations[key]
+		defaultSpec, hasDefault := defaults[key]
+		if hasDefault && operationSpecsEquivalent(spec, defaultSpec) {
+			continue
+		}
+		filtered[key] = spec
+	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+func operationSpecsEquivalent(left OperationSpec, right OperationSpec) bool {
+	normalizedLeft := normalizeOperationSpecForComparison(left)
+	normalizedRight := normalizeOperationSpecForComparison(right)
+	return reflect.DeepEqual(normalizedLeft, normalizedRight)
+}
+
+func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
+	normalized := OperationSpec{
+		Method:      strings.TrimSpace(spec.Method),
+		Path:        strings.TrimSpace(spec.Path),
+		Accept:      strings.TrimSpace(spec.Accept),
+		ContentType: strings.TrimSpace(spec.ContentType),
+		Body:        spec.Body,
+		JQ:          strings.TrimSpace(spec.JQ),
+	}
+
+	if len(spec.Query) > 0 {
+		normalized.Query = cloneStringMap(spec.Query)
+	}
+	if len(spec.Headers) > 0 {
+		normalized.Headers = cloneStringMap(spec.Headers)
+	}
+	if len(spec.Filter) > 0 {
+		normalized.Filter = cloneStringSlice(spec.Filter)
+	}
+	if len(spec.Suppress) > 0 {
+		normalized.Suppress = cloneStringSlice(spec.Suppress)
+	}
+
+	return normalized
 }
 
 func openAPIPathDefinitions(openAPISpec any) map[string]map[string]struct{} {

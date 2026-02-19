@@ -353,9 +353,15 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 				}
 			}
 
+			outputItem, err := metadatadomain.CompactInferredMetadataDefaults(resolvedPath, item, openAPISpec)
+			if err != nil {
+				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+
 			debugctx.Printf(command.Context(), "metadata infer succeeded path=%q", resolvedPath)
 
-			return common.WriteOutput(command, outputFormat, item, nil)
+			return common.WriteOutput(command, outputFormat, outputItem, nil)
 		},
 	}
 

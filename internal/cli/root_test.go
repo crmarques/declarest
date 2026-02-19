@@ -277,6 +277,130 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--repository", "--remote-server")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
+
+	t.Run("repository_masks_metadata_declared_secret_by_default", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getLocalValues = map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":       "acme",
+				"password": "plain-secret",
+			},
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"password"},
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--repository")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"password": "{{secret .}}"`) {
+			t.Fatalf("expected masked password in output, got %q", output)
+		}
+		if strings.Contains(output, "plain-secret") {
+			t.Fatalf("expected plaintext secret to be hidden, got %q", output)
+		}
+	})
+
+	t.Run("remote_server_masks_metadata_declared_secret_by_default", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getRemoteValue = map[string]any{
+			"id":       "acme",
+			"password": "plain-secret",
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"password"},
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--remote-server")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"password": "{{secret .}}"`) {
+			t.Fatalf("expected masked password in output, got %q", output)
+		}
+		if strings.Contains(output, "plain-secret") {
+			t.Fatalf("expected plaintext secret to be hidden, got %q", output)
+		}
+	})
+
+	t.Run("show_secrets_flag_preserves_plaintext_for_repository_source", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getLocalValues = map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":       "acme",
+				"password": "plain-secret",
+			},
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"password"},
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/customers/acme",
+			"--repository",
+			"--show-secrets",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"password": "plain-secret"`) {
+			t.Fatalf("expected plaintext password in output with --show-secrets, got %q", output)
+		}
+		if strings.Contains(output, `{{secret .}}`) {
+			t.Fatalf("expected placeholder output to be disabled with --show-secrets, got %q", output)
+		}
+	})
+
+	t.Run("show_secrets_flag_preserves_plaintext_for_remote_source", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getRemoteValue = map[string]any{
+			"id":       "acme",
+			"password": "plain-secret",
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"password"},
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/customers/acme",
+			"--remote-server",
+			"--show-secrets",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"password": "plain-secret"`) {
+			t.Fatalf("expected plaintext password in output with --show-secrets, got %q", output)
+		}
+		if strings.Contains(output, `{{secret .}}`) {
+			t.Fatalf("expected placeholder output to be disabled with --show-secrets, got %q", output)
+		}
+	})
 }
 
 func TestAdHocMethodCommands(t *testing.T) {
@@ -1625,6 +1749,48 @@ func TestMetadataPathCommands(t *testing.T) {
 			strings.Contains(output, "\"filter\": null") ||
 			strings.Contains(output, "\"suppress\": null") {
 			t.Fatalf("expected infer output without null metadata fields, got %q", output)
+		}
+	})
+
+	t.Run("infer_collection_path_uses_openapi_identity_and_omits_default_operations", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms": map[string]any{
+						"get":  map[string]any{},
+						"post": map[string]any{},
+					},
+					"/admin/realms/{realm}": map[string]any{
+						"get":    map[string]any{},
+						"put":    map[string]any{},
+						"delete": map[string]any{},
+					},
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"infer",
+			"/admin/realms",
+		)
+		if err != nil {
+			t.Fatalf("unexpected infer collection-path error: %v", err)
+		}
+		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+			t.Fatalf("expected inferred idFromAttribute=realm, got %q", output)
+		}
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"realm\"") {
+			t.Fatalf("expected inferred aliasFromAttribute=realm, got %q", output)
+		}
+		if strings.Contains(output, "\"operations\"") {
+			t.Fatalf("expected default operations to be omitted from infer output, got %q", output)
 		}
 	})
 

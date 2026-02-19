@@ -123,6 +123,87 @@ func TestInferFromOpenAPISupportsIntermediarySelectors(t *testing.T) {
 	}
 }
 
+func TestInferFromOpenAPITreatsCollectionPathWithoutSelectorAsCollection(t *testing.T) {
+	t.Parallel()
+
+	inferred, err := InferFromOpenAPISpec(
+		context.Background(),
+		"/admin/realms",
+		InferenceRequest{},
+		map[string]any{
+			"paths": map[string]any{
+				"/admin/realms": map[string]any{
+					"get":  map[string]any{},
+					"post": map[string]any{},
+				},
+				"/admin/realms/{realm}": map[string]any{
+					"get":    map[string]any{},
+					"put":    map[string]any{},
+					"delete": map[string]any{},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.IDFromAttribute != "realm" {
+		t.Fatalf("expected idFromAttribute to be inferred as realm, got %q", inferred.IDFromAttribute)
+	}
+	if inferred.AliasFromAttribute != "realm" {
+		t.Fatalf("expected aliasFromAttribute to be inferred as realm, got %q", inferred.AliasFromAttribute)
+	}
+
+	listOperation := inferred.Operations[string(OperationList)]
+	if listOperation.Path != "/admin/realms" {
+		t.Fatalf("unexpected inferred list operation path: %+v", listOperation)
+	}
+
+	getOperation := inferred.Operations[string(OperationGet)]
+	if getOperation.Path != "/admin/realms/{{.realm}}" {
+		t.Fatalf("unexpected inferred get operation path: %+v", getOperation)
+	}
+}
+
+func TestCompactInferredMetadataDefaultsOmitsFallbackOperations(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/admin/realms": map[string]any{
+				"get":  map[string]any{},
+				"post": map[string]any{},
+			},
+			"/admin/realms/{realm}": map[string]any{
+				"get":    map[string]any{},
+				"put":    map[string]any{},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/admin/realms", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	compact, err := CompactInferredMetadataDefaults("/admin/realms", inferred, openAPISpec)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+
+	if compact.IDFromAttribute != "realm" {
+		t.Fatalf("expected idFromAttribute to be preserved, got %q", compact.IDFromAttribute)
+	}
+	if compact.AliasFromAttribute != "realm" {
+		t.Fatalf("expected aliasFromAttribute to be preserved, got %q", compact.AliasFromAttribute)
+	}
+	if len(compact.Operations) != 0 {
+		t.Fatalf("expected fallback-equivalent operations to be omitted, got %#v", compact.Operations)
+	}
+}
+
 func assertValidationError(t *testing.T, err error) {
 	t.Helper()
 
