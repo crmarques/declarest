@@ -321,7 +321,7 @@ func collectDetectedCandidates(value any, candidates map[string]struct{}) error 
 					if err != nil {
 						return err
 					}
-					if !isPlaceholder {
+					if !isPlaceholder && isLikelySecretValue(stringValue) {
 						candidates[key] = struct{}{}
 					}
 				}
@@ -436,6 +436,26 @@ func isAbsoluteSecretKey(value string) bool {
 	return strings.HasPrefix(trimmed, "/") || strings.Contains(trimmed, ":")
 }
 
+func isLikelySecretValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	switch strings.ToLower(trimmed) {
+	case "true", "false", "yes", "no", "on", "off", "enabled", "disabled":
+		return false
+	}
+
+	allDigits := true
+	for _, symbol := range trimmed {
+		if symbol < '0' || symbol > '9' {
+			allDigits = false
+			break
+		}
+	}
+	return !allDigits
+}
+
 func currentScopeSecretPlaceholder() string {
 	return "{{secret .}}"
 }
@@ -499,6 +519,9 @@ func hasStrongSecretPair(tokens []string) bool {
 		default:
 			continue
 		}
+		if idx > 0 && isNonSecretQualifierToken(tokens[idx-1]) {
+			continue
+		}
 
 		if idx+1 == len(tokens)-1 {
 			return true
@@ -521,23 +544,55 @@ func isSecretCoreToken(token string) bool {
 	}
 }
 
+func isSecretPairPrefixToken(token string) bool {
+	switch token {
+	case "api", "client", "access", "private", "bearer", "refresh":
+		return true
+	default:
+		return false
+	}
+}
+
 func isStandaloneSecretToken(tokens []string, idx int) bool {
 	if idx < 0 || idx >= len(tokens) {
 		return false
 	}
+	if idx > 0 && isNonSecretQualifierToken(tokens[idx-1]) {
+		return false
+	}
 	if idx == len(tokens)-1 {
+		if idx >= 2 &&
+			isNonSecretQualifierToken(tokens[idx-2]) &&
+			(isSecretCoreToken(tokens[idx-1]) || isSecretPairPrefixToken(tokens[idx-1])) {
+			return false
+		}
 		return true
 	}
-	return !isNonSecretQualifierToken(tokens[idx+1])
+	if isNonSecretQualifierToken(tokens[idx+1]) {
+		return false
+	}
+
+	for next := idx + 2; next < len(tokens); next++ {
+		if isSecretCoreToken(tokens[next]) {
+			return true
+		}
+		if isNonSecretQualifierToken(tokens[next]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isNonSecretQualifierToken(token string) bool {
 	switch token {
 	case "mode", "type", "policy", "method", "strategy", "preference", "delivery", "conveyance",
-		"endpoint", "url", "uri", "path", "lifetime", "ttl", "timeout", "duration",
+		"endpoint", "url", "uri", "path", "lifetime", "lifespan", "ttl", "timeout", "duration",
 		"expiry", "expires", "expiration", "validity", "issuer", "name", "id", "length",
-		"size", "count", "min", "max", "enabled", "required", "supported", "allowed",
-		"algorithm", "alg", "version", "scheme", "file", "ref", "reference":
+		"size", "count", "min", "max", "enabled", "enable", "required", "supported", "allowed",
+		"algorithm", "alg", "version", "scheme", "file", "ref", "reference", "claim", "claims",
+		"header", "response", "exchange", "creation", "created", "time", "timestamp", "requested",
+		"request", "use", "lower", "upper", "case", "format":
 		return true
 	default:
 		return false

@@ -828,6 +828,31 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
+	t.Run("ignore_flag_does_not_bypass_metadata_declared_secret", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"password"},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		deps := newResourceSaveDeps(reconciler, metadataService)
+		_, err := executeForTest(
+			deps,
+			`{"password":"plain-secret"}`,
+			"resource",
+			"save",
+			"/customers/acme",
+			"--ignore",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "password") {
+			t.Fatalf("expected metadata-declared candidate in error, got %q", err.Error())
+		}
+		if len(reconciler.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when metadata-declared secret remains plaintext, got %d", len(reconciler.saveCalls))
+		}
+	})
+
 	t.Run("handle_secrets_masks_payload_updates_metadata_and_stores_secret_values", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
@@ -1084,6 +1109,80 @@ func TestResourceSaveInputModes(t *testing.T) {
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
 		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
+		}
+	})
+
+	t.Run("wildcard_handle_secrets_requested_attribute_skips_collections_without_candidate", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		metadataService.items["/admin/realms/tenant-a/clients"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute: "id",
+		}
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			remoteList: []resource.Resource{
+				{LogicalPath: "/admin/realms/master"},
+				{LogicalPath: "/admin/realms/tenant-a"},
+			},
+			getRemoteValues: map[string]resource.Value{
+				"/admin/realms/master/clients": []any{
+					map[string]any{"id": "app-a", "secret": "sec-a"},
+				},
+				"/admin/realms/tenant-a/clients": []any{
+					map[string]any{"id": "app-b", "enabled": true},
+				},
+			},
+		}
+
+		deps := newResourceSaveDeps(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/_/clients",
+			"--handle-secrets=secret",
+		)
+		if err != nil {
+			t.Fatalf("unexpected wildcard save error with --handle-secrets=secret: %v", err)
+		}
+		if len(reconciler.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		}
+
+		savedByPath := make(map[string]resource.Value, len(reconciler.saveCalls))
+		for _, call := range reconciler.saveCalls {
+			savedByPath[call.logicalPath] = call.value
+		}
+
+		masterPayload, ok := savedByPath["/admin/realms/master/clients/app-a"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved master payload map, got %T", savedByPath["/admin/realms/master/clients/app-a"])
+		}
+		if got := masterPayload["secret"]; got != `{{secret .}}` {
+			t.Fatalf("expected master secret placeholder, got %#v", got)
+		}
+
+		tenantPayload, ok := savedByPath["/admin/realms/tenant-a/clients/app-b"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved tenant payload map, got %T", savedByPath["/admin/realms/tenant-a/clients/app-b"])
+		}
+		if got, found := tenantPayload["secret"]; found {
+			t.Fatalf("expected tenant payload to skip secret handling, got %#v", got)
+		}
+		if got := tenantPayload["enabled"]; got != true {
+			t.Fatalf("expected tenant payload preserved, got %#v", got)
+		}
+
+		if secretProvider.values["/admin/realms/master/clients/app-a:secret"] != "sec-a" {
+			t.Fatalf("expected master secret to be stored, got %#v", secretProvider.values)
+		}
+		if _, found := secretProvider.values["/admin/realms/tenant-a/clients/app-b:secret"]; found {
+			t.Fatalf("expected tenant secret key to be absent, got %#v", secretProvider.values)
 		}
 	})
 }
@@ -1429,6 +1528,18 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("render_flag_path_without_operation_uses_default", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "metadata", "render", "--path", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected render default-operation error with --path: %v", err)
+		}
+		if !strings.Contains(output, "\"path\": \"/api/customers/acme\"") {
+			t.Fatalf("expected default get render output with --path, got %q", output)
+		}
+	})
+
 	t.Run("render_mismatch_path", func(t *testing.T) {
 		t.Parallel()
 
@@ -1439,8 +1550,110 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("render_missing_operation", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme")
-		assertTypedCategory(t, err, faults.ValidationError)
+		output, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected render default-operation error: %v", err)
+		}
+		if !strings.Contains(output, "\"path\": \"/api/customers/acme\"") {
+			t.Fatalf("expected default get render output, got %q", output)
+		}
+	})
+
+	t.Run("render_collection_selector_defaults_to_list", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/_/clients/"] = metadatadomain.ResourceMetadata{
+			Operations: map[string]metadatadomain.OperationSpec{
+				string(metadatadomain.OperationList): {
+					Path: "/admin/realms/{{.realm}}/clients",
+				},
+			},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "metadata", "render", "/admin/realms/_/clients/")
+		if err != nil {
+			t.Fatalf("unexpected selector render default-operation error: %v", err)
+		}
+		if !strings.Contains(output, "\"path\": \"/admin/realms/{{.realm}}/clients\"") {
+			t.Fatalf("expected list render output for selector path, got %q", output)
+		}
+	})
+
+	t.Run("infer_collection_selector_uses_openapi_and_omits_null_fields", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms/{realm}/clients": map[string]any{
+						"get":  map[string]any{},
+						"post": map[string]any{},
+					},
+					"/admin/realms/{realm}/clients/{clientId}": map[string]any{
+						"get":    map[string]any{},
+						"put":    map[string]any{},
+						"delete": map[string]any{},
+					},
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"infer",
+			"/admin/realms/_/clients/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected infer selector error: %v", err)
+		}
+		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+			t.Fatalf("expected inferred idFromAttribute, got %q", output)
+		}
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
+			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
+		}
+		if !strings.Contains(output, "\"secretsFromAttributes\": [\n    \"secret\"\n  ]") {
+			t.Fatalf("expected inferred secretsFromAttributes, got %q", output)
+		}
+		if strings.Contains(output, "\"operations\": null") ||
+			strings.Contains(output, "\"filter\": null") ||
+			strings.Contains(output, "\"suppress\": null") {
+			t.Fatalf("expected infer output without null metadata fields, got %q", output)
+		}
+	})
+
+	t.Run("get_omits_nil_fields", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/_/clients/"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute:       "id",
+			AliasFromAttribute:    "clientId",
+			SecretsFromAttributes: []string{"secret"},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"get",
+			"/admin/realms/_/clients/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected metadata get error: %v", err)
+		}
+		if strings.Contains(output, "\"operations\": null") ||
+			strings.Contains(output, "\"filter\": null") ||
+			strings.Contains(output, "\"suppress\": null") {
+			t.Fatalf("expected metadata get output without null fields, got %q", output)
+		}
 	})
 }
 
@@ -1787,21 +2000,92 @@ func TestSecretCommands(t *testing.T) {
 func TestRepoStatusOutput(t *testing.T) {
 	t.Parallel()
 
-	textOutput, err := executeForTest(testDeps(), "", "repo", "status")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.Contains(textOutput, "state=no_remote") {
-		t.Fatalf("expected text repo status output, got %q", textOutput)
-	}
+	t.Run("filesystem_context_text_output", func(t *testing.T) {
+		t.Parallel()
 
-	jsonOutput, err := executeForTest(testDeps(), "", "-o", "json", "repo", "status")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !strings.Contains(jsonOutput, "\"state\": \"no_remote\"") {
-		t.Fatalf("expected structured json status output, got %q", jsonOutput)
-	}
+		textOutput, err := executeForTest(testDeps(), "", "repo", "status")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(textOutput, "type=filesystem sync=not_applicable") {
+			t.Fatalf("expected filesystem text repo status output, got %q", textOutput)
+		}
+	})
+
+	t.Run("git_context_text_output", func(t *testing.T) {
+		t.Parallel()
+
+		textOutput, err := executeForTest(testDeps(), "", "--context", "git", "repo", "status")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(textOutput, "type=git state=no_remote") {
+			t.Fatalf("expected git text repo status output, got %q", textOutput)
+		}
+	})
+
+	t.Run("git_context_without_remote_text_output", func(t *testing.T) {
+		t.Parallel()
+
+		textOutput, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repo", "status")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(textOutput, "type=git state=no_remote remote=not_configured") {
+			t.Fatalf("expected git no-remote text repo status output, got %q", textOutput)
+		}
+	})
+
+	t.Run("json_output_remains_structured", func(t *testing.T) {
+		t.Parallel()
+
+		jsonOutput, err := executeForTest(testDeps(), "", "-o", "json", "repo", "status")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(jsonOutput, "\"state\": \"no_remote\"") {
+			t.Fatalf("expected structured json status output, got %q", jsonOutput)
+		}
+	})
+}
+
+func TestRepoPushTypeAwareValidation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("filesystem_context_fails_fast", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "repo", "push")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "filesystem repositories") {
+			t.Fatalf("expected filesystem-specific validation error, got %v", err)
+		}
+	})
+
+	t.Run("git_context_calls_push", func(t *testing.T) {
+		t.Parallel()
+
+		repoService := &testRepository{}
+		deps := testDeps()
+		deps.Repository = repoService
+
+		if _, err := executeForTest(deps, "", "--context", "git", "repo", "push"); err != nil {
+			t.Fatalf("unexpected push error: %v", err)
+		}
+		if repoService.pushCalls != 1 {
+			t.Fatalf("expected push to be called once, got %d", repoService.pushCalls)
+		}
+	})
+
+	t.Run("git_context_without_remote_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repo", "push")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "repository.git.remote") {
+			t.Fatalf("expected git remote validation error, got %v", err)
+		}
+	})
 }
 
 func TestResourceListRecursiveFlag(t *testing.T) {
@@ -2869,12 +3153,30 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 		format = config.ResourceFormatYAML
 	}
 
-	return config.Context{
-		Name: name,
-		Repository: config.Repository{
+	repositoryConfig := config.Repository{
+		ResourceFormat: format,
+		Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+	}
+	if name == "git" || name == "git-no-remote" {
+		gitRepo := &config.GitRepository{
+			Local: config.GitLocal{
+				BaseDir: "/tmp/repo",
+			},
+		}
+		if name == "git" {
+			gitRepo.Remote = &config.GitRemote{
+				URL: "https://example.invalid/repo.git",
+			}
+		}
+		repositoryConfig = config.Repository{
 			ResourceFormat: format,
-			Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/repo"},
-		},
+			Git:            gitRepo,
+		}
+	}
+
+	return config.Context{
+		Name:       name,
+		Repository: repositoryConfig,
 	}, nil
 }
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
@@ -3251,6 +3553,7 @@ func (s *testSecretProvider) DetectSecretCandidates(_ context.Context, value res
 
 type testRepository struct {
 	deleteCalls []deleteCall
+	pushCalls   int
 }
 
 func (r *testRepository) Save(context.Context, string, resource.Value) error { return nil }
@@ -3276,7 +3579,10 @@ func (r *testRepository) Init(context.Context) error                          { 
 func (r *testRepository) Refresh(context.Context) error                       { return nil }
 func (r *testRepository) Reset(context.Context, repository.ResetPolicy) error { return nil }
 func (r *testRepository) Check(context.Context) error                         { return nil }
-func (r *testRepository) Push(context.Context, repository.PushPolicy) error   { return nil }
+func (r *testRepository) Push(context.Context, repository.PushPolicy) error {
+	r.pushCalls++
+	return nil
+}
 func (r *testRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
 	return repository.SyncReport{
 		State:          repository.SyncStateNoRemote,

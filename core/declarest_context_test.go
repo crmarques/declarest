@@ -85,10 +85,22 @@ contexts:
     repository:
       filesystem:
         base-dir: ` + devRepo + `
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: dev-token
   - name: prod
     repository:
       filesystem:
         base-dir: ` + prodRepo + `
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: prod-token
 current-ctx: dev
 `)
 	if err := os.WriteFile(path, contextCatalog, 0o600); err != nil {

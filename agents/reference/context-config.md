@@ -28,6 +28,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 11. Missing context catalog files MUST be treated as an empty catalog state.
 12. `metadata.base-dir` MUST default to the selected repository base-dir when unset.
 13. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
+14. Every context MUST define `managed-server.http` with one configured auth mode.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -37,7 +38,7 @@ Top-level catalog fields:
 Per-context fields:
 1. `name`.
 2. `repository`.
-3. optional `managed-server`.
+3. required `managed-server`.
 4. optional `secret-store`.
 5. optional `metadata` (omit when equivalent to default repository base-dir behavior).
 6. optional `preferences`.
@@ -71,8 +72,9 @@ Runtime override keys:
 contexts:
   - name: xxx
     repository:
-      # Resource file format: json (default) or yaml.
-      resource-format: json
+      # Optional resource file format: json or yaml.
+      # When omitted, declarest uses the remote resource format default.
+      # resource-format: json
       # Choose exactly one repository type: filesystem or git.
       git:
         local:
@@ -180,17 +182,18 @@ current-ctx: xxx
 2. Duplicate context names.
 3. Unknown YAML key due to strict decode.
 4. Repository backend one-of violation.
-5. Managed server auth one-of violation.
-6. Secret store one-of violation.
-7. Secret file key source one-of violation.
-8. Config path resolution failure for home expansion or file access.
-9. Runtime override key not in the supported override-key list.
-10. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
+5. Missing required `managed-server`.
+6. Managed server auth one-of violation.
+7. Secret store one-of violation.
+8. Secret file key source one-of violation.
+9. Config path resolution failure for home expansion or file access.
+10. Runtime override key not in the supported override-key list.
+11. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
-2. Context with optional `managed-server` omitted.
-3. Context with optional `secret-store` omitted.
+2. Context with optional `secret-store` omitted.
+3. Context with required `managed-server` omitted fails validation.
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.

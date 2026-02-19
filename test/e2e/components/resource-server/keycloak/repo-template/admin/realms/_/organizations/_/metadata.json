@@ -1,9 +1,4 @@
 {
-  "idFromAttribute": "name",
-  "aliasFromAttribute": "name",
-  "operations": {
-    "create": {
-      "path": "/admin/realms/{{.realm}}/organizations"
-    }
-  }
+  "idFromAttribute": "id",
+  "aliasFromAttribute": "alias"
 }

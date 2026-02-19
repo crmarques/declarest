@@ -1,9 +1,12 @@
 package repo
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"strings"
 
+	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
@@ -21,7 +24,7 @@ func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags
 		newRefreshCommand(deps),
 		newResetCommand(deps),
 		newCheckCommand(deps),
-		newPushCommand(deps),
+		newPushCommand(deps, globalFlags),
 		newStatusCommand(deps, globalFlags),
 	)
 
@@ -93,7 +96,7 @@ func newCheckCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newPushCommand(deps common.CommandDependencies) *cobra.Command {
+func newPushCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	var force bool
 
 	command := &cobra.Command{
@@ -104,6 +107,16 @@ func newPushCommand(deps common.CommandDependencies) *cobra.Command {
 			repositoryService, err := common.RequireRepository(deps)
 			if err != nil {
 				return err
+			}
+			repositoryContext, err := resolveRepositoryContext(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+			if repositoryContext.Kind == repositoryContextFilesystem {
+				return common.ValidationError("repo push is not available for filesystem repositories", nil)
+			}
+			if repositoryContext.Kind == repositoryContextGit && !repositoryContext.HasRemote {
+				return common.ValidationError("repo push requires repository.git.remote configuration", nil)
 			}
 			return repositoryService.Push(command.Context(), repository.PushPolicy{Force: force})
 		},
@@ -128,6 +141,10 @@ func newStatusCommand(deps common.CommandDependencies, globalFlags *common.Globa
 			if err != nil {
 				return err
 			}
+			repositoryContext, err := resolveRepositoryContext(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
 
 			output := repoStatusOutput{
 				State:          status.State,
@@ -138,15 +155,7 @@ func newStatusCommand(deps common.CommandDependencies, globalFlags *common.Globa
 
 			format := resolveRepoStatusOutputFormat(globalFlags)
 			return common.WriteOutput(command, format, output, func(w io.Writer, value repoStatusOutput) error {
-				_, writeErr := fmt.Fprintf(
-					w,
-					"state=%s ahead=%d behind=%d hasUncommitted=%t\n",
-					value.State,
-					value.Ahead,
-					value.Behind,
-					value.HasUncommitted,
-				)
-				return writeErr
+				return renderRepoStatusText(w, value, repositoryContext)
 			})
 		},
 	}
@@ -168,5 +177,102 @@ func resolveRepoStatusOutputFormat(globalFlags *common.GlobalFlags) string {
 		return common.OutputText
 	default:
 		return globalFlags.Output
+	}
+}
+
+type repositoryContextKind string
+
+const (
+	repositoryContextUnknown    repositoryContextKind = "unknown"
+	repositoryContextFilesystem repositoryContextKind = "filesystem"
+	repositoryContextGit        repositoryContextKind = "git"
+)
+
+type repositoryContextInfo struct {
+	Kind      repositoryContextKind
+	HasRemote bool
+}
+
+func resolveRepositoryContext(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	globalFlags *common.GlobalFlags,
+) (repositoryContextInfo, error) {
+	contexts, err := common.RequireContexts(deps)
+	if err != nil {
+		return repositoryContextInfo{}, err
+	}
+
+	resolvedContext, err := contexts.ResolveContext(ctx, configdomain.ContextSelection{
+		Name: selectedContextName(globalFlags, ctx),
+	})
+	if err != nil {
+		return repositoryContextInfo{}, err
+	}
+
+	switch {
+	case resolvedContext.Repository.Filesystem != nil:
+		return repositoryContextInfo{
+			Kind:      repositoryContextFilesystem,
+			HasRemote: false,
+		}, nil
+	case resolvedContext.Repository.Git != nil:
+		return repositoryContextInfo{
+			Kind:      repositoryContextGit,
+			HasRemote: resolvedContext.Repository.Git.Remote != nil,
+		}, nil
+	default:
+		return repositoryContextInfo{
+			Kind:      repositoryContextUnknown,
+			HasRemote: false,
+		}, nil
+	}
+}
+
+func selectedContextName(globalFlags *common.GlobalFlags, ctx context.Context) string {
+	if globalFlags != nil && strings.TrimSpace(globalFlags.Context) != "" {
+		return strings.TrimSpace(globalFlags.Context)
+	}
+	return strings.TrimSpace(common.ContextName(ctx))
+}
+
+func renderRepoStatusText(w io.Writer, value repoStatusOutput, repositoryContext repositoryContextInfo) error {
+	switch repositoryContext.Kind {
+	case repositoryContextFilesystem:
+		_, err := fmt.Fprintf(
+			w,
+			"type=filesystem sync=not_applicable hasUncommitted=%t\n",
+			value.HasUncommitted,
+		)
+		return err
+	case repositoryContextGit:
+		if !repositoryContext.HasRemote {
+			_, err := fmt.Fprintf(
+				w,
+				"type=git state=%s remote=not_configured hasUncommitted=%t\n",
+				value.State,
+				value.HasUncommitted,
+			)
+			return err
+		}
+		_, err := fmt.Fprintf(
+			w,
+			"type=git state=%s ahead=%d behind=%d hasUncommitted=%t\n",
+			value.State,
+			value.Ahead,
+			value.Behind,
+			value.HasUncommitted,
+		)
+		return err
+	default:
+		_, err := fmt.Fprintf(
+			w,
+			"state=%s ahead=%d behind=%d hasUncommitted=%t\n",
+			value.State,
+			value.Ahead,
+			value.Behind,
+			value.HasUncommitted,
+		)
+		return err
 	}
 }

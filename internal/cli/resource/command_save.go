@@ -189,8 +189,16 @@ func saveResolvedPathPayload(
 			if err != nil {
 				return err
 			}
-			if len(unhandled) > 0 && !ignore {
-				return saveSecretSafetyError(resolvedPath, unhandled)
+			declaredCandidates := []string(nil)
+			if ignore {
+				declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+				if err != nil {
+					return err
+				}
+			}
+			blockingCandidates := filterSaveSecretCandidatesForSafety(unhandled, declaredCandidates, ignore)
+			if len(blockingCandidates) > 0 {
+				return saveSecretSafetyError(resolvedPath, blockingCandidates)
 			}
 			return orchestratorService.Save(ctx, resolvedPath, value)
 		}
@@ -210,15 +218,16 @@ func saveResolvedPathPayload(
 	if err := ensureSaveEntriesWritable(ctx, repositoryService, entries, force); err != nil {
 		return err
 	}
-	collectionCandidates := make([]string, 0)
-	if handleSecretsEnabled || !ignore {
-		collectionCandidates, err = detectSaveSecretCandidatesForCollection(ctx, deps, resolvedPath, entries)
-		if err != nil {
-			return err
-		}
+	collectionCandidates, err := detectSaveSecretCandidatesForCollection(ctx, deps, resolvedPath, entries)
+	if err != nil {
+		return err
 	}
 	if handleSecretsEnabled {
-		selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(collectionCandidates, requestedSecretCandidates)
+		selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(
+			collectionCandidates,
+			requestedSecretCandidates,
+			true,
+		)
 		if err != nil {
 			return err
 		}
@@ -258,11 +267,31 @@ func saveResolvedPathPayload(
 			}
 		}
 
-		if len(unhandledCandidates) > 0 && !ignore {
-			return saveSecretSafetyError(resolvedPath, unhandledCandidates)
+		declaredCandidates := []string(nil)
+		if ignore {
+			declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+			if err != nil {
+				return err
+			}
 		}
-	} else if len(collectionCandidates) > 0 && !ignore {
-		return saveSecretSafetyError(resolvedPath, collectionCandidates)
+
+		blockingCandidates := filterSaveSecretCandidatesForSafety(unhandledCandidates, declaredCandidates, ignore)
+		if len(blockingCandidates) > 0 {
+			return saveSecretSafetyError(resolvedPath, blockingCandidates)
+		}
+	} else {
+		declaredCandidates := []string(nil)
+		if ignore {
+			declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+			if err != nil {
+				return err
+			}
+		}
+
+		blockingCandidates := filterSaveSecretCandidatesForSafety(collectionCandidates, declaredCandidates, ignore)
+		if len(blockingCandidates) > 0 {
+			return saveSecretSafetyError(resolvedPath, blockingCandidates)
+		}
 	}
 	for _, entry := range entries {
 		if err := orchestratorService.Save(ctx, entry.LogicalPath, entry.Payload); err != nil {
@@ -628,19 +657,25 @@ func enforceSaveSecretSafety(
 	value resource.Value,
 	ignore bool,
 ) error {
-	if ignore {
-		return nil
-	}
-
 	candidates, err := detectSaveSecretCandidates(ctx, deps, logicalPath, value)
 	if err != nil {
 		return err
 	}
-	if len(candidates) == 0 {
+
+	declaredCandidates := []string(nil)
+	if ignore {
+		declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, logicalPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	blockingCandidates := filterSaveSecretCandidatesForSafety(candidates, declaredCandidates, ignore)
+	if len(blockingCandidates) == 0 {
 		return nil
 	}
 
-	return saveSecretSafetyError(logicalPath, candidates)
+	return saveSecretSafetyError(logicalPath, blockingCandidates)
 }
 
 func handleSaveSecrets(
@@ -664,7 +699,7 @@ func handleSaveSecrets(
 		return normalizedValue, nil, nil
 	}
 
-	selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(candidates, requestedCandidates)
+	selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(candidates, requestedCandidates, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -794,7 +829,7 @@ func parseSaveHandleSecretsFlag(command *cobra.Command, rawValue string) (bool, 
 	return true, requested, nil
 }
 
-func selectSaveSecretCandidates(candidates []string, requested []string) ([]string, []string, error) {
+func selectSaveSecretCandidates(candidates []string, requested []string, allowMissingRequested bool) ([]string, []string, error) {
 	normalizedCandidates := dedupeAndSortSaveSecretAttributes(candidates)
 	if len(requested) == 0 {
 		return normalizedCandidates, nil, nil
@@ -809,6 +844,9 @@ func selectSaveSecretCandidates(candidates []string, requested []string) ([]stri
 	selectedSet := make(map[string]struct{}, len(requested))
 	for _, requestedCandidate := range dedupeAndSortSaveSecretAttributes(requested) {
 		if _, found := candidateSet[requestedCandidate]; !found {
+			if allowMissingRequested {
+				continue
+			}
 			return nil, nil, common.ValidationError(
 				fmt.Sprintf("requested --handle-secrets attribute %q was not detected", requestedCandidate),
 				nil,
@@ -830,6 +868,43 @@ func selectSaveSecretCandidates(candidates []string, requested []string) ([]stri
 	}
 
 	return selected, unhandled, nil
+}
+
+func resolveDeclaredSaveSecretAttributes(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+) ([]string, error) {
+	resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, logicalPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return dedupeAndSortSaveSecretAttributes(resolvedMetadata.SecretsFromAttributes), nil
+}
+
+func filterSaveSecretCandidatesForSafety(candidates []string, declared []string, ignore bool) []string {
+	normalizedCandidates := dedupeAndSortSaveSecretAttributes(candidates)
+	if len(normalizedCandidates) == 0 {
+		return nil
+	}
+	if !ignore {
+		return normalizedCandidates
+	}
+
+	declaredSet := make(map[string]struct{}, len(declared))
+	for _, candidate := range dedupeAndSortSaveSecretAttributes(declared) {
+		declaredSet[candidate] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(normalizedCandidates))
+	for _, candidate := range normalizedCandidates {
+		if _, found := declaredSet[candidate]; !found {
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	return filtered
 }
 
 func saveSecretSafetyError(logicalPath string, candidates []string) error {
@@ -939,6 +1014,9 @@ func detectMetadataSecretCandidates(value resource.Value, attributes []string) [
 			continue
 		}
 		if isSecretPlaceholderValue(fieldValue) {
+			continue
+		}
+		if !isLikelyPlaintextSecretValue(fieldValue) {
 			continue
 		}
 		candidates = append(candidates, attribute)
@@ -1136,6 +1214,36 @@ func dedupeAndSortSaveSecretAttributes(values []string) []string {
 	}
 	sort.Strings(items)
 	return items
+}
+
+func isNumericOnlyString(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	for _, symbol := range trimmed {
+		if symbol < '0' || symbol > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isLikelyPlaintextSecretValue(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	if isNumericOnlyString(trimmed) {
+		return false
+	}
+
+	switch strings.ToLower(trimmed) {
+	case "true", "false", "yes", "no", "on", "off", "enabled", "disabled":
+		return false
+	default:
+		return true
+	}
 }
 
 func storeAndMaskAttribute(

@@ -5,8 +5,9 @@ const contextTemplateYAML = `# Context catalog template for declarest.
 contexts:
   - name: my-context
     repository:
-      # Resource file format used by repository operations: json or yaml.
-      resource-format: yaml
+      # Optional resource file format used by repository operations: json or yaml.
+      # If omitted, declarest uses the remote resource format default.
+      # resource-format: yaml
 
       # Mutually exclusive: choose exactly one repository backend.
       git:
@@ -45,42 +46,42 @@ contexts:
       # filesystem:
       #   base-dir: /path/to/repository
 
-    # Optional managed server.
-    # managed-server:
-    #   http:
-    #     base-url: https://example.com/api
-    #     openapi: /path/to/openapi.yaml
-    #
-    #     # Optional default request headers.
-    #     default-headers:
-    #       X-Example: value
-    #
-    #     # Mutually exclusive: choose exactly one auth method.
-    #     auth:
-    #       oauth2:
-    #         token-url: https://example.com/oauth/token
-    #         grant-type: client_credentials
-    #         client-id: change-me
-    #         client-secret: change-me
-    #         username: change-me
-    #         password: change-me
-    #         scope: api.read
-    #         audience: https://example.com/
-    #       # basic-auth:
-    #       #   username: change-me
-    #       #   password: change-me
-    #       # bearer-token:
-    #       #   token: change-me
-    #       # custom-header:
-    #       #   header: X-Api-Token
-    #       #   token: change-me
-    #
-    #     # Optional TLS.
-    #     tls:
-    #       ca-cert-file: /path/to/ca.pem
-    #       client-cert-file: /path/to/client.pem
-    #       client-key-file: /path/to/client-key.pem
-    #       insecure-skip-verify: false
+    # Required managed-server.
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        # openapi: /path/to/openapi.yaml
+
+        # Optional default request headers.
+        # default-headers:
+        #   X-Example: value
+
+        # Mutually exclusive: choose exactly one auth method.
+        auth:
+          bearer-token:
+            token: change-me
+          # oauth2:
+          #   token-url: https://example.com/oauth/token
+          #   grant-type: client_credentials
+          #   client-id: change-me
+          #   client-secret: change-me
+          #   username: change-me
+          #   password: change-me
+          #   scope: api.read
+          #   audience: https://example.com/
+          # basic-auth:
+          #   username: change-me
+          #   password: change-me
+          # custom-header:
+          #   header: X-Api-Token
+          #   token: change-me
+
+        # Optional TLS.
+        # tls:
+        #   ca-cert-file: /path/to/ca.pem
+        #   client-cert-file: /path/to/client.pem
+        #   client-key-file: /path/to/client-key.pem
+        #   insecure-skip-verify: false
 
     # Optional secret store.
     # secret-store:

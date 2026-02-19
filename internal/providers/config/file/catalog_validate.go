@@ -144,7 +144,7 @@ func validateRepository(repository config.Repository) error {
 
 func validateManagedServer(managedServer *config.ManagedServer) error {
 	if managedServer == nil {
-		return nil
+		return validationError("managed-server is required", nil)
 	}
 	if managedServer.HTTP == nil {
 		return validationError("managed-server must define http", nil)

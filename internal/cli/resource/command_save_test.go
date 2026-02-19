@@ -278,6 +278,122 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		}
 	})
 
+	t.Run("metadata_secrets_from_attributes_ignores_numeric_values", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{
+						"actionTokenGeneratedByUserLifespan.idp-verify-account-via-email",
+						"actionTokenGeneratedByUserLifespan.reset-credentials",
+						"actionTokenGeneratedByUserLifespan.verify-email",
+					},
+				},
+			},
+			Secrets: &fakeSaveSecretProvider{},
+		}
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), deps, "/admin/realms", map[string]any{
+			"actionTokenGeneratedByUserLifespan": map[string]any{
+				"idp-verify-account-via-email": "43200",
+				"reset-credentials":            "43200",
+				"verify-email":                 "43200",
+			},
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+		if len(candidates) != 0 {
+			t.Fatalf("expected no candidates for numeric-only lifespan values, got %#v", candidates)
+		}
+	})
+
+	t.Run("metadata_secrets_from_attributes_ignores_boolean_policy_values", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{
+						"access.token.claim",
+						"access.token.header.type.rfc9068",
+						"client.secret.creation.time",
+						"client_credentials.use_refresh_token",
+						"id.token.claim",
+						"introspection.token.claim",
+						"standard.token.exchange.enableRefreshRequestedTokenType",
+						"standard.token.exchange.enabled",
+						"token.response.type.bearer.lower-case",
+						"userinfo.token.claim",
+					},
+				},
+			},
+			Secrets: &fakeSaveSecretProvider{},
+		}
+
+		candidates, err := detectSaveSecretCandidates(context.Background(), deps, "/admin/realms/bndes/clients", map[string]any{
+			"access": map[string]any{
+				"token": map[string]any{
+					"claim": true,
+					"header": map[string]any{
+						"type": map[string]any{
+							"rfc9068": false,
+						},
+					},
+				},
+			},
+			"client": map[string]any{
+				"secret": map[string]any{
+					"creation": map[string]any{
+						"time": 1733075351,
+					},
+				},
+			},
+			"client_credentials": map[string]any{
+				"use_refresh_token": true,
+			},
+			"id": map[string]any{
+				"token": map[string]any{
+					"claim": false,
+				},
+			},
+			"introspection": map[string]any{
+				"token": map[string]any{
+					"claim": true,
+				},
+			},
+			"standard": map[string]any{
+				"token": map[string]any{
+					"exchange": map[string]any{
+						"enableRefreshRequestedTokenType": false,
+						"enabled":                         true,
+					},
+				},
+			},
+			"token": map[string]any{
+				"response": map[string]any{
+					"type": map[string]any{
+						"bearer": map[string]any{
+							"lower-case": true,
+						},
+					},
+				},
+			},
+			"userinfo": map[string]any{
+				"token": map[string]any{
+					"claim": false,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("detectSaveSecretCandidates returned error: %v", err)
+		}
+		if len(candidates) != 0 {
+			t.Fatalf("expected no candidates for boolean/toggle policy values, got %#v", candidates)
+		}
+	})
+
 	t.Run("falls_back_to_builtin_detection_without_secret_provider", func(t *testing.T) {
 		t.Parallel()
 
@@ -389,6 +505,30 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("enforceSaveSecretSafety returned error: %v", err)
+		}
+	})
+
+	t.Run("ignore_still_blocks_metadata_declared_plaintext_secret", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"password"},
+				},
+			},
+		}
+
+		err := enforceSaveSecretSafety(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{"password": "plain-secret"},
+			true,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "password") {
+			t.Fatalf("expected metadata-declared candidate in error, got %q", err.Error())
 		}
 	})
 }

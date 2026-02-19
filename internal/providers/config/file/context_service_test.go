@@ -49,7 +49,11 @@ func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 	t.Parallel()
 
 	contextCatalog := config.ContextCatalog{
-		Contexts:   []config.Context{{Name: "dev", Repository: validFilesystemRepository()}},
+		Contexts: []config.Context{{
+			Name:          "dev",
+			Repository:    validFilesystemRepository(),
+			ManagedServer: validManagedServer(),
+		}},
 		CurrentCtx: "prod",
 	}
 
@@ -64,8 +68,8 @@ func TestValidateCatalogDuplicateContextNames(t *testing.T) {
 
 	contextCatalog := config.ContextCatalog{
 		Contexts: []config.Context{
-			{Name: "dev", Repository: validFilesystemRepository()},
-			{Name: "dev", Repository: validFilesystemRepository()},
+			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
+			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
 		},
 		CurrentCtx: "dev",
 	}
@@ -86,7 +90,8 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 		{
 			name: "repository_multiple_backends",
 			cfg: config.Context{
-				Name: "dev",
+				Name:          "dev",
+				ManagedServer: validManagedServer(),
 				Repository: config.Repository{
 					Git:        &config.GitRepository{Local: config.GitLocal{BaseDir: "/tmp/repo"}},
 					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
@@ -104,10 +109,18 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 			},
 		},
 		{
-			name: "secret_store_multiple_backends",
+			name: "managed_server_missing",
 			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
+			},
+		},
+		{
+			name: "secret_store_multiple_backends",
+			cfg: config.Context{
+				Name:          "dev",
+				Repository:    validFilesystemRepository(),
+				ManagedServer: validManagedServer(),
 				SecretStore: &config.SecretStore{
 					File:  &config.FileSecretStore{Path: "/tmp/secrets.json", Passphrase: "secret"},
 					Vault: &config.VaultSecretStore{Address: "https://vault.example.com", Auth: &config.VaultAuth{Token: "x"}},
@@ -283,7 +296,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	dev := config.Context{
-		Name: "dev",
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/dev"},
 		},
@@ -293,7 +307,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	}
 
 	prod := config.Context{
-		Name: "prod",
+		Name:          "prod",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			ResourceFormat: config.ResourceFormatYAML,
 			Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/prod"},
@@ -336,7 +351,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	}
 
 	if err := contextService.Update(context.Background(), config.Context{
-		Name: "stage",
+		Name:          "stage",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/stage"},
 		},
@@ -391,7 +407,8 @@ func TestSetCurrentPreservesContextOrder(t *testing.T) {
 
 	for _, name := range []string{"a", "b", "c"} {
 		if err := contextService.Create(context.Background(), config.Context{
-			Name: name,
+			Name:          name,
+			ManagedServer: validManagedServer(),
 			Repository: config.Repository{
 				Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/" + name},
 			},
@@ -423,7 +440,8 @@ func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
-		Name: "dev",
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 		},
@@ -450,7 +468,8 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
-		Name: "dev",
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 		},
@@ -517,7 +536,7 @@ func TestResolveContextDefaultsMetadataBaseDirWhenMissing(t *testing.T) {
 	}
 }
 
-func TestResolveContextOverrideRequiresConfiguredOptionalBlock(t *testing.T) {
+func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -526,15 +545,18 @@ func TestResolveContextOverrideRequiresConfiguredOptionalBlock(t *testing.T) {
 	}
 
 	contextService := NewFileContextService(path)
-	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
 		Overrides: map[string]string{"managed-server.http.base-url": "https://override.example.com"},
 	})
-	if err == nil {
-		t.Fatal("expected managed-server override to fail when managed-server is missing")
+	if err != nil {
+		t.Fatalf("expected managed-server override to succeed, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "requires managed-server.http to be configured") {
-		t.Fatalf("unexpected error: %v", err)
+	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed-server configuration, got %#v", resolved.ManagedServer)
+	}
+	if resolved.ManagedServer.HTTP.BaseURL != "https://override.example.com" {
+		t.Fatalf("expected managed-server base-url override, got %q", resolved.ManagedServer.HTTP.BaseURL)
 	}
 }
 
@@ -576,7 +598,8 @@ func TestMutationOnMissingCatalogReturnsNotFound(t *testing.T) {
 			name: "update",
 			run: func() error {
 				return contextService.Update(context.Background(), config.Context{
-					Name: "missing",
+					Name:          "missing",
+					ManagedServer: validManagedServer(),
 					Repository: config.Repository{
 						Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 					},
@@ -628,6 +651,17 @@ func validFilesystemRepository() config.Repository {
 	}
 }
 
+func validManagedServer() *config.ManagedServer {
+	return &config.ManagedServer{
+		HTTP: &config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "secret-token"},
+			},
+		},
+	}
+}
+
 const validContextCatalogYAML = `
 contexts:
   - name: dev
@@ -657,6 +691,12 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
 
   - name: git
     repository:
@@ -664,6 +704,12 @@ contexts:
       git:
         local:
           base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
 
   - name: http
     repository:
@@ -682,6 +728,12 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
     secret-store:
       file:
         path: /tmp/secrets.json
@@ -692,6 +744,12 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
     secret-store:
       vault:
         address: https://vault.example.com
@@ -707,5 +765,11 @@ contexts:
     repository:
       filesystem:
         base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
 current-ctx: dev
 `

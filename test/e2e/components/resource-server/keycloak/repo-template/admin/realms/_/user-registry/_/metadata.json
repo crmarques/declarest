@@ -1,24 +1,13 @@
 {
-  "idFromAttribute": "name",
-  "aliasFromAttribute": "name",
-  "operations": {
-    "create": {
-      "path": "{{.logicalPath}}"
+    "resourceInfo": {
+        "idFromAttribute": "id",
+        "aliasFromAttribute": "name",
+        "collectionPath": "/admin/realms/{{.realm}}/components",
+        "secretInAttributes": ["config.bindCredential[0]"]
     },
-    "get": {
-      "path": "{{.logicalPath}}"
-    },
-    "update": {
-      "path": "{{.logicalPath}}"
-    },
-    "delete": {
-      "path": "{{.logicalPath}}"
-    },
-    "list": {
-      "path": "{{.collectionPath}}"
-    },
-    "compare": {
-      "path": "{{.logicalPath}}"
+    "operationInfo": {
+        "listCollection": {
+            "jqFilter": "[ .[] | select(.providerId == \"ldap\") ]"
+        }
     }
-  }
 }

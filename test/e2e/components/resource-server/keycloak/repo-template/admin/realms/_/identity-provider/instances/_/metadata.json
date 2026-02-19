@@ -1,9 +1,4 @@
 {
   "idFromAttribute": "alias",
-  "aliasFromAttribute": "alias",
-  "operations": {
-    "create": {
-      "path": "/admin/realms/{{.realm}}/identity-provider/instances"
-    }
-  }
+  "aliasFromAttribute": "alias"
 }

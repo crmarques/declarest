@@ -1,11 +1,16 @@
 package metadata
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -202,9 +207,9 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	var pathFlag string
 
 	command := &cobra.Command{
-		Use:   "render [path] <operation>",
+		Use:   "render [path] [operation]",
 		Short: "Render operation spec",
-		Args:  cobra.RangeArgs(1, 2),
+		Args:  cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
 			pathArgs, operationArg, err := extractRenderArgs(pathFlag, args)
 			if err != nil {
@@ -216,7 +221,7 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			operation, err := parseOperation(operationArg)
+			operation, err := parseRenderOperation(resolvedPath, operationArg)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operationArg, err)
 				return err
@@ -236,7 +241,7 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			item, err := service.RenderOperationSpec(command.Context(), resolvedPath, operation, map[string]any{})
+			item, err := renderMetadataOperation(command.Context(), service, resolvedPath, operation)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
@@ -318,10 +323,34 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 			}
 
 			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
-			item, err := service.Infer(command.Context(), resolvedPath, request)
+
+			var openAPISpec resource.Value
+			orchestratorService, orchestratorErr := common.RequireOrchestrator(deps)
+			if orchestratorErr == nil {
+				openAPISpec, _ = orchestratorService.GetOpenAPISpec(command.Context())
+			}
+
+			item, err := metadatadomain.InferFromOpenAPISpec(command.Context(), resolvedPath, request, openAPISpec)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
+			}
+
+			existing, err := service.Get(command.Context(), resolvedPath)
+			if err != nil {
+				if !isTypedErrorCategory(err, faults.NotFoundError) {
+					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
+			} else {
+				item = metadatadomain.MergeResourceMetadata(item, existing)
+			}
+
+			if request.Apply {
+				if err := service.Set(command.Context(), resolvedPath, item); err != nil {
+					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
 			}
 
 			debugctx.Printf(command.Context(), "metadata infer succeeded path=%q", resolvedPath)
@@ -357,16 +386,150 @@ func parseOperation(value string) (metadatadomain.Operation, error) {
 	}
 }
 
+func parseRenderOperation(logicalPath string, rawOperation string) (metadatadomain.Operation, error) {
+	trimmedOperation := strings.TrimSpace(rawOperation)
+	if trimmedOperation != "" {
+		return parseOperation(trimmedOperation)
+	}
+
+	if metadataPathLooksCollection(logicalPath) {
+		return metadatadomain.OperationList, nil
+	}
+	return metadatadomain.OperationGet, nil
+}
+
+func renderMetadataOperation(
+	ctx context.Context,
+	service metadatadomain.MetadataService,
+	logicalPath string,
+	operation metadatadomain.Operation,
+) (metadatadomain.OperationSpec, error) {
+	if !metadataPathNeedsSelectorMode(logicalPath) {
+		return service.RenderOperationSpec(ctx, logicalPath, operation, map[string]any{})
+	}
+
+	metadataValue, err := service.Get(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.OperationSpec{}, err
+	}
+
+	return resolveOperationSpecWithoutRendering(metadataValue, operation)
+}
+
+func resolveOperationSpecWithoutRendering(
+	metadataValue metadatadomain.ResourceMetadata,
+	operation metadatadomain.Operation,
+) (metadatadomain.OperationSpec, error) {
+	spec := metadatadomain.OperationSpec{
+		Filter:   cloneStringSlice(metadataValue.Filter),
+		Suppress: cloneStringSlice(metadataValue.Suppress),
+		JQ:       metadataValue.JQ,
+	}
+	if metadataValue.Operations != nil {
+		if operationSpec, found := metadataValue.Operations[string(operation)]; found {
+			spec = metadatadomain.MergeOperationSpec(spec, operationSpec)
+		}
+	}
+
+	if strings.TrimSpace(spec.Path) == "" {
+		return metadatadomain.OperationSpec{}, common.ValidationError(
+			fmt.Sprintf("metadata operation %q path is required", operation),
+			nil,
+		)
+	}
+	return spec, nil
+}
+
 func extractRenderArgs(pathFlag string, args []string) ([]string, string, error) {
 	switch len(args) {
+	case 0:
+		if pathFlag != "" {
+			return nil, "", nil
+		}
+		return nil, "", common.ValidationError("path is required", nil)
 	case 1:
 		if pathFlag != "" {
 			return nil, args[0], nil
 		}
-		return nil, "", common.ValidationError("operation is required", nil)
+		if _, err := parseOperation(args[0]); err == nil {
+			return nil, "", common.ValidationError("path is required", nil)
+		}
+		return []string{args[0]}, "", nil
 	case 2:
 		return []string{args[0]}, args[1], nil
 	default:
 		return nil, "", common.ValidationError("invalid render arguments", nil)
 	}
+}
+
+func metadataPathNeedsSelectorMode(logicalPath string) bool {
+	trimmedPath := strings.TrimSpace(logicalPath)
+	if trimmedPath == "" {
+		return false
+	}
+	if strings.HasSuffix(trimmedPath, "/") {
+		return true
+	}
+
+	normalized := strings.ReplaceAll(trimmedPath, "\\", "/")
+	for _, segment := range strings.Split(normalized, "/") {
+		segment = strings.TrimSpace(segment)
+		if segment == "" || segment == "." {
+			continue
+		}
+		if segment == "_" || strings.ContainsAny(segment, "*?[") {
+			return true
+		}
+	}
+	return false
+}
+
+func metadataPathLooksCollection(logicalPath string) bool {
+	trimmedPath := strings.TrimSpace(logicalPath)
+	if trimmedPath == "" {
+		return false
+	}
+	if strings.HasSuffix(trimmedPath, "/") {
+		return true
+	}
+
+	normalized := strings.ReplaceAll(trimmedPath, "\\", "/")
+	segments := strings.Split(strings.Trim(normalized, "/"), "/")
+	if len(segments) == 0 {
+		return false
+	}
+
+	lastSegment := strings.TrimSpace(segments[len(segments)-1])
+	if lastSegment == "_" {
+		return true
+	}
+	for _, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "_" || strings.ContainsAny(segment, "*?[") {
+			return true
+		}
+	}
+	return false
+}
+
+func cloneStringSlice(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	items := make([]string, len(values))
+	copy(items, values)
+	return items
+}
+
+func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
+	if err == nil {
+		return false
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+
+	return typedErr.Category == category
 }

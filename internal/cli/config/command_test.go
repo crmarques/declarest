@@ -735,9 +735,9 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
-		confirms:    []bool{false, false, false},
+		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
+		confirms:    []bool{false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -766,6 +766,12 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.Metadata.BaseDir != "/tmp/meta" {
 		t.Fatalf("expected metadata base-dir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
 	}
+	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
+		t.Fatal("expected managed-server configuration")
+	}
+	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select resource format (optional; remote-default keeps remote resource format)" {
+		t.Fatalf("expected optional resource format prompt, got %#v", prompter.selectPrompts)
+	}
 }
 
 func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *testing.T) {
@@ -774,9 +780,9 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo", ""},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
-		confirms:    []bool{false, false, false},
+		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
+		confirms:    []bool{false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -811,9 +817,9 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"/tmp/repo", "/tmp/meta"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
-		confirms:    []bool{false, false, false},
+		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
+		confirms:    []bool{false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -849,9 +855,9 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"/tmp/repo", "/tmp/meta"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
-		confirms:    []bool{false, false, false},
+		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
+		confirms:    []bool{false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -898,6 +904,33 @@ func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) 
 	}
 }
 
+func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
+		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "bearer-token"},
+		confirms:    []bool{false, false, false, false},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&common.GlobalFlags{},
+		prompter,
+		"",
+		"create",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+	if service.createdContext.Repository.ResourceFormat != "" {
+		t.Fatalf("expected empty resource format for remote-default selection, got %q", service.createdContext.Repository.ResourceFormat)
+	}
+}
+
 func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *testing.T) {
 	t.Parallel()
 
@@ -937,7 +970,6 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"key-file",
 		},
 		confirms: []bool{
-			true,  // configure managed-server
 			true,  // configure default headers
 			false, // configure managed-server tls
 			true,  // configure secret-store

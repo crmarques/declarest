@@ -101,11 +101,15 @@ Interactive config commands:
 4. `config show` SHOULD support context selection when `--context` is omitted.
 5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
 6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
-7. `config create` SHOULD surface optional sections with explicit skip choices and, for one-of blocks, SHOULD prompt only the selected branch fields.
+7. `config create` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
+8. For interactive `config create`, repository `resource-format` SHOULD be optional with an explicit remote-default selection.
 
 ## CLI Input Grammar
 1. Resource targets MUST be logical absolute paths.
 2. Metadata targets accept collection and resource scopes with positional path and `--path`.
+64. Metadata selector paths using intermediary namespace segments (for example `/admin/realms/_/clients/`) MUST be accepted by `metadata get|infer|render`.
+65. `metadata render` MUST accept optional operation input; when omitted, it MUST default to `list` for collection/selector targets and `get` for resource targets.
+66. `metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
 3. Mutations from stdin MUST validate payload format before side effects.
 4. Option conflicts MUST produce usage errors.
 5. `resource get` MUST support mutually exclusive `--repository` and `--remote-server` flags.
@@ -162,8 +166,11 @@ Interactive config commands:
 56. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
 57. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 58. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
-59. Interactive `config create` MUST support full context-schema authoring: prompt required fields for selected providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth) by collecting only the selected option's fields.
+59. Interactive `config create` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth) by collecting only the selected option's fields.
 60. `config print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
+61. `repo push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
+62. Context-catalog mutations (`config create|add|update|validate`) MUST fail validation when `managed-server` is omitted.
+63. Interactive `config create` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -180,9 +187,11 @@ Interactive config commands:
 12. Unless `--no-status` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and all runnable `ad-hoc` method commands (`ad-hoc get|head|options|post|put|patch|delete|trace|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
 13. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
 14. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
+67. Metadata command structured output (`metadata get|resolve|infer`) MUST omit nil directive fields instead of emitting `null` entries.
 15. State-changing commands (`resource save|apply|create|update|delete` and `ad-hoc post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 16. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
 17. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `resource-server`, and `secret-store` labels.
+18. `repo status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 
 ## Failure Modes
 1. Missing required path argument.
@@ -210,6 +219,8 @@ Interactive config commands:
 23. `resource diff` targets a collection path with no local resources.
 24. `config create` receives both positional context name and `--context` with different values.
 25. `config print-template` receives positional arguments.
+26. `repo push` is invoked for a `filesystem` repository context.
+27. Context-catalog mutation input omits required `managed-server`.
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
@@ -233,6 +244,8 @@ Interactive config commands:
 19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 20. `config create` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth`, `bearer-token`, or `custom-header` fields.
 21. `config print-template` works without a configured current context and still renders the full template.
+22. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
+23. Interactive `config create` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -263,6 +276,8 @@ Interactive config commands:
 26. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
 27. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
 28. `declarest metadata render /customers/acme get` renders metadata operation spec.
+75. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
+76. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
 29. `declarest repo push --force` executes force push with explicit safety acknowledgment.
 30. `declarest repo status` reports local/remote sync status without mutating repository state.
 31. `declarest completion bash` generates Bash completion output.
@@ -306,3 +321,6 @@ Interactive config commands:
 69. `declarest config create --context dev` skips context-name prompt and starts interactive prompts at repository settings.
 70. `declarest config create full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
 71. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
+72. `declarest repo push` fails with `ValidationError` when the active context repository type is `filesystem`.
+73. `declarest repo status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
+74. `declarest config create` interactive flow always prompts `managed-server` fields and allows `resource-format` to remain unset via remote-default selection.

@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const resourceFormatRemoteDefaultOption = "remote-default"
+
 func resolveCreateContextInput(
 	command *cobra.Command,
 	input common.InputFlags,
@@ -52,13 +54,17 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 		}
 	}
 
-	resourceFormat, err := prompter.Select(
+	resourceFormatSelection, err := prompter.Select(
 		command,
-		"Select resource format",
-		[]string{configdomain.ResourceFormatYAML, configdomain.ResourceFormatJSON},
+		"Select resource format (optional; remote-default keeps remote resource format)",
+		[]string{resourceFormatRemoteDefaultOption, configdomain.ResourceFormatYAML, configdomain.ResourceFormatJSON},
 	)
 	if err != nil {
 		return configdomain.Context{}, err
+	}
+	resourceFormat := strings.TrimSpace(resourceFormatSelection)
+	if resourceFormat == resourceFormatRemoteDefaultOption {
+		resourceFormat = ""
 	}
 
 	repositoryType, err := prompter.Select(command, "Select repository type", []string{"filesystem", "git"})
@@ -88,17 +94,11 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 	}
 	contextCfg.Metadata.BaseDir = metadataBaseDir
 
-	includeManagedServer, err := prompter.Confirm(command, "Configure managed-server?", false)
+	managedServer, err := promptManagedServer(command, prompter)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
-	if includeManagedServer {
-		managedServer, managedErr := promptManagedServer(command, prompter)
-		if managedErr != nil {
-			return configdomain.Context{}, managedErr
-		}
-		contextCfg.ManagedServer = managedServer
-	}
+	contextCfg.ManagedServer = managedServer
 
 	includeSecretStore, err := prompter.Confirm(command, "Configure secret-store?", false)
 	if err != nil {

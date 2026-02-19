@@ -26,6 +26,8 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 9. Inference from OpenAPI SHOULD propose method/path defaults but MUST NOT overwrite explicit user metadata unless explicitly requested.
 10. Metadata persistence MUST omit nil directive fields from stored files instead of writing `null`.
 11. Metadata persistence MUST preserve explicit empty arrays/maps when they are provided for replacement semantics.
+12. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
+13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes.
 
 ## Data Contracts
 Supported metadata groups:
@@ -69,8 +71,10 @@ Template context contract:
 4. Explicit null directive intended to clear inherited field.
 5. `secretsFromAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
 6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps.
+7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
 
 ## Examples
 1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
 2. `operations.compare.suppress` includes `/updatedAt` and `/version`; diff output excludes these fields.
 3. `operations.list.path` inferred from OpenAPI, then manually overridden with custom query defaults.
+4. Inference for `/admin/realms/_/clients/` can propose `idFromAttribute: id`, `aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.

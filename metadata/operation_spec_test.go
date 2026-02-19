@@ -77,6 +77,52 @@ func TestInferFromOpenAPIDefaults(t *testing.T) {
 	}
 }
 
+func TestInferFromOpenAPISupportsIntermediarySelectors(t *testing.T) {
+	t.Parallel()
+
+	inferred, err := InferFromOpenAPISpec(
+		context.Background(),
+		"/admin/realms/_/clients/",
+		InferenceRequest{},
+		map[string]any{
+			"paths": map[string]any{
+				"/admin/realms/{realm}/clients": map[string]any{
+					"get":  map[string]any{},
+					"post": map[string]any{},
+				},
+				"/admin/realms/{realm}/clients/{clientId}": map[string]any{
+					"get":    map[string]any{},
+					"put":    map[string]any{},
+					"delete": map[string]any{},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.IDFromAttribute != "id" {
+		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	}
+	if inferred.AliasFromAttribute != "clientId" {
+		t.Fatalf("expected aliasFromAttribute to be inferred as clientId, got %q", inferred.AliasFromAttribute)
+	}
+	if len(inferred.SecretsFromAttributes) != 1 || inferred.SecretsFromAttributes[0] != "secret" {
+		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretsFromAttributes)
+	}
+
+	listOperation := inferred.Operations[string(OperationList)]
+	if listOperation.Path != "/admin/realms/{{.realm}}/clients" {
+		t.Fatalf("unexpected inferred list operation path: %+v", listOperation)
+	}
+
+	getOperation := inferred.Operations[string(OperationGet)]
+	if getOperation.Path != "/admin/realms/{{.realm}}/clients/{{.clientId}}" {
+		t.Fatalf("unexpected inferred get operation path: %+v", getOperation)
+	}
+}
+
 func assertValidationError(t *testing.T, err error) {
 	t.Helper()
 

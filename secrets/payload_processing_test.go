@@ -74,10 +74,11 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		t.Parallel()
 
 		input := map[string]any{
-			"name":      "acme",
-			"apiToken":  "token-value",
-			"password":  "pass-value",
-			"notSecret": "{{secret \"already-masked\"}}",
+			"name":                               "acme",
+			"apiToken":                           "token-value",
+			"password":                           "pass-value",
+			"actionTokenGeneratedByUserLifespan": "300",
+			"notSecret":                          "{{secret \"already-masked\"}}",
 		}
 
 		stored := map[string]string{
@@ -92,10 +93,11 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		}
 
 		expectedMasked := map[string]any{
-			"name":      "acme",
-			"apiToken":  "{{secret .}}",
-			"password":  "{{secret .}}",
-			"notSecret": "{{secret \"already-masked\"}}",
+			"name":                               "acme",
+			"apiToken":                           "{{secret .}}",
+			"password":                           "{{secret .}}",
+			"actionTokenGeneratedByUserLifespan": "300",
+			"notSecret":                          "{{secret \"already-masked\"}}",
 		}
 		if !reflect.DeepEqual(masked, expectedMasked) {
 			t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
@@ -130,10 +132,11 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		}
 
 		expectedResolved := map[string]any{
-			"name":      "acme",
-			"apiToken":  "token-value",
-			"password":  "pass-value",
-			"notSecret": "already-value",
+			"name":                               "acme",
+			"apiToken":                           "token-value",
+			"password":                           "pass-value",
+			"actionTokenGeneratedByUserLifespan": "300",
+			"notSecret":                          "already-value",
 		}
 		if !reflect.DeepEqual(resolved, expectedResolved) {
 			t.Fatalf("expected resolved %#v, got %#v", expectedResolved, resolved)
@@ -289,6 +292,17 @@ func TestIsLikelySecretKey(t *testing.T) {
 		{name: "token endpoint", key: "tokenEndpoint", expected: false},
 		{name: "password policy", key: "passwordPolicy", expected: false},
 		{name: "refresh token expiry", key: "refreshTokenExpiresIn", expected: false},
+		{name: "action token lifespan", key: "actionTokenGeneratedByUserLifespan", expected: false},
+		{name: "access token claim flag", key: "access.token.claim", expected: false},
+		{name: "access token header type", key: "access.token.header.type.rfc9068", expected: false},
+		{name: "client secret creation time", key: "client.secret.creation.time", expected: false},
+		{name: "client credentials use refresh token", key: "client_credentials.use_refresh_token", expected: false},
+		{name: "id token claim", key: "id.token.claim", expected: false},
+		{name: "introspection token claim", key: "introspection.token.claim", expected: false},
+		{name: "standard token exchange refresh requested type", key: "standard.token.exchange.enableRefreshRequestedTokenType", expected: false},
+		{name: "standard token exchange enabled", key: "standard.token.exchange.enabled", expected: false},
+		{name: "token response type bearer lower case", key: "token.response.type.bearer.lower-case", expected: false},
+		{name: "userinfo token claim", key: "userinfo.token.claim", expected: false},
 		{name: "private key pem", key: "privateKeyPem", expected: true},
 	}
 
@@ -299,6 +313,32 @@ func TestIsLikelySecretKey(t *testing.T) {
 
 			if got := isLikelySecretKey(tc.key); got != tc.expected {
 				t.Fatalf("expected %v for %q, got %v", tc.expected, tc.key, got)
+			}
+		})
+	}
+}
+
+func TestIsLikelySecretValue(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{name: "secret text", value: "abc123", expected: true},
+		{name: "numeric policy value", value: "43200", expected: false},
+		{name: "boolean true", value: "true", expected: false},
+		{name: "boolean false", value: "false", expected: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isLikelySecretValue(tc.value); got != tc.expected {
+				t.Fatalf("expected %v for %q, got %v", tc.expected, tc.value, got)
 			}
 		})
 	}
