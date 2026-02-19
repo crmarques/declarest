@@ -493,14 +493,38 @@ func extractListItems(payload any) ([]any, error) {
 		return typed, nil
 	case map[string]any:
 		items, ok := typed["items"]
-		if !ok {
-			return nil, validationError("list response object must include an \"items\" array", nil)
+		if ok {
+			values, valuesOK := items.([]any)
+			if !valuesOK {
+				return nil, validationError("list response \"items\" must be an array", nil)
+			}
+			return values, nil
 		}
-		values, ok := items.([]any)
-		if !ok {
-			return nil, validationError("list response \"items\" must be an array", nil)
+
+		arrayFieldKeys := make([]string, 0, len(typed))
+		for key, field := range typed {
+			if _, fieldIsArray := field.([]any); fieldIsArray {
+				arrayFieldKeys = append(arrayFieldKeys, key)
+			}
 		}
-		return values, nil
+		sort.Strings(arrayFieldKeys)
+
+		if len(arrayFieldKeys) == 1 {
+			values, _ := typed[arrayFieldKeys[0]].([]any)
+			return values, nil
+		}
+
+		if len(arrayFieldKeys) > 1 {
+			return nil, validationError(
+				fmt.Sprintf(
+					"list response object is ambiguous: expected an \"items\" array or a single array field, found array fields [%s]",
+					strings.Join(arrayFieldKeys, ", "),
+				),
+				nil,
+			)
+		}
+
+		return nil, validationError("list response object must include an \"items\" array", nil)
 	default:
 		return nil, validationError("list response must be an array or an object with an \"items\" array", nil)
 	}

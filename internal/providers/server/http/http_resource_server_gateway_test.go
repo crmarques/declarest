@@ -837,6 +837,59 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		}
 	})
 
+	t.Run("object_single_array_field_shape_supported", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `{"realms":[{"realm":"b"},{"realm":"a"}]}`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		items, err := gateway.List(context.Background(), "/admin/realms", metadata.ResourceMetadata{
+			IDFromAttribute: "realm",
+		})
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/admin/realms/a" || items[1].LogicalPath != "/admin/realms/b" {
+			t.Fatalf("expected deterministic sorted output, got %#v", items)
+		}
+	})
+
+	t.Run("object_multiple_array_fields_returns_validation_error", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `{"groups":[{"id":"g"}],"realms":[{"id":"r"}]}`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.List(context.Background(), "/customers", metadata.ResourceMetadata{
+			IDFromAttribute: "id",
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+			t.Fatalf("expected ambiguous list response validation error, got %v", err)
+		}
+	})
+
 	t.Run("duplicate_alias_returns_conflict", func(t *testing.T) {
 		t.Parallel()
 

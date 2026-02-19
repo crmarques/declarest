@@ -7,7 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\+=\("--[^"]+=\"\)\s*$`)
+var (
+	bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\("--[^"]+=\"\)\s*$`)
+	bashEqualsFlagSuggestionToken       = regexp.MustCompile(`\s*"--[^"=\s]+="`)
+	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
+)
 
 func newBashCommand() *cobra.Command {
 	return &cobra.Command{
@@ -34,7 +38,13 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 		if bashEqualsFlagSuggestionLinePattern.Match(line) {
 			continue
 		}
-		filtered = append(filtered, line)
+
+		normalizedLine := bashEqualsFlagSuggestionToken.ReplaceAll(line, []byte{})
+		if bashEmptyArrayAppendPattern.Match(normalizedLine) {
+			continue
+		}
+
+		filtered = append(filtered, normalizedLine)
 	}
 	return bytes.Join(filtered, []byte{'\n'})
 }

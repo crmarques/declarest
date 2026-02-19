@@ -13,6 +13,7 @@ import (
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +75,12 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			}
 
 			debugctx.Printf(command.Context(), "resource get succeeded path=%q value_type=%T source=%q", resolvedPath, value, source)
-			if !showSecrets {
+			if showSecrets {
+				value, err = resolveGetSecretsForOutput(command.Context(), deps, resolvedPath, value)
+				if err != nil {
+					return err
+				}
+			} else {
 				value, err = maskGetSecretsForOutput(command.Context(), deps, resolvedPath, value)
 				if err != nil {
 					return err
@@ -137,6 +143,17 @@ func renderRepositoryCollection(
 			maskedItems = append(maskedItems, item)
 		}
 		items = maskedItems
+	} else {
+		resolvedItems := make([]resource.Resource, 0, len(items))
+		for _, item := range items {
+			resolvedPayload, resolveErr := resolveGetSecretsForOutput(command.Context(), deps, item.LogicalPath, item.Payload)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			item.Payload = resolvedPayload
+			resolvedItems = append(resolvedItems, item)
+		}
+		items = resolvedItems
 	}
 
 	payloads := make([]resource.Value, len(items))
@@ -168,6 +185,36 @@ func maskGetSecretsForOutput(
 		return value, nil
 	}
 	return maskGetSecretsInValue(value, secretAttributes)
+}
+
+func resolveGetSecretsForOutput(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+	value resource.Value,
+) (resource.Value, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return nil, err
+	}
+
+	secretProvider, secretProviderErr := common.RequireSecretProvider(deps)
+	if secretProviderErr != nil {
+		return secretdomain.ResolvePayloadForResource(value, normalizedPath, func(string) (string, error) {
+			return "", common.ValidationError(
+				"flag --show-secrets requires a configured secret provider when payload includes placeholders",
+				nil,
+			)
+		})
+	}
+
+	return secretdomain.ResolvePayloadForResource(value, normalizedPath, func(key string) (string, error) {
+		return secretProvider.Get(ctx, key)
+	})
 }
 
 func resolveGetSecretAttributes(

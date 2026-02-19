@@ -368,6 +368,71 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("show_secrets_flag_resolves_repository_placeholders_from_secret_store", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getLocalValues = map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":       "acme",
+				"password": "{{secret .}}",
+			},
+		}
+
+		secretProvider := deps.Secrets.(*testSecretProvider)
+		if err := secretProvider.Store(context.Background(), "/customers/acme:password", "stored-secret"); err != nil {
+			t.Fatalf("unexpected secret store setup error: %v", err)
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/customers/acme",
+			"--repository",
+			"--show-secrets",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"password": "stored-secret"`) {
+			t.Fatalf("expected resolved stored secret in output with --show-secrets, got %q", output)
+		}
+		if strings.Contains(output, `{{secret .}}`) {
+			t.Fatalf("expected placeholder output to be resolved with --show-secrets, got %q", output)
+		}
+	})
+
+	t.Run("show_secrets_flag_requires_secret_provider_when_placeholders_exist", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.getLocalValues = map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":       "acme",
+				"password": "{{secret .}}",
+			},
+		}
+		deps.Secrets = nil
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/customers/acme",
+			"--repository",
+			"--show-secrets",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "requires a configured secret provider") {
+			t.Fatalf("expected secret provider validation error, got %v", err)
+		}
+	})
+
 	t.Run("show_secrets_flag_preserves_plaintext_for_remote_source", func(t *testing.T) {
 		t.Parallel()
 
@@ -3075,6 +3140,9 @@ func TestCompletionBashGeneratesScript(t *testing.T) {
 		t.Fatalf("expected completion script output, got %q", output)
 	}
 	if strings.Contains(output, "--output=") {
+		t.Fatalf("expected bash completion script to avoid duplicated equals flag suggestions, got %q", output)
+	}
+	if strings.Contains(output, "--context=") {
 		t.Fatalf("expected bash completion script to avoid duplicated equals flag suggestions, got %q", output)
 	}
 	if strings.Contains(output, "--path=") {
