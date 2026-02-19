@@ -204,6 +204,48 @@ func TestCompactInferredMetadataDefaultsOmitsFallbackOperations(t *testing.T) {
 	}
 }
 
+func TestCompactInferredMetadataDefaultsOmitsOpenAPIDefaultOperationsWithNonTemplateSafeParams(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients": map[string]any{
+				"get":  map[string]any{},
+				"post": map[string]any{},
+			},
+			"/admin/realms/{realm}/clients/{client-uuid}": map[string]any{
+				"get":    map[string]any{},
+				"put":    map[string]any{},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/admin/realms/_/clients/", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.IDFromAttribute != "id" {
+		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	}
+	if inferred.AliasFromAttribute != "clientId" {
+		t.Fatalf("expected aliasFromAttribute to be inferred as clientId, got %q", inferred.AliasFromAttribute)
+	}
+	if len(inferred.SecretsFromAttributes) != 1 || inferred.SecretsFromAttributes[0] != "secret" {
+		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretsFromAttributes)
+	}
+
+	compact, err := CompactInferredMetadataDefaults("/admin/realms/_/clients/", inferred, openAPISpec)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+
+	if len(compact.Operations) != 0 {
+		t.Fatalf("expected openapi-default operations to be omitted, got %#v", compact.Operations)
+	}
+}
+
 func assertValidationError(t *testing.T, err error) {
 	t.Helper()
 

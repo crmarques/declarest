@@ -27,7 +27,7 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 10. Metadata persistence MUST omit nil directive fields from stored files instead of writing `null`.
 11. Metadata persistence MUST preserve explicit empty arrays/maps when they are provided for replacement semantics.
 12. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
-13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes.
+13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
 14. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
 
 ## Data Contracts

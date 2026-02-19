@@ -1683,6 +1683,29 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("render_missing_operation_falls_back_to_list_when_get_path_is_missing", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
+			Operations: map[string]metadatadomain.OperationSpec{
+				string(metadatadomain.OperationList): {
+					Method: "GET",
+					Path:   "/admin/realms",
+				},
+			},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "metadata", "render", "/admin/realms")
+		if err != nil {
+			t.Fatalf("unexpected render fallback error: %v", err)
+		}
+		if !strings.Contains(output, "\"path\": \"/admin/realms\"") {
+			t.Fatalf("expected fallback list render path, got %q", output)
+		}
+	})
+
 	t.Run("render_collection_selector_defaults_to_list", func(t *testing.T) {
 		t.Parallel()
 
@@ -1749,6 +1772,54 @@ func TestMetadataPathCommands(t *testing.T) {
 			strings.Contains(output, "\"filter\": null") ||
 			strings.Contains(output, "\"suppress\": null") {
 			t.Fatalf("expected infer output without null metadata fields, got %q", output)
+		}
+		if strings.Contains(output, "\"operations\"") {
+			t.Fatalf("expected openapi-default operations to be omitted from infer output, got %q", output)
+		}
+	})
+
+	t.Run("infer_collection_selector_omits_default_operations_with_non_template_safe_openapi_param", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms/{realm}/clients": map[string]any{
+						"get":  map[string]any{},
+						"post": map[string]any{},
+					},
+					"/admin/realms/{realm}/clients/{client-uuid}": map[string]any{
+						"get":    map[string]any{},
+						"put":    map[string]any{},
+						"delete": map[string]any{},
+					},
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"infer",
+			"/admin/realms/_/clients/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected infer selector error: %v", err)
+		}
+		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+			t.Fatalf("expected inferred idFromAttribute, got %q", output)
+		}
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
+			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
+		}
+		if !strings.Contains(output, "\"secretsFromAttributes\": [\n    \"secret\"\n  ]") {
+			t.Fatalf("expected inferred secretsFromAttributes, got %q", output)
+		}
+		if strings.Contains(output, "\"operations\"") {
+			t.Fatalf("expected openapi-default operations to be omitted from infer output, got %q", output)
 		}
 	})
 
@@ -2867,6 +2938,12 @@ func TestCompletionBashGeneratesScript(t *testing.T) {
 	}
 	if !strings.Contains(output, "declarest") {
 		t.Fatalf("expected completion script output, got %q", output)
+	}
+	if strings.Contains(output, "--output=") {
+		t.Fatalf("expected bash completion script to avoid duplicated equals flag suggestions, got %q", output)
+	}
+	if strings.Contains(output, "--path=") {
+		t.Fatalf("expected bash completion script to avoid duplicated equals flag suggestions, got %q", output)
 	}
 }
 

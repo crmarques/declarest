@@ -226,6 +226,7 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operationArg, err)
 				return err
 			}
+			operationDefaulted := strings.TrimSpace(operationArg) == ""
 
 			debugctx.Printf(command.Context(), "metadata render requested path=%q operation=%q", resolvedPath, operation)
 
@@ -242,6 +243,16 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 			}
 
 			item, err := renderMetadataOperation(command.Context(), service, resolvedPath, operation)
+			if err != nil && operationDefaulted &&
+				operation == metadatadomain.OperationGet &&
+				isOperationPathRequiredError(err, metadatadomain.OperationGet) {
+				fallbackItem, fallbackErr := renderMetadataOperation(command.Context(), service, resolvedPath, metadatadomain.OperationList)
+				if fallbackErr == nil {
+					operation = metadatadomain.OperationList
+					item = fallbackItem
+					err = nil
+				}
+			}
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
@@ -538,4 +549,12 @@ func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
 	}
 
 	return typedErr.Category == category
+}
+
+func isOperationPathRequiredError(err error, operation metadatadomain.Operation) bool {
+	if !isTypedErrorCategory(err, faults.ValidationError) {
+		return false
+	}
+
+	return strings.Contains(err.Error(), fmt.Sprintf("metadata operation %q path is required", operation))
 }

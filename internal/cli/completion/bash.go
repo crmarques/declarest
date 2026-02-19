@@ -1,6 +1,13 @@
 package completion
 
-import "github.com/spf13/cobra"
+import (
+	"bytes"
+	"regexp"
+
+	"github.com/spf13/cobra"
+)
+
+var bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\+=\("--[^"]+=\"\)\s*$`)
 
 func newBashCommand() *cobra.Command {
 	return &cobra.Command{
@@ -8,7 +15,26 @@ func newBashCommand() *cobra.Command {
 		Short: "Generate Bash completion",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			return command.Root().GenBashCompletion(command.OutOrStdout())
+			buffer := &bytes.Buffer{}
+			if err := command.Root().GenBashCompletion(buffer); err != nil {
+				return err
+			}
+
+			normalized := normalizeBashFlagSuggestions(buffer.Bytes())
+			_, err := command.OutOrStdout().Write(normalized)
+			return err
 		},
 	}
+}
+
+func normalizeBashFlagSuggestions(script []byte) []byte {
+	lines := bytes.Split(script, []byte{'\n'})
+	filtered := make([][]byte, 0, len(lines))
+	for _, line := range lines {
+		if bashEqualsFlagSuggestionLinePattern.Match(line) {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return bytes.Join(filtered, []byte{'\n'})
 }

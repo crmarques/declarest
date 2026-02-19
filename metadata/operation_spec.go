@@ -108,6 +108,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	target = promoteInferTargetFromOpenAPI(target, openAPISpec)
 
 	defaults := inferFallbackMetadata(target)
+	openAPIDefaults, _ := inferMetadataFromOpenAPISpec(target, openAPISpec)
+	defaults = MergeResourceMetadata(defaults, openAPIDefaults)
 	compact := ResourceMetadata{
 		IDFromAttribute:       inferred.IDFromAttribute,
 		AliasFromAttribute:    inferred.AliasFromAttribute,
@@ -225,7 +227,8 @@ func sortedMapKeys(values map[string]string) []string {
 	return keys
 }
 
-var openAPIPathTemplateSegmentPattern = regexp.MustCompile(`^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$`)
+var openAPIPathParameterSegmentPattern = regexp.MustCompile(`^\{([^{}]+)\}$`)
+var templateIdentifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 type inferTarget struct {
 	Selector   string
@@ -374,6 +377,7 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 	if len(pathDefinitions) == 0 {
 		return ResourceMetadata{}, ""
 	}
+	defaults := inferFallbackMetadata(target)
 
 	var collectionCandidate openAPICandidate
 	var resourceCandidate openAPICandidate
@@ -388,7 +392,8 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 
 	operations := make(map[string]OperationSpec)
 	if collectionCandidate.path != "" {
-		metadataCollectionPath := openAPIPathToMetadataTemplate(collectionCandidate.path)
+		defaultCollectionPath := defaults.Operations[string(OperationList)].Path
+		metadataCollectionPath := openAPIPathToMetadataTemplate(collectionCandidate.path, defaultCollectionPath)
 		if hasOpenAPIMethod(collectionCandidate.methods, "get") {
 			operations[string(OperationList)] = OperationSpec{
 				Method: "GET",
@@ -405,7 +410,8 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 
 	resourceIdentityAttribute := ""
 	if resourceCandidate.path != "" {
-		metadataResourcePath := openAPIPathToMetadataTemplate(resourceCandidate.path)
+		defaultResourcePath := defaults.Operations[string(OperationGet)].Path
+		metadataResourcePath := openAPIPathToMetadataTemplate(resourceCandidate.path, defaultResourcePath)
 		resourceIdentityAttribute, _ = lastOpenAPIVariable(resourceCandidate.segments)
 
 		if hasOpenAPIMethod(resourceCandidate.methods, "get") {
@@ -665,7 +671,7 @@ func matchOpenAPIPath(selectorSegments []string, templateSegments []string) (boo
 		selectorSegment := selectorSegments[idx]
 		templateSegment := templateSegments[idx]
 
-		templateVariable, templateIsVariable := templateVariableName(templateSegment)
+		templateVariable, templateIsVariable := openAPIPathParameterName(templateSegment)
 		if selectorSegment == "_" {
 			if templateIsVariable {
 				score += 2
@@ -702,16 +708,25 @@ func matchOpenAPIPath(selectorSegments []string, templateSegments []string) (boo
 	return true, score
 }
 
-func openAPIPathToMetadataTemplate(pathTemplate string) string {
+func openAPIPathToMetadataTemplate(pathTemplate string, fallbackTemplate string) string {
 	segments := splitPathSegments(pathTemplate)
 	if len(segments) == 0 {
 		return "/"
 	}
+	fallbackSegments := splitPathSegments(fallbackTemplate)
 
 	converted := make([]string, 0, len(segments))
-	for _, segment := range segments {
-		if variableName, ok := templateVariableName(segment); ok {
-			converted = append(converted, "{{."+variableName+"}}")
+	for idx, segment := range segments {
+		if variableName, isPathParameter := openAPIPathParameterName(segment); isPathParameter {
+			if isTemplateIdentifier(variableName) {
+				converted = append(converted, "{{."+variableName+"}}")
+				continue
+			}
+			if idx < len(fallbackSegments) && isMetadataTemplatePlaceholderSegment(fallbackSegments[idx]) {
+				converted = append(converted, fallbackSegments[idx])
+				continue
+			}
+			converted = append(converted, "{{.id}}")
 			continue
 		}
 		converted = append(converted, segment)
@@ -735,11 +750,32 @@ func lastOpenAPIVariable(segments []string) (string, bool) {
 }
 
 func templateVariableName(segment string) (string, bool) {
-	matches := openAPIPathTemplateSegmentPattern.FindStringSubmatch(strings.TrimSpace(segment))
+	parameterName, ok := openAPIPathParameterName(segment)
+	if !ok || !isTemplateIdentifier(parameterName) {
+		return "", false
+	}
+	return parameterName, true
+}
+
+func openAPIPathParameterName(segment string) (string, bool) {
+	matches := openAPIPathParameterSegmentPattern.FindStringSubmatch(strings.TrimSpace(segment))
 	if len(matches) != 2 {
 		return "", false
 	}
-	return matches[1], true
+	parameterName := strings.TrimSpace(matches[1])
+	if parameterName == "" {
+		return "", false
+	}
+	return parameterName, true
+}
+
+func isTemplateIdentifier(value string) bool {
+	return templateIdentifierPattern.MatchString(strings.TrimSpace(value))
+}
+
+func isMetadataTemplatePlaceholderSegment(segment string) bool {
+	trimmed := strings.TrimSpace(segment)
+	return strings.HasPrefix(trimmed, "{{.") && strings.HasSuffix(trimmed, "}}")
 }
 
 func inferCollectionAndResourceTemplatePaths(target inferTarget, resourceIdentity string) (string, string) {
