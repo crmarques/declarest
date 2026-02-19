@@ -1,8 +1,11 @@
 package resource
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/resource"
@@ -30,14 +33,34 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			if err != nil {
 				return err
 			}
-			items, err := orchestratorService.Diff(command.Context(), resolvedPath)
+			targets, err := listLocalMutationTargets(command.Context(), orchestratorService, resolvedPath, false)
 			if err != nil {
 				return err
 			}
 
+			items := make([]resource.DiffEntry, 0)
+			for _, target := range targets {
+				targetItems, diffErr := orchestratorService.Diff(command.Context(), target.LogicalPath)
+				if diffErr != nil {
+					return diffErr
+				}
+				items = append(items, targetItems...)
+			}
+
+			sort.Slice(items, func(i int, j int) bool {
+				if items[i].Path == items[j].Path {
+					return items[i].Operation < items[j].Operation
+				}
+				return items[i].Path < items[j].Path
+			})
+
 			return common.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.DiffEntry) error {
 				for _, item := range value {
-					if _, writeErr := fmt.Fprintf(w, "%s %s\n", item.Operation, item.Path); writeErr != nil {
+					line, lineErr := renderDiffTextLine(resolvedPath, item)
+					if lineErr != nil {
+						return lineErr
+					}
+					if _, writeErr := fmt.Fprintln(w, line); writeErr != nil {
 						return writeErr
 					}
 				}
@@ -50,4 +73,76 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	return command
+}
+
+func renderDiffTextLine(basePath string, entry resource.DiffEntry) (string, error) {
+	local, err := marshalDiffTextValue(entry.Local)
+	if err != nil {
+		return "", err
+	}
+	remote, err := marshalDiffTextValue(entry.Remote)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(
+		"%s [Local=%s] => [Remote=%s]",
+		formatDiffTextPath(basePath, entry.Path),
+		local,
+		remote,
+	), nil
+}
+
+func marshalDiffTextValue(value any) (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func formatDiffTextPath(basePath string, diffPath string) string {
+	normalizedBasePath, err := resource.NormalizeLogicalPath(basePath)
+	if err != nil {
+		return diffPath
+	}
+
+	normalizedDiffPath, err := resource.NormalizeLogicalPath(diffPath)
+	if err != nil {
+		return diffPath
+	}
+
+	if normalizedDiffPath == normalizedBasePath {
+		return "."
+	}
+
+	if normalizedBasePath == "/" {
+		return dotPathFromPointer(normalizedDiffPath)
+	}
+
+	prefix := normalizedBasePath + "/"
+	if !strings.HasPrefix(normalizedDiffPath, prefix) {
+		return diffPath
+	}
+
+	return dotPathFromPointer(strings.TrimPrefix(normalizedDiffPath, normalizedBasePath))
+}
+
+func dotPathFromPointer(pointerPath string) string {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(pointerPath), "/")
+	if trimmed == "" {
+		return "."
+	}
+
+	segments := strings.Split(trimmed, "/")
+	for idx, segment := range segments {
+		segments[idx] = unescapePointerToken(segment)
+	}
+
+	return "." + strings.Join(segments, ".")
+}
+
+func unescapePointerToken(value string) string {
+	unescaped := strings.ReplaceAll(value, "~1", "/")
+	return strings.ReplaceAll(unescaped, "~0", "~")
 }

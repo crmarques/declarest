@@ -269,7 +269,13 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 
 	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo)
 	if err != nil {
-		return nil, err
+		// A missing remote resource represents full drift from desired local state.
+		// Keep diff deterministic by comparing against a nil remote payload.
+		if isTypedCategory(err, faults.NotFoundError) {
+			remoteValue = nil
+		} else {
+			return nil, err
+		}
 	}
 
 	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, metadata.OperationCompare, localForCompare)

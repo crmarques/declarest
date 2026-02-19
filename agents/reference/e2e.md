@@ -50,6 +50,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 32. `resource-server` components MUST declare security capabilities in `component.env`; runner selection MUST fail when requested security features are unsupported or required features are disabled.
 33. `simple-api-server` mTLS trust MUST be reloaded from configured client-certificate sources for new connections without process restart.
 34. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.
+35. `manual` with `repo-type=git` MUST run `repo init` after context assembly so repository-dependent checks (`config check`, `repo status`) are immediately usable.
 
 ## Data Contracts
 Runner flags:
@@ -110,6 +111,7 @@ Manual handoff:
 8. Local `simple-api-server` with `ENABLE_MTLS=true` generates or consumes mounted cert material from a host directory and fails fast when required TLS files are missing.
 9. Selecting both `--resource-server-basic-auth=true` and `--resource-server-oauth2=true` fails fast before startup with actionable validation output.
 10. Local `simple-api-server` mTLS trust directory can transition from non-empty to empty and back during runtime; API access follows the current trust set for new connections.
+11. `manual` with `repo-type=git` and `resource-server=none` still initializes a local git repository so readiness checks do not fail with `git repository not initialized`.
 
 ## Examples
 1. `./run-e2e.sh --profile basic --repo-type filesystem --resource-server none --secret-provider none` runs compatible main cases and reports deterministic summary.
@@ -119,3 +121,4 @@ Manual handoff:
 5. `./run-e2e.sh --profile full --resource-server simple-api-server --resource-server-mtls true` validates runtime mTLS trust reload by removing and re-adding trusted client certificates without restarting the server.
 6. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --resource-server simple-api-server --secret-provider file` runs git main-case coverage against a local compose-backed Gitea provider.
 7. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --git-provider-connection remote --resource-server none --secret-provider none` fails `Preparing Components` when required `DECLAREST_E2E_GITEA_*` remote credentials are missing.
+8. `./run-e2e.sh --profile manual --repo-type git --git-provider gitea --resource-server none --secret-provider none` yields a handoff context where `declarest-e2e config check` and `declarest-e2e repo status` can run without `git repository not initialized`.

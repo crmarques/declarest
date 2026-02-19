@@ -21,10 +21,6 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 			if err != nil {
 				return err
 			}
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
-			}
 
 			orchestratorService, err := common.RequireOrchestrator(deps)
 			if err != nil {
@@ -42,6 +38,15 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 					return orchestratorService.Apply(ctx, logicalPath)
 				},
 			)
+			if err != nil {
+				return err
+			}
+
+			if !common.IsVerbose(globalFlags) {
+				return nil
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/spf13/cobra"
@@ -54,6 +55,10 @@ func ResolveContextOutputFormat(ctx context.Context, deps CommandDependencies, g
 }
 
 func WriteOutput[T any](command *cobra.Command, format string, value T, renderText func(io.Writer, T) error) error {
+	if isNilOutputValue(value) {
+		return nil
+	}
+
 	switch format {
 	case OutputAuto, OutputText:
 		if renderText != nil {
@@ -85,4 +90,19 @@ func WriteText(command *cobra.Command, format string, text string) error {
 		_, err := fmt.Fprintln(w, value)
 		return err
 	})
+}
+
+func isNilOutputValue[T any](value T) bool {
+	anyValue := any(value)
+	if anyValue == nil {
+		return true
+	}
+
+	reflected := reflect.ValueOf(anyValue)
+	switch reflected.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
+	}
 }

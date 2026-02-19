@@ -640,6 +640,25 @@ e2e_manual_seed_repo_from_template() {
   return 0
 }
 
+e2e_manual_init_repo_if_needed() {
+  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+    return 0
+  fi
+
+  if [[ "${E2E_REPO_TYPE}" != 'git' ]]; then
+    return 0
+  fi
+
+  e2e_info 'manual profile initializing git repository'
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repo init >/dev/null || {
+    e2e_die 'manual profile git repository initialization failed'
+    return 1
+  }
+
+  e2e_info 'manual profile git repository initialized'
+  return 0
+}
+
 step_skip_not_requested() {
   return "${E2E_STEP_SKIP}"
 }
@@ -760,6 +779,9 @@ main() {
     if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
       e2e_manual_print_component_access_info || true
       e2e_manual_seed_repo_from_template || E2E_OVERALL_FAILED=1
+      if ((E2E_OVERALL_FAILED == 0)); then
+        e2e_manual_init_repo_if_needed || E2E_OVERALL_FAILED=1
+      fi
       if ((E2E_OVERALL_FAILED == 0)); then
         E2E_KEEP_RUNTIME=1
         manual_handoff_needed=1

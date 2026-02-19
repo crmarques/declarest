@@ -820,6 +820,58 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 	}
 }
 
+func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"id":    "42",
+			"alias": "acme",
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "alias",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationList):    {Path: "/api/customers"},
+			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{.id}}"},
+		},
+	}
+
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Repository: repo,
+		Metadata:   metadataService,
+		Server:     serverManager,
+	}
+
+	items, err := reconciler.Diff(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Diff returned error: %v", err)
+	}
+	if !serverManager.getCalled || !serverManager.listCalled {
+		t.Fatalf("expected bounded fallback flow, get=%t list=%t", serverManager.getCalled, serverManager.listCalled)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one top-level drift entry, got %#v", items)
+	}
+	if items[0].Path != "/customers/acme" {
+		t.Fatalf("expected drift path /customers/acme, got %#v", items[0].Path)
+	}
+	if items[0].Operation != "replace" {
+		t.Fatalf("expected replace operation for missing remote payload, got %#v", items[0].Operation)
+	}
+	if items[0].Remote != nil {
+		t.Fatalf("expected nil remote payload for missing resource, got %#v", items[0].Remote)
+	}
+}
+
 func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 	t.Parallel()
 

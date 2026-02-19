@@ -575,7 +575,7 @@ func runConfigCheck(command *cobra.Command, deps common.CommandDependencies, cfg
 		},
 		checkRepository(command, deps, cfg),
 		checkMetadata(command, deps, cfg),
-		checkManagedServer(command, deps, cfg),
+		checkResourceServer(command, deps, cfg),
 		checkSecretStore(command, deps, cfg),
 	}
 
@@ -687,9 +687,9 @@ func checkMetadata(command *cobra.Command, deps common.CommandDependencies, cfg 
 	return result
 }
 
-func checkManagedServer(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkResourceServer(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
-		Component: "managed-server",
+		Component: "resource-server",
 	}
 
 	if cfg.ManagedServer == nil {
@@ -708,7 +708,7 @@ func checkManagedServer(command *cobra.Command, deps common.CommandDependencies,
 	_, err = orchestratorService.ListRemote(command.Context(), "/", orchestratordomain.ListPolicy{Recursive: false})
 	if err == nil {
 		result.Status = configCheckOK
-		result.Details = "remote server probe succeeded"
+		result.Details = "resource server probe succeeded"
 		return result
 	}
 

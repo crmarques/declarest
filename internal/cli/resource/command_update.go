@@ -21,10 +21,6 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 			if err != nil {
 				return err
 			}
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
-			}
 
 			orchestratorService, err := common.RequireOrchestrator(deps)
 			if err != nil {
@@ -46,6 +42,15 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 					return orchestratorService.Update(ctx, logicalPath, localValue)
 				},
 			)
+			if err != nil {
+				return err
+			}
+
+			if !common.IsVerbose(globalFlags) {
+				return nil
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}

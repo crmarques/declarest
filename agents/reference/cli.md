@@ -27,6 +27,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 10. Shell completion output MUST expose canonical command names and MUST NOT leak internal command placeholders.
 11. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
 12. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
+13. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing local and remote collection children with metadata-aware path semantics.
 
 ## Data Contracts
 Command groups:
@@ -36,9 +37,10 @@ Command groups:
 Global flags:
 1. `--context`, `-c`.
 2. `--debug`, `-d`.
-3. `--no-status`, `-n`.
-4. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
-5. `--help`, `-h`.
+3. `--verbose`, `-v`.
+4. `--no-status`, `-n`.
+5. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
+6. `--help`, `-h`.
 
 Input flags:
 1. `--file`, `-f`.
@@ -152,6 +154,7 @@ Interactive config commands:
 52. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
 53. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
 54. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
+55. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -164,6 +167,13 @@ Interactive config commands:
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
 10. Help output SHOULD avoid repeated blank lines between sections.
+11. `resource diff --output text` MUST render one line per diff entry using relative dot-path notation from the requested target path and JSON-encoded values in the form `<dot-path> [Local=<json>] => [Remote=<json>]`.
+12. Unless `--no-status` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and all runnable `ad-hoc` method commands (`ad-hoc get|head|options|post|put|patch|delete|trace|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
+13. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
+14. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
+15. State-changing commands (`resource save|apply|create|update|delete` and `ad-hoc post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
+16. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
+17. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `resource-server`, and `secret-store` labels.
 
 ## Failure Modes
 1. Missing required path argument.
@@ -188,6 +198,7 @@ Interactive config commands:
 20. `ad-hoc delete` is invoked without `--force`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
 22. `resource save` wildcard path is combined with payload input.
+23. `resource diff` targets a collection path with no local resources.
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
@@ -206,6 +217,8 @@ Interactive config commands:
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
 15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
+17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
+18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and otherwise returns the template path candidate.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -264,3 +277,14 @@ Interactive config commands:
 54. `declarest resource delete /admin/realms/master/clients/account --force --remote-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
 55. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
 56. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
+57. `declarest resource diff /customers` compares all direct-child repository resources in `/customers` and returns a single deterministic diff list.
+58. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
+59. `declarest resource diff /admin/realms/payments --output text` prints lines like `.displayName [Local="Payments Realm"] => [Remote="Payments Realm 2"]`.
+60. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
+61. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
+62. `declarest ad-hoc get /health` terminates with `[OK] command executed successfully.`.
+63. `declarest resource create /customers/acme --payload '{"id":"acme"}'` prints no payload output by default and only the final status footer.
+64. `declarest resource create /customers/acme --payload '{"id":"acme"}' --verbose` prints the created target payload output plus the final status footer.
+65. `declarest ad-hoc delete /customers --force --recursive` prints no response bodies by default and only the final status footer.
+66. `declarest ad-hoc delete /customers --force --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
+67. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.

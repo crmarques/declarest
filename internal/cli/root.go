@@ -75,9 +75,10 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 
 			debugctx.Printf(
 				command.Context(),
-				"root flags context=%q output=%q no_status=%t command=%q",
+				"root flags context=%q output=%q verbose=%t no_status=%t command=%q",
 				globalFlags.Context,
 				globalFlags.Output,
+				globalFlags.Verbose,
 				globalFlags.NoStatus,
 				command.CommandPath(),
 			)

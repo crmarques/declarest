@@ -2,8 +2,6 @@ package resource
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/common"
@@ -23,10 +21,6 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
-			if err != nil {
-				return err
-			}
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -53,10 +47,16 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 					return createErr
 				}
 
-				return common.WriteOutput(command, outputFormat, item, func(w io.Writer, output resource.Resource) error {
-					_, writeErr := fmt.Fprintln(w, output.LogicalPath)
-					return writeErr
-				})
+				if !common.IsVerbose(globalFlags) {
+					return nil
+				}
+
+				outputFormat, outputErr := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+				if outputErr != nil {
+					return outputErr
+				}
+
+				return writeCollectionMutationOutput(command, outputFormat, resolvedPath, []resource.Resource{item})
 			}
 
 			targets, err := listLocalMutationTargets(command.Context(), orchestratorService, resolvedPath, recursive)
@@ -78,6 +78,14 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
+			if !common.IsVerbose(globalFlags) {
+				return nil
+			}
+
+			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
 			return writeCollectionMutationOutput(command, outputFormat, resolvedPath, items)
 		},
 	}

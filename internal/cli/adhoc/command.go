@@ -76,9 +76,13 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
+			renderBodyOutput := !isStateChangingAdHocMethod(method) || common.IsVerbose(globalFlags)
+			outputFormat := common.OutputJSON
+			if renderBodyOutput {
+				outputFormat, err = common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+				if err != nil {
+					return err
+				}
 			}
 
 			orchestratorService, err := common.RequireOrchestrator(deps)
@@ -121,7 +125,14 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 						target.LogicalPath,
 						value,
 					)
-					values = append(values, value)
+
+					if renderBodyOutput {
+						values = append(values, value)
+					}
+				}
+
+				if !renderBodyOutput {
+					return nil
 				}
 
 				if len(values) == 1 && targets[0].LogicalPath == resolvedPath {
@@ -189,6 +200,10 @@ func newMethodCommand(method string, deps common.CommandDependencies, globalFlag
 				value,
 			)
 
+			if !renderBodyOutput {
+				return nil
+			}
+
 			return common.WriteOutput(command, outputFormat, value, func(w io.Writer, item resource.Value) error {
 				_, writeErr := fmt.Fprintln(w, item)
 				return writeErr
@@ -236,6 +251,15 @@ func decodeOptionalBody(command *cobra.Command, flags common.InputFlags, payload
 	}
 
 	return common.DecodeInputData[resource.Value](data, flags.Format)
+}
+
+func isStateChangingAdHocMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect:
+		return true
+	default:
+		return false
+	}
 }
 
 func isNotFoundError(err error) bool {

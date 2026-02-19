@@ -506,7 +506,7 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		"[OK] context",
 		"[OK] repository",
 		"[OK] metadata",
-		"[SKIP] managed-server",
+		"[SKIP] resource-server",
 		"[SKIP] secret-store",
 		"Result: PASS",
 	}
@@ -517,7 +517,7 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 	}
 }
 
-func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
+func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
@@ -556,8 +556,8 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check returned error: %v", err)
 	}
-	if !strings.Contains(output, "[WARN] managed-server") {
-		t.Fatalf("expected warn status for managed server probe, got %q", output)
+	if !strings.Contains(output, "[WARN] resource-server") {
+		t.Fatalf("expected warn status for resource server probe, got %q", output)
 	}
 	if !strings.Contains(output, "Result: PASS") {
 		t.Fatalf("expected pass result when only warnings are present, got %q", output)
@@ -606,8 +606,8 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	assertTypedCategory(t, err, faults.ValidationError)
 
-	if !strings.Contains(output, "[FAIL] managed-server") {
-		t.Fatalf("expected managed-server failure in output, got %q", output)
+	if !strings.Contains(output, "[FAIL] resource-server") {
+		t.Fatalf("expected resource-server failure in output, got %q", output)
 	}
 	if !strings.Contains(output, "[FAIL] secret-store") {
 		t.Fatalf("expected secret-store failure in output, got %q", output)

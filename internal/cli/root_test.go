@@ -131,7 +131,7 @@ func TestDebugFlagPrintsTraceOutput(t *testing.T) {
 	if !strings.Contains(output, "/customers/acme") {
 		t.Fatalf("expected output to contain path, got %q", output)
 	}
-	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" no_status=false command="declarest resource get"`) {
+	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" verbose=false no_status=false command="declarest resource get"`) {
 		t.Fatalf("expected root debug trace, got %q", debugOutput)
 	}
 	if !strings.Contains(debugOutput, `debug: resource get requested path="/customers/acme"`) {
@@ -329,11 +329,8 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "\"method\": \"POST\"") {
-			t.Fatalf("expected POST method output, got %q", output)
-		}
-		if !strings.Contains(output, "\"name\": \"alpha\"") {
-			t.Fatalf("expected stdin payload to be forwarded, got %q", output)
+		if output != "" {
+			t.Fatalf("expected post output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -350,11 +347,8 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "\"method\": \"PUT\"") {
-			t.Fatalf("expected PUT method output, got %q", output)
-		}
-		if !strings.Contains(output, "\"name\": \"beta\"") {
-			t.Fatalf("expected file payload to be forwarded, got %q", output)
+		if output != "" {
+			t.Fatalf("expected put output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -365,11 +359,8 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "\"method\": \"POST\"") {
-			t.Fatalf("expected POST method output, got %q", output)
-		}
-		if !strings.Contains(output, "\"name\": \"gamma\"") {
-			t.Fatalf("expected payload flag body to be forwarded, got %q", output)
+		if output != "" {
+			t.Fatalf("expected post output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -380,11 +371,23 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "\"method\": \"PUT\"") {
-			t.Fatalf("expected PUT method output, got %q", output)
+		if output != "" {
+			t.Fatalf("expected put output to be empty without --verbose, got %q", output)
 		}
-		if !strings.Contains(output, "\"name\": \"delta\"") {
-			t.Fatalf("expected payload flag body to be forwarded, got %q", output)
+	})
+
+	t.Run("post_verbose_renders_response_body", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), `{"id":"a","name":"alpha"}`, "ad-hoc", "post", "/items", "--verbose")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "\"method\": \"POST\"") {
+			t.Fatalf("expected POST method output with --verbose, got %q", output)
+		}
+		if !strings.Contains(output, "\"name\": \"alpha\"") {
+			t.Fatalf("expected stdin payload to be forwarded with --verbose, got %q", output)
 		}
 	})
 
@@ -446,11 +449,23 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		if output != "" {
+			t.Fatalf("expected delete output to be empty without --verbose, got %q", output)
+		}
+	})
+
+	t.Run("delete_with_force_verbose", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "ad-hoc", "delete", "/items/a", "--force", "--verbose")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if !strings.Contains(output, "\"method\": \"DELETE\"") {
-			t.Fatalf("expected DELETE method output, got %q", output)
+			t.Fatalf("expected DELETE method output with --verbose, got %q", output)
 		}
 		if !strings.Contains(output, "\"path\": \"/items/a\"") {
-			t.Fatalf("expected delete path output, got %q", output)
+			t.Fatalf("expected delete path output with --verbose, got %q", output)
 		}
 	})
 
@@ -477,8 +492,8 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if reconciler.adHocCalls[0].path != "/items/a" || reconciler.adHocCalls[1].path != "/items/b" {
 			t.Fatalf("expected direct-child delete paths [/items/a /items/b], got %#v", reconciler.adHocCalls)
 		}
-		if strings.Contains(output, "/items/nested/c") {
-			t.Fatalf("expected non-recursive delete output to exclude nested resources, got %q", output)
+		if output != "" {
+			t.Fatalf("expected non-recursive delete output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -505,8 +520,30 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if reconciler.adHocCalls[2].path != "/items/nested/c" {
 			t.Fatalf("expected recursive delete to include nested path, got %#v", reconciler.adHocCalls)
 		}
+		if output != "" {
+			t.Fatalf("expected recursive delete output to be empty without --verbose, got %q", output)
+		}
+	})
+
+	t.Run("delete_collection_path_recursive_verbose_renders_response_bodies", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/items/a"},
+				{LogicalPath: "/items/b"},
+				{LogicalPath: "/items/nested/c"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force", "--recursive", "--verbose")
+		if err != nil {
+			t.Fatalf("unexpected recursive collection delete error: %v", err)
+		}
 		if !strings.Contains(output, "\"path\": \"/items/nested/c\"") {
-			t.Fatalf("expected recursive delete output to include nested path, got %q", output)
+			t.Fatalf("expected recursive delete output to include nested path with --verbose, got %q", output)
 		}
 	})
 
@@ -1893,12 +1930,8 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 	if !reflect.DeepEqual(reconciler.applyCalls, expectedDirectCalls) {
 		t.Fatalf("expected direct apply calls %#v, got %#v", expectedDirectCalls, reconciler.applyCalls)
 	}
-	if !strings.Contains(directOutput, "\"LogicalPath\": \"/customers/acme\"") ||
-		!strings.Contains(directOutput, "\"LogicalPath\": \"/customers/beta\"") {
-		t.Fatalf("expected direct apply output for direct resources, got %q", directOutput)
-	}
-	if strings.Contains(directOutput, "/customers/nested/gamma") {
-		t.Fatalf("expected non-recursive apply to exclude nested resources, got %q", directOutput)
+	if directOutput != "" {
+		t.Fatalf("expected direct apply output to be empty without --verbose, got %q", directOutput)
 	}
 
 	reconciler.applyCalls = nil
@@ -1910,8 +1943,16 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 	if !reflect.DeepEqual(reconciler.applyCalls, expectedRecursiveCalls) {
 		t.Fatalf("expected recursive apply calls %#v, got %#v", expectedRecursiveCalls, reconciler.applyCalls)
 	}
-	if !strings.Contains(recursiveOutput, "\"LogicalPath\": \"/customers/nested/gamma\"") {
-		t.Fatalf("expected recursive apply output to include nested resource, got %q", recursiveOutput)
+	if recursiveOutput != "" {
+		t.Fatalf("expected recursive apply output to be empty without --verbose, got %q", recursiveOutput)
+	}
+
+	verboseOutput, err := executeForTest(deps, "", "resource", "apply", "/customers", "--recursive", "--verbose")
+	if err != nil {
+		t.Fatalf("unexpected recursive apply verbose error: %v", err)
+	}
+	if !strings.Contains(verboseOutput, "\"LogicalPath\": \"/customers/nested/gamma\"") {
+		t.Fatalf("expected recursive apply output to include nested resource with --verbose, got %q", verboseOutput)
 	}
 }
 
@@ -1934,8 +1975,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 		if reconciler.createCalls[0].logicalPath != "/customers/acme" {
 			t.Fatalf("expected create path /customers/acme, got %q", reconciler.createCalls[0].logicalPath)
 		}
-		if !strings.Contains(output, "/customers/acme") {
-			t.Fatalf("expected create output to contain /customers/acme, got %q", output)
+		if output != "" {
+			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -1976,8 +2017,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 		if !reflect.DeepEqual(reconciler.createCalls[1].value, reconciler.getLocalValues["/customers/beta"]) {
 			t.Fatalf("expected create payload to come from local resource for /customers/beta")
 		}
-		if strings.Contains(output, "/customers/nested/gamma") {
-			t.Fatalf("expected non-recursive create output to exclude nested resources, got %q", output)
+		if output != "" {
+			t.Fatalf("expected non-recursive create output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -2006,8 +2047,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 		if len(reconciler.createCalls) != 3 {
 			t.Fatalf("expected 3 create calls for recursive create, got %d", len(reconciler.createCalls))
 		}
-		if !strings.Contains(output, "/customers/nested/gamma") {
-			t.Fatalf("expected recursive create output to include nested resource, got %q", output)
+		if output != "" {
+			t.Fatalf("expected recursive create output to be empty without --verbose, got %q", output)
 		}
 	})
 
@@ -2049,8 +2090,23 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 		if len(reconciler.createCalls) != 1 {
 			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
 		}
+		if output != "" {
+			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
+		}
+	})
+
+	t.Run("create_with_payload_flag_verbose_renders_target", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{metadataService: newTestMetadata()}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "create", "/customers/acme", "--payload", `{"id":"acme","tier":"startup"}`, "--verbose")
+		if err != nil {
+			t.Fatalf("unexpected create error: %v", err)
+		}
 		if !strings.Contains(output, "/customers/acme") {
-			t.Fatalf("expected create output to contain /customers/acme, got %q", output)
+			t.Fatalf("expected create output to contain /customers/acme with --verbose, got %q", output)
 		}
 	})
 
@@ -2130,11 +2186,8 @@ func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 	if !reflect.DeepEqual(reconciler.updateCalls[0].value, reconciler.getLocalValues["/customers/acme"]) {
 		t.Fatalf("expected update payload to come from local resource for /customers/acme")
 	}
-	if !strings.Contains(output, "\"LogicalPath\": \"/customers/acme\"") {
-		t.Fatalf("expected update output to include /customers/acme, got %q", output)
-	}
-	if strings.Contains(output, "/customers/nested/gamma") {
-		t.Fatalf("expected non-recursive update output to exclude nested resources, got %q", output)
+	if output != "" {
+		t.Fatalf("expected non-recursive update output to be empty without --verbose, got %q", output)
 	}
 
 	reconciler.updateCalls = nil
@@ -2146,9 +2199,153 @@ func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 	if len(reconciler.updateCalls) != 2 {
 		t.Fatalf("expected 2 update calls for recursive update, got %d", len(reconciler.updateCalls))
 	}
-	if !strings.Contains(recursiveOutput, "/customers/nested/gamma") {
-		t.Fatalf("expected recursive update output to include nested resources, got %q", recursiveOutput)
+	if recursiveOutput != "" {
+		t.Fatalf("expected recursive update output to be empty without --verbose, got %q", recursiveOutput)
 	}
+
+	verboseOutput, err := executeForTest(deps, "", "resource", "update", "/customers", "--recursive", "--verbose")
+	if err != nil {
+		t.Fatalf("unexpected recursive update verbose error: %v", err)
+	}
+	if !strings.Contains(verboseOutput, "/customers/nested/gamma") {
+		t.Fatalf("expected recursive update output to include nested resources with --verbose, got %q", verboseOutput)
+	}
+}
+
+func TestResourceDiffCollectionPath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("collection_path_compares_all_direct_children", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+				{LogicalPath: "/customers/beta"},
+				{LogicalPath: "/customers/nested/gamma"},
+			},
+			diffValues: map[string][]resource.DiffEntry{
+				"/customers/acme": {
+					{Path: "/customers/acme/name", Operation: "replace"},
+				},
+				"/customers/beta": {
+					{Path: "/customers/beta/enabled", Operation: "remove"},
+				},
+				"/customers/nested/gamma": {
+					{Path: "/customers/nested/gamma/name", Operation: "replace"},
+				},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "diff", "/customers")
+		if err != nil {
+			t.Fatalf("unexpected diff collection error: %v", err)
+		}
+
+		expectedCalls := []string{"/customers/acme", "/customers/beta"}
+		if !reflect.DeepEqual(reconciler.diffCalls, expectedCalls) {
+			t.Fatalf("expected non-recursive diff calls %#v, got %#v", expectedCalls, reconciler.diffCalls)
+		}
+		if !strings.Contains(output, "/customers/acme/name") || !strings.Contains(output, "/customers/beta/enabled") {
+			t.Fatalf("expected diff output to include direct-child entries, got %q", output)
+		}
+		if strings.Contains(output, "/customers/nested/gamma/name") {
+			t.Fatalf("expected non-recursive diff to exclude nested resources, got %q", output)
+		}
+	})
+
+	t.Run("fallback_to_single_resource_when_collection_list_is_empty", func(t *testing.T) {
+		t.Parallel()
+
+		const idPath = "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c"
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/admin/realms/master/clients/account"},
+			},
+			getLocalValues: map[string]resource.Value{
+				idPath: map[string]any{"id": "f88c68f3-3253-49f9-94a9-fe7553d33b5c", "clientId": "account"},
+			},
+			diffValues: map[string][]resource.DiffEntry{
+				idPath: {
+					{Path: idPath + "/name", Operation: "replace"},
+				},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "diff", idPath)
+		if err != nil {
+			t.Fatalf("unexpected diff fallback error: %v", err)
+		}
+		if len(reconciler.diffCalls) != 1 || reconciler.diffCalls[0] != idPath {
+			t.Fatalf("expected diff fallback single target %q, got %#v", idPath, reconciler.diffCalls)
+		}
+		if !strings.Contains(output, idPath+"/name") {
+			t.Fatalf("expected diff fallback output for %q, got %q", idPath, output)
+		}
+	})
+
+	t.Run("fails_when_no_local_resources_match", func(t *testing.T) {
+		t.Parallel()
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		_, err := executeForTest(deps, "", "resource", "diff", "/orders")
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
+	t.Run("text_output_uses_relative_dot_path_and_local_remote_values", func(t *testing.T) {
+		t.Parallel()
+
+		const targetPath = "/admin/realms/payments"
+
+		reconciler := &testReconciler{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: targetPath},
+			},
+			diffValues: map[string][]resource.DiffEntry{
+				targetPath: {
+					{
+						Path:      "/admin/realms/payments/attributes/clientOfflineSessionIdleTimeout",
+						Operation: "add",
+						Local:     nil,
+						Remote:    "0",
+					},
+					{
+						Path:      "/admin/realms/payments/displayName",
+						Operation: "replace",
+						Local:     "Payments Realm",
+						Remote:    "Payments Realm 2",
+					},
+				},
+			},
+		}
+		deps := testDepsWith(reconciler, reconciler.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "diff", targetPath, "--output", "text")
+		if err != nil {
+			t.Fatalf("unexpected diff text output error: %v", err)
+		}
+
+		expectedOutput := strings.Join([]string{
+			".attributes.clientOfflineSessionIdleTimeout [Local=null] => [Remote=\"0\"]",
+			".displayName [Local=\"Payments Realm\"] => [Remote=\"Payments Realm 2\"]",
+		}, "\n") + "\n"
+		if output != expectedOutput {
+			t.Fatalf("expected text output %q, got %q", expectedOutput, output)
+		}
+	})
 }
 
 func TestResourceCollectionMutationsFallbackToSingleResourceLookupWhenListIsEmpty(t *testing.T) {
@@ -2255,6 +2452,44 @@ func TestPathCompletionMergesLocalRemoteAndOpenAPI(t *testing.T) {
 	}
 	if !strings.Contains(output, ":4") {
 		t.Fatalf("expected no-file completion directive, got %q", output)
+	}
+}
+
+func TestPathCompletionExpandsOpenAPITemplatesFromCollectionItems(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master"},
+		{LogicalPath: "/admin/realms/master/clients/local-app"},
+	}
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/prod"},
+		{LogicalPath: "/admin/realms/master/clients/remote-app"},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/master/clients/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+
+	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
+		t.Fatalf("expected local collection item completion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/master/clients/remote-app") {
+		t.Fatalf("expected remote collection item completion, got %q", output)
+	}
+	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected completion to consult local collection path, calls=%#v", reconciler.listLocalCalls)
+	}
+	if !containsString(reconciler.listRemoteCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected completion to consult remote collection path, calls=%#v", reconciler.listRemoteCalls)
 	}
 }
 
@@ -2656,9 +2891,13 @@ type testReconciler struct {
 	adHocErr        error
 	getLocalCalls   []string
 	listLocalCalls  []string
+	listRemoteCalls []string
 	applyCalls      []string
 	createCalls     []savedResource
 	updateCalls     []savedResource
+	diffCalls       []string
+	diffValues      map[string][]resource.DiffEntry
+	diffErr         error
 	getLocalValues  map[string]resource.Value
 	localList       []resource.Resource
 	remoteList      []resource.Resource
@@ -2788,6 +3027,7 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 	}}, nil
 }
 func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+	r.listRemoteCalls = append(r.listRemoteCalls, logicalPath)
 	if len(r.remoteList) > 0 {
 		items := make([]resource.Resource, len(r.remoteList))
 		copy(items, r.remoteList)
@@ -2818,6 +3058,17 @@ func (r *testReconciler) Explain(_ context.Context, logicalPath string) ([]resou
 	return []resource.DiffEntry{{Path: logicalPath, Operation: "noop"}}, nil
 }
 func (r *testReconciler) Diff(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+	r.diffCalls = append(r.diffCalls, logicalPath)
+	if r.diffErr != nil {
+		return nil, r.diffErr
+	}
+	if r.diffValues != nil {
+		if value, ok := r.diffValues[logicalPath]; ok {
+			items := make([]resource.DiffEntry, len(value))
+			copy(items, value)
+			return items, nil
+		}
+	}
 	return []resource.DiffEntry{{Path: logicalPath, Operation: "noop"}}, nil
 }
 func (r *testReconciler) Template(_ context.Context, _ string, value resource.Value) (resource.Value, error) {
@@ -2855,6 +3106,15 @@ func isPathOrDescendant(basePath string, candidatePath string) bool {
 	}
 	basePrefix := strings.TrimSuffix(base, "/")
 	return strings.HasPrefix(candidate, basePrefix+"/")
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 type testMetadata struct {
