@@ -246,6 +246,48 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIDefaultOperationsWithNonTemp
 	}
 }
 
+func TestHasOpenAPIPath(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/admin/realms": map[string]any{
+				"get":  map[string]any{},
+				"post": map[string]any{},
+			},
+			"/admin/realms/{realm}": map[string]any{
+				"get":    map[string]any{},
+				"put":    map[string]any{},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	exists, err := HasOpenAPIPath("/admin/realms/", openAPISpec)
+	if err != nil {
+		t.Fatalf("HasOpenAPIPath returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected /admin/realms/ to be found in OpenAPI paths")
+	}
+
+	exists, err = HasOpenAPIPath("/admin/realms/master", openAPISpec)
+	if err != nil {
+		t.Fatalf("HasOpenAPIPath returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected /admin/realms/master to be found in OpenAPI paths")
+	}
+
+	exists, err = HasOpenAPIPath("/admin/unknown/", openAPISpec)
+	if err != nil {
+		t.Fatalf("HasOpenAPIPath returned error: %v", err)
+	}
+	if exists {
+		t.Fatal("expected /admin/unknown/ to be missing from OpenAPI paths")
+	}
+}
+
 func assertValidationError(t *testing.T, err error) {
 	t.Helper()
 

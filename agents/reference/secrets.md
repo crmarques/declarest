@@ -22,14 +22,14 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 5. Secret operations on collection payloads MUST be rejected when key scope is ambiguous.
 6. Secret normalization MUST occur before compare/diff to avoid false drift.
 7. Secret store initialization MUST validate required credentials and encryption configuration.
-8. `resource save` MUST fail by default when potential plaintext secrets are detected and MUST require explicit `--ignore` or `--handle-secrets` override to proceed.
+8. `resource save` MUST fail by default when non-metadata-declared potential plaintext secrets are detected and MUST require explicit `--ignore` or `--handle-secrets` override to proceed.
 9. `resource save --handle-secrets` MUST accept an optional comma-separated list of attributes; when omitted, all detected candidates MUST be handled.
 10. `resource save --handle-secrets` MUST store handled plaintext values in the configured secret store with deterministic path-scoped keys and rewrite handled payload values to `{{secret .}}` placeholders before repository persistence.
 11. When resolving resource payload placeholders, `{{secret .}}` MUST map to `<logical-path>:<attribute-path>` and `{{secret <custom-key>}}` MUST map to `<logical-path>:<custom-key>`.
 12. Resource placeholder resolution MUST continue to accept legacy absolute key placeholders (for example `{{secret "/customers/acme:apiToken"}}`) without rewriting failures.
-13. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with plaintext-secret warning including only remaining unhandled candidates, except when remaining candidates are not declared in metadata and `--ignore` is set.
-14. Metadata `secretsFromAttributes` entries MUST be treated as explicit secret candidates in save-time plaintext checks.
-15. `resource save --ignore` MUST NOT bypass plaintext-secret enforcement for candidates declared by metadata `secretsFromAttributes`; it only bypasses non-metadata detections.
+13. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with plaintext-secret warning including only remaining unhandled candidates that are not declared in metadata, except when `--ignore` is set.
+14. Metadata `secretsFromAttributes` entries MUST be treated as explicit secret candidates in detection and handling flows, but they are non-blocking in default save-time plaintext checks.
+15. `resource save --ignore` MUST bypass plaintext-secret save enforcement for all remaining candidates.
 16. For collection/group saves with `resource save --handle-secrets=<attribute-list>`, each requested attribute MUST be applied only to resources where it is present; resources without the attribute MUST be skipped for that attribute without failing the command.
 17. `resource get` MUST redact values for metadata `secretsFromAttributes` as `{{secret .}}` placeholders by default for repository and remote-server output modes.
 18. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
@@ -73,11 +73,11 @@ Store contracts:
 1. `resource save --handle-secrets` at `/customers/acme` stores plaintext `apiToken` as key `/customers/acme:apiToken` and writes `{{secret .}}` in the resource payload.
 2. Apply operation resolves placeholders at execution time and keeps repository content masked.
 3. Compare operation normalizes equivalent placeholders with different key naming conventions.
-4. `resource save --handle-secrets=password` handles `password` and then fails with warning when another detected candidate like `apiToken` remains unhandled unless `--ignore` is set and `apiToken` is not metadata-declared.
-5. Save rejects plaintext at `credentials.authValue` when `secretsFromAttributes` includes that attribute and user omits both `--ignore` and `--handle-secrets`.
+4. `resource save --handle-secrets=password` handles `password` and then fails with warning when another non-metadata-declared detected candidate like `apiToken` remains unhandled unless `--ignore` is set.
+5. Save permits plaintext at `credentials.authValue` when `secretsFromAttributes` includes that attribute and user omits both `--ignore` and `--handle-secrets`.
 6. `secret detect /customers/acme --fix` writes detected attributes into `/customers/acme` metadata `secretsFromAttributes`.
 7. `secret detect` without path scans the whole local repository and returns detected attributes grouped by logical resource path.
-8. `resource save /admin/realms/master/clients --handle-secrets=secret` writes handled secret attributes to collection metadata path `/admin/realms/_/clients`, skips resources without `secret`, and fails if other metadata-declared candidates remain unhandled.
+8. `resource save /admin/realms/master/clients --handle-secrets=secret` writes handled secret attributes to collection metadata path `/admin/realms/_/clients`, skips resources without `secret`, and fails if other non-metadata-declared candidates remain unhandled.
 9. `{{secret client-token}}` inside `/customers/acme` resolves secret key `/customers/acme:client-token`.
 10. `actionTokenGeneratedByUserLifespan.reset-credentials: "43200"` is not treated as a secret candidate by default detection.
 11. `access.token.claim: true` and `token.response.type.bearer.lower-case: false` are not treated as secret candidates by default detection.

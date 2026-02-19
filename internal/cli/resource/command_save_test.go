@@ -508,7 +508,7 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 		}
 	})
 
-	t.Run("ignore_still_blocks_metadata_declared_plaintext_secret", func(t *testing.T) {
+	t.Run("allows_metadata_declared_plaintext_secret_without_ignore", func(t *testing.T) {
 		t.Parallel()
 
 		deps := common.CommandDependencies{
@@ -524,11 +524,10 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 			deps,
 			"/customers/acme",
 			map[string]any{"password": "plain-secret"},
-			true,
+			false,
 		)
-		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "password") {
-			t.Fatalf("expected metadata-declared candidate in error, got %q", err.Error())
+		if err != nil {
+			t.Fatalf("expected metadata-declared plaintext to pass safety check, got %v", err)
 		}
 	})
 }

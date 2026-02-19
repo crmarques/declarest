@@ -189,12 +189,9 @@ func saveResolvedPathPayload(
 			if err != nil {
 				return err
 			}
-			declaredCandidates := []string(nil)
-			if ignore {
-				declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
-				if err != nil {
-					return err
-				}
+			declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+			if err != nil {
+				return err
 			}
 			blockingCandidates := filterSaveSecretCandidatesForSafety(unhandled, declaredCandidates, ignore)
 			if len(blockingCandidates) > 0 {
@@ -267,12 +264,9 @@ func saveResolvedPathPayload(
 			}
 		}
 
-		declaredCandidates := []string(nil)
-		if ignore {
-			declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
-			if err != nil {
-				return err
-			}
+		declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+		if err != nil {
+			return err
 		}
 
 		blockingCandidates := filterSaveSecretCandidatesForSafety(unhandledCandidates, declaredCandidates, ignore)
@@ -280,12 +274,9 @@ func saveResolvedPathPayload(
 			return saveSecretSafetyError(resolvedPath, blockingCandidates)
 		}
 	} else {
-		declaredCandidates := []string(nil)
-		if ignore {
-			declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
-			if err != nil {
-				return err
-			}
+		declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+		if err != nil {
+			return err
 		}
 
 		blockingCandidates := filterSaveSecretCandidatesForSafety(collectionCandidates, declaredCandidates, ignore)
@@ -662,12 +653,9 @@ func enforceSaveSecretSafety(
 		return err
 	}
 
-	declaredCandidates := []string(nil)
-	if ignore {
-		declaredCandidates, err = resolveDeclaredSaveSecretAttributes(ctx, deps, logicalPath)
-		if err != nil {
-			return err
-		}
+	declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, logicalPath)
+	if err != nil {
+		return err
 	}
 
 	blockingCandidates := filterSaveSecretCandidatesForSafety(candidates, declaredCandidates, ignore)
@@ -888,8 +876,8 @@ func filterSaveSecretCandidatesForSafety(candidates []string, declared []string,
 	if len(normalizedCandidates) == 0 {
 		return nil
 	}
-	if !ignore {
-		return normalizedCandidates
+	if ignore {
+		return nil
 	}
 
 	declaredSet := make(map[string]struct{}, len(declared))
@@ -899,7 +887,7 @@ func filterSaveSecretCandidatesForSafety(candidates []string, declared []string,
 
 	filtered := make([]string, 0, len(normalizedCandidates))
 	for _, candidate := range normalizedCandidates {
-		if _, found := declaredSet[candidate]; !found {
+		if _, found := declaredSet[candidate]; found {
 			continue
 		}
 		filtered = append(filtered, candidate)

@@ -112,6 +112,8 @@ Interactive config commands:
 66. When `metadata render` defaults to `get` and the resolved `get` operation path is missing, it MUST retry with `list` before returning a validation error.
 67. `metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
 68. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
+69. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults.
+70. `metadata get` MUST return inferred compact metadata when explicit metadata is missing and the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
 3. Mutations from stdin MUST validate payload format before side effects.
 4. Option conflicts MUST produce usage errors.
 5. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
@@ -133,11 +135,11 @@ Interactive config commands:
 21. `resource save` without payload input (`--file` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 22. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 23. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
-24. `resource save` MUST reject potential plaintext secret values and fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
+24. `resource save` MUST reject potential plaintext secret values that are not declared by metadata `secretsFromAttributes` and fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
 25. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
 26. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `secretsFromAttributes` for the saved logical path.
 27. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>`, resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`, and remain compatible with legacy absolute key placeholders.
-28. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates unless `--ignore` is set.
+28. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
 29. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 30. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `secretsFromAttributes`.
 31. `secret detect` without input payload (`--file` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
@@ -208,7 +210,7 @@ Interactive config commands:
 7. `resource delete` receives conflicting source flags (`--repository`, `--remote-server`, `--both`).
 8. `resource save` receives both `--as-items` and `--as-one-resource`.
 9. `resource save --as-items` receives non-list input.
-10. `resource save` detects potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, or the command attempts to overwrite an existing repository resource without `--force`.
+10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, or the command attempts to overwrite an existing repository resource without `--force`.
 11. `resource save --handle-secrets=<attr-list>` includes one or more attributes that are not detected in the payload.
 12. `resource create` is invoked without payload input and no matching local resources exist under the target path.
 13. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
@@ -229,7 +231,7 @@ Interactive config commands:
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
-2. `resource save --handle-secrets` handles only a subset and fails with warning for the remaining plaintext candidates unless `--ignore` is set.
+2. `resource save --handle-secrets` handles only a subset and fails with warning for the remaining non-metadata-declared plaintext candidates unless `--ignore` is set.
 3. `delete` invoked on collection without recursive force confirmation.
 4. `metadata infer` called with missing OpenAPI source.
 5. Completion for alias path when remote ID differs.

@@ -100,6 +100,29 @@ func InferFromOpenAPISpec(
 	return inferred, nil
 }
 
+func HasOpenAPIPath(logicalPath string, openAPISpec any) (bool, error) {
+	target, err := parseInferTarget(logicalPath)
+	if err != nil {
+		return false, err
+	}
+	target = promoteInferTargetFromOpenAPI(target, openAPISpec)
+
+	pathDefinitions := openAPIPathDefinitions(openAPISpec)
+	if len(pathDefinitions) == 0 {
+		return false, nil
+	}
+
+	if target.Collection {
+		if hasOpenAPIPathMatch(target.Segments, len(target.Segments), pathDefinitions) {
+			return true, nil
+		}
+
+		return hasOpenAPIPathMatch(target.Segments, len(target.Segments)+1, pathDefinitions), nil
+	}
+
+	return hasOpenAPIPathMatch(target.Segments, len(target.Segments), pathDefinitions), nil
+}
+
 func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetadata, openAPISpec any) (ResourceMetadata, error) {
 	target, err := parseInferTarget(logicalPath)
 	if err != nil {
@@ -655,6 +678,56 @@ func selectOpenAPICandidate(
 		return openAPICandidate{}
 	}
 	return best
+}
+
+func hasOpenAPIPathMatch(
+	selectorSegments []string,
+	expectedSegments int,
+	pathDefinitions map[string]map[string]struct{},
+) bool {
+	for pathKey := range pathDefinitions {
+		templateSegments := splitPathSegments(pathKey)
+		if len(templateSegments) != expectedSegments {
+			continue
+		}
+		if matchOpenAPIPathForExistence(selectorSegments, templateSegments) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchOpenAPIPathForExistence(selectorSegments []string, templateSegments []string) bool {
+	if len(templateSegments) != len(selectorSegments) {
+		return false
+	}
+
+	for idx := range selectorSegments {
+		selectorSegment := selectorSegments[idx]
+		templateSegment := templateSegments[idx]
+		_, templateIsVariable := openAPIPathParameterName(templateSegment)
+
+		if selectorSegment == "_" {
+			continue
+		}
+		if hasWildcardPattern(selectorSegment) {
+			if templateIsVariable {
+				continue
+			}
+			matched, err := path.Match(selectorSegment, templateSegment)
+			if err != nil || !matched {
+				return false
+			}
+			continue
+		}
+		if templateIsVariable {
+			continue
+		}
+		if selectorSegment != templateSegment {
+			return false
+		}
+	}
+	return true
 }
 
 func matchOpenAPIPath(selectorSegments []string, templateSegments []string) (bool, int) {

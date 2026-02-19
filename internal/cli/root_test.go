@@ -884,7 +884,31 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("metadata_secrets_from_attributes_blocks_plaintext", func(t *testing.T) {
+	t.Run("list_save_allows_metadata_declared_plaintext_secret", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute:       "id",
+			SecretsFromAttributes: []string{"secret"},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		deps := newResourceSaveDeps(reconciler, metadataService)
+		_, err := executeForTest(
+			deps,
+			`[{"id":"acme","secret":"plain-secret"}]`,
+			"resource",
+			"save",
+			"/customers",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+	})
+
+	t.Run("metadata_secrets_from_attributes_allows_plaintext", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"credentials.authValue"},
@@ -899,12 +923,11 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"save",
 			"/customers/acme",
 		)
-		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "credentials.authValue") {
-			t.Fatalf("expected metadata attribute in error, got %q", err.Error())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls after safety failure, got %d", len(reconciler.saveCalls))
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
 		}
 	})
 
@@ -952,7 +975,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("ignore_flag_does_not_bypass_metadata_declared_secret", func(t *testing.T) {
+	t.Run("ignore_flag_allows_metadata_declared_secret", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"password"},
@@ -968,12 +991,11 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"/customers/acme",
 			"--ignore",
 		)
-		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "password") {
-			t.Fatalf("expected metadata-declared candidate in error, got %q", err.Error())
+		if err != nil {
+			t.Fatalf("unexpected error with --ignore: %v", err)
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls when metadata-declared secret remains plaintext, got %d", len(reconciler.saveCalls))
+		if len(reconciler.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
 		}
 	})
 
@@ -1890,6 +1912,119 @@ func TestMetadataPathCommands(t *testing.T) {
 			strings.Contains(output, "\"filter\": null") ||
 			strings.Contains(output, "\"suppress\": null") {
 			t.Fatalf("expected metadata get output without null fields, got %q", output)
+		}
+	})
+
+	t.Run("get_not_found_falls_back_to_infer_when_openapi_has_endpoint", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		delete(metadataService.items, "/admin/realms/")
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms": map[string]any{
+						"get":  map[string]any{},
+						"post": map[string]any{},
+					},
+					"/admin/realms/{realm}": map[string]any{
+						"get":    map[string]any{},
+						"put":    map[string]any{},
+						"delete": map[string]any{},
+					},
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"get",
+			"/admin/realms/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected metadata get fallback error: %v", err)
+		}
+		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+			t.Fatalf("expected inferred idFromAttribute in metadata get fallback output, got %q", output)
+		}
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"realm\"") {
+			t.Fatalf("expected inferred aliasFromAttribute in metadata get fallback output, got %q", output)
+		}
+	})
+
+	t.Run("get_not_found_without_openapi_or_remote_keeps_not_found", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		delete(metadataService.items, "/admin/realms/")
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec:     nil,
+			listRemoteErr: faults.NewTypedError(
+				faults.NotFoundError,
+				"resource \"/admin/realms/\" not found",
+				nil,
+			),
+		}
+
+		_, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"get",
+			"/admin/realms/",
+		)
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
+	t.Run("infer_apply_persists_compact_metadata_without_defaults", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		reconciler := &testReconciler{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms": map[string]any{
+						"get":  map[string]any{},
+						"post": map[string]any{},
+					},
+					"/admin/realms/{realm}": map[string]any{
+						"get":    map[string]any{},
+						"put":    map[string]any{},
+						"delete": map[string]any{},
+					},
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(reconciler, metadataService),
+			"",
+			"metadata",
+			"infer",
+			"/admin/realms/",
+			"--apply",
+		)
+		if err != nil {
+			t.Fatalf("unexpected infer apply error: %v", err)
+		}
+		if strings.Contains(output, "\"operations\"") {
+			t.Fatalf("expected infer apply output without default operations, got %q", output)
+		}
+
+		stored, found := metadataService.items["/admin/realms/"]
+		if !found {
+			t.Fatal("expected inferred metadata to be persisted")
+		}
+		if stored.IDFromAttribute != "realm" || stored.AliasFromAttribute != "realm" {
+			t.Fatalf("expected persisted compact identity attributes, got %#v", stored)
+		}
+		if len(stored.Operations) != 0 {
+			t.Fatalf("expected persisted metadata without default operations, got %#v", stored.Operations)
 		}
 	})
 }
@@ -3438,6 +3573,7 @@ type testReconciler struct {
 	getLocalCalls   []string
 	listLocalCalls  []string
 	listRemoteCalls []string
+	listRemoteErr   error
 	applyCalls      []string
 	createCalls     []savedResource
 	updateCalls     []savedResource
@@ -3574,6 +3710,9 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 }
 func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listRemoteCalls = append(r.listRemoteCalls, logicalPath)
+	if r.listRemoteErr != nil {
+		return nil, r.listRemoteErr
+	}
 	if len(r.remoteList) > 0 {
 		items := make([]resource.Resource, len(r.remoteList))
 		copy(items, r.remoteList)

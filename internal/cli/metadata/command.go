@@ -10,6 +10,7 @@ import (
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -62,8 +63,21 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 
 			item, err := service.Get(command.Context(), resolvedPath)
 			if err != nil {
-				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
-				return err
+				if !isTypedErrorCategory(err, faults.NotFoundError) {
+					debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
+
+				inferredItem, inferred, inferErr := inferMetadataFromAvailableEndpoints(command.Context(), deps, resolvedPath)
+				if inferErr != nil {
+					debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, inferErr)
+					return inferErr
+				}
+				if !inferred {
+					debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
+				item = inferredItem
 			}
 
 			debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
@@ -357,17 +371,17 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 				item = metadatadomain.MergeResourceMetadata(item, existing)
 			}
 
-			if request.Apply {
-				if err := service.Set(command.Context(), resolvedPath, item); err != nil {
-					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
-					return err
-				}
-			}
-
 			outputItem, err := metadatadomain.CompactInferredMetadataDefaults(resolvedPath, item, openAPISpec)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
+			}
+
+			if request.Apply {
+				if err := service.Set(command.Context(), resolvedPath, outputItem); err != nil {
+					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
 			}
 
 			debugctx.Printf(command.Context(), "metadata infer succeeded path=%q", resolvedPath)
@@ -527,6 +541,74 @@ func metadataPathLooksCollection(logicalPath string) bool {
 		}
 	}
 	return false
+}
+
+func inferMetadataFromAvailableEndpoints(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+) (metadatadomain.ResourceMetadata, bool, error) {
+	orchestratorService, orchestratorErr := common.RequireOrchestrator(deps)
+
+	var openAPISpec resource.Value
+	if orchestratorErr == nil {
+		openAPISpec, _ = orchestratorService.GetOpenAPISpec(ctx)
+	}
+
+	existsInOpenAPI, err := metadatadomain.HasOpenAPIPath(logicalPath, openAPISpec)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, false, err
+	}
+
+	existsRemotely := false
+	if !existsInOpenAPI && orchestratorErr == nil {
+		existsRemotely, err = metadataPathExistsRemotely(ctx, orchestratorService, logicalPath)
+		if err != nil {
+			return metadatadomain.ResourceMetadata{}, false, err
+		}
+	}
+
+	if !existsInOpenAPI && !existsRemotely {
+		return metadatadomain.ResourceMetadata{}, false, nil
+	}
+
+	inferred, err := metadatadomain.InferFromOpenAPISpec(ctx, logicalPath, metadatadomain.InferenceRequest{}, openAPISpec)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, false, err
+	}
+
+	compact, err := metadatadomain.CompactInferredMetadataDefaults(logicalPath, inferred, openAPISpec)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, false, err
+	}
+
+	return compact, true, nil
+}
+
+func metadataPathExistsRemotely(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPath string,
+) (bool, error) {
+	if metadataPathLooksCollection(logicalPath) {
+		_, err := orchestratorService.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: false})
+		if err == nil {
+			return true, nil
+		}
+		if isTypedErrorCategory(err, faults.NotFoundError) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	_, err := orchestratorService.GetRemote(ctx, logicalPath)
+	if err == nil {
+		return true, nil
+	}
+	if isTypedErrorCategory(err, faults.NotFoundError) {
+		return false, nil
+	}
+	return false, err
 }
 
 func cloneStringSlice(values []string) []string {
