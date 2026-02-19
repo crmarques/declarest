@@ -210,6 +210,11 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "config print-template command does not require context bootstrap",
+			args: []string{"config", "print-template"},
+			want: true,
+		},
+		{
 			name: "config check command requires context bootstrap",
 			args: []string{"config", "check"},
 			want: false,
@@ -288,6 +293,11 @@ func TestRequiresContextBootstrap(t *testing.T) {
 		{
 			name:        "config list does not require context",
 			commandPath: "declarest config list",
+			want:        false,
+		},
+		{
+			name:        "config print-template does not require context",
+			commandPath: "declarest config print-template",
 			want:        false,
 		},
 	}

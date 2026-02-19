@@ -26,7 +26,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 9. Help invocations (`--help`, `-h`, or `help`) and completion-script invocations (`completion`, `__complete`, `__completeNoDesc`) MUST render without requiring active-context resolution.
 10. Shell completion output MUST expose canonical command names and MUST NOT leak internal command placeholders.
 11. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
-12. Non-runtime commands (`version`, `config create|add|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
+12. Non-runtime commands (`version`, `config create|print-template|add|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
 13. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 14. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing local and remote collection children with metadata-aware path semantics.
 
@@ -67,20 +67,21 @@ Core resource commands:
 
 Selected command names:
 1. `config create`.
-2. `config add`.
-3. `config use`.
-4. `config show`.
-5. `config current`.
-6. `config resolve`.
-7. `metadata resolve`.
-8. `metadata render`.
-9. `repo status`.
-10. `secret mask`.
-11. `secret resolve`.
-12. `secret normalize`.
-13. `secret detect`.
-14. `completion`.
-15. `version`.
+2. `config print-template`.
+3. `config add`.
+4. `config use`.
+5. `config show`.
+6. `config current`.
+7. `config resolve`.
+8. `metadata resolve`.
+9. `metadata render`.
+10. `repo status`.
+11. `secret mask`.
+12. `secret resolve`.
+13. `secret normalize`.
+14. `secret detect`.
+15. `completion`.
+16. `version`.
 
 Ad-hoc command methods:
 1. `ad-hoc get`.
@@ -100,6 +101,7 @@ Interactive config commands:
 4. `config show` SHOULD support context selection when `--context` is omitted.
 5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
 6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
+7. `config create` SHOULD surface optional sections with explicit skip choices and, for one-of blocks, SHOULD prompt only the selected branch fields.
 
 ## CLI Input Grammar
 1. Resource targets MUST be logical absolute paths.
@@ -160,6 +162,8 @@ Interactive config commands:
 56. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
 57. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 58. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
+59. Interactive `config create` MUST support full context-schema authoring: prompt required fields for selected providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth) by collecting only the selected option's fields.
+60. `config print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -205,6 +209,7 @@ Interactive config commands:
 22. `resource save` wildcard path is combined with payload input.
 23. `resource diff` targets a collection path with no local resources.
 24. `config create` receives both positional context name and `--context` with different values.
+25. `config print-template` receives positional arguments.
 
 ## Edge Cases
 1. `resource save --handle-secrets` is requested but no secret manager is configured.
@@ -226,6 +231,8 @@ Interactive config commands:
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and otherwise returns the template path candidate.
 19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
+20. `config create` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth`, `bearer-token`, or `custom-header` fields.
+21. `config print-template` works without a configured current context and still renders the full template.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -297,3 +304,5 @@ Interactive config commands:
 67. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
 68. `declarest config create dev` skips context-name prompt and starts interactive prompts at repository settings.
 69. `declarest config create --context dev` skips context-name prompt and starts interactive prompts at repository settings.
+70. `declarest config create full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
+71. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.

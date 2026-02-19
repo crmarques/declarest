@@ -31,7 +31,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
   "name": "dev",
   "repository": {"filesystem": {"base-dir": "/tmp/repo"}},
   "unknown": true
-}`, "create")
+}`, "create", "--format", "json")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.createCalled {
 			t.Fatal("expected create service call to be skipped on decode failure")
@@ -68,6 +68,61 @@ unknown: true
 			t.Fatal("expected validate service call to be skipped on decode failure")
 		}
 	})
+}
+
+func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeConfigCommand(
+		t,
+		nil,
+		&common.GlobalFlags{},
+		"",
+		"print-template",
+	)
+	if err != nil {
+		t.Fatalf("print-template returned error: %v", err)
+	}
+
+	requiredSnippets := []string{
+		"contexts:",
+		"current-ctx:",
+		"repository:",
+		"git:",
+		"filesystem:",
+		"managed-server:",
+		"auth:",
+		"oauth2:",
+		"basic-auth:",
+		"bearer-token:",
+		"custom-header:",
+		"secret-store:",
+		"file:",
+		"vault:",
+		"preferences:",
+		"Mutually exclusive: choose exactly one",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected template output to contain %q, got %q", snippet, output)
+		}
+	}
+}
+
+func TestPrintTemplateRejectsUnexpectedArguments(t *testing.T) {
+	t.Parallel()
+
+	_, err := executeConfigCommand(
+		t,
+		nil,
+		&common.GlobalFlags{},
+		"",
+		"print-template",
+		"unexpected",
+	)
+	if err == nil {
+		t.Fatal("expected print-template to reject positional arguments")
+	}
 }
 
 func TestAddImportsSingleContextAndSupportsRename(t *testing.T) {
@@ -130,6 +185,35 @@ repository:
 	}
 	if service.createdContext.Name != "dev" {
 		t.Fatalf("expected context name dev, got %q", service.createdContext.Name)
+	}
+}
+
+func TestCreateInputModeAppliesContextNameFromPositionalArg(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&common.GlobalFlags{},
+		`
+name: from-input
+repository:
+  filesystem:
+    base-dir: /tmp/dev
+`,
+		"create",
+		"from-arg",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if !service.createCalled {
+		t.Fatal("expected create to be called")
+	}
+	if service.createdContext.Name != "from-arg" {
+		t.Fatalf("expected context name from-arg, got %q", service.createdContext.Name)
 	}
 }
 
@@ -652,7 +736,8 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta"},
-		selects:     []string{"filesystem"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
+		confirms:    []bool{false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -690,7 +775,8 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", ""},
-		selects:     []string{"filesystem"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
+		confirms:    []bool{false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -726,7 +812,8 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta"},
-		selects:     []string{"filesystem"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
+		confirms:    []bool{false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -763,7 +850,8 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta"},
-		selects:     []string{"filesystem"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem"},
+		confirms:    []bool{false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -807,6 +895,132 @@ func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) 
 	assertTypedCategory(t, err, faults.ValidationError)
 	if service.createCalled {
 		t.Fatal("expected create call to be skipped on context name conflict")
+	}
+}
+
+func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs: []string{
+			"/tmp/repo",
+			"",
+			"https://api.example.com",
+			"https://api.example.com/openapi.yaml",
+			"X-Tenant",
+			"acme",
+			"",
+			"https://idp.example.com/token",
+			"",
+			"client-id",
+			"client-secret",
+			"",
+			"",
+			"scope-a",
+			"",
+			"/tmp/secrets.json",
+			"/tmp/key.txt",
+			"1",
+			"65536",
+			"4",
+			"env",
+			"dev",
+			"",
+		},
+		selects: []string{
+			configdomain.ResourceFormatJSON,
+			"filesystem",
+			"oauth2",
+			"file",
+			"key-file",
+		},
+		confirms: []bool{
+			true,  // configure managed-server
+			true,  // configure default headers
+			false, // configure managed-server tls
+			true,  // configure secret-store
+			true,  // configure file kdf
+			true,  // configure preferences
+		},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&common.GlobalFlags{},
+		prompter,
+		"",
+		"create",
+		"full-context",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if !service.createCalled {
+		t.Fatal("expected create to be called")
+	}
+
+	if service.createdContext.Name != "full-context" {
+		t.Fatalf("expected context name full-context, got %q", service.createdContext.Name)
+	}
+	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatJSON {
+		t.Fatalf("expected repository format json, got %q", service.createdContext.Repository.ResourceFormat)
+	}
+	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
+		t.Fatal("expected managed-server http configuration")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth == nil {
+		t.Fatal("expected managed-server auth configuration")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
+		t.Fatal("expected managed-server oauth2 configuration")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth.BasicAuth != nil {
+		t.Fatal("basic auth should not be configured when oauth2 is selected")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth.BearerToken != nil {
+		t.Fatal("bearer-token auth should not be configured when oauth2 is selected")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth.CustomHeader != nil {
+		t.Fatal("custom-header auth should not be configured when oauth2 is selected")
+	}
+	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
+		t.Fatalf(
+			"expected oauth2 grant-type default %q, got %q",
+			configdomain.OAuthClientCreds,
+			service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType,
+		)
+	}
+
+	if service.createdContext.SecretStore == nil || service.createdContext.SecretStore.File == nil {
+		t.Fatal("expected file secret-store configuration")
+	}
+	if service.createdContext.SecretStore.File.KeyFile != "/tmp/key.txt" {
+		t.Fatalf("expected secret-store key-file /tmp/key.txt, got %q", service.createdContext.SecretStore.File.KeyFile)
+	}
+	if service.createdContext.SecretStore.File.Key != "" {
+		t.Fatal("secret-store key should not be set when key-file source is selected")
+	}
+	if service.createdContext.SecretStore.File.Passphrase != "" || service.createdContext.SecretStore.File.PassphraseFile != "" {
+		t.Fatal("secret-store passphrase fields should not be set when key-file source is selected")
+	}
+	if service.createdContext.SecretStore.File.KDF == nil {
+		t.Fatal("expected secret-store KDF configuration")
+	}
+	if service.createdContext.SecretStore.File.KDF.Time != 1 ||
+		service.createdContext.SecretStore.File.KDF.Memory != 65536 ||
+		service.createdContext.SecretStore.File.KDF.Threads != 4 {
+		t.Fatalf("unexpected KDF values: %#v", service.createdContext.SecretStore.File.KDF)
+	}
+
+	if value := service.createdContext.Preferences["env"]; value != "dev" {
+		t.Fatalf("expected preference env=dev, got %q", value)
+	}
+	if len(prompter.inputPrompts) == 0 || prompter.inputPrompts[0] != "Repository base-dir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", prompter.inputPrompts)
 	}
 }
 

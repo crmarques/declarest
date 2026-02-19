@@ -39,6 +39,7 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"ad-hoc connect",
 		"config",
 		"config create",
+		"config print-template",
 		"config add",
 		"config use",
 		"config current",

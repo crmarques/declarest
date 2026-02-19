@@ -31,6 +31,7 @@ func newCommandWithPrompter(
 
 	command.AddCommand(
 		newCreateCommand(deps, globalFlags, prompter),
+		newPrintTemplateCommand(),
 		newAddCommand(deps),
 		newUpdateCommand(deps),
 		newDeleteCommand(deps, prompter),
@@ -45,6 +46,18 @@ func newCommandWithPrompter(
 	)
 
 	return command
+}
+
+func newPrintTemplateCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "print-template",
+		Short: "Print a full context YAML template with guidance comments",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			_, err := io.WriteString(command.OutOrStdout(), contextTemplateYAML)
+			return err
+		},
+	}
 }
 
 func newCreateCommand(
