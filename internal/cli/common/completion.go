@@ -247,58 +247,91 @@ func CompleteLogicalPaths(
 	defer cancel()
 
 	strategy := resolveCompletionSourceStrategy(command)
+	normalizedPrefix := normalizeCompletionPrefix(toComplete)
+	queryPath := completionQueryPath(normalizedPrefix)
 	localItems := []resource.Resource{}
 	remoteItems := []resource.Resource{}
 
-	primaryItems, primaryErr := listCompletionResources(
+	primaryItems, _, primaryErr := queryScopedCompletionResources(
 		ctx,
 		orchestratorService,
 		strategy.primary,
-		"/",
-		true,
+		queryPath,
+		suggestions,
 	)
-	if primaryErr == nil {
-		addResourceSuggestions(suggestions, primaryItems)
-		switch strategy.primary {
-		case completionSourceLocal:
-			localItems = primaryItems
-		case completionSourceRemote:
-			remoteItems = primaryItems
-		}
-	}
-
-	if shouldQuerySecondarySource(strategy, len(primaryItems), primaryErr) {
-		secondaryItems, secondaryErr := listCompletionResources(
-			ctx,
-			orchestratorService,
-			strategy.secondary,
-			"/",
-			true,
-		)
-		if secondaryErr == nil {
-			addResourceSuggestions(suggestions, secondaryItems)
-			switch strategy.secondary {
-			case completionSourceLocal:
-				localItems = secondaryItems
-			case completionSourceRemote:
-				remoteItems = secondaryItems
-			}
-		}
+	switch strategy.primary {
+	case completionSourceLocal:
+		localItems = append(localItems, primaryItems...)
+	case completionSourceRemote:
+		remoteItems = append(remoteItems, primaryItems...)
 	}
 
 	openAPISpec, err := orchestratorService.GetOpenAPISpec(ctx)
 	if err == nil {
-		addOpenAPISuggestions(suggestions, openAPISpec)
-		addSmartOpenAPISuggestions(
+		addOpenAPISuggestions(suggestions, openAPISpec, normalizedPrefix)
+		if shouldRunSmartOpenAPISuggestions(suggestions, toComplete) {
+			addSmartOpenAPISuggestions(
+				ctx,
+				orchestratorService,
+				suggestions,
+				localItems,
+				remoteItems,
+				openAPISpec,
+				toComplete,
+				strategy,
+			)
+		}
+	}
+
+	if shouldRunRootRecursiveFallback(suggestions, toComplete) {
+		primaryRootItems, primaryRootErr := listCompletionResources(
 			ctx,
 			orchestratorService,
-			suggestions,
-			localItems,
-			remoteItems,
-			openAPISpec,
-			toComplete,
-			strategy,
+			strategy.primary,
+			"/",
+			true,
 		)
+		if primaryRootErr == nil {
+			addResourceSuggestions(suggestions, primaryRootItems)
+			switch strategy.primary {
+			case completionSourceLocal:
+				localItems = append(localItems, primaryRootItems...)
+			case completionSourceRemote:
+				remoteItems = append(remoteItems, primaryRootItems...)
+			}
+		}
+	}
+
+	primaryCompletionCount := len(filterPathSuggestions(suggestions, toComplete))
+	if shouldQuerySecondarySource(strategy, primaryCompletionCount, primaryErr) {
+		secondaryItems, _, secondaryErr := queryScopedCompletionResources(
+			ctx,
+			orchestratorService,
+			strategy.secondary,
+			queryPath,
+			suggestions,
+		)
+		if secondaryErr == nil {
+			switch strategy.secondary {
+			case completionSourceLocal:
+				localItems = append(localItems, secondaryItems...)
+			case completionSourceRemote:
+				remoteItems = append(remoteItems, secondaryItems...)
+			}
+		}
+
+		if shouldRunRootRecursiveFallback(suggestions, toComplete) {
+			secondaryRootItems, secondaryRootErr := listCompletionResources(
+				ctx,
+				orchestratorService,
+				strategy.secondary,
+				"/",
+				true,
+			)
+			if secondaryRootErr == nil {
+				addResourceSuggestions(suggestions, secondaryRootItems)
+			}
+		}
 	}
 
 	return filterPathSuggestions(suggestions, toComplete), pathCompletionDirective
@@ -333,6 +366,88 @@ func completionContext(base context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(base, completionTimeout)
 }
 
+func completionQueryPath(normalizedPrefix string) string {
+	scope, ok := resolveCompletionScope(normalizedPrefix)
+	if !ok {
+		return "/"
+	}
+	return scope.parentPath
+}
+
+func queryScopedCompletionResources(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	source completionDataSource,
+	parentPath string,
+	suggestions map[string]struct{},
+) ([]resource.Resource, int, error) {
+	directItems, directErr := listCompletionResources(
+		ctx,
+		orchestratorService,
+		source,
+		parentPath,
+		false,
+	)
+
+	aggregated := make([]resource.Resource, 0, len(directItems))
+	if directErr == nil {
+		aggregated = append(aggregated, directItems...)
+		addResourceSuggestions(suggestions, directItems)
+	}
+
+	candidateCount := directChildCandidateCount(parentPath, aggregated)
+	if shouldRunScopedRecursiveFallback(parentPath, candidateCount, directErr) {
+		recursiveItems, recursiveErr := listCompletionResources(
+			ctx,
+			orchestratorService,
+			source,
+			parentPath,
+			true,
+		)
+		if recursiveErr == nil {
+			aggregated = append(aggregated, recursiveItems...)
+			addResourceSuggestions(suggestions, recursiveItems)
+			candidateCount = directChildCandidateCount(parentPath, aggregated)
+		}
+	}
+
+	return aggregated, candidateCount, directErr
+}
+
+func shouldRunScopedRecursiveFallback(
+	parentPath string,
+	candidateCount int,
+	directErr error,
+) bool {
+	if parentPath == "/" {
+		return false
+	}
+	if directErr != nil {
+		return false
+	}
+	return candidateCount <= 1
+}
+
+func directChildCandidateCount(parentPath string, items []resource.Resource) int {
+	children := map[string]struct{}{}
+	addDirectChildSegmentsFromResources(children, parentPath, items)
+	return len(children)
+}
+
+func shouldRunRootRecursiveFallback(
+	suggestions map[string]struct{},
+	toComplete string,
+) bool {
+	return len(filterPathSuggestions(suggestions, toComplete)) == 0
+}
+
+func shouldRunSmartOpenAPISuggestions(
+	suggestions map[string]struct{},
+	toComplete string,
+) bool {
+	return len(filterPathSuggestions(suggestions, toComplete)) == 0
+}
+
 func addResourceSuggestions(suggestions map[string]struct{}, items []resource.Resource) {
 	for _, item := range items {
 		addPathSuggestion(suggestions, item.CollectionPath)
@@ -340,8 +455,19 @@ func addResourceSuggestions(suggestions map[string]struct{}, items []resource.Re
 	}
 }
 
-func addOpenAPISuggestions(suggestions map[string]struct{}, openAPISpec resource.Value) {
+func addOpenAPISuggestions(
+	suggestions map[string]struct{},
+	openAPISpec resource.Value,
+	normalizedPrefix string,
+) {
 	for _, pathKey := range openAPIPathKeys(openAPISpec) {
+		normalizedPathKey := normalizePathSuggestion(pathKey)
+		if normalizedPathKey == "" {
+			continue
+		}
+		if normalizedPrefix != "" && !candidateRelevantForExpansion(normalizedPathKey, normalizedPrefix) {
+			continue
+		}
 		addPathSuggestion(suggestions, pathKey)
 	}
 }
@@ -841,7 +967,7 @@ func filterPathSuggestions(suggestions map[string]struct{}, toComplete string) [
 	items := make([]string, 0, len(suggestions))
 	for value := range suggestions {
 		normalizedValue := normalizePathSuggestion(value)
-		if normalizedValue == "" || containsTemplateSegments(normalizedValue) {
+		if normalizedValue == "" {
 			continue
 		}
 		if !suggestionMatchesPrefix(normalizedValue, normalizedPrefix) {
@@ -856,6 +982,7 @@ func filterPathSuggestions(suggestions map[string]struct{}, toComplete string) [
 	} else {
 		items = renderCollectionSuggestionsWithTrailingSlash(items)
 	}
+	items = removeTemplateSuggestions(items)
 	sort.Strings(items)
 	if len(items) > maxCompletionSuggestions {
 		items = items[:maxCompletionSuggestions]
@@ -940,15 +1067,11 @@ func restrictToNextLevelSuggestions(items []string, normalizedPrefix string) ([]
 
 	rendered := make(map[string]struct{}, len(scoped))
 	for childPath, details := range scoped {
-		displayPath := "/" + strings.TrimPrefix(strings.TrimSpace(path.Base(childPath)), "/")
-		if displayPath == "/" {
+		if details.hasDescendants {
+			rendered[childPath+"/"] = struct{}{}
 			continue
 		}
-		if details.hasDescendants && scope.parentPath == "/" {
-			rendered[displayPath+"/"] = struct{}{}
-			continue
-		}
-		rendered[displayPath] = struct{}{}
+		rendered[childPath] = struct{}{}
 	}
 
 	return sortedSetValues(rendered), true
@@ -995,6 +1118,32 @@ func renderCollectionSuggestionsWithTrailingSlash(items []string) []string {
 	}
 
 	return sortedSetValues(rendered)
+}
+
+func removeTemplateSuggestions(items []string) []string {
+	if len(items) == 0 {
+		return items
+	}
+
+	filtered := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		normalized := normalizePathSuggestion(trimmed)
+		if normalized == "" || containsTemplateSegments(normalized) {
+			continue
+		}
+		rendered := normalized
+		if strings.HasSuffix(trimmed, "/") && normalized != "/" {
+			rendered = normalized + "/"
+		}
+		if _, exists := seen[rendered]; exists {
+			continue
+		}
+		seen[rendered] = struct{}{}
+		filtered = append(filtered, rendered)
+	}
+	return filtered
 }
 
 func sortedSetValues(values map[string]struct{}) []string {

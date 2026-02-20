@@ -3375,10 +3375,10 @@ func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testi
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/remote-app") {
+	if !strings.Contains(output, "/admin/realms/master/clients/remote-app") {
 		t.Fatalf("expected remote collection item completion, got %q", output)
 	}
-	if strings.Contains(output, "/local-app") {
+	if strings.Contains(output, "/admin/realms/master/clients/local-app") {
 		t.Fatalf("expected get completion to avoid local fallback when remote collection items are available, got %q", output)
 	}
 	if !containsString(reconciler.listRemoteCalls, "/admin/realms/master/clients") {
@@ -3409,7 +3409,7 @@ func TestPathCompletionFallsBackToRepositoryWhenRemoteUnavailable(t *testing.T) 
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/local-app") {
+	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
 		t.Fatalf("expected repository fallback completion item, got %q", output)
 	}
 	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
@@ -3473,10 +3473,10 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/account") {
+	if !strings.Contains(output, "/admin/realms/master/clients/account") {
 		t.Fatalf("expected alias-based completion item, got %q", output)
 	}
-	if strings.Contains(output, "/f88c68f3") {
+	if strings.Contains(output, "/admin/realms/master/clients/f88c68f3") {
 		t.Fatalf("expected completion to hide id-based segment when alias is available, got %q", output)
 	}
 }
@@ -3507,6 +3507,59 @@ func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
 	}
 }
 
+func TestPathCompletionCompletesScopedPrefixToCanonicalPath(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master"},
+		{LogicalPath: "/admin/realms/prod"},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/rea")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/\n") {
+		t.Fatalf("expected scoped completion to include canonical /admin/realms/, got %q", output)
+	}
+	if strings.Contains(output, "/realms\n") {
+		t.Fatalf("expected completion to avoid fragment-only candidate output, got %q", output)
+	}
+}
+
+func TestPathCompletionNoDescRemainsPrefixCompatibleForBash(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master"},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__completeNoDesc", "resource", "get", "/admin/rea")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/") {
+		t.Fatalf("expected __completeNoDesc to emit prefix-compatible canonical candidates, got %q", output)
+	}
+	if strings.Contains(output, "\n/realms\n") {
+		t.Fatalf("expected __completeNoDesc to avoid fragment-only candidates, got %q", output)
+	}
+}
+
 func TestPathCompletionShowsOnlyNextLevelForCollectionPrefix(t *testing.T) {
 	t.Parallel()
 
@@ -3528,19 +3581,19 @@ func TestPathCompletionShowsOnlyNextLevelForCollectionPrefix(t *testing.T) {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/alpha\n") {
+	if !strings.Contains(output, "/admin/realms/alpha/\n") {
 		t.Fatalf("expected alpha realm next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/beta\n") {
+	if !strings.Contains(output, "/admin/realms/beta/\n") {
 		t.Fatalf("expected beta realm next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/gamma\n") {
+	if !strings.Contains(output, "/admin/realms/gamma\n") {
 		t.Fatalf("expected gamma realm completion, got %q", output)
 	}
-	if strings.Contains(output, "/alpha/clients") {
+	if strings.Contains(output, "/admin/realms/alpha/clients") {
 		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
 	}
-	if strings.Contains(output, "/beta/roles") {
+	if strings.Contains(output, "/admin/realms/beta/roles") {
 		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
 	}
 	if strings.Contains(output, "{realm}") {
@@ -3564,20 +3617,45 @@ func TestPathCompletionShowsOnlyNextLevelForNestedCollectionPrefix(t *testing.T)
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/aaaa\n") {
+	if !strings.Contains(output, "/admin/realms/master/aaaa/\n") {
 		t.Fatalf("expected aaaa next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/bbbb\n") {
+	if !strings.Contains(output, "/admin/realms/master/bbbb\n") {
 		t.Fatalf("expected bbbb next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/cccc\n") {
+	if !strings.Contains(output, "/admin/realms/master/cccc/\n") {
 		t.Fatalf("expected cccc next-level completion, got %q", output)
 	}
-	if strings.Contains(output, "/aaaa/resource-a") {
+	if strings.Contains(output, "/admin/realms/master/aaaa/resource-a") {
 		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
 	}
-	if strings.Contains(output, "/cccc/deeper") {
+	if strings.Contains(output, "/admin/realms/master/cccc/deeper") {
 		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
+	}
+}
+
+func TestPathCompletionScopedQueriesAvoidRootRecursiveFallbackWhenScopedMatchesExist(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/alpha"},
+		{LogicalPath: "/admin/realms/beta"},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/alpha") {
+		t.Fatalf("expected scoped completion output, got %q", output)
+	}
+	if !containsListCall(reconciler.listRemoteDetail, "/admin/realms", false) {
+		t.Fatalf("expected scoped non-recursive query for /admin/realms, calls=%#v", reconciler.listRemoteDetail)
+	}
+	if containsListCall(reconciler.listRemoteDetail, "/", true) {
+		t.Fatalf("expected scoped completion to avoid root-recursive remote fallback when scoped candidates exist, calls=%#v", reconciler.listRemoteDetail)
 	}
 }
 
@@ -3985,30 +4063,32 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
 type testReconciler struct {
-	metadataService *testMetadata
-	saveCalls       []savedResource
-	deleteCalls     []deleteCall
-	saveErr         error
-	getRemoteValue  resource.Value
-	getRemoteValues map[string]resource.Value
-	getRemoteErr    error
-	getRemoteCalls  []string
-	adHocCalls      []adHocCall
-	adHocErr        error
-	getLocalCalls   []string
-	listLocalCalls  []string
-	listRemoteCalls []string
-	listRemoteErr   error
-	applyCalls      []string
-	createCalls     []savedResource
-	updateCalls     []savedResource
-	diffCalls       []string
-	diffValues      map[string][]resource.DiffEntry
-	diffErr         error
-	getLocalValues  map[string]resource.Value
-	localList       []resource.Resource
-	remoteList      []resource.Resource
-	openAPISpec     resource.Value
+	metadataService  *testMetadata
+	saveCalls        []savedResource
+	deleteCalls      []deleteCall
+	saveErr          error
+	getRemoteValue   resource.Value
+	getRemoteValues  map[string]resource.Value
+	getRemoteErr     error
+	getRemoteCalls   []string
+	adHocCalls       []adHocCall
+	adHocErr         error
+	getLocalCalls    []string
+	listLocalCalls   []string
+	listLocalDetail  []listCall
+	listRemoteCalls  []string
+	listRemoteDetail []listCall
+	listRemoteErr    error
+	applyCalls       []string
+	createCalls      []savedResource
+	updateCalls      []savedResource
+	diffCalls        []string
+	diffValues       map[string][]resource.DiffEntry
+	diffErr          error
+	getLocalValues   map[string]resource.Value
+	localList        []resource.Resource
+	remoteList       []resource.Resource
+	openAPISpec      resource.Value
 }
 
 type savedResource struct {
@@ -4017,6 +4097,11 @@ type savedResource struct {
 }
 
 type deleteCall struct {
+	logicalPath string
+	recursive   bool
+}
+
+type listCall struct {
 	logicalPath string
 	recursive   bool
 }
@@ -4107,6 +4192,10 @@ func (r *testReconciler) Delete(_ context.Context, logicalPath string, policy or
 }
 func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listLocalCalls = append(r.listLocalCalls, logicalPath)
+	r.listLocalDetail = append(r.listLocalDetail, listCall{
+		logicalPath: logicalPath,
+		recursive:   policy.Recursive,
+	})
 	if len(r.localList) > 0 {
 		items := make([]resource.Resource, len(r.localList))
 		copy(items, r.localList)
@@ -4135,6 +4224,10 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 }
 func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listRemoteCalls = append(r.listRemoteCalls, logicalPath)
+	r.listRemoteDetail = append(r.listRemoteDetail, listCall{
+		logicalPath: logicalPath,
+		recursive:   policy.Recursive,
+	})
 	if r.listRemoteErr != nil {
 		return nil, r.listRemoteErr
 	}
@@ -4221,6 +4314,15 @@ func isPathOrDescendant(basePath string, candidatePath string) bool {
 func containsString(items []string, target string) bool {
 	for _, item := range items {
 		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsListCall(items []listCall, logicalPath string, recursive bool) bool {
+	for _, item := range items {
+		if item.logicalPath == logicalPath && item.recursive == recursive {
 			return true
 		}
 	}
