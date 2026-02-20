@@ -78,6 +78,7 @@ Acceptance contracts:
 40. CLI completion flag contract: shell completion output avoids duplicate option suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
 41. Metadata get fallback contract: `metadata get` returns inferred compact metadata when explicit metadata is absent but the endpoint exists in OpenAPI or remote discovery, and still returns `NotFoundError` when neither source resolves the endpoint.
 42. Metadata infer apply persistence contract: `metadata infer --apply` persists compacted metadata only (no default-equivalent directives), matching the command output contract, and JSON output/persisted JSON metadata end with one trailing newline.
+43. Secret get CLI contract: `secret get` accepts path/key positional and flag variants, path-only reads return deterministic `<key>=<value>` text lines, and single-secret reads print raw plaintext values without JSON quoting.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

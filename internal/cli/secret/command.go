@@ -79,7 +79,14 @@ func newGetCommand(deps common.CommandDependencies) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "get [path] [key]",
 		Short: "Read one secret or all secrets for a path",
-		Args:  cobra.MaximumNArgs(2),
+		Example: strings.Join([]string{
+			"  declarest secret get /customers/acme",
+			"  declarest secret get /customers/acme apiToken",
+			"  declarest secret get --path /customers/acme",
+			"  declarest secret get --path /customers/acme --key apiToken",
+			"  declarest secret get /customers/acme:apiToken",
+		}, "\n"),
+		Args: cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
 			secretProvider, err := common.RequireSecretProvider(deps)
 			if err != nil {
@@ -185,10 +192,14 @@ func resolveSecretGetFromSingleArg(pathFlag string, hasPathFlag bool, keyFlag st
 		return secretGetRequest{Path: normalizedPathArg, Key: keyFlag}, nil
 	}
 
-	pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(arg)
-	if composite {
+	if strings.HasPrefix(arg, "/") && strings.Contains(arg, ":") {
+		pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(arg)
+		if !composite {
+			return secretGetRequest{}, common.ValidationError("invalid secret target format: expected <path>:<key>", nil)
+		}
 		return secretGetRequest{Path: pathFromComposite, Key: keyFromComposite}, nil
 	}
+
 	if strings.HasPrefix(arg, "/") {
 		normalizedPathArg, err := normalizeSecretPathForGet(arg)
 		if err != nil {

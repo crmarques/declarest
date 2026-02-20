@@ -2177,6 +2177,115 @@ func TestSecretCommands(t *testing.T) {
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 
+	t.Run("get_accepts_path_key_input_formats_and_outputs_plaintext", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		seedSecrets := []struct {
+			key   string
+			value string
+		}{
+			{key: "/customers/acme:apiToken", value: "token-123"},
+			{key: "/customers/acme:password", value: "pw-123"},
+			{key: "/customers/acme:quoted", value: `he said "hi"`},
+			{key: "/customers/beta:apiToken", value: "token-b"},
+		}
+		for _, item := range seedSecrets {
+			if _, err := executeForTest(deps, "", "secret", "store", item.key, item.value); err != nil {
+				t.Fatalf("store %q returned error: %v", item.key, err)
+			}
+		}
+
+		tests := []struct {
+			name   string
+			args   []string
+			expect string
+		}{
+			{
+				name:   "path_only_lists_all_for_path",
+				args:   []string{"secret", "get", "/customers/acme"},
+				expect: "apiToken=token-123\npassword=pw-123\nquoted=he said \"hi\"\n",
+			},
+			{
+				name:   "path_and_key_positional",
+				args:   []string{"secret", "get", "/customers/acme", "apiToken"},
+				expect: "token-123\n",
+			},
+			{
+				name:   "path_flag_only_lists_all_for_path",
+				args:   []string{"secret", "get", "--path", "/customers/acme"},
+				expect: "apiToken=token-123\npassword=pw-123\nquoted=he said \"hi\"\n",
+			},
+			{
+				name:   "path_and_key_flags",
+				args:   []string{"secret", "get", "--path", "/customers/acme", "--key", "apiToken"},
+				expect: "token-123\n",
+			},
+			{
+				name:   "composite_path_key",
+				args:   []string{"secret", "get", "/customers/acme:apiToken"},
+				expect: "token-123\n",
+			},
+		}
+
+		for _, testCase := range tests {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				output, err := executeForTest(deps, "", testCase.args...)
+				if err != nil {
+					t.Fatalf("secret get returned error: %v", err)
+				}
+				if output != testCase.expect {
+					t.Fatalf("unexpected output; expected %q, got %q", testCase.expect, output)
+				}
+				if strings.Contains(output, "\"token-123\"") || strings.Contains(output, "\"pw-123\"") {
+					t.Fatalf("expected plain text output without added quotes, got %q", output)
+				}
+			})
+		}
+	})
+
+	t.Run("get_path_and_key_preserves_quotes_when_secret_contains_quotes", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:quoted", `he said "hi"`); err != nil {
+			t.Fatalf("store returned error: %v", err)
+		}
+
+		output, err := executeForTest(deps, "", "secret", "get", "/customers/acme", "quoted")
+		if err != nil {
+			t.Fatalf("get returned error: %v", err)
+		}
+		if output != "he said \"hi\"\n" {
+			t.Fatalf("expected quoted content preserved in plain text output, got %q", output)
+		}
+	})
+
+	t.Run("get_with_key_flag_requires_path", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "secret", "get", "--key", "apiToken")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("get_ignores_structured_output_modes_and_stays_plain_text", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:apiToken", "token-123"); err != nil {
+			t.Fatalf("store returned error: %v", err)
+		}
+
+		output, err := executeForTest(deps, "", "--output", "json", "secret", "get", "/customers/acme:apiToken")
+		if err != nil {
+			t.Fatalf("get returned error: %v", err)
+		}
+		if output != "token-123\n" {
+			t.Fatalf("expected plain text output even with --output json, got %q", output)
+		}
+	})
+
 	t.Run("mask_and_resolve_payload", func(t *testing.T) {
 		t.Parallel()
 

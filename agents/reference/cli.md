@@ -148,6 +148,10 @@ Interactive config commands:
 32. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
 33. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `secretsFromAttributes` for each detected resource path in scope.
 34. `secret detect --secret-attribute <attr>` MUST apply only that detected attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
+71. `secret get` MUST accept `secret get <path>`, `secret get <path> <key>`, `secret get --path <path>`, `secret get --path <path> --key <key>`, and `secret get <path>:<key>` in addition to direct key mode (`secret get <key>`).
+72. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
+73. `secret get` with path+key input (`<path> <key>`, `--path`+`--key`, or `<path>:<key>`) MUST resolve the canonical secret key as `<path>:<key>`.
+74. `secret get --key` MUST require `--path`.
 35. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 36. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
 37. `config create` MUST default `--format` to `yaml` while continuing to accept explicit `json`.
@@ -202,6 +206,7 @@ Interactive config commands:
 16. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
 17. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `resource-server`, and `secret-store` labels.
 18. `repo status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
+69. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.
 
 ## Failure Modes
 1. Missing required path argument.
@@ -231,6 +236,8 @@ Interactive config commands:
 25. `config print-template` receives positional arguments.
 26. `repo push` is invoked for a `filesystem` repository context.
 27. Context-catalog mutation input omits required `managed-server`.
+28. `secret get --key <key>` is invoked without `--path`.
+29. `secret get <path>:` uses an empty key segment.
 
 ## Edge Cases
 1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--handle-secrets`) but no secret manager is configured.
@@ -252,6 +259,7 @@ Interactive config commands:
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and otherwise returns the template path candidate.
 19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
+24. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
 20. `config create` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth`, `bearer-token`, or `custom-header` fields.
 21. `config print-template` works without a configured current context and still renders the full template.
 22. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
@@ -284,6 +292,10 @@ Interactive config commands:
 24. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
 25. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `secretsFromAttributes` for `/customers/acme`.
 26. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
+30. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
+31. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
+32. `declarest secret get --path /customers/acme --key apiToken` prints only the secret value for `/customers/acme:apiToken`.
+33. `declarest secret get /customers/acme:apiToken` prints only the secret value for `/customers/acme:apiToken`.
 27. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
 28. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
 77. `declarest metadata render /customers/acme get` renders metadata operation spec.
