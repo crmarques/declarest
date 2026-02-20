@@ -532,6 +532,77 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 	})
 }
 
+func TestAutoHandleDeclaredSaveSecrets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("masks_and_stores_metadata_declared_candidates", func(t *testing.T) {
+		t.Parallel()
+
+		secretProvider := &fakeSaveSecretProvider{}
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"credentials.authValue"},
+				},
+			},
+			Secrets: secretProvider,
+		}
+
+		updatedValue, err := autoHandleDeclaredSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{
+				"id": "acme",
+				"credentials": map[string]any{
+					"authValue": "plain-secret",
+				},
+			},
+		)
+		if err != nil {
+			t.Fatalf("autoHandleDeclaredSaveSecrets returned error: %v", err)
+		}
+
+		payload, ok := updatedValue.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map payload, got %T", updatedValue)
+		}
+		credentials, ok := payload["credentials"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected credentials map, got %T", payload["credentials"])
+		}
+		if got := credentials["authValue"]; got != `{{secret .}}` {
+			t.Fatalf("expected masked metadata-declared secret placeholder, got %#v", got)
+		}
+		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+			t.Fatalf("expected stored metadata-declared secret, got %#v", secretProvider.values)
+		}
+	})
+
+	t.Run("fails_when_secret_provider_is_missing_for_metadata_declared_candidates", func(t *testing.T) {
+		t.Parallel()
+
+		deps := common.CommandDependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{
+					SecretsFromAttributes: []string{"password"},
+				},
+			},
+		}
+
+		_, err := autoHandleDeclaredSaveSecrets(
+			context.Background(),
+			deps,
+			"/customers/acme",
+			map[string]any{"password": "plain-secret"},
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "secret provider is not configured") {
+			t.Fatalf("expected missing secret provider error, got %q", err.Error())
+		}
+	})
+}
+
 func TestHandleSaveSecrets(t *testing.T) {
 	t.Parallel()
 

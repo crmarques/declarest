@@ -381,6 +381,9 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read metadata file %q: %v", filePath, err)
 	}
+	if !strings.HasSuffix(string(content), "\n") {
+		t.Fatalf("expected metadata file to end with newline, got %q", string(content))
+	}
 
 	if strings.Contains(string(content), "null") {
 		t.Fatalf("expected metadata file without null values, got %s", string(content))

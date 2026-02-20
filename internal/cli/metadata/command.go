@@ -349,18 +349,9 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 
 			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
 
-			var openAPISpec resource.Value
-			orchestratorService, orchestratorErr := common.RequireOrchestrator(deps)
-			if orchestratorErr == nil {
-				openAPISpec, _ = orchestratorService.GetOpenAPISpec(command.Context())
-			}
+			_, openAPISpec := resolveOpenAPISpec(command.Context(), deps)
 
-			item, err := metadatadomain.InferFromOpenAPISpec(command.Context(), resolvedPath, request, openAPISpec)
-			if err != nil {
-				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
-				return err
-			}
-
+			var existingMetadata *metadatadomain.ResourceMetadata
 			existing, err := service.Get(command.Context(), resolvedPath)
 			if err != nil {
 				if !isTypedErrorCategory(err, faults.NotFoundError) {
@@ -368,10 +359,16 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 					return err
 				}
 			} else {
-				item = metadatadomain.MergeResourceMetadata(item, existing)
+				existingMetadata = &existing
 			}
 
-			outputItem, err := metadatadomain.CompactInferredMetadataDefaults(resolvedPath, item, openAPISpec)
+			outputItem, err := inferCompactedMetadata(
+				command.Context(),
+				resolvedPath,
+				request,
+				openAPISpec,
+				existingMetadata,
+			)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -548,12 +545,7 @@ func inferMetadataFromAvailableEndpoints(
 	deps common.CommandDependencies,
 	logicalPath string,
 ) (metadatadomain.ResourceMetadata, bool, error) {
-	orchestratorService, orchestratorErr := common.RequireOrchestrator(deps)
-
-	var openAPISpec resource.Value
-	if orchestratorErr == nil {
-		openAPISpec, _ = orchestratorService.GetOpenAPISpec(ctx)
-	}
+	orchestratorService, openAPISpec := resolveOpenAPISpec(ctx, deps)
 
 	existsInOpenAPI, err := metadatadomain.HasOpenAPIPath(logicalPath, openAPISpec)
 	if err != nil {
@@ -561,7 +553,7 @@ func inferMetadataFromAvailableEndpoints(
 	}
 
 	existsRemotely := false
-	if !existsInOpenAPI && orchestratorErr == nil {
+	if !existsInOpenAPI && orchestratorService != nil {
 		existsRemotely, err = metadataPathExistsRemotely(ctx, orchestratorService, logicalPath)
 		if err != nil {
 			return metadatadomain.ResourceMetadata{}, false, err
@@ -572,17 +564,47 @@ func inferMetadataFromAvailableEndpoints(
 		return metadatadomain.ResourceMetadata{}, false, nil
 	}
 
-	inferred, err := metadatadomain.InferFromOpenAPISpec(ctx, logicalPath, metadatadomain.InferenceRequest{}, openAPISpec)
-	if err != nil {
-		return metadatadomain.ResourceMetadata{}, false, err
-	}
-
-	compact, err := metadatadomain.CompactInferredMetadataDefaults(logicalPath, inferred, openAPISpec)
+	compact, err := inferCompactedMetadata(ctx, logicalPath, metadatadomain.InferenceRequest{}, openAPISpec, nil)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, false, err
 	}
 
 	return compact, true, nil
+}
+
+func resolveOpenAPISpec(
+	ctx context.Context,
+	deps common.CommandDependencies,
+) (orchestratordomain.Orchestrator, resource.Value) {
+	orchestratorService, err := common.RequireOrchestrator(deps)
+	if err != nil {
+		return nil, nil
+	}
+
+	openAPISpec, _ := orchestratorService.GetOpenAPISpec(ctx)
+	return orchestratorService, openAPISpec
+}
+
+func inferCompactedMetadata(
+	ctx context.Context,
+	logicalPath string,
+	request metadatadomain.InferenceRequest,
+	openAPISpec resource.Value,
+	existing *metadatadomain.ResourceMetadata,
+) (metadatadomain.ResourceMetadata, error) {
+	inferred, err := metadatadomain.InferFromOpenAPISpec(ctx, logicalPath, request, openAPISpec)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	if existing != nil {
+		inferred = metadatadomain.MergeResourceMetadata(inferred, *existing)
+	}
+
+	compact, err := metadatadomain.CompactInferredMetadataDefaults(logicalPath, inferred, openAPISpec)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	return compact, nil
 }
 
 func metadataPathExistsRemotely(

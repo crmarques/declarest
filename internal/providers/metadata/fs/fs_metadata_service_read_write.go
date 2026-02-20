@@ -277,8 +277,19 @@ func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetad
 		if err != nil {
 			return nil, internalError("failed to encode json metadata", err)
 		}
-		return encoded, nil
+		return ensureTrailingNewline(encoded), nil
 	}
+}
+
+func ensureTrailingNewline(data []byte) []byte {
+	if len(data) == 0 || data[len(data)-1] == '\n' {
+		return data
+	}
+
+	result := make([]byte, len(data)+1)
+	copy(result, data)
+	result[len(data)] = '\n'
+	return result
 }
 
 func resourceMetadataForStorage(metadata metadatadomain.ResourceMetadata) storageResourceMetadata {

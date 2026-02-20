@@ -949,7 +949,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("list_save_allows_metadata_declared_plaintext_secret", func(t *testing.T) {
+	t.Run("list_save_metadata_declared_plaintext_secret_is_auto_masked_and_stored", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute:       "id",
@@ -958,6 +958,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		reconciler := &testReconciler{metadataService: metadataService}
 
 		deps := newResourceSaveDeps(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme","secret":"plain-secret"}]`,
@@ -971,9 +972,20 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if len(reconciler.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
 		}
+
+		savedPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		if got := savedPayload["secret"]; got != `{{secret .}}` {
+			t.Fatalf("expected saved secret placeholder, got %#v", got)
+		}
+		if secretProvider.values["/customers/acme:secret"] != "plain-secret" {
+			t.Fatalf("expected stored secret value, got %#v", secretProvider.values)
+		}
 	})
 
-	t.Run("metadata_secrets_from_attributes_allows_plaintext", func(t *testing.T) {
+	t.Run("metadata_secrets_from_attributes_auto_masks_and_stores_plaintext", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"credentials.authValue"},
@@ -981,6 +993,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		reconciler := &testReconciler{metadataService: metadataService}
 
 		deps := newResourceSaveDeps(reconciler, metadataService)
+		secretProvider := deps.Secrets.(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
 			`{"credentials":{"authValue":"plain-secret"}}`,
@@ -993,6 +1006,46 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		if len(reconciler.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		}
+
+		savedPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+		}
+		credentials, ok := savedPayload["credentials"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected nested credentials map, got %T", savedPayload["credentials"])
+		}
+		if got := credentials["authValue"]; got != `{{secret .}}` {
+			t.Fatalf("expected masked authValue placeholder, got %#v", got)
+		}
+		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+			t.Fatalf("expected stored metadata-declared secret, got %#v", secretProvider.values)
+		}
+	})
+
+	t.Run("metadata_secrets_from_attributes_requires_secret_provider", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
+			SecretsFromAttributes: []string{"credentials.authValue"},
+		}
+		reconciler := &testReconciler{metadataService: metadataService}
+
+		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps.Secrets = nil
+		_, err := executeForTest(
+			deps,
+			`{"credentials":{"authValue":"plain-secret"}}`,
+			"resource",
+			"save",
+			"/customers/acme",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), "secret provider is not configured") {
+			t.Fatalf("expected missing secret provider error, got %q", err.Error())
+		}
+		if len(reconciler.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when secret provider is missing, got %d", len(reconciler.saveCalls))
 		}
 	})
 
@@ -2076,6 +2129,9 @@ func TestMetadataPathCommands(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("unexpected infer apply error: %v", err)
+		}
+		if !strings.HasSuffix(output, "\n") {
+			t.Fatalf("expected infer output to end with newline, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
 			t.Fatalf("expected infer apply output without default operations, got %q", output)

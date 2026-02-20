@@ -199,6 +199,10 @@ func saveResolvedPathPayload(
 			}
 			return orchestratorService.Save(ctx, resolvedPath, value)
 		}
+		value, err = autoHandleDeclaredSaveSecrets(ctx, deps, resolvedPath, value)
+		if err != nil {
+			return err
+		}
 		if err := enforceSaveSecretSafety(ctx, deps, resolvedPath, value, ignore); err != nil {
 			return err
 		}
@@ -235,24 +239,10 @@ func saveResolvedPathPayload(
 				return err
 			}
 
-			updatedEntries := make([]saveEntry, 0, len(entries))
-			for _, entry := range entries {
-				processedPayload, _, err := applySaveSecretCandidates(
-					ctx,
-					secretProvider,
-					entry.LogicalPath,
-					entry.Payload,
-					selectedCandidates,
-				)
-				if err != nil {
-					return err
-				}
-				updatedEntries = append(updatedEntries, saveEntry{
-					LogicalPath: entry.LogicalPath,
-					Payload:     processedPayload,
-				})
+			entries, err = applySaveSecretCandidatesToEntries(ctx, secretProvider, entries, selectedCandidates)
+			if err != nil {
+				return err
 			}
-			entries = updatedEntries
 
 			if err := persistSaveSecretAttributes(
 				ctx,
@@ -275,6 +265,16 @@ func saveResolvedPathPayload(
 		}
 	} else {
 		declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, resolvedPath)
+		if err != nil {
+			return err
+		}
+		entries, err = autoHandleDeclaredSaveSecretsForEntries(
+			ctx,
+			deps,
+			entries,
+			collectionCandidates,
+			declaredCandidates,
+		)
 		if err != nil {
 			return err
 		}
@@ -715,6 +715,124 @@ func handleSaveSecrets(
 	}
 
 	return processedPayload, unhandledCandidates, nil
+}
+
+func autoHandleDeclaredSaveSecrets(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	logicalPath string,
+	value resource.Value,
+) (resource.Value, error) {
+	normalizedValue, err := resource.Normalize(value)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates, err := detectSaveSecretCandidates(ctx, deps, logicalPath, normalizedValue)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		return normalizedValue, nil
+	}
+
+	declaredCandidates, err := resolveDeclaredSaveSecretAttributes(ctx, deps, logicalPath)
+	if err != nil {
+		return nil, err
+	}
+
+	metadataDeclaredCandidates := intersectSaveSecretCandidates(candidates, declaredCandidates)
+	if len(metadataDeclaredCandidates) == 0 {
+		return normalizedValue, nil
+	}
+
+	secretProvider, err := common.RequireSecretProvider(deps)
+	if err != nil {
+		return nil, err
+	}
+
+	processedPayload, _, err := applySaveSecretCandidates(
+		ctx,
+		secretProvider,
+		logicalPath,
+		normalizedValue,
+		metadataDeclaredCandidates,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return processedPayload, nil
+}
+
+func autoHandleDeclaredSaveSecretsForEntries(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	entries []saveEntry,
+	detectedCandidates []string,
+	declaredCandidates []string,
+) ([]saveEntry, error) {
+	metadataDeclaredCandidates := intersectSaveSecretCandidates(detectedCandidates, declaredCandidates)
+	if len(metadataDeclaredCandidates) == 0 {
+		return entries, nil
+	}
+
+	secretProvider, err := common.RequireSecretProvider(deps)
+	if err != nil {
+		return nil, err
+	}
+
+	return applySaveSecretCandidatesToEntries(ctx, secretProvider, entries, metadataDeclaredCandidates)
+}
+
+func applySaveSecretCandidatesToEntries(
+	ctx context.Context,
+	secretProvider secretdomain.SecretProvider,
+	entries []saveEntry,
+	selectedCandidates []string,
+) ([]saveEntry, error) {
+	if len(entries) == 0 || len(selectedCandidates) == 0 {
+		return entries, nil
+	}
+
+	updatedEntries := make([]saveEntry, 0, len(entries))
+	for _, entry := range entries {
+		processedPayload, _, err := applySaveSecretCandidates(
+			ctx,
+			secretProvider,
+			entry.LogicalPath,
+			entry.Payload,
+			selectedCandidates,
+		)
+		if err != nil {
+			return nil, err
+		}
+		updatedEntries = append(updatedEntries, saveEntry{
+			LogicalPath: entry.LogicalPath,
+			Payload:     processedPayload,
+		})
+	}
+	return updatedEntries, nil
+}
+
+func intersectSaveSecretCandidates(candidates []string, declared []string) []string {
+	normalizedCandidates := dedupeAndSortSaveSecretAttributes(candidates)
+	if len(normalizedCandidates) == 0 || len(declared) == 0 {
+		return nil
+	}
+
+	declaredSet := make(map[string]struct{}, len(declared))
+	for _, candidate := range dedupeAndSortSaveSecretAttributes(declared) {
+		declaredSet[candidate] = struct{}{}
+	}
+
+	intersections := make([]string, 0, len(normalizedCandidates))
+	for _, candidate := range normalizedCandidates {
+		if _, found := declaredSet[candidate]; !found {
+			continue
+		}
+		intersections = append(intersections, candidate)
+	}
+	return intersections
 }
 
 func applySaveSecretCandidates(

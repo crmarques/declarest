@@ -112,7 +112,7 @@ Interactive config commands:
 66. When `metadata render` defaults to `get` and the resolved `get` operation path is missing, it MUST retry with `list` before returning a validation error.
 67. `metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
 68. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
-69. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults.
+69. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
 70. `metadata get` MUST return inferred compact metadata when explicit metadata is missing and the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
 3. Mutations from stdin MUST validate payload format before side effects.
 4. Option conflicts MUST produce usage errors.
@@ -135,7 +135,7 @@ Interactive config commands:
 21. `resource save` without payload input (`--file` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 22. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 23. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
-24. `resource save` MUST reject potential plaintext secret values that are not declared by metadata `secretsFromAttributes` and fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
+24. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `secretsFromAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
 25. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
 26. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `secretsFromAttributes` for the saved logical path.
 27. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>`, resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`, and remain compatible with legacy absolute key placeholders.
@@ -195,6 +195,7 @@ Interactive config commands:
 13. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
 14. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
 67. Metadata command structured output (`metadata get|resolve|infer`) MUST omit nil directive fields instead of emitting `null` entries.
+68. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
 15. State-changing commands (`resource save|apply|create|update|delete` and `ad-hoc post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 16. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
 17. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `resource-server`, and `secret-store` labels.
@@ -210,7 +211,7 @@ Interactive config commands:
 7. `resource delete` receives conflicting source flags (`--repository`, `--remote-server`, `--both`).
 8. `resource save` receives both `--as-items` and `--as-one-resource`.
 9. `resource save --as-items` receives non-list input.
-10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, or the command attempts to overwrite an existing repository resource without `--force`.
+10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, detects metadata-declared plaintext candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--force`.
 11. `resource save --handle-secrets=<attr-list>` includes one or more attributes that are not detected in the payload.
 12. `resource create` is invoked without payload input and no matching local resources exist under the target path.
 13. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
@@ -230,7 +231,7 @@ Interactive config commands:
 27. Context-catalog mutation input omits required `managed-server`.
 
 ## Edge Cases
-1. `resource save --handle-secrets` is requested but no secret manager is configured.
+1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--handle-secrets`) but no secret manager is configured.
 2. `resource save --handle-secrets` handles only a subset and fails with warning for the remaining non-metadata-declared plaintext candidates unless `--ignore` is set.
 3. `delete` invoked on collection without recursive force confirmation.
 4. `metadata infer` called with missing OpenAPI source.
@@ -276,13 +277,14 @@ Interactive config commands:
 19. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
 20. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
 21. `declarest resource save /customers/acme --ignore < payload.json` bypasses plaintext-secret save guard.
-22. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `secretsFromAttributes`.
-23. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
-24. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `secretsFromAttributes` for `/customers/acme`.
-25. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
-26. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
-27. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
-28. `declarest metadata render /customers/acme get` renders metadata operation spec.
+22. `declarest resource save /customers/acme < payload.json` with metadata `secretsFromAttributes: [credentials.authValue]` stores and masks `credentials.authValue` automatically before repository persistence.
+23. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `secretsFromAttributes`.
+24. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
+25. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `secretsFromAttributes` for `/customers/acme`.
+26. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
+27. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
+28. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
+77. `declarest metadata render /customers/acme get` renders metadata operation spec.
 75. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
 76. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
 29. `declarest repo push --force` executes force push with explicit safety acknowledgment.
