@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -113,6 +114,9 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 
 	candidates, listErr := serverManager.List(ctx, resourceInfo.CollectionPath, resourceInfo.Metadata)
 	if listErr != nil {
+		if isTypedCategory(listErr, faults.NotFoundError) || isFallbackListPayloadShapeError(listErr) {
+			return nil, err
+		}
 		return nil, listErr
 	}
 
@@ -331,6 +335,23 @@ func listPayloadFromResources(items []resource.Resource) resource.Value {
 		payload = append(payload, item.Payload)
 	}
 	return payload
+}
+
+func isFallbackListPayloadShapeError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+	if typedErr.Category != faults.ValidationError {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(typedErr.Message))
+	return strings.HasPrefix(message, "list response ") || strings.HasPrefix(message, "list payload ")
 }
 
 func (r *DefaultOrchestrator) renderOperationSpec(

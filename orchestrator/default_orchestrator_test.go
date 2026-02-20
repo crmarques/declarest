@@ -331,6 +331,29 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 	}
 }
 
+func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadIsInvalid(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listErr: faults.NewTypedError(
+			faults.ValidationError,
+			`list response object is ambiguous: expected an "items" array or a single array field`,
+			nil,
+		),
+	}
+	reconciler := &DefaultOrchestrator{
+		Server: serverManager,
+	}
+
+	_, err := reconciler.GetRemote(context.Background(), "/admin/realms/publico/organizatio")
+	assertTypedCategory(t, err, faults.NotFoundError)
+
+	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/publico"}) {
+		t.Fatalf("expected parent collection fallback path, got %#v", serverManager.listPaths)
+	}
+}
+
 func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T) {
 	t.Parallel()
 
