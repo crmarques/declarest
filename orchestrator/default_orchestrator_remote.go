@@ -99,6 +99,10 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 
 	remoteValue, err := serverManager.Get(ctx, resourceInfo)
 	if err == nil {
+		ambiguityErr := r.detectRemoteIdentityAmbiguityAfterDirectGet(ctx, serverManager, resourceInfo)
+		if ambiguityErr != nil {
+			return nil, ambiguityErr
+		}
 		return remoteValue, nil
 	}
 	if !isTypedCategory(err, faults.NotFoundError) {
@@ -131,17 +135,16 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 
 	matched := make([]resource.Resource, 0, len(candidates))
 	for _, candidate := range candidates {
-		if candidate.LocalAlias == resourceInfo.LocalAlias {
-			matched = append(matched, candidate)
-			continue
-		}
-		if resourceInfo.RemoteID != "" && candidate.RemoteID == resourceInfo.RemoteID {
+		if matchesRemoteFallbackCandidate(resourceInfo, candidate) {
 			matched = append(matched, candidate)
 		}
 	}
 
 	switch len(matched) {
 	case 0:
+		if allowsSingletonListIdentityFallback(resourceInfo.Metadata, candidates) {
+			return candidates[0].Payload, nil
+		}
 		return nil, err
 	case 1:
 		return matched[0].Payload, nil
@@ -152,6 +155,42 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 			nil,
 		)
 	}
+}
+
+func (r *DefaultOrchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	resourceInfo resource.Resource,
+) error {
+	if !shouldCheckRemoteIdentityAmbiguity(resourceInfo) {
+		return nil
+	}
+
+	candidates, listErr := serverManager.List(ctx, resourceInfo.CollectionPath, resourceInfo.Metadata)
+	if listErr != nil {
+		if isTypedCategory(listErr, faults.ConflictError) {
+			return listErr
+		}
+		// Keep direct GET deterministic; this guard is best-effort.
+		return nil
+	}
+
+	matchCount := 0
+	for _, candidate := range candidates {
+		if !matchesRemoteFallbackCandidate(resourceInfo, candidate) {
+			continue
+		}
+		matchCount++
+		if matchCount > 1 {
+			return faults.NewTypedError(
+				faults.ConflictError,
+				fmt.Sprintf("remote fallback for %q is ambiguous", resourceInfo.LogicalPath),
+				nil,
+			)
+		}
+	}
+
+	return nil
 }
 
 func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
@@ -247,20 +286,31 @@ func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
 
 		switch len(matched) {
 		case 0:
+			if allowsSingletonListIdentityFallback(segmentInfo.Metadata, candidates) {
+				nextPath, replaced, replaceErr := replaceLogicalPathSegment(
+					segments,
+					segmentIndex,
+					remoteFallbackSegmentValue(candidates[0], segmentInfo.Metadata),
+				)
+				if replaceErr != nil {
+					return nil, replaceErr
+				}
+				if replaced {
+					return []string{nextPath}, nil
+				}
+			}
 			continue
 		case 1:
-			replacement := remoteFallbackSegmentValue(matched[0], segmentInfo.Metadata)
-			if strings.TrimSpace(replacement) == "" || replacement == segments[segmentIndex] {
-				continue
+			nextPath, replaced, replaceErr := replaceLogicalPathSegment(
+				segments,
+				segmentIndex,
+				remoteFallbackSegmentValue(matched[0], segmentInfo.Metadata),
+			)
+			if replaceErr != nil {
+				return nil, replaceErr
 			}
-
-			nextSegments := make([]string, len(segments))
-			copy(nextSegments, segments)
-			nextSegments[segmentIndex] = replacement
-
-			nextPath, normalizeErr := resource.NormalizeLogicalPath("/" + strings.Join(nextSegments, "/"))
-			if normalizeErr != nil {
-				return nil, normalizeErr
+			if !replaced {
+				continue
 			}
 			return []string{nextPath}, nil
 		default:
@@ -297,8 +347,74 @@ func remoteFallbackSegmentValue(candidate resource.Resource, md metadata.Resourc
 	return ""
 }
 
+func replaceLogicalPathSegment(
+	segments []string,
+	segmentIndex int,
+	replacement string,
+) (string, bool, error) {
+	trimmedReplacement := strings.TrimSpace(replacement)
+	if trimmedReplacement == "" || trimmedReplacement == segments[segmentIndex] {
+		return "", false, nil
+	}
+
+	nextSegments := make([]string, len(segments))
+	copy(nextSegments, segments)
+	nextSegments[segmentIndex] = trimmedReplacement
+
+	nextPath, normalizeErr := resource.NormalizeLogicalPath("/" + strings.Join(nextSegments, "/"))
+	if normalizeErr != nil {
+		return "", false, normalizeErr
+	}
+	return nextPath, true, nil
+}
+
 func hasRemoteFallbackIdentityMetadata(md metadata.ResourceMetadata) bool {
 	return strings.TrimSpace(md.IDFromAttribute) != "" || strings.TrimSpace(md.AliasFromAttribute) != ""
+}
+
+func shouldCheckRemoteIdentityAmbiguity(resourceInfo resource.Resource) bool {
+	if strings.TrimSpace(resourceInfo.Metadata.IDFromAttribute) == "" {
+		return false
+	}
+	if strings.TrimSpace(resourceInfo.Metadata.AliasFromAttribute) == "" {
+		return false
+	}
+
+	alias := strings.TrimSpace(resourceInfo.LocalAlias)
+	remoteID := strings.TrimSpace(resourceInfo.RemoteID)
+	if alias == "" || remoteID == "" {
+		return false
+	}
+	return alias != remoteID
+}
+
+func matchesRemoteFallbackCandidate(resourceInfo resource.Resource, candidate resource.Resource) bool {
+	if candidate.LocalAlias == resourceInfo.LocalAlias {
+		return true
+	}
+	return resourceInfo.RemoteID != "" && candidate.RemoteID == resourceInfo.RemoteID
+}
+
+func allowsSingletonListIdentityFallback(
+	md metadata.ResourceMetadata,
+	candidates []resource.Resource,
+) bool {
+	if len(candidates) != 1 {
+		return false
+	}
+
+	if strings.TrimSpace(md.JQ) != "" {
+		return true
+	}
+	if md.Operations == nil {
+		return false
+	}
+
+	listSpec, hasListSpec := md.Operations[string(metadata.OperationList)]
+	if !hasListSpec {
+		return false
+	}
+	return strings.TrimSpace(listSpec.JQ) != ""
 }
 
 func (r *DefaultOrchestrator) fetchRemoteCollectionValue(

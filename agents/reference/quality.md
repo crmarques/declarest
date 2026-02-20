@@ -27,11 +27,11 @@ Define quality gates and security invariants so behavior changes are verifiable 
 ## Data Contracts
 Test layers:
 1. Unit: pure transforms, normalization, metadata layering/template rendering, secret placeholder normalization.
-2. Integration: reconciler workflows with fake providers and conflict handling.
+2. Integration: orchestrator workflows with fake providers and conflict handling.
 3. E2E: CLI workflows using representative stacks and fixture trees.
 
 Acceptance contracts:
-1. Reconciler idempotency for repeated apply.
+1. Orchestrator idempotency for repeated apply.
 2. Stable diff ordering for equivalent inputs.
 3. Typed error categories for all major failure classes.
 
@@ -53,7 +53,7 @@ Acceptance contracts:
 15. OAuth2 component auth: `client_credentials` token issuance and bearer-token rejection when auth is missing or invalid.
 16. mTLS component auth: only configured client certificates are accepted when mTLS is enabled.
 17. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
-18. Ad-hoc CLI routing: `ad-hoc <method>` maps to managed-server requests with positional/flag path validation and payload decoding from `--file` or stdin, and `ad-hoc post|put --payload` inline decoding with source-conflict validation.
+18. Ad-hoc CLI routing: `ad-hoc <method>` maps to resource-server requests with positional/flag path validation and payload decoding from `--file` or stdin, and `ad-hoc post|put --payload` inline decoding with source-conflict validation.
 19. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
 20. Resource save secret safeguard: `resource save` fails on potential plaintext secrets that are not metadata-declared unless `--ignore` is provided, metadata-declared candidates are automatically stored/masked before persistence (and fail when no secret provider is configured), and `resource save --handle-secrets[=<comma-separated-attributes>]` handles selected candidates, stores deterministic path-scoped secret keys, writes `{{secret .}}` placeholders, updates metadata, skips group items that do not contain requested attributes, and fails with warning when non-metadata-declared candidates remain unhandled.
 21. Secret detect metadata fix flow: `secret detect` scans repository scope when no payload input is provided (default scope `/`), `secret detect --fix` merges detected attributes into metadata `resourceInfo.secretInAttributes`, and `--secret-attribute` filtering has negative validation coverage for payload and repository-scan modes.
@@ -68,10 +68,10 @@ Acceptance contracts:
 30. CLI path completion: completion merges repository paths, remote paths, and OpenAPI paths with command-aware source priority (remote-first defaults for `resource get|save|list|delete` and `ad-hoc <method>`, repository-first defaults for `resource apply|create|update|diff|explain|template`, `metadata *`, and path-aware `secret` commands; each uses fallback to the secondary source when the preferred source has no candidates); templated OpenAPI segments resolve concrete values through source-prioritized collection listings, placeholder segments (`{...}`) are excluded from rendered suggestions, alias-aware segments prefer metadata `aliasFromAttribute` values over IDs when available, rendered suggestions use canonical absolute paths that remain prefix-compatible with shell token filtering, collection-prefix suggestions preserve deterministic trailing-`/` semantics, scoped completion queries prefer parent-path direct listing with bounded recursive/root fallback only when needed, and path completions emit `NoSpace` so accepted completions do not auto-append a trailing space.
 31. CLI startup bootstrap gating: `version` and context-catalog commands (`config create|print-template|add|update|delete|rename|list|use|show|current|resolve|validate`) execute without active-context resolution, while runtime commands (`resource/*`, `repo/*`, `metadata/*`, `secret/*`, `ad-hoc <method>`, `config check`) still fail fast when no active context is available.
 32. Config create input contract: `config create` defaults `--format` to `yaml`, accepts context name from positional arg or global `--context`, skips interactive name prompt when provided, and returns `ValidationError` when both names differ.
-33. Config create interactive schema coverage: wizard prompts require managed-server capture, allow optional-section skipping for optional blocks, support full context attribute capture across repository/managed-server/secret-store/preference blocks, and enforce one-of prompt branching so only the selected auth/key-source/provider branch is collected.
+33. Config create interactive schema coverage: wizard prompts require resource-server capture, allow optional-section skipping for optional blocks, support full context attribute capture across repository/resource-server/secret-store/preference blocks, and enforce one-of prompt branching so only the selected auth/key-source/provider branch is collected.
 34. Config template output contract: `config print-template` emits a stable commented YAML template containing all supported context options, explicitly documents mutually-exclusive sections, accepts no positional args, and runs without active-context resolution.
 35. Repo command repository-type awareness: `repo push` fails fast with `ValidationError` on filesystem contexts, and `repo status` default text output differs by repository type while preserving stable structured (`json|yaml`) sync fields.
-36. Context validation contract: all context-catalog mutation and resolve flows fail with `ValidationError` when `managed-server` is missing, and interactive `config create` always prompts managed-server configuration.
+36. Context validation contract: all context-catalog mutation and resolve flows fail with `ValidationError` when `resource-server` is missing, and interactive `config create` always prompts resource-server configuration.
 37. Secret-candidate false-positive guard: detection and save-time checks ignore numeric-only and boolean-like policy/toggle values for secret-like keys/attributes (for example action-token lifespan maps and token-claim toggles) while preserving detection for real plaintext secret strings.
 38. Metadata selector-path contract: `metadata infer|render|get` accept intermediary selector paths (for example `/admin/realms/_/clients/`), `metadata render` defaults operation by target kind and retries `list` when defaulted `get` is missing a path, infer uses OpenAPI hints when available (including fallback placeholder normalization for non-template-safe OpenAPI parameter names), structured metadata output omits nil directive fields, and infer output omits directives equal to deterministic fallback defaults.
 39. Resource get secret-output contract: `resource get` redacts metadata-declared secret attributes to `{{secret .}}` for `--repository` and `--remote-server` by default, and `--show-secrets` restores plaintext output for those attributes.
@@ -83,6 +83,7 @@ Acceptance contracts:
 45. Remote read fallback error contract: when single-resource parent-collection fallback receives a non-list validation payload (for example object/array-shape mismatch), commands preserve the original resource `NotFound` instead of surfacing list-decoding validation output.
 46. Metadata path indirection contract: rendered operation specs resolve `resourceInfo.collectionPath` templates from handled logical-path context (for example intermediary `/_/` selectors), treat `.`-prefixed operation paths as collection-relative, default omitted operation paths to `.` for `create|list` and `./{{.id}}` for `get|update|delete|compare`, and accept compatibility decoding from `operationInfo.<operation>.url.path`.
 47. List jq transform contract: list workflows execute resolved list-operation `jq` expressions before list-shape extraction; valid filters constrain candidate resources deterministically and invalid jq expressions fail with `ValidationError`.
+48. Remote metadata singleton fallback contract: when metadata list filtering (`jq`) yields exactly one candidate for a `NotFound` single-resource read, remote fallback resolves that candidate deterministically (including canonical-ID retry path) instead of returning the original `NotFound`.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

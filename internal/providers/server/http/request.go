@@ -206,7 +206,7 @@ func (g *HTTPResourceServerGateway) newRequest(ctx context.Context, spec metadat
 
 func (g *HTTPResourceServerGateway) resolveRequestURL(requestPath string, query map[string]string) (string, error) {
 	if parsed, err := url.Parse(requestPath); err == nil && parsed.Scheme != "" {
-		return "", validationError("operation path must be relative to managed-server.http.base-url", nil)
+		return "", validationError("operation path must be relative to resource-server.http.base-url", nil)
 	}
 
 	target := *g.baseURL

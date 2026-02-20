@@ -46,8 +46,8 @@ contexts:
       # filesystem:
       #   base-dir: /path/to/repository
 
-    # Required managed-server.
-    managed-server:
+    # Required resource-server.
+    resource-server:
       http:
         base-url: https://example.com/api
         # openapi: /path/to/openapi.yaml

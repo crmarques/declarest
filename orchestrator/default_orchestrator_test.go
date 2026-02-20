@@ -24,11 +24,11 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: fakeRepo,
 	}
 
-	value, err := reconciler.Get(context.Background(), "/customers/acme")
+	value, err := orchestrator.Get(context.Background(), "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get returned error: %v", err)
 	}
@@ -36,11 +36,11 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 		t.Fatal("expected non-nil value")
 	}
 
-	if err := reconciler.Save(context.Background(), "/customers/acme", map[string]any{"x": 1}); err != nil {
+	if err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"x": 1}); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
-	items, err := reconciler.ListLocal(context.Background(), "/customers", ListPolicy{Recursive: true})
+	items, err := orchestrator.ListLocal(context.Background(), "/customers", ListPolicy{Recursive: true})
 	if err != nil {
 		t.Fatalf("ListLocal returned error: %v", err)
 	}
@@ -64,11 +64,11 @@ func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Server: serverManager,
 	}
 
-	if err := reconciler.Delete(context.Background(), "/customers/acme", DeletePolicy{}); err != nil {
+	if err := orchestrator.Delete(context.Background(), "/customers/acme", DeletePolicy{}); err != nil {
 		t.Fatalf("Delete returned error: %v", err)
 	}
 	if !serverManager.deleteCalled {
@@ -82,9 +82,9 @@ func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{}
+	orchestrator := &DefaultOrchestrator{}
 
-	_, err := reconciler.Get(context.Background(), "/customers/acme")
+	_, err := orchestrator.Get(context.Background(), "/customers/acme")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -95,7 +95,7 @@ func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: &fakeRepository{
 			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		},
@@ -107,12 +107,12 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 		},
 	}
 
-	value, err := reconciler.Get(context.Background(), "/admin/realms/")
+	value, err := orchestrator.Get(context.Background(), "/admin/realms/")
 	if err != nil {
 		t.Fatalf("Get returned error: %v", err)
 	}
 
-	serverManager := reconciler.Server.(*fakeServer)
+	serverManager := orchestrator.Server.(*fakeServer)
 	if !serverManager.getCalled {
 		t.Fatal("expected remote fallback get call")
 	}
@@ -130,7 +130,7 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: &fakeRepository{
 			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		},
@@ -145,12 +145,12 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 		},
 	}
 
-	_, err := reconciler.Get(context.Background(), "/admin/realms/platform")
+	_, err := orchestrator.Get(context.Background(), "/admin/realms/platform")
 	if err != nil {
 		t.Fatalf("Get returned error: %v", err)
 	}
 
-	serverManager := reconciler.Server.(*fakeServer)
+	serverManager := orchestrator.Server.(*fakeServer)
 	payload, ok := serverManager.lastResource.Payload.(map[string]any)
 	if !ok {
 		t.Fatalf("expected payload map, got %T", serverManager.lastResource.Payload)
@@ -166,7 +166,7 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
@@ -189,12 +189,12 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 		},
 	}
 
-	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/clients/account")
+	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/clients/account")
 	if err != nil {
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
-	serverManager := reconciler.Server.(*fakeServer)
+	serverManager := orchestrator.Server.(*fakeServer)
 	if !serverManager.listCalled {
 		t.Fatal("expected fallback list call after not found get")
 	}
@@ -215,6 +215,119 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected alias-matched payload, got %#v", payload)
 	}
+}
+
+func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T) {
+	t.Parallel()
+
+	requestPath := "/admin/realms/publico-br/user-registry"
+	resolvedIDPath := "/admin/realms/publico-br/13de4420-7c8d-4db7-b8f7-2d2a26f2053e"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getValues: map[string]resource.Value{
+			resolvedIDPath: map[string]any{
+				"id":         "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name":       "ldap-1",
+				"providerId": "ldap",
+			},
+		},
+		listValues: map[string][]resource.Resource{
+			"/admin/realms/publico-br": {
+				{
+					LogicalPath: "/admin/realms/publico-br/ldap-1",
+					LocalAlias:  "ldap-1",
+					RemoteID:    "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+					Payload: map[string]any{
+						"id":         "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+						"name":       "ldap-1",
+						"providerId": "ldap",
+					},
+				},
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+				CollectionPath:     "/admin/realms/{{.realm}}/components",
+				Operations: map[string]metadatadomain.OperationSpec{
+					string(metadatadomain.OperationList): {
+						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+					},
+				},
+			},
+		},
+		Server: serverManager,
+	}
+
+	value, err := orchestrator.GetRemote(context.Background(), requestPath)
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	if !reflect.DeepEqual(serverManager.getPaths, []string{requestPath, resolvedIDPath}) {
+		t.Fatalf("expected jq singleton fallback to retry with resolved id path, got get calls %#v", serverManager.getPaths)
+	}
+	foundCollectionFallback := false
+	for _, listPath := range serverManager.listPaths {
+		if listPath == "/admin/realms/publico-br" {
+			foundCollectionFallback = true
+			break
+		}
+	}
+	if !foundCollectionFallback {
+		t.Fatalf("expected fallback list call for /admin/realms/publico-br, got %#v", serverManager.listPaths)
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload, got %T", value)
+	}
+	if payload["id"] != "13de4420-7c8d-4db7-b8f7-2d2a26f2053e" {
+		t.Fatalf("unexpected payload %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *testing.T) {
+	t.Parallel()
+
+	requestPath := "/admin/realms/publico-br/user-registry"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listValues: map[string][]resource.Resource{
+			"/admin/realms/publico-br": {
+				{
+					LogicalPath: "/admin/realms/publico-br/ldap-1",
+					LocalAlias:  "ldap-1",
+					RemoteID:    "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+					Payload: map[string]any{
+						"id":         "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+						"name":       "ldap-1",
+						"providerId": "ldap",
+					},
+				},
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+				CollectionPath:     "/admin/realms/{{.realm}}/components",
+			},
+		},
+		Server: serverManager,
+	}
+
+	_, err := orchestrator.GetRemote(context.Background(), requestPath)
+	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
 func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallback(t *testing.T) {
@@ -260,7 +373,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
@@ -276,7 +389,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 		Server: serverManager,
 	}
 
-	value, err := reconciler.GetRemote(context.Background(), aliasPath)
+	value, err := orchestrator.GetRemote(context.Background(), aliasPath)
 	if err != nil {
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
@@ -348,7 +461,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
@@ -376,7 +489,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 		Server: serverManager,
 	}
 
-	value, err := reconciler.GetRemote(context.Background(), aliasPath)
+	value, err := orchestrator.GetRemote(context.Background(), aliasPath)
 	if err != nil {
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
@@ -415,7 +528,7 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
@@ -425,7 +538,7 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 		Server: serverManager,
 	}
 
-	_, err := reconciler.GetRemote(context.Background(), requestPath)
+	_, err := orchestrator.GetRemote(context.Background(), requestPath)
 	assertTypedCategory(t, err, faults.NotFoundError)
 
 	foundAdminProbe := false
@@ -464,11 +577,11 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIH
 			},
 		},
 	}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Server: serverManager,
 	}
 
-	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
 	if err != nil {
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
@@ -502,12 +615,12 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenReposito
 			nil,
 		),
 	}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repositoryManager,
 		Server:     serverManager,
 	}
 
-	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
 	if err != nil {
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
@@ -539,7 +652,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 			nil,
 		),
 	}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
@@ -553,7 +666,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 		Server: serverManager,
 	}
 
-	_, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
 	assertTypedCategory(t, err, faults.NotFoundError)
 
 	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/master"}) {
@@ -572,11 +685,11 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadI
 			nil,
 		),
 	}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Server: serverManager,
 	}
 
-	_, err := reconciler.GetRemote(context.Background(), "/admin/realms/publico/organizatio")
+	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/publico/organizatio")
 	assertTypedCategory(t, err, faults.NotFoundError)
 
 	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/publico"}) {
@@ -599,7 +712,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repositoryManager,
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -609,7 +722,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 		},
 	}
 
-	value, err := reconciler.GetLocal(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
+	value, err := orchestrator.GetLocal(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
 	if err != nil {
 		t.Fatalf("GetLocal returned error: %v", err)
 	}
@@ -645,7 +758,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repositoryManager,
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -655,7 +768,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 		},
 	}
 
-	value, err := reconciler.GetLocal(context.Background(), "/admin/realms/platform/clients/client-0002")
+	value, err := orchestrator.GetLocal(context.Background(), "/admin/realms/platform/clients/client-0002")
 	if err != nil {
 		t.Fatalf("GetLocal returned error: %v", err)
 	}
@@ -684,7 +797,7 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repositoryManager,
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -701,12 +814,12 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		},
 	}
 
-	item, err := reconciler.Apply(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
+	item, err := orchestrator.Apply(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
 
-	serverManager := reconciler.Server.(*fakeServer)
+	serverManager := orchestrator.Server.(*fakeServer)
 	if !serverManager.updateCalled {
 		t.Fatal("expected update mutation after local id fallback")
 	}
@@ -740,7 +853,7 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Server: serverManager,
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -750,7 +863,7 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		},
 	}
 
-	if err := reconciler.Delete(context.Background(), "/admin/realms/master/clients/account", DeletePolicy{}); err != nil {
+	if err := orchestrator.Delete(context.Background(), "/admin/realms/master/clients/account", DeletePolicy{}); err != nil {
 		t.Fatalf("Delete returned error: %v", err)
 	}
 
@@ -771,12 +884,12 @@ func TestDefaultOrchestratorAdHocDelegatesToServer(t *testing.T) {
 	serverManager := &fakeServer{
 		adHocValue: map[string]any{"ok": true},
 	}
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Server: serverManager,
 	}
 
 	body := resource.Value(map[string]any{"id": "a"})
-	value, err := reconciler.AdHoc(context.Background(), "POST", "/test", body)
+	value, err := orchestrator.AdHoc(context.Background(), "POST", "/test", body)
 	if err != nil {
 		t.Fatalf("AdHoc returned error: %v", err)
 	}
@@ -801,8 +914,8 @@ func TestDefaultOrchestratorAdHocDelegatesToServer(t *testing.T) {
 func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{}
-	_, err := reconciler.AdHoc(context.Background(), "GET", "/test", nil)
+	orchestrator := &DefaultOrchestrator{}
+	_, err := orchestrator.AdHoc(context.Background(), "GET", "/test", nil)
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
@@ -1145,14 +1258,14 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
 		Secrets:    secretProvider,
 	}
 
-	item, err := reconciler.Apply(context.Background(), "/customers/acme")
+	item, err := orchestrator.Apply(context.Background(), "/customers/acme")
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
@@ -1226,14 +1339,14 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
 		Secrets:    secretProvider,
 	}
 
-	items, err := reconciler.Diff(context.Background(), "/customers/acme")
+	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
 	if err != nil {
 		t.Fatalf("Diff returned error: %v", err)
 	}
@@ -1271,13 +1384,13 @@ func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T)
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
 	}
 
-	items, err := reconciler.Diff(context.Background(), "/customers/acme")
+	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
 	if err != nil {
 		t.Fatalf("Diff returned error: %v", err)
 	}
@@ -1327,20 +1440,74 @@ func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T)
 		},
 	}
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: repo,
 		Metadata:   metadataService,
 		Server:     serverManager,
 	}
 
-	_, err := reconciler.Diff(context.Background(), "/customers/acme")
+	_, err := orchestrator.Diff(context.Background(), "/customers/acme")
+	assertTypedCategory(t, err, faults.ConflictError)
+}
+
+func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"id":    "remote-two",
+			"alias": "remote-one",
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "alias",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationList):    {Path: "/api/customers"},
+			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{.id}}"},
+		},
+	}
+
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"id":    "remote-two",
+			"alias": "remote-two",
+		},
+		listValues: map[string][]resource.Resource{
+			"/customers": {
+				{
+					LogicalPath: "/customers/remote-one",
+					LocalAlias:  "remote-one",
+					RemoteID:    "remote-one",
+					Payload:     map[string]any{"id": "remote-one", "alias": "remote-one"},
+				},
+				{
+					LogicalPath: "/customers/remote-two",
+					LocalAlias:  "remote-two",
+					RemoteID:    "remote-two",
+					Payload:     map[string]any{"id": "remote-two", "alias": "remote-two"},
+				},
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Repository: repo,
+		Metadata:   metadataService,
+		Server:     serverManager,
+	}
+
+	_, err := orchestrator.Diff(context.Background(), "/customers/local")
 	assertTypedCategory(t, err, faults.ConflictError)
 }
 
 func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: &fakeRepository{},
 		Metadata:   &fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{}},
 		Server: &fakeServer{
@@ -1351,7 +1518,7 @@ func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 		},
 	}
 
-	items, err := reconciler.ListRemote(context.Background(), "/customers", ListPolicy{})
+	items, err := orchestrator.ListRemote(context.Background(), "/customers", ListPolicy{})
 	if err != nil {
 		t.Fatalf("ListRemote returned error: %v", err)
 	}
@@ -1367,7 +1534,7 @@ func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{
+	orchestrator := &DefaultOrchestrator{
 		Repository: &fakeRepository{},
 		Metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1378,7 +1545,7 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 		},
 	}
 
-	templated, err := reconciler.Template(context.Background(), "/customers/acme", map[string]any{
+	templated, err := orchestrator.Template(context.Background(), "/customers/acme", map[string]any{
 		"id":    "42",
 		"name":  "ACME",
 		"count": float64(2),
@@ -1399,7 +1566,7 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{}
+	orchestrator := &DefaultOrchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",
@@ -1408,7 +1575,7 @@ func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t 
 		},
 	}
 
-	spec, err := reconciler.renderOperationSpec(
+	spec, err := orchestrator.renderOperationSpec(
 		context.Background(),
 		resourceInfo,
 		metadatadomain.OperationList,
@@ -1426,7 +1593,7 @@ func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t 
 func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &DefaultOrchestrator{}
+	orchestrator := &DefaultOrchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",
@@ -1435,7 +1602,7 @@ func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(
 		},
 	}
 
-	spec, err := reconciler.renderOperationSpec(
+	spec, err := orchestrator.renderOperationSpec(
 		context.Background(),
 		resourceInfo,
 		metadatadomain.OperationCreate,

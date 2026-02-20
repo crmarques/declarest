@@ -27,7 +27,7 @@ Define implementation patterns that keep behavior predictable, testable, and mai
 
 ## Data Contracts
 Implementation structure:
-1. Keep boundary types in owner packages (`config`, `repository`, `metadata`, `server`, `secrets`, `reconciler`).
+1. Keep boundary types in owner packages (`config`, `repository`, `metadata`, `server`, `secrets`, `orchestrator`).
 2. Keep provider-specific payloads inside provider boundaries (`internal/providers/*`).
 3. Normalize resource payloads before persistence and comparison.
 4. Use typed error wrappers aligned with `agents/reference/interfaces.md`.
@@ -39,7 +39,7 @@ File design guidance:
 
 ## Failure Modes
 1. Hidden coupling through shared mutable state.
-2. Mixed-concern files that combine CLI, reconciliation, and provider logic.
+2. Mixed-concern files that combine CLI, orchestration, and provider logic.
 3. Non-deterministic tests due to unstable ordering.
 4. Error wrappers that drop actionable context.
 
@@ -51,5 +51,5 @@ File design guidance:
 
 ## Examples
 1. Preferred: pure `metadata.ResolveOperationSpec(...)` with no side effects.
-2. Preferred: `reconciler.ResourceReconciler.Apply` orchestrates managers and returns typed errors.
+2. Preferred: `orchestrator.Orchestrator.Apply` orchestrates managers and returns typed errors.
 3. Avoid: CLI parsing file also contains HTTP transport and filesystem path logic.

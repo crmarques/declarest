@@ -6,7 +6,7 @@
 3. Error categories align with taxonomy in `agents/reference/interfaces.md`.
 
 ## Boundary Integrity
-1. `architecture.md` enforces dependency direction and reconciler orchestration boundaries.
+1. `architecture.md` enforces dependency direction and orchestrator orchestration boundaries.
 2. `code.md` implementation rules do not contradict `architecture.md`.
 3. Adapter-specific concerns stay outside domain contracts.
 
@@ -15,10 +15,10 @@
 2. `resource-repo.md` path safety rules reject traversal.
 3. `resource-server.md` OpenAPI fallback rules preserve explicit metadata overrides.
 4. `secrets.md` non-disclosure rules are strict and enforceable.
-5. `reconciler.md` defines idempotent apply behavior and bounded fallbacks.
+5. `orchestrator.md` defines idempotent apply behavior and bounded fallbacks.
 
 ## CLI and UX Integrity
-1. `cli.md` command semantics map to reconciler use cases.
+1. `cli.md` command semantics map to orchestrator use cases.
 2. Validation and destructive-operation safeguards are explicit.
 3. Structured output expectations are stable.
 

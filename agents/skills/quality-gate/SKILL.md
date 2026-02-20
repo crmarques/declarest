@@ -16,7 +16,7 @@ description: Select and execute the smallest verification set that protects chan
 1. `doc`: spec/comment/instruction-only edits with no behavior change; tests are optional unless contracts changed.
 2. `low`: pure transforms in one package, no I/O/auth/path-safety changes; run targeted package tests.
 3. `medium`: CLI wiring, metadata behavior, repository semantics, or provider contract changes; run targeted tests plus repository-wide tests.
-4. `high`: reconciler orchestration, auth/secrets, path safety, destructive operations, or E2E harness changes; run repository-wide tests and relevant E2E coverage.
+4. `high`: orchestration, auth/secrets, path safety, destructive operations, or E2E harness changes; run repository-wide tests and relevant E2E coverage.
 
 ## Command Guidance
 1. Prefer package-scoped checks first: `go test ./<package>/...`.

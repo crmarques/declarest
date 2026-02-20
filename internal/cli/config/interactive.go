@@ -94,11 +94,11 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 	}
 	contextCfg.Metadata.BaseDir = metadataBaseDir
 
-	managedServer, err := promptManagedServer(command, prompter)
+	resourceServer, err := promptResourceServer(command, prompter)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
-	contextCfg.ManagedServer = managedServer
+	contextCfg.ResourceServer = resourceServer
 
 	includeSecretStore, err := prompter.Confirm(command, "Configure secret-store?", false)
 	if err != nil {
@@ -290,12 +290,12 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 	return auth, nil
 }
 
-func promptManagedServer(command *cobra.Command, prompter configPrompter) (*configdomain.ManagedServer, error) {
-	baseURL, err := promptRequiredInput(command, prompter, "Managed-server base-url: ", "managed-server base-url")
+func promptResourceServer(command *cobra.Command, prompter configPrompter) (*configdomain.ResourceServer, error) {
+	baseURL, err := promptRequiredInput(command, prompter, "Resource-server base-url: ", "resource-server base-url")
 	if err != nil {
 		return nil, err
 	}
-	openAPI, err := promptOptionalInput(command, prompter, "Managed-server OpenAPI path/url (optional): ")
+	openAPI, err := promptOptionalInput(command, prompter, "Resource-server OpenAPI path/url (optional): ")
 	if err != nil {
 		return nil, err
 	}
@@ -305,12 +305,12 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 		OpenAPI: openAPI,
 	}
 
-	includeHeaders, err := prompter.Confirm(command, "Configure managed-server default headers?", false)
+	includeHeaders, err := prompter.Confirm(command, "Configure resource-server default headers?", false)
 	if err != nil {
 		return nil, err
 	}
 	if includeHeaders {
-		headers, headerErr := promptStringMap(command, prompter, "Managed-server default header")
+		headers, headerErr := promptStringMap(command, prompter, "Resource-server default header")
 		if headerErr != nil {
 			return nil, headerErr
 		}
@@ -323,7 +323,7 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 	}
 	server.Auth = auth
 
-	includeTLS, err := prompter.Confirm(command, "Configure managed-server TLS?", false)
+	includeTLS, err := prompter.Confirm(command, "Configure resource-server TLS?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -335,13 +335,13 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 		server.TLS = tls
 	}
 
-	return &configdomain.ManagedServer{HTTP: server}, nil
+	return &configdomain.ResourceServer{HTTP: server}, nil
 }
 
 func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPAuth, error) {
 	method, err := prompter.Select(
 		command,
-		"Select managed-server auth method",
+		"Select resource-server auth method",
 		[]string{"oauth2", "basic-auth", "bearer-token", "custom-header"},
 	)
 	if err != nil {
@@ -438,7 +438,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Token:  token,
 		}
 	default:
-		return nil, common.ValidationError("invalid managed-server auth method selected", nil)
+		return nil, common.ValidationError("invalid resource-server auth method selected", nil)
 	}
 
 	return auth, nil

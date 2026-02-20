@@ -11,7 +11,7 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 }
 
 {
-  printf 'managed-server:\n'
+  printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${KEYCLOAK_BASE_URL}"
   printf '    auth:\n'

@@ -20,7 +20,7 @@ if [[ "${enable_basic_auth}" == 'true' && "${enable_oauth2}" == 'true' ]]; then
 fi
 
 {
-  printf 'managed-server:\n'
+  printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
 

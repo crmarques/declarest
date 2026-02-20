@@ -28,7 +28,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 11. Missing context catalog files MUST be treated as an empty catalog state.
 12. `metadata.base-dir` MUST default to the selected repository base-dir when unset.
 13. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
-14. Every context MUST define `managed-server.http` with one configured auth mode.
+14. Every context MUST define `resource-server.http` with one configured auth mode.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -38,7 +38,7 @@ Top-level catalog fields:
 Per-context fields:
 1. `name`.
 2. `repository`.
-3. required `managed-server`.
+3. required `resource-server`.
 4. optional `secret-store`.
 5. optional `metadata` (omit when equivalent to default repository base-dir behavior).
 6. optional `preferences`.
@@ -47,8 +47,8 @@ Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
 2. `repository.resource-format` allowed values: `json` or `yaml`.
 
-Managed server auth one-of contract:
-1. Exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header` MUST be set under `managed-server.http.auth`.
+Resource server auth one-of contract:
+1. Exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header` MUST be set under `resource-server.http.auth`.
 
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
@@ -64,7 +64,7 @@ Runtime override keys:
 1. `repository.resource-format`.
 2. `repository.git.local.base-dir`.
 3. `repository.filesystem.base-dir`.
-4. `managed-server.http.base-url`.
+4. `resource-server.http.base-url`.
 5. `metadata.base-dir`.
 
 ## Canonical YAML Template
@@ -102,7 +102,7 @@ contexts:
       # filesystem:
       #   base-dir: /path/to/repo
 
-    managed-server:
+    resource-server:
       http:
         base-url: https://example.com/api
         # openapi: /path/to/openapi.yaml
@@ -182,8 +182,8 @@ current-ctx: xxx
 2. Duplicate context names.
 3. Unknown YAML key due to strict decode.
 4. Repository backend one-of violation.
-5. Missing required `managed-server`.
-6. Managed server auth one-of violation.
+5. Missing required `resource-server`.
+6. Resource server auth one-of violation.
 7. Secret store one-of violation.
 8. Secret file key source one-of violation.
 9. Config path resolution failure for home expansion or file access.
@@ -193,7 +193,7 @@ current-ctx: xxx
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
 2. Context with optional `secret-store` omitted.
-3. Context with required `managed-server` omitted fails validation.
+3. Context with required `resource-server` omitted fails validation.
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.

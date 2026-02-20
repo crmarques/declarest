@@ -53,7 +53,7 @@ func validateConfig(cfg config.Context) error {
 		return err
 	}
 
-	if err := validateManagedServer(cfg.ManagedServer); err != nil {
+	if err := validateResourceServer(cfg.ResourceServer); err != nil {
 		return err
 	}
 
@@ -142,51 +142,51 @@ func validateRepository(repository config.Repository) error {
 	return nil
 }
 
-func validateManagedServer(managedServer *config.ManagedServer) error {
-	if managedServer == nil {
-		return validationError("managed-server is required", nil)
+func validateResourceServer(resourceServer *config.ResourceServer) error {
+	if resourceServer == nil {
+		return validationError("resource-server is required", nil)
 	}
-	if managedServer.HTTP == nil {
-		return validationError("managed-server must define http", nil)
+	if resourceServer.HTTP == nil {
+		return validationError("resource-server must define http", nil)
 	}
-	if managedServer.HTTP.BaseURL == "" {
-		return validationError("managed-server.http.base-url is required", nil)
+	if resourceServer.HTTP.BaseURL == "" {
+		return validationError("resource-server.http.base-url is required", nil)
 	}
-	if managedServer.HTTP.Auth == nil {
-		return validationError("managed-server.http.auth is required", nil)
+	if resourceServer.HTTP.Auth == nil {
+		return validationError("resource-server.http.auth is required", nil)
 	}
 
 	if countSet(
-		managedServer.HTTP.Auth.OAuth2 != nil,
-		managedServer.HTTP.Auth.BasicAuth != nil,
-		managedServer.HTTP.Auth.BearerToken != nil,
-		managedServer.HTTP.Auth.CustomHeader != nil,
+		resourceServer.HTTP.Auth.OAuth2 != nil,
+		resourceServer.HTTP.Auth.BasicAuth != nil,
+		resourceServer.HTTP.Auth.BearerToken != nil,
+		resourceServer.HTTP.Auth.CustomHeader != nil,
 	) != 1 {
-		return validationError("managed-server.http.auth must define exactly one of oauth2, basic-auth, bearer-token, custom-header", nil)
+		return validationError("resource-server.http.auth must define exactly one of oauth2, basic-auth, bearer-token, custom-header", nil)
 	}
 
-	if managedServer.HTTP.Auth.OAuth2 != nil {
-		oauth := managedServer.HTTP.Auth.OAuth2
+	if resourceServer.HTTP.Auth.OAuth2 != nil {
+		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return validationError("managed-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return validationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 	}
 
-	if managedServer.HTTP.Auth.BasicAuth != nil {
-		basic := managedServer.HTTP.Auth.BasicAuth
+	if resourceServer.HTTP.Auth.BasicAuth != nil {
+		basic := resourceServer.HTTP.Auth.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return validationError("managed-server.http.auth.basic-auth requires username and password", nil)
+			return validationError("resource-server.http.auth.basic-auth requires username and password", nil)
 		}
 	}
 
-	if managedServer.HTTP.Auth.BearerToken != nil && managedServer.HTTP.Auth.BearerToken.Token == "" {
-		return validationError("managed-server.http.auth.bearer-token.token is required", nil)
+	if resourceServer.HTTP.Auth.BearerToken != nil && resourceServer.HTTP.Auth.BearerToken.Token == "" {
+		return validationError("resource-server.http.auth.bearer-token.token is required", nil)
 	}
 
-	if managedServer.HTTP.Auth.CustomHeader != nil {
-		head := managedServer.HTTP.Auth.CustomHeader
+	if resourceServer.HTTP.Auth.CustomHeader != nil {
+		head := resourceServer.HTTP.Auth.CustomHeader
 		if head.Header == "" || head.Token == "" {
-			return validationError("managed-server.http.auth.custom-header requires header and token", nil)
+			return validationError("resource-server.http.auth.custom-header requires header and token", nil)
 		}
 	}
 
@@ -251,11 +251,11 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, validationError("override repository.filesystem.base-dir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "managed-server.http.base-url":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, validationError("override managed-server.http.base-url requires managed-server.http to be configured", nil)
+		case "resource-server.http.base-url":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, validationError("override resource-server.http.base-url requires resource-server.http to be configured", nil)
 			}
-			cfg.ManagedServer.HTTP.BaseURL = value
+			cfg.ResourceServer.HTTP.BaseURL = value
 		case "metadata.base-dir":
 			cfg.Metadata.BaseDir = value
 		default:

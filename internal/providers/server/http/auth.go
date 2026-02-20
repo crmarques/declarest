@@ -33,7 +33,7 @@ type authConfig struct {
 
 func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 	if cfg == nil {
-		return authConfig{}, validationError("managed-server.http.auth is required", nil)
+		return authConfig{}, validationError("resource-server.http.auth is required", nil)
 	}
 
 	setCount := 0
@@ -50,7 +50,7 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 		setCount++
 	}
 	if setCount != 1 {
-		return authConfig{}, validationError("managed-server.http.auth must define exactly one auth mode", nil)
+		return authConfig{}, validationError("resource-server.http.auth must define exactly one auth mode", nil)
 	}
 
 	switch {
@@ -60,37 +60,37 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 			strings.TrimSpace(oauth.GrantType) == "" ||
 			strings.TrimSpace(oauth.ClientID) == "" ||
 			strings.TrimSpace(oauth.ClientSecret) == "" {
-			return authConfig{}, validationError("managed-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return authConfig{}, validationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 		if strings.TrimSpace(oauth.GrantType) != config.OAuthClientCreds {
-			return authConfig{}, validationError("managed-server.http.auth.oauth2.grant-type supports only client_credentials", nil)
+			return authConfig{}, validationError("resource-server.http.auth.oauth2.grant-type supports only client_credentials", nil)
 		}
 		tokenURL, err := url.Parse(oauth.TokenURL)
 		if err != nil || tokenURL.Scheme == "" || tokenURL.Host == "" {
-			return authConfig{}, validationError("managed-server.http.auth.oauth2.token-url is invalid", err)
+			return authConfig{}, validationError("resource-server.http.auth.oauth2.token-url is invalid", err)
 		}
 
 		return authConfig{mode: authModeOAuth2, oauth2: oauth}, nil
 	case cfg.BasicAuth != nil:
 		basic := *cfg.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return authConfig{}, validationError("managed-server.http.auth.basic-auth requires username and password", nil)
+			return authConfig{}, validationError("resource-server.http.auth.basic-auth requires username and password", nil)
 		}
 		return authConfig{mode: authModeBasic, basicAuth: basic}, nil
 	case cfg.BearerToken != nil:
 		bearer := *cfg.BearerToken
 		if bearer.Token == "" {
-			return authConfig{}, validationError("managed-server.http.auth.bearer-token.token is required", nil)
+			return authConfig{}, validationError("resource-server.http.auth.bearer-token.token is required", nil)
 		}
 		return authConfig{mode: authModeBearer, bearerToken: bearer}, nil
 	case cfg.CustomHeader != nil:
 		custom := *cfg.CustomHeader
 		if custom.Header == "" || custom.Token == "" {
-			return authConfig{}, validationError("managed-server.http.auth.custom-header requires header and token", nil)
+			return authConfig{}, validationError("resource-server.http.auth.custom-header requires header and token", nil)
 		}
 		return authConfig{mode: authModeCustomHeader, customHeader: custom}, nil
 	default:
-		return authConfig{}, validationError("managed-server.http.auth is invalid", nil)
+		return authConfig{}, validationError("resource-server.http.auth is invalid", nil)
 	}
 }
 
@@ -109,7 +109,7 @@ func (g *HTTPResourceServerGateway) applyAuth(ctx context.Context, request *http
 	case authModeCustomHeader:
 		request.Header.Set(g.auth.customHeader.Header, g.auth.customHeader.Token)
 	default:
-		return validationError("managed-server.http.auth mode is not configured", nil)
+		return validationError("resource-server.http.auth mode is not configured", nil)
 	}
 	return nil
 }

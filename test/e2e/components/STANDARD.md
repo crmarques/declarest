@@ -72,7 +72,7 @@ Field rules:
 - `DESCRIPTION`: short operator-facing description.
 - `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `basic-auth oauth2 mtls`; use empty string when none are supported.
 - `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; each listed feature MUST be enabled by runner selection.
-- Runner selection enforces `basic-auth` and `oauth2` as mutually exclusive because context `managed-server.http.auth` is a one-of contract.
+- Runner selection enforces `basic-auth` and `oauth2` as mutually exclusive because context `resource-server.http.auth` is a one-of contract.
 
 ## Hook Contract
 

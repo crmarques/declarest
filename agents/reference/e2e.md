@@ -46,7 +46,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 28. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run.
 29. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
 30. Runner security selection flags MUST include `--resource-server-basic-auth`, `--resource-server-oauth2`, and `--resource-server-mtls` with defaults `false`, `true`, and `false`, respectively.
-31. `--resource-server-basic-auth` and `--resource-server-oauth2` MUST NOT both be `true` in the same run because `managed-server.http.auth` is one-of.
+31. `--resource-server-basic-auth` and `--resource-server-oauth2` MUST NOT both be `true` in the same run because `resource-server.http.auth` is one-of.
 32. `resource-server` components MUST declare security capabilities in `component.env`; runner selection MUST fail when requested security features are unsupported or required features are disabled.
 33. `simple-api-server` mTLS trust MUST be reloaded from configured client-certificate sources for new connections without process restart.
 34. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.

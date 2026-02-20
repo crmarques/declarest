@@ -16,7 +16,7 @@ description: Audit instruction/spec changes for contract consistency, completene
 
 ## Audit Priorities
 1. Interface drift from `agents/reference/interfaces.md`.
-2. Boundary violations across architecture, reconciler, and providers.
+2. Boundary violations across architecture, orchestrator, and providers.
 3. Gaps in metadata, secrets, path safety, and CLI safeguard coverage.
 4. Routing/skill-order inconsistencies between `AGENTS.md` and `agents/skills/*`.
 5. Unnecessary duplication or file fragmentation.

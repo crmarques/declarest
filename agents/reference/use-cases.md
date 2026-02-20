@@ -52,10 +52,10 @@ Inputs:
 3. Metadata defining update path and compare suppression.
 
 Execution:
-1. `reconciler.ResourceReconciler` loads resource and resolved metadata.
+1. `orchestrator.Orchestrator` loads resource and resolved metadata.
 2. `secrets.SecretProvider` resolves placeholders.
 3. `server.ResourceServerManager` executes update.
-4. Reconciler returns normalized remote mutation output without implicit local persistence.
+4. Orchestrator returns normalized remote mutation output without implicit local persistence.
 
 Expected outputs:
 1. Remote update succeeds.
@@ -71,7 +71,7 @@ Inputs:
 
 Execution:
 1. Direct get returns 404.
-2. Reconciler performs bounded alias/list fallback.
+2. Orchestrator performs bounded alias/list fallback.
 3. Matching candidate updates `resource.Resource` identity fields.
 
 Expected outputs:
@@ -117,7 +117,7 @@ Inputs:
 
 Execution:
 1. CLI parses positional and flag path values.
-2. CLI detects mismatch and stops before reconciler call.
+2. CLI detects mismatch and stops before orchestrator call.
 
 Expected outputs:
 1. Command fails with `ValidationError`.
@@ -129,8 +129,8 @@ Inputs:
 1. `declarest repo status` with `--output auto|json|yaml`.
 
 Execution:
-1. CLI calls `reconciler.ResourceReconciler.RepoStatus`.
-2. Reconciler calls `repository.ResourceRepositoryManager.SyncStatus`.
+1. CLI calls `orchestrator.Orchestrator.RepoStatus`.
+2. Orchestrator calls `repository.ResourceRepositoryManager.SyncStatus`.
 
 Expected outputs:
 1. `auto` prints deterministic text summary.
@@ -167,7 +167,7 @@ Inputs:
 
 Execution:
 1. Loader expands metadata placeholders into concrete collection targets.
-2. Reconciler operations resolve remote paths using API-facing identifiers.
+2. Orchestrator operations resolve remote paths using API-facing identifiers.
 
 Expected outputs:
 1. Expanded targets are deterministic and contain no unresolved intermediary placeholders.
@@ -193,7 +193,7 @@ Expected outputs:
 2. Step 2 reads from repository local source.
 
 Failure expectation:
-1. Step 3 fails with `ValidationError` before reconciler execution.
+1. Step 3 fails with `ValidationError` before orchestrator execution.
 
 ### Example 10: Resource Save List Fanout
 Goal: persist collection payloads as one file per resource by default.

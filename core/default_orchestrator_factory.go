@@ -50,11 +50,11 @@ func buildDefaultOrchestrator(
 		return nil, faults.NewTypedError(faults.InternalError, "context repository provider is invalid", nil)
 	}
 
-	if resolvedContext.ManagedServer != nil {
-		if resolvedContext.ManagedServer.HTTP == nil {
-			return nil, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
+	if resolvedContext.ResourceServer != nil {
+		if resolvedContext.ResourceServer.HTTP == nil {
+			return nil, faults.NewTypedError(faults.InternalError, "resource server provider is invalid", nil)
 		}
-		serverManager, err := httpserver.NewHTTPResourceServerGateway(*resolvedContext.ManagedServer.HTTP)
+		serverManager, err := httpserver.NewHTTPResourceServerGateway(*resolvedContext.ResourceServer.HTTP)
 		if err != nil {
 			return nil, err
 		}

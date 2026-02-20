@@ -63,7 +63,7 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 						Local: config.GitLocal{BaseDir: "/tmp/repo"},
 					},
 				},
-				ManagedServer: &config.ManagedServer{
+				ResourceServer: &config.ResourceServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -174,16 +174,16 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 		assertTypedCategory(t, err, faults.InternalError)
 	})
 
-	t.Run("invalid_managed_server_provider_configuration", func(t *testing.T) {
+	t.Run("invalid_resource_server_provider_configuration", func(t *testing.T) {
 		t.Parallel()
 
 		contextService := &fakeContextService{
 			resolvedContext: config.Context{
-				Name: "invalid-managed-server",
+				Name: "invalid-resource-server",
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 				},
-				ManagedServer: &config.ManagedServer{
+				ResourceServer: &config.ResourceServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com/api",
 						Auth: &config.HTTPAuth{
@@ -199,7 +199,7 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
+		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-resource-server"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

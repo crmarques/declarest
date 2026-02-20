@@ -33,24 +33,24 @@ func validateOpenAPISource(source string) error {
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return validationError("managed-server.http.openapi is invalid", err)
+		return validationError("resource-server.http.openapi is invalid", err)
 	}
 
 	if parsed.Scheme == "" {
 		return nil
 	}
 	if parsed.Scheme != "https" {
-		return validationError("managed-server.http.openapi must use https when configured as URL", nil)
+		return validationError("resource-server.http.openapi must use https when configured as URL", nil)
 	}
 	if parsed.Host == "" {
-		return validationError("managed-server.http.openapi URL host is required", nil)
+		return validationError("resource-server.http.openapi URL host is required", nil)
 	}
 	return nil
 }
 
 func (g *HTTPResourceServerGateway) openAPIDocument(ctx context.Context) (map[string]any, error) {
 	if strings.TrimSpace(g.openAPISource) == "" {
-		return nil, validationError("managed-server.http.openapi is not configured", nil)
+		return nil, validationError("resource-server.http.openapi is not configured", nil)
 	}
 
 	g.openapiMu.Lock()
@@ -80,7 +80,7 @@ func (g *HTTPResourceServerGateway) loadOpenAPIDocument(ctx context.Context) (ma
 	source := strings.TrimSpace(g.openAPISource)
 	parsed, err := url.Parse(source)
 	if err != nil {
-		return nil, validationError("managed-server.http.openapi is invalid", err)
+		return nil, validationError("resource-server.http.openapi is invalid", err)
 	}
 
 	var content []byte
@@ -88,7 +88,7 @@ func (g *HTTPResourceServerGateway) loadOpenAPIDocument(ctx context.Context) (ma
 	case "":
 		content, err = os.ReadFile(source)
 		if err != nil {
-			return nil, notFoundError("managed-server.http.openapi file could not be read", err)
+			return nil, notFoundError("resource-server.http.openapi file could not be read", err)
 		}
 	case "https":
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
@@ -128,7 +128,7 @@ func (g *HTTPResourceServerGateway) loadOpenAPIDocument(ctx context.Context) (ma
 			)
 		}
 	default:
-		return nil, validationError("managed-server.http.openapi must be a local file path or https URL", nil)
+		return nil, validationError("resource-server.http.openapi must be a local file path or https URL", nil)
 	}
 
 	var root any

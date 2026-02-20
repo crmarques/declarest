@@ -633,7 +633,7 @@ e2e_validate_resource_server_security_selection() {
   fi
 
   if [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' && "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
-    e2e_die '--resource-server-basic-auth and --resource-server-oauth2 cannot both be true (managed-server auth is one-of)'
+    e2e_die '--resource-server-basic-auth and --resource-server-oauth2 cannot both be true (resource-server auth is one-of)'
     return 1
   fi
 

@@ -14,7 +14,7 @@ api_version="${RUNDECK_API_VERSION:-45}"
 base_url="${RUNDECK_BASE_URL%/}/api/${api_version}"
 
 {
-  printf 'managed-server:\n'
+  printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${base_url}"
   printf '    auth:\n'

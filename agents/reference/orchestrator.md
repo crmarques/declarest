@@ -1,4 +1,4 @@
-# Reconciler and Integration
+# Orchestrator and Integration
 
 ## Purpose
 Define orchestration behavior that coordinates repository, metadata, server, and secret operations for all user workflows.
@@ -15,7 +15,7 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 3. CLI parsing details.
 
 ## Normative Rules
-1. `reconciler.ResourceReconciler` MUST be the only component that coordinates multiple managers in one workflow.
+1. `orchestrator.Orchestrator` MUST be the only component that coordinates multiple managers in one workflow.
 2. Workflows MUST declare mutation scope: local, remote, or both.
 3. Apply-like operations MUST resolve metadata and identity before remote mutations.
 4. Workflows that persist local state MUST use normalized `resource.Resource` and payload.
@@ -26,12 +26,13 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 9. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
 10. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
 11. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint.
+12. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering; this singleton candidate MUST be deterministic and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
 
 ## Data Contracts
-Core reconciler workflows:
+Core orchestrator workflows:
 1. Local read/write: get/save/list local resources.
 2. Remote read/write: get/create/update/delete/list remote resources.
-3. Reconciliation: apply, refresh, explain, diff, template.
+3. Orchestration workflows: apply, refresh, explain, diff, template.
 4. Repository administration: init, refresh, push, reset, check, status.
 
 Policy contract:

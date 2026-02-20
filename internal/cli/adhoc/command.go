@@ -32,7 +32,7 @@ var supportedHTTPMethods = []string{
 func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "ad-hoc",
-		Short: "Execute ad-hoc HTTP requests against managed server API",
+		Short: "Execute ad-hoc HTTP requests against resource server API",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()

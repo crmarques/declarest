@@ -54,8 +54,8 @@ case_run() {
 
   case_run_declarest metadata get "${metadata_target_path}" -o json
   case_expect_success
-  if ! jq -e '.secretsFromAttributes == ["password"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
-    printf 'expected --fix to write secretsFromAttributes metadata\n' >&2
+  if ! jq -e '.resourceInfo.secretInAttributes == ["password"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+    printf 'expected --fix to write resourceInfo.secretInAttributes metadata\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
   fi

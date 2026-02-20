@@ -20,12 +20,12 @@ type ContextCatalog struct {
 }
 
 type Context struct {
-	Name          string            `yaml:"name"`
-	Repository    Repository        `yaml:"repository"`
-	ManagedServer *ManagedServer    `yaml:"managed-server,omitempty"`
-	SecretStore   *SecretStore      `yaml:"secret-store,omitempty"`
-	Metadata      Metadata          `yaml:"metadata,omitempty"`
-	Preferences   map[string]string `yaml:"preferences,omitempty"`
+	Name           string            `yaml:"name"`
+	Repository     Repository        `yaml:"repository"`
+	ResourceServer *ResourceServer   `yaml:"resource-server,omitempty"`
+	SecretStore    *SecretStore      `yaml:"secret-store,omitempty"`
+	Metadata       Metadata          `yaml:"metadata,omitempty"`
+	Preferences    map[string]string `yaml:"preferences,omitempty"`
 }
 
 type Repository struct {
@@ -62,7 +62,7 @@ type FilesystemRepository struct {
 	BaseDir string `yaml:"base-dir"`
 }
 
-type ManagedServer struct {
+type ResourceServer struct {
 	HTTP *HTTPServer `yaml:"http,omitempty"`
 }
 

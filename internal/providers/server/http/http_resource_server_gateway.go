@@ -166,18 +166,18 @@ func (g *HTTPResourceServerGateway) Exists(ctx context.Context, resourceInfo res
 func parseBaseURL(raw string) (*url.URL, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return nil, validationError("managed-server.http.base-url is required", nil)
+		return nil, validationError("resource-server.http.base-url is required", nil)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return nil, validationError("managed-server.http.base-url is invalid", err)
+		return nil, validationError("resource-server.http.base-url is invalid", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, validationError("managed-server.http.base-url must use http or https", nil)
+		return nil, validationError("resource-server.http.base-url must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return nil, validationError("managed-server.http.base-url host is required", nil)
+		return nil, validationError("resource-server.http.base-url host is required", nil)
 	}
 
 	if parsed.Path == "" {
@@ -188,7 +188,7 @@ func parseBaseURL(raw string) (*url.URL, error) {
 }
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
-	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-server.http")
+	return tlsconfig.BuildTLSConfig(tlsSettings, "resource-server.http")
 }
 
 func cloneStringMap(values map[string]string) map[string]string {

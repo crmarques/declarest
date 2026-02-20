@@ -37,7 +37,7 @@ Represents client-facing application state assembled at startup.
 
 Required fields:
 1. `Contexts`: `config.ContextService` instance.
-2. `Reconciler`: `reconciler.ResourceReconciler` instance.
+2. `Orchestrator`: `orchestrator.Orchestrator` instance.
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
@@ -54,8 +54,8 @@ Represents startup wiring inputs.
 Fields:
 1. `ContextCatalogPath`: optional explicit context catalog path.
 
-### Type: `reconciler.DefaultReconciler`
-Represents the default concrete reconciler assembled by the composition root.
+### Type: `orchestrator.DefaultOrchestrator`
+Represents the default concrete orchestrator assembled by the composition root.
 
 Required fields:
 1. `Name`: selected context name.
@@ -70,7 +70,7 @@ Represents persisted context configuration.
 Required fields:
 1. `Name`.
 2. `Repository` typed configuration object.
-3. `ManagedServer` typed server configuration object.
+3. `ResourceServer` typed server configuration object.
 
 Optional fields:
 1. `SecretStore` typed secret store configuration object.
@@ -83,7 +83,7 @@ YAML key contract:
 
 One-of invariants:
 1. `repository` MUST define exactly one of `git` or `filesystem`.
-2. `managed-server.http.auth` MUST define exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header`.
+2. `resource-server.http.auth` MUST define exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header`.
 3. `secret-store` MUST define exactly one of `file` or `vault`.
 4. `secret-store.file` MUST define exactly one of `key`, `key-file`, `passphrase`, `passphrase-file`.
 
@@ -183,13 +183,13 @@ Required fields:
 3. `Behind`.
 4. `HasUncommitted`.
 
-### Type: `reconciler.DeletePolicy`
+### Type: `orchestrator.DeletePolicy`
 Represents local delete behavior options.
 
 Fields:
 1. `Recursive`.
 
-### Type: `reconciler.ListPolicy`
+### Type: `orchestrator.ListPolicy`
 Represents local/remote list behavior options.
 
 Fields:
@@ -264,7 +264,7 @@ Method families:
 ### Interface: `server.ResourceServerManager`
 Responsibilities:
 1. Execute remote CRUD/list operations.
-2. Execute ad-hoc HTTP operations against managed-server endpoints.
+2. Execute ad-hoc HTTP operations against resource-server endpoints.
 3. Resolve OpenAPI hints for operations.
 4. Expose typed transport failures.
 
@@ -287,7 +287,7 @@ Method families:
 4. `NormalizeSecretPlaceholders`.
 5. `DetectSecretCandidates`.
 
-### Interface: `reconciler.ResourceReconciler`
+### Interface: `orchestrator.Orchestrator`
 Responsibilities:
 1. Orchestrate repository, metadata, server, and secret managers.
 2. Apply desired state to remote systems.
@@ -324,7 +324,7 @@ Propagation rules:
 1. Input paths MUST be logical absolute paths.
 2. Methods returning collections MUST specify ordering semantics.
 3. IO methods MUST declare whether they mutate local, remote, or both.
-4. Irreversible operations MUST support dry-run explanation mode at reconciler boundary.
+4. Irreversible operations MUST support dry-run explanation mode at orchestrator boundary.
 
 ## Failure Modes
 1. Context resolution failure due to missing or invalid config.
@@ -340,6 +340,6 @@ Propagation rules:
 4. Partial context configuration with optional managers absent.
 
 ## Examples
-1. A `reconciler.ResourceReconciler.Apply` call resolves metadata, builds request intent, and executes a remote create/update mutation derived from repository desired state.
+1. A `orchestrator.Orchestrator.Apply` call resolves metadata, builds request intent, and executes a remote create/update mutation derived from repository desired state.
 2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceRepositoryManager.Save`.
 3. A `config.ContextService.ResolveContext` call merges persisted context and environment overrides, then validates and returns one resolved `config.Context`.

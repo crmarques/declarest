@@ -90,7 +90,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"repository:",
 		"git:",
 		"filesystem:",
-		"managed-server:",
+		"resource-server:",
 		"auth:",
 		"oauth2:",
 		"basic-auth:",
@@ -645,7 +645,7 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ManagedServer: &configdomain.ManagedServer{
+			ResourceServer: &configdomain.ResourceServer{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -692,7 +692,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ManagedServer: &configdomain.ManagedServer{
+			ResourceServer: &configdomain.ResourceServer{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -710,7 +710,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 		Contexts:     contextService,
 		Repository:   &testRepositoryService{},
 		Metadata:     &testMetadataService{},
-		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "resource server auth failed", nil)},
 		Secrets:      &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
 	}
 	globalFlags := &common.GlobalFlags{Output: common.OutputText}
@@ -766,8 +766,8 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.Metadata.BaseDir != "/tmp/meta" {
 		t.Fatalf("expected metadata base-dir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
 	}
-	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managed-server configuration")
+	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
+		t.Fatal("expected resource-server configuration")
 	}
 	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select resource format (optional; remote-default keeps remote resource format)" {
 		t.Fatalf("expected optional resource format prompt, got %#v", prompter.selectPrompts)
@@ -971,7 +971,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 		},
 		confirms: []bool{
 			true,  // configure default headers
-			false, // configure managed-server tls
+			false, // configure resource-server tls
 			true,  // configure secret-store
 			true,  // configure file kdf
 			true,  // configure preferences
@@ -1001,29 +1001,29 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatJSON {
 		t.Fatalf("expected repository format json, got %q", service.createdContext.Repository.ResourceFormat)
 	}
-	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managed-server http configuration")
+	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
+		t.Fatal("expected resource-server http configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth == nil {
-		t.Fatal("expected managed-server auth configuration")
+	if service.createdContext.ResourceServer.HTTP.Auth == nil {
+		t.Fatal("expected resource-server auth configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
-		t.Fatal("expected managed-server oauth2 configuration")
+	if service.createdContext.ResourceServer.HTTP.Auth.OAuth2 == nil {
+		t.Fatal("expected resource-server oauth2 configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.BasicAuth != nil {
+	if service.createdContext.ResourceServer.HTTP.Auth.BasicAuth != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.BearerToken != nil {
+	if service.createdContext.ResourceServer.HTTP.Auth.BearerToken != nil {
 		t.Fatal("bearer-token auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.CustomHeader != nil {
+	if service.createdContext.ResourceServer.HTTP.Auth.CustomHeader != nil {
 		t.Fatal("custom-header auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
+	if service.createdContext.ResourceServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
 		t.Fatalf(
 			"expected oauth2 grant-type default %q, got %q",
 			configdomain.OAuthClientCreds,
-			service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType,
+			service.createdContext.ResourceServer.HTTP.Auth.OAuth2.GrantType,
 		)
 	}
 

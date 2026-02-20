@@ -282,8 +282,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getLocalValues = map[string]resource.Value{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalValues = map[string]resource.Value{
 			"/customers/acme": map[string]any{
 				"id":       "acme",
 				"password": "plain-secret",
@@ -310,8 +310,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getRemoteValue = map[string]any{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteValue = map[string]any{
 			"id":       "acme",
 			"password": "plain-secret",
 		}
@@ -336,8 +336,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getLocalValues = map[string]resource.Value{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalValues = map[string]resource.Value{
 			"/customers/acme": map[string]any{
 				"id":       "acme",
 				"password": "plain-secret",
@@ -372,8 +372,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getLocalValues = map[string]resource.Value{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalValues = map[string]resource.Value{
 			"/customers/acme": map[string]any{
 				"id":       "acme",
 				"password": "{{secret .}}",
@@ -409,8 +409,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getLocalValues = map[string]resource.Value{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalValues = map[string]resource.Value{
 			"/customers/acme": map[string]any{
 				"id":       "acme",
 				"password": "{{secret .}}",
@@ -437,8 +437,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.getRemoteValue = map[string]any{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteValue = map[string]any{
 			"id":       "acme",
 			"password": "plain-secret",
 		}
@@ -490,9 +490,9 @@ func TestAdHocMethodCommands(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.adHocErr = faults.NewTypedError(faults.NotFoundError, "ad-hoc path not found", nil)
-		reconciler.getRemoteValue = map[string]any{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.adHocErr = faults.NewTypedError(faults.NotFoundError, "ad-hoc path not found", nil)
+		orchestrator.getRemoteValue = map[string]any{
 			"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
 			"clientId": "account",
 		}
@@ -501,11 +501,11 @@ func TestAdHocMethodCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected fallback error: %v", err)
 		}
-		if len(reconciler.getRemoteCalls) != 1 {
-			t.Fatalf("expected one metadata-aware fallback read, got %d", len(reconciler.getRemoteCalls))
+		if len(orchestrator.getRemoteCalls) != 1 {
+			t.Fatalf("expected one metadata-aware fallback read, got %d", len(orchestrator.getRemoteCalls))
 		}
-		if reconciler.getRemoteCalls[0] != "/admin/realms/master/clients/account" {
-			t.Fatalf("expected fallback path to match request, got %q", reconciler.getRemoteCalls[0])
+		if orchestrator.getRemoteCalls[0] != "/admin/realms/master/clients/account" {
+			t.Fatalf("expected fallback path to match request, got %q", orchestrator.getRemoteCalls[0])
 		}
 		if !strings.Contains(output, "\"clientId\": \"account\"") {
 			t.Fatalf("expected fallback payload output, got %q", output)
@@ -662,7 +662,7 @@ func TestAdHocMethodCommands(t *testing.T) {
 	t.Run("delete_collection_path_targets_direct_children", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/items/a"},
@@ -670,17 +670,17 @@ func TestAdHocMethodCommands(t *testing.T) {
 				{LogicalPath: "/items/nested/c"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force")
 		if err != nil {
 			t.Fatalf("unexpected collection delete error: %v", err)
 		}
-		if len(reconciler.adHocCalls) != 2 {
-			t.Fatalf("expected 2 ad-hoc delete calls, got %#v", reconciler.adHocCalls)
+		if len(orchestrator.adHocCalls) != 2 {
+			t.Fatalf("expected 2 ad-hoc delete calls, got %#v", orchestrator.adHocCalls)
 		}
-		if reconciler.adHocCalls[0].path != "/items/a" || reconciler.adHocCalls[1].path != "/items/b" {
-			t.Fatalf("expected direct-child delete paths [/items/a /items/b], got %#v", reconciler.adHocCalls)
+		if orchestrator.adHocCalls[0].path != "/items/a" || orchestrator.adHocCalls[1].path != "/items/b" {
+			t.Fatalf("expected direct-child delete paths [/items/a /items/b], got %#v", orchestrator.adHocCalls)
 		}
 		if output != "" {
 			t.Fatalf("expected non-recursive delete output to be empty without --verbose, got %q", output)
@@ -690,7 +690,7 @@ func TestAdHocMethodCommands(t *testing.T) {
 	t.Run("delete_collection_path_recursive_targets_full_tree", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/items/a"},
@@ -698,17 +698,17 @@ func TestAdHocMethodCommands(t *testing.T) {
 				{LogicalPath: "/items/nested/c"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force", "--recursive")
 		if err != nil {
 			t.Fatalf("unexpected recursive collection delete error: %v", err)
 		}
-		if len(reconciler.adHocCalls) != 3 {
-			t.Fatalf("expected 3 ad-hoc delete calls, got %#v", reconciler.adHocCalls)
+		if len(orchestrator.adHocCalls) != 3 {
+			t.Fatalf("expected 3 ad-hoc delete calls, got %#v", orchestrator.adHocCalls)
 		}
-		if reconciler.adHocCalls[2].path != "/items/nested/c" {
-			t.Fatalf("expected recursive delete to include nested path, got %#v", reconciler.adHocCalls)
+		if orchestrator.adHocCalls[2].path != "/items/nested/c" {
+			t.Fatalf("expected recursive delete to include nested path, got %#v", orchestrator.adHocCalls)
 		}
 		if output != "" {
 			t.Fatalf("expected recursive delete output to be empty without --verbose, got %q", output)
@@ -718,7 +718,7 @@ func TestAdHocMethodCommands(t *testing.T) {
 	t.Run("delete_collection_path_recursive_verbose_renders_response_bodies", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/items/a"},
@@ -726,7 +726,7 @@ func TestAdHocMethodCommands(t *testing.T) {
 				{LogicalPath: "/items/nested/c"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "ad-hoc", "delete", "/items", "--force", "--recursive", "--verbose")
 		if err != nil {
@@ -750,9 +750,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("without_input_fetches_remote_and_saves_locally", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			"",
@@ -763,15 +763,15 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/customers/acme" {
-			t.Fatalf("expected save path /customers/acme, got %q", reconciler.saveCalls[0].logicalPath)
+		if orchestrator.saveCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected save path /customers/acme, got %q", orchestrator.saveCalls[0].logicalPath)
 		}
-		saved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		saved, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
 		if saved["source"] != "remote" {
 			t.Fatalf("expected saved payload to come from remote source, got %#v", saved)
@@ -783,7 +783,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
 			AliasFromAttribute: "clientId",
 		}
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			getRemoteValue: []any{
 				map[string]any{"id": "app-a-id", "enabled": true},
@@ -791,7 +791,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			},
 		}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			"",
@@ -802,14 +802,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/app-a-id" {
-			t.Fatalf("expected first saved path to use id fallback, got %q", reconciler.saveCalls[0].logicalPath)
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/master/clients/app-a-id" {
+			t.Fatalf("expected first saved path to use id fallback, got %q", orchestrator.saveCalls[0].logicalPath)
 		}
-		if reconciler.saveCalls[1].logicalPath != "/admin/realms/master/clients/app-b-id" {
-			t.Fatalf("expected second saved path to use id fallback, got %q", reconciler.saveCalls[1].logicalPath)
+		if orchestrator.saveCalls[1].logicalPath != "/admin/realms/master/clients/app-b-id" {
+			t.Fatalf("expected second saved path to use id fallback, got %q", orchestrator.saveCalls[1].logicalPath)
 		}
 	})
 
@@ -818,9 +818,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme","tier":"pro"},{"id":"beta","tier":"free"}]`,
@@ -832,14 +832,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/customers/acme" {
-			t.Fatalf("expected first saved path /customers/acme, got %q", reconciler.saveCalls[0].logicalPath)
+		if orchestrator.saveCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected first saved path /customers/acme, got %q", orchestrator.saveCalls[0].logicalPath)
 		}
-		if reconciler.saveCalls[1].logicalPath != "/customers/beta" {
-			t.Fatalf("expected second saved path /customers/beta, got %q", reconciler.saveCalls[1].logicalPath)
+		if orchestrator.saveCalls[1].logicalPath != "/customers/beta" {
+			t.Fatalf("expected second saved path /customers/beta, got %q", orchestrator.saveCalls[1].logicalPath)
 		}
 	})
 
@@ -848,9 +848,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme"},{"id":"beta"}]`,
@@ -863,22 +863,22 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/customers" {
-			t.Fatalf("expected saved path /customers, got %q", reconciler.saveCalls[0].logicalPath)
+		if orchestrator.saveCalls[0].logicalPath != "/customers" {
+			t.Fatalf("expected saved path /customers, got %q", orchestrator.saveCalls[0].logicalPath)
 		}
-		if _, ok := reconciler.saveCalls[0].value.([]any); !ok {
-			t.Fatalf("expected single saved payload to be list, got %T", reconciler.saveCalls[0].value)
+		if _, ok := orchestrator.saveCalls[0].value.([]any); !ok {
+			t.Fatalf("expected single saved payload to be list, got %T", orchestrator.saveCalls[0].value)
 		}
 	})
 
 	t.Run("as_items_requires_list_payload", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"id":"acme"}`,
@@ -892,9 +892,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("as_items_and_as_one_resource_conflict", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme"}]`,
@@ -909,9 +909,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("plaintext_secret_is_blocked_without_ignore", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"password":"plain-secret"}`,
@@ -923,8 +923,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !strings.Contains(err.Error(), "--ignore") {
 			t.Fatalf("expected --ignore hint, got %q", err.Error())
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls after safety failure, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 0 {
+			t.Fatalf("expected no save calls after safety failure, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
@@ -933,9 +933,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme","tier":"pro"},{"id":"beta","password":"plain-secret"}]`,
@@ -944,8 +944,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"/customers",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no partial writes when safety check fails, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 0 {
+			t.Fatalf("expected no partial writes when safety check fails, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
@@ -955,9 +955,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 			IDFromAttribute:       "id",
 			SecretsFromAttributes: []string{"secret"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
@@ -969,13 +969,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 
-		savedPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		savedPayload, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
 		if got := savedPayload["secret"]; got != `{{secret .}}` {
 			t.Fatalf("expected saved secret placeholder, got %#v", got)
@@ -990,9 +990,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"credentials.authValue"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
@@ -1004,13 +1004,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 
-		savedPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		savedPayload, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
 		credentials, ok := savedPayload["credentials"].(map[string]any)
 		if !ok {
@@ -1029,9 +1029,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"credentials.authValue"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		deps.Secrets = nil
 		_, err := executeForTest(
 			deps,
@@ -1044,8 +1044,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !strings.Contains(err.Error(), "secret provider is not configured") {
 			t.Fatalf("expected missing secret provider error, got %q", err.Error())
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls when secret provider is missing, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when secret provider is missing, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
@@ -1054,9 +1054,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"credentials.authValue"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"credentials":{"authValue":"{{secret \"authValue\"}}"}}`,
@@ -1067,16 +1067,16 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
 	t.Run("ignore_flag_allows_plaintext_secret", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"password":"plain-secret"}`,
@@ -1088,8 +1088,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error with --ignore: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
@@ -1098,9 +1098,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"password"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"password":"plain-secret"}`,
@@ -1112,8 +1112,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error with --ignore: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 	})
 
@@ -1123,8 +1123,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 			IDFromAttribute:       "id",
 			SecretsFromAttributes: []string{"credentials.authValue", "existingSecret"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1138,13 +1138,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error with --handle-secrets: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 save call, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
 		}
 
-		saved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		saved, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
 		if got := saved["apiToken"]; got != `{{secret .}}` {
 			t.Fatalf("expected apiToken placeholder, got %#v", got)
@@ -1176,8 +1176,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1191,17 +1191,17 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list save error with --handle-secrets: %v", err)
 		}
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
 
-		firstSaved, ok := reconciler.saveCalls[0].value.(map[string]any)
+		firstSaved, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected first saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected first saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
-		secondSaved, ok := reconciler.saveCalls[1].value.(map[string]any)
+		secondSaved, ok := orchestrator.saveCalls[1].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected second saved payload map, got %T", reconciler.saveCalls[1].value)
+			t.Fatalf("expected second saved payload map, got %T", orchestrator.saveCalls[1].value)
 		}
 		if got := firstSaved["password"]; got != `{{secret .}}` {
 			t.Fatalf("expected first path-scoped placeholder, got %#v", got)
@@ -1220,8 +1220,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("handle_secrets_requires_secret_provider_when_candidates_exist", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		deps.Secrets = nil
 
 		_, err := executeForTest(
@@ -1240,8 +1240,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("handle_secrets_with_subset_fails_on_remaining_candidates_after_handling_requested", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1256,8 +1256,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
 			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(orchestrator.saveCalls))
 		}
 		if secretProvider.values["/customers/acme:password"] != "pw-123" {
 			t.Fatalf("expected requested secret candidate to be stored, got %#v", secretProvider.values)
@@ -1269,9 +1269,9 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 	t.Run("handle_secrets_with_unknown_candidate_fails_validation", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		_, err := executeForTest(
 			deps,
 			`{"password":"pw-123"}`,
@@ -1291,14 +1291,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			getRemoteValue: []any{
 				map[string]any{"id": "app-a", "secret": "sec-a", "apiToken": "tok-a"},
 				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
 			},
 		}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1313,8 +1313,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
 			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
 		}
-		if len(reconciler.saveCalls) != 0 {
-			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 0 {
+			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(orchestrator.saveCalls))
 		}
 
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
@@ -1334,14 +1334,14 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			getRemoteValue: []any{
 				map[string]any{"id": "app-a", "secret": "sec-a", "apiToken": "tok-a"},
 				map[string]any{"id": "app-b", "secret": "sec-b", "apiToken": "tok-b"},
 			},
 		}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1355,13 +1355,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error with --handle-secrets and --ignore: %v", err)
 		}
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
 
-		firstPayload, ok := reconciler.saveCalls[0].value.(map[string]any)
+		firstPayload, ok := orchestrator.saveCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected first saved payload map, got %T", reconciler.saveCalls[0].value)
+			t.Fatalf("expected first saved payload map, got %T", orchestrator.saveCalls[0].value)
 		}
 		if got := firstPayload["secret"]; got != `{{secret .}}` {
 			t.Fatalf("expected first secret placeholder, got %#v", got)
@@ -1384,7 +1384,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService.items["/admin/realms/tenant-a/clients"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "id",
 		}
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			remoteList: []resource.Resource{
 				{LogicalPath: "/admin/realms/master"},
@@ -1400,7 +1400,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			},
 		}
 
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 		secretProvider := deps.Secrets.(*testSecretProvider)
 
 		_, err := executeForTest(
@@ -1414,12 +1414,12 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected wildcard save error with --handle-secrets=secret: %v", err)
 		}
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
 
-		savedByPath := make(map[string]resource.Value, len(reconciler.saveCalls))
-		for _, call := range reconciler.saveCalls {
+		savedByPath := make(map[string]resource.Value, len(orchestrator.saveCalls))
+		for _, call := range orchestrator.saveCalls {
 			savedByPath[call.logicalPath] = call.value
 		}
 
@@ -1456,7 +1456,7 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 
 	t.Run("collection_wildcard_saves_items_from_all_matched_collections", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			remoteList: []resource.Resource{
 				{LogicalPath: "/admin/realms/master"},
@@ -1471,7 +1471,7 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 				},
 			},
 		}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1484,22 +1484,22 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 			t.Fatalf("unexpected wildcard collection save error: %v", err)
 		}
 
-		if len(reconciler.saveCalls) != 2 {
-			t.Fatalf("expected 2 save calls, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/master-client" &&
-			reconciler.saveCalls[1].logicalPath != "/admin/realms/master/clients/master-client" {
-			t.Fatalf("expected master collection item to be saved, got %#v", reconciler.saveCalls)
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/master/clients/master-client" &&
+			orchestrator.saveCalls[1].logicalPath != "/admin/realms/master/clients/master-client" {
+			t.Fatalf("expected master collection item to be saved, got %#v", orchestrator.saveCalls)
 		}
-		if reconciler.saveCalls[0].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" &&
-			reconciler.saveCalls[1].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" {
-			t.Fatalf("expected tenant collection item to be saved, got %#v", reconciler.saveCalls)
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" &&
+			orchestrator.saveCalls[1].logicalPath != "/admin/realms/tenant-a/clients/tenant-client" {
+			t.Fatalf("expected tenant collection item to be saved, got %#v", orchestrator.saveCalls)
 		}
 	})
 
 	t.Run("resource_wildcard_saves_only_existing_matches", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			remoteList: []resource.Resource{
 				{LogicalPath: "/admin/realms/master"},
@@ -1509,7 +1509,7 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 				"/admin/realms/master/clients/test": map[string]any{"id": "test", "realm": "master"},
 			},
 		}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1521,18 +1521,18 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected wildcard resource save error: %v", err)
 		}
-		if len(reconciler.saveCalls) != 1 {
-			t.Fatalf("expected 1 saved match, got %d", len(reconciler.saveCalls))
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 saved match, got %d", len(orchestrator.saveCalls))
 		}
-		if reconciler.saveCalls[0].logicalPath != "/admin/realms/master/clients/test" {
-			t.Fatalf("expected /admin/realms/master/clients/test save path, got %q", reconciler.saveCalls[0].logicalPath)
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/master/clients/test" {
+			t.Fatalf("expected /admin/realms/master/clients/test save path, got %q", orchestrator.saveCalls[0].logicalPath)
 		}
 	})
 
 	t.Run("wildcard_path_rejects_inline_payload", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1549,8 +1549,8 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 
 	t.Run("wildcard_path_returns_not_found_when_no_remote_matches_exist", func(t *testing.T) {
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
-		deps := newResourceSaveDeps(reconciler, metadataService)
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := newResourceSaveDeps(orchestrator, metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -1613,15 +1613,15 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Repository.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
-		if len(reconciler.deleteCalls) != 1 {
-			t.Fatalf("expected 1 remote delete call, got %d", len(reconciler.deleteCalls))
+		if len(orchestrator.deleteCalls) != 1 {
+			t.Fatalf("expected 1 remote delete call, got %d", len(orchestrator.deleteCalls))
 		}
 		if len(repositoryService.deleteCalls) != 0 {
 			t.Fatalf("expected 0 repository delete calls, got %d", len(repositoryService.deleteCalls))
@@ -1632,15 +1632,15 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Repository.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--repository")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
-		if len(reconciler.deleteCalls) != 0 {
-			t.Fatalf("expected 0 remote delete calls, got %d", len(reconciler.deleteCalls))
+		if len(orchestrator.deleteCalls) != 0 {
+			t.Fatalf("expected 0 remote delete calls, got %d", len(orchestrator.deleteCalls))
 		}
 		if len(repositoryService.deleteCalls) != 1 {
 			t.Fatalf("expected 1 repository delete call, got %d", len(repositoryService.deleteCalls))
@@ -1651,15 +1651,15 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Repository.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--both")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
-		if len(reconciler.deleteCalls) != 1 {
-			t.Fatalf("expected 1 remote delete call, got %d", len(reconciler.deleteCalls))
+		if len(orchestrator.deleteCalls) != 1 {
+			t.Fatalf("expected 1 remote delete call, got %d", len(orchestrator.deleteCalls))
 		}
 		if len(repositoryService.deleteCalls) != 1 {
 			t.Fatalf("expected 1 repository delete call, got %d", len(repositoryService.deleteCalls))
@@ -1677,7 +1677,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
@@ -1685,40 +1685,40 @@ func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *tes
 			{LogicalPath: "/customers/nested/gamma"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	_, err := executeForTest(deps, "", "resource", "delete", "/customers", "--force")
 	if err != nil {
 		t.Fatalf("unexpected non-recursive delete error: %v", err)
 	}
-	if len(reconciler.deleteCalls) != 2 {
-		t.Fatalf("expected 2 remote delete calls for non-recursive collection delete, got %d", len(reconciler.deleteCalls))
+	if len(orchestrator.deleteCalls) != 2 {
+		t.Fatalf("expected 2 remote delete calls for non-recursive collection delete, got %d", len(orchestrator.deleteCalls))
 	}
-	if reconciler.deleteCalls[0].logicalPath != "/customers/acme" || reconciler.deleteCalls[1].logicalPath != "/customers/beta" {
+	if orchestrator.deleteCalls[0].logicalPath != "/customers/acme" || orchestrator.deleteCalls[1].logicalPath != "/customers/beta" {
 		t.Fatalf(
 			"expected non-recursive remote delete paths [/customers/acme /customers/beta], got [%s %s]",
-			reconciler.deleteCalls[0].logicalPath,
-			reconciler.deleteCalls[1].logicalPath,
+			orchestrator.deleteCalls[0].logicalPath,
+			orchestrator.deleteCalls[1].logicalPath,
 		)
 	}
-	if reconciler.deleteCalls[0].recursive || reconciler.deleteCalls[1].recursive {
-		t.Fatalf("expected expanded non-recursive delete targets to use recursive=false, got %#v", reconciler.deleteCalls)
+	if orchestrator.deleteCalls[0].recursive || orchestrator.deleteCalls[1].recursive {
+		t.Fatalf("expected expanded non-recursive delete targets to use recursive=false, got %#v", orchestrator.deleteCalls)
 	}
 
-	reconciler.deleteCalls = nil
+	orchestrator.deleteCalls = nil
 	_, err = executeForTest(deps, "", "resource", "delete", "/customers", "--force", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive delete error: %v", err)
 	}
-	if len(reconciler.deleteCalls) != 3 {
-		t.Fatalf("expected 3 remote delete calls for recursive collection delete, got %d", len(reconciler.deleteCalls))
+	if len(orchestrator.deleteCalls) != 3 {
+		t.Fatalf("expected 3 remote delete calls for recursive collection delete, got %d", len(orchestrator.deleteCalls))
 	}
-	if reconciler.deleteCalls[2].logicalPath != "/customers/nested/gamma" {
-		t.Fatalf("expected recursive delete to include nested path, got %#v", reconciler.deleteCalls)
+	if orchestrator.deleteCalls[2].logicalPath != "/customers/nested/gamma" {
+		t.Fatalf("expected recursive delete to include nested path, got %#v", orchestrator.deleteCalls)
 	}
-	for _, call := range reconciler.deleteCalls {
+	for _, call := range orchestrator.deleteCalls {
 		if call.recursive {
-			t.Fatalf("expected expanded recursive delete targets to execute as single-resource deletes, got %#v", reconciler.deleteCalls)
+			t.Fatalf("expected expanded recursive delete targets to execute as single-resource deletes, got %#v", orchestrator.deleteCalls)
 		}
 	}
 }
@@ -1726,25 +1726,25 @@ func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *tes
 func TestResourceDeleteFallsBackToRequestedPathWhenNoLocalTargetsMatch(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	_, err := executeForTest(deps, "", "resource", "delete", "/orders", "--force", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected delete fallback error: %v", err)
 	}
-	if len(reconciler.deleteCalls) != 1 {
-		t.Fatalf("expected one fallback delete call, got %#v", reconciler.deleteCalls)
+	if len(orchestrator.deleteCalls) != 1 {
+		t.Fatalf("expected one fallback delete call, got %#v", orchestrator.deleteCalls)
 	}
-	if reconciler.deleteCalls[0].logicalPath != "/orders" {
-		t.Fatalf("expected fallback delete path /orders, got %q", reconciler.deleteCalls[0].logicalPath)
+	if orchestrator.deleteCalls[0].logicalPath != "/orders" {
+		t.Fatalf("expected fallback delete path /orders, got %q", orchestrator.deleteCalls[0].logicalPath)
 	}
-	if !reconciler.deleteCalls[0].recursive {
+	if !orchestrator.deleteCalls[0].recursive {
 		t.Fatalf("expected fallback delete to preserve recursive=true policy")
 	}
 }
@@ -1835,9 +1835,9 @@ func TestMetadataPathCommands(t *testing.T) {
 				},
 			},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "metadata", "render", "/admin/realms")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "metadata", "render", "/admin/realms")
 		if err != nil {
 			t.Fatalf("unexpected render fallback error: %v", err)
 		}
@@ -1857,9 +1857,9 @@ func TestMetadataPathCommands(t *testing.T) {
 				},
 			},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "metadata", "render", "/admin/realms/_/clients/")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "metadata", "render", "/admin/realms/_/clients/")
 		if err != nil {
 			t.Fatalf("unexpected selector render default-operation error: %v", err)
 		}
@@ -1872,7 +1872,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec: map[string]any{
 				"paths": map[string]any{
@@ -1890,7 +1890,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"infer",
@@ -1922,7 +1922,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec: map[string]any{
 				"paths": map[string]any{
@@ -1940,7 +1940,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"infer",
@@ -1967,7 +1967,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec: map[string]any{
 				"paths": map[string]any{
@@ -1985,7 +1985,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"infer",
@@ -2014,10 +2014,10 @@ func TestMetadataPathCommands(t *testing.T) {
 			AliasFromAttribute:    "clientId",
 			SecretsFromAttributes: []string{"secret"},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"get",
@@ -2038,7 +2038,7 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		delete(metadataService.items, "/admin/realms/")
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec: map[string]any{
 				"paths": map[string]any{
@@ -2056,7 +2056,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"get",
@@ -2078,7 +2078,7 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		delete(metadataService.items, "/admin/realms/")
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec:     nil,
 			listRemoteErr: faults.NewTypedError(
@@ -2089,7 +2089,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"get",
@@ -2102,7 +2102,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			openAPISpec: map[string]any{
 				"paths": map[string]any{
@@ -2120,7 +2120,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"metadata",
 			"infer",
@@ -2326,7 +2326,7 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2338,12 +2338,12 @@ func TestSecretCommands(t *testing.T) {
 			},
 		}
 
-		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "secret", "detect")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "secret", "detect")
 		if err != nil {
 			t.Fatalf("detect without input returned error: %v", err)
 		}
-		if len(reconciler.listLocalCalls) != 1 || reconciler.listLocalCalls[0] != "/" {
-			t.Fatalf("expected repo-wide scan with path \"/\", got %#v", reconciler.listLocalCalls)
+		if len(orchestrator.listLocalCalls) != 1 || orchestrator.listLocalCalls[0] != "/" {
+			t.Fatalf("expected repo-wide scan with path \"/\", got %#v", orchestrator.listLocalCalls)
 		}
 		if !strings.Contains(output, "\"LogicalPath\": \"/customers/acme\"") ||
 			!strings.Contains(output, "\"LogicalPath\": \"/customers/beta\"") {
@@ -2359,7 +2359,7 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2369,12 +2369,12 @@ func TestSecretCommands(t *testing.T) {
 			},
 		}
 
-		output, err := executeForTest(testDepsWith(reconciler, metadataService), "", "secret", "detect", "/customers")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "secret", "detect", "/customers")
 		if err != nil {
 			t.Fatalf("detect path scope without input returned error: %v", err)
 		}
-		if len(reconciler.listLocalCalls) != 1 || reconciler.listLocalCalls[0] != "/customers" {
-			t.Fatalf("expected scoped scan with path \"/customers\", got %#v", reconciler.listLocalCalls)
+		if len(orchestrator.listLocalCalls) != 1 || orchestrator.listLocalCalls[0] != "/customers" {
+			t.Fatalf("expected scoped scan with path \"/customers\", got %#v", orchestrator.listLocalCalls)
 		}
 		if !strings.Contains(output, "\"LogicalPath\": \"/customers/acme\"") {
 			t.Fatalf("expected scoped detect output, got %q", output)
@@ -2385,10 +2385,10 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			`{"apiToken":"token-abc","password":"pw-123","name":"acme"}`,
 			"secret",
 			"detect",
@@ -2413,10 +2413,10 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			`{"password":"pw-123","name":"acme"}`,
 			"secret",
 			"detect",
@@ -2439,7 +2439,7 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2451,7 +2451,7 @@ func TestSecretCommands(t *testing.T) {
 			},
 		}
 
-		_, err := executeForTest(testDepsWith(reconciler, metadataService), "", "secret", "detect", "--fix")
+		_, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "secret", "detect", "--fix")
 		if err != nil {
 			t.Fatalf("detect --fix without input returned error: %v", err)
 		}
@@ -2496,10 +2496,10 @@ func TestSecretCommands(t *testing.T) {
 				string(metadatadomain.OperationGet): {Path: "/api/customers/acme"},
 			},
 		}
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			`{"apiToken":"token-abc","password":"pw-123"}`,
 			"secret",
 			"detect",
@@ -2526,10 +2526,10 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{metadataService: metadataService}
+		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			`{"password":"pw-123"}`,
 			"secret",
 			"detect",
@@ -2545,7 +2545,7 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2558,7 +2558,7 @@ func TestSecretCommands(t *testing.T) {
 		}
 
 		output, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"secret",
 			"detect",
@@ -2577,7 +2577,7 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2588,7 +2588,7 @@ func TestSecretCommands(t *testing.T) {
 		}
 
 		_, err := executeForTest(
-			testDepsWith(reconciler, metadataService),
+			testDepsWith(orchestrator, metadataService),
 			"",
 			"secret",
 			"detect",
@@ -2722,12 +2722,12 @@ func TestResourceListSourceFlags(t *testing.T) {
 	t.Run("default_lists_from_remote_server", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
 			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
-		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/")
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/")
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
@@ -2745,12 +2745,12 @@ func TestResourceListSourceFlags(t *testing.T) {
 	t.Run("remote_server_flag_lists_from_remote_server", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
 			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
-		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/", "--remote-server")
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--remote-server")
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
@@ -2768,12 +2768,12 @@ func TestResourceListSourceFlags(t *testing.T) {
 	t.Run("repository_flag_lists_from_repository", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
 			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
-		output, err := executeForTest(testDepsWith(reconciler, reconciler.metadataService), "", "resource", "list", "/", "--repository")
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--repository")
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
@@ -2799,7 +2799,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 func TestResourceApplyCollectionPath(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
@@ -2807,28 +2807,28 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 			{LogicalPath: "/customers/nested/gamma"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	directOutput, err := executeForTest(deps, "", "resource", "apply", "/customers")
 	if err != nil {
 		t.Fatalf("unexpected direct apply error: %v", err)
 	}
 	expectedDirectCalls := []string{"/customers/acme", "/customers/beta"}
-	if !reflect.DeepEqual(reconciler.applyCalls, expectedDirectCalls) {
-		t.Fatalf("expected direct apply calls %#v, got %#v", expectedDirectCalls, reconciler.applyCalls)
+	if !reflect.DeepEqual(orchestrator.applyCalls, expectedDirectCalls) {
+		t.Fatalf("expected direct apply calls %#v, got %#v", expectedDirectCalls, orchestrator.applyCalls)
 	}
 	if directOutput != "" {
 		t.Fatalf("expected direct apply output to be empty without --verbose, got %q", directOutput)
 	}
 
-	reconciler.applyCalls = nil
+	orchestrator.applyCalls = nil
 	recursiveOutput, err := executeForTest(deps, "", "resource", "apply", "/customers", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive apply error: %v", err)
 	}
 	expectedRecursiveCalls := []string{"/customers/acme", "/customers/beta", "/customers/nested/gamma"}
-	if !reflect.DeepEqual(reconciler.applyCalls, expectedRecursiveCalls) {
-		t.Fatalf("expected recursive apply calls %#v, got %#v", expectedRecursiveCalls, reconciler.applyCalls)
+	if !reflect.DeepEqual(orchestrator.applyCalls, expectedRecursiveCalls) {
+		t.Fatalf("expected recursive apply calls %#v, got %#v", expectedRecursiveCalls, orchestrator.applyCalls)
 	}
 	if recursiveOutput != "" {
 		t.Fatalf("expected recursive apply output to be empty without --verbose, got %q", recursiveOutput)
@@ -2849,18 +2849,18 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_with_input", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "create", "/customers/acme")
 		if err != nil {
 			t.Fatalf("unexpected create error: %v", err)
 		}
-		if len(reconciler.createCalls) != 1 {
-			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
+		if len(orchestrator.createCalls) != 1 {
+			t.Fatalf("expected single create call, got %d", len(orchestrator.createCalls))
 		}
-		if reconciler.createCalls[0].logicalPath != "/customers/acme" {
-			t.Fatalf("expected create path /customers/acme, got %q", reconciler.createCalls[0].logicalPath)
+		if orchestrator.createCalls[0].logicalPath != "/customers/acme" {
+			t.Fatalf("expected create path /customers/acme, got %q", orchestrator.createCalls[0].logicalPath)
 		}
 		if output != "" {
 			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
@@ -2870,7 +2870,7 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_without_input_uses_repository_targets", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2883,25 +2883,25 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 				"/customers/nested/gamma": map[string]any{"id": "gamma", "tier": "enterprise"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "create", "/customers")
 		if err != nil {
 			t.Fatalf("unexpected create collection error: %v", err)
 		}
-		if len(reconciler.createCalls) != 2 {
-			t.Fatalf("expected 2 create calls for non-recursive collection create, got %d", len(reconciler.createCalls))
+		if len(orchestrator.createCalls) != 2 {
+			t.Fatalf("expected 2 create calls for non-recursive collection create, got %d", len(orchestrator.createCalls))
 		}
-		if reconciler.createCalls[0].logicalPath != "/customers/acme" || reconciler.createCalls[1].logicalPath != "/customers/beta" {
-			t.Fatalf("expected non-recursive create paths [/customers/acme /customers/beta], got [%s %s]", reconciler.createCalls[0].logicalPath, reconciler.createCalls[1].logicalPath)
+		if orchestrator.createCalls[0].logicalPath != "/customers/acme" || orchestrator.createCalls[1].logicalPath != "/customers/beta" {
+			t.Fatalf("expected non-recursive create paths [/customers/acme /customers/beta], got [%s %s]", orchestrator.createCalls[0].logicalPath, orchestrator.createCalls[1].logicalPath)
 		}
-		if len(reconciler.getLocalCalls) != 2 {
-			t.Fatalf("expected 2 local payload lookups, got %#v", reconciler.getLocalCalls)
+		if len(orchestrator.getLocalCalls) != 2 {
+			t.Fatalf("expected 2 local payload lookups, got %#v", orchestrator.getLocalCalls)
 		}
-		if !reflect.DeepEqual(reconciler.createCalls[0].value, reconciler.getLocalValues["/customers/acme"]) {
+		if !reflect.DeepEqual(orchestrator.createCalls[0].value, orchestrator.getLocalValues["/customers/acme"]) {
 			t.Fatalf("expected create payload to come from local resource for /customers/acme")
 		}
-		if !reflect.DeepEqual(reconciler.createCalls[1].value, reconciler.getLocalValues["/customers/beta"]) {
+		if !reflect.DeepEqual(orchestrator.createCalls[1].value, orchestrator.getLocalValues["/customers/beta"]) {
 			t.Fatalf("expected create payload to come from local resource for /customers/beta")
 		}
 		if output != "" {
@@ -2912,7 +2912,7 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_without_input_recursive_includes_descendants", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -2925,14 +2925,14 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 				"/customers/nested/gamma": map[string]any{"id": "gamma"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "create", "/customers", "--recursive")
 		if err != nil {
 			t.Fatalf("unexpected recursive create error: %v", err)
 		}
-		if len(reconciler.createCalls) != 3 {
-			t.Fatalf("expected 3 create calls for recursive create, got %d", len(reconciler.createCalls))
+		if len(orchestrator.createCalls) != 3 {
+			t.Fatalf("expected 3 create calls for recursive create, got %d", len(orchestrator.createCalls))
 		}
 		if output != "" {
 			t.Fatalf("expected recursive create output to be empty without --verbose, got %q", output)
@@ -2942,13 +2942,13 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_without_input_fails_when_no_local_resources_match", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		_, err := executeForTest(deps, "", "resource", "create", "/orders")
 		assertTypedCategory(t, err, faults.NotFoundError)
@@ -2957,8 +2957,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_recursive_rejects_explicit_input", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		_, err := executeForTest(deps, `{"id":"acme"}`, "resource", "create", "/customers/acme", "--recursive")
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -2967,15 +2967,15 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_with_payload_flag", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "create", "/customers/acme", "--payload", `{"id":"acme","tier":"startup"}`)
 		if err != nil {
 			t.Fatalf("unexpected create error: %v", err)
 		}
-		if len(reconciler.createCalls) != 1 {
-			t.Fatalf("expected single create call, got %d", len(reconciler.createCalls))
+		if len(orchestrator.createCalls) != 1 {
+			t.Fatalf("expected single create call, got %d", len(orchestrator.createCalls))
 		}
 		if output != "" {
 			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
@@ -2985,8 +2985,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_with_payload_flag_verbose_renders_target", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "create", "/customers/acme", "--payload", `{"id":"acme","tier":"startup"}`, "--verbose")
 		if err != nil {
@@ -3000,8 +3000,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_payload_conflicts_with_file", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 		tempDir := t.TempDir()
 		payloadPath := filepath.Join(tempDir, "payload.json")
 		if err := os.WriteFile(payloadPath, []byte(`{"id":"acme","tier":"pro"}`), 0o600); err != nil {
@@ -3025,8 +3025,8 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 	t.Run("create_payload_conflicts_with_stdin", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{metadataService: newTestMetadata()}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		_, err := executeForTest(
 			deps,
@@ -3044,7 +3044,7 @@ func TestResourceCreateUsesExplicitOrRepositoryInput(t *testing.T) {
 func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
@@ -3055,36 +3055,36 @@ func TestResourceUpdateUsesRepositoryPayloads(t *testing.T) {
 			"/customers/nested/gamma": map[string]any{"id": "gamma", "tier": "free"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	output, err := executeForTest(deps, "", "resource", "update", "/customers")
 	if err != nil {
 		t.Fatalf("unexpected update collection error: %v", err)
 	}
-	if len(reconciler.updateCalls) != 1 {
-		t.Fatalf("expected 1 update call for non-recursive update, got %d", len(reconciler.updateCalls))
+	if len(orchestrator.updateCalls) != 1 {
+		t.Fatalf("expected 1 update call for non-recursive update, got %d", len(orchestrator.updateCalls))
 	}
-	if reconciler.updateCalls[0].logicalPath != "/customers/acme" {
-		t.Fatalf("expected non-recursive update path /customers/acme, got %q", reconciler.updateCalls[0].logicalPath)
+	if orchestrator.updateCalls[0].logicalPath != "/customers/acme" {
+		t.Fatalf("expected non-recursive update path /customers/acme, got %q", orchestrator.updateCalls[0].logicalPath)
 	}
-	if len(reconciler.getLocalCalls) != 1 || reconciler.getLocalCalls[0] != "/customers/acme" {
-		t.Fatalf("expected non-recursive update to read only /customers/acme, got %#v", reconciler.getLocalCalls)
+	if len(orchestrator.getLocalCalls) != 1 || orchestrator.getLocalCalls[0] != "/customers/acme" {
+		t.Fatalf("expected non-recursive update to read only /customers/acme, got %#v", orchestrator.getLocalCalls)
 	}
-	if !reflect.DeepEqual(reconciler.updateCalls[0].value, reconciler.getLocalValues["/customers/acme"]) {
+	if !reflect.DeepEqual(orchestrator.updateCalls[0].value, orchestrator.getLocalValues["/customers/acme"]) {
 		t.Fatalf("expected update payload to come from local resource for /customers/acme")
 	}
 	if output != "" {
 		t.Fatalf("expected non-recursive update output to be empty without --verbose, got %q", output)
 	}
 
-	reconciler.updateCalls = nil
-	reconciler.getLocalCalls = nil
+	orchestrator.updateCalls = nil
+	orchestrator.getLocalCalls = nil
 	recursiveOutput, err := executeForTest(deps, "", "resource", "update", "/customers", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive update error: %v", err)
 	}
-	if len(reconciler.updateCalls) != 2 {
-		t.Fatalf("expected 2 update calls for recursive update, got %d", len(reconciler.updateCalls))
+	if len(orchestrator.updateCalls) != 2 {
+		t.Fatalf("expected 2 update calls for recursive update, got %d", len(orchestrator.updateCalls))
 	}
 	if recursiveOutput != "" {
 		t.Fatalf("expected recursive update output to be empty without --verbose, got %q", recursiveOutput)
@@ -3105,7 +3105,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 	t.Run("collection_path_compares_all_direct_children", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
@@ -3124,7 +3124,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 				},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "diff", "/customers")
 		if err != nil {
@@ -3132,8 +3132,8 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 		}
 
 		expectedCalls := []string{"/customers/acme", "/customers/beta"}
-		if !reflect.DeepEqual(reconciler.diffCalls, expectedCalls) {
-			t.Fatalf("expected non-recursive diff calls %#v, got %#v", expectedCalls, reconciler.diffCalls)
+		if !reflect.DeepEqual(orchestrator.diffCalls, expectedCalls) {
+			t.Fatalf("expected non-recursive diff calls %#v, got %#v", expectedCalls, orchestrator.diffCalls)
 		}
 		if !strings.Contains(output, "/customers/acme/name") || !strings.Contains(output, "/customers/beta/enabled") {
 			t.Fatalf("expected diff output to include direct-child entries, got %q", output)
@@ -3148,7 +3148,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 
 		const idPath = "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c"
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/admin/realms/master/clients/account"},
@@ -3162,14 +3162,14 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 				},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "diff", idPath)
 		if err != nil {
 			t.Fatalf("unexpected diff fallback error: %v", err)
 		}
-		if len(reconciler.diffCalls) != 1 || reconciler.diffCalls[0] != idPath {
-			t.Fatalf("expected diff fallback single target %q, got %#v", idPath, reconciler.diffCalls)
+		if len(orchestrator.diffCalls) != 1 || orchestrator.diffCalls[0] != idPath {
+			t.Fatalf("expected diff fallback single target %q, got %#v", idPath, orchestrator.diffCalls)
 		}
 		if !strings.Contains(output, idPath+"/name") {
 			t.Fatalf("expected diff fallback output for %q, got %q", idPath, output)
@@ -3179,13 +3179,13 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 	t.Run("fails_when_no_local_resources_match", func(t *testing.T) {
 		t.Parallel()
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: "/customers/acme"},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		_, err := executeForTest(deps, "", "resource", "diff", "/orders")
 		assertTypedCategory(t, err, faults.NotFoundError)
@@ -3196,7 +3196,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 
 		const targetPath = "/admin/realms/payments"
 
-		reconciler := &testReconciler{
+		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
 			localList: []resource.Resource{
 				{LogicalPath: targetPath},
@@ -3218,7 +3218,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 				},
 			},
 		}
-		deps := testDepsWith(reconciler, reconciler.metadataService)
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 		output, err := executeForTest(deps, "", "resource", "diff", targetPath, "--output", "text")
 		if err != nil {
@@ -3240,7 +3240,7 @@ func TestResourceCollectionMutationsFallbackToSingleResourceLookupWhenListIsEmpt
 
 	const idPath = "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c"
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/admin/realms/master/clients/account"},
@@ -3249,40 +3249,40 @@ func TestResourceCollectionMutationsFallbackToSingleResourceLookupWhenListIsEmpt
 			idPath: map[string]any{"id": "f88c68f3-3253-49f9-94a9-fe7553d33b5c", "clientId": "account"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	_, err := executeForTest(deps, "", "resource", "apply", idPath)
 	if err != nil {
 		t.Fatalf("unexpected apply fallback error: %v", err)
 	}
-	if len(reconciler.applyCalls) != 1 || reconciler.applyCalls[0] != idPath {
-		t.Fatalf("expected apply to execute fallback single target %q, got %#v", idPath, reconciler.applyCalls)
+	if len(orchestrator.applyCalls) != 1 || orchestrator.applyCalls[0] != idPath {
+		t.Fatalf("expected apply to execute fallback single target %q, got %#v", idPath, orchestrator.applyCalls)
 	}
 
-	reconciler.updateCalls = nil
-	reconciler.getLocalCalls = nil
+	orchestrator.updateCalls = nil
+	orchestrator.getLocalCalls = nil
 	_, err = executeForTest(deps, "", "resource", "update", idPath)
 	if err != nil {
 		t.Fatalf("unexpected update fallback error: %v", err)
 	}
-	if len(reconciler.updateCalls) != 1 || reconciler.updateCalls[0].logicalPath != idPath {
-		t.Fatalf("expected update to execute fallback single target %q, got %#v", idPath, reconciler.updateCalls)
+	if len(orchestrator.updateCalls) != 1 || orchestrator.updateCalls[0].logicalPath != idPath {
+		t.Fatalf("expected update to execute fallback single target %q, got %#v", idPath, orchestrator.updateCalls)
 	}
-	if len(reconciler.getLocalCalls) == 0 || reconciler.getLocalCalls[0] != idPath {
-		t.Fatalf("expected getLocal fallback lookup for %q, got %#v", idPath, reconciler.getLocalCalls)
+	if len(orchestrator.getLocalCalls) == 0 || orchestrator.getLocalCalls[0] != idPath {
+		t.Fatalf("expected getLocal fallback lookup for %q, got %#v", idPath, orchestrator.getLocalCalls)
 	}
 }
 
 func TestResourceCollectionMutationsFailWhenNoLocalResourcesMatch(t *testing.T) {
 	t.Parallel()
 
-	reconciler := &testReconciler{
+	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
 		localList: []resource.Resource{
 			{LogicalPath: "/customers/acme"},
 		},
 	}
-	deps := testDepsWith(reconciler, reconciler.metadataService)
+	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
 	_, err := executeForTest(deps, "", "resource", "apply", "/orders")
 	assertTypedCategory(t, err, faults.NotFoundError)
@@ -3319,14 +3319,14 @@ func TestPathCompletionResourceGetPrefersRemoteAndOpenAPI(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.localList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.localList = []resource.Resource{
 		{LogicalPath: "/customers/local"},
 	}
-	reconciler.remoteList = []resource.Resource{
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/customers/remote"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/customers/{id}": map[string]any{},
 			"/health":         map[string]any{},
@@ -3343,8 +3343,8 @@ func TestPathCompletionResourceGetPrefersRemoteAndOpenAPI(t *testing.T) {
 	if strings.Contains(output, "/customers/remote") || strings.Contains(output, "/customers/local") {
 		t.Fatalf("expected get completion to collapse to next-level candidates, got %q", output)
 	}
-	if len(reconciler.listLocalCalls) > 0 {
-		t.Fatalf("expected get completion to skip local list when remote suggestions are available, calls=%#v", reconciler.listLocalCalls)
+	if len(orchestrator.listLocalCalls) > 0 {
+		t.Fatalf("expected get completion to skip local list when remote suggestions are available, calls=%#v", orchestrator.listLocalCalls)
 	}
 	if !strings.Contains(output, ":6") {
 		t.Fatalf("expected no-file+no-space completion directive, got %q", output)
@@ -3355,16 +3355,16 @@ func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testi
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.localList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.localList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master"},
 		{LogicalPath: "/admin/realms/master/clients/local-app"},
 	}
-	reconciler.remoteList = []resource.Resource{
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/prod"},
 		{LogicalPath: "/admin/realms/master/clients/remote-app"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3381,11 +3381,11 @@ func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testi
 	if strings.Contains(output, "/admin/realms/master/clients/local-app") {
 		t.Fatalf("expected get completion to avoid local fallback when remote collection items are available, got %q", output)
 	}
-	if !containsString(reconciler.listRemoteCalls, "/admin/realms/master/clients") {
-		t.Fatalf("expected completion to consult remote collection path, calls=%#v", reconciler.listRemoteCalls)
+	if !containsString(orchestrator.listRemoteCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected completion to consult remote collection path, calls=%#v", orchestrator.listRemoteCalls)
 	}
-	if containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
-		t.Fatalf("expected completion to skip local collection fallback when remote items are available, calls=%#v", reconciler.listLocalCalls)
+	if containsString(orchestrator.listLocalCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected completion to skip local collection fallback when remote items are available, calls=%#v", orchestrator.listLocalCalls)
 	}
 }
 
@@ -3393,13 +3393,13 @@ func TestPathCompletionFallsBackToRepositoryWhenRemoteUnavailable(t *testing.T) 
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.localList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.localList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master"},
 		{LogicalPath: "/admin/realms/master/clients/local-app"},
 	}
-	reconciler.listRemoteErr = errors.New("remote unavailable")
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.listRemoteErr = errors.New("remote unavailable")
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3412,8 +3412,8 @@ func TestPathCompletionFallsBackToRepositoryWhenRemoteUnavailable(t *testing.T) 
 	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
 		t.Fatalf("expected repository fallback completion item, got %q", output)
 	}
-	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
-		t.Fatalf("expected fallback completion to consult local collection path, calls=%#v", reconciler.listLocalCalls)
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected fallback completion to consult local collection path, calls=%#v", orchestrator.listLocalCalls)
 	}
 }
 
@@ -3421,11 +3421,11 @@ func TestPathCompletionResourceApplyPrefersRepository(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.localList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.localList = []resource.Resource{
 		{LogicalPath: "/customers/local"},
 	}
-	reconciler.remoteList = []resource.Resource{
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/customers/remote"},
 	}
 
@@ -3439,8 +3439,8 @@ func TestPathCompletionResourceApplyPrefersRepository(t *testing.T) {
 	if strings.Contains(output, "/customers/remote") || strings.Contains(output, "/customers/local") {
 		t.Fatalf("expected apply completion to collapse to next-level candidates, got %q", output)
 	}
-	if len(reconciler.listRemoteCalls) > 0 {
-		t.Fatalf("expected apply completion to skip remote list when local suggestions are available, calls=%#v", reconciler.listRemoteCalls)
+	if len(orchestrator.listRemoteCalls) > 0 {
+		t.Fatalf("expected apply completion to skip remote list when local suggestions are available, calls=%#v", orchestrator.listRemoteCalls)
 	}
 }
 
@@ -3448,8 +3448,8 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{
 			LogicalPath:    "/admin/realms/master/clients/f88c68f3",
 			CollectionPath: "/admin/realms/master/clients",
@@ -3463,7 +3463,7 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 			},
 		},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3485,11 +3485,11 @@ func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master/clients/remote-app"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3511,12 +3511,12 @@ func TestPathCompletionCompletesScopedPrefixToCanonicalPath(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master"},
 		{LogicalPath: "/admin/realms/prod"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3538,11 +3538,11 @@ func TestPathCompletionNoDescRemainsPrefixCompatibleForBash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3564,13 +3564,13 @@ func TestPathCompletionShowsOnlyNextLevelForCollectionPrefix(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/alpha/clients/app-a"},
 		{LogicalPath: "/admin/realms/beta/roles/viewer"},
 		{LogicalPath: "/admin/realms/gamma"},
 	}
-	reconciler.openAPISpec = map[string]any{
+	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{
 			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
 		},
@@ -3605,8 +3605,8 @@ func TestPathCompletionShowsOnlyNextLevelForNestedCollectionPrefix(t *testing.T)
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/master/aaaa/resource-a"},
 		{LogicalPath: "/admin/realms/master/bbbb"},
 		{LogicalPath: "/admin/realms/master/cccc/deeper/resource-c"},
@@ -3638,8 +3638,8 @@ func TestPathCompletionScopedQueriesAvoidRootRecursiveFallbackWhenScopedMatchesE
 	t.Parallel()
 
 	deps := testDeps()
-	reconciler := deps.Orchestrator.(*testReconciler)
-	reconciler.remoteList = []resource.Resource{
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
 		{LogicalPath: "/admin/realms/alpha"},
 		{LogicalPath: "/admin/realms/beta"},
 	}
@@ -3651,11 +3651,11 @@ func TestPathCompletionScopedQueriesAvoidRootRecursiveFallbackWhenScopedMatchesE
 	if !strings.Contains(output, "/admin/realms/alpha") {
 		t.Fatalf("expected scoped completion output, got %q", output)
 	}
-	if !containsListCall(reconciler.listRemoteDetail, "/admin/realms", false) {
-		t.Fatalf("expected scoped non-recursive query for /admin/realms, calls=%#v", reconciler.listRemoteDetail)
+	if !containsListCall(orchestrator.listRemoteDetail, "/admin/realms", false) {
+		t.Fatalf("expected scoped non-recursive query for /admin/realms, calls=%#v", orchestrator.listRemoteDetail)
 	}
-	if containsListCall(reconciler.listRemoteDetail, "/", true) {
-		t.Fatalf("expected scoped completion to avoid root-recursive remote fallback when scoped candidates exist, calls=%#v", reconciler.listRemoteDetail)
+	if containsListCall(orchestrator.listRemoteDetail, "/", true) {
+		t.Fatalf("expected scoped completion to avoid root-recursive remote fallback when scoped candidates exist, calls=%#v", orchestrator.listRemoteDetail)
 	}
 }
 
@@ -3831,11 +3831,11 @@ func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			deps := testDeps()
-			reconciler := deps.Orchestrator.(*testReconciler)
-			reconciler.localList = []resource.Resource{
+			orchestrator := deps.Orchestrator.(*testOrchestrator)
+			orchestrator.localList = []resource.Resource{
 				{LogicalPath: "/customers/local"},
 			}
-			reconciler.remoteList = []resource.Resource{
+			orchestrator.remoteList = []resource.Resource{
 				{LogicalPath: "/customers/remote"},
 			}
 
@@ -3851,14 +3851,14 @@ func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
 				t.Fatalf("expected path completion directive :6, got %q", output)
 			}
 
-			localCalled := len(reconciler.listLocalCalls) > 0
-			remoteCalled := len(reconciler.listRemoteCalls) > 0
+			localCalled := len(orchestrator.listLocalCalls) > 0
+			remoteCalled := len(orchestrator.listRemoteCalls) > 0
 
 			if localCalled != testCase.expectLocal {
-				t.Fatalf("expected local completion queries=%t, got %t (calls=%#v)", testCase.expectLocal, localCalled, reconciler.listLocalDetail)
+				t.Fatalf("expected local completion queries=%t, got %t (calls=%#v)", testCase.expectLocal, localCalled, orchestrator.listLocalDetail)
 			}
 			if remoteCalled != testCase.expectRemote {
-				t.Fatalf("expected remote completion queries=%t, got %t (calls=%#v)", testCase.expectRemote, remoteCalled, reconciler.listRemoteDetail)
+				t.Fatalf("expected remote completion queries=%t, got %t (calls=%#v)", testCase.expectRemote, remoteCalled, orchestrator.listRemoteDetail)
 			}
 		})
 	}
@@ -3869,11 +3869,11 @@ func TestPathCompletionAdHocPrefersRemoteWithRepositoryFallback(t *testing.T) {
 
 	t.Run("remote_first", func(t *testing.T) {
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.localList = []resource.Resource{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.localList = []resource.Resource{
 			{LogicalPath: "/admin/local-only"},
 		}
-		reconciler.remoteList = []resource.Resource{
+		orchestrator.remoteList = []resource.Resource{
 			{LogicalPath: "/admin/remote-only"},
 		}
 
@@ -3884,21 +3884,21 @@ func TestPathCompletionAdHocPrefersRemoteWithRepositoryFallback(t *testing.T) {
 		if !strings.Contains(output, "/admin/") {
 			t.Fatalf("expected ad-hoc completion output, got %q", output)
 		}
-		if len(reconciler.listRemoteCalls) == 0 {
+		if len(orchestrator.listRemoteCalls) == 0 {
 			t.Fatalf("expected ad-hoc completion to query remote source first")
 		}
-		if len(reconciler.listLocalCalls) != 0 {
-			t.Fatalf("expected ad-hoc completion to skip local fallback when remote candidates exist, calls=%#v", reconciler.listLocalDetail)
+		if len(orchestrator.listLocalCalls) != 0 {
+			t.Fatalf("expected ad-hoc completion to skip local fallback when remote candidates exist, calls=%#v", orchestrator.listLocalDetail)
 		}
 	})
 
 	t.Run("fallback_to_local_when_remote_fails", func(t *testing.T) {
 		deps := testDeps()
-		reconciler := deps.Orchestrator.(*testReconciler)
-		reconciler.localList = []resource.Resource{
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.localList = []resource.Resource{
 			{LogicalPath: "/admin/local-only"},
 		}
-		reconciler.listRemoteErr = errors.New("remote unavailable")
+		orchestrator.listRemoteErr = errors.New("remote unavailable")
 
 		output, err := executeForTest(deps, "", "__complete", "ad-hoc", "get", "/adm")
 		if err != nil {
@@ -3907,10 +3907,10 @@ func TestPathCompletionAdHocPrefersRemoteWithRepositoryFallback(t *testing.T) {
 		if !strings.Contains(output, "/admin/") {
 			t.Fatalf("expected ad-hoc completion output from local fallback, got %q", output)
 		}
-		if len(reconciler.listRemoteCalls) == 0 {
+		if len(orchestrator.listRemoteCalls) == 0 {
 			t.Fatalf("expected ad-hoc completion to attempt remote source first")
 		}
-		if len(reconciler.listLocalCalls) == 0 {
+		if len(orchestrator.listLocalCalls) == 0 {
 			t.Fatalf("expected ad-hoc completion to fallback to local source when remote fails")
 		}
 	})
@@ -3932,11 +3932,11 @@ func TestPathCompletionMetadataAndSecretPreferRepositoryPaths(t *testing.T) {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			deps := testDeps()
-			reconciler := deps.Orchestrator.(*testReconciler)
-			reconciler.localList = []resource.Resource{
+			orchestrator := deps.Orchestrator.(*testOrchestrator)
+			orchestrator.localList = []resource.Resource{
 				{LogicalPath: "/customers/local"},
 			}
-			reconciler.remoteList = []resource.Resource{
+			orchestrator.remoteList = []resource.Resource{
 				{LogicalPath: "/customers/remote"},
 			}
 
@@ -3948,11 +3948,11 @@ func TestPathCompletionMetadataAndSecretPreferRepositoryPaths(t *testing.T) {
 			if !strings.Contains(output, "/customers/") {
 				t.Fatalf("expected completion output, got %q", output)
 			}
-			if len(reconciler.listLocalCalls) == 0 {
+			if len(orchestrator.listLocalCalls) == 0 {
 				t.Fatalf("expected completion to query local repository source")
 			}
-			if len(reconciler.listRemoteCalls) != 0 {
-				t.Fatalf("expected completion to skip remote fallback when repository candidates exist, calls=%#v", reconciler.listRemoteDetail)
+			if len(orchestrator.listRemoteCalls) != 0 {
+				t.Fatalf("expected completion to skip remote fallback when repository candidates exist, calls=%#v", orchestrator.listRemoteDetail)
 			}
 		})
 	}
@@ -3991,7 +3991,7 @@ func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 		args            []string
 		expectedSnippet string
 	}{
-		{name: "ad-hoc", args: []string{"ad-hoc"}, expectedSnippet: "Execute ad-hoc HTTP requests against managed server API"},
+		{name: "ad-hoc", args: []string{"ad-hoc"}, expectedSnippet: "Execute ad-hoc HTTP requests against resource server API"},
 		{name: "config", args: []string{"config"}, expectedSnippet: "Manage contexts"},
 		{name: "metadata", args: []string{"metadata"}, expectedSnippet: "Manage metadata"},
 		{name: "repo", args: []string{"repo"}, expectedSnippet: "Manage local repository state"},
@@ -4264,19 +4264,19 @@ func trailingBlankLineCount(value string) int {
 func testDeps() Dependencies {
 	metadataService := newTestMetadata()
 	return testDepsWith(
-		&testReconciler{
+		&testOrchestrator{
 			metadataService: metadataService,
 		},
 		metadataService,
 	)
 }
 
-func testDepsWith(reconciler *testReconciler, metadataService *testMetadata) Dependencies {
+func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
 
 	return Dependencies{
-		Orchestrator: reconciler,
+		Orchestrator: orchestrator,
 		Contexts:     &testContextService{},
 		Repository:   repositoryService,
 		Metadata:     metadataService,
@@ -4284,8 +4284,8 @@ func testDepsWith(reconciler *testReconciler, metadataService *testMetadata) Dep
 	}
 }
 
-func newResourceSaveDeps(reconciler *testReconciler, metadataService *testMetadata) Dependencies {
-	deps := testDepsWith(reconciler, metadataService)
+func newResourceSaveDeps(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
+	deps := testDepsWith(orchestrator, metadataService)
 	deps.Repository = &resourceSaveTestRepository{}
 	return deps
 }
@@ -4341,7 +4341,7 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 }
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
-type testReconciler struct {
+type testOrchestrator struct {
 	metadataService  *testMetadata
 	saveCalls        []savedResource
 	deleteCalls      []deleteCall
@@ -4391,10 +4391,10 @@ type adHocCall struct {
 	body   resource.Value
 }
 
-func (r *testReconciler) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *testOrchestrator) Get(_ context.Context, logicalPath string) (resource.Value, error) {
 	return map[string]any{"path": logicalPath, "source": "get"}, nil
 }
-func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
 	r.getLocalCalls = append(r.getLocalCalls, logicalPath)
 	if r.getLocalValues != nil {
 		if value, ok := r.getLocalValues[logicalPath]; ok {
@@ -4403,7 +4403,7 @@ func (r *testReconciler) GetLocal(_ context.Context, logicalPath string) (resour
 	}
 	return map[string]any{"path": logicalPath, "source": "local"}, nil
 }
-func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
 	r.getRemoteCalls = append(r.getRemoteCalls, logicalPath)
 	if r.getRemoteErr != nil {
 		return nil, r.getRemoteErr
@@ -4419,7 +4419,7 @@ func (r *testReconciler) GetRemote(_ context.Context, logicalPath string) (resou
 	}
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
-func (r *testReconciler) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+func (r *testOrchestrator) AdHoc(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
 	r.adHocCalls = append(r.adHocCalls, adHocCall{
 		method: method,
 		path:   endpointPath,
@@ -4434,42 +4434,42 @@ func (r *testReconciler) AdHoc(_ context.Context, method string, endpointPath st
 		"body":   body,
 	}, nil
 }
-func (r *testReconciler) GetOpenAPISpec(_ context.Context) (resource.Value, error) {
+func (r *testOrchestrator) GetOpenAPISpec(_ context.Context) (resource.Value, error) {
 	return r.openAPISpec, nil
 }
-func (r *testReconciler) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (r *testOrchestrator) Save(_ context.Context, logicalPath string, value resource.Value) error {
 	r.saveCalls = append(r.saveCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       value,
 	})
 	return r.saveErr
 }
-func (r *testReconciler) Apply(_ context.Context, logicalPath string) (resource.Resource, error) {
+func (r *testOrchestrator) Apply(_ context.Context, logicalPath string) (resource.Resource, error) {
 	r.applyCalls = append(r.applyCalls, logicalPath)
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testReconciler) Create(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *testOrchestrator) Create(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
 	r.createCalls = append(r.createCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       value,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testReconciler) Update(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *testOrchestrator) Update(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
 	r.updateCalls = append(r.updateCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       value,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testReconciler) Delete(_ context.Context, logicalPath string, policy orchestrator.DeletePolicy) error {
+func (r *testOrchestrator) Delete(_ context.Context, logicalPath string, policy orchestrator.DeletePolicy) error {
 	r.deleteCalls = append(r.deleteCalls, deleteCall{
 		logicalPath: logicalPath,
 		recursive:   policy.Recursive,
 	})
 	return nil
 }
-func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+func (r *testOrchestrator) ListLocal(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listLocalCalls = append(r.listLocalCalls, logicalPath)
 	r.listLocalDetail = append(r.listLocalDetail, listCall{
 		logicalPath: logicalPath,
@@ -4501,7 +4501,7 @@ func (r *testReconciler) ListLocal(_ context.Context, logicalPath string, policy
 		Payload:     map[string]any{"path": logicalPath},
 	}}, nil
 }
-func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+func (r *testOrchestrator) ListRemote(_ context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	r.listRemoteCalls = append(r.listRemoteCalls, logicalPath)
 	r.listRemoteDetail = append(r.listRemoteDetail, listCall{
 		logicalPath: logicalPath,
@@ -4536,10 +4536,10 @@ func (r *testReconciler) ListRemote(_ context.Context, logicalPath string, polic
 		Payload:     map[string]any{"path": logicalPath},
 	}}, nil
 }
-func (r *testReconciler) Explain(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+func (r *testOrchestrator) Explain(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	return []resource.DiffEntry{{Path: logicalPath, Operation: "noop"}}, nil
 }
-func (r *testReconciler) Diff(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+func (r *testOrchestrator) Diff(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	r.diffCalls = append(r.diffCalls, logicalPath)
 	if r.diffErr != nil {
 		return nil, r.diffErr
@@ -4553,7 +4553,7 @@ func (r *testReconciler) Diff(_ context.Context, logicalPath string) ([]resource
 	}
 	return []resource.DiffEntry{{Path: logicalPath, Operation: "noop"}}, nil
 }
-func (r *testReconciler) Template(_ context.Context, _ string, value resource.Value) (resource.Value, error) {
+func (r *testOrchestrator) Template(_ context.Context, _ string, value resource.Value) (resource.Value, error) {
 	return value, nil
 }
 

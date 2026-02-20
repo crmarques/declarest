@@ -32,7 +32,7 @@ func TestNewDeclarestContext(t *testing.T) {
 		t.Fatal("expected non-nil contexts service")
 	}
 	if declarestContext.Orchestrator == nil {
-		t.Fatal("expected non-nil resource reconciler")
+		t.Fatal("expected non-nil resource orchestrator")
 	}
 
 	if _, ok := declarestContext.Contexts.(*configfile.FileContextService); !ok {
@@ -85,7 +85,7 @@ contexts:
     repository:
       filesystem:
         base-dir: ` + devRepo + `
-    managed-server:
+    resource-server:
       http:
         base-url: https://example.com/api
         auth:
@@ -95,7 +95,7 @@ contexts:
     repository:
       filesystem:
         base-dir: ` + prodRepo + `
-    managed-server:
+    resource-server:
       http:
         base-url: https://example.com/api
         auth:

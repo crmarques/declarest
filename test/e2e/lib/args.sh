@@ -137,7 +137,7 @@ Component selection (choose values for each flag; see notes below):
     simple-api-server : Lightweight JSON API with optional basic-auth, OAuth2, and mTLS enforcement.
     keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
     rundeck           : Rundeck HTTP API surface for job-centric operations.
-    vault             : HashiCorp Vault HTTP API acting as the managed resource server.
+    vault             : HashiCorp Vault HTTP API acting as the resource server.
     none              : Skip provisioning any resource server; resource mutations run against the repository only.
   --resource-server-connection <local|remote>           default: local
     local  : Start the chosen resource server via the provided fixtures and scripts.

@@ -736,7 +736,7 @@ func checkResourceServer(command *cobra.Command, deps common.CommandDependencies
 		Component: "resource-server",
 	}
 
-	if cfg.ManagedServer == nil {
+	if cfg.ResourceServer == nil {
 		result.Status = configCheckSkip
 		result.Details = "not configured"
 		return result

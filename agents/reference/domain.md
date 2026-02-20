@@ -28,7 +28,7 @@ Domain entities:
 1. `Resource`: desired or observed payload.
 2. `ResourceMetadata`: operation and transform directives.
 3. `resource.Resource`: identity, paths, metadata, and payload bundle.
-4. `reconciler.DefaultReconciler`: active runtime managers and configuration identity.
+4. `orchestrator.DefaultOrchestrator`: active runtime managers and configuration identity.
 
 Key terms:
 1. Logical Path: canonical repository path for a resource.
