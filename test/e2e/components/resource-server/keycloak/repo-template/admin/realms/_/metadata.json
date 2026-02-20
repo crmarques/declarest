@@ -2,10 +2,5 @@
   "resourceInfo": {
     "idFromAttribute": "realm",
     "aliasFromAttribute": "realm"
-  },
-  "operationInfo": {
-    "createResource": {
-      "path": "/admin/realms"
-    }
   }
 }
