@@ -82,6 +82,7 @@ Acceptance contracts:
 44. Remote collection `NotFound` fallback: `resource get`/`resource save` remote reads treat `404` as an empty list only when collection intent is confirmed by repository structure hints or OpenAPI inference; single-resource paths still use metadata alias/id fallback and preserve `NotFound` when no match exists.
 45. Remote read fallback error contract: when single-resource parent-collection fallback receives a non-list validation payload (for example object/array-shape mismatch), commands preserve the original resource `NotFound` instead of surfacing list-decoding validation output.
 46. Metadata path indirection contract: rendered operation specs resolve `resourceInfo.collectionPath` templates from handled logical-path context (for example intermediary `/_/` selectors), treat `.`-prefixed operation paths as collection-relative, default omitted operation paths to `.` for `create|list` and `./{{.id}}` for `get|update|delete|compare`, and accept compatibility decoding from `operationInfo.<operation>.url.path`.
+47. List jq transform contract: list workflows execute resolved list-operation `jq` expressions before list-shape extraction; valid filters constrain candidate resources deterministically and invalid jq expressions fail with `ValidationError`.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

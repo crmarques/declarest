@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/itchyny/gojq"
+
 	"github.com/crmarques/declarest/internal/support/identity"
 	"github.com/crmarques/declarest/internal/support/templatescope"
 	"github.com/crmarques/declarest/metadata"
@@ -116,6 +118,7 @@ func resolveOperationSpecTemplates(
 	}
 
 	templateMetadata := metadata.ResourceMetadata{
+		CollectionPath: md.CollectionPath,
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},
@@ -225,8 +228,17 @@ func (g *HTTPResourceServerGateway) resolveRequestURL(requestPath string, query 
 	return target.String(), nil
 }
 
-func (g *HTTPResourceServerGateway) decodeListResponse(collectionPath string, md metadata.ResourceMetadata, body []byte) ([]resource.Resource, error) {
+func (g *HTTPResourceServerGateway) decodeListResponse(
+	collectionPath string,
+	md metadata.ResourceMetadata,
+	spec metadata.OperationSpec,
+	body []byte,
+) ([]resource.Resource, error) {
 	payload, err := decodeJSONResponse(body)
+	if err != nil {
+		return nil, err
+	}
+	payload, err = applyListJQ(payload, spec.JQ)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +300,39 @@ func (g *HTTPResourceServerGateway) decodeListResponse(collectionPath string, md
 		return list[i].LogicalPath < list[j].LogicalPath
 	})
 	return list, nil
+}
+
+func applyListJQ(payload any, expression string) (any, error) {
+	trimmedExpression := strings.TrimSpace(expression)
+	if trimmedExpression == "" {
+		return payload, nil
+	}
+
+	query, err := gojq.Parse(trimmedExpression)
+	if err != nil {
+		return nil, validationError("invalid list jq expression", err)
+	}
+
+	iterator := query.Run(payload)
+	results := make([]any, 0, 1)
+	for {
+		value, ok := iterator.Next()
+		if !ok {
+			break
+		}
+		if valueErr, isErr := value.(error); isErr {
+			return nil, validationError("failed to evaluate list jq expression", valueErr)
+		}
+		results = append(results, value)
+	}
+
+	if len(results) == 0 {
+		return []any{}, nil
+	}
+	if len(results) == 1 {
+		return results[0], nil
+	}
+	return results, nil
 }
 
 func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool) {

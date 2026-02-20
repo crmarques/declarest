@@ -181,6 +181,42 @@ func TestBuildRequestFromMetadataRendersTemplates(t *testing.T) {
 	}
 }
 
+func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testing.T) {
+	t.Parallel()
+
+	gateway := mustGateway(t, config.HTTPServer{
+		BaseURL: "https://example.com/api",
+		Auth: &config.HTTPAuth{
+			BearerToken: &config.BearerTokenAuth{Token: "token"},
+		},
+	})
+
+	spec, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+		LogicalPath:    "/admin/realms/publico-br/user-registry",
+		CollectionPath: "/admin/realms/publico-br",
+		Metadata: metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.providerId == "ldap") ]`,
+				},
+			},
+		},
+	}, metadata.OperationList)
+	if err != nil {
+		t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+	}
+
+	if spec.Path != "/admin/realms/publico-br/components" {
+		t.Fatalf("expected rendered list path /admin/realms/publico-br/components, got %q", spec.Path)
+	}
+	if spec.JQ != `[ .[] | select(.providerId == "ldap") ]` {
+		t.Fatalf("expected list jq to be preserved, got %q", spec.JQ)
+	}
+}
+
 func TestOpenAPIFallbackAndValidation(t *testing.T) {
 	t.Parallel()
 
@@ -805,6 +841,78 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		if items[0].LogicalPath != "/customers/a" || items[1].LogicalPath != "/customers/b" {
 			t.Fatalf("expected deterministic sorted output, got %#v", items)
 		}
+	})
+
+	t.Run("list_operation_applies_jq_and_collection_template", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/admin/realms/publico-br/components" {
+				t.Fatalf("expected list request path /admin/realms/publico-br/components, got %q", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"id":"ldap-id","name":"user-registry","providerId":"ldap"},
+				  {"id":"oidc-id","name":"identity-provider","providerId":"oidc"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		items, err := gateway.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.providerId == "ldap") ]`,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("expected jq-filtered list with 1 item, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/admin/realms/publico-br/user-registry" {
+			t.Fatalf("unexpected filtered logical path %#v", items[0].LogicalPath)
+		}
+	})
+
+	t.Run("invalid_list_jq_returns_validation_error", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `[{"id":"ldap-id","name":"user-registry"}]`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: "[ .[] | select(.providerId == ]",
+				},
+			},
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
 	t.Run("object_items_shape_supported", func(t *testing.T) {

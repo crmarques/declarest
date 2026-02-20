@@ -22,6 +22,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 5. HTTP response errors MUST preserve status code and response body context.
 6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
 7. List responses MUST be normalized into deterministic `resource.Resource` ordering.
+8. `operationInfo.listCollection.jq` (or resolved list-operation `jq`) MUST be executed against decoded list payload before list-shape extraction and identity mapping.
 
 ## Data Contracts
 Request spec fields:
