@@ -13,6 +13,8 @@ var (
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
 	bashOutCompgenPattern               = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$cur"`)
 	bashOutCompgenBracedCurPattern      = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$\{cur\}"`)
+	bashOutCompgenPlainOutPattern       = regexp.MustCompile(`compgen\s+-W\s+"\$out"\s+--\s+"\$cur"`)
+	bashOutCompgenPlainOutBracedCur     = regexp.MustCompile(`compgen\s+-W\s+"\$out"\s+--\s+"\$\{cur\}"`)
 )
 
 func newBashCommand() *cobra.Command {
@@ -57,6 +59,14 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
 	)
 	normalized = bashOutCompgenBracedCurPattern.ReplaceAllLiteral(
+		normalized,
+		[]byte(`compgen -W "${out// /\\ }" -- "${cur}"`),
+	)
+	normalized = bashOutCompgenPlainOutPattern.ReplaceAllLiteral(
+		normalized,
+		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
+	)
+	normalized = bashOutCompgenPlainOutBracedCur.ReplaceAllLiteral(
 		normalized,
 		[]byte(`compgen -W "${out// /\\ }" -- "${cur}"`),
 	)
