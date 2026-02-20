@@ -3,12 +3,15 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/support/templatescope"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/secrets"
+	"github.com/crmarques/declarest/server"
 )
 
 func (r *DefaultOrchestrator) executeRemoteMutation(
@@ -100,6 +103,14 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 		return nil, err
 	}
 
+	collectionValue, handled, collectionErr := r.fetchRemoteCollectionValue(ctx, serverManager, resourceInfo)
+	if handled {
+		if collectionErr != nil {
+			return nil, collectionErr
+		}
+		return collectionValue, nil
+	}
+
 	candidates, listErr := serverManager.List(ctx, resourceInfo.CollectionPath, resourceInfo.Metadata)
 	if listErr != nil {
 		return nil, listErr
@@ -128,6 +139,198 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 			nil,
 		)
 	}
+}
+
+func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	resourceInfo resource.Resource,
+) (resource.Value, bool, error) {
+	if !r.shouldTreatRemotePathAsCollection(ctx, serverManager, resourceInfo) {
+		return nil, false, nil
+	}
+
+	items, err := serverManager.List(ctx, resourceInfo.LogicalPath, resourceInfo.Metadata)
+	if err != nil {
+		// Some APIs incorrectly return 404 for empty collections.
+		if isTypedCategory(err, faults.NotFoundError) {
+			return []any{}, true, nil
+		}
+		return nil, true, err
+	}
+
+	return listPayloadFromResources(items), true, nil
+}
+
+func (r *DefaultOrchestrator) shouldTreatRemotePathAsCollection(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	resourceInfo resource.Resource,
+) bool {
+	if r.collectionHintFromRepository(ctx, resourceInfo.LogicalPath) {
+		return true
+	}
+
+	return r.collectionHintFromOpenAPI(ctx, serverManager, resourceInfo)
+}
+
+func (r *DefaultOrchestrator) listOperationTargetsLogicalPath(
+	ctx context.Context,
+	resourceInfo resource.Resource,
+) bool {
+	normalizedPath, ok := r.renderedOperationPath(ctx, resourceInfo, metadata.OperationList)
+	if !ok {
+		return false
+	}
+	return normalizedPath == resourceInfo.LogicalPath
+}
+
+func (r *DefaultOrchestrator) collectionHintFromRepository(
+	ctx context.Context,
+	logicalPath string,
+) bool {
+	if r == nil || r.Repository == nil {
+		return false
+	}
+
+	exists, err := r.Repository.Exists(ctx, logicalPath)
+	if err != nil || !exists {
+		return false
+	}
+
+	_, err = r.Repository.Get(ctx, logicalPath)
+	if err == nil {
+		return false
+	}
+
+	return isTypedCategory(err, faults.NotFoundError)
+}
+
+func (r *DefaultOrchestrator) collectionHintFromOpenAPI(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	resourceInfo resource.Resource,
+) bool {
+	openAPISpec, err := serverManager.GetOpenAPISpec(ctx)
+	if err != nil {
+		return false
+	}
+	existsInOpenAPI, err := metadata.HasOpenAPIPath(resourceInfo.LogicalPath, openAPISpec)
+	if err != nil || !existsInOpenAPI {
+		return false
+	}
+
+	if r.openAPIInferenceHintsCollection(ctx, resourceInfo, resourceInfo.LogicalPath, openAPISpec) {
+		return true
+	}
+
+	if resourceInfo.LogicalPath == "/" {
+		return false
+	}
+
+	collectionSelector := strings.TrimSuffix(resourceInfo.LogicalPath, "/") + "/"
+	return r.openAPIInferenceHintsCollection(ctx, resourceInfo, collectionSelector, openAPISpec)
+}
+
+func (r *DefaultOrchestrator) openAPIInferenceHintsCollection(
+	ctx context.Context,
+	resourceInfo resource.Resource,
+	logicalPath string,
+	openAPISpec any,
+) bool {
+	inferred, err := metadata.InferFromOpenAPISpec(ctx, logicalPath, metadata.InferenceRequest{}, openAPISpec)
+	if err != nil {
+		return false
+	}
+
+	hintInfo := resourceInfo
+	hintInfo.Metadata = inferred
+	hintInfo.Payload = buildCollectionHintPayload(resourceInfo.Payload, resourceInfo.LogicalPath, inferred)
+
+	if !r.listOperationTargetsLogicalPath(ctx, hintInfo) {
+		return false
+	}
+
+	if createPath, ok := r.renderedOperationPath(ctx, hintInfo, metadata.OperationCreate); ok && createPath == hintInfo.LogicalPath {
+		return true
+	}
+
+	getPath, ok := r.renderedOperationPath(ctx, hintInfo, metadata.OperationGet)
+	if !ok {
+		return false
+	}
+	return isCollectionItemPath(hintInfo.LogicalPath, getPath)
+}
+
+func (r *DefaultOrchestrator) renderedOperationPath(
+	ctx context.Context,
+	resourceInfo resource.Resource,
+	operation metadata.Operation,
+) (string, bool) {
+	spec, err := r.renderOperationSpec(ctx, resourceInfo, operation, resourceInfo.Payload)
+	if err != nil {
+		return "", false
+	}
+
+	normalizedPath, err := resource.NormalizeLogicalPath(spec.Path)
+	if err != nil {
+		return "", false
+	}
+	return normalizedPath, true
+}
+
+func isCollectionItemPath(collectionPath string, resourcePath string) bool {
+	if collectionPath == "/" {
+		return resourcePath != "/" && strings.Count(strings.Trim(resourcePath, "/"), "/") == 0
+	}
+
+	trimmedPrefix := strings.TrimSuffix(collectionPath, "/") + "/"
+	return strings.HasPrefix(resourcePath, trimmedPrefix)
+}
+
+func buildCollectionHintPayload(
+	basePayload resource.Value,
+	logicalPath string,
+	inferred metadata.ResourceMetadata,
+) resource.Value {
+	payload, _ := basePayload.(map[string]any)
+	scope := make(map[string]any, len(payload))
+	for key, value := range payload {
+		scope[key] = value
+	}
+
+	for key, value := range templatescope.DerivePathTemplateFields(logicalPath, inferred) {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		if _, exists := scope[key]; exists {
+			continue
+		}
+		scope[key] = value
+	}
+
+	if len(scope) == 0 {
+		return basePayload
+	}
+	return scope
+}
+
+func listPayloadFromResources(items []resource.Resource) resource.Value {
+	if len(items) == 0 {
+		return []any{}
+	}
+
+	sorted := make([]resource.Resource, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i int, j int) bool {
+		return sorted[i].LogicalPath < sorted[j].LogicalPath
+	})
+
+	payload := make([]any, 0, len(sorted))
+	for _, item := range sorted {
+		payload = append(payload, item.Payload)
+	}
+	return payload
 }
 
 func (r *DefaultOrchestrator) renderOperationSpec(

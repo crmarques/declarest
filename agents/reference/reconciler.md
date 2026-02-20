@@ -25,6 +25,7 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 8. Compare/diff output MUST be stable for identical inputs.
 9. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
 10. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
+11. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint.
 
 ## Data Contracts
 Core reconciler workflows:
@@ -53,9 +54,11 @@ Resolution contract:
 3. Remote list returns duplicate alias candidates.
 4. Dry-run explain differs from live apply due to dynamic template context drift.
 5. Local path segment is an ID while repository uses metadata alias for stored logical paths.
+6. Collection endpoint returns `404` when empty and must be interpreted as zero items rather than missing endpoint when collection hints are present.
 
 ## Examples
 1. `Apply(/customers/acme)` resolves metadata, builds update path, resolves secrets, and performs a remote create/update mutation from repository desired state.
 2. `Refresh(/customers)` lists remote collection, maps each item to deterministic alias paths, and writes local files.
 3. `Diff(/customers/acme)` loads local and remote payloads, applies compare transforms, and returns deterministic operations.
 4. `Apply(/admin/realms/master/clients/<uuid>)` resolves the local resource by metadata ID fallback when only alias-based repository paths exist.
+5. `GetRemote(/admin/realms/master/organizations)` returns an empty list when the server responds `404` for an empty collection and collection hints confirm the path is a collection.

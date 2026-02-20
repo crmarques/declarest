@@ -210,6 +210,127 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	}
 }
 
+func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIHintsCollection(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listErr: faults.NewTypedError(
+			faults.NotFoundError,
+			"collection not found",
+			nil,
+		),
+		openAPISpec: map[string]any{
+			"paths": map[string]any{
+				"/admin/realms/{realm}/organizations": map[string]any{
+					"get":  map[string]any{},
+					"post": map[string]any{},
+				},
+				"/admin/realms/{realm}/organizations/{organization}": map[string]any{
+					"get":    map[string]any{},
+					"put":    map[string]any{},
+					"delete": map[string]any{},
+				},
+			},
+		},
+	}
+	reconciler := &DefaultOrchestrator{
+		Server: serverManager,
+	}
+
+	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	items, ok := value.([]any)
+	if !ok {
+		t.Fatalf("expected empty list payload, got %T", value)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty list payload, got %#v", items)
+	}
+	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/master/organizations"}) {
+		t.Fatalf("expected direct collection list fallback path, got %#v", serverManager.listPaths)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenRepositoryHintsCollection(t *testing.T) {
+	t.Parallel()
+
+	repositoryManager := &fakeRepository{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		existsValues: map[string]bool{
+			"/admin/realms/master/organizations": true,
+		},
+	}
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listErr: faults.NewTypedError(
+			faults.NotFoundError,
+			"collection not found",
+			nil,
+		),
+	}
+	reconciler := &DefaultOrchestrator{
+		Repository: repositoryManager,
+		Server:     serverManager,
+	}
+
+	value, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	items, ok := value.([]any)
+	if !ok {
+		t.Fatalf("expected empty list payload, got %T", value)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty list payload, got %#v", items)
+	}
+
+	if !reflect.DeepEqual(repositoryManager.existsCalls, []string{"/admin/realms/master/organizations"}) {
+		t.Fatalf("expected repository collection hint lookup, got %#v", repositoryManager.existsCalls)
+	}
+	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/master/organizations"}) {
+		t.Fatalf("expected direct collection list fallback path, got %#v", serverManager.listPaths)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOrRepositoryHints(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listErr: faults.NewTypedError(
+			faults.NotFoundError,
+			"collection not found",
+			nil,
+		),
+	}
+	reconciler := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				Operations: map[string]metadatadomain.OperationSpec{
+					string(metadatadomain.OperationList): {
+						Method: "GET",
+						Path:   "/admin/realms/{{.realm}}/organizations",
+					},
+				},
+			},
+		},
+		Server: serverManager,
+	}
+
+	_, err := reconciler.GetRemote(context.Background(), "/admin/realms/master/organizations")
+	assertTypedCategory(t, err, faults.NotFoundError)
+
+	if !reflect.DeepEqual(serverManager.listPaths, []string{"/admin/realms/master"}) {
+		t.Fatalf("expected parent collection fallback only, got %#v", serverManager.listPaths)
+	}
+}
+
 func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T) {
 	t.Parallel()
 
@@ -433,17 +554,21 @@ func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
 }
 
 type fakeRepository struct {
-	getValue    resource.Value
-	getValues   map[string]resource.Value
-	getErr      error
-	listValue   []resource.Resource
-	listErr     error
-	statusValue repository.SyncReport
+	getValue     resource.Value
+	getValues    map[string]resource.Value
+	getErr       error
+	listValue    []resource.Resource
+	listErr      error
+	existsValue  bool
+	existsValues map[string]bool
+	existsErr    error
+	statusValue  repository.SyncReport
 
-	savedPath  string
-	savedValue resource.Value
-	getCalls   []string
-	listCalls  []string
+	savedPath   string
+	savedValue  resource.Value
+	getCalls    []string
+	listCalls   []string
+	existsCalls []string
 
 	deletePolicy repository.DeletePolicy
 	listPolicy   repository.ListPolicy
@@ -486,10 +611,23 @@ func (f *fakeRepository) List(_ context.Context, logicalPath string, policy repo
 	return f.listValue, nil
 }
 
-func (f *fakeRepository) Exists(context.Context, string) (bool, error) { return false, nil }
-func (f *fakeRepository) Move(context.Context, string, string) error   { return nil }
-func (f *fakeRepository) Init(context.Context) error                   { return nil }
-func (f *fakeRepository) Refresh(context.Context) error                { return nil }
+func (f *fakeRepository) Exists(_ context.Context, logicalPath string) (bool, error) {
+	f.existsCalls = append(f.existsCalls, logicalPath)
+	if f.existsErr != nil {
+		return false, f.existsErr
+	}
+
+	if f.existsValues != nil {
+		if exists, found := f.existsValues[logicalPath]; found {
+			return exists, nil
+		}
+	}
+
+	return f.existsValue, nil
+}
+func (f *fakeRepository) Move(context.Context, string, string) error { return nil }
+func (f *fakeRepository) Init(context.Context) error                 { return nil }
+func (f *fakeRepository) Refresh(context.Context) error              { return nil }
 func (f *fakeRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }
@@ -563,6 +701,9 @@ type fakeServer struct {
 	adHocBody       resource.Value
 	lastResource    resource.Resource
 	lastListPath    string
+	listPaths       []string
+	openAPISpec     resource.Value
+	openAPIErr      error
 	deleteResources []resource.Resource
 }
 
@@ -602,6 +743,7 @@ func (f *fakeServer) Delete(_ context.Context, resourceInfo resource.Resource) e
 func (f *fakeServer) List(_ context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	f.listCalled = true
 	f.lastListPath = logicalPath
+	f.listPaths = append(f.listPaths, logicalPath)
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -627,7 +769,10 @@ func (f *fakeServer) AdHoc(_ context.Context, method string, endpointPath string
 }
 
 func (f *fakeServer) GetOpenAPISpec(context.Context) (resource.Value, error) {
-	return nil, nil
+	if f.openAPIErr != nil {
+		return nil, f.openAPIErr
+	}
+	return f.openAPISpec, nil
 }
 
 func (f *fakeServer) BuildRequestFromMetadata(context.Context, resource.Resource, metadatadomain.Operation) (metadatadomain.OperationSpec, error) {
