@@ -185,6 +185,26 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "shell completion for runtime command requires bootstrap",
+			args: []string{"__complete", "resource", "get", "/ad"},
+			want: false,
+		},
+		{
+			name: "shell completion no desc for runtime command requires bootstrap",
+			args: []string{"__completeNoDesc", "resource", "get", "/ad"},
+			want: false,
+		},
+		{
+			name: "shell completion for command group skips bootstrap",
+			args: []string{"__complete", "resource", "g"},
+			want: true,
+		},
+		{
+			name: "shell completion for completion command skips bootstrap",
+			args: []string{"__complete", "completion", "b"},
+			want: true,
+		},
+		{
 			name: "partial command path",
 			args: []string{"resource"},
 			want: true,

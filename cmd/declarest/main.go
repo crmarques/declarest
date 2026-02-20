@@ -21,15 +21,18 @@ func main() {
 			config.ContextSelection{Name: contextNameFromArgs(args)},
 		)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		deps = cli.Dependencies{
-			Orchestrator: declarestContext.Orchestrator,
-			Contexts:     declarestContext.Contexts,
-			Repository:   declarestContext.Repository,
-			Metadata:     declarestContext.Metadata,
-			Secrets:      declarestContext.Secrets,
+			if !isShellCompletionInvocation(args) {
+				_, _ = fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		} else {
+			deps = cli.Dependencies{
+				Orchestrator: declarestContext.Orchestrator,
+				Contexts:     declarestContext.Contexts,
+				Repository:   declarestContext.Repository,
+				Metadata:     declarestContext.Metadata,
+				Secrets:      declarestContext.Secrets,
+			}
 		}
 	}
 
@@ -77,21 +80,69 @@ func isHelpInvocation(args []string) bool {
 }
 
 func isCompletionInvocation(args []string) bool {
+	return isCompletionScriptInvocation(args) || isShellCompletionInvocation(args)
+}
+
+func isCompletionScriptInvocation(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
+	return args[0] == "completion"
+}
 
-	switch args[0] {
-	case "completion", "__complete", "__completeNoDesc":
-		return true
-	default:
+func isShellCompletionInvocation(args []string) bool {
+	if len(args) == 0 {
 		return false
 	}
+	return args[0] == "__complete" || args[0] == "__completeNoDesc"
+}
+
+func shellCompletionRequiresContextBootstrap(args []string) bool {
+	if !isShellCompletionInvocation(args) || len(args) <= 1 {
+		return false
+	}
+
+	completionArgs := args[1:]
+	targetArgs := completionArgs
+	if len(completionArgs) > 0 {
+		targetArgs = completionArgs[:len(completionArgs)-1]
+	}
+	if len(targetArgs) == 0 {
+		return false
+	}
+
+	commandPath, ok := resolveCompletionCommandPath(targetArgs)
+	if !ok {
+		return false
+	}
+
+	return requiresContextBootstrap(commandPath)
+}
+
+func resolveCompletionCommandPath(args []string) (string, bool) {
+	probe := cli.NewRootCommand(cli.Dependencies{})
+	command, _, err := probe.Find(args)
+	if err != nil {
+		return "", false
+	}
+	if command == nil {
+		return "", false
+	}
+	if !command.Runnable() {
+		return "", false
+	}
+	return strings.TrimSpace(command.CommandPath()), true
 }
 
 func shouldSkipContextBootstrap(args []string) bool {
-	if isHelpInvocation(args) || isCompletionInvocation(args) {
+	if isHelpInvocation(args) {
 		return true
+	}
+	if isCompletionScriptInvocation(args) {
+		return true
+	}
+	if isShellCompletionInvocation(args) {
+		return !shellCompletionRequiresContextBootstrap(args)
 	}
 
 	commandPath, ok := resolveRunnableCommandPath(args)
