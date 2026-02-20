@@ -29,6 +29,10 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 12. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
 13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
 14. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
+15. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
+16. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
+17. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
+18. Metadata decoding SHOULD accept `operationInfo.<operation>.url.path` as a compatibility alias for `operationInfo.<operation>.path`.
 
 ## Data Contracts
 Supported metadata groups:
@@ -42,6 +46,7 @@ Supported metadata groups:
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
 2. Allowed operation values are `get`, `create`, `update`, `delete`, `list`, and `compare`.
+3. Operation path fields MAY be provided as either `path` or compatibility `url.path`.
 
 Infer options contract:
 1. `apply`: whether inferred directives are persisted.
@@ -74,9 +79,12 @@ Template context contract:
 5. `secretInAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
 6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps.
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
+8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
+9. Relative operation paths resolve against rendered collection paths and keep compatibility for non-relative legacy values (for example `customers` => `/customers`).
 
 ## Examples
 1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
 2. `operationInfo.compareResources.suppress` includes `/updatedAt` and `/version`; diff output excludes these fields.
 3. `operationInfo.listCollection.path` inferred from OpenAPI, then manually overridden with custom query defaults.
 4. Inference for `/admin/realms/_/clients/` can propose `resourceInfo.idFromAttribute: id`, `resourceInfo.aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.
+5. For selector `/admin/realms/_/user-registry` with `resourceInfo.collectionPath: /admin/realms/{{.realm}}/components` and `operationInfo.getResource.path: ./{{.id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.

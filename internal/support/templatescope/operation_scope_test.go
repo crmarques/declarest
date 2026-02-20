@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestBuildOperationScopePreservesPayloadBinding(t *testing.T) {
@@ -95,5 +96,59 @@ func TestDerivePathTemplateFieldsSkipsMismatchedTemplate(t *testing.T) {
 
 	if len(fields) != 0 {
 		t.Fatalf("expected no derived fields for mismatched template, got %#v", fields)
+	}
+}
+
+func TestDerivePathTemplateFieldsFromCollectionTemplatePrefix(t *testing.T) {
+	t.Parallel()
+
+	fields := DerivePathTemplateFields(
+		"/admin/realms/platform/user-registry",
+		metadata.ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {
+					Path: "./{{.id}}",
+				},
+			},
+		},
+	)
+
+	if fields["realm"] != "platform" {
+		t.Fatalf("expected realm field to be derived from collection template, got %#v", fields["realm"])
+	}
+}
+
+func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
+	t.Parallel()
+
+	scope, err := BuildResourceScope(resource.Resource{
+		LogicalPath:    "/admin/realms/platform/user-registry",
+		CollectionPath: "/admin/realms/platform",
+		LocalAlias:     "user-registry",
+		RemoteID:       "123",
+		Metadata: metadata.ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {
+					Path: "./{{.id}}",
+				},
+			},
+		},
+		Payload: map[string]any{"id": "123"},
+	})
+	if err != nil {
+		t.Fatalf("BuildResourceScope returned error: %v", err)
+	}
+
+	if scope["realm"] != "platform" {
+		t.Fatalf("expected derived realm in scope, got %#v", scope["realm"])
+	}
+	payloadMap, ok := scope["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload map in scope, got %T", scope["payload"])
+	}
+	if payloadMap["realm"] != "platform" {
+		t.Fatalf("expected derived realm in payload map, got %#v", payloadMap["realm"])
 	}
 }

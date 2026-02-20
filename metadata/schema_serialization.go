@@ -68,6 +68,7 @@ type operationDefaultsWire struct {
 type resourceOperationWire struct {
 	Method      string             `json:"method,omitempty" yaml:"method,omitempty"`
 	Path        string             `json:"path,omitempty" yaml:"path,omitempty"`
+	URL         *resourceURLWire   `json:"url,omitempty" yaml:"url,omitempty"`
 	Query       *map[string]string `json:"query,omitempty" yaml:"query,omitempty"`
 	Headers     *map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
 	Accept      string             `json:"accept,omitempty" yaml:"accept,omitempty"`
@@ -76,6 +77,10 @@ type resourceOperationWire struct {
 	Filter      *[]string          `json:"filter,omitempty" yaml:"filter,omitempty"`
 	Suppress    *[]string          `json:"suppress,omitempty" yaml:"suppress,omitempty"`
 	JQ          string             `json:"jq,omitempty" yaml:"jq,omitempty"`
+}
+
+type resourceURLWire struct {
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
 func (m ResourceMetadata) MarshalJSON() ([]byte, error) {
@@ -342,9 +347,14 @@ func operationSpecToWire(spec OperationSpec) *resourceOperationWire {
 }
 
 func operationSpecFromWire(spec resourceOperationWire) OperationSpec {
+	pathValue := spec.Path
+	if strings.TrimSpace(pathValue) == "" && spec.URL != nil {
+		pathValue = spec.URL.Path
+	}
+
 	operation := OperationSpec{
 		Method:      spec.Method,
-		Path:        spec.Path,
+		Path:        pathValue,
 		Accept:      spec.Accept,
 		ContentType: spec.ContentType,
 		Body:        spec.Body,

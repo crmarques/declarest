@@ -21,8 +21,8 @@ import (
 func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, operation metadata.Operation) (metadata.OperationSpec, error) {
 	spec, explicitMethod, explicitAccept, explicitContentType := operationSpecFromMetadata(resourceInfo.Metadata, operation)
 
-	if strings.TrimSpace(spec.Path) == "" {
-		spec.Path = fallbackOperationPath(resourceInfo, operation)
+	if strings.TrimSpace(spec.Path) == "" && strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
+		spec.Path = resourceInfo.ResolvedRemotePath
 	}
 	var err error
 	spec, err = resolveOperationSpecTemplates(ctx, resourceInfo.Metadata, operation, spec, resourceInfo)
@@ -303,22 +303,6 @@ func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.
 	spec.Query = cloneStringMap(spec.Query)
 	spec.Headers = cloneStringMap(spec.Headers)
 	return spec, explicitMethod, explicitAccept, explicitContentType
-}
-
-func fallbackOperationPath(resourceInfo resource.Resource, operation metadata.Operation) string {
-	if strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
-		return resourceInfo.ResolvedRemotePath
-	}
-	if operation == metadata.OperationList {
-		collectionPath := metadata.EffectiveCollectionPath(resourceInfo.Metadata, resourceInfo.CollectionPath)
-		if strings.TrimSpace(collectionPath) != "" {
-			return collectionPath
-		}
-	}
-	if strings.TrimSpace(resourceInfo.LogicalPath) != "" {
-		return resourceInfo.LogicalPath
-	}
-	return resourceInfo.CollectionPath
 }
 
 func defaultOperationMethod(operation metadata.Operation) string {

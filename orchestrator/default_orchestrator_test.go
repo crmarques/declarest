@@ -1423,7 +1423,7 @@ func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t 
 	}
 }
 
-func TestDefaultOrchestratorRenderOperationSpecCreateUsesLogicalPathFallback(t *testing.T) {
+func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
 	reconciler := &DefaultOrchestrator{}
@@ -1445,8 +1445,8 @@ func TestDefaultOrchestratorRenderOperationSpecCreateUsesLogicalPathFallback(t *
 		t.Fatalf("renderOperationSpec returned error: %v", err)
 	}
 
-	if spec.Path != "/admin/realms/platform/clients/declarest-cli/resource" {
-		t.Fatalf("expected create fallback path to use logical path, got %q", spec.Path)
+	if spec.Path != "/admin/realms/platform/clients" {
+		t.Fatalf("expected create fallback path to use collection path, got %q", spec.Path)
 	}
 }
 

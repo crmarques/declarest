@@ -36,6 +36,13 @@ func ResolveOperationSpecWithScope(
 		)
 	}
 
+	scopeCopy := cloneScopeMap(scope)
+	collectionPath, err := resolveEffectiveCollectionPath(metadata.CollectionPath, scopeCopy)
+	if err != nil {
+		return OperationSpec{}, err
+	}
+	scopeCopy["collectionPath"] = collectionPath
+
 	spec := OperationSpec{
 		Filter:   cloneStringSlice(metadata.Filter),
 		Suppress: cloneStringSlice(metadata.Suppress),
@@ -48,10 +55,20 @@ func ResolveOperationSpecWithScope(
 		}
 	}
 
-	rendered, err := renderOperationSpecTemplates(spec, scope)
+	if strings.TrimSpace(spec.Path) == "" {
+		spec.Path = defaultOperationPathTemplate(operation)
+	}
+
+	rendered, err := renderOperationSpecTemplates(spec, scopeCopy)
 	if err != nil {
 		return OperationSpec{}, err
 	}
+
+	resolvedPath, err := resolveRenderedOperationPath(rendered.Path, collectionPath)
+	if err != nil {
+		return OperationSpec{}, err
+	}
+	rendered.Path = resolvedPath
 
 	if strings.TrimSpace(rendered.Path) == "" {
 		return OperationSpec{}, faults.NewTypedError(
@@ -62,6 +79,92 @@ func ResolveOperationSpecWithScope(
 	}
 
 	return rendered, nil
+}
+
+func cloneScopeMap(scope map[string]any) map[string]any {
+	if scope == nil {
+		return map[string]any{}
+	}
+
+	cloned := make(map[string]any, len(scope))
+	for key, value := range scope {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func resolveEffectiveCollectionPath(rawCollectionPath string, scope map[string]any) (string, error) {
+	candidate := strings.TrimSpace(rawCollectionPath)
+	if candidate == "" {
+		candidate = strings.TrimSpace(scopeString(scope["collectionPath"]))
+	}
+	if candidate == "" {
+		return "", nil
+	}
+
+	rendered, err := renderTemplateString("collectionPath", candidate, scope)
+	if err != nil {
+		return "", err
+	}
+	return normalizeRenderedOperationPath(rendered), nil
+}
+
+func resolveRenderedOperationPath(rawPath string, collectionPath string) (string, error) {
+	trimmedPath := strings.TrimSpace(rawPath)
+	if trimmedPath == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(trimmedPath, "/") {
+		return normalizeRenderedOperationPath(trimmedPath), nil
+	}
+	if !strings.HasPrefix(trimmedPath, ".") {
+		return normalizeRenderedOperationPath(trimmedPath), nil
+	}
+
+	normalizedCollectionPath := strings.TrimSpace(collectionPath)
+	if normalizedCollectionPath == "" {
+		return "", faults.NewTypedError(
+			faults.ValidationError,
+			"relative metadata path requires collectionPath context",
+			nil,
+		)
+	}
+
+	joined := path.Join(normalizedCollectionPath, trimmedPath)
+	if !strings.HasPrefix(joined, "/") {
+		joined = "/" + joined
+	}
+	return normalizeRenderedOperationPath(joined), nil
+}
+
+func normalizeRenderedOperationPath(rawPath string) string {
+	trimmed := strings.TrimSpace(rawPath)
+	if trimmed == "" {
+		return ""
+	}
+
+	normalized := path.Clean(trimmed)
+	if !strings.HasPrefix(normalized, "/") {
+		normalized = "/" + normalized
+	}
+	return normalized
+}
+
+func defaultOperationPathTemplate(operation Operation) string {
+	switch operation {
+	case OperationCreate, OperationList:
+		return "."
+	default:
+		return "./{{.id}}"
+	}
+}
+
+func scopeString(value any) string {
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return text
 }
 
 func InferFromOpenAPI(ctx context.Context, logicalPath string, request InferenceRequest) (ResourceMetadata, error) {

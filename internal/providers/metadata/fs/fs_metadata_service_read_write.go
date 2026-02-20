@@ -68,6 +68,7 @@ type storageOperationDefaults struct {
 type storageOperationSpec struct {
 	Method      string             `json:"method,omitempty" yaml:"method,omitempty"`
 	Path        string             `json:"path,omitempty" yaml:"path,omitempty"`
+	URL         *storageURL        `json:"url,omitempty" yaml:"url,omitempty"`
 	Query       *map[string]string `json:"query,omitempty" yaml:"query,omitempty"`
 	Headers     *map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
 	Accept      string             `json:"accept,omitempty" yaml:"accept,omitempty"`
@@ -76,6 +77,10 @@ type storageOperationSpec struct {
 	Filter      *[]string          `json:"filter,omitempty" yaml:"filter,omitempty"`
 	Suppress    *[]string          `json:"suppress,omitempty" yaml:"suppress,omitempty"`
 	JQ          string             `json:"jq,omitempty" yaml:"jq,omitempty"`
+}
+
+type storageURL struct {
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
 func (s *FSMetadataService) Get(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
@@ -484,9 +489,14 @@ func operationSpecForStorage(spec metadatadomain.OperationSpec) *storageOperatio
 }
 
 func operationSpecFromStorage(spec storageOperationSpec) metadatadomain.OperationSpec {
+	pathValue := spec.Path
+	if strings.TrimSpace(pathValue) == "" && spec.URL != nil {
+		pathValue = spec.URL.Path
+	}
+
 	item := metadatadomain.OperationSpec{
 		Method:      spec.Method,
-		Path:        spec.Path,
+		Path:        pathValue,
 		Accept:      spec.Accept,
 		ContentType: spec.ContentType,
 		Body:        spec.Body,

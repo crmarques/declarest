@@ -58,6 +58,71 @@ func TestResolveOperationSpecValidation(t *testing.T) {
 	assertValidationError(t, err)
 }
 
+func TestResolveOperationSpecWithScopeSupportsCollectionPathIndirection(t *testing.T) {
+	t.Parallel()
+
+	resolved, err := ResolveOperationSpecWithScope(
+		context.Background(),
+		ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/components",
+			Operations: map[string]OperationSpec{
+				string(OperationGet): {
+					Path: "./{{.id}}",
+				},
+			},
+		},
+		OperationGet,
+		map[string]any{
+			"realm":          "platform",
+			"id":             "123456",
+			"collectionPath": "/admin/realms/platform/user-registry",
+		},
+	)
+	if err != nil {
+		t.Fatalf("ResolveOperationSpecWithScope returned error: %v", err)
+	}
+
+	if resolved.Path != "/admin/realms/platform/components/123456" {
+		t.Fatalf("unexpected resolved path %q", resolved.Path)
+	}
+}
+
+func TestResolveOperationSpecWithScopeDefaultsOperationPathTemplates(t *testing.T) {
+	t.Parallel()
+
+	metadata := ResourceMetadata{
+		CollectionPath: "/admin/realms/{{.realm}}/components",
+	}
+	scope := map[string]any{
+		"realm": "platform",
+		"id":    "abc",
+	}
+
+	createSpec, err := ResolveOperationSpecWithScope(context.Background(), metadata, OperationCreate, scope)
+	if err != nil {
+		t.Fatalf("ResolveOperationSpecWithScope(create) returned error: %v", err)
+	}
+	if createSpec.Path != "/admin/realms/platform/components" {
+		t.Fatalf("expected create default to resolve collection path, got %q", createSpec.Path)
+	}
+
+	listSpec, err := ResolveOperationSpecWithScope(context.Background(), metadata, OperationList, scope)
+	if err != nil {
+		t.Fatalf("ResolveOperationSpecWithScope(list) returned error: %v", err)
+	}
+	if listSpec.Path != "/admin/realms/platform/components" {
+		t.Fatalf("expected list default to resolve collection path, got %q", listSpec.Path)
+	}
+
+	getSpec, err := ResolveOperationSpecWithScope(context.Background(), metadata, OperationGet, scope)
+	if err != nil {
+		t.Fatalf("ResolveOperationSpecWithScope(get) returned error: %v", err)
+	}
+	if getSpec.Path != "/admin/realms/platform/components/abc" {
+		t.Fatalf("expected get default to resolve collection item path, got %q", getSpec.Path)
+	}
+}
+
 func TestInferFromOpenAPIDefaults(t *testing.T) {
 	t.Parallel()
 

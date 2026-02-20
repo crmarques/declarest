@@ -291,6 +291,53 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	}
 }
 
+func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir(), "")
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
+		IDFromAttribute: "id",
+		CollectionPath:  "/admin/realms/{{.realm}}/components",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "./{{.id}}",
+			},
+		},
+	})
+
+	getSpec, err := service.RenderOperationSpec(
+		ctx,
+		"/admin/realms/platform/user-registry",
+		metadatadomain.OperationGet,
+		map[string]any{
+			"id": "123456",
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderOperationSpec(get) returned error: %v", err)
+	}
+	if getSpec.Path != "/admin/realms/platform/components/123456" {
+		t.Fatalf("unexpected rendered get path %q", getSpec.Path)
+	}
+
+	createSpec, err := service.RenderOperationSpec(
+		ctx,
+		"/admin/realms/platform/user-registry",
+		metadatadomain.OperationCreate,
+		map[string]any{
+			"id": "123456",
+		},
+	)
+	if err != nil {
+		t.Fatalf("RenderOperationSpec(create) returned error: %v", err)
+	}
+	if createSpec.Path != "/admin/realms/platform/components" {
+		t.Fatalf("unexpected rendered create path %q", createSpec.Path)
+	}
+}
+
 func TestFSMetadataInferPreservesExplicitAndApply(t *testing.T) {
 	t.Parallel()
 
@@ -481,6 +528,47 @@ func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
 	specSuppress, hasSpecSuppress := getSpec["suppress"].([]any)
 	if !hasSpecSuppress || len(specSuppress) != 0 {
 		t.Fatalf("expected explicit empty operation suppress array, got %#v", getSpec["suppress"])
+	}
+}
+
+func TestFSMetadataGetSupportsOperationURLPathSyntax(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	filePath := filepath.Join(baseDir, "admin", "realms", "_", "user-registry", "_", "metadata.json")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory %q: %v", filepath.Dir(filePath), err)
+	}
+
+	payload := `{
+  "resourceInfo": {
+    "collectionPath": "/admin/realms/{{.realm}}/components"
+  },
+  "operationInfo": {
+    "getResource": {
+      "url": {
+        "path": "./{{.id}}"
+      }
+    }
+  }
+}
+`
+	if err := os.WriteFile(filePath, []byte(payload), 0o644); err != nil {
+		t.Fatalf("failed to write metadata file %q: %v", filePath, err)
+	}
+
+	decoded, err := service.Get(ctx, "/admin/realms/_/user-registry")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if decoded.CollectionPath != "/admin/realms/{{.realm}}/components" {
+		t.Fatalf("unexpected collectionPath: %q", decoded.CollectionPath)
+	}
+	if decoded.Operations[string(metadatadomain.OperationGet)].Path != "./{{.id}}" {
+		t.Fatalf("unexpected get path: %#v", decoded.Operations[string(metadatadomain.OperationGet)])
 	}
 }
 

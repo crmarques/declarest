@@ -517,19 +517,14 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	value resource.Value,
 ) (metadata.OperationSpec, error) {
 	metadataCopy := metadata.CloneResourceMetadata(resourceInfo.Metadata)
-	if metadataCopy.Operations == nil {
-		metadataCopy.Operations = map[string]metadata.OperationSpec{}
+	templateResource := resourceInfo
+	templateResource.Metadata = metadataCopy
+	templateResource.Payload = value
+
+	scope, err := templatescope.BuildResourceScope(templateResource)
+	if err != nil {
+		return metadata.OperationSpec{}, err
 	}
 
-	operationSpec := metadataCopy.Operations[string(operation)]
-	if strings.TrimSpace(operationSpec.Path) == "" {
-		if operation == metadata.OperationList {
-			operationSpec.Path = metadata.EffectiveCollectionPath(metadataCopy, resourceInfo.CollectionPath)
-		} else {
-			operationSpec.Path = resourceInfo.LogicalPath
-		}
-		metadataCopy.Operations[string(operation)] = operationSpec
-	}
-
-	return metadata.ResolveOperationSpec(ctx, metadataCopy, operation, value)
+	return metadata.ResolveOperationSpecWithScope(ctx, metadataCopy, operation, scope)
 }

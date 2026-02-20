@@ -660,5 +660,14 @@ func isOperationPathRequiredError(err error, operation metadatadomain.Operation)
 		return false
 	}
 
-	return strings.Contains(err.Error(), fmt.Sprintf("metadata operation %q path is required", operation))
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.Contains(message, strings.ToLower(fmt.Sprintf("metadata operation %q path is required", operation))) {
+		return true
+	}
+
+	// Default get paths resolve to "./{{.id}}". When "id" is unavailable in
+	// render mode, retry list just like the missing-path fallback.
+	return operation == metadatadomain.OperationGet &&
+		strings.Contains(message, "failed to render metadata template for path") &&
+		strings.Contains(message, "map has no entry for key \"id\"")
 }

@@ -185,3 +185,32 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		}
 	})
 }
+
+func TestResourceMetadataUnmarshalJSONSupportsOperationURLPathSyntax(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{
+	  "resourceInfo": {
+	    "collectionPath": "/admin/realms/{{.realm}}/components"
+	  },
+	  "operationInfo": {
+	    "getResource": {
+	      "url": {
+	        "path": "./{{.id}}"
+	      }
+	    }
+	  }
+	}`)
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+
+	if decoded.CollectionPath != "/admin/realms/{{.realm}}/components" {
+		t.Fatalf("unexpected collectionPath: %q", decoded.CollectionPath)
+	}
+	if decoded.Operations[string(OperationGet)].Path != "./{{.id}}" {
+		t.Fatalf("unexpected get operation path: %#v", decoded.Operations[string(OperationGet)])
+	}
+}

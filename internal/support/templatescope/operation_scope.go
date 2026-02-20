@@ -1,6 +1,7 @@
 package templatescope
 
 import (
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -48,20 +49,48 @@ func BuildOperationScope(
 }
 
 func BuildResourceScope(resourceInfo resource.Resource) (map[string]any, error) {
-	return BuildOperationScope(
+	collectionPath := resourceInfo.CollectionPath
+	if strings.TrimSpace(collectionPath) == "" {
+		collectionPath = collectionPathForLogicalPath(resourceInfo.LogicalPath)
+	}
+
+	scope, err := BuildOperationScope(
 		resourceInfo.LogicalPath,
-		resourceInfo.CollectionPath,
+		collectionPath,
 		resourceInfo.LocalAlias,
 		resourceInfo.RemoteID,
 		resourceInfo.Payload,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	payloadMap, _ := scope["payload"].(map[string]any)
+	for key, value := range DerivePathTemplateFields(resourceInfo.LogicalPath, resourceInfo.Metadata) {
+		trimmedKey := strings.TrimSpace(key)
+		trimmedValue := strings.TrimSpace(value)
+		if trimmedKey == "" || trimmedValue == "" {
+			continue
+		}
+		if _, exists := scope[trimmedKey]; exists {
+			continue
+		}
+		scope[trimmedKey] = trimmedValue
+		if payloadMap != nil {
+			payloadMap[trimmedKey] = trimmedValue
+		}
+	}
+
+	return scope, nil
 }
 
 func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) map[string]string {
 	derived := map[string]string{}
-	if md.Operations == nil {
-		return derived
+	collectionTemplate := strings.TrimSpace(md.CollectionPath)
+	if collectionTemplate == "" {
+		collectionTemplate = collectionPathForLogicalPath(logicalPath)
 	}
+	mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(collectionTemplate, logicalPath))
 
 	operationNames := make([]string, 0, len(md.Operations))
 	for operationName := range md.Operations {
@@ -71,13 +100,14 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 
 	for _, operationName := range operationNames {
 		spec := md.Operations[operationName]
-		fields := deriveTemplateFieldsFromPathTemplate(spec.Path, logicalPath)
-		for key, value := range fields {
-			if _, exists := derived[key]; exists {
-				continue
-			}
-			derived[key] = value
+		templatePath := strings.TrimSpace(spec.Path)
+		if templatePath == "" {
+			continue
 		}
+		if !strings.HasPrefix(templatePath, "/") {
+			templatePath = joinTemplatePaths(collectionTemplate, templatePath)
+		}
+		mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(templatePath, logicalPath))
 	}
 
 	return derived
@@ -90,12 +120,18 @@ func deriveTemplateFieldsFromPathTemplate(pathTemplate string, logicalPath strin
 
 	templateSegments := splitPathSegments(pathTemplate)
 	logicalSegments := splitPathSegments(logicalPath)
-	if len(templateSegments) == 0 || len(templateSegments) != len(logicalSegments) {
+	if len(templateSegments) == 0 || len(logicalSegments) == 0 {
 		return nil
 	}
 
 	fields := make(map[string]string)
-	for idx, templateSegment := range templateSegments {
+	segmentLimit := len(templateSegments)
+	if len(logicalSegments) < segmentLimit {
+		segmentLimit = len(logicalSegments)
+	}
+
+	for idx := 0; idx < segmentLimit; idx++ {
+		templateSegment := templateSegments[idx]
 		logicalSegment := logicalSegments[idx]
 
 		matches := pathTemplateSegmentPattern.FindStringSubmatch(templateSegment)
@@ -109,11 +145,53 @@ func deriveTemplateFieldsFromPathTemplate(pathTemplate string, logicalPath strin
 		}
 
 		if templateSegment != logicalSegment {
-			return nil
+			break
 		}
 	}
 
+	if len(fields) == 0 {
+		return nil
+	}
 	return fields
+}
+
+func mergeTemplateFields(destination map[string]string, source map[string]string) {
+	for key, value := range source {
+		if _, exists := destination[key]; exists {
+			continue
+		}
+		destination[key] = value
+	}
+}
+
+func joinTemplatePaths(collectionPath string, operationPath string) string {
+	base := strings.TrimSpace(collectionPath)
+	if base == "" {
+		base = "/"
+	}
+	relative := strings.TrimSpace(operationPath)
+	if relative == "" {
+		return base
+	}
+
+	joined := path.Join(base, relative)
+	if !strings.HasPrefix(joined, "/") {
+		return "/" + joined
+	}
+	return joined
+}
+
+func collectionPathForLogicalPath(logicalPath string) string {
+	normalized := strings.TrimSpace(logicalPath)
+	if normalized == "" || normalized == "/" {
+		return "/"
+	}
+
+	parent := path.Dir(normalized)
+	if parent == "." || parent == "" {
+		return "/"
+	}
+	return parent
 }
 
 func splitPathSegments(value string) []string {

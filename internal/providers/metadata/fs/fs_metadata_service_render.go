@@ -103,11 +103,12 @@ func buildTemplateValue(
 		return nil, err
 	}
 
-	return templatescope.BuildOperationScope(
-		logicalPath,
-		collectionPathForLogicalPath(logicalPath),
-		alias,
-		remoteID,
-		normalizedPayload,
-	)
+	return templatescope.BuildResourceScope(resource.Resource{
+		LogicalPath:    logicalPath,
+		CollectionPath: collectionPathForLogicalPath(logicalPath),
+		LocalAlias:     alias,
+		RemoteID:       remoteID,
+		Metadata:       metadata,
+		Payload:        normalizedPayload,
+	})
 }
