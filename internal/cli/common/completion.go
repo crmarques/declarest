@@ -18,6 +18,7 @@ const (
 	maxCompletionSuggestions = 256
 	maxTemplateQueries       = 32
 	maxTemplateCandidates    = 128
+	pathCompletionDirective  = cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
 )
 
 var (
@@ -239,7 +240,7 @@ func CompleteLogicalPaths(
 
 	orchestratorService, err := RequireOrchestrator(deps)
 	if err != nil {
-		return filterPathSuggestions(suggestions, toComplete), cobra.ShellCompDirectiveNoFileComp
+		return filterPathSuggestions(suggestions, toComplete), pathCompletionDirective
 	}
 
 	ctx, cancel := completionContext(command.Context())
@@ -300,7 +301,7 @@ func CompleteLogicalPaths(
 		)
 	}
 
-	return filterPathSuggestions(suggestions, toComplete), cobra.ShellCompDirectiveNoFileComp
+	return filterPathSuggestions(suggestions, toComplete), pathCompletionDirective
 }
 
 func CompleteValues(values []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -839,10 +840,14 @@ func filterPathSuggestions(suggestions map[string]struct{}, toComplete string) [
 
 	items := make([]string, 0, len(suggestions))
 	for value := range suggestions {
-		if !suggestionMatchesPrefix(value, normalizedPrefix) {
+		normalizedValue := normalizePathSuggestion(value)
+		if normalizedValue == "" || containsTemplateSegments(normalizedValue) {
 			continue
 		}
-		items = append(items, value)
+		if !suggestionMatchesPrefix(normalizedValue, normalizedPrefix) {
+			continue
+		}
+		items = append(items, normalizedValue)
 	}
 
 	scopedItems, scoped := restrictToNextLevelSuggestions(items, normalizedPrefix)
@@ -910,7 +915,7 @@ func restrictToNextLevelSuggestions(items []string, normalizedPrefix string) ([]
 		}
 
 		childSegment, hasChild := firstChildSegment(scope.parentPath, normalizedItem)
-		if !hasChild || strings.TrimSpace(childSegment) == "" {
+		if !hasChild || strings.TrimSpace(childSegment) == "" || isTemplateSegment(childSegment) {
 			continue
 		}
 		if scope.partialSegment != "" && !strings.HasPrefix(childSegment, scope.partialSegment) {
@@ -935,11 +940,15 @@ func restrictToNextLevelSuggestions(items []string, normalizedPrefix string) ([]
 
 	rendered := make(map[string]struct{}, len(scoped))
 	for childPath, details := range scoped {
-		if details.hasDescendants {
-			rendered[childPath+"/"] = struct{}{}
+		displayPath := "/" + strings.TrimPrefix(strings.TrimSpace(path.Base(childPath)), "/")
+		if displayPath == "/" {
 			continue
 		}
-		rendered[childPath] = struct{}{}
+		if details.hasDescendants && scope.parentPath == "/" {
+			rendered[displayPath+"/"] = struct{}{}
+			continue
+		}
+		rendered[displayPath] = struct{}{}
 	}
 
 	return sortedSetValues(rendered), true

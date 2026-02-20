@@ -3346,8 +3346,8 @@ func TestPathCompletionResourceGetPrefersRemoteAndOpenAPI(t *testing.T) {
 	if len(reconciler.listLocalCalls) > 0 {
 		t.Fatalf("expected get completion to skip local list when remote suggestions are available, calls=%#v", reconciler.listLocalCalls)
 	}
-	if !strings.Contains(output, ":4") {
-		t.Fatalf("expected no-file completion directive, got %q", output)
+	if !strings.Contains(output, ":6") {
+		t.Fatalf("expected no-file+no-space completion directive, got %q", output)
 	}
 }
 
@@ -3375,10 +3375,10 @@ func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testi
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/admin/realms/master/clients/remote-app") {
+	if !strings.Contains(output, "/remote-app") {
 		t.Fatalf("expected remote collection item completion, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/master/clients/local-app") {
+	if strings.Contains(output, "/local-app") {
 		t.Fatalf("expected get completion to avoid local fallback when remote collection items are available, got %q", output)
 	}
 	if !containsString(reconciler.listRemoteCalls, "/admin/realms/master/clients") {
@@ -3409,7 +3409,7 @@ func TestPathCompletionFallsBackToRepositoryWhenRemoteUnavailable(t *testing.T) 
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
+	if !strings.Contains(output, "/local-app") {
 		t.Fatalf("expected repository fallback completion item, got %q", output)
 	}
 	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
@@ -3473,10 +3473,10 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/admin/realms/master/clients/account") {
+	if !strings.Contains(output, "/account") {
 		t.Fatalf("expected alias-based completion item, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/master/clients/f88c68f3") {
+	if strings.Contains(output, "/f88c68f3") {
 		t.Fatalf("expected completion to hide id-based segment when alias is available, got %q", output)
 	}
 }
@@ -3517,26 +3517,34 @@ func TestPathCompletionShowsOnlyNextLevelForCollectionPrefix(t *testing.T) {
 		{LogicalPath: "/admin/realms/beta/roles/viewer"},
 		{LogicalPath: "/admin/realms/gamma"},
 	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
 
 	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/")
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/admin/realms/alpha/\n") {
+	if !strings.Contains(output, "/alpha\n") {
 		t.Fatalf("expected alpha realm next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/admin/realms/beta/\n") {
+	if !strings.Contains(output, "/beta\n") {
 		t.Fatalf("expected beta realm next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/admin/realms/gamma\n") {
+	if !strings.Contains(output, "/gamma\n") {
 		t.Fatalf("expected gamma realm completion, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/alpha/clients") {
+	if strings.Contains(output, "/alpha/clients") {
 		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/beta/roles") {
+	if strings.Contains(output, "/beta/roles") {
 		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
+	}
+	if strings.Contains(output, "{realm}") {
+		t.Fatalf("expected completion to suppress templated placeholders, got %q", output)
 	}
 }
 
@@ -3556,19 +3564,19 @@ func TestPathCompletionShowsOnlyNextLevelForNestedCollectionPrefix(t *testing.T)
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/admin/realms/master/aaaa/\n") {
+	if !strings.Contains(output, "/aaaa\n") {
 		t.Fatalf("expected aaaa next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/admin/realms/master/bbbb\n") {
+	if !strings.Contains(output, "/bbbb\n") {
 		t.Fatalf("expected bbbb next-level completion, got %q", output)
 	}
-	if !strings.Contains(output, "/admin/realms/master/cccc/\n") {
+	if !strings.Contains(output, "/cccc\n") {
 		t.Fatalf("expected cccc next-level completion, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/master/aaaa/resource-a") {
+	if strings.Contains(output, "/aaaa/resource-a") {
 		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
 	}
-	if strings.Contains(output, "/admin/realms/master/cccc/deeper") {
+	if strings.Contains(output, "/cccc/deeper") {
 		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
 	}
 }

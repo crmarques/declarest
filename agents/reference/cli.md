@@ -30,7 +30,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 13. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 14. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
 15. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), while repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates.
-16. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasFromAttribute` values for displayed path segments over ID-only segments when aliases are available, and collection-prefix suggestions SHOULD include a trailing `/`.
+16. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasFromAttribute` values for displayed path segments over ID-only segments when aliases are available, scoped collection-prefix completions SHOULD render only the next child fragment (for example `/alpha`), templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, and top-level collection-prefix suggestions SHOULD preserve trailing `/` semantics.
 
 ## Data Contracts
 Command groups:
@@ -257,7 +257,7 @@ Interactive config commands:
 15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
-18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and otherwise returns the template path candidate.
+18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/realms/m`) returns concrete collection candidates when local or remote collection children are available and suppresses template placeholder segments when concrete values are unavailable.
 19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 24. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
 20. `config create` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth`, `bearer-token`, or `custom-header` fields.
