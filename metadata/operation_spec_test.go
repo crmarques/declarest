@@ -123,6 +123,120 @@ func TestInferFromOpenAPISupportsIntermediarySelectors(t *testing.T) {
 	}
 }
 
+func TestInferFromOpenAPIPrefersSchemaIdentityAttributesOverMissingPathVariable(t *testing.T) {
+	t.Parallel()
+
+	inferred, err := InferFromOpenAPISpec(
+		context.Background(),
+		"/admin/realms/_/organizations/",
+		InferenceRequest{},
+		map[string]any{
+			"paths": map[string]any{
+				"/admin/realms/{realm}/organizations": map[string]any{
+					"get":  map[string]any{},
+					"post": map[string]any{},
+				},
+				"/admin/realms/{realm}/organizations/{organization}": map[string]any{
+					"get": map[string]any{
+						"responses": map[string]any{
+							"200": map[string]any{
+								"content": map[string]any{
+									"application/json": map[string]any{
+										"schema": map[string]any{
+											"$ref": "#/components/schemas/OrganizationRepresentation",
+										},
+									},
+								},
+							},
+						},
+					},
+					"put":    map[string]any{},
+					"delete": map[string]any{},
+				},
+			},
+			"components": map[string]any{
+				"schemas": map[string]any{
+					"OrganizationRepresentation": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"id":    map[string]any{"type": "string"},
+							"alias": map[string]any{"type": "string"},
+							"name":  map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.IDFromAttribute != "id" {
+		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	}
+	if inferred.AliasFromAttribute != "alias" {
+		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	}
+}
+
+func TestInferFromOpenAPIPrefersSchemaIdentityAttributesForNonTemplateSafePathVariable(t *testing.T) {
+	t.Parallel()
+
+	inferred, err := InferFromOpenAPISpec(
+		context.Background(),
+		"/admin/realms/_/organizations/",
+		InferenceRequest{},
+		map[string]any{
+			"paths": map[string]any{
+				"/admin/realms/{realm}/organizations": map[string]any{
+					"get":  map[string]any{},
+					"post": map[string]any{},
+				},
+				"/admin/realms/{realm}/organizations/{organization-id}": map[string]any{
+					"get": map[string]any{
+						"responses": map[string]any{
+							"200": map[string]any{
+								"content": map[string]any{
+									"application/json": map[string]any{
+										"schema": map[string]any{
+											"$ref": "#/components/schemas/OrganizationRepresentation",
+										},
+									},
+								},
+							},
+						},
+					},
+					"put":    map[string]any{},
+					"delete": map[string]any{},
+				},
+			},
+			"components": map[string]any{
+				"schemas": map[string]any{
+					"OrganizationRepresentation": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"id":    map[string]any{"type": "string"},
+							"alias": map[string]any{"type": "string"},
+							"name":  map[string]any{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.IDFromAttribute != "id" {
+		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	}
+	if inferred.AliasFromAttribute != "alias" {
+		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	}
+}
+
 func TestInferFromOpenAPITreatsCollectionPathWithoutSelectorAsCollection(t *testing.T) {
 	t.Parallel()
 
