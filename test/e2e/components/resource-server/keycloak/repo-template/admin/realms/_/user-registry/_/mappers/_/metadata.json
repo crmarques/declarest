@@ -6,7 +6,7 @@
   },
   "operationInfo": {
     "listCollection": {
-      "jq": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.provider}}/\") | .id)) ]"
+      "jq": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.name}}/\") | .id)) ]"
     }
   }
 }

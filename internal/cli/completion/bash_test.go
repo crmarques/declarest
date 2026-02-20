@@ -45,3 +45,17 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpaces(t *testing.T)
 		t.Fatalf("expected custom completion compgen to escape spaces, got %q", normalized)
 	}
 }
+
+func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithBracedCur(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`done < <(compgen   -W   "${out}"   --   "${cur}")`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "${cur}"`) {
+		t.Fatalf("expected braced-cur custom completion compgen to escape spaces, got %q", normalized)
+	}
+}

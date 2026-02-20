@@ -11,6 +11,8 @@ var (
 	bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\("--[^"]+=\"\)\s*$`)
 	bashEqualsFlagSuggestionToken       = regexp.MustCompile(`\s*"--[^"=\s]+="`)
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
+	bashOutCompgenPattern               = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$cur"`)
+	bashOutCompgenBracedCurPattern      = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$\{cur\}"`)
 )
 
 func newBashCommand() *cobra.Command {
@@ -50,10 +52,13 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 
 	// Bash `compgen -W` splits completion words by spaces. Escape spaces in
 	// dynamic custom-completion values so aliases like "AD PRD" stay intact.
-	normalized = bytes.ReplaceAll(
+	normalized = bashOutCompgenPattern.ReplaceAllLiteral(
 		normalized,
-		[]byte(`compgen -W "${out}" -- "$cur"`),
 		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
+	)
+	normalized = bashOutCompgenBracedCurPattern.ReplaceAllLiteral(
+		normalized,
+		[]byte(`compgen -W "${out// /\\ }" -- "${cur}"`),
 	)
 
 	return normalized
