@@ -230,6 +230,26 @@ func TestResourceGetDualPathInput(t *testing.T) {
 		_, err := executeForTest(testDeps(), "", "resource", "get")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
+
+	t.Run("invalid_non_absolute_path_fails_fast", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		_, err := executeForTest(deps, "", "resource", "get", "adminrealmspublico-bruser-registryADmappers")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "absolute") {
+			t.Fatalf("expected absolute-path validation error, got %v", err)
+		}
+		if len(orchestrator.getRemoteCalls) > 0 || len(orchestrator.getLocalCalls) > 0 {
+			t.Fatalf(
+				"expected invalid path to fail before source requests, remote_calls=%#v local_calls=%#v",
+				orchestrator.getRemoteCalls,
+				orchestrator.getLocalCalls,
+			)
+		}
+	})
 }
 
 func TestResourceGetSourceSelection(t *testing.T) {
@@ -3386,6 +3406,41 @@ func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testi
 	}
 	if containsString(orchestrator.listLocalCalls, "/admin/realms/master/clients") {
 		t.Fatalf("expected completion to skip local collection fallback when remote items are available, calls=%#v", orchestrator.listLocalCalls)
+	}
+}
+
+func TestPathCompletionResourceGetIncludesRepositoryCandidatesWhenRemoteMatchesOnlyOpenAPI(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/publico-br/user-registry"},
+	}
+	orchestrator.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/publico-br"},
+	}
+	orchestrator.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/users": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/publico-br/user")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/publico-br/users\n") {
+		t.Fatalf("expected openapi-backed completion candidate, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/publico-br/user-registry\n") {
+		t.Fatalf("expected repository-backed completion candidate, got %q", output)
+	}
+	if !containsString(orchestrator.listRemoteCalls, "/admin/realms/publico-br") {
+		t.Fatalf("expected completion to query remote scoped path, calls=%#v", orchestrator.listRemoteCalls)
+	}
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/publico-br") {
+		t.Fatalf("expected completion to query repository scoped path when remote has no direct candidates, calls=%#v", orchestrator.listLocalCalls)
 	}
 }
 

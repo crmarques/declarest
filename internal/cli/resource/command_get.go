@@ -31,6 +31,10 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			if err != nil {
 				return err
 			}
+			resolvedPath, err = resource.NormalizeLogicalPath(resolvedPath)
+			if err != nil {
+				return err
+			}
 
 			if fromRepository && fromRemoteServer {
 				return common.ValidationError("flags --repository and --remote-server cannot be used together", nil)

@@ -1088,10 +1088,6 @@ func persistSaveSecretAttributes(
 	return secretworkflow.PersistDetectedAttributes(ctx, metadataService, logicalPath, attributes)
 }
 
-func mergeSaveSecretAttributes(existing []string, detected []string) []string {
-	return secretworkflow.MergeAttributes(existing, detected)
-}
-
 func ensureSaveTargetAllowed(
 	ctx context.Context,
 	repositoryService repository.ResourceStore,
@@ -1151,10 +1147,6 @@ func dedupeAndSortSaveSecretAttributes(values []string) []string {
 	return secretworkflow.DedupeAndSortAttributes(values)
 }
 
-func isLikelyPlaintextSecretValue(value string) bool {
-	return secretworkflow.IsLikelyPlaintextValue(value)
-}
-
 func storeAndMaskAttribute(
 	ctx context.Context,
 	secretProvider secretdomain.SecretProvider,
@@ -1163,22 +1155,6 @@ func storeAndMaskAttribute(
 	attribute string,
 ) error {
 	return secretworkflow.StoreAndMaskAttribute(ctx, secretProvider, payload, logicalPath, attribute)
-}
-
-func findAttributeParentMap(payload map[string]any, attribute string) (map[string]any, string, bool) {
-	return secretworkflow.FindAttributeParentMap(payload, attribute)
-}
-
-func secretPlaceholderValue() string {
-	return secretworkflow.PlaceholderValue()
-}
-
-func buildSaveSecretKey(logicalPath string, attribute string) string {
-	return secretworkflow.BuildPathScopedSecretKey(logicalPath, attribute)
-}
-
-func isSecretPlaceholderValue(value string) bool {
-	return secretworkflow.IsPlaceholderValue(value)
 }
 
 func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {

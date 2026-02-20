@@ -262,6 +262,7 @@ func CompleteLogicalPaths(
 	queryPath := completionQueryPath(normalizedPrefix)
 	localItems := []resource.Resource{}
 	remoteItems := []resource.Resource{}
+	primarySourceSuggestions := map[string]struct{}{}
 
 	primaryItems, _, primaryErr := queryScopedCompletionResources(
 		ctx,
@@ -276,6 +277,7 @@ func CompleteLogicalPaths(
 	case completionSourceRemote:
 		remoteItems = append(remoteItems, primaryItems...)
 	}
+	addResourceSuggestions(primarySourceSuggestions, primaryItems)
 
 	openAPISpec, err := orchestratorService.GetOpenAPISpec(ctx)
 	if err == nil {
@@ -304,6 +306,7 @@ func CompleteLogicalPaths(
 		)
 		if primaryRootErr == nil {
 			addResourceSuggestions(suggestions, primaryRootItems)
+			addResourceSuggestions(primarySourceSuggestions, primaryRootItems)
 			switch strategy.primary {
 			case completionSourceLocal:
 				localItems = append(localItems, primaryRootItems...)
@@ -313,7 +316,27 @@ func CompleteLogicalPaths(
 		}
 	}
 
-	primaryCompletionCount := len(filterPathSuggestions(suggestions, toComplete))
+	if queryPath == "/" && primaryErr == nil && len(filterPathSuggestions(primarySourceSuggestions, toComplete)) == 0 {
+		primaryRootItems, primaryRootErr := listCompletionResources(
+			ctx,
+			orchestratorService,
+			strategy.primary,
+			"/",
+			true,
+		)
+		if primaryRootErr == nil {
+			addResourceSuggestions(suggestions, primaryRootItems)
+			addResourceSuggestions(primarySourceSuggestions, primaryRootItems)
+			switch strategy.primary {
+			case completionSourceLocal:
+				localItems = append(localItems, primaryRootItems...)
+			case completionSourceRemote:
+				remoteItems = append(remoteItems, primaryRootItems...)
+			}
+		}
+	}
+
+	primaryCompletionCount := len(filterPathSuggestions(primarySourceSuggestions, toComplete))
 	if shouldQuerySecondarySource(strategy, primaryCompletionCount, primaryErr) {
 		secondaryItems, _, secondaryErr := queryScopedCompletionResources(
 			ctx,
