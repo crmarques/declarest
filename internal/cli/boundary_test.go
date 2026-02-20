@@ -48,3 +48,69 @@ func TestCLIDoesNotImportProviderImplementations(t *testing.T) {
 		t.Fatalf("boundary scan failed: %v", err)
 	}
 }
+
+func TestCLIImportsFollowAllowedProjectBoundaries(t *testing.T) {
+	t.Parallel()
+
+	const modulePrefix = "github.com/crmarques/declarest/"
+
+	allowedPrefixes := []string{
+		modulePrefix + "internal/cli/",
+		modulePrefix + "internal/app/",
+		modulePrefix + "config",
+		modulePrefix + "faults",
+		modulePrefix + "metadata",
+		modulePrefix + "orchestrator",
+		modulePrefix + "repository",
+		modulePrefix + "resource",
+		modulePrefix + "secrets",
+	}
+
+	allowedExactImports := map[string]struct{}{
+		modulePrefix + "internal/support/debug": {},
+	}
+
+	fset := token.NewFileSet()
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		file, parseErr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if parseErr != nil {
+			return parseErr
+		}
+
+		for _, imp := range file.Imports {
+			importPath := strings.Trim(imp.Path.Value, "\"")
+			if !strings.HasPrefix(importPath, modulePrefix) {
+				continue
+			}
+			if _, allowed := allowedExactImports[importPath]; allowed {
+				continue
+			}
+
+			allowed := false
+			for _, prefix := range allowedPrefixes {
+				if strings.HasPrefix(importPath, prefix) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				t.Fatalf("forbidden project import %q in %s", importPath, path)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("boundary scan failed: %v", err)
+	}
+}

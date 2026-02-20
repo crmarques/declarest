@@ -9,11 +9,13 @@ import (
 )
 
 type CommandDependencies struct {
-	Orchestrator orchestrator.Orchestrator
-	Contexts     config.ContextService
-	Repository   repository.ResourceRepository
-	Metadata     metadata.MetadataService
-	Secrets      secrets.SecretProvider
+	Orchestrator   orchestrator.Orchestrator
+	Contexts       config.ContextService
+	Repository     repository.ResourceRepository
+	ResourceStore  repository.ResourceStore
+	RepositorySync repository.RepositorySync
+	Metadata       metadata.MetadataService
+	Secrets        secrets.SecretProvider
 }
 
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
@@ -30,11 +32,24 @@ func RequireOrchestrator(deps CommandDependencies) (orchestrator.Orchestrator, e
 	return deps.Orchestrator, nil
 }
 
-func RequireRepository(deps CommandDependencies) (repository.ResourceRepository, error) {
-	if deps.Repository == nil {
-		return nil, ValidationError("repository is not configured", nil)
+func RequireResourceStore(deps CommandDependencies) (repository.ResourceStore, error) {
+	if deps.ResourceStore == nil && deps.Repository != nil {
+		return deps.Repository, nil
 	}
-	return deps.Repository, nil
+	if deps.ResourceStore == nil {
+		return nil, ValidationError("resource store is not configured", nil)
+	}
+	return deps.ResourceStore, nil
+}
+
+func RequireRepositorySync(deps CommandDependencies) (repository.RepositorySync, error) {
+	if deps.RepositorySync == nil && deps.Repository != nil {
+		return deps.Repository, nil
+	}
+	if deps.RepositorySync == nil {
+		return nil, ValidationError("repository sync is not configured", nil)
+	}
+	return deps.RepositorySync, nil
 }
 
 func RequireMetadataService(deps CommandDependencies) (metadata.MetadataService, error) {

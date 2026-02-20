@@ -8,6 +8,8 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+var _ repository.ResourceStore = (*FSResourceRepository)(nil)
+var _ repository.RepositorySync = (*FSResourceRepository)(nil)
 var _ repository.ResourceRepository = (*FSResourceRepository)(nil)
 
 type FSResourceRepository struct {

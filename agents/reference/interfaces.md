@@ -1,7 +1,7 @@
 # Canonical Interfaces and Contracts
 
 ## Purpose
-Define stable contracts for manager interfaces, shared types, determinism, and error handling across bounded-context packages.
+Define stable contracts for shared interfaces, types, determinism, and error handling across bounded-context packages.
 
 ## In Scope
 1. Canonical interface definitions.
@@ -38,10 +38,15 @@ Represents client-facing application state assembled at startup.
 Required fields:
 1. `Contexts`: `config.ContextService` instance.
 2. `Orchestrator`: `orchestrator.Orchestrator` instance.
+3. `ResourceStore`: `repository.ResourceStore` instance.
+4. `RepositorySync`: `repository.RepositorySync` instance.
+5. `Metadata`: optional `metadata.MetadataService` instance.
+6. `Secrets`: optional `secrets.SecretProvider` instance.
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
 2. clients MUST consume `core.DeclarestContext` as their primary dependency entrypoint.
+3. `Repository` MAY be exposed only as temporary compatibility union while callers migrate to split repository contracts.
 
 Factory contract:
 1. `core.NewDeclarestContext` MUST assemble default provider implementations.
@@ -58,11 +63,10 @@ Fields:
 Represents the default concrete orchestrator assembled by the composition root.
 
 Required fields:
-1. `Name`: selected context name.
-2. `RepositoryManager`: `repository.ResourceRepositoryManager` instance.
-3. `MetadataService`: `metadata.MetadataService` instance.
-4. `ServerManager`: optional `server.ResourceServerManager` instance.
-5. `SecretsProvider`: optional `secrets.SecretProvider` instance.
+1. `Repository`: `repository.ResourceStore` instance.
+2. `Metadata`: `metadata.MetadataService` instance.
+3. `Server`: optional `server.ResourceServer` instance.
+4. `Secrets`: optional `secrets.SecretProvider` instance.
 
 ### Type: `config.Context`
 Represents persisted context configuration.
@@ -236,32 +240,44 @@ Method families:
 3. `ResolveContext`.
 4. `Validate`.
 
-### Interface: `repository.ResourceRepositoryManager`
+### Interface: `repository.ResourceStore`
 Responsibilities:
 1. Persist resources by logical path.
-2. Read/list/delete/move resources.
-3. Manage repository synchronization with optional Git.
-4. Enforce path safety and layout invariants.
+2. Read/list/delete resources.
+3. Enforce path safety and layout invariants.
 
 Method families:
-1. Resource IO: `Save/Get/Delete(policy)/List(policy)/Exists/Move`.
-2. Repository lifecycle: `Init/Refresh/Reset/Check`.
-3. Sync: `Push/SyncStatus`.
+1. `Save/Get/Delete(policy)/List(policy)/Exists`.
+
+### Interface: `repository.RepositorySync`
+Responsibilities:
+1. Manage repository lifecycle and synchronization operations.
+2. Expose deterministic sync status.
+
+Method families:
+1. Lifecycle: `Init/Refresh/Reset/Check`.
+2. Sync: `Push/SyncStatus`.
+
+### Interface: `repository.ResourceRepository`
+Responsibilities:
+1. Compatibility union for consumers that still require one dependency.
+
+Method families:
+1. Embeds `repository.ResourceStore`.
+2. Embeds `repository.RepositorySync`.
 
 ### Interface: `metadata.MetadataService`
 Responsibilities:
 1. Read/write metadata.
 2. Resolve layered metadata.
 3. Render templates and derive operation directives.
-4. Infer metadata from external hints such as OpenAPI.
 
 Method families:
 1. `Get/Set/Unset`.
 2. `ResolveForPath`.
 3. `RenderOperationSpec`.
-4. `Infer`.
 
-### Interface: `server.ResourceServerManager`
+### Interface: `server.ResourceServer`
 Responsibilities:
 1. Execute remote CRUD/list operations.
 2. Execute ad-hoc HTTP operations against resource-server endpoints.
@@ -272,7 +288,6 @@ Method families:
 1. `Get/Create/Update/Delete/List/Exists`.
 2. `AdHoc`.
 3. `GetOpenAPISpec`.
-4. `BuildRequestFromMetadata`.
 
 ### Interface: `secrets.SecretProvider`
 Responsibilities:
@@ -289,16 +304,15 @@ Method families:
 
 ### Interface: `orchestrator.Orchestrator`
 Responsibilities:
-1. Orchestrate repository, metadata, server, and secret managers.
+1. Orchestrate repository-store, metadata, server, and secret-provider workflows.
 2. Apply desired state to remote systems.
 3. Refresh local state from remote systems.
 4. Compute explain/diff/list outputs.
 
 Method families:
-1. `Get/GetLocal/GetRemote/AdHoc/Save/Apply/Create/Update/Delete`.
+1. `GetLocal/GetRemote/AdHoc/GetOpenAPISpec/Save/Apply/Create/Update/Delete`.
 2. `ListLocal(policy)/ListRemote(policy)`.
 3. `Explain/Diff/Template`.
-4. `RepoInit/RepoRefresh/RepoPush/RepoReset/RepoCheck/RepoStatus`.
 
 ## Error Taxonomy and Propagation
 Error categories:
@@ -341,5 +355,5 @@ Propagation rules:
 
 ## Examples
 1. A `orchestrator.Orchestrator.Apply` call resolves metadata, builds request intent, and executes a remote create/update mutation derived from repository desired state.
-2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceRepositoryManager.Save`.
+2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceStore.Save`.
 3. A `config.ContextService.ResolveContext` call merges persisted context and environment overrides, then validates and returns one resolved `config.Context`.

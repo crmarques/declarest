@@ -650,7 +650,7 @@ func checkRepository(command *cobra.Command, deps common.CommandDependencies, cf
 		Component: "repository",
 	}
 
-	repositoryService, err := common.RequireRepository(deps)
+	repositoryService, err := common.RequireRepositorySync(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()

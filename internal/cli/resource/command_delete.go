@@ -75,7 +75,7 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 				return nil
 			}
 
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireResourceStore(deps)
 			if err != nil {
 				return err
 			}

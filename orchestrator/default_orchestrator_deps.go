@@ -13,7 +13,7 @@ import (
 	"github.com/crmarques/declarest/server"
 )
 
-func (r *DefaultOrchestrator) requireRepository() (repository.ResourceRepository, error) {
+func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, error) {
 	if r == nil || r.Repository == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "repository manager is not configured", nil)
 	}

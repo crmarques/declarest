@@ -4,8 +4,8 @@ import (
 	"context"
 
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
-	"github.com/crmarques/declarest/internal/support/identity"
-	"github.com/crmarques/declarest/internal/support/templatescope"
+	"github.com/crmarques/declarest/resource/identity"
+	"github.com/crmarques/declarest/metadata/templatescope"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )

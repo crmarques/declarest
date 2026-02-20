@@ -16,5 +16,4 @@ type ResourceServer interface {
 	Exists(ctx context.Context, resourceInfo resource.Resource) (bool, error)
 	AdHoc(ctx context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error)
 	GetOpenAPISpec(ctx context.Context) (resource.Value, error)
-	BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, operation metadata.Operation) (metadata.OperationSpec, error)
 }

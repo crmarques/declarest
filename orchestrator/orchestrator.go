@@ -7,7 +7,6 @@ import (
 )
 
 type Orchestrator interface {
-	Get(ctx context.Context, logicalPath string) (resource.Value, error)
 	GetLocal(ctx context.Context, logicalPath string) (resource.Value, error)
 	GetRemote(ctx context.Context, logicalPath string) (resource.Value, error)
 	AdHoc(ctx context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error)

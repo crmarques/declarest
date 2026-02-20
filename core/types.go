@@ -9,11 +9,15 @@ import (
 )
 
 type DeclarestContext struct {
-	Contexts     config.ContextService
-	Orchestrator orchestrator.Orchestrator
-	Repository   repository.ResourceRepository
-	Metadata     metadata.MetadataService
-	Secrets      secrets.SecretProvider
+	// Repository is kept for compatibility while consumers migrate to
+	// ResourceStore/RepositorySync split interfaces.
+	Repository     repository.ResourceRepository
+	Contexts       config.ContextService
+	Orchestrator   orchestrator.Orchestrator
+	ResourceStore  repository.ResourceStore
+	RepositorySync repository.RepositorySync
+	Metadata       metadata.MetadataService
+	Secrets        secrets.SecretProvider
 }
 
 type BootstrapConfig struct {

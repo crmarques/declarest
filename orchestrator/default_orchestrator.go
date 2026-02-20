@@ -10,7 +10,7 @@ import (
 var _ Orchestrator = (*DefaultOrchestrator)(nil)
 
 type DefaultOrchestrator struct {
-	Repository repository.ResourceRepository
+	Repository repository.ResourceStore
 	Metadata   metadata.MetadataService
 	Server     server.ResourceServer
 	Secrets    secrets.SecretProvider

@@ -15,7 +15,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 3. CLI completion internals.
 
 ## Normative Rules
-1. Remote operations MUST be executed through `server.ResourceServerManager` only.
+1. Remote operations MUST be executed through `server.ResourceServer` only.
 2. Request method, path, query, and headers MUST derive from resolved metadata plus explicit overrides.
 3. Auth mode precedence MUST be deterministic and documented.
 4. TLS configuration errors MUST fail fast during initialization.
@@ -34,10 +34,9 @@ Request spec fields:
 6. `ContentType`.
 7. `Body` resource payload.
 
-Server manager operations:
+Server interface operations:
 1. `Get/Create/Update/Delete/List/Exists`.
 2. `GetOpenAPISpec`.
-3. `BuildRequestFromMetadata` with typed `metadata.Operation`.
 
 Auth modes:
 1. OAuth2.

@@ -27,11 +27,13 @@ func main() {
 			}
 		} else {
 			deps = cli.Dependencies{
-				Orchestrator: declarestContext.Orchestrator,
-				Contexts:     declarestContext.Contexts,
-				Repository:   declarestContext.Repository,
-				Metadata:     declarestContext.Metadata,
-				Secrets:      declarestContext.Secrets,
+				Orchestrator:   declarestContext.Orchestrator,
+				Contexts:       declarestContext.Contexts,
+				Repository:     declarestContext.Repository,
+				ResourceStore:  declarestContext.ResourceStore,
+				RepositorySync: declarestContext.RepositorySync,
+				Metadata:       declarestContext.Metadata,
+				Secrets:        declarestContext.Secrets,
 			}
 		}
 	}

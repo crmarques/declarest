@@ -37,7 +37,7 @@ func newInitCommand(deps common.CommandDependencies) *cobra.Command {
 		Short: "Initialize repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -52,7 +52,7 @@ func newRefreshCommand(deps common.CommandDependencies) *cobra.Command {
 		Short: "Refresh repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -69,7 +69,7 @@ func newResetCommand(deps common.CommandDependencies) *cobra.Command {
 		Short: "Reset repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -87,7 +87,7 @@ func newCheckCommand(deps common.CommandDependencies) *cobra.Command {
 		Short: "Check repository health",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -104,7 +104,7 @@ func newPushCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		Short: "Push repository changes",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -132,7 +132,7 @@ func newStatusCommand(deps common.CommandDependencies, globalFlags *common.Globa
 		Short: "Show repository sync status",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := common.RequireRepository(deps)
+			repositoryService, err := common.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}

@@ -5,8 +5,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/support/identity"
-	"github.com/crmarques/declarest/internal/support/templatescope"
+	"github.com/crmarques/declarest/resource/identity"
+	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
 )
 

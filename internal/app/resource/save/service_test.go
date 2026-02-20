@@ -1,4 +1,4 @@
-package resource
+package save
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	repositorydomain "github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
@@ -87,7 +86,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("metadata_alias_resolution_and_deterministic_order", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "alias"},
 			},
@@ -112,7 +111,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("resource_entry_shape_bypasses_metadata", func(t *testing.T) {
 		t.Parallel()
 
-		entries, err := resolveSaveEntriesForItems(context.Background(), common.CommandDependencies{}, "/ignored", []any{
+		entries, err := resolveSaveEntriesForItems(context.Background(), Dependencies{}, "/ignored", []any{
 			map[string]any{"LogicalPath": "/customers/zeta", "Payload": map[string]any{"id": "zeta"}},
 			map[string]any{"LogicalPath": "/customers/alpha", "Payload": map[string]any{"id": "alpha"}},
 		})
@@ -131,7 +130,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("duplicate_resolved_path_fails", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "alias"},
 			},
@@ -147,7 +146,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("falls_back_to_common_identity_attributes_when_metadata_is_missing", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{},
 			},
@@ -175,7 +174,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("falls_back_to_id_when_metadata_attribute_is_missing_in_payload", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "clientId"},
 			},
@@ -198,7 +197,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 	t.Run("resource_entry_shape_missing_payload_fails", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := resolveSaveEntriesForItems(context.Background(), common.CommandDependencies{}, "/customers", []any{
+		_, err := resolveSaveEntriesForItems(context.Background(), Dependencies{}, "/customers", []any{
 			map[string]any{"LogicalPath": "/customers/acme"},
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -211,7 +210,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_detects_plaintext", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"credentials.authValue"},
@@ -235,7 +234,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_ignores_placeholders", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"credentials.authValue"},
@@ -258,7 +257,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_ignores_unquoted_placeholders", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"credentials.authValue"},
@@ -281,7 +280,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_ignores_numeric_values", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{
@@ -312,7 +311,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_ignores_boolean_policy_values", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{
@@ -397,7 +396,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 	t.Run("falls_back_to_builtin_detection_without_secret_provider", func(t *testing.T) {
 		t.Parallel()
 
-		candidates, err := detectSaveSecretCandidates(context.Background(), common.CommandDependencies{}, "/customers/acme", map[string]any{
+		candidates, err := detectSaveSecretCandidates(context.Background(), Dependencies{}, "/customers/acme", map[string]any{
 			"password": "plain-secret",
 		})
 		if err != nil {
@@ -412,7 +411,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		t.Parallel()
 
 		expectedErr := faults.NewTypedError(faults.TransportError, "detect failed", nil)
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Secrets: &fakeSaveSecretProvider{detectErr: expectedErr},
 		}
 
@@ -431,7 +430,7 @@ func TestDetectSaveSecretCandidatesForCollection(t *testing.T) {
 	t.Run("unions_detected_candidates_across_collection_items", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"credentials.authValue"},
@@ -479,7 +478,7 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 
 		err := enforceSaveSecretSafety(
 			context.Background(),
-			common.CommandDependencies{},
+			Dependencies{},
 			"/customers/acme",
 			map[string]any{"password": "plain-secret"},
 			false,
@@ -498,7 +497,7 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 
 		err := enforceSaveSecretSafety(
 			context.Background(),
-			common.CommandDependencies{},
+			Dependencies{},
 			"/customers/acme",
 			map[string]any{"password": "plain-secret"},
 			true,
@@ -511,7 +510,7 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 	t.Run("allows_metadata_declared_plaintext_secret_without_ignore", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"password"},
@@ -539,7 +538,7 @@ func TestAutoHandleDeclaredSaveSecrets(t *testing.T) {
 		t.Parallel()
 
 		secretProvider := &fakeSaveSecretProvider{}
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"credentials.authValue"},
@@ -582,7 +581,7 @@ func TestAutoHandleDeclaredSaveSecrets(t *testing.T) {
 	t.Run("fails_when_secret_provider_is_missing_for_metadata_declared_candidates", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
 					SecretsFromAttributes: []string{"password"},
@@ -623,7 +622,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 		secretProvider := &fakeSaveSecretProvider{
 			detectedCandidates: []string{"apiToken"},
 		}
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: metadataService,
 			Secrets:  secretProvider,
 		}
@@ -687,7 +686,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			items: map[string]metadatadomain.ResourceMetadata{},
 		}
 		secretProvider := &fakeSaveSecretProvider{}
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: metadataService,
 			Secrets:  secretProvider,
 		}
@@ -726,7 +725,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 	t.Run("non_object_payload_with_candidates_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{},
 			Secrets: &fakeSaveSecretProvider{
 				detectedCandidates: []string{"password"},
@@ -751,7 +750,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 		secretProvider := &fakeSaveSecretProvider{
 			detectedCandidates: []string{"apiToken", "password"},
 		}
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: metadataService,
 			Secrets:  secretProvider,
 		}
@@ -790,7 +789,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 	t.Run("requested_candidate_not_detected_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				items: map[string]metadatadomain.ResourceMetadata{},
 			},
@@ -819,7 +818,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 		metadataService := &fakeSaveMetadataService{
 			items: map[string]metadatadomain.ResourceMetadata{},
 		}
-		deps := common.CommandDependencies{
+		deps := Dependencies{
 			Metadata: metadataService,
 			Secrets: &fakeSaveSecretProvider{
 				detectedCandidates: []string{"secret"},

@@ -54,7 +54,7 @@ Inputs:
 Execution:
 1. `orchestrator.Orchestrator` loads resource and resolved metadata.
 2. `secrets.SecretProvider` resolves placeholders.
-3. `server.ResourceServerManager` executes update.
+3. `server.ResourceServer` executes update.
 4. Orchestrator returns normalized remote mutation output without implicit local persistence.
 
 Expected outputs:
@@ -129,8 +129,8 @@ Inputs:
 1. `declarest repo status` with `--output auto|json|yaml`.
 
 Execution:
-1. CLI calls `orchestrator.Orchestrator.RepoStatus`.
-2. Orchestrator calls `repository.ResourceRepositoryManager.SyncStatus`.
+1. CLI resolves `repository.RepositorySync` from startup context.
+2. CLI calls `repository.RepositorySync.SyncStatus`.
 
 Expected outputs:
 1. `auto` prints deterministic text summary.
