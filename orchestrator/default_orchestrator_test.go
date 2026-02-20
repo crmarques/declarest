@@ -397,6 +397,49 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 	}
 }
 
+func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackProbeResponseIsInvalid(t *testing.T) {
+	t.Parallel()
+
+	requestPath := "/admin/realms/xxxxx/organizations"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listErrs: map[string]error{
+			"/admin/realms/xxxxx": faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			"/admin/realms":       faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			"/admin": faults.NewTypedError(
+				faults.ValidationError,
+				`response body is not valid JSON: invalid character '<' looking for beginning of value`,
+				nil,
+			),
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "alias",
+			},
+		},
+		Server: serverManager,
+	}
+
+	_, err := reconciler.GetRemote(context.Background(), requestPath)
+	assertTypedCategory(t, err, faults.NotFoundError)
+
+	foundAdminProbe := false
+	for _, listPath := range serverManager.listPaths {
+		if listPath == "/admin" {
+			foundAdminProbe = true
+			break
+		}
+	}
+	if !foundAdminProbe {
+		t.Fatalf("expected recursive fallback probe to include /admin list call, got %#v", serverManager.listPaths)
+	}
+}
+
 func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIHintsCollection(t *testing.T) {
 	t.Parallel()
 

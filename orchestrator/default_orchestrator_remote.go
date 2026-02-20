@@ -171,14 +171,18 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 		if currentPath != resourceInfo.LogicalPath {
 			currentInfo, infoErr := r.buildResourceInfoForRemoteRead(ctx, currentPath)
 			if infoErr != nil {
-				return nil, true, infoErr
+				if isTypedCategory(infoErr, faults.ConflictError) {
+					return nil, true, infoErr
+				}
+				continue
 			}
 
 			currentValue, currentErr := serverManager.Get(ctx, currentInfo)
 			if currentErr == nil {
 				return currentValue, true, nil
 			}
-			if !isTypedCategory(currentErr, faults.NotFoundError) {
+			// Candidate lookups are best-effort and must not override the original NotFound.
+			if isTypedCategory(currentErr, faults.ConflictError) {
 				return nil, true, currentErr
 			}
 		}
@@ -222,10 +226,16 @@ func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
 
 		candidates, listErr := serverManager.List(ctx, segmentInfo.CollectionPath, segmentInfo.Metadata)
 		if listErr != nil {
-			if isTypedCategory(listErr, faults.NotFoundError) || isFallbackListPayloadShapeError(listErr) {
+			// Fallback list probes are best-effort and must not override the original NotFound.
+			if isTypedCategory(listErr, faults.ConflictError) {
+				return nil, listErr
+			}
+			if isTypedCategory(listErr, faults.NotFoundError) ||
+				isTypedCategory(listErr, faults.ValidationError) ||
+				isFallbackListPayloadShapeError(listErr) {
 				continue
 			}
-			return nil, listErr
+			continue
 		}
 
 		matched := make([]resource.Resource, 0, len(candidates))
