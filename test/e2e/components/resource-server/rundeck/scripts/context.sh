@@ -17,6 +17,9 @@ base_url="${RUNDECK_BASE_URL%/}/api/${api_version}"
   printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${base_url}"
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
+    printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
+  fi
   printf '    auth:\n'
 
   if [[ "${RUNDECK_AUTH_MODE:-}" == 'token' && -n "${RUNDECK_API_TOKEN:-}" ]]; then

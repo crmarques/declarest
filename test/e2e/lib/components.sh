@@ -10,6 +10,7 @@ declare -Ag E2E_COMPONENT_DESCRIPTION=()
 declare -Ag E2E_COMPONENT_PROJECT=()
 declare -Ag E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
 declare -Ag E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
+declare -Ag E2E_COMPONENT_OPENAPI_SPEC=()
 declare -Ag E2E_CAPABILITY_SET=()
 
 declare -ag E2E_COMPONENT_KEYS=()
@@ -103,6 +104,60 @@ e2e_component_context_fragment_path() {
     "${E2E_CONTEXT_DIR}" \
     "$(e2e_component_type "${component_key}")" \
     "$(e2e_component_name "${component_key}")"
+}
+
+e2e_component_openapi_source_path() {
+  local component_key=$1
+  local component_dir="${E2E_COMPONENT_PATH[${component_key}]:-}"
+
+  if [[ -z "${component_dir}" ]]; then
+    return 1
+  fi
+
+  local spec_path="${component_dir}/openapi.yaml"
+  if [[ ! -f "${spec_path}" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${spec_path}"
+  return 0
+}
+
+e2e_component_install_openapi_spec() {
+  local component_key=$1
+  local spec_src
+
+  spec_src=$(e2e_component_openapi_source_path "${component_key}") || return 0
+
+  local component_name
+  component_name=$(e2e_component_name "${component_key}")
+  local dest="${E2E_RUN_DIR}/${component_name}-openapi.yaml"
+
+  rm -f "${dest}"
+  if ! cp -- "${spec_src}" "${dest}"; then
+    e2e_die "failed to copy openapi spec for component ${component_key}"
+    return 1
+  fi
+
+  E2E_COMPONENT_OPENAPI_SPEC["${component_key}"]="${dest}"
+  e2e_info "resource-server openapi spec key=${component_key} file=${dest}"
+  return 0
+}
+
+e2e_prepare_resource_server_openapi_specs() {
+  local component_key
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    if [[ "$(e2e_component_type "${component_key}")" != 'resource-server' ]]; then
+      continue
+    fi
+
+    if ! e2e_component_install_openapi_spec "${component_key}"; then
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 e2e_component_validate_connections() {
@@ -818,6 +873,7 @@ e2e_component_export_env() {
   export E2E_COMPONENT_STATE_FILE="$(e2e_component_state_file "${component_key}")"
   export E2E_COMPONENT_PROJECT_NAME="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
   export E2E_COMPONENT_CONTEXT_FRAGMENT="$(e2e_component_context_fragment_path "${component_key}")"
+  export E2E_COMPONENT_OPENAPI_SPEC="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   export E2E_ROOT_DIR
   export E2E_DIR
   export E2E_RUN_DIR

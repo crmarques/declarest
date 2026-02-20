@@ -23,6 +23,9 @@ fi
   printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
+    printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
+  fi
 
   if [[ "${enable_mtls}" == 'true' ]]; then
     if [[ -z "${SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST:-}" || -z "${SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST:-}" || -z "${SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST:-}" ]]; then

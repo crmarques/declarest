@@ -330,3 +330,22 @@ Expected outputs:
 Failure expectation:
 1. `declarest secret detect --fix < payload.json` without path fails with `ValidationError`.
 2. `declarest secret detect /customers --secret-attribute unknown` fails with `ValidationError`.
+
+### Example 16: OpenAPI Context Propagation
+Goal: surface a resource-server's `openapi.yaml` (when present) to the generated context so metadata inference uses the stable API definition.
+
+Inputs:
+1. Resource-server component `keycloak` (or another) declares an `openapi.yaml` asset under its component directory.
+2. `run-e2e.sh` is invoked with that resource server selected and a writable run directory.
+
+Execution:
+1. The runner copies `openapi.yaml` to the run directory before context hooks execute.
+2. The resource-server `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits `resource-server.http.openapi` pointing at the run-scoped spec file.
+3. `e2e_context_build` aggregates fragments, producing a context YAML that references the copied spec.
+
+Expected outputs:
+1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `resource-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
+2. `declarest config show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `metadata infer --openapi`.
+
+Failure expectation:
+1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `metadata` commands run.

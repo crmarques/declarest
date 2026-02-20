@@ -553,6 +553,7 @@ step_configure_access() {
   e2e_components_run_hook_all 'configure-auth' 'true' || return 1
 
   mkdir -p "${E2E_CONTEXT_DIR}" || return 1
+  e2e_prepare_resource_server_openapi_specs || return 1
   e2e_components_run_hook_all 'context' 'true' || return 1
 
   e2e_context_build || return 1

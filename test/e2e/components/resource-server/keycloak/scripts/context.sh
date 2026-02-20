@@ -14,6 +14,9 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
   printf 'resource-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${KEYCLOAK_BASE_URL}"
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
+    printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
+  fi
   printf '    auth:\n'
   printf '      oauth2:\n'
     printf '        token-url: %s\n' "${KEYCLOAK_TOKEN_URL}"

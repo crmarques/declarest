@@ -11,10 +11,9 @@ var (
 	bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\("--[^"]+=\"\)\s*$`)
 	bashEqualsFlagSuggestionToken       = regexp.MustCompile(`\s*"--[^"=\s]+="`)
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
-	bashOutCompgenPattern               = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$cur"`)
-	bashOutCompgenBracedCurPattern      = regexp.MustCompile(`compgen\s+-W\s+"\$\{out\}"\s+--\s+"\$\{cur\}"`)
-	bashOutCompgenPlainOutPattern       = regexp.MustCompile(`compgen\s+-W\s+"\$out"\s+--\s+"\$cur"`)
-	bashOutCompgenPlainOutBracedCur     = regexp.MustCompile(`compgen\s+-W\s+"\$out"\s+--\s+"\$\{cur\}"`)
+	bashOutCompgenAnyOutCurPattern      = regexp.MustCompile(`compgen\s+-W\s+"?\$\{?out\}?"?\s+--\s+"?\$\{?cur\}?"?`)
+	bashCompleteCommandPattern          = regexp.MustCompile(`^\s*complete\s+.*-o\s+default.*-F\s+__start_[^\s]+\s+[^\s]+\s*$`)
+	bashCompoptNoSpacePattern           = regexp.MustCompile(`compopt\s+-o\s+nospace`)
 )
 
 func newBashCommand() *cobra.Command {
@@ -47,6 +46,9 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 		if bashEmptyArrayAppendPattern.Match(normalizedLine) {
 			continue
 		}
+		if bashCompleteCommandPattern.Match(normalizedLine) && !bytes.Contains(normalizedLine, []byte("-o filenames")) {
+			normalizedLine = bytes.Replace(normalizedLine, []byte("-o default"), []byte("-o default -o filenames"), 1)
+		}
 
 		filtered = append(filtered, normalizedLine)
 	}
@@ -54,21 +56,13 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 
 	// Bash `compgen -W` splits completion words by spaces. Escape spaces in
 	// dynamic custom-completion values so aliases like "AD PRD" stay intact.
-	normalized = bashOutCompgenPattern.ReplaceAllLiteral(
+	normalized = bashOutCompgenAnyOutCurPattern.ReplaceAllLiteral(
 		normalized,
 		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
 	)
-	normalized = bashOutCompgenBracedCurPattern.ReplaceAllLiteral(
+	normalized = bashCompoptNoSpacePattern.ReplaceAllLiteral(
 		normalized,
-		[]byte(`compgen -W "${out// /\\ }" -- "${cur}"`),
-	)
-	normalized = bashOutCompgenPlainOutPattern.ReplaceAllLiteral(
-		normalized,
-		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
-	)
-	normalized = bashOutCompgenPlainOutBracedCur.ReplaceAllLiteral(
-		normalized,
-		[]byte(`compgen -W "${out// /\\ }" -- "${cur}"`),
+		[]byte(`compopt -o nospace -o filenames`),
 	)
 
 	return normalized

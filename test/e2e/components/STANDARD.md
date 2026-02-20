@@ -28,6 +28,8 @@ scripts/configure-auth.sh
 scripts/context.sh
 ```
 
+Resource-server components MAY also ship `openapi.yaml`. When provided, the runner copies it into the run directory and adds the resulting path to `resource-server.http.openapi` so context-aware commands can infer the API surface.
+
 Additional runtime files:
 
 - `compose` runtime components MUST include:

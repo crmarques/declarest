@@ -55,7 +55,7 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithBracedCur(
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "${cur}"`) {
+	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
 		t.Fatalf("expected braced-cur custom completion compgen to escape spaces, got %q", normalized)
 	}
 }
@@ -83,7 +83,73 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithPlainOutAn
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "${cur}"`) {
+	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
 		t.Fatalf("expected plain-out+braced-cur custom completion compgen to escape spaces, got %q", normalized)
+	}
+}
+
+func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithUnquotedOutCur(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`done < <(compgen -W $out -- $cur)`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
+		t.Fatalf("expected unquoted custom completion compgen to escape spaces, got %q", normalized)
+	}
+}
+
+func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithBracedOutUnquotedCur(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`done < <(compgen -W ${out} -- $cur)`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
+		t.Fatalf("expected braced-out custom completion compgen to escape spaces, got %q", normalized)
+	}
+}
+
+func TestNormalizeBashFlagSuggestionsAddsFilenamesCompletionMode(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`complete -o default -o nospace -F __start_declarest declarest`,
+		`complete -o default -F __start_declarest declarest`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if !strings.Contains(normalized, `complete -o default -o filenames -o nospace -F __start_declarest declarest`) {
+		t.Fatalf("expected bash completion to register filenames mode, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `complete -o default -o filenames -F __start_declarest declarest`) {
+		t.Fatalf("expected bash completion branch with compopt to register filenames mode, got %q", normalized)
+	}
+}
+
+func TestNormalizeBashFlagSuggestionsAddsFilenamesToCompoptNospace(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`compopt -o nospace`,
+		`if [[ $(type -t compopt) = "builtin" ]]; then`,
+		`    compopt -o nospace`,
+		`fi`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if strings.Contains(normalized, `compopt -o nospace`) && !strings.Contains(normalized, `compopt -o nospace -o filenames`) {
+		t.Fatalf("expected compopt nospace to include filenames mode, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `compopt -o nospace -o filenames`) {
+		t.Fatalf("expected normalized script to include compopt filenames mode, got %q", normalized)
 	}
 }
