@@ -3206,7 +3206,7 @@ func TestCompletionBashGeneratesScript(t *testing.T) {
 	}
 }
 
-func TestPathCompletionMergesLocalRemoteAndOpenAPI(t *testing.T) {
+func TestPathCompletionResourceGetPrefersRemoteAndOpenAPI(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
@@ -3228,21 +3228,24 @@ func TestPathCompletionMergesLocalRemoteAndOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/customers/local") {
-		t.Fatalf("expected local path completion, got %q", output)
-	}
 	if !strings.Contains(output, "/customers/remote") {
 		t.Fatalf("expected remote path completion, got %q", output)
 	}
+	if strings.Contains(output, "/customers/local") {
+		t.Fatalf("expected get completion to prefer remote items when available, got %q", output)
+	}
 	if !strings.Contains(output, "/customers/{id}") {
 		t.Fatalf("expected OpenAPI path completion, got %q", output)
+	}
+	if len(reconciler.listLocalCalls) > 0 {
+		t.Fatalf("expected get completion to skip local list when remote suggestions are available, calls=%#v", reconciler.listLocalCalls)
 	}
 	if !strings.Contains(output, ":4") {
 		t.Fatalf("expected no-file completion directive, got %q", output)
 	}
 }
 
-func TestPathCompletionExpandsOpenAPITemplatesFromCollectionItems(t *testing.T) {
+func TestPathCompletionExpandsOpenAPITemplatesFromRemoteCollectionItems(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()
@@ -3266,17 +3269,135 @@ func TestPathCompletionExpandsOpenAPITemplatesFromCollectionItems(t *testing.T) 
 		t.Fatalf("unexpected completion error: %v", err)
 	}
 
-	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
-		t.Fatalf("expected local collection item completion, got %q", output)
-	}
 	if !strings.Contains(output, "/admin/realms/master/clients/remote-app") {
 		t.Fatalf("expected remote collection item completion, got %q", output)
 	}
-	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
-		t.Fatalf("expected completion to consult local collection path, calls=%#v", reconciler.listLocalCalls)
+	if strings.Contains(output, "/admin/realms/master/clients/local-app") {
+		t.Fatalf("expected get completion to avoid local fallback when remote collection items are available, got %q", output)
 	}
 	if !containsString(reconciler.listRemoteCalls, "/admin/realms/master/clients") {
 		t.Fatalf("expected completion to consult remote collection path, calls=%#v", reconciler.listRemoteCalls)
+	}
+	if containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected completion to skip local collection fallback when remote items are available, calls=%#v", reconciler.listLocalCalls)
+	}
+}
+
+func TestPathCompletionFallsBackToRepositoryWhenRemoteUnavailable(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master"},
+		{LogicalPath: "/admin/realms/master/clients/local-app"},
+	}
+	reconciler.listRemoteErr = errors.New("remote unavailable")
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/master/clients/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/master/clients/local-app") {
+		t.Fatalf("expected repository fallback completion item, got %q", output)
+	}
+	if !containsString(reconciler.listLocalCalls, "/admin/realms/master/clients") {
+		t.Fatalf("expected fallback completion to consult local collection path, calls=%#v", reconciler.listLocalCalls)
+	}
+}
+
+func TestPathCompletionResourceApplyPrefersRepository(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.localList = []resource.Resource{
+		{LogicalPath: "/customers/local"},
+	}
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/customers/remote"},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "apply", "/customers")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/customers/local") {
+		t.Fatalf("expected repository completion item, got %q", output)
+	}
+	if strings.Contains(output, "/customers/remote") {
+		t.Fatalf("expected apply completion to avoid remote fallback when local suggestions are available, got %q", output)
+	}
+	if len(reconciler.listRemoteCalls) > 0 {
+		t.Fatalf("expected apply completion to skip remote list when local suggestions are available, calls=%#v", reconciler.listRemoteCalls)
+	}
+}
+
+func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/clients/f88c68f3",
+			CollectionPath: "/admin/realms/master/clients",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":       "f88c68f3",
+				"clientId": "account",
+			},
+		},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/master/clients/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/master/clients/account") {
+		t.Fatalf("expected alias-based completion item, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/master/clients/f88c68f3") {
+		t.Fatalf("expected completion to hide id-based segment when alias is available, got %q", output)
+	}
+}
+
+func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/clients/remote-app"},
+	}
+	reconciler.openAPISpec = map[string]any{
+		"paths": map[string]any{
+			"/admin/realms/{realm}/clients/{clientId}": map[string]any{},
+		},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/adm")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/\n") {
+		t.Fatalf("expected collection prefix with trailing slash, got %q", output)
+	}
+	if strings.Contains(output, "/admin\n") {
+		t.Fatalf("expected collection prefix to render with trailing slash only, got %q", output)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	identitysupport "github.com/crmarques/declarest/internal/support/identity"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -31,6 +32,136 @@ var (
 		OutputYAML,
 	}
 )
+
+type completionDataSource uint8
+
+const (
+	completionSourceNone completionDataSource = iota
+	completionSourceLocal
+	completionSourceRemote
+)
+
+type completionSourceStrategy struct {
+	primary      completionDataSource
+	secondary    completionDataSource
+	fallbackOnly bool
+}
+
+func defaultCompletionSourceStrategy() completionSourceStrategy {
+	return completionSourceStrategy{
+		primary:      completionSourceLocal,
+		secondary:    completionSourceRemote,
+		fallbackOnly: false,
+	}
+}
+
+func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStrategy {
+	strategy := defaultCompletionSourceStrategy()
+	if command == nil {
+		return strategy
+	}
+	if command.Parent() == nil || command.Parent().Name() != "resource" {
+		return strategy
+	}
+
+	switch command.Name() {
+	case "get", "save":
+		strategy.primary = completionSourceRemote
+		strategy.secondary = completionSourceLocal
+		strategy.fallbackOnly = true
+
+		if commandFlagEnabled(command, "repository") {
+			strategy.primary = completionSourceLocal
+			strategy.secondary = completionSourceRemote
+		}
+		if commandFlagEnabled(command, "remote-server") {
+			strategy.primary = completionSourceRemote
+			strategy.secondary = completionSourceLocal
+		}
+	case "list":
+		strategy.primary = completionSourceRemote
+		strategy.secondary = completionSourceLocal
+		strategy.fallbackOnly = true
+
+		if commandFlagEnabled(command, "repository") {
+			strategy.primary = completionSourceLocal
+			strategy.secondary = completionSourceRemote
+		}
+		if commandFlagEnabled(command, "remote-server") {
+			strategy.primary = completionSourceRemote
+			strategy.secondary = completionSourceLocal
+		}
+	case "delete":
+		strategy.fallbackOnly = true
+		switch {
+		case commandFlagEnabled(command, "both"):
+			strategy.primary = completionSourceLocal
+			strategy.secondary = completionSourceRemote
+			strategy.fallbackOnly = false
+		case commandFlagEnabled(command, "repository"):
+			strategy.primary = completionSourceLocal
+			strategy.secondary = completionSourceRemote
+		default:
+			strategy.primary = completionSourceRemote
+			strategy.secondary = completionSourceLocal
+		}
+	case "apply", "create", "update", "diff", "explain", "template":
+		strategy.primary = completionSourceLocal
+		strategy.secondary = completionSourceRemote
+		strategy.fallbackOnly = true
+	}
+
+	return strategy
+}
+
+func commandFlagEnabled(command *cobra.Command, flagName string) bool {
+	if command == nil || command.Flags() == nil {
+		return false
+	}
+	flag := command.Flags().Lookup(flagName)
+	if flag == nil {
+		return false
+	}
+	enabled, err := command.Flags().GetBool(flagName)
+	if err != nil {
+		return false
+	}
+	return enabled
+}
+
+func shouldQuerySecondarySource(
+	strategy completionSourceStrategy,
+	primaryCount int,
+	primaryErr error,
+) bool {
+	if strategy.secondary == completionSourceNone || strategy.secondary == strategy.primary {
+		return false
+	}
+	if !strategy.fallbackOnly {
+		return true
+	}
+	if primaryErr != nil {
+		return true
+	}
+	return primaryCount == 0
+}
+
+func listCompletionResources(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	source completionDataSource,
+	logicalPath string,
+	recursive bool,
+) ([]resource.Resource, error) {
+	switch source {
+	case completionSourceLocal:
+		return orchestratorService.ListLocal(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: recursive})
+	case completionSourceRemote:
+		return orchestratorService.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: recursive})
+	default:
+		return nil, nil
+	}
+}
 
 func RegisterOutputFlagCompletion(command *cobra.Command) {
 	RegisterFlagValueCompletions(command, "output", outputCompletionValues)
@@ -114,22 +245,59 @@ func CompleteLogicalPaths(
 	ctx, cancel := completionContext(command.Context())
 	defer cancel()
 
+	strategy := resolveCompletionSourceStrategy(command)
 	localItems := []resource.Resource{}
-	localItems, err = orchestratorService.ListLocal(ctx, "/", orchestratordomain.ListPolicy{Recursive: true})
-	if err == nil {
-		addResourceSuggestions(suggestions, localItems)
+	remoteItems := []resource.Resource{}
+
+	primaryItems, primaryErr := listCompletionResources(
+		ctx,
+		orchestratorService,
+		strategy.primary,
+		"/",
+		true,
+	)
+	if primaryErr == nil {
+		addResourceSuggestions(suggestions, primaryItems)
+		switch strategy.primary {
+		case completionSourceLocal:
+			localItems = primaryItems
+		case completionSourceRemote:
+			remoteItems = primaryItems
+		}
 	}
 
-	remoteItems := []resource.Resource{}
-	remoteItems, err = orchestratorService.ListRemote(ctx, "/", orchestratordomain.ListPolicy{Recursive: true})
-	if err == nil {
-		addResourceSuggestions(suggestions, remoteItems)
+	if shouldQuerySecondarySource(strategy, len(primaryItems), primaryErr) {
+		secondaryItems, secondaryErr := listCompletionResources(
+			ctx,
+			orchestratorService,
+			strategy.secondary,
+			"/",
+			true,
+		)
+		if secondaryErr == nil {
+			addResourceSuggestions(suggestions, secondaryItems)
+			switch strategy.secondary {
+			case completionSourceLocal:
+				localItems = secondaryItems
+			case completionSourceRemote:
+				remoteItems = secondaryItems
+			}
+		}
 	}
 
 	openAPISpec, err := orchestratorService.GetOpenAPISpec(ctx)
 	if err == nil {
 		addOpenAPISuggestions(suggestions, openAPISpec)
-		addSmartOpenAPISuggestions(ctx, orchestratorService, suggestions, localItems, remoteItems, openAPISpec, toComplete)
+		addSmartOpenAPISuggestions(
+			ctx,
+			orchestratorService,
+			suggestions,
+			localItems,
+			remoteItems,
+			openAPISpec,
+			toComplete,
+			strategy,
+		)
 	}
 
 	return filterPathSuggestions(suggestions, toComplete), cobra.ShellCompDirectiveNoFileComp
@@ -167,7 +335,7 @@ func completionContext(base context.Context) (context.Context, context.CancelFun
 func addResourceSuggestions(suggestions map[string]struct{}, items []resource.Resource) {
 	for _, item := range items {
 		addPathSuggestion(suggestions, item.CollectionPath)
-		addPathSuggestion(suggestions, item.LogicalPath)
+		addPathSuggestion(suggestions, completionResourcePath(item))
 	}
 }
 
@@ -185,6 +353,7 @@ func addSmartOpenAPISuggestions(
 	remoteSeed []resource.Resource,
 	openAPISpec resource.Value,
 	toComplete string,
+	sourceStrategy completionSourceStrategy,
 ) {
 	templates := openAPIPathKeys(openAPISpec)
 	if len(templates) == 0 {
@@ -192,7 +361,14 @@ func addSmartOpenAPISuggestions(
 	}
 
 	normalizedPrefix := normalizeCompletionPrefix(toComplete)
-	resolver := newCollectionSegmentResolver(ctx, orchestratorService, localSeed, remoteSeed, maxTemplateQueries)
+	resolver := newCollectionSegmentResolver(
+		ctx,
+		orchestratorService,
+		localSeed,
+		remoteSeed,
+		maxTemplateQueries,
+		sourceStrategy,
+	)
 	for _, templatePath := range templates {
 		normalizedTemplate := normalizePathSuggestion(templatePath)
 		if normalizedTemplate == "" || !containsTemplateSegments(normalizedTemplate) {
@@ -213,6 +389,7 @@ type collectionSegmentResolver struct {
 	orchestratorService orchestratordomain.Orchestrator
 	localSeed           []resource.Resource
 	remoteSeed          []resource.Resource
+	sourceStrategy      completionSourceStrategy
 	cache               map[string][]string
 	queryBudget         int
 }
@@ -223,12 +400,14 @@ func newCollectionSegmentResolver(
 	localSeed []resource.Resource,
 	remoteSeed []resource.Resource,
 	maxQueries int,
+	sourceStrategy completionSourceStrategy,
 ) *collectionSegmentResolver {
 	return &collectionSegmentResolver{
 		ctx:                 ctx,
 		orchestratorService: orchestratorService,
 		localSeed:           localSeed,
 		remoteSeed:          remoteSeed,
+		sourceStrategy:      sourceStrategy,
 		cache:               map[string][]string{},
 		queryBudget:         maxQueries,
 	}
@@ -243,27 +422,73 @@ func (r *collectionSegmentResolver) Resolve(collectionPath string) []string {
 		return cached
 	}
 
-	segments := map[string]struct{}{}
-	addDirectChildSegmentsFromResources(segments, normalizedCollectionPath, r.localSeed)
-	addDirectChildSegmentsFromResources(segments, normalizedCollectionPath, r.remoteSeed)
-
-	if r.queryBudget > 0 {
-		if localItems, err := r.orchestratorService.ListLocal(r.ctx, normalizedCollectionPath, orchestratordomain.ListPolicy{}); err == nil {
-			addDirectChildSegmentsFromResources(segments, normalizedCollectionPath, localItems)
-		}
-		r.queryBudget--
+	primarySegments := map[string]struct{}{}
+	addDirectChildSegmentsFromSource(
+		primarySegments,
+		normalizedCollectionPath,
+		r.sourceStrategy.primary,
+		r.localSeed,
+		r.remoteSeed,
+	)
+	primaryItems, primaryErr := r.listCollectionChildren(normalizedCollectionPath, r.sourceStrategy.primary)
+	if primaryErr == nil {
+		addDirectChildSegmentsFromResources(primarySegments, normalizedCollectionPath, primaryItems)
 	}
 
-	if r.queryBudget > 0 {
-		if remoteItems, err := r.orchestratorService.ListRemote(r.ctx, normalizedCollectionPath, orchestratordomain.ListPolicy{}); err == nil {
-			addDirectChildSegmentsFromResources(segments, normalizedCollectionPath, remoteItems)
+	segments := primarySegments
+	if shouldQuerySecondarySource(r.sourceStrategy, len(primarySegments), primaryErr) {
+		addDirectChildSegmentsFromSource(
+			segments,
+			normalizedCollectionPath,
+			r.sourceStrategy.secondary,
+			r.localSeed,
+			r.remoteSeed,
+		)
+		secondaryItems, secondaryErr := r.listCollectionChildren(
+			normalizedCollectionPath,
+			r.sourceStrategy.secondary,
+		)
+		if secondaryErr == nil {
+			addDirectChildSegmentsFromResources(segments, normalizedCollectionPath, secondaryItems)
 		}
-		r.queryBudget--
 	}
 
 	resolved := sortedSetValues(segments)
 	r.cache[normalizedCollectionPath] = resolved
 	return resolved
+}
+
+func addDirectChildSegmentsFromSource(
+	destination map[string]struct{},
+	collectionPath string,
+	source completionDataSource,
+	localSeed []resource.Resource,
+	remoteSeed []resource.Resource,
+) {
+	switch source {
+	case completionSourceLocal:
+		addDirectChildSegmentsFromResources(destination, collectionPath, localSeed)
+	case completionSourceRemote:
+		addDirectChildSegmentsFromResources(destination, collectionPath, remoteSeed)
+	}
+}
+
+func (r *collectionSegmentResolver) listCollectionChildren(
+	collectionPath string,
+	source completionDataSource,
+) ([]resource.Resource, error) {
+	if source == completionSourceNone || r.queryBudget <= 0 {
+		return nil, nil
+	}
+	r.queryBudget--
+
+	return listCompletionResources(
+		r.ctx,
+		r.orchestratorService,
+		source,
+		collectionPath,
+		false,
+	)
 }
 
 func addDirectChildSegmentsFromResources(
@@ -273,8 +498,50 @@ func addDirectChildSegmentsFromResources(
 ) {
 	for _, item := range items {
 		addDirectChildSegment(destination, parentPath, item.CollectionPath)
-		addDirectChildSegment(destination, parentPath, item.LogicalPath)
+		addDirectChildSegment(destination, parentPath, completionResourcePath(item))
 	}
+}
+
+func completionResourcePath(item resource.Resource) string {
+	normalizedLogicalPath := normalizePathSuggestion(item.LogicalPath)
+	if normalizedLogicalPath == "" || normalizedLogicalPath == "/" {
+		return normalizedLogicalPath
+	}
+
+	collectionPath := normalizePathSuggestion(item.CollectionPath)
+	if collectionPath == "" {
+		collectionPath = normalizePathSuggestion(path.Dir(normalizedLogicalPath))
+	}
+
+	aliasSegment := completionAliasSegment(item)
+	if aliasSegment == "" || aliasSegment == "_" || strings.Contains(aliasSegment, "/") {
+		return normalizedLogicalPath
+	}
+
+	if collectionPath == "" || collectionPath == "/" {
+		return normalizePathSuggestion("/" + aliasSegment)
+	}
+	return appendPathSegment(collectionPath, aliasSegment)
+}
+
+func completionAliasSegment(item resource.Resource) string {
+	if payloadMap, ok := item.Payload.(map[string]any); ok {
+		if aliasAttribute := strings.TrimSpace(item.Metadata.AliasFromAttribute); aliasAttribute != "" {
+			if value, found := identitysupport.LookupScalarAttribute(payloadMap, aliasAttribute); found {
+				trimmedValue := strings.TrimSpace(value)
+				if trimmedValue != "" {
+					return trimmedValue
+				}
+			}
+		}
+	}
+
+	trimmedAlias := strings.TrimSpace(item.LocalAlias)
+	if trimmedAlias != "" && trimmedAlias != "/" {
+		return trimmedAlias
+	}
+
+	return strings.TrimSpace(path.Base(item.LogicalPath))
 }
 
 func addDirectChildSegment(destination map[string]struct{}, parentPath string, candidatePath string) {
@@ -577,11 +844,56 @@ func filterPathSuggestions(suggestions map[string]struct{}, toComplete string) [
 		}
 		items = append(items, value)
 	}
+
+	items = renderCollectionSuggestionsWithTrailingSlash(items)
 	sort.Strings(items)
 	if len(items) > maxCompletionSuggestions {
 		items = items[:maxCompletionSuggestions]
 	}
 	return items
+}
+
+func renderCollectionSuggestionsWithTrailingSlash(items []string) []string {
+	if len(items) == 0 {
+		return items
+	}
+
+	normalizedItems := make([]string, 0, len(items))
+	for _, item := range items {
+		normalized := normalizePathSuggestion(item)
+		if normalized == "" {
+			continue
+		}
+		normalizedItems = append(normalizedItems, normalized)
+	}
+
+	collections := make(map[string]struct{})
+	for _, parent := range normalizedItems {
+		if parent == "/" {
+			continue
+		}
+		parentPrefix := strings.TrimSuffix(parent, "/") + "/"
+		for _, candidate := range normalizedItems {
+			if candidate == parent {
+				continue
+			}
+			if strings.HasPrefix(candidate, parentPrefix) {
+				collections[parent] = struct{}{}
+				break
+			}
+		}
+	}
+
+	rendered := make(map[string]struct{}, len(normalizedItems))
+	for _, item := range normalizedItems {
+		if _, collection := collections[item]; collection {
+			rendered[item+"/"] = struct{}{}
+			continue
+		}
+		rendered[item] = struct{}{}
+	}
+
+	return sortedSetValues(rendered)
 }
 
 func sortedSetValues(values map[string]struct{}) []string {

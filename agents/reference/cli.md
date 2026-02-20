@@ -28,7 +28,9 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 11. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
 12. Non-runtime commands (`version`, `config create|print-template|add|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
 13. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
-14. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing local and remote collection children with metadata-aware path semantics.
+14. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
+15. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), while repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates.
+16. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasFromAttribute` values for displayed path segments over ID-only segments when aliases are available, and collection-prefix suggestions SHOULD include a trailing `/`.
 
 ## Data Contracts
 Command groups:
@@ -333,3 +335,5 @@ Interactive config commands:
 72. `declarest repo push` fails with `ValidationError` when the active context repository type is `filesystem`.
 73. `declarest repo status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
 74. `declarest config create` interactive flow always prompts `managed-server` fields and allows `resource-format` to remain unset via remote-default selection.
+75. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.
+76. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasFromAttribute` (for example `account`) instead of ID-only segments.
