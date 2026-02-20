@@ -198,8 +198,15 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	if !serverManager.listCalled {
 		t.Fatal("expected fallback list call after not found get")
 	}
-	if got := serverManager.lastListPath; got != "/admin/realms/master/clients" {
-		t.Fatalf("expected fallback list path /admin/realms/master/clients, got %q", got)
+	foundCollectionFallback := false
+	for _, listPath := range serverManager.listPaths {
+		if listPath == "/admin/realms/master/clients" {
+			foundCollectionFallback = true
+			break
+		}
+	}
+	if !foundCollectionFallback {
+		t.Fatalf("expected fallback list to include /admin/realms/master/clients, got %#v", serverManager.listPaths)
 	}
 	payload, ok := value.(map[string]any)
 	if !ok {
@@ -207,6 +214,186 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	}
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected alias-matched payload, got %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallback(t *testing.T) {
+	t.Parallel()
+
+	aliasPath := "/admin/realms/publico-br/organizations/teste"
+	resolvedIDPath := "/admin/realms/publico-br/organizations/71ba388d-9f95-4a4d-b674-a632f697b732"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getValues: map[string]resource.Value{
+			resolvedIDPath: map[string]any{
+				"id":    "71ba388d-9f95-4a4d-b674-a632f697b732",
+				"alias": "teste",
+				"name":  "teste ltda",
+			},
+		},
+		listValues: map[string][]resource.Resource{
+			"/admin/realms/publico-br/organizations": {
+				{
+					LogicalPath: aliasPath,
+					LocalAlias:  "teste",
+					RemoteID:    "71ba388d-9f95-4a4d-b674-a632f697b732",
+					Payload: map[string]any{
+						"id":    "71ba388d-9f95-4a4d-b674-a632f697b732",
+						"alias": "teste",
+					},
+				},
+			},
+		},
+		listErrs: map[string]error{
+			aliasPath: faults.NewTypedError(faults.NotFoundError, "collection not found", nil),
+		},
+		openAPISpec: map[string]any{
+			"paths": map[string]any{
+				"/admin/realms/{realm}/organizations/{organization}": map[string]any{
+					"get": map[string]any{},
+				},
+				"/admin/realms/{realm}/organizations/{organization}/domains": map[string]any{
+					"get": map[string]any{},
+				},
+			},
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValues: map[string]metadatadomain.ResourceMetadata{
+				aliasPath: {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+				resolvedIDPath: {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+			},
+		},
+		Server: serverManager,
+	}
+
+	value, err := reconciler.GetRemote(context.Background(), aliasPath)
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	if !reflect.DeepEqual(serverManager.getPaths, []string{aliasPath, resolvedIDPath}) {
+		t.Fatalf("expected literal get then metadata-resolved id get, got %#v", serverManager.getPaths)
+	}
+	for _, listPath := range serverManager.listPaths {
+		if listPath == aliasPath {
+			t.Fatalf("expected metadata id fallback to run before collection fallback, list calls=%#v", serverManager.listPaths)
+		}
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload from resolved id read, got %T", value)
+	}
+	if payload["id"] != "71ba388d-9f95-4a4d-b674-a632f697b732" || payload["alias"] != "teste" {
+		t.Fatalf("unexpected payload from metadata id fallback: %#v", payload)
+	}
+}
+
+func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t *testing.T) {
+	t.Parallel()
+
+	aliasPath := "/admin/realms/publico-br/organizations/teste"
+	resolvedRealmPath := "/admin/realms/realm-1/organizations/teste"
+	resolvedResourcePath := "/admin/realms/realm-1/organizations/org-1"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		getValues: map[string]resource.Value{
+			resolvedResourcePath: map[string]any{
+				"id":    "org-1",
+				"alias": "teste",
+				"name":  "Teste LTDA",
+			},
+		},
+		listValues: map[string][]resource.Resource{
+			"/admin/realms": {
+				{
+					LogicalPath: "/admin/realms/publico-br",
+					LocalAlias:  "publico-br",
+					RemoteID:    "realm-1",
+					Payload: map[string]any{
+						"id":    "realm-1",
+						"alias": "publico-br",
+					},
+				},
+			},
+			"/admin/realms/realm-1/organizations": {
+				{
+					LogicalPath: "/admin/realms/realm-1/organizations/teste",
+					LocalAlias:  "teste",
+					RemoteID:    "org-1",
+					Payload: map[string]any{
+						"id":    "org-1",
+						"alias": "teste",
+					},
+				},
+			},
+		},
+		listErrs: map[string]error{
+			"/admin/realms/publico-br/organizations": faults.NewTypedError(
+				faults.NotFoundError,
+				"resource not found",
+				nil,
+			),
+		},
+	}
+
+	reconciler := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValues: map[string]metadatadomain.ResourceMetadata{
+				aliasPath: {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+				resolvedRealmPath: {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+				resolvedResourcePath: {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+				"/admin/realms/publico-br": {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+				"/admin/realms/realm-1": {
+					IDFromAttribute:    "id",
+					AliasFromAttribute: "alias",
+				},
+			},
+		},
+		Server: serverManager,
+	}
+
+	value, err := reconciler.GetRemote(context.Background(), aliasPath)
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	if !reflect.DeepEqual(serverManager.getPaths, []string{aliasPath, resolvedRealmPath, resolvedResourcePath}) {
+		t.Fatalf(
+			"expected recursive higher-level metadata fallback path search, got get calls %#v",
+			serverManager.getPaths,
+		)
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload, got %T", value)
+	}
+	if payload["id"] != "org-1" || payload["alias"] != "teste" {
+		t.Fatalf("unexpected recursively-resolved payload: %#v", payload)
 	}
 }
 
@@ -663,8 +850,10 @@ func (f *fakeRepository) SyncStatus(context.Context) (repository.SyncReport, err
 }
 
 type fakeMetadata struct {
-	resolveValue metadatadomain.ResourceMetadata
-	resolveErr   error
+	resolveValue  metadatadomain.ResourceMetadata
+	resolveValues map[string]metadatadomain.ResourceMetadata
+	resolveErr    error
+	resolveCalls  []string
 }
 
 func (f *fakeMetadata) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
@@ -679,9 +868,15 @@ func (f *fakeMetadata) Unset(context.Context, string) error {
 	return nil
 }
 
-func (f *fakeMetadata) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+func (f *fakeMetadata) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	f.resolveCalls = append(f.resolveCalls, logicalPath)
 	if f.resolveErr != nil {
 		return metadatadomain.ResourceMetadata{}, f.resolveErr
+	}
+	if f.resolveValues != nil {
+		if value, found := f.resolveValues[logicalPath]; found {
+			return value, nil
+		}
 	}
 	return f.resolveValue, nil
 }
@@ -701,11 +896,14 @@ func (f *fakeMetadata) Infer(context.Context, string, metadatadomain.InferenceRe
 
 type fakeServer struct {
 	getValue    resource.Value
+	getValues   map[string]resource.Value
 	getErr      error
 	createValue resource.Value
 	updateValue resource.Value
 	listValue   []resource.Resource
+	listValues  map[string][]resource.Resource
 	listErr     error
+	listErrs    map[string]error
 	existsValue bool
 	existsErr   error
 	adHocValue  resource.Value
@@ -717,6 +915,7 @@ type fakeServer struct {
 	updateCalled    bool
 	deleteCalled    bool
 	getCalled       bool
+	getPaths        []string
 	listCalled      bool
 	adHocCalled     bool
 	adHocMethod     string
@@ -733,6 +932,12 @@ type fakeServer struct {
 func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource) (resource.Value, error) {
 	f.getCalled = true
 	f.lastResource = resourceInfo
+	f.getPaths = append(f.getPaths, resourceInfo.LogicalPath)
+	if f.getValues != nil {
+		if value, found := f.getValues[resourceInfo.LogicalPath]; found {
+			return value, nil
+		}
+	}
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
@@ -767,6 +972,16 @@ func (f *fakeServer) List(_ context.Context, logicalPath string, _ metadatadomai
 	f.listCalled = true
 	f.lastListPath = logicalPath
 	f.listPaths = append(f.listPaths, logicalPath)
+	if f.listErrs != nil {
+		if err, found := f.listErrs[logicalPath]; found {
+			return nil, err
+		}
+	}
+	if f.listValues != nil {
+		if items, found := f.listValues[logicalPath]; found {
+			return items, nil
+		}
+	}
 	if f.listErr != nil {
 		return nil, f.listErr
 	}

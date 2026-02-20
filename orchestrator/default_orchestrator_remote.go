@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/support/identity"
 	"github.com/crmarques/declarest/internal/support/templatescope"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
@@ -104,6 +105,14 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 		return nil, err
 	}
 
+	metadataFallbackValue, metadataHandled, metadataErr := r.fetchRemoteMetadataPathFallbackValue(ctx, serverManager, resourceInfo)
+	if metadataHandled {
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
+		return metadataFallbackValue, nil
+	}
+
 	collectionValue, handled, collectionErr := r.fetchRemoteCollectionValue(ctx, serverManager, resourceInfo)
 	if handled {
 		if collectionErr != nil {
@@ -143,6 +152,143 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 			nil,
 		)
 	}
+}
+
+func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	resourceInfo resource.Resource,
+) (resource.Value, bool, error) {
+	visited := map[string]struct{}{
+		resourceInfo.LogicalPath: {},
+	}
+	queue := []string{resourceInfo.LogicalPath}
+
+	for len(queue) > 0 {
+		currentPath := queue[0]
+		queue = queue[1:]
+
+		if currentPath != resourceInfo.LogicalPath {
+			currentInfo, infoErr := r.buildResourceInfoForRemoteRead(ctx, currentPath)
+			if infoErr != nil {
+				return nil, true, infoErr
+			}
+
+			currentValue, currentErr := serverManager.Get(ctx, currentInfo)
+			if currentErr == nil {
+				return currentValue, true, nil
+			}
+			if !isTypedCategory(currentErr, faults.NotFoundError) {
+				return nil, true, currentErr
+			}
+		}
+
+		nextPaths, nextErr := r.resolveNextRemoteMetadataFallbackPaths(ctx, serverManager, currentPath)
+		if nextErr != nil {
+			return nil, true, nextErr
+		}
+
+		for _, nextPath := range nextPaths {
+			if _, exists := visited[nextPath]; exists {
+				continue
+			}
+			visited[nextPath] = struct{}{}
+			queue = append(queue, nextPath)
+		}
+	}
+
+	return nil, false, nil
+}
+
+func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	logicalPath string,
+) ([]string, error) {
+	segments := splitLogicalPathSegments(logicalPath)
+	if len(segments) == 0 {
+		return nil, nil
+	}
+
+	for segmentIndex := len(segments) - 1; segmentIndex >= 0; segmentIndex-- {
+		segmentPath := "/" + strings.Join(segments[:segmentIndex+1], "/")
+		segmentInfo, infoErr := r.buildResourceInfoForRemoteRead(ctx, segmentPath)
+		if infoErr != nil {
+			return nil, infoErr
+		}
+		if !hasRemoteFallbackIdentityMetadata(segmentInfo.Metadata) {
+			continue
+		}
+
+		candidates, listErr := serverManager.List(ctx, segmentInfo.CollectionPath, segmentInfo.Metadata)
+		if listErr != nil {
+			if isTypedCategory(listErr, faults.NotFoundError) || isFallbackListPayloadShapeError(listErr) {
+				continue
+			}
+			return nil, listErr
+		}
+
+		matched := make([]resource.Resource, 0, len(candidates))
+		for _, candidate := range candidates {
+			if matchesLocalFallbackIdentity(segmentInfo, candidate.LocalAlias, candidate.RemoteID, candidate.Payload) {
+				matched = append(matched, candidate)
+			}
+		}
+
+		switch len(matched) {
+		case 0:
+			continue
+		case 1:
+			replacement := remoteFallbackSegmentValue(matched[0], segmentInfo.Metadata)
+			if strings.TrimSpace(replacement) == "" || replacement == segments[segmentIndex] {
+				continue
+			}
+
+			nextSegments := make([]string, len(segments))
+			copy(nextSegments, segments)
+			nextSegments[segmentIndex] = replacement
+
+			nextPath, normalizeErr := resource.NormalizeLogicalPath("/" + strings.Join(nextSegments, "/"))
+			if normalizeErr != nil {
+				return nil, normalizeErr
+			}
+			return []string{nextPath}, nil
+		default:
+			return nil, faults.NewTypedError(
+				faults.ConflictError,
+				fmt.Sprintf("remote fallback for %q is ambiguous", logicalPath),
+				nil,
+			)
+		}
+	}
+
+	return nil, nil
+}
+
+func remoteFallbackSegmentValue(candidate resource.Resource, md metadata.ResourceMetadata) string {
+	if value := strings.TrimSpace(candidate.RemoteID); value != "" {
+		return value
+	}
+
+	payload, ok := candidate.Payload.(map[string]any)
+	if ok {
+		for _, attribute := range identityAttributeCandidates(md) {
+			value, found := identity.LookupScalarAttribute(payload, attribute)
+			if !found || strings.TrimSpace(value) == "" {
+				continue
+			}
+			return strings.TrimSpace(value)
+		}
+	}
+	if value := strings.TrimSpace(candidate.LocalAlias); value != "" {
+		return value
+	}
+
+	return ""
+}
+
+func hasRemoteFallbackIdentityMetadata(md metadata.ResourceMetadata) bool {
+	return strings.TrimSpace(md.IDFromAttribute) != "" || strings.TrimSpace(md.AliasFromAttribute) != ""
 }
 
 func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
