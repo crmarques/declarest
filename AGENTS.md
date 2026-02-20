@@ -68,6 +68,12 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
 14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
 
+## Spec Quality Criteria
+1. Efficiency: keep workflows and rules minimal; reference canonical sources instead of repeating full rule sets.
+2. Assertivity: use `MUST`, `SHOULD`, and `MAY` consistently, with explicit conditions and outcomes.
+3. Objectivity: define observable, testable expectations and avoid subjective wording without measurable checks.
+4. Redundancy control: when duplicate guidance is discovered, keep one canonical source and replace duplicates with references.
+
 ## Completion Checklist
 1. Changed behavior is captured in the correct domain files.
 2. Interface references match `agents/reference/interfaces.md` exactly.
@@ -76,3 +82,4 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 5. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
 6. Verification scope is documented (commands run, blockers, and residual risks).
 7. No unnecessary file fragmentation was introduced.
+8. Spec updates satisfy the efficiency/assertivity/objectivity/redundancy criteria above.

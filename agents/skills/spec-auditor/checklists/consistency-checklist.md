@@ -23,7 +23,7 @@
 3. Structured output expectations are stable.
 
 ## Routing and Skill Integrity
-1. `AGENTS.md` request matrix and `agents/skills/spec-router/SKILL.md` route map are consistent for overlapping request types.
+1. `AGENTS.md` request matrix remains canonical and `agents/skills/spec-router/SKILL.md` supplemental routing rules do not contradict it.
 2. Skill order and trigger guidance are consistent between `AGENTS.md` and each `agents/skills/*/SKILL.md`.
 3. All skill references point to existing files and use stable paths.
 
@@ -38,3 +38,9 @@
 2. Split triggers are documented and applied consistently.
 3. No unnecessary placeholder or duplicate files exist.
 4. Completion checklist requirements are achievable from the documented workflows.
+
+## Spec Quality Integrity
+1. Rules are efficient and do not duplicate canonical guidance unnecessarily.
+2. Normative language is assertive and uses `MUST`/`SHOULD`/`MAY` consistently.
+3. Requirements are objective, observable, and testable.
+4. Redundant rules are consolidated to one canonical source with cross-references.

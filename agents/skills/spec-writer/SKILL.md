@@ -22,6 +22,8 @@ description: Author or revise instruction/spec files with implementation-ready, 
 4. Use normative keywords consistently (`MUST`, `SHOULD`, `MAY`) and avoid ambiguous wording.
 5. Keep examples concise and tied to real behavior.
 6. Prefer deterministic, testable phrasing (explicit condition and expected outcome).
+7. Optimize for efficiency by minimizing repeated guidance and cross-referencing canonical files.
+8. Keep wording objective: specify observable behavior instead of intent-only language.
 
 ## Split Triggers
 1. Mixed concerns in one file.
