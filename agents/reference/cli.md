@@ -184,6 +184,8 @@ Interactive config commands:
 75. `repo push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
 76. Context-catalog mutations (`config create|add|update|validate`) MUST fail validation when `resource-server` is omitted.
 77. Interactive `config create` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
+78. `resource get` with an explicit trailing slash collection marker and remote source (`--remote-server` or default) MUST execute remote list resolution for the normalized collection path instead of single-resource read.
+79. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -349,3 +351,5 @@ Interactive config commands:
 81. `declarest config create` interactive flow always prompts `resource-server` fields and allows `resource-format` to remain unset via remote-default selection.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.
 83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasFromAttribute` (for example `account`) instead of ID-only segments.
+84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
+85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.

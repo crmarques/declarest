@@ -142,7 +142,7 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 
 	switch len(matched) {
 	case 0:
-		if allowsSingletonListIdentityFallback(resourceInfo.Metadata, candidates) {
+		if allowsSingletonListIdentityFallback(resourceInfo.LogicalPath, resourceInfo.Metadata, candidates) {
 			return candidates[0].Payload, nil
 		}
 		return nil, err
@@ -286,7 +286,7 @@ func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
 
 		switch len(matched) {
 		case 0:
-			if allowsSingletonListIdentityFallback(segmentInfo.Metadata, candidates) {
+			if allowsSingletonListIdentityFallback(segmentPath, segmentInfo.Metadata, candidates) {
 				nextPath, replaced, replaceErr := replaceLogicalPathSegment(
 					segments,
 					segmentIndex,
@@ -396,10 +396,14 @@ func matchesRemoteFallbackCandidate(resourceInfo resource.Resource, candidate re
 }
 
 func allowsSingletonListIdentityFallback(
+	logicalPath string,
 	md metadata.ResourceMetadata,
 	candidates []resource.Resource,
 ) bool {
 	if len(candidates) != 1 {
+		return false
+	}
+	if !singletonFallbackWithinSelectorDepth(logicalPath, md) {
 		return false
 	}
 
@@ -415,6 +419,27 @@ func allowsSingletonListIdentityFallback(
 		return false
 	}
 	return strings.TrimSpace(listSpec.JQ) != ""
+}
+
+func singletonFallbackWithinSelectorDepth(logicalPath string, md metadata.ResourceMetadata) bool {
+	trimmedTemplate := strings.TrimSpace(md.CollectionPath)
+	if trimmedTemplate == "" {
+		return true
+	}
+
+	templateDepth := len(splitLogicalPathSegments(trimmedTemplate))
+	if templateDepth == 0 {
+		return true
+	}
+
+	logicalDepth := len(splitLogicalPathSegments(logicalPath))
+	if logicalDepth == 0 {
+		return true
+	}
+
+	// Limit singleton fallback to selector depth (for example /.../user-registry),
+	// and avoid collapsing explicit child identities like /.../user-registry/<name>.
+	return logicalDepth <= templateDepth
 }
 
 func (r *DefaultOrchestrator) fetchRemoteCollectionValue(

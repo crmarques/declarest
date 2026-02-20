@@ -984,6 +984,67 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		}
 	})
 
+	t.Run("list_operation_jq_resource_function_renders_name_from_parent_path", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/admin/realms/publico-br/components" {
+				t.Fatalf("expected list request path /admin/realms/publico-br/components, got %q", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"id":"mapper-a","name":"alpha","parentId":"ldap-id"},
+				  {"id":"mapper-b","name":"beta","parentId":"other-id"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		var resolverCalls int32
+		ctx := serverdomain.WithListJQResourceResolver(
+			context.Background(),
+			func(_ context.Context, logicalPath string) (resource.Value, error) {
+				atomic.AddInt32(&resolverCalls, 1)
+				if logicalPath != "/admin/realms/publico-br/user-registry/AD" {
+					t.Fatalf("unexpected resolved logical path %q", logicalPath)
+				}
+				return map[string]any{"id": "ldap-id"}, nil
+			},
+		)
+
+		items, err := gateway.List(ctx, "/admin/realms/publico-br/user-registry/AD/mappers", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.name}}/") | .id)) ]`,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+
+		if len(items) != 1 {
+			t.Fatalf("expected jq-filtered list with 1 item, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/admin/realms/publico-br/user-registry/AD/mappers/alpha" {
+			t.Fatalf("unexpected filtered logical path %#v", items[0].LogicalPath)
+		}
+		if got := atomic.LoadInt32(&resolverCalls); got != 1 {
+			t.Fatalf("expected context resolver to be called once, got %d", got)
+		}
+	})
+
 	t.Run("invalid_list_jq_returns_validation_error", func(t *testing.T) {
 		t.Parallel()
 

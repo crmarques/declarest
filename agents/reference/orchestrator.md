@@ -26,7 +26,7 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 9. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
 10. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
 11. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint.
-12. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering; this singleton candidate MUST be deterministic and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
+12. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering, but only when the requested logical path depth does not exceed the resolved selector/collection template depth; singleton fallback MUST NOT collapse explicit child identity segments and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
 
 ## Data Contracts
 Core orchestrator workflows:

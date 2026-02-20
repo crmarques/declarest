@@ -46,5 +46,15 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 
 		filtered = append(filtered, normalizedLine)
 	}
-	return bytes.Join(filtered, []byte{'\n'})
+	normalized := bytes.Join(filtered, []byte{'\n'})
+
+	// Bash `compgen -W` splits completion words by spaces. Escape spaces in
+	// dynamic custom-completion values so aliases like "AD PRD" stay intact.
+	normalized = bytes.ReplaceAll(
+		normalized,
+		[]byte(`compgen -W "${out}" -- "$cur"`),
+		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
+	)
+
+	return normalized
 }

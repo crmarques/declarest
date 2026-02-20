@@ -293,6 +293,56 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 	}
 }
 
+func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate(t *testing.T) {
+	t.Parallel()
+
+	requestPath := "/admin/realms/publico-br/user-registry/xxx"
+	expectedSingletonAliasPath := "/admin/realms/publico-br/user-registry/AD PRD"
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listValues: map[string][]resource.Resource{
+			"/admin/realms/publico-br/user-registry": {
+				{
+					LogicalPath: expectedSingletonAliasPath,
+					LocalAlias:  "AD PRD",
+					RemoteID:    "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+					Payload: map[string]any{
+						"id":         "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+						"name":       "AD PRD",
+						"providerId": "ldap",
+					},
+				},
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+				CollectionPath:     "/admin/realms/{{.realm}}/components",
+				Operations: map[string]metadatadomain.OperationSpec{
+					string(metadatadomain.OperationList): {
+						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+					},
+				},
+			},
+		},
+		Server: serverManager,
+	}
+
+	_, err := orchestrator.GetRemote(context.Background(), requestPath)
+	assertTypedCategory(t, err, faults.NotFoundError)
+
+	for _, path := range serverManager.getPaths {
+		if path == expectedSingletonAliasPath {
+			t.Fatalf("expected explicit child lookup to keep NotFound and avoid singleton alias collapse, get calls %#v", serverManager.getPaths)
+		}
+	}
+}
+
 func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *testing.T) {
 	t.Parallel()
 

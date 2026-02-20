@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
@@ -27,11 +28,13 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 		Short: "Read a resource",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			requestedPath, err := common.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
-			resolvedPath, err = resource.NormalizeLogicalPath(resolvedPath)
+			explicitCollectionTarget := hasCollectionTargetMarker(requestedPath)
+
+			resolvedPath, err := resource.NormalizeLogicalPath(requestedPath)
 			if err != nil {
 				return err
 			}
@@ -57,6 +60,11 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			orchestratorService, err := common.RequireOrchestrator(deps)
 			if err != nil {
 				return err
+			}
+
+			if source == sourceRemoteServer && explicitCollectionTarget {
+				debugctx.Printf(command.Context(), "resource get treating %q as remote collection listing", resolvedPath)
+				return renderRemoteCollection(command, outputFormat, deps, orchestratorService, resolvedPath, showSecrets)
 			}
 
 			var value resource.Value
@@ -135,6 +143,33 @@ func renderRepositoryCollection(
 		return err
 	}
 
+	return renderCollection(command, outputFormat, deps, items, showSecrets)
+}
+
+func renderRemoteCollection(
+	command *cobra.Command,
+	outputFormat string,
+	deps common.CommandDependencies,
+	orchestratorService orchestrator.Orchestrator,
+	logicalPath string,
+	showSecrets bool,
+) error {
+	items, err := orchestratorService.ListRemote(command.Context(), logicalPath, orchestrator.ListPolicy{})
+	if err != nil {
+		return err
+	}
+
+	return renderCollection(command, outputFormat, deps, items, showSecrets)
+}
+
+func renderCollection(
+	command *cobra.Command,
+	outputFormat string,
+	deps common.CommandDependencies,
+	items []resource.Resource,
+	showSecrets bool,
+) error {
+
 	if !showSecrets {
 		maskedItems := make([]resource.Resource, 0, len(items))
 		for _, item := range items {
@@ -172,6 +207,11 @@ func renderRepositoryCollection(
 		}
 		return nil
 	})
+}
+
+func hasCollectionTargetMarker(rawPath string) bool {
+	trimmed := strings.TrimSpace(rawPath)
+	return trimmed != "" && trimmed != "/" && strings.HasSuffix(trimmed, "/")
 }
 
 func maskGetSecretsForOutput(

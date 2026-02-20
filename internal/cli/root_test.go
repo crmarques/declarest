@@ -291,6 +291,52 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("remote_collection_marker_uses_list_remote", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/publico-br/user-registry/AD/mappers/alpha",
+				Payload: map[string]any{
+					"id":   "mapper-a",
+					"name": "alpha",
+				},
+			},
+			{
+				LogicalPath: "/admin/realms/publico-br/user-registry/AD/mappers/beta",
+				Payload: map[string]any{
+					"id":   "mapper-b",
+					"name": "beta",
+				},
+			},
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/admin/realms/publico-br/user-registry/AD/mappers/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(orchestrator.getRemoteCalls) != 0 {
+			t.Fatalf("expected no remote get calls for explicit collection target, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(
+			orchestrator.listRemoteCalls,
+			[]string{"/admin/realms/publico-br/user-registry/AD/mappers"},
+		) {
+			t.Fatalf("expected remote list call for normalized collection path, got %#v", orchestrator.listRemoteCalls)
+		}
+		if !strings.Contains(output, "\"name\": \"alpha\"") || !strings.Contains(output, "\"name\": \"beta\"") {
+			t.Fatalf("expected collection payload output, got %q", output)
+		}
+	})
+
 	t.Run("repository_and_remote_server_flags_conflict", func(t *testing.T) {
 		t.Parallel()
 
@@ -3533,6 +3579,42 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 	}
 	if strings.Contains(output, "/admin/realms/master/clients/f88c68f3") {
 		t.Fatalf("expected completion to hide id-based segment when alias is available, got %q", output)
+	}
+}
+
+func TestPathCompletionPreservesAliasesWithSpaces(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/publico-br/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			CollectionPath: "/admin/realms/publico-br/user-registry",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/publico-br/user-registry/A",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/publico-br/user-registry/AD PRD") {
+		t.Fatalf("expected completion output to keep alias spaces, got %q", output)
 	}
 }
 
