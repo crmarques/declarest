@@ -121,7 +121,7 @@ Interactive config commands:
 5. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
 6. `resource get` MUST support mutually exclusive `--repository` and `--remote-server` flags.
 7. `resource get` MUST default to `--remote-server` when neither source flag is provided, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
-8. `resource get` MUST redact values for metadata-declared `secretsFromAttributes` using `{{secret .}}` placeholders for both `--repository` and `--remote-server` output by default.
+8. `resource get` MUST redact values for metadata-declared `resourceInfo.secretInAttributes` using `{{secret .}}` placeholders for both `--repository` and `--remote-server` output by default.
 9. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
 10. `resource list` MUST support mutually exclusive `--repository` and `--remote-server` flags.
 11. `resource list` MUST default to `--remote-server` when neither source flag is provided.
@@ -137,16 +137,16 @@ Interactive config commands:
 21. `resource save` without payload input (`--file` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 22. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 23. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
-24. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `secretsFromAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
+24. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
 25. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
-26. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `secretsFromAttributes` for the saved logical path.
+26. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
 27. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>`, resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`, and remain compatible with legacy absolute key placeholders.
 28. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
 29. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
-30. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `secretsFromAttributes`.
+30. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resourceInfo.secretInAttributes`.
 31. `secret detect` without input payload (`--file` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 32. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
-33. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `secretsFromAttributes` for each detected resource path in scope.
+33. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for each detected resource path in scope.
 34. `secret detect --secret-attribute <attr>` MUST apply only that detected attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
 71. `secret get` MUST accept `secret get <path>`, `secret get <path> <key>`, `secret get --path <path>`, `secret get --path <path> --key <key>`, and `secret get <path>:<key>` in addition to direct key mode (`secret get <key>`).
 72. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
@@ -287,10 +287,10 @@ Interactive config commands:
 19. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
 20. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
 21. `declarest resource save /customers/acme --ignore < payload.json` bypasses plaintext-secret save guard.
-22. `declarest resource save /customers/acme < payload.json` with metadata `secretsFromAttributes: [credentials.authValue]` stores and masks `credentials.authValue` automatically before repository persistence.
-23. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `secretsFromAttributes`.
+22. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [credentials.authValue]` stores and masks `credentials.authValue` automatically before repository persistence.
+23. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
 24. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
-25. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `secretsFromAttributes` for `/customers/acme`.
+25. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
 26. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
 30. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
 31. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
@@ -318,7 +318,7 @@ Interactive config commands:
 43. `declarest config add --file contexts.yaml --format yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
 44. `declarest resource save --help` prints help text even when no current context is configured.
 45. `declarest secret detect` scans the whole local repository for secret candidates when no payload input is provided.
-46. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `secretsFromAttributes` for detected resource paths.
+46. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resourceInfo.secretInAttributes` for detected resource paths.
 47. `declarest completion bash` prints completion script even when no current context is configured.
 48. `declarest` shell tab completion at root suggests `help` and does not suggest internal helper names.
 49. `declarest resource` prints resource command help even when no current context is configured.

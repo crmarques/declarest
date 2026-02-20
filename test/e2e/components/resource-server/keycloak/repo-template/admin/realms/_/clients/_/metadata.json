@@ -1,4 +1,6 @@
 {
-  "idFromAttribute": "id",
-  "aliasFromAttribute": "clientId"
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "clientId"
+  }
 }

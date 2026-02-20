@@ -1,25 +1,27 @@
 {
-  "idFromAttribute": "id",
-  "aliasFromAttribute": "name",
-  "operations": {
-    "create": {
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
       "method": "PUT",
       "path": "/api/projects/{{.id}}"
     },
-    "get": {
+    "getResource": {
       "path": "/api/projects/{{.id}}"
     },
-    "update": {
+    "updateResource": {
       "method": "PUT",
       "path": "/api/projects/{{.id}}"
     },
-    "delete": {
+    "deleteResource": {
       "path": "/api/projects/{{.id}}"
     },
-    "list": {
+    "listCollection": {
       "path": "/api/projects"
     },
-    "compare": {
+    "compareResources": {
       "path": "/api/projects/{{.id}}"
     }
   }

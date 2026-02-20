@@ -1,23 +1,25 @@
 {
-  "idFromAttribute": "name",
-  "aliasFromAttribute": "name",
-  "operations": {
-    "create": {
+  "resourceInfo": {
+    "idFromAttribute": "name",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
       "path": "{{.logicalPath}}"
     },
-    "get": {
+    "getResource": {
       "path": "{{.logicalPath}}"
     },
-    "update": {
+    "updateResource": {
       "path": "{{.logicalPath}}"
     },
-    "delete": {
+    "deleteResource": {
       "path": "{{.logicalPath}}"
     },
-    "list": {
+    "listCollection": {
       "path": "{{.collectionPath}}"
     },
-    "compare": {
+    "compareResources": {
       "path": "{{.logicalPath}}"
     }
   }

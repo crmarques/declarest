@@ -845,12 +845,104 @@ func filterPathSuggestions(suggestions map[string]struct{}, toComplete string) [
 		items = append(items, value)
 	}
 
-	items = renderCollectionSuggestionsWithTrailingSlash(items)
+	scopedItems, scoped := restrictToNextLevelSuggestions(items, normalizedPrefix)
+	if scoped {
+		items = scopedItems
+	} else {
+		items = renderCollectionSuggestionsWithTrailingSlash(items)
+	}
 	sort.Strings(items)
 	if len(items) > maxCompletionSuggestions {
 		items = items[:maxCompletionSuggestions]
 	}
 	return items
+}
+
+type completionScope struct {
+	parentPath     string
+	partialSegment string
+}
+
+func resolveCompletionScope(normalizedPrefix string) (completionScope, bool) {
+	trimmedPrefix := strings.TrimSpace(normalizedPrefix)
+	if trimmedPrefix == "" {
+		return completionScope{}, false
+	}
+
+	normalizedPath := normalizePathSuggestion(trimmedPrefix)
+	if normalizedPath == "" {
+		return completionScope{}, false
+	}
+
+	if strings.HasSuffix(trimmedPrefix, "/") {
+		return completionScope{
+			parentPath:     normalizedPath,
+			partialSegment: "",
+		}, true
+	}
+
+	parentPath := normalizePathSuggestion(path.Dir(normalizedPath))
+	if parentPath == "" {
+		parentPath = "/"
+	}
+
+	return completionScope{
+		parentPath:     parentPath,
+		partialSegment: strings.TrimSpace(path.Base(normalizedPath)),
+	}, true
+}
+
+func restrictToNextLevelSuggestions(items []string, normalizedPrefix string) ([]string, bool) {
+	scope, ok := resolveCompletionScope(normalizedPrefix)
+	if !ok {
+		return nil, false
+	}
+
+	type scopedSuggestion struct {
+		hasDescendants bool
+	}
+	scoped := map[string]*scopedSuggestion{}
+
+	for _, item := range items {
+		normalizedItem := normalizePathSuggestion(item)
+		if normalizedItem == "" {
+			continue
+		}
+
+		childSegment, hasChild := firstChildSegment(scope.parentPath, normalizedItem)
+		if !hasChild || strings.TrimSpace(childSegment) == "" {
+			continue
+		}
+		if scope.partialSegment != "" && !strings.HasPrefix(childSegment, scope.partialSegment) {
+			continue
+		}
+
+		childPath := appendPathSegment(scope.parentPath, childSegment)
+		entry, exists := scoped[childPath]
+		if !exists {
+			entry = &scopedSuggestion{}
+			scoped[childPath] = entry
+		}
+
+		if normalizedItem != childPath && strings.HasPrefix(normalizedItem, childPath+"/") {
+			entry.hasDescendants = true
+		}
+	}
+
+	if len(scoped) == 0 {
+		return nil, true
+	}
+
+	rendered := make(map[string]struct{}, len(scoped))
+	for childPath, details := range scoped {
+		if details.hasDescendants {
+			rendered[childPath+"/"] = struct{}{}
+			continue
+		}
+		rendered[childPath] = struct{}{}
+	}
+
+	return sortedSetValues(rendered), true
 }
 
 func renderCollectionSuggestionsWithTrailingSlash(items []string) []string {

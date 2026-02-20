@@ -136,6 +136,7 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	compact := ResourceMetadata{
 		IDFromAttribute:       inferred.IDFromAttribute,
 		AliasFromAttribute:    inferred.AliasFromAttribute,
+		CollectionPath:        inferred.CollectionPath,
 		SecretsFromAttributes: cloneStringSlice(inferred.SecretsFromAttributes),
 		Operations:            cloneOperationMap(inferred.Operations),
 		Filter:                cloneStringSlice(inferred.Filter),
@@ -146,6 +147,9 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
 	if len(compact.Operations) == 0 {
 		compact.Operations = nil
+	}
+	if strings.TrimSpace(compact.CollectionPath) == strings.TrimSpace(defaults.CollectionPath) {
+		compact.CollectionPath = ""
 	}
 
 	return compact, nil
@@ -349,6 +353,7 @@ func inferFallbackMetadata(target inferTarget) ResourceMetadata {
 		}
 
 		return ResourceMetadata{
+			CollectionPath: collectionPath,
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
 					Method: "GET",
@@ -392,7 +397,10 @@ func inferFallbackMetadata(target inferTarget) ResourceMetadata {
 		operations[string(OperationCompare)] = OperationSpec{Method: "GET", Path: resourcePath}
 	}
 
-	return ResourceMetadata{Operations: operations}
+	return ResourceMetadata{
+		CollectionPath: collectionPath,
+		Operations:     operations,
+	}
 }
 
 func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (ResourceMetadata, string) {
@@ -414,9 +422,11 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 	}
 
 	operations := make(map[string]OperationSpec)
+	collectionPath := ""
 	if collectionCandidate.path != "" {
 		defaultCollectionPath := defaults.Operations[string(OperationList)].Path
 		metadataCollectionPath := openAPIPathToMetadataTemplate(collectionCandidate.path, defaultCollectionPath)
+		collectionPath = metadataCollectionPath
 		if hasOpenAPIMethod(collectionCandidate.methods, "get") {
 			operations[string(OperationList)] = OperationSpec{
 				Method: "GET",
@@ -469,7 +479,10 @@ func inferMetadataFromOpenAPISpec(target inferTarget, openAPISpec any) (Resource
 	if len(operations) == 0 {
 		return ResourceMetadata{}, resourceIdentityAttribute
 	}
-	return ResourceMetadata{Operations: operations}, resourceIdentityAttribute
+	return ResourceMetadata{
+		CollectionPath: collectionPath,
+		Operations:     operations,
+	}, resourceIdentityAttribute
 }
 
 func promoteInferTargetFromOpenAPI(target inferTarget, openAPISpec any) inferTarget {

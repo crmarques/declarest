@@ -309,8 +309,11 @@ func fallbackOperationPath(resourceInfo resource.Resource, operation metadata.Op
 	if strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
 		return resourceInfo.ResolvedRemotePath
 	}
-	if operation == metadata.OperationList && strings.TrimSpace(resourceInfo.CollectionPath) != "" {
-		return resourceInfo.CollectionPath
+	if operation == metadata.OperationList {
+		collectionPath := metadata.EffectiveCollectionPath(resourceInfo.Metadata, resourceInfo.CollectionPath)
+		if strings.TrimSpace(collectionPath) != "" {
+			return collectionPath
+		}
 	}
 	if strings.TrimSpace(resourceInfo.LogicalPath) != "" {
 		return resourceInfo.LogicalPath

@@ -58,5 +58,5 @@ Key terms:
 
 ## Examples
 1. Local path `/customers/acme` maps to collection `/customers`, alias `acme`, remote ID from `idFromAttribute` if configured.
-2. Metadata on `/customers/_` sets default `get.path`; resource metadata on `/customers/acme` overrides only `update.path`.
+2. Metadata on `/customers/_` sets default `operationInfo.getResource.path`; resource metadata on `/customers/acme` overrides only `operationInfo.updateResource.path`.
 3. Diff operation suppresses `/updatedAt` and `/lastSeen` before comparison to avoid false drift.

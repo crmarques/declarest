@@ -1,8 +1,10 @@
 {
-  "idFromAttribute": "realm",
-  "aliasFromAttribute": "realm",
-  "operations": {
-    "create": {
+  "resourceInfo": {
+    "idFromAttribute": "realm",
+    "aliasFromAttribute": "realm"
+  },
+  "operationInfo": {
+    "createResource": {
       "path": "/admin/realms"
     }
   }

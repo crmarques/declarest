@@ -114,11 +114,11 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. identity mapping (`idFromAttribute`, `aliasFromAttribute`).
-2. secret mapping (`secretsFromAttributes`).
-3. operation directives (`path`, `method`, `query`, `headers`).
-4. transforms (`filter`, `suppress`, `jq`).
-5. template directives and defaults.
+1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`) and optional `collectionPath` override.
+2. `resourceInfo` secret mapping (`secretInAttributes`).
+3. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
+4. operation fields (`path`, `method`, `query`, `headers`, `accept`, `contentType`, `body`, `filter`, `suppress`, `jq`).
+5. `operationInfo.defaults` transform defaults (`filter`, `suppress`, `jq`).
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.

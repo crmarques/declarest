@@ -1905,8 +1905,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
 			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretsFromAttributes\": [\n    \"secret\"\n  ]") {
-			t.Fatalf("expected inferred secretsFromAttributes, got %q", output)
+		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"secret\"\n    ]") {
+			t.Fatalf("expected inferred secretInAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\": null") ||
 			strings.Contains(output, "\"filter\": null") ||
@@ -1955,8 +1955,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
 			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretsFromAttributes\": [\n    \"secret\"\n  ]") {
-			t.Fatalf("expected inferred secretsFromAttributes, got %q", output)
+		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"secret\"\n    ]") {
+			t.Fatalf("expected inferred secretInAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
 			t.Fatalf("expected openapi-default operations to be omitted from infer output, got %q", output)
@@ -3337,14 +3337,11 @@ func TestPathCompletionResourceGetPrefersRemoteAndOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/customers/remote") {
-		t.Fatalf("expected remote path completion, got %q", output)
+	if !strings.Contains(output, "/customers/") {
+		t.Fatalf("expected next-level collection completion, got %q", output)
 	}
-	if strings.Contains(output, "/customers/local") {
-		t.Fatalf("expected get completion to prefer remote items when available, got %q", output)
-	}
-	if !strings.Contains(output, "/customers/{id}") {
-		t.Fatalf("expected OpenAPI path completion, got %q", output)
+	if strings.Contains(output, "/customers/remote") || strings.Contains(output, "/customers/local") {
+		t.Fatalf("expected get completion to collapse to next-level candidates, got %q", output)
 	}
 	if len(reconciler.listLocalCalls) > 0 {
 		t.Fatalf("expected get completion to skip local list when remote suggestions are available, calls=%#v", reconciler.listLocalCalls)
@@ -3436,11 +3433,11 @@ func TestPathCompletionResourceApplyPrefersRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "/customers/local") {
-		t.Fatalf("expected repository completion item, got %q", output)
+	if !strings.Contains(output, "/customers/") {
+		t.Fatalf("expected next-level repository collection completion, got %q", output)
 	}
-	if strings.Contains(output, "/customers/remote") {
-		t.Fatalf("expected apply completion to avoid remote fallback when local suggestions are available, got %q", output)
+	if strings.Contains(output, "/customers/remote") || strings.Contains(output, "/customers/local") {
+		t.Fatalf("expected apply completion to collapse to next-level candidates, got %q", output)
 	}
 	if len(reconciler.listRemoteCalls) > 0 {
 		t.Fatalf("expected apply completion to skip remote list when local suggestions are available, calls=%#v", reconciler.listRemoteCalls)
@@ -3507,6 +3504,72 @@ func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
 	}
 	if strings.Contains(output, "/admin\n") {
 		t.Fatalf("expected collection prefix to render with trailing slash only, got %q", output)
+	}
+}
+
+func TestPathCompletionShowsOnlyNextLevelForCollectionPrefix(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/alpha/clients/app-a"},
+		{LogicalPath: "/admin/realms/beta/roles/viewer"},
+		{LogicalPath: "/admin/realms/gamma"},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+
+	if !strings.Contains(output, "/admin/realms/alpha/\n") {
+		t.Fatalf("expected alpha realm next-level completion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/beta/\n") {
+		t.Fatalf("expected beta realm next-level completion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/gamma\n") {
+		t.Fatalf("expected gamma realm completion, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/alpha/clients") {
+		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/beta/roles") {
+		t.Fatalf("expected collection prefix completion to omit deep descendants, got %q", output)
+	}
+}
+
+func TestPathCompletionShowsOnlyNextLevelForNestedCollectionPrefix(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	reconciler := deps.Orchestrator.(*testReconciler)
+	reconciler.remoteList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/aaaa/resource-a"},
+		{LogicalPath: "/admin/realms/master/bbbb"},
+		{LogicalPath: "/admin/realms/master/cccc/deeper/resource-c"},
+	}
+
+	output, err := executeForTest(deps, "", "__complete", "resource", "get", "/admin/realms/master/")
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+
+	if !strings.Contains(output, "/admin/realms/master/aaaa/\n") {
+		t.Fatalf("expected aaaa next-level completion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/master/bbbb\n") {
+		t.Fatalf("expected bbbb next-level completion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/master/cccc/\n") {
+		t.Fatalf("expected cccc next-level completion, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/master/aaaa/resource-a") {
+		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/master/cccc/deeper") {
+		t.Fatalf("expected nested collection completion to omit deep descendants, got %q", output)
 	}
 }
 

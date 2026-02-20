@@ -6,6 +6,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
 		IDFromAttribute:       value.IDFromAttribute,
 		AliasFromAttribute:    value.AliasFromAttribute,
+		CollectionPath:        value.CollectionPath,
 		SecretsFromAttributes: cloneStringSlice(value.SecretsFromAttributes),
 		Operations:            make(map[string]OperationSpec, len(value.Operations)),
 		Filter:                cloneStringSlice(value.Filter),
@@ -35,6 +36,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	merged := ResourceMetadata{
 		IDFromAttribute:       base.IDFromAttribute,
 		AliasFromAttribute:    base.AliasFromAttribute,
+		CollectionPath:        base.CollectionPath,
 		SecretsFromAttributes: cloneStringSlice(base.SecretsFromAttributes),
 		Operations:            cloneOperationMap(base.Operations),
 		Filter:                cloneStringSlice(base.Filter),
@@ -47,6 +49,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 	if overlay.AliasFromAttribute != "" {
 		merged.AliasFromAttribute = overlay.AliasFromAttribute
+	}
+	if overlay.CollectionPath != "" {
+		merged.CollectionPath = overlay.CollectionPath
 	}
 	if overlay.SecretsFromAttributes != nil {
 		merged.SecretsFromAttributes = cloneStringSlice(overlay.SecretsFromAttributes)

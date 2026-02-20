@@ -57,6 +57,6 @@ Auth modes:
 4. OpenAPI path exists but method unsupported for operation type.
 
 ## Examples
-1. `Get` operation uses `operations.get.path` plus default `Accept: application/json`.
+1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/json`.
 2. `Update` operation resolves `ContentType` from metadata and sends normalized payload body.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.

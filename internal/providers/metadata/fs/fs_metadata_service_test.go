@@ -394,14 +394,15 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
-	if _, found := decoded["operations"]; found {
-		t.Fatalf("expected operations key to be omitted when nil, got %v", decoded["operations"])
+	resourceInfo, hasResourceInfo := decoded["resourceInfo"].(map[string]any)
+	if !hasResourceInfo {
+		t.Fatalf("expected resourceInfo object, got %#v", decoded["resourceInfo"])
 	}
-	if _, found := decoded["filter"]; found {
-		t.Fatalf("expected filter key to be omitted when nil, got %v", decoded["filter"])
+	if _, found := resourceInfo["secretInAttributes"]; !found {
+		t.Fatalf("expected secretInAttributes under resourceInfo, got %#v", resourceInfo)
 	}
-	if _, found := decoded["suppress"]; found {
-		t.Fatalf("expected suppress key to be omitted when nil, got %v", decoded["suppress"])
+	if _, found := decoded["operationInfo"]; found {
+		t.Fatalf("expected operationInfo key to be omitted when nil, got %v", decoded["operationInfo"])
 	}
 }
 
@@ -441,22 +442,28 @@ func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
-	filter, hasFilter := decoded["filter"].([]any)
-	if !hasFilter || len(filter) != 0 {
-		t.Fatalf("expected explicit empty filter array, got %#v", decoded["filter"])
-	}
-	suppress, hasSuppress := decoded["suppress"].([]any)
-	if !hasSuppress || len(suppress) != 0 {
-		t.Fatalf("expected explicit empty suppress array, got %#v", decoded["suppress"])
+	operationInfo, hasOperationInfo := decoded["operationInfo"].(map[string]any)
+	if !hasOperationInfo {
+		t.Fatalf("expected operationInfo object, got %#v", decoded["operationInfo"])
 	}
 
-	operations, hasOperations := decoded["operations"].(map[string]any)
-	if !hasOperations {
-		t.Fatalf("expected operations object, got %#v", decoded["operations"])
+	defaults, hasDefaults := operationInfo["defaults"].(map[string]any)
+	if !hasDefaults {
+		t.Fatalf("expected operationInfo defaults object, got %#v", operationInfo["defaults"])
 	}
-	getSpec, hasGet := operations[string(metadatadomain.OperationGet)].(map[string]any)
+
+	filter, hasFilter := defaults["filter"].([]any)
+	if !hasFilter || len(filter) != 0 {
+		t.Fatalf("expected explicit empty filter array, got %#v", defaults["filter"])
+	}
+	suppress, hasSuppress := defaults["suppress"].([]any)
+	if !hasSuppress || len(suppress) != 0 {
+		t.Fatalf("expected explicit empty suppress array, got %#v", defaults["suppress"])
+	}
+
+	getSpec, hasGet := operationInfo["getResource"].(map[string]any)
 	if !hasGet {
-		t.Fatalf("expected get operation metadata, got %#v", operations[string(metadatadomain.OperationGet)])
+		t.Fatalf("expected get operation metadata, got %#v", operationInfo["getResource"])
 	}
 
 	query, hasQuery := getSpec["query"].(map[string]any)

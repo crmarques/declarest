@@ -144,7 +144,7 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	operationSpec := metadataCopy.Operations[string(operation)]
 	if strings.TrimSpace(operationSpec.Path) == "" {
 		if operation == metadata.OperationList {
-			operationSpec.Path = resourceInfo.CollectionPath
+			operationSpec.Path = metadata.EffectiveCollectionPath(metadataCopy, resourceInfo.CollectionPath)
 		} else {
 			operationSpec.Path = resourceInfo.LogicalPath
 		}

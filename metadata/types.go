@@ -19,6 +19,7 @@ type InferenceRequest struct {
 type ResourceMetadata struct {
 	IDFromAttribute       string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
 	AliasFromAttribute    string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	CollectionPath        string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	SecretsFromAttributes []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
 	Operations            map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`
 	Filter                []string                 `json:"filter,omitempty" yaml:"filter,omitempty"`

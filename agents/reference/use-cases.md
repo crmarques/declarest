@@ -67,7 +67,7 @@ Goal: fetch remote resource when direct path is stale.
 
 Inputs:
 1. Path `/customers/acme`.
-2. Resolved `get.path` targets stale remote identifier.
+2. Resolved `operationInfo.getResource.path` targets stale remote identifier.
 
 Execution:
 1. Direct get returns 404.
@@ -320,11 +320,11 @@ Execution:
 2. With payload input, CLI detects secret candidates from payload content.
 3. When `--secret-attribute` is provided, CLI filters to exactly one detected attribute.
 4. In `--fix` mode, CLI loads existing metadata for each target path (or initializes empty metadata when missing).
-5. CLI merges filtered detected attributes into `secretsFromAttributes` and persists metadata.
+5. CLI merges filtered detected attributes into `resourceInfo.secretInAttributes` and persists metadata.
 
 Expected outputs:
 1. Repository-scan output groups detected attributes by logical resource path with deterministic ordering.
-2. Metadata for fixed paths contains deterministic, deduplicated `secretsFromAttributes`.
+2. Metadata for fixed paths contains deterministic, deduplicated `resourceInfo.secretInAttributes`.
 3. Existing metadata directives remain preserved.
 
 Failure expectation:

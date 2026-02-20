@@ -1,13 +1,15 @@
 {
-    "resourceInfo": {
-        "idFromAttribute": "id",
-        "aliasFromAttribute": "name",
-        "collectionPath": "/admin/realms/{{.realm}}/components",
-        "secretInAttributes": ["config.bindCredential[0]"]
-    },
-    "operationInfo": {
-        "listCollection": {
-            "jqFilter": "[ .[] | select(.providerId == \"ldap\") ]"
-        }
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name",
+    "collectionPath": "/admin/realms/{{.realm}}/components",
+    "secretInAttributes": [
+      "config.bindCredential[0]"
+    ]
+  },
+  "operationInfo": {
+    "listCollection": {
+      "jq": "[ .[] | select(.providerId == \"ldap\") ]"
     }
+  }
 }

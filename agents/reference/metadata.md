@@ -33,10 +33,11 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 ## Data Contracts
 Supported metadata groups:
 1. `resourceInfo`: identity, secret-attribute, and collection directives.
-2. `operations.get/create/update/delete/list/compare`: operation-specific directives.
-3. Operation fields: `path`, `method`, `query`, `headers`, `contentType`, `accept`.
-4. Transform fields: `filter`, `suppress`, `jq`.
-5. Resource-level secret detection fields: `secretsFromAttributes`.
+2. `operationInfo.createResource/updateResource/deleteResource/getResource/compareResources/listCollection`: operation-specific directives.
+3. `operationInfo.defaults`: shared transform defaults applied before operation-specific overrides.
+4. Operation fields: `path`, `method`, `query`, `headers`, `contentType`, `accept`, `body`.
+5. Transform fields: `filter`, `suppress`, `jq`.
+6. Resource-level secret detection fields: `secretInAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -70,12 +71,12 @@ Template context contract:
 2. Relative template references exceed available ancestor depth.
 3. Compare suppression removes all fields and yields empty normalized payload.
 4. Explicit null directive intended to clear inherited field.
-5. `secretsFromAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
+5. `secretInAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
 6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps.
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
 
 ## Examples
-1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
-2. `operations.compare.suppress` includes `/updatedAt` and `/version`; diff output excludes these fields.
-3. `operations.list.path` inferred from OpenAPI, then manually overridden with custom query defaults.
-4. Inference for `/admin/realms/_/clients/` can propose `idFromAttribute: id`, `aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.
+1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
+2. `operationInfo.compareResources.suppress` includes `/updatedAt` and `/version`; diff output excludes these fields.
+3. `operationInfo.listCollection.path` inferred from OpenAPI, then manually overridden with custom query defaults.
+4. Inference for `/admin/realms/_/clients/` can propose `resourceInfo.idFromAttribute: id`, `resourceInfo.aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.

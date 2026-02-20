@@ -1,25 +1,27 @@
 {
-  "idFromAttribute": "name",
-  "aliasFromAttribute": "name",
-  "operations": {
-    "create": {
+  "resourceInfo": {
+    "idFromAttribute": "name",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
       "method": "PUT",
       "path": "/v1/sys/policies/acl/{{.name}}"
     },
-    "get": {
+    "getResource": {
       "path": "/v1/sys/policies/acl/{{.name}}"
     },
-    "update": {
+    "updateResource": {
       "method": "PUT",
       "path": "/v1/sys/policies/acl/{{.name}}"
     },
-    "delete": {
+    "deleteResource": {
       "path": "/v1/sys/policies/acl/{{.name}}"
     },
-    "list": {
+    "listCollection": {
       "path": "/v1/sys/policies/acl"
     },
-    "compare": {
+    "compareResources": {
       "path": "/v1/sys/policies/acl/{{.name}}"
     }
   }
