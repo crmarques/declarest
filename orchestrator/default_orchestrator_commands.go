@@ -224,7 +224,7 @@ func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string
 		return nil, err
 	}
 
-	items, err := serverManager.List(ctx, normalizedPath, resolvedMetadata)
+	items, err := r.listRemoteResources(ctx, serverManager, normalizedPath, resolvedMetadata)
 	if err != nil {
 		return nil, err
 	}

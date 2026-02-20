@@ -4,6 +4,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/crmarques/declarest/metadata"
@@ -11,6 +12,7 @@ import (
 )
 
 var pathTemplateSegmentPattern = regexp.MustCompile(`^\{\{\s*\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}$`)
+var jqResourcePathPattern = regexp.MustCompile(`resource\(\s*"((?:[^"\\]|\\.)*)"\s*\)`)
 
 func BuildOperationScope(
 	logicalPath string,
@@ -91,6 +93,7 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 		collectionTemplate = collectionPathForLogicalPath(logicalPath)
 	}
 	mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(collectionTemplate, logicalPath))
+	mergeTemplateFields(derived, deriveTemplateFieldsFromJQExpression(md.JQ, logicalPath))
 
 	operationNames := make([]string, 0, len(md.Operations))
 	for operationName := range md.Operations {
@@ -100,6 +103,8 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 
 	for _, operationName := range operationNames {
 		spec := md.Operations[operationName]
+		mergeTemplateFields(derived, deriveTemplateFieldsFromJQExpression(spec.JQ, logicalPath))
+
 		templatePath := strings.TrimSpace(spec.Path)
 		if templatePath == "" {
 			continue
@@ -110,6 +115,39 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 		mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(templatePath, logicalPath))
 	}
 
+	return derived
+}
+
+func deriveTemplateFieldsFromJQExpression(jqExpression string, logicalPath string) map[string]string {
+	trimmedExpression := strings.TrimSpace(jqExpression)
+	if trimmedExpression == "" || !strings.Contains(trimmedExpression, "{{") || !strings.Contains(trimmedExpression, "resource(") {
+		return nil
+	}
+
+	matches := jqResourcePathPattern.FindAllStringSubmatch(trimmedExpression, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	derived := map[string]string{}
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		pathTemplate, unquoteErr := strconv.Unquote(`"` + match[1] + `"`)
+		if unquoteErr != nil {
+			continue
+		}
+		mergeTemplateFields(
+			derived,
+			deriveTemplateFieldsFromPathTemplate(strings.TrimSpace(pathTemplate), logicalPath),
+		)
+	}
+
+	if len(derived) == 0 {
+		return nil
+	}
 	return derived
 }
 

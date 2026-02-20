@@ -12,6 +12,7 @@ import (
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
+	serverdomain "github.com/crmarques/declarest/server"
 )
 
 func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
@@ -1060,6 +1061,7 @@ type fakeServer struct {
 	listValues  map[string][]resource.Resource
 	listErr     error
 	listErrs    map[string]error
+	listFunc    func(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error)
 	existsValue bool
 	existsErr   error
 	adHocValue  resource.Value
@@ -1124,10 +1126,13 @@ func (f *fakeServer) Delete(_ context.Context, resourceInfo resource.Resource) e
 	return f.deleteErr
 }
 
-func (f *fakeServer) List(_ context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (f *fakeServer) List(ctx context.Context, logicalPath string, metadataValue metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	f.listCalled = true
 	f.lastListPath = logicalPath
 	f.listPaths = append(f.listPaths, logicalPath)
+	if f.listFunc != nil {
+		return f.listFunc(ctx, logicalPath, metadataValue)
+	}
 	if f.listErrs != nil {
 		if err, found := f.listErrs[logicalPath]; found {
 			return nil, err
@@ -1528,6 +1533,126 @@ func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	}
 	if items[0].LogicalPath != "/customers/acme" || items[1].LogicalPath != "/customers/zeta" {
 		t.Fatalf("expected deterministic order, got %#v", items)
+	}
+}
+
+func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
+	t.Parallel()
+
+	metadataService := &fakeMetadata{
+		resolveValues: map[string]metadatadomain.ResourceMetadata{
+			"/admin/realms/publico-br/user-registry/ldap-test/mappers": {
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+			},
+			"/admin/realms/publico-br/user-registry/ldap-test": {
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+				Operations: map[string]metadatadomain.OperationSpec{
+					string(metadatadomain.OperationList): {
+						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+					},
+				},
+			},
+			"/admin/realms/publico-br/user-registry": {
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "name",
+			},
+		},
+	}
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listFunc: func(ctx context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+			switch logicalPath {
+			case "/admin/realms/publico-br/user-registry/ldap-test/mappers":
+				parentValue, resolved, resolveErr := serverdomain.ResolveListJQResource(
+					ctx,
+					"/admin/realms/publico-br/user-registry/ldap-test",
+				)
+				if resolveErr != nil {
+					return nil, resolveErr
+				}
+				if !resolved {
+					return nil, fmt.Errorf("expected list jq resolver in context")
+				}
+
+				parentPayload, ok := parentValue.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("expected parent payload map, got %T", parentValue)
+				}
+				parentID, _ := parentPayload["id"].(string)
+
+				items := []resource.Resource{
+					{
+						LogicalPath: "/admin/realms/publico-br/user-registry/ldap-test/mappers/alpha",
+						LocalAlias:  "alpha",
+						RemoteID:    "mapper-a",
+						Payload: map[string]any{
+							"id":       "mapper-a",
+							"name":     "alpha",
+							"parentId": "ldap-id",
+						},
+					},
+					{
+						LogicalPath: "/admin/realms/publico-br/user-registry/ldap-test/mappers/beta",
+						LocalAlias:  "beta",
+						RemoteID:    "mapper-b",
+						Payload: map[string]any{
+							"id":       "mapper-b",
+							"name":     "beta",
+							"parentId": "other-id",
+						},
+					},
+				}
+
+				filtered := make([]resource.Resource, 0, len(items))
+				for _, item := range items {
+					payloadMap, _ := item.Payload.(map[string]any)
+					if payloadMap["parentId"] == parentID {
+						filtered = append(filtered, item)
+					}
+				}
+				return filtered, nil
+			case "/admin/realms/publico-br/user-registry":
+				return []resource.Resource{
+					{
+						LogicalPath: "/admin/realms/publico-br/user-registry/ldap-test",
+						LocalAlias:  "ldap-test",
+						RemoteID:    "ldap-id",
+						Payload: map[string]any{
+							"id":         "ldap-id",
+							"name":       "ldap-test",
+							"providerId": "ldap",
+						},
+					},
+				}, nil
+			default:
+				return nil, faults.NewTypedError(faults.NotFoundError, "list not found", nil)
+			}
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Repository: &fakeRepository{},
+		Metadata:   metadataService,
+		Server:     serverManager,
+	}
+
+	items, err := orchestrator.ListRemote(
+		context.Background(),
+		"/admin/realms/publico-br/user-registry/ldap-test/mappers",
+		ListPolicy{},
+	)
+	if err != nil {
+		t.Fatalf("ListRemote returned error: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected filtered list with 1 item, got %d", len(items))
+	}
+	if items[0].LogicalPath != "/admin/realms/publico-br/user-registry/ldap-test/mappers/alpha" {
+		t.Fatalf("unexpected filtered list item %#v", items[0].LogicalPath)
 	}
 }
 

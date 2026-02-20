@@ -14,10 +14,11 @@ import (
 
 	"github.com/itchyny/gojq"
 
-	"github.com/crmarques/declarest/resource/identity"
-	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/resource/identity"
+	serverdomain "github.com/crmarques/declarest/server"
 )
 
 func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, operation metadata.Operation) (metadata.OperationSpec, error) {
@@ -229,6 +230,7 @@ func (g *HTTPResourceServerGateway) resolveRequestURL(requestPath string, query 
 }
 
 func (g *HTTPResourceServerGateway) decodeListResponse(
+	ctx context.Context,
 	collectionPath string,
 	md metadata.ResourceMetadata,
 	spec metadata.OperationSpec,
@@ -238,7 +240,7 @@ func (g *HTTPResourceServerGateway) decodeListResponse(
 	if err != nil {
 		return nil, err
 	}
-	payload, err = applyListJQ(payload, spec.JQ)
+	payload, err = g.applyListJQ(ctx, payload, spec.JQ)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +304,7 @@ func (g *HTTPResourceServerGateway) decodeListResponse(
 	return list, nil
 }
 
-func applyListJQ(payload any, expression string) (any, error) {
+func (g *HTTPResourceServerGateway) applyListJQ(ctx context.Context, payload any, expression string) (any, error) {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {
 		return payload, nil
@@ -312,8 +314,16 @@ func applyListJQ(payload any, expression string) (any, error) {
 	if err != nil {
 		return nil, validationError("invalid list jq expression", err)
 	}
+	code, err := gojq.Compile(query, gojq.WithFunction("resource", 1, 1, g.listJQResourceFunction(ctx)))
+	if err != nil {
+		return nil, validationError("invalid list jq expression", err)
+	}
 
-	iterator := query.Run(payload)
+	runCtx := ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+	iterator := code.RunWithContext(runCtx, payload)
 	results := make([]any, 0, 1)
 	for {
 		value, ok := iterator.Next()
@@ -333,6 +343,58 @@ func applyListJQ(payload any, expression string) (any, error) {
 		return results[0], nil
 	}
 	return results, nil
+}
+
+func (g *HTTPResourceServerGateway) listJQResourceFunction(ctx context.Context) func(any, []any) any {
+	cache := make(map[string]resource.Value)
+
+	return func(_ any, args []any) any {
+		logicalPath, err := parseListJQResourcePathArg(args)
+		if err != nil {
+			return err
+		}
+
+		if cached, exists := cache[logicalPath]; exists {
+			return cached
+		}
+
+		resolved, err := g.resolveListJQResource(ctx, logicalPath)
+		if err != nil {
+			return err
+		}
+
+		cache[logicalPath] = resolved
+		return resolved
+	}
+}
+
+func parseListJQResourcePathArg(args []any) (string, error) {
+	if len(args) != 1 {
+		return "", fmt.Errorf("resource() expects exactly one path argument")
+	}
+
+	pathValue, ok := args[0].(string)
+	if !ok {
+		return "", fmt.Errorf("resource() path argument must be a string")
+	}
+
+	trimmed := strings.TrimSpace(pathValue)
+	if trimmed == "" {
+		return "", fmt.Errorf("resource() path argument must not be empty")
+	}
+
+	return trimmed, nil
+}
+
+func (g *HTTPResourceServerGateway) resolveListJQResource(ctx context.Context, logicalPath string) (resource.Value, error) {
+	resolved, found, err := serverdomain.ResolveListJQResource(ctx, logicalPath)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, validationError("resource() requires list resolver context", nil)
+	}
+	return resource.Normalize(resolved)
 }
 
 func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool) {

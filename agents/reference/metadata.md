@@ -33,6 +33,7 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 16. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
 17. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
 18. Metadata decoding SHOULD accept `operationInfo.<operation>.url.path` as a compatibility alias for `operationInfo.<operation>.path`.
+19. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
 
 ## Data Contracts
 Supported metadata groups:
@@ -81,6 +82,7 @@ Template context contract:
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
 8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
 9. Relative operation paths resolve against rendered collection paths and keep compatibility for non-relative legacy values (for example `customers` => `/customers`).
+10. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
 
 ## Examples
 1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only headers.
@@ -88,3 +90,4 @@ Template context contract:
 3. `operationInfo.listCollection.path` inferred from OpenAPI, then manually overridden with custom query defaults.
 4. Inference for `/admin/realms/_/clients/` can propose `resourceInfo.idFromAttribute: id`, `resourceInfo.aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.
 5. For selector `/admin/realms/_/user-registry` with `resourceInfo.collectionPath: /admin/realms/{{.realm}}/components` and `operationInfo.getResource.path: ./{{.id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
+6. For selector `/admin/realms/_/user-registry/_/mappers/`, list `jq` MAY use `resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.

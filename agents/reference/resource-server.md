@@ -23,6 +23,9 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
 7. List responses MUST be normalized into deterministic `resource.Resource` ordering.
 8. `operationInfo.listCollection.jq` (or resolved list-operation `jq`) MUST be executed against decoded list payload before list-shape extraction and identity mapping.
+9. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
+10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
+11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
 
 ## Data Contracts
 Request spec fields:
@@ -60,3 +63,4 @@ Auth modes:
 1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/json`.
 2. `Update` operation resolves `ContentType` from metadata and sends normalized payload body.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
+4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).

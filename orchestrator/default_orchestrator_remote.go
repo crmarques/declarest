@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/resource/identity"
-	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/resource/identity"
 	"github.com/crmarques/declarest/secrets"
 	"github.com/crmarques/declarest/server"
 )
@@ -125,7 +125,7 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 		return collectionValue, nil
 	}
 
-	candidates, listErr := serverManager.List(ctx, resourceInfo.CollectionPath, resourceInfo.Metadata)
+	candidates, listErr := r.listRemoteResources(ctx, serverManager, resourceInfo.CollectionPath, resourceInfo.Metadata)
 	if listErr != nil {
 		if isTypedCategory(listErr, faults.NotFoundError) || isFallbackListPayloadShapeError(listErr) {
 			return nil, err
@@ -166,7 +166,7 @@ func (r *DefaultOrchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
 		return nil
 	}
 
-	candidates, listErr := serverManager.List(ctx, resourceInfo.CollectionPath, resourceInfo.Metadata)
+	candidates, listErr := r.listRemoteResources(ctx, serverManager, resourceInfo.CollectionPath, resourceInfo.Metadata)
 	if listErr != nil {
 		if isTypedCategory(listErr, faults.ConflictError) {
 			return listErr
@@ -263,7 +263,7 @@ func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
 			continue
 		}
 
-		candidates, listErr := serverManager.List(ctx, segmentInfo.CollectionPath, segmentInfo.Metadata)
+		candidates, listErr := r.listRemoteResources(ctx, serverManager, segmentInfo.CollectionPath, segmentInfo.Metadata)
 		if listErr != nil {
 			// Fallback list probes are best-effort and must not override the original NotFound.
 			if isTypedCategory(listErr, faults.ConflictError) {
@@ -426,7 +426,7 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 		return nil, false, nil
 	}
 
-	items, err := serverManager.List(ctx, resourceInfo.LogicalPath, resourceInfo.Metadata)
+	items, err := r.listRemoteResources(ctx, serverManager, resourceInfo.LogicalPath, resourceInfo.Metadata)
 	if err != nil {
 		// Some APIs incorrectly return 404 for empty collections.
 		if isTypedCategory(err, faults.NotFoundError) {
@@ -436,6 +436,26 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 	}
 
 	return listPayloadFromResources(items), true, nil
+}
+
+func (r *DefaultOrchestrator) withListJQResourceResolver(ctx context.Context) context.Context {
+	return server.WithListJQResourceResolver(ctx, r.resolveListJQResource)
+}
+
+func (r *DefaultOrchestrator) listRemoteResources(
+	ctx context.Context,
+	serverManager server.ResourceServer,
+	collectionPath string,
+	md metadata.ResourceMetadata,
+) ([]resource.Resource, error) {
+	return serverManager.List(r.withListJQResourceResolver(ctx), collectionPath, md)
+}
+
+func (r *DefaultOrchestrator) resolveListJQResource(
+	ctx context.Context,
+	logicalPath string,
+) (resource.Value, error) {
+	return r.GetRemote(ctx, logicalPath)
 }
 
 func (r *DefaultOrchestrator) shouldTreatRemotePathAsCollection(

@@ -84,6 +84,7 @@ Acceptance contracts:
 46. Metadata path indirection contract: rendered operation specs resolve `resourceInfo.collectionPath` templates from handled logical-path context (for example intermediary `/_/` selectors), treat `.`-prefixed operation paths as collection-relative, default omitted operation paths to `.` for `create|list` and `./{{.id}}` for `get|update|delete|compare`, and accept compatibility decoding from `operationInfo.<operation>.url.path`.
 47. List jq transform contract: list workflows execute resolved list-operation `jq` expressions before list-shape extraction; valid filters constrain candidate resources deterministically and invalid jq expressions fail with `ValidationError`.
 48. Remote metadata singleton fallback contract: when metadata list filtering (`jq`) yields exactly one candidate for a `NotFound` single-resource read, remote fallback resolves that candidate deterministically (including canonical-ID retry path) instead of returning the original `NotFound`.
+49. List jq resource-reference contract: `jq` expressions can call `resource("<logical-path>")`, resolution uses the active workflow source through context resolver wiring, missing resolver context fails with `ValidationError`, repeated lookups are cached per expression evaluation, and invalid arguments/cyclic resolver dependencies fail with `ValidationError`.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

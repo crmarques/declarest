@@ -144,7 +144,7 @@ func (g *HTTPResourceServerGateway) List(ctx context.Context, collectionPath str
 		return nil, err
 	}
 
-	return g.decodeListResponse(collectionPath, md, spec, body)
+	return g.decodeListResponse(ctx, collectionPath, md, spec, body)
 }
 
 func (g *HTTPResourceServerGateway) Exists(ctx context.Context, resourceInfo resource.Resource) (bool, error) {

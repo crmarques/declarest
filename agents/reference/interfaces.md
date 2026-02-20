@@ -227,6 +227,16 @@ Required fields:
 3. `Local`.
 4. `Remote`.
 
+### Type: `server.ListJQResourceResolver`
+Represents logical-path resource resolution callback used by list-operation `jq` `resource("<logical-path>")` calls.
+
+Signature:
+1. `func(ctx context.Context, logicalPath string) (resource.Value, error)`.
+
+Invariants:
+1. identical `(logicalPath, state)` inputs MUST return deterministic payload output.
+2. resolver implementations MUST treat `logicalPath` as normalized absolute path input.
+
 ## Interface Contracts
 
 ### Interface: `config.ContextService`
@@ -277,11 +287,16 @@ Responsibilities:
 2. Execute ad-hoc HTTP operations against resource-server endpoints.
 3. Resolve OpenAPI hints for operations.
 4. Expose typed transport failures.
+5. Honor list-operation `jq` resolver context when list transforms call `resource("<logical-path>")`.
 
 Method families:
 1. `Get/Create/Update/Delete/List/Exists`.
 2. `AdHoc`.
 3. `GetOpenAPISpec`.
+
+Context helper contract:
+1. `server.WithListJQResourceResolver` MUST attach one resolver per request context and preserve deterministic cache/cycle-guard state for nested resolution calls.
+2. `server.ResolveListJQResource` MUST return `(value, resolved=true, err=nil)` on success, `(nil, resolved=false, err=nil)` when no resolver is attached, and `(nil, resolved=true, err!=nil)` when resolution fails.
 
 ### Interface: `secrets.SecretProvider`
 Responsibilities:

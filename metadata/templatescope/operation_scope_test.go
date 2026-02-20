@@ -119,6 +119,29 @@ func TestDerivePathTemplateFieldsFromCollectionTemplatePrefix(t *testing.T) {
 	}
 }
 
+func TestDerivePathTemplateFieldsFromListJQResourcePathTemplate(t *testing.T) {
+	t.Parallel()
+
+	fields := DerivePathTemplateFields(
+		"/admin/realms/aaa/user-registry/bbb/mappers/ccc",
+		metadata.ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
+				},
+			},
+		},
+	)
+
+	if fields["realm"] != "aaa" {
+		t.Fatalf("expected realm field to be derived from jq resource path, got %#v", fields["realm"])
+	}
+	if fields["provider"] != "bbb" {
+		t.Fatalf("expected provider field to be derived from jq resource path, got %#v", fields["provider"])
+	}
+}
+
 func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 	t.Parallel()
 
@@ -150,5 +173,39 @@ func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 	}
 	if payloadMap["realm"] != "platform" {
 		t.Fatalf("expected derived realm in payload map, got %#v", payloadMap["realm"])
+	}
+}
+
+func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
+	t.Parallel()
+
+	scope, err := BuildResourceScope(resource.Resource{
+		LogicalPath:    "/admin/realms/aaa/user-registry/bbb/mappers/ccc",
+		CollectionPath: "/admin/realms/aaa/user-registry/bbb/mappers",
+		LocalAlias:     "ccc",
+		RemoteID:       "mapper-id",
+		Metadata: metadata.ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
+				},
+			},
+		},
+		Payload: map[string]any{"id": "mapper-id"},
+	})
+	if err != nil {
+		t.Fatalf("BuildResourceScope returned error: %v", err)
+	}
+
+	if scope["provider"] != "bbb" {
+		t.Fatalf("expected derived provider in scope, got %#v", scope["provider"])
+	}
+	payloadMap, ok := scope["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload map in scope, got %T", scope["payload"])
+	}
+	if payloadMap["provider"] != "bbb" {
+		t.Fatalf("expected derived provider in payload map, got %#v", payloadMap["provider"])
 	}
 }

@@ -22,6 +22,7 @@ import (
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
+	serverdomain "github.com/crmarques/declarest/server"
 )
 
 func TestNewHTTPResourceServerGatewayValidation(t *testing.T) {
@@ -888,6 +889,101 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		}
 	})
 
+	t.Run("list_operation_jq_resource_function_requires_context_resolver", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"id":"widget-a","name":"alpha","parentId":"project-primary"},
+				  {"id":"widget-b","name":"beta","parentId":"project-secondary"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.List(context.Background(), "/api/projects/widgets", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					Path: `/api/projects/widgets`,
+					JQ:   `[ .[] | select(.parentId == (resource("/api/projects/current") | .id)) ]`,
+				},
+			},
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("list_operation_jq_resource_function_uses_context_resolver", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/admin/realms/publico-br/components" {
+				t.Fatalf("expected list request path /admin/realms/publico-br/components, got %q", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"id":"mapper-a","name":"alpha","parentId":"ldap-id"},
+				  {"id":"mapper-b","name":"beta","parentId":"other-id"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		var resolverCalls int32
+		ctx := serverdomain.WithListJQResourceResolver(
+			context.Background(),
+			func(_ context.Context, logicalPath string) (resource.Value, error) {
+				atomic.AddInt32(&resolverCalls, 1)
+				if logicalPath != "/admin/realms/publico-br/user-registry/ldap-test" {
+					t.Fatalf("unexpected resolved logical path %q", logicalPath)
+				}
+				return map[string]any{"id": "ldap-id"}, nil
+			},
+		)
+
+		items, err := gateway.List(ctx, "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+
+		if len(items) != 1 {
+			t.Fatalf("expected jq-filtered list with 1 item, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/admin/realms/publico-br/user-registry/ldap-test/mappers/alpha" {
+			t.Fatalf("unexpected filtered logical path %#v", items[0].LogicalPath)
+		}
+		if got := atomic.LoadInt32(&resolverCalls); got != 1 {
+			t.Fatalf("expected context resolver to be called once, got %d", got)
+		}
+	})
+
 	t.Run("invalid_list_jq_returns_validation_error", func(t *testing.T) {
 		t.Parallel()
 
@@ -909,6 +1005,34 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					JQ: "[ .[] | select(.providerId == ]",
+				},
+			},
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("invalid_list_jq_resource_argument_returns_validation_error", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `[{"id":"mapper-a","name":"alpha","parentId":"ldap-id"}]`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.List(context.Background(), "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					Path: `/admin/realms/publico-br/user-registry/ldap-test/mappers`,
+					JQ:   `[ .[] | select(.parentId == (resource(1) | .id)) ]`,
 				},
 			},
 		})

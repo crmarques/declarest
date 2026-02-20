@@ -1,6 +1,12 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "name",
-    "aliasFromAttribute": "name"
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name",
+    "collectionPath": "/admin/realms/{{.realm}}/components"
+  },
+  "operationInfo": {
+    "listCollection": {
+      "jq": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.provider}}/\") | .id)) ]"
+    }
   }
 }
