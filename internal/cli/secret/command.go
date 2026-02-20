@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	"github.com/crmarques/declarest/internal/cli/common"
-	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -666,7 +666,7 @@ func detectSecretCandidatesFromRepository(
 }
 
 func filterDetectedSecretAttributes(keys []string, secretAttribute string) ([]string, bool) {
-	normalizedKeys := dedupeAndSortStrings(keys)
+	normalizedKeys := secretworkflow.DedupeAndSortAttributes(keys)
 	if len(normalizedKeys) == 0 {
 		return nil, false
 	}
@@ -722,69 +722,11 @@ func applyDetectedSecretAttributes(
 		return nil
 	}
 
-	currentMetadata, err := metadataService.Get(ctx, logicalPath)
-	if err != nil {
-		if !isTypedErrorCategory(err, faults.NotFoundError) {
-			return err
-		}
-		currentMetadata = metadatadomain.ResourceMetadata{}
-	}
-
-	currentMetadata.SecretsFromAttributes = mergeSecretAttributes(
-		currentMetadata.SecretsFromAttributes,
-		detected,
-	)
-
-	return metadataService.Set(ctx, logicalPath, currentMetadata)
+	return secretworkflow.PersistDetectedAttributes(ctx, metadataService, logicalPath, detected)
 }
 
 func mergeSecretAttributes(existing []string, detected []string) []string {
-	merged := make([]string, 0, len(existing)+len(detected))
-	seen := make(map[string]struct{}, len(existing)+len(detected))
-
-	for _, raw := range existing {
-		attribute := strings.TrimSpace(raw)
-		if attribute == "" {
-			continue
-		}
-		if _, found := seen[attribute]; found {
-			continue
-		}
-		seen[attribute] = struct{}{}
-		merged = append(merged, attribute)
-	}
-	for _, raw := range detected {
-		attribute := strings.TrimSpace(raw)
-		if attribute == "" {
-			continue
-		}
-		if _, found := seen[attribute]; found {
-			continue
-		}
-		seen[attribute] = struct{}{}
-		merged = append(merged, attribute)
-	}
-
-	sort.Strings(merged)
-	return merged
-}
-
-func dedupeAndSortStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	items := make([]string, 0, len(values))
-	for _, raw := range values {
-		value := strings.TrimSpace(raw)
-		if value == "" {
-			continue
-		}
-		if _, found := seen[value]; found {
-			continue
-		}
-		seen[value] = struct{}{}
-		items = append(items, value)
-	}
-	sort.Strings(items)
-	return items
+	return secretworkflow.MergeAttributes(existing, detected)
 }
 
 func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {

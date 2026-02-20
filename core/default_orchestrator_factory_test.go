@@ -8,8 +8,8 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
-	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
+	localfs "github.com/crmarques/declarest/internal/providers/repository/localfs"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
@@ -38,8 +38,8 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.Repository.(*fsrepository.FSResourceRepository); !ok {
-			t.Fatalf("expected FSResourceRepository, got %T", defaultOrchestrator.Repository)
+		if _, ok := defaultOrchestrator.Repository.(*localfs.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.Repository)
 		}
 		if _, ok := defaultOrchestrator.Metadata.(*fsmetadata.FSMetadataService); !ok {
 			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.Metadata)
@@ -121,8 +121,8 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.Repository.(*fsrepository.FSResourceRepository); !ok {
-			t.Fatalf("expected FSResourceRepository, got %T", defaultOrchestrator.Repository)
+		if _, ok := defaultOrchestrator.Repository.(*localfs.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.Repository)
 		}
 		if _, ok := defaultOrchestrator.Secrets.(*vaultsecrets.VaultSecretService); !ok {
 			t.Fatalf("expected VaultSecretService, got %T", defaultOrchestrator.Secrets)

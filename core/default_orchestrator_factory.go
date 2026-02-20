@@ -6,8 +6,8 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
-	fsrepository "github.com/crmarques/declarest/internal/providers/repository/fs"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
+	localfs "github.com/crmarques/declarest/internal/providers/repository/localfs"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
@@ -37,7 +37,7 @@ func buildDefaultOrchestrator(
 
 	switch {
 	case resolvedContext.Repository.Filesystem != nil:
-		defaultOrchestrator.Repository = fsrepository.NewFSResourceRepository(
+		defaultOrchestrator.Repository = localfs.NewLocalResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)

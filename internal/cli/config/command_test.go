@@ -602,9 +602,10 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 	}
 
 	deps := common.CommandDependencies{
-		Contexts:   contextService,
-		Repository: &testRepositoryService{},
-		Metadata:   &testMetadataService{},
+		Contexts:       contextService,
+		ResourceStore:  &testRepositoryService{},
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
 	}
 	globalFlags := &common.GlobalFlags{Output: common.OutputText}
 
@@ -657,10 +658,11 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 	}
 
 	deps := common.CommandDependencies{
-		Contexts:     contextService,
-		Repository:   &testRepositoryService{},
-		Metadata:     &testMetadataService{},
-		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+		Contexts:       contextService,
+		ResourceStore:  &testRepositoryService{},
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
+		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
 	}
 	globalFlags := &common.GlobalFlags{Output: common.OutputText}
 
@@ -707,11 +709,12 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	}
 
 	deps := common.CommandDependencies{
-		Contexts:     contextService,
-		Repository:   &testRepositoryService{},
-		Metadata:     &testMetadataService{},
-		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "resource server auth failed", nil)},
-		Secrets:      &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
+		Contexts:       contextService,
+		ResourceStore:  &testRepositoryService{},
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
+		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "resource server auth failed", nil)},
+		Secrets:        &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
 	}
 	globalFlags := &common.GlobalFlags{Output: common.OutputText}
 

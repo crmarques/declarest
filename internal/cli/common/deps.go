@@ -11,7 +11,6 @@ import (
 type CommandDependencies struct {
 	Orchestrator   orchestrator.Orchestrator
 	Contexts       config.ContextService
-	Repository     repository.ResourceRepository
 	ResourceStore  repository.ResourceStore
 	RepositorySync repository.RepositorySync
 	Metadata       metadata.MetadataService
@@ -33,9 +32,6 @@ func RequireOrchestrator(deps CommandDependencies) (orchestrator.Orchestrator, e
 }
 
 func RequireResourceStore(deps CommandDependencies) (repository.ResourceStore, error) {
-	if deps.ResourceStore == nil && deps.Repository != nil {
-		return deps.Repository, nil
-	}
 	if deps.ResourceStore == nil {
 		return nil, ValidationError("resource store is not configured", nil)
 	}
@@ -43,9 +39,6 @@ func RequireResourceStore(deps CommandDependencies) (repository.ResourceStore, e
 }
 
 func RequireRepositorySync(deps CommandDependencies) (repository.RepositorySync, error) {
-	if deps.RepositorySync == nil && deps.Repository != nil {
-		return deps.Repository, nil
-	}
 	if deps.RepositorySync == nil {
 		return nil, ValidationError("repository sync is not configured", nil)
 	}

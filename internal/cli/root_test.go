@@ -1614,7 +1614,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.Repository.(*testRepository)
+		repositoryService := deps.ResourceStore.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force")
 		if err != nil {
@@ -1633,7 +1633,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.Repository.(*testRepository)
+		repositoryService := deps.ResourceStore.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--repository")
 		if err != nil {
@@ -1652,7 +1652,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.Repository.(*testRepository)
+		repositoryService := deps.ResourceStore.(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--force", "--both")
 		if err != nil {
@@ -2669,7 +2669,7 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 
 		repoService := &testRepository{}
 		deps := testDeps()
-		deps.Repository = repoService
+		deps.RepositorySync = repoService
 
 		if _, err := executeForTest(deps, "", "--context", "git", "repo", "push"); err != nil {
 			t.Fatalf("unexpected push error: %v", err)
@@ -4276,17 +4276,20 @@ func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata)
 	repositoryService := &testRepository{}
 
 	return Dependencies{
-		Orchestrator: orchestrator,
-		Contexts:     &testContextService{},
-		Repository:   repositoryService,
-		Metadata:     metadataService,
-		Secrets:      secretProvider,
+		Orchestrator:   orchestrator,
+		Contexts:       &testContextService{},
+		ResourceStore:  repositoryService,
+		RepositorySync: repositoryService,
+		Metadata:       metadataService,
+		Secrets:        secretProvider,
 	}
 }
 
 func newResourceSaveDeps(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
 	deps := testDepsWith(orchestrator, metadataService)
-	deps.Repository = &resourceSaveTestRepository{}
+	repositoryService := &resourceSaveTestRepository{}
+	deps.ResourceStore = repositoryService
+	deps.RepositorySync = repositoryService
 	return deps
 }
 

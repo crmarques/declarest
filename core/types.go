@@ -9,9 +9,6 @@ import (
 )
 
 type DeclarestContext struct {
-	// Repository is kept for compatibility while consumers migrate to
-	// ResourceStore/RepositorySync split interfaces.
-	Repository     repository.ResourceRepository
 	Contexts       config.ContextService
 	Orchestrator   orchestrator.Orchestrator
 	ResourceStore  repository.ResourceStore

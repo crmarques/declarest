@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
-	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
 	"github.com/crmarques/declarest/orchestrator"
@@ -222,104 +221,9 @@ func resolveGetSecretAttributes(
 	deps common.CommandDependencies,
 	logicalPath string,
 ) ([]string, error) {
-	resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, logicalPath)
-	if err != nil {
-		return nil, err
-	}
-	return dedupeAndSortSaveSecretAttributes(resolvedMetadata.SecretsFromAttributes), nil
+	return secretworkflow.ResolveDeclaredAttributes(ctx, deps.Metadata, logicalPath)
 }
 
 func maskGetSecretsInValue(value resource.Value, secretAttributes []string) (resource.Value, error) {
-	normalizedValue, err := resource.Normalize(value)
-	if err != nil {
-		return nil, err
-	}
-
-	switch typed := normalizedValue.(type) {
-	case map[string]any:
-		maskGetSecretsInPayload(typed, secretAttributes)
-		return typed, nil
-	case []any:
-		items := make([]any, len(typed))
-		for idx := range typed {
-			entry := typed[idx]
-			entryPayload, ok := entry.(map[string]any)
-			if !ok {
-				items[idx] = entry
-				continue
-			}
-			maskGetSecretsInPayload(entryPayload, secretAttributes)
-			items[idx] = entryPayload
-		}
-		return items, nil
-	default:
-		return normalizedValue, nil
-	}
-}
-
-func maskGetSecretsInPayload(payload map[string]any, secretAttributes []string) {
-	paths := resolveGetSecretAttributePaths(payload, secretAttributes)
-	for _, attributePath := range paths {
-		parent, leafKey, found := findAttributeParentMap(payload, attributePath)
-		if !found {
-			continue
-		}
-
-		currentValue := parent[leafKey]
-		if currentValue == nil {
-			continue
-		}
-		if stringValue, ok := currentValue.(string); ok && isSecretPlaceholderValue(stringValue) {
-			continue
-		}
-		parent[leafKey] = secretPlaceholderValue()
-	}
-}
-
-func resolveGetSecretAttributePaths(payload map[string]any, secretAttributes []string) []string {
-	resolvedPaths := make(map[string]struct{})
-	for _, rawAttribute := range secretAttributes {
-		attribute := strings.TrimSpace(rawAttribute)
-		if attribute == "" {
-			continue
-		}
-		if strings.Contains(attribute, ".") {
-			if _, _, found := findAttributeParentMap(payload, attribute); found {
-				resolvedPaths[attribute] = struct{}{}
-			}
-			continue
-		}
-		collectGetSecretAttributePaths(payload, "", attribute, resolvedPaths)
-	}
-
-	paths := make([]string, 0, len(resolvedPaths))
-	for attributePath := range resolvedPaths {
-		paths = append(paths, attributePath)
-	}
-	sort.Strings(paths)
-	return paths
-}
-
-func collectGetSecretAttributePaths(
-	value any,
-	prefix string,
-	attribute string,
-	paths map[string]struct{},
-) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, field := range typed {
-			currentPath := key
-			if prefix != "" {
-				currentPath = prefix + "." + key
-			}
-			if key == attribute {
-				paths[currentPath] = struct{}{}
-			}
-			collectGetSecretAttributePaths(field, currentPath, attribute, paths)
-		}
-	case []any:
-		// Arrays are intentionally ignored because metadata secret paths are map-path based.
-		return
-	}
+	return secretworkflow.MaskValue(value, secretAttributes)
 }

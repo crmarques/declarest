@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -1058,112 +1058,15 @@ func resolveMetadataForSecretCheck(
 	deps Dependencies,
 	logicalPath string,
 ) (metadatadomain.ResourceMetadata, error) {
-	if deps.Metadata == nil {
-		return metadatadomain.ResourceMetadata{}, nil
-	}
-
-	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
-	if err != nil {
-		return metadatadomain.ResourceMetadata{}, err
-	}
-
-	resolvedMetadata, err := deps.Metadata.ResolveForPath(ctx, normalizedPath)
-	if err != nil {
-		if isTypedErrorCategory(err, faults.NotFoundError) {
-			return metadatadomain.ResourceMetadata{}, nil
-		}
-		return metadatadomain.ResourceMetadata{}, err
-	}
-	return resolvedMetadata, nil
+	return secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.Metadata, logicalPath)
 }
 
 func detectMetadataSecretCandidates(value resource.Value, attributes []string) []string {
-	payload, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-
-	candidates := make([]string, 0)
-	seenAttributes := make(map[string]struct{})
-	for _, rawAttribute := range attributes {
-		attribute := strings.TrimSpace(rawAttribute)
-		if attribute == "" {
-			continue
-		}
-		if _, seen := seenAttributes[attribute]; seen {
-			continue
-		}
-		seenAttributes[attribute] = struct{}{}
-
-		fieldValue, found := identity.LookupScalarAttribute(payload, attribute)
-		if !found || strings.TrimSpace(fieldValue) == "" {
-			continue
-		}
-		if isSecretPlaceholderValue(fieldValue) {
-			continue
-		}
-		if !isLikelyPlaintextSecretValue(fieldValue) {
-			continue
-		}
-		candidates = append(candidates, attribute)
-	}
-
-	sort.Strings(candidates)
-	return candidates
+	return secretworkflow.DetectMetadataSecretCandidates(value, attributes)
 }
 
 func resolveSaveSecretAttributes(payload map[string]any, candidates []string) []string {
-	attributes := make(map[string]struct{})
-	for _, rawCandidate := range candidates {
-		candidate := strings.TrimSpace(rawCandidate)
-		if candidate == "" {
-			continue
-		}
-
-		if strings.Contains(candidate, ".") {
-			fieldValue, found := identity.LookupScalarAttribute(payload, candidate)
-			if found && strings.TrimSpace(fieldValue) != "" && !isSecretPlaceholderValue(fieldValue) {
-				attributes[candidate] = struct{}{}
-			}
-			continue
-		}
-
-		collectCandidateAttributePaths(payload, "", candidate, attributes)
-	}
-
-	result := make([]string, 0, len(attributes))
-	for attribute := range attributes {
-		result = append(result, attribute)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func collectCandidateAttributePaths(
-	value any,
-	prefix string,
-	candidate string,
-	attributes map[string]struct{},
-) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, field := range typed {
-			attribute := key
-			if prefix != "" {
-				attribute = prefix + "." + key
-			}
-			if key == candidate {
-				fieldValue, ok := field.(string)
-				if ok && strings.TrimSpace(fieldValue) != "" && !isSecretPlaceholderValue(fieldValue) {
-					attributes[attribute] = struct{}{}
-				}
-			}
-			collectCandidateAttributePaths(field, attribute, candidate, attributes)
-		}
-	case []any:
-		// Arrays are intentionally skipped because metadata attributes are map-path based.
-		return
-	}
+	return secretworkflow.ResolveAttributePathsForCandidates(payload, candidates)
 }
 
 func persistSaveSecretAttributes(
@@ -1182,51 +1085,11 @@ func persistSaveSecretAttributes(
 		return err
 	}
 
-	currentMetadata, err := metadataService.Get(ctx, logicalPath)
-	if err != nil {
-		if !isTypedErrorCategory(err, faults.NotFoundError) {
-			return err
-		}
-		currentMetadata = metadatadomain.ResourceMetadata{}
-	}
-
-	currentMetadata.SecretsFromAttributes = mergeSaveSecretAttributes(
-		currentMetadata.SecretsFromAttributes,
-		attributes,
-	)
-
-	return metadataService.Set(ctx, logicalPath, currentMetadata)
+	return secretworkflow.PersistDetectedAttributes(ctx, metadataService, logicalPath, attributes)
 }
 
 func mergeSaveSecretAttributes(existing []string, detected []string) []string {
-	merged := make([]string, 0, len(existing)+len(detected))
-	seen := make(map[string]struct{}, len(existing)+len(detected))
-
-	for _, raw := range existing {
-		attribute := strings.TrimSpace(raw)
-		if attribute == "" {
-			continue
-		}
-		if _, found := seen[attribute]; found {
-			continue
-		}
-		seen[attribute] = struct{}{}
-		merged = append(merged, attribute)
-	}
-	for _, raw := range detected {
-		attribute := strings.TrimSpace(raw)
-		if attribute == "" {
-			continue
-		}
-		if _, found := seen[attribute]; found {
-			continue
-		}
-		seen[attribute] = struct{}{}
-		merged = append(merged, attribute)
-	}
-
-	sort.Strings(merged)
-	return merged
+	return secretworkflow.MergeAttributes(existing, detected)
 }
 
 func ensureSaveTargetAllowed(
@@ -1285,51 +1148,11 @@ func resourceExists(
 }
 
 func dedupeAndSortSaveSecretAttributes(values []string) []string {
-	items := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, raw := range values {
-		value := strings.TrimSpace(raw)
-		if value == "" {
-			continue
-		}
-		if _, found := seen[value]; found {
-			continue
-		}
-		seen[value] = struct{}{}
-		items = append(items, value)
-	}
-	sort.Strings(items)
-	return items
-}
-
-func isNumericOnlyString(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return false
-	}
-	for _, symbol := range trimmed {
-		if symbol < '0' || symbol > '9' {
-			return false
-		}
-	}
-	return true
+	return secretworkflow.DedupeAndSortAttributes(values)
 }
 
 func isLikelyPlaintextSecretValue(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return false
-	}
-	if isNumericOnlyString(trimmed) {
-		return false
-	}
-
-	switch strings.ToLower(trimmed) {
-	case "true", "false", "yes", "no", "on", "off", "enabled", "disabled":
-		return false
-	default:
-		return true
-	}
+	return secretworkflow.IsLikelyPlaintextValue(value)
 }
 
 func storeAndMaskAttribute(
@@ -1339,98 +1162,23 @@ func storeAndMaskAttribute(
 	logicalPath string,
 	attribute string,
 ) error {
-	secretValue, found := identity.LookupScalarAttribute(payload, attribute)
-	if !found || strings.TrimSpace(secretValue) == "" {
-		return nil
-	}
-	if isSecretPlaceholderValue(secretValue) {
-		return nil
-	}
-
-	parent, leafKey, found := findAttributeParentMap(payload, attribute)
-	if !found {
-		return nil
-	}
-
-	secretKey := buildSaveSecretKey(logicalPath, attribute)
-	if err := secretProvider.Store(ctx, secretKey, secretValue); err != nil {
-		return err
-	}
-
-	parent[leafKey] = secretPlaceholderValue()
-	return nil
+	return secretworkflow.StoreAndMaskAttribute(ctx, secretProvider, payload, logicalPath, attribute)
 }
 
 func findAttributeParentMap(payload map[string]any, attribute string) (map[string]any, string, bool) {
-	segments := strings.Split(strings.TrimSpace(attribute), ".")
-	if len(segments) == 0 {
-		return nil, "", false
-	}
-
-	current := payload
-	for idx := 0; idx < len(segments)-1; idx++ {
-		segment := strings.TrimSpace(segments[idx])
-		if segment == "" {
-			return nil, "", false
-		}
-
-		nextRaw, exists := current[segment]
-		if !exists {
-			return nil, "", false
-		}
-		next, ok := nextRaw.(map[string]any)
-		if !ok {
-			return nil, "", false
-		}
-		current = next
-	}
-
-	leafKey := strings.TrimSpace(segments[len(segments)-1])
-	if leafKey == "" {
-		return nil, "", false
-	}
-	if _, exists := current[leafKey]; !exists {
-		return nil, "", false
-	}
-
-	return current, leafKey, true
+	return secretworkflow.FindAttributeParentMap(payload, attribute)
 }
 
 func secretPlaceholderValue() string {
-	return "{{secret .}}"
+	return secretworkflow.PlaceholderValue()
 }
 
 func buildSaveSecretKey(logicalPath string, attribute string) string {
-	return strings.TrimSpace(logicalPath) + ":" + strings.TrimSpace(attribute)
+	return secretworkflow.BuildPathScopedSecretKey(logicalPath, attribute)
 }
 
 func isSecretPlaceholderValue(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if !strings.HasPrefix(trimmed, "{{") || !strings.HasSuffix(trimmed, "}}") {
-		return false
-	}
-
-	inner := strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}")
-	inner = strings.TrimSpace(inner)
-	if !strings.HasPrefix(inner, "secret") {
-		return false
-	}
-
-	argument := strings.TrimSpace(strings.TrimPrefix(inner, "secret"))
-	if argument == "." {
-		return true
-	}
-	if strings.HasPrefix(argument, "\"") {
-		parsed, err := strconv.Unquote(argument)
-		if err != nil {
-			return false
-		}
-		return strings.TrimSpace(parsed) != ""
-	}
-	if strings.ContainsAny(argument, " \t\r\n") {
-		return false
-	}
-	return strings.TrimSpace(argument) != ""
+	return secretworkflow.IsPlaceholderValue(value)
 }
 
 func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {

@@ -21,7 +21,6 @@ import (
 
 var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
-var _ repository.ResourceRepository = (*GitResourceRepository)(nil)
 
 const (
 	defaultRemoteName = "origin"

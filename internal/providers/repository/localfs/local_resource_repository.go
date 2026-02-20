@@ -15,7 +15,6 @@ import (
 
 var _ repository.ResourceStore = (*LocalResourceRepository)(nil)
 var _ repository.RepositorySync = (*LocalResourceRepository)(nil)
-var _ repository.ResourceRepository = (*LocalResourceRepository)(nil)
 
 type LocalResourceRepository struct {
 	baseDir        string

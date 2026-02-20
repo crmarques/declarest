@@ -84,20 +84,15 @@ type resourceURLWire struct {
 }
 
 func (m ResourceMetadata) MarshalJSON() ([]byte, error) {
-	wire := resourceMetadataToWire(m)
-	return json.Marshal(wire)
+	return EncodeResourceMetadataJSON(m, false)
 }
 
 func (m *ResourceMetadata) UnmarshalJSON(data []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-
-	wire := resourceMetadataWire{}
-	if err := decoder.Decode(&wire); err != nil {
+	decoded, err := DecodeResourceMetadataJSON(data)
+	if err != nil {
 		return err
 	}
-
-	*m = resourceMetadataFromWire(wire)
+	*m = decoded
 	return nil
 }
 
@@ -113,6 +108,42 @@ func (m *ResourceMetadata) UnmarshalYAML(value *yaml.Node) error {
 
 	*m = resourceMetadataFromWire(wire)
 	return nil
+}
+
+func DecodeResourceMetadataJSON(data []byte) (ResourceMetadata, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+
+	wire := resourceMetadataWire{}
+	if err := decoder.Decode(&wire); err != nil {
+		return ResourceMetadata{}, err
+	}
+
+	return resourceMetadataFromWire(wire), nil
+}
+
+func DecodeResourceMetadataYAML(data []byte) (ResourceMetadata, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+
+	wire := resourceMetadataWire{}
+	if err := decoder.Decode(&wire); err != nil {
+		return ResourceMetadata{}, err
+	}
+
+	return resourceMetadataFromWire(wire), nil
+}
+
+func EncodeResourceMetadataJSON(metadata ResourceMetadata, pretty bool) ([]byte, error) {
+	wire := resourceMetadataToWire(metadata)
+	if pretty {
+		return json.MarshalIndent(wire, "", "  ")
+	}
+	return json.Marshal(wire)
+}
+
+func EncodeResourceMetadataYAML(metadata ResourceMetadata) ([]byte, error) {
+	return yaml.Marshal(resourceMetadataToWire(metadata))
 }
 
 func EffectiveCollectionPath(md ResourceMetadata, fallback string) string {

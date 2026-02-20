@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
 	"github.com/crmarques/declarest/repository"
 )
@@ -20,18 +21,16 @@ func NewDeclarestContext(opts BootstrapConfig, selection config.ContextSelection
 		return DeclarestContext{}, err
 	}
 
-	var repositoryCompat repository.ResourceRepository
-	if typed, ok := defaultOrchestrator.Repository.(repository.ResourceRepository); ok {
-		repositoryCompat = typed
-	}
-
-	var repositorySync repository.RepositorySync
-	if typed, ok := defaultOrchestrator.Repository.(repository.RepositorySync); ok {
-		repositorySync = typed
+	repositorySync, ok := defaultOrchestrator.Repository.(repository.RepositorySync)
+	if !ok {
+		return DeclarestContext{}, faults.NewTypedError(
+			faults.InternalError,
+			"repository provider does not implement sync capabilities",
+			nil,
+		)
 	}
 
 	return DeclarestContext{
-		Repository:     repositoryCompat,
 		Contexts:       contextService,
 		Orchestrator:   defaultOrchestrator,
 		ResourceStore:  defaultOrchestrator.Repository,

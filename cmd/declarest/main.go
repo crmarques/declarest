@@ -29,7 +29,6 @@ func main() {
 			deps = cli.Dependencies{
 				Orchestrator:   declarestContext.Orchestrator,
 				Contexts:       declarestContext.Contexts,
-				Repository:     declarestContext.Repository,
 				ResourceStore:  declarestContext.ResourceStore,
 				RepositorySync: declarestContext.RepositorySync,
 				Metadata:       declarestContext.Metadata,

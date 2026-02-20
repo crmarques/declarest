@@ -24,9 +24,3 @@ type RepositorySync interface {
 	Push(ctx context.Context, policy PushPolicy) error
 	SyncStatus(ctx context.Context) (SyncReport, error)
 }
-
-// ResourceRepository is a compatibility union for consumers not yet split.
-type ResourceRepository interface {
-	ResourceStore
-	RepositorySync
-}

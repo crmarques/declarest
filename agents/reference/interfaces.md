@@ -46,12 +46,14 @@ Required fields:
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
 2. clients MUST consume `core.DeclarestContext` as their primary dependency entrypoint.
-3. `Repository` MAY be exposed only as temporary compatibility union while callers migrate to split repository contracts.
 
 Factory contract:
 1. `core.NewDeclarestContext` MUST assemble default provider implementations.
 2. `core.NewDeclarestContext` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
+
+Corner case example:
+1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `core.NewDeclarestContext` MUST return an `InternalError`.
 
 ### Type: `core.BootstrapConfig`
 Represents startup wiring inputs.
@@ -257,14 +259,6 @@ Responsibilities:
 Method families:
 1. Lifecycle: `Init/Refresh/Reset/Check`.
 2. Sync: `Push/SyncStatus`.
-
-### Interface: `repository.ResourceRepository`
-Responsibilities:
-1. Compatibility union for consumers that still require one dependency.
-
-Method families:
-1. Embeds `repository.ResourceStore`.
-2. Embeds `repository.RepositorySync`.
 
 ### Interface: `metadata.MetadataService`
 Responsibilities:

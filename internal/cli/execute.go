@@ -19,7 +19,6 @@ import (
 type Dependencies struct {
 	Orchestrator   orchestrator.Orchestrator
 	Contexts       config.ContextService
-	Repository     repository.ResourceRepository
 	ResourceStore  repository.ResourceStore
 	RepositorySync repository.RepositorySync
 	Metadata       metadata.MetadataService
@@ -27,23 +26,11 @@ type Dependencies struct {
 }
 
 func (d Dependencies) commandDependencies() common.CommandDependencies {
-	resourceStore := d.ResourceStore
-	repositorySync := d.RepositorySync
-	if d.Repository != nil {
-		if resourceStore == nil {
-			resourceStore = d.Repository
-		}
-		if repositorySync == nil {
-			repositorySync = d.Repository
-		}
-	}
-
 	return common.CommandDependencies{
 		Orchestrator:   d.Orchestrator,
 		Contexts:       d.Contexts,
-		Repository:     d.Repository,
-		ResourceStore:  resourceStore,
-		RepositorySync: repositorySync,
+		ResourceStore:  d.ResourceStore,
+		RepositorySync: d.RepositorySync,
 		Metadata:       d.Metadata,
 		Secrets:        d.Secrets,
 	}
