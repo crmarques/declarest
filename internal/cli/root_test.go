@@ -3698,6 +3698,266 @@ func TestResourceListCompletionShowsSourceFlags(t *testing.T) {
 	}
 }
 
+func TestPathCompletionAvailableForAllPathAwareCommands(t *testing.T) {
+	t.Parallel()
+
+	command := NewRootCommand(testDeps())
+	pathAwareCommands := [][]string{
+		{"resource", "get"},
+		{"resource", "save"},
+		{"resource", "apply"},
+		{"resource", "create"},
+		{"resource", "update"},
+		{"resource", "delete"},
+		{"resource", "diff"},
+		{"resource", "list"},
+		{"resource", "explain"},
+		{"resource", "template"},
+		{"metadata", "get"},
+		{"metadata", "set"},
+		{"metadata", "unset"},
+		{"metadata", "resolve"},
+		{"metadata", "render"},
+		{"metadata", "infer"},
+		{"secret", "get"},
+		{"secret", "detect"},
+		{"ad-hoc", "get"},
+		{"ad-hoc", "head"},
+		{"ad-hoc", "options"},
+		{"ad-hoc", "post"},
+		{"ad-hoc", "put"},
+		{"ad-hoc", "patch"},
+		{"ad-hoc", "delete"},
+		{"ad-hoc", "trace"},
+		{"ad-hoc", "connect"},
+	}
+
+	for _, commandPath := range pathAwareCommands {
+		commandPath := append([]string{}, commandPath...)
+		t.Run(joinPath(commandPath), func(t *testing.T) {
+			target := commandByPath(command, commandPath...)
+			if target == nil {
+				t.Fatalf("expected command path %q to exist", joinPath(commandPath))
+			}
+			if target.Flags().Lookup("path") == nil {
+				t.Fatalf("expected command %q to declare --path", joinPath(commandPath))
+			}
+			if _, found := target.GetFlagCompletionFunc("path"); !found {
+				t.Fatalf("expected command %q to register --path completion", joinPath(commandPath))
+			}
+			if target.ValidArgsFunction == nil {
+				t.Fatalf("expected command %q to register positional path completion", joinPath(commandPath))
+			}
+		})
+	}
+}
+
+func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name            string
+		args            []string
+		expectLocal     bool
+		expectRemote    bool
+		expectedSnippet string
+	}{
+		{
+			name:            "get_default_prefers_remote",
+			args:            []string{"resource", "get", "/customers"},
+			expectLocal:     false,
+			expectRemote:    true,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "get_repository_prefers_local",
+			args:            []string{"resource", "get", "--repository", "/customers"},
+			expectLocal:     true,
+			expectRemote:    false,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "get_remote_server_prefers_remote",
+			args:            []string{"resource", "get", "--remote-server", "/customers"},
+			expectLocal:     false,
+			expectRemote:    true,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "get_repository_path_flag_uses_local",
+			args:            []string{"resource", "get", "--repository", "--path", "/customers"},
+			expectLocal:     true,
+			expectRemote:    false,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "list_repository_prefers_local",
+			args:            []string{"resource", "list", "--repository", "/customers"},
+			expectLocal:     true,
+			expectRemote:    false,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "list_remote_server_prefers_remote",
+			args:            []string{"resource", "list", "--remote-server", "/customers"},
+			expectLocal:     false,
+			expectRemote:    true,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "delete_repository_prefers_local",
+			args:            []string{"resource", "delete", "--force", "--repository", "/customers"},
+			expectLocal:     true,
+			expectRemote:    false,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "delete_remote_server_prefers_remote",
+			args:            []string{"resource", "delete", "--force", "--remote-server", "/customers"},
+			expectLocal:     false,
+			expectRemote:    true,
+			expectedSnippet: "/customers/",
+		},
+		{
+			name:            "delete_both_queries_both_sources",
+			args:            []string{"resource", "delete", "--force", "--both", "/customers"},
+			expectLocal:     true,
+			expectRemote:    true,
+			expectedSnippet: "/customers/",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			deps := testDeps()
+			reconciler := deps.Orchestrator.(*testReconciler)
+			reconciler.localList = []resource.Resource{
+				{LogicalPath: "/customers/local"},
+			}
+			reconciler.remoteList = []resource.Resource{
+				{LogicalPath: "/customers/remote"},
+			}
+
+			completeArgs := append([]string{"__complete"}, testCase.args...)
+			output, err := executeForTest(deps, "", completeArgs...)
+			if err != nil {
+				t.Fatalf("unexpected completion error: %v", err)
+			}
+			if !strings.Contains(output, testCase.expectedSnippet) {
+				t.Fatalf("expected completion output %q, got %q", testCase.expectedSnippet, output)
+			}
+			if !strings.Contains(output, ":6") {
+				t.Fatalf("expected path completion directive :6, got %q", output)
+			}
+
+			localCalled := len(reconciler.listLocalCalls) > 0
+			remoteCalled := len(reconciler.listRemoteCalls) > 0
+
+			if localCalled != testCase.expectLocal {
+				t.Fatalf("expected local completion queries=%t, got %t (calls=%#v)", testCase.expectLocal, localCalled, reconciler.listLocalDetail)
+			}
+			if remoteCalled != testCase.expectRemote {
+				t.Fatalf("expected remote completion queries=%t, got %t (calls=%#v)", testCase.expectRemote, remoteCalled, reconciler.listRemoteDetail)
+			}
+		})
+	}
+}
+
+func TestPathCompletionAdHocPrefersRemoteWithRepositoryFallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("remote_first", func(t *testing.T) {
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.localList = []resource.Resource{
+			{LogicalPath: "/admin/local-only"},
+		}
+		reconciler.remoteList = []resource.Resource{
+			{LogicalPath: "/admin/remote-only"},
+		}
+
+		output, err := executeForTest(deps, "", "__complete", "ad-hoc", "get", "/adm")
+		if err != nil {
+			t.Fatalf("unexpected completion error: %v", err)
+		}
+		if !strings.Contains(output, "/admin/") {
+			t.Fatalf("expected ad-hoc completion output, got %q", output)
+		}
+		if len(reconciler.listRemoteCalls) == 0 {
+			t.Fatalf("expected ad-hoc completion to query remote source first")
+		}
+		if len(reconciler.listLocalCalls) != 0 {
+			t.Fatalf("expected ad-hoc completion to skip local fallback when remote candidates exist, calls=%#v", reconciler.listLocalDetail)
+		}
+	})
+
+	t.Run("fallback_to_local_when_remote_fails", func(t *testing.T) {
+		deps := testDeps()
+		reconciler := deps.Orchestrator.(*testReconciler)
+		reconciler.localList = []resource.Resource{
+			{LogicalPath: "/admin/local-only"},
+		}
+		reconciler.listRemoteErr = errors.New("remote unavailable")
+
+		output, err := executeForTest(deps, "", "__complete", "ad-hoc", "get", "/adm")
+		if err != nil {
+			t.Fatalf("unexpected completion error: %v", err)
+		}
+		if !strings.Contains(output, "/admin/") {
+			t.Fatalf("expected ad-hoc completion output from local fallback, got %q", output)
+		}
+		if len(reconciler.listRemoteCalls) == 0 {
+			t.Fatalf("expected ad-hoc completion to attempt remote source first")
+		}
+		if len(reconciler.listLocalCalls) == 0 {
+			t.Fatalf("expected ad-hoc completion to fallback to local source when remote fails")
+		}
+	})
+}
+
+func TestPathCompletionMetadataAndSecretPreferRepositoryPaths(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		args []string
+	}{
+		{name: "metadata_get", args: []string{"metadata", "get", "/customers"}},
+		{name: "secret_get", args: []string{"secret", "get", "/customers"}},
+		{name: "secret_detect", args: []string{"secret", "detect", "/customers"}},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			deps := testDeps()
+			reconciler := deps.Orchestrator.(*testReconciler)
+			reconciler.localList = []resource.Resource{
+				{LogicalPath: "/customers/local"},
+			}
+			reconciler.remoteList = []resource.Resource{
+				{LogicalPath: "/customers/remote"},
+			}
+
+			completeArgs := append([]string{"__complete"}, testCase.args...)
+			output, err := executeForTest(deps, "", completeArgs...)
+			if err != nil {
+				t.Fatalf("unexpected completion error: %v", err)
+			}
+			if !strings.Contains(output, "/customers/") {
+				t.Fatalf("expected completion output, got %q", output)
+			}
+			if len(reconciler.listLocalCalls) == 0 {
+				t.Fatalf("expected completion to query local repository source")
+			}
+			if len(reconciler.listRemoteCalls) != 0 {
+				t.Fatalf("expected completion to skip remote fallback when repository candidates exist, calls=%#v", reconciler.listRemoteDetail)
+			}
+		})
+	}
+}
+
 func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
 	t.Parallel()
 
@@ -3927,6 +4187,25 @@ func joinPath(path []string) string {
 		joined += " " + path[i]
 	}
 	return joined
+}
+
+func commandByPath(root *cobra.Command, path ...string) *cobra.Command {
+	command := root
+	for _, name := range path {
+		found := false
+		for _, child := range command.Commands() {
+			if child.Name() != name {
+				continue
+			}
+			command = child
+			found = true
+			break
+		}
+		if !found {
+			return nil
+		}
+	}
+	return command
 }
 
 func extractHelpSection(output string, heading string) string {

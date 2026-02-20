@@ -52,7 +52,7 @@ func defaultCompletionSourceStrategy() completionSourceStrategy {
 	return completionSourceStrategy{
 		primary:      completionSourceLocal,
 		secondary:    completionSourceRemote,
-		fallbackOnly: false,
+		fallbackOnly: true,
 	}
 }
 
@@ -61,52 +61,65 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 	if command == nil {
 		return strategy
 	}
-	if command.Parent() == nil || command.Parent().Name() != "resource" {
-		return strategy
+
+	parentName := ""
+	if command.Parent() != nil {
+		parentName = command.Parent().Name()
 	}
 
-	switch command.Name() {
-	case "get", "save":
+	switch parentName {
+	case "resource":
+		switch command.Name() {
+		case "get", "save":
+			strategy.primary = completionSourceRemote
+			strategy.secondary = completionSourceLocal
+			strategy.fallbackOnly = true
+
+			if commandFlagEnabled(command, "repository") {
+				strategy.primary = completionSourceLocal
+				strategy.secondary = completionSourceRemote
+			}
+			if commandFlagEnabled(command, "remote-server") {
+				strategy.primary = completionSourceRemote
+				strategy.secondary = completionSourceLocal
+			}
+		case "list":
+			strategy.primary = completionSourceRemote
+			strategy.secondary = completionSourceLocal
+			strategy.fallbackOnly = true
+
+			if commandFlagEnabled(command, "repository") {
+				strategy.primary = completionSourceLocal
+				strategy.secondary = completionSourceRemote
+			}
+			if commandFlagEnabled(command, "remote-server") {
+				strategy.primary = completionSourceRemote
+				strategy.secondary = completionSourceLocal
+			}
+		case "delete":
+			strategy.fallbackOnly = true
+			switch {
+			case commandFlagEnabled(command, "both"):
+				strategy.primary = completionSourceLocal
+				strategy.secondary = completionSourceRemote
+				strategy.fallbackOnly = false
+			case commandFlagEnabled(command, "repository"):
+				strategy.primary = completionSourceLocal
+				strategy.secondary = completionSourceRemote
+			default:
+				strategy.primary = completionSourceRemote
+				strategy.secondary = completionSourceLocal
+			}
+		case "apply", "create", "update", "diff", "explain", "template":
+			strategy.primary = completionSourceLocal
+			strategy.secondary = completionSourceRemote
+			strategy.fallbackOnly = true
+		}
+	case "ad-hoc":
 		strategy.primary = completionSourceRemote
 		strategy.secondary = completionSourceLocal
 		strategy.fallbackOnly = true
-
-		if commandFlagEnabled(command, "repository") {
-			strategy.primary = completionSourceLocal
-			strategy.secondary = completionSourceRemote
-		}
-		if commandFlagEnabled(command, "remote-server") {
-			strategy.primary = completionSourceRemote
-			strategy.secondary = completionSourceLocal
-		}
-	case "list":
-		strategy.primary = completionSourceRemote
-		strategy.secondary = completionSourceLocal
-		strategy.fallbackOnly = true
-
-		if commandFlagEnabled(command, "repository") {
-			strategy.primary = completionSourceLocal
-			strategy.secondary = completionSourceRemote
-		}
-		if commandFlagEnabled(command, "remote-server") {
-			strategy.primary = completionSourceRemote
-			strategy.secondary = completionSourceLocal
-		}
-	case "delete":
-		strategy.fallbackOnly = true
-		switch {
-		case commandFlagEnabled(command, "both"):
-			strategy.primary = completionSourceLocal
-			strategy.secondary = completionSourceRemote
-			strategy.fallbackOnly = false
-		case commandFlagEnabled(command, "repository"):
-			strategy.primary = completionSourceLocal
-			strategy.secondary = completionSourceRemote
-		default:
-			strategy.primary = completionSourceRemote
-			strategy.secondary = completionSourceLocal
-		}
-	case "apply", "create", "update", "diff", "explain", "template":
+	case "metadata", "secret":
 		strategy.primary = completionSourceLocal
 		strategy.secondary = completionSourceRemote
 		strategy.fallbackOnly = true

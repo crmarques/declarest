@@ -454,6 +454,9 @@ func inferMetadataFromOpenAPISpec(
 
 	resourceIdentityAttribute := ""
 	resourceSchemaAttributes := inferOpenAPIResponseAttributes(resourceCandidate, pathItems, openAPISpec)
+	if len(resourceSchemaAttributes) == 0 {
+		resourceSchemaAttributes = inferOpenAPIResponseAttributes(collectionCandidate, pathItems, openAPISpec)
+	}
 	if resourceCandidate.path != "" {
 		defaultResourcePath := defaults.Operations[string(OperationGet)].Path
 		metadataResourcePath := openAPIPathToMetadataTemplate(resourceCandidate.path, defaultResourcePath)
@@ -1077,7 +1080,10 @@ func matchOpenAPIPath(selectorSegments []string, templateSegments []string) (boo
 		}
 
 		if templateIsVariable {
-			return false, 0
+			// Concrete selector segments can match templated OpenAPI variables
+			// (for example /realms/publico-br against /realms/{realm}).
+			score++
+			continue
 		}
 		if selectorSegment != templateSegment {
 			return false, 0
