@@ -143,7 +143,8 @@ func commandFlagEnabled(command *cobra.Command, flagName string) bool {
 
 func shouldQuerySecondarySource(
 	strategy completionSourceStrategy,
-	primaryCount int,
+	primarySuggestions []string,
+	toComplete string,
 	primaryErr error,
 ) bool {
 	if strategy.secondary == completionSourceNone || strategy.secondary == strategy.primary {
@@ -155,7 +156,34 @@ func shouldQuerySecondarySource(
 	if primaryErr != nil {
 		return true
 	}
-	return primaryCount == 0
+	if len(primarySuggestions) == 0 {
+		return true
+	}
+	return !completionSuggestionsAdvancePrefix(primarySuggestions, toComplete)
+}
+
+func completionSuggestionsAdvancePrefix(primarySuggestions []string, toComplete string) bool {
+	normalizedPrefix := normalizeCompletionPrefix(toComplete)
+	typedEndsWithSlash := strings.HasSuffix(strings.TrimSpace(toComplete), "/")
+
+	for _, suggestion := range primarySuggestions {
+		normalizedSuggestion := normalizePathSuggestion(suggestion)
+		if normalizedSuggestion == "" {
+			continue
+		}
+
+		if normalizedSuggestion != normalizedPrefix {
+			return true
+		}
+
+		// Keep searching when the only completion equals the typed token unless
+		// that candidate explicitly advances to collection scope via trailing '/'.
+		if strings.HasSuffix(strings.TrimSpace(suggestion), "/") && !typedEndsWithSlash {
+			return true
+		}
+	}
+
+	return false
 }
 
 func listCompletionResources(
@@ -295,6 +323,9 @@ func CompleteLogicalPaths(
 			)
 		}
 	}
+	if metadataService, metadataErr := RequireMetadataService(deps); metadataErr == nil {
+		addMetadataCollectionSuggestions(ctx, metadataService, suggestions, queryPath)
+	}
 
 	if shouldRunRootRecursiveFallback(suggestions, toComplete) {
 		primaryRootItems, primaryRootErr := listCompletionResources(
@@ -336,8 +367,8 @@ func CompleteLogicalPaths(
 		}
 	}
 
-	primaryCompletionCount := len(filterPathSuggestions(primarySourceSuggestions, toComplete))
-	if shouldQuerySecondarySource(strategy, primaryCompletionCount, primaryErr) {
+	primaryCompletions := filterPathSuggestions(primarySourceSuggestions, toComplete)
+	if shouldQuerySecondarySource(strategy, primaryCompletions, toComplete, primaryErr) {
 		secondaryItems, _, secondaryErr := queryScopedCompletionResources(
 			ctx,
 			orchestratorService,

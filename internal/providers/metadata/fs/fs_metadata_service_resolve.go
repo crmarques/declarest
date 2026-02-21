@@ -140,6 +140,91 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 	return merged, nil
 }
 
+// ResolveCollectionChildren returns literal child collection selector segments
+// available for the given logical path based on metadata selector structure.
+// It is used by shell completion to surface metadata-only branches (for example
+// intermediary "/_/" templates) even when OpenAPI paths differ.
+func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error) {
+	debugctx.Printf(ctx, "metadata fs resolve-children start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
+	targetPath, err := normalizeResolvePath(logicalPath)
+	if err != nil {
+		debugctx.Printf(ctx, "metadata fs resolve-children invalid logical_path=%q error=%v", logicalPath, err)
+		return nil, err
+	}
+
+	parentSelectors, err := s.matchingParentSelectors(targetPath)
+	if err != nil {
+		debugctx.Printf(ctx, "metadata fs resolve-children match failed logical_path=%q error=%v", targetPath, err)
+		return nil, err
+	}
+	if len(parentSelectors) == 0 {
+		return nil, nil
+	}
+
+	children := map[string]struct{}{}
+	for _, parentSelector := range parentSelectors {
+		parentDir, dirErr := s.selectorDirPath(parentSelector)
+		if dirErr != nil {
+			return nil, dirErr
+		}
+
+		entries, readErr := os.ReadDir(parentDir)
+		if readErr != nil {
+			if errors.Is(readErr, os.ErrNotExist) {
+				continue
+			}
+			return nil, internalError("failed to list metadata selector children", readErr)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			childName := strings.TrimSpace(entry.Name())
+			if childName == "" || childName == "_" || hasWildcardPattern(childName) {
+				continue
+			}
+			children[childName] = struct{}{}
+		}
+	}
+
+	resolved := sortedSelectorKeys(children)
+	debugctx.Printf(
+		ctx,
+		"metadata fs resolve-children done logical_path=%q normalized=%q children=%v",
+		logicalPath,
+		targetPath,
+		resolved,
+	)
+	return resolved, nil
+}
+
+func (s *FSMetadataService) matchingParentSelectors(logicalPath string) ([]string, error) {
+	parentSelectors := []string{"/"}
+	for _, segment := range splitPathSegments(logicalPath) {
+		nextParents := map[string]struct{}{}
+		for _, parentSelector := range parentSelectors {
+			wildcards, literals, err := s.matchingCollectionCandidates(parentSelector, segment)
+			if err != nil {
+				return nil, err
+			}
+			for _, selector := range wildcards {
+				nextParents[selector] = struct{}{}
+			}
+			for _, selector := range literals {
+				nextParents[selector] = struct{}{}
+			}
+		}
+
+		parentSelectors = sortedSelectorKeys(nextParents)
+		if len(parentSelectors) == 0 {
+			return nil, nil
+		}
+	}
+	return parentSelectors, nil
+}
+
 func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, segment string) ([]string, []string, error) {
 	parentDir, err := s.selectorDirPath(parentSelector)
 	if err != nil {

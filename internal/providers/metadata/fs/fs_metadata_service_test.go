@@ -255,6 +255,35 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	}
 }
 
+func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir(), "")
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "name",
+		CollectionPath:     "/admin/realms/{{.realm}}/components",
+	})
+	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "name",
+		CollectionPath:     "/admin/realms/{{.realm}}/components",
+	})
+
+	children, err := service.ResolveCollectionChildren(
+		ctx,
+		"/admin/realms/master/user-registry/AD PRD",
+	)
+	if err != nil {
+		t.Fatalf("ResolveCollectionChildren returned error: %v", err)
+	}
+	if !reflect.DeepEqual(children, []string{"mappers"}) {
+		t.Fatalf("expected metadata child branch [mappers], got %#v", children)
+	}
+}
+
 func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	t.Parallel()
 

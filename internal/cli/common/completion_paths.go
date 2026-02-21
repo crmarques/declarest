@@ -124,6 +124,35 @@ func addOpenAPISuggestions(
 	}
 }
 
+func addMetadataCollectionSuggestions(
+	ctx context.Context,
+	metadataService any,
+	suggestions map[string]struct{},
+	logicalPath string,
+) {
+	resolver, ok := metadataService.(metadataCollectionChildResolver)
+	if !ok {
+		return
+	}
+
+	normalizedPath := normalizePathSuggestion(logicalPath)
+	if normalizedPath == "" {
+		normalizedPath = "/"
+	}
+
+	children, err := resolver.ResolveCollectionChildren(ctx, normalizedPath)
+	if err != nil {
+		return
+	}
+	for _, child := range children {
+		segment := strings.TrimSpace(child)
+		if segment == "" || segment == "_" || containsTemplateSegments(segment) {
+			continue
+		}
+		addPathSuggestion(suggestions, appendPathSegment(normalizedPath, segment))
+	}
+}
+
 func addSmartOpenAPISuggestions(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
@@ -173,6 +202,10 @@ type collectionSegmentResolver struct {
 	queryBudget         int
 }
 
+type metadataCollectionChildResolver interface {
+	ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error)
+}
+
 func newCollectionSegmentResolver(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
@@ -215,7 +248,12 @@ func (r *collectionSegmentResolver) Resolve(collectionPath string) []string {
 	}
 
 	segments := primarySegments
-	if shouldQuerySecondarySource(r.sourceStrategy, len(primarySegments), primaryErr) {
+	if shouldQuerySecondarySource(
+		r.sourceStrategy,
+		sortedSetValues(primarySegments),
+		"",
+		primaryErr,
+	) {
 		addDirectChildSegmentsFromSource(
 			segments,
 			normalizedCollectionPath,
@@ -299,6 +337,29 @@ func completionResourcePath(item resource.Resource) string {
 
 	if collectionPath == "" || collectionPath == "/" {
 		return normalizePathSuggestion("/" + aliasSegment)
+	}
+
+	parentSegment := strings.TrimSpace(path.Base(collectionPath))
+	if parentSegment != "" && aliasSegment == parentSegment {
+		candidatePath := appendPathSegment(collectionPath, aliasSegment)
+		// Avoid self-loop suggestions like ".../AD PRD/AD PRD". These can be
+		// emitted by provider list responses for alias-resolved paths and do not
+		// advance completion to the next level.
+		if normalizedLogicalPath == candidatePath {
+			return collectionPath
+		}
+		// If logical path doesn't live under this collection, prefer logical path
+		// and let scoped filtering/fallback handle it.
+		if !strings.HasPrefix(normalizedLogicalPath, strings.TrimSuffix(collectionPath, "/")+"/") {
+			return normalizedLogicalPath
+		}
+	}
+
+	// Some list providers can return collection-like entries where the
+	// collection path equals the logical path. In that case, appending alias
+	// would duplicate the last segment (for example ".../AD PRD/AD PRD").
+	if normalizedLogicalPath == collectionPath {
+		return normalizedLogicalPath
 	}
 	return appendPathSegment(collectionPath, aliasSegment)
 }
@@ -454,11 +515,38 @@ func normalizeCompletionPrefix(value string) string {
 		return ""
 	}
 
-	normalizedPrefix = strings.ReplaceAll(normalizedPrefix, "\\", "/")
+	normalizedPrefix = unescapeCompletionToken(normalizedPrefix)
 	if !strings.HasPrefix(normalizedPrefix, "/") {
 		normalizedPrefix = "/" + strings.Trim(normalizedPrefix, "/")
 	}
 	return normalizedPrefix
+}
+
+func unescapeCompletionToken(value string) string {
+	if value == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(value))
+	escaped := false
+	for _, item := range value {
+		if escaped {
+			builder.WriteRune(item)
+			escaped = false
+			continue
+		}
+		if item == '\\' {
+			escaped = true
+			continue
+		}
+		builder.WriteRune(item)
+	}
+	if escaped {
+		builder.WriteRune('\\')
+	}
+
+	return builder.String()
 }
 
 func suggestionMatchesPrefix(suggestion string, normalizedPrefix string) bool {

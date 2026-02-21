@@ -3618,6 +3618,237 @@ func TestPathCompletionPreservesAliasesWithSpaces(t *testing.T) {
 	}
 }
 
+func TestPathCompletionEscapedExactAliasFallsBackToRepositoryDescendants(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			CollectionPath: "/admin/realms/master/user-registry",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+	orchestrator.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha"},
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/master/user-registry/AD\\ PRD",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/") {
+		t.Fatalf("expected escaped alias completion to advance into collection scope, got %q", output)
+	}
+	if !containsString(orchestrator.listRemoteCalls, "/admin/realms/master/user-registry") {
+		t.Fatalf("expected completion to query remote parent collection first, calls=%#v", orchestrator.listRemoteCalls)
+	}
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/master/user-registry") {
+		t.Fatalf("expected completion to fallback to repository when remote result does not advance token, calls=%#v", orchestrator.listLocalCalls)
+	}
+}
+
+func TestPathCompletionEscapedCollectionTokenCompletesNextSegment(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			CollectionPath: "/admin/realms/master/user-registry",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+	orchestrator.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha"},
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/master/user-registry/AD\\ PRD/",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/mappers/") {
+		t.Fatalf("expected escaped collection completion to resolve next segment from repository, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/AD PRD") {
+		t.Fatalf("expected completion to avoid repeating escaped alias fragment, got %q", output)
+	}
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/master/user-registry/AD PRD") {
+		t.Fatalf("expected repository completion query for escaped collection path, calls=%#v", orchestrator.listLocalCalls)
+	}
+}
+
+func TestPathCompletionAvoidsSelfAliasSegmentDuplication(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/user-registry/AD PRD",
+			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+	orchestrator.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha"},
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/master/user-registry/AD\\ PRD/",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/AD PRD") {
+		t.Fatalf("expected completion to avoid duplicated self alias segment, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/mappers/") {
+		t.Fatalf("expected completion to include next segment from repository fallback, got %q", output)
+	}
+	if !containsString(orchestrator.listRemoteCalls, "/admin/realms/master/user-registry/AD PRD") {
+		t.Fatalf("expected completion to query remote scoped path first, calls=%#v", orchestrator.listRemoteCalls)
+	}
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/master/user-registry/AD PRD") {
+		t.Fatalf("expected completion to fallback to repository for non-advancing remote candidates, calls=%#v", orchestrator.listLocalCalls)
+	}
+}
+
+func TestPathCompletionAvoidsRepeatedAliasChildSuggestion(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
+			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+	orchestrator.localList = []resource.Resource{
+		{LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha"},
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/master/user-registry/AD\\ PRD/",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/AD PRD") {
+		t.Fatalf("expected completion to suppress repeated alias child suggestion, got %q", output)
+	}
+	if !strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/mappers/") {
+		t.Fatalf("expected completion to include repository-descendant next segment, got %q", output)
+	}
+	if !containsString(orchestrator.listRemoteCalls, "/admin/realms/master/user-registry/AD PRD") {
+		t.Fatalf("expected completion to query remote scoped path first, calls=%#v", orchestrator.listRemoteCalls)
+	}
+	if !containsString(orchestrator.listLocalCalls, "/admin/realms/master/user-registry/AD PRD") {
+		t.Fatalf("expected completion to fallback to repository for repeated alias child candidates, calls=%#v", orchestrator.listLocalCalls)
+	}
+}
+
+func TestPathCompletionUsesMetadataOnlyBranchWhenOpenAPIHasNoPath(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.remoteList = []resource.Resource{
+		{
+			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
+			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
+			Metadata: metadatadomain.ResourceMetadata{
+				AliasFromAttribute: "name",
+				IDFromAttribute:    "id",
+			},
+			Payload: map[string]any{
+				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+				"name": "AD PRD",
+			},
+		},
+	}
+	orchestrator.localList = nil
+	orchestrator.openAPISpec = map[string]any{
+		"paths": map[string]any{},
+	}
+	metadataService := deps.Metadata.(*testMetadata)
+	metadataService.collectionChildren["/admin/realms/master/user-registry/AD PRD"] = []string{"mappers"}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"resource",
+		"get",
+		"/admin/realms/master/user-registry/AD\\ PRD/",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/mappers") {
+		t.Fatalf("expected completion to include metadata-defined child branch, got %q", output)
+	}
+	if strings.Contains(output, "/admin/realms/master/user-registry/AD PRD/AD PRD") {
+		t.Fatalf("expected completion to avoid repeated alias child path, got %q", output)
+	}
+}
+
 func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
 	t.Parallel()
 
@@ -4749,7 +4980,8 @@ func containsListCall(items []listCall, logicalPath string, recursive bool) bool
 }
 
 type testMetadata struct {
-	items map[string]metadatadomain.ResourceMetadata
+	items              map[string]metadatadomain.ResourceMetadata
+	collectionChildren map[string][]string
 }
 
 func newTestMetadata() *testMetadata {
@@ -4763,6 +4995,7 @@ func newTestMetadata() *testMetadata {
 				},
 			},
 		},
+		collectionChildren: map[string][]string{},
 	}
 }
 
@@ -4803,6 +5036,16 @@ func (s *testMetadata) RenderOperationSpec(
 	}
 
 	return metadatadomain.ResolveOperationSpec(ctx, metadata, operation, value)
+}
+
+func (s *testMetadata) ResolveCollectionChildren(_ context.Context, logicalPath string) ([]string, error) {
+	children, found := s.collectionChildren[logicalPath]
+	if !found {
+		return nil, nil
+	}
+	items := make([]string, len(children))
+	copy(items, children)
+	return items, nil
 }
 
 func (s *testMetadata) Infer(

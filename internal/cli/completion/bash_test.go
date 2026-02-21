@@ -36,13 +36,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpaces(t *testing.T)
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		`    COMPREPLY+=("$comp")`,
 		`done < <(compgen -W "${out}" -- "$cur")`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected custom completion COMPREPLY to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected custom completion compgen to preserve spaced candidates, got %q", normalized)
 	}
 }
 
@@ -50,13 +55,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithBracedCur(
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		`  COMPREPLY+=("$comp")`,
 		`done < <(compgen   -W   "${out}"   --   "${cur}")`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected braced-cur custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected braced-cur custom completion compgen to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected braced-cur custom completion compgen to normalize quoting, got %q", normalized)
 	}
 }
 
@@ -64,13 +74,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithPlainOut(t
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		`COMPREPLY+=("$comp")`,
 		`done < <(compgen -W "$out" -- "$cur")`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected plain-out custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected plain-out custom completion compgen to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected plain-out custom completion compgen to normalize quoting, got %q", normalized)
 	}
 }
 
@@ -78,13 +93,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithPlainOutAn
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		`COMPREPLY+=("$comp")`,
 		`done < <(compgen   -W "$out" -- "${cur}")`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected plain-out+braced-cur custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected plain-out+braced-cur custom completion compgen to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected plain-out+braced-cur custom completion compgen to normalize quoting, got %q", normalized)
 	}
 }
 
@@ -92,13 +112,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithUnquotedOu
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		`    COMPREPLY+=("$comp")`,
 		`done < <(compgen -W $out -- $cur)`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected unquoted custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected unquoted custom completion compgen to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected unquoted custom completion compgen to normalize quoting, got %q", normalized)
 	}
 }
 
@@ -106,13 +131,18 @@ func TestNormalizeBashFlagSuggestionsEscapesCustomCompletionSpacesWithBracedOutU
 	t.Parallel()
 
 	raw := strings.Join([]string{
+		`while IFS='' read -r comp; do`,
+		` COMPREPLY+=("$comp")`,
 		`done < <(compgen -W ${out} -- $cur)`,
 		"",
 	}, "\n")
 
 	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
-	if !strings.Contains(normalized, `compgen -W "${out// /\\ }" -- "$cur"`) {
-		t.Fatalf("expected braced-out custom completion compgen to escape spaces, got %q", normalized)
+	if !strings.Contains(normalized, `COMPREPLY+=( "$(printf '%q' "$comp")" )`) {
+		t.Fatalf("expected braced-out custom completion compgen to quote candidates, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `done < <(compgen -W "${out// /\\ }" -- "$cur")`) {
+		t.Fatalf("expected braced-out custom completion compgen to normalize quoting, got %q", normalized)
 	}
 }
 

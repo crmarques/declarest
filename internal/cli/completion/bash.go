@@ -11,7 +11,7 @@ var (
 	bashEqualsFlagSuggestionLinePattern = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\("--[^"]+=\"\)\s*$`)
 	bashEqualsFlagSuggestionToken       = regexp.MustCompile(`\s*"--[^"=\s]+="`)
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
-	bashOutCompgenAnyOutCurPattern      = regexp.MustCompile(`compgen\s+-W\s+"?\$\{?out\}?"?\s+--\s+"?\$\{?cur\}?"?`)
+	bashOutCompgenLoopPattern           = regexp.MustCompile(`(?m)^\s*while IFS='' read -r comp; do\s*\n\s*COMPREPLY\+=\("\$comp"\)\s*\n\s*done < <\(compgen\s+-W\s+"?\$\{?out\}?"?\s+--\s+"?\$\{?cur\}?"?\)\s*$`)
 	bashCompleteCommandPattern          = regexp.MustCompile(`^\s*complete\s+.*-o\s+default.*-F\s+__start_[^\s]+\s+[^\s]+\s*$`)
 	bashCompoptNoSpacePattern           = regexp.MustCompile(`compopt\s+-o\s+nospace`)
 )
@@ -54,11 +54,13 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 	}
 	normalized := bytes.Join(filtered, []byte{'\n'})
 
-	// Bash `compgen -W` splits completion words by spaces. Escape spaces in
-	// dynamic custom-completion values so aliases like "AD PRD" stay intact.
-	normalized = bashOutCompgenAnyOutCurPattern.ReplaceAllLiteral(
+	// Bash `compgen -W` emits raw candidates. Quote each candidate when adding
+	// to COMPREPLY so values containing spaces stay a single shell token.
+	normalized = bashOutCompgenLoopPattern.ReplaceAllLiteral(
 		normalized,
-		[]byte(`compgen -W "${out// /\\ }" -- "$cur"`),
+		[]byte(`        while IFS='' read -r comp; do
+            COMPREPLY+=( "$(printf '%q' "$comp")" )
+        done < <(compgen -W "${out// /\\ }" -- "$cur")`),
 	)
 	normalized = bashCompoptNoSpacePattern.ReplaceAllLiteral(
 		normalized,
