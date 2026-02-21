@@ -7,7 +7,6 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
-// PathDescriptor captures normalized selector semantics for metadata paths.
 type PathDescriptor struct {
 	Selector     string
 	Segments     []string
