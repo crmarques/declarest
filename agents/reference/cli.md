@@ -47,7 +47,7 @@ Global flags:
 6. `--help`, `-h`.
 
 Input flags:
-1. `--file`, `-f`.
+1. `--file <path|->`, `-f` (use `-` to read stdin).
 2. `--format`, `-i` with allowed formats `json|yaml`.
 3. `--payload` as a command-specific inline payload flag for `ad-hoc post`, `ad-hoc put`, and `resource create`.
 
@@ -131,11 +131,11 @@ Interactive config commands:
 21. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
 22. `resource apply` MUST treat collection paths as batch targets resolved from local repository resources and default to non-recursive direct-child execution.
 23. `resource apply --recursive` MUST include descendant resources under the target path.
-24. `resource create` MUST accept explicit payload input (`--file`, stdin, or `--payload`) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute create for each resolved target.
+24. `resource create` MUST accept explicit payload input (`--file <path|->`, stdin, or `--payload`) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute create for each resolved target.
 25. `resource update` MUST load local repository payloads for resources under the target path and execute remote updates for each matching resource.
 26. `resource update` without `--recursive` MUST mutate only direct-child resources for collection paths.
 27. `resource update --recursive` MUST include descendant resources under the target path.
-28. `resource save` without payload input (`--file` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
+28. `resource save` without payload input (`--file <path|->` or stdin) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 29. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 30. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
 31. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
@@ -145,7 +145,7 @@ Interactive config commands:
 35. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
 36. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 37. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resourceInfo.secretInAttributes`.
-38. `secret detect` without input payload (`--file` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
+38. `secret detect` without input payload (`--file <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 39. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
 40. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for each detected resource path in scope.
 41. `secret detect --secret-attribute <attr>` MUST apply only that detected attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
@@ -159,9 +159,9 @@ Interactive config commands:
 49. `config create` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
 50. `config create` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
 51. `ad-hoc <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `ad-hoc get` MUST attempt metadata-aware remote read fallback when the literal ad-hoc request returns `NotFound`.
-52. `ad-hoc <method>` MUST accept optional request payload from `--file` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
-53. `ad-hoc post` and `ad-hoc put` MUST also support optional `--payload` inline input, decoded according to `--format`, and `--payload` MUST be mutually exclusive with `--file` and stdin input.
-54. `config add` MUST accept input from `--file` or stdin.
+52. `ad-hoc <method>` MUST accept optional request payload from `--file <path|->` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
+53. `ad-hoc post` and `ad-hoc put` MUST also support optional `--payload` inline input, decoded according to `--format`, and `--payload` MUST be mutually exclusive with `--file <path|->` and stdin input.
+54. `config add` MUST accept input from `--file <path|->` or stdin.
 55. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
 56. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
 57. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
@@ -177,7 +177,7 @@ Interactive config commands:
 67. `resource delete --remote-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
 68. `ad-hoc delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
 69. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
-70. `resource save` with wildcard path segments and payload input (`--file` or stdin) MUST fail with `ValidationError`.
+70. `resource save` with wildcard path segments and payload input (`--file <path|->` or stdin) MUST fail with `ValidationError`.
 71. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 72. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
 73. Interactive `config create` MUST support full context-schema authoring: prompt required fields for repository and resource-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth) by collecting only the selected option's fields.
@@ -228,8 +228,8 @@ Interactive config commands:
 14. `secret detect --fix` is provided with payload input but without path input.
 15. `secret detect --secret-attribute` value is not detected in payload or repository scope.
 16. `config add --context-name` does not match any catalog context.
-17. `ad-hoc post` or `ad-hoc put` receives `--payload` together with `--file` or stdin input.
-18. `resource create` receives `--payload` together with `--file` or stdin input.
+17. `ad-hoc post` or `ad-hoc put` receives `--payload` together with `--file <path|->` or stdin input.
+18. `resource create` receives `--payload` together with `--file <path|->` or stdin input.
 19. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
 20. `ad-hoc delete` is invoked without `--force`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.

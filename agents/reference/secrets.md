@@ -33,7 +33,7 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 16. For collection/group saves with `resource save --handle-secrets=<attribute-list>`, each requested attribute MUST be applied only to resources where it is present; resources without the attribute MUST be skipped for that attribute without failing the command.
 17. `resource get` MUST redact values for metadata `resourceInfo.secretInAttributes` as `{{secret .}}` placeholders by default for repository and remote-server output modes.
 18. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
-19. `secret detect` without payload input (`--file` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
+19. `secret detect` without payload input (`--file <path|->` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
 20. `secret detect --fix` MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for detected resource paths in scope.
 21. `secret detect --fix` with payload input MUST fail with `ValidationError` when no target path is provided.
 22. `secret detect --secret-attribute` MUST restrict apply behavior to one detected attribute and MUST fail with `ValidationError` when the attribute is not detected in payload or repository scope.

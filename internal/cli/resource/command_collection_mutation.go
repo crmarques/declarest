@@ -15,8 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const missingInputMessage = "input is required: provide --file or stdin"
-
 func decodeOptionalResourceInput(command *cobra.Command, input common.InputFlags) (resource.Value, bool, error) {
 	value, err := common.DecodeInput[resource.Value](command, input)
 	if err == nil {
@@ -132,7 +130,7 @@ func isMissingInputError(err error) bool {
 	if !errors.As(err, &typedErr) {
 		return false
 	}
-	return typedErr.Category == faults.ValidationError && typedErr.Message == missingInputMessage
+	return typedErr.Category == faults.ValidationError && typedErr.Message == common.MissingInputMessage
 }
 
 func logicalPathDepth(logicalPath string) int {

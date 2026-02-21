@@ -10,6 +10,11 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+const (
+	stdinFileIndicator  = "-"
+	MissingInputMessage = "input is required: provide --file <path|-> or stdin"
+)
+
 func ReadInput(command *cobra.Command, flags InputFlags) ([]byte, error) {
 	return readInput(command, flags, true)
 }
@@ -49,7 +54,7 @@ func DecodeInputData[T any](data []byte, format string) (T, error) {
 }
 
 func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte, error) {
-	if flags.File != "" {
+	if flags.File != "" && flags.File != stdinFileIndicator {
 		data, err := os.ReadFile(flags.File)
 		if err != nil {
 			return nil, err
@@ -65,7 +70,7 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 		info, err := stdinFile.Stat()
 		if err == nil && (info.Mode()&os.ModeCharDevice) != 0 {
 			if required {
-				return nil, ValidationError("input is required: provide --file or stdin", nil)
+				return nil, ValidationError(MissingInputMessage, nil)
 			}
 			return nil, nil
 		}
@@ -77,7 +82,7 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		if required {
-			return nil, ValidationError("input is required: provide --file or stdin", nil)
+			return nil, ValidationError(MissingInputMessage, nil)
 		}
 		return nil, nil
 	}
