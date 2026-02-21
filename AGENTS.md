@@ -51,6 +51,23 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 3. Use `agents/skills/quality-gate/SKILL.md` when selecting verification scope for behavior, contract, or security changes.
 4. Use `agents/skills/spec-auditor/SKILL.md` when validating consistency and coverage.
 5. If multiple skills apply, run in order: `spec-router`, `spec-writer`, `quality-gate`, `spec-auditor`.
+6. Use `agents/skills/commit-workflow/SKILL.md` whenever preparing commits mandated by Delivery Protocol rules.
+
+## Git commits (agents)
+- Agents MAY create local commits.
+- Agents MUST NOT push, force-push, rewrite history, or change remotes unless explicitly requested; document any request to touch remotes before acting.
+- Commit messages MUST follow Conventional Commits: `<type>(<scope>): <summary>`.
+- Allowed types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`.
+- Allowed scopes: `cli`, `metadata`, `secrets`, `resource-repo`, `resource-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`.
+- Each commit MUST be focused (one logical change). Prefer multiple small commits over one large one.
+- Before committing, agents MUST:
+  - run the repo’s standard test command(s) (or at least unit tests when the full suite is impractically slow),
+  - scan diffs for secrets or accidental large/binary files,
+  - review the staged diff (`git diff --staged`) for correctness.
+- Agents MUST include in their final response:
+  - commit SHAs + subjects,
+  - a brief rationale for each commit,
+  - the list of commands executed during the work.
 
 ## Engineering Rules
 1. Keep architecture and implementation aligned with senior engineering practices.
@@ -70,11 +87,8 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 
 ## Delivery Protocol
 1. After fulfilling a request, stage and commit the touched files before the final response unless the user explicitly forbids committing or technical blockers prevent a clean commit; document the blocker when a commit cannot be made.
-2. Commit messages MUST be a single line that follows `<type>(<component>): <description>`.
-   - `type` is restricted to `chore`, `fix`, or `feat` and reflects the nature of the change.
-   - `component` names the affected bounded context or visible area (for example `instructions`, `metadata`, `cli`).
-   - `description` is a succinct yet meaningful summary of the change.
-3. Keep the commit message concise (no multi-line bodies) so it doubles as the single-line comment that documents the change.
+2. Each commit MUST follow the `Git commits (agents)` rules and the `agents/skills/commit-workflow/SKILL.md` checklist before running `git commit`.
+3. Prefer multiple focused commits when the work spans distinct concerns; each commit MUST capture a single logical change.
 
 ## Spec Quality Criteria
 1. Efficiency: keep workflows and rules minimal; reference canonical sources instead of repeating full rule sets.
