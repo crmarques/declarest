@@ -35,6 +35,11 @@ type ExecuteOptions struct {
 	RequestedSecretCandidates []string
 }
 
+type saveRemoteReader interface {
+	GetRemote(ctx context.Context, logicalPath string) (resource.Value, error)
+	ListRemote(ctx context.Context, logicalPath string, policy orchestratordomain.ListPolicy) ([]resource.Resource, error)
+}
+
 func Execute(
 	ctx context.Context,
 	deps Dependencies,
@@ -43,7 +48,7 @@ func Execute(
 	hasInput bool,
 	options ExecuteOptions,
 ) error {
-	normalizedPath, hasWildcard, err := normalizeSavePathPattern(resolvedPath)
+	normalizedPath, hasWildcard, explicitCollectionTarget, err := normalizeSavePathPattern(resolvedPath)
 	if err != nil {
 		return err
 	}
@@ -110,7 +115,13 @@ func Execute(
 	}
 
 	if !hasInput {
-		remoteValue, err := orchestratorService.GetRemote(ctx, normalizedPath)
+		remoteValue, err := resolveSaveRemoteValue(
+			ctx,
+			orchestratorService,
+			deps.Metadata,
+			normalizedPath,
+			explicitCollectionTarget,
+		)
 		if err != nil {
 			return err
 		}
@@ -271,26 +282,27 @@ func saveResolvedPathPayload(
 	return nil
 }
 
-func normalizeSavePathPattern(rawPath string) (string, bool, error) {
+func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {
 	trimmedPath := strings.TrimSpace(rawPath)
 	if trimmedPath == "" {
-		return "", false, validationError("path is required", nil)
+		return "", false, false, validationError("path is required", nil)
 	}
+	explicitCollectionTarget := trimmedPath != "/" && strings.HasSuffix(trimmedPath, "/")
 
 	normalizedInput := strings.ReplaceAll(trimmedPath, "\\", "/")
 	if !strings.HasPrefix(normalizedInput, "/") {
-		return "", false, validationError("logical path must be absolute", nil)
+		return "", false, false, validationError("logical path must be absolute", nil)
 	}
 
 	for _, segment := range strings.Split(normalizedInput, "/") {
 		if segment == ".." {
-			return "", false, validationError("logical path must not contain traversal segments", nil)
+			return "", false, false, validationError("logical path must not contain traversal segments", nil)
 		}
 	}
 
 	normalizedPath := path.Clean(normalizedInput)
 	if !strings.HasPrefix(normalizedPath, "/") {
-		return "", false, validationError("logical path must be absolute", nil)
+		return "", false, false, validationError("logical path must be absolute", nil)
 	}
 	if normalizedPath != "/" {
 		normalizedPath = strings.TrimSuffix(normalizedPath, "/")
@@ -304,7 +316,115 @@ func normalizeSavePathPattern(rawPath string) (string, bool, error) {
 		}
 	}
 
-	return normalizedPath, hasWildcard, nil
+	return normalizedPath, hasWildcard, explicitCollectionTarget, nil
+}
+
+func resolveSaveRemoteValue(
+	ctx context.Context,
+	remoteReader saveRemoteReader,
+	metadataService metadatadomain.MetadataService,
+	logicalPath string,
+	explicitCollectionTarget bool,
+) (resource.Value, error) {
+	if explicitCollectionTarget {
+		items, err := remoteReader.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{})
+		if err == nil {
+			return saveListPayloadFromResources(items), nil
+		}
+		if !isCollectionListShapeError(err) {
+			return nil, err
+		}
+	}
+
+	remoteValue, err := remoteReader.GetRemote(ctx, logicalPath)
+	if err == nil {
+		return remoteValue, nil
+	}
+	if !isTypedErrorCategory(err, faults.NotFoundError) {
+		return nil, err
+	}
+
+	items, listErr := remoteReader.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{})
+	if listErr != nil {
+		return nil, err
+	}
+	if !explicitCollectionTarget && !shouldUseSaveCollectionFallback(ctx, metadataService, logicalPath, items) {
+		return nil, err
+	}
+
+	return saveListPayloadFromResources(items), nil
+}
+
+func saveListPayloadFromResources(items []resource.Resource) resource.Value {
+	if len(items) == 0 {
+		return []any{}
+	}
+
+	sorted := make([]resource.Resource, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i int, j int) bool {
+		return sorted[i].LogicalPath < sorted[j].LogicalPath
+	})
+
+	payload := make([]any, 0, len(sorted))
+	for _, item := range sorted {
+		payload = append(payload, item.Payload)
+	}
+	return payload
+}
+
+func shouldUseSaveCollectionFallback(
+	ctx context.Context,
+	metadataService metadatadomain.MetadataService,
+	logicalPath string,
+	items []resource.Resource,
+) bool {
+	if len(items) == 0 {
+		return true
+	}
+
+	collectionChildrenResolver, ok := metadataService.(metadatadomain.CollectionChildrenResolver)
+	if !ok {
+		return false
+	}
+
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil || normalizedPath == "/" {
+		return false
+	}
+
+	parentPath := path.Dir(normalizedPath)
+	if parentPath == "." || parentPath == "" {
+		parentPath = "/"
+	}
+	requestedSegment := path.Base(normalizedPath)
+	if strings.TrimSpace(requestedSegment) == "" || requestedSegment == "/" {
+		return false
+	}
+
+	children, err := collectionChildrenResolver.ResolveCollectionChildren(ctx, parentPath)
+	if err != nil {
+		return false
+	}
+	for _, child := range children {
+		if strings.TrimSpace(child) == requestedSegment {
+			return true
+		}
+	}
+	return false
+}
+
+func isCollectionListShapeError(err error) bool {
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+	if typedErr.Category != faults.ValidationError {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(typedErr.Message))
+	return strings.HasPrefix(message, "list response ") || strings.HasPrefix(message, "list payload ")
 }
 
 func splitSavePathSegments(logicalPath string) []string {

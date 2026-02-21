@@ -10,6 +10,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	repositorydomain "github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -77,6 +78,112 @@ func TestExtractSaveListItems(t *testing.T) {
 		if items != nil {
 			t.Fatalf("expected nil items, got %#v", items)
 		}
+	})
+}
+
+func TestResolveSaveRemoteValue(t *testing.T) {
+	t.Parallel()
+
+	t.Run("explicit_collection_target_uses_list_before_get", func(t *testing.T) {
+		t.Parallel()
+
+		remoteReader := &fakeSaveRemoteReader{
+			listValue: []resourcedomain.Resource{
+				{
+					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
+					Payload:     map[string]any{"id": "mapper-a", "name": "alpha"},
+				},
+			},
+		}
+
+		value, err := resolveSaveRemoteValue(
+			context.Background(),
+			remoteReader,
+			&fakeSaveMetadataService{},
+			"/admin/realms/master/user-registry/AD PRD/mappers",
+			true,
+		)
+		if err != nil {
+			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
+		}
+		items, ok := value.([]any)
+		if !ok || len(items) != 1 {
+			t.Fatalf("expected one list payload item, got %#v", value)
+		}
+		if len(remoteReader.getCalls) != 0 {
+			t.Fatalf("expected no remote get calls, got %#v", remoteReader.getCalls)
+		}
+		if !reflect.DeepEqual(remoteReader.listCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one list call, got %#v", remoteReader.listCalls)
+		}
+	})
+
+	t.Run("not_found_get_uses_collection_branch_fallback_for_non_empty_list", func(t *testing.T) {
+		t.Parallel()
+
+		remoteReader := &fakeSaveRemoteReader{
+			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			listValue: []resourcedomain.Resource{
+				{
+					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
+					Payload:     map[string]any{"id": "mapper-a", "name": "alpha"},
+				},
+				{
+					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/beta",
+					Payload:     map[string]any{"id": "mapper-b", "name": "beta"},
+				},
+			},
+		}
+		metadataService := &fakeSaveMetadataService{
+			collectionChildren: map[string][]string{
+				"/admin/realms/master/user-registry/AD PRD": {"mappers"},
+			},
+		}
+
+		value, err := resolveSaveRemoteValue(
+			context.Background(),
+			remoteReader,
+			metadataService,
+			"/admin/realms/master/user-registry/AD PRD/mappers",
+			false,
+		)
+		if err != nil {
+			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
+		}
+		items, ok := value.([]any)
+		if !ok || len(items) != 2 {
+			t.Fatalf("expected two list payload items, got %#v", value)
+		}
+		if !reflect.DeepEqual(remoteReader.getCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one get call, got %#v", remoteReader.getCalls)
+		}
+		if !reflect.DeepEqual(remoteReader.listCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one list call, got %#v", remoteReader.listCalls)
+		}
+	})
+
+	t.Run("not_found_get_keeps_not_found_when_non_empty_list_is_not_metadata_collection_branch", func(t *testing.T) {
+		t.Parallel()
+
+		notFoundErr := faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		remoteReader := &fakeSaveRemoteReader{
+			getErr: notFoundErr,
+			listValue: []resourcedomain.Resource{
+				{
+					LogicalPath: "/admin/realms/master/user-registry/ldap-1",
+					Payload:     map[string]any{"id": "ldap-id-1", "name": "ldap-1"},
+				},
+			},
+		}
+
+		_, err := resolveSaveRemoteValue(
+			context.Background(),
+			remoteReader,
+			&fakeSaveMetadataService{},
+			"/admin/realms/master/user-registry",
+			false,
+		)
+		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 }
 
@@ -943,9 +1050,10 @@ func TestIsTypedErrorCategory(t *testing.T) {
 }
 
 type fakeSaveMetadataService struct {
-	resolved   metadatadomain.ResourceMetadata
-	resolveErr error
-	items      map[string]metadatadomain.ResourceMetadata
+	resolved           metadatadomain.ResourceMetadata
+	resolveErr         error
+	items              map[string]metadatadomain.ResourceMetadata
+	collectionChildren map[string][]string
 }
 
 func (f *fakeSaveMetadataService) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
@@ -989,6 +1097,51 @@ func (f *fakeSaveMetadataService) Infer(
 	metadatadomain.InferenceRequest,
 ) (metadatadomain.ResourceMetadata, error) {
 	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func (f *fakeSaveMetadataService) ResolveCollectionChildren(_ context.Context, logicalPath string) ([]string, error) {
+	if f.collectionChildren == nil {
+		return nil, nil
+	}
+
+	children, found := f.collectionChildren[logicalPath]
+	if !found {
+		return nil, nil
+	}
+	items := make([]string, len(children))
+	copy(items, children)
+	return items, nil
+}
+
+type fakeSaveRemoteReader struct {
+	getValue  resourcedomain.Value
+	getErr    error
+	listValue []resourcedomain.Resource
+	listErr   error
+	getCalls  []string
+	listCalls []string
+}
+
+func (f *fakeSaveRemoteReader) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+	f.getCalls = append(f.getCalls, logicalPath)
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	return f.getValue, nil
+}
+
+func (f *fakeSaveRemoteReader) ListRemote(
+	_ context.Context,
+	logicalPath string,
+	_ orchestratordomain.ListPolicy,
+) ([]resourcedomain.Resource, error) {
+	f.listCalls = append(f.listCalls, logicalPath)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	items := make([]resourcedomain.Resource, len(f.listValue))
+	copy(items, f.listValue)
+	return items, nil
 }
 
 type fakeSaveSecretProvider struct {

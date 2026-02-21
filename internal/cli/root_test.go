@@ -424,6 +424,52 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("remote_not_found_without_collection_marker_renders_collection_when_metadata_declares_branch", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
+				Payload: map[string]any{
+					"id":   "mapper-a",
+					"name": "alpha",
+				},
+			},
+			{
+				LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/beta",
+				Payload: map[string]any{
+					"id":   "mapper-b",
+					"name": "beta",
+				},
+			},
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.collectionChildren["/admin/realms/master/user-registry/AD PRD"] = []string{"mappers"}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/admin/realms/master/user-registry/AD PRD/mappers",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(orchestrator.getRemoteCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one remote get call, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one remote list fallback call, got %#v", orchestrator.listRemoteCalls)
+		}
+		if !strings.Contains(output, "\"name\": \"alpha\"") || !strings.Contains(output, "\"name\": \"beta\"") {
+			t.Fatalf("expected collection payload output, got %q", output)
+		}
+	})
+
 	t.Run("repository_and_remote_server_flags_conflict", func(t *testing.T) {
 		t.Parallel()
 
@@ -931,6 +977,60 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
+	t.Run("without_input_collection_marker_reads_remote_list_when_resource_get_is_not_found", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/master/user-registry/AD PRD/mappers"] = metadatadomain.ResourceMetadata{
+			AliasFromAttribute: "name",
+		}
+		orchestrator := &testOrchestrator{
+			metadataService: metadataService,
+			getRemoteErr:    faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+			remoteList: []resource.Resource{
+				{
+					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/alpha",
+					Payload: map[string]any{
+						"id":   "mapper-a",
+						"name": "alpha",
+					},
+				},
+				{
+					LogicalPath: "/admin/realms/master/user-registry/AD PRD/mappers/beta",
+					Payload: map[string]any{
+						"id":   "mapper-b",
+						"name": "beta",
+					},
+				},
+			},
+		}
+
+		deps := newResourceSaveDeps(orchestrator, metadataService)
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/master/user-registry/AD PRD/mappers/",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
+			t.Fatalf("expected one remote list call for collection target, got %#v", orchestrator.listRemoteCalls)
+		}
+		if len(orchestrator.getRemoteCalls) != 0 {
+			t.Fatalf("expected no remote get call when collection list succeeds, got %#v", orchestrator.getRemoteCalls)
+		}
+		if len(orchestrator.saveCalls) != 2 {
+			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
+		}
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/master/user-registry/AD PRD/mappers/alpha" {
+			t.Fatalf("expected first saved path /admin/realms/master/user-registry/AD PRD/mappers/alpha, got %q", orchestrator.saveCalls[0].logicalPath)
+		}
+		if orchestrator.saveCalls[1].logicalPath != "/admin/realms/master/user-registry/AD PRD/mappers/beta" {
+			t.Fatalf("expected second saved path /admin/realms/master/user-registry/AD PRD/mappers/beta, got %q", orchestrator.saveCalls[1].logicalPath)
+		}
+	})
+
 	t.Run("without_input_remote_list_falls_back_to_common_item_identity_attributes", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
@@ -938,9 +1038,15 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
-			getRemoteValue: []any{
-				map[string]any{"id": "app-a-id", "enabled": true},
-				map[string]any{"id": "app-b-id", "enabled": false},
+			remoteList: []resource.Resource{
+				{
+					LogicalPath: "/admin/realms/master/clients/app-a-id",
+					Payload:     map[string]any{"id": "app-a-id", "enabled": true},
+				},
+				{
+					LogicalPath: "/admin/realms/master/clients/app-b-id",
+					Payload:     map[string]any{"id": "app-b-id", "enabled": false},
+				},
 			},
 		}
 
@@ -954,6 +1060,12 @@ func TestResourceSaveInputModes(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(orchestrator.getRemoteCalls) != 0 {
+			t.Fatalf("expected no remote get calls for explicit collection target, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/clients"}) {
+			t.Fatalf("expected one remote list call, got %#v", orchestrator.listRemoteCalls)
 		}
 		if len(orchestrator.saveCalls) != 2 {
 			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))

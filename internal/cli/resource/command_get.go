@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	"github.com/crmarques/declarest/internal/cli/common"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -100,7 +102,7 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 						"resource get attempting empty-collection fallback for %q after remote not found",
 						resolvedPath,
 					)
-					handled, fallbackErr := renderRemoteEmptyCollectionFallback(
+					handled, fallbackErr := renderRemoteCollectionFallback(
 						command,
 						outputFormat,
 						deps,
@@ -200,7 +202,7 @@ func renderRemoteCollection(
 	return renderCollection(command, outputFormat, deps, items, showSecrets)
 }
 
-func renderRemoteEmptyCollectionFallback(
+func renderRemoteCollectionFallback(
 	command *cobra.Command,
 	outputFormat string,
 	deps common.CommandDependencies,
@@ -212,11 +214,52 @@ func renderRemoteEmptyCollectionFallback(
 	if err != nil {
 		return false, err
 	}
-	if len(items) != 0 {
+	if !shouldRenderRemoteCollectionFallback(command.Context(), deps.Metadata, logicalPath, items) {
 		return false, nil
 	}
 
 	return true, renderCollection(command, outputFormat, deps, items, showSecrets)
+}
+
+func shouldRenderRemoteCollectionFallback(
+	ctx context.Context,
+	metadataService metadatadomain.MetadataService,
+	logicalPath string,
+	items []resource.Resource,
+) bool {
+	if len(items) == 0 {
+		return true
+	}
+
+	collectionChildrenResolver, ok := metadataService.(metadatadomain.CollectionChildrenResolver)
+	if !ok {
+		return false
+	}
+
+	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil || normalizedPath == "/" {
+		return false
+	}
+
+	parentPath := path.Dir(normalizedPath)
+	if parentPath == "." || parentPath == "" {
+		parentPath = "/"
+	}
+	requestedSegment := path.Base(normalizedPath)
+	if strings.TrimSpace(requestedSegment) == "" || requestedSegment == "/" {
+		return false
+	}
+
+	children, err := collectionChildrenResolver.ResolveCollectionChildren(ctx, parentPath)
+	if err != nil {
+		return false
+	}
+	for _, child := range children {
+		if strings.TrimSpace(child) == requestedSegment {
+			return true
+		}
+	}
+	return false
 }
 
 func renderCollection(
