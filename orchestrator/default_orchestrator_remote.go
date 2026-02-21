@@ -457,6 +457,9 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 		if isTypedCategory(err, faults.NotFoundError) {
 			return []any{}, true, nil
 		}
+		if isFallbackListPayloadShapeError(err) {
+			return nil, false, nil
+		}
 		return nil, true, err
 	}
 
