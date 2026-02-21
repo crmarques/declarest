@@ -185,7 +185,7 @@ Interactive config commands:
 75. `repo push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
 76. Context-catalog mutations (`config create|add|update|validate`) MUST fail validation when `resource-server` is omitted.
 77. Interactive `config create` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
-78. `resource get` with an explicit trailing slash collection marker and remote source (`--remote-server` or default) MUST execute remote list resolution for the normalized collection path instead of single-resource read.
+78. `resource get` with an explicit trailing slash collection marker and remote source (`--remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 79. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
 
 ## Output Contract
@@ -267,6 +267,7 @@ Interactive config commands:
 22. `config print-template` works without a configured current context and still renders the full template.
 23. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
 24. Interactive `config create` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
+25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -354,3 +355,4 @@ Interactive config commands:
 83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasFromAttribute` (for example `account`) instead of ID-only segments.
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
+86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.

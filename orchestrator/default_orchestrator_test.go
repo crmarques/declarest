@@ -833,6 +833,63 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 	}
 }
 
+func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t *testing.T) {
+	t.Parallel()
+
+	repositoryManager := &fakeRepository{
+		getValues: map[string]resource.Value{
+			"/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c": map[string]any{
+				"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				"clientId": "account",
+			},
+			"/admin/realms/master/clients/11111111-1111-1111-1111-111111111111": map[string]any{
+				"id":       "11111111-1111-1111-1111-111111111111",
+				"clientId": "billing",
+			},
+		},
+		listValue: []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c",
+				LocalAlias:  "account",
+			},
+			{
+				LogicalPath: "/admin/realms/master/clients/11111111-1111-1111-1111-111111111111",
+				LocalAlias:  "billing",
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		Repository: repositoryManager,
+		Metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "id",
+				AliasFromAttribute: "clientId",
+			},
+		},
+	}
+
+	value, err := orchestrator.GetLocal(context.Background(), "/admin/realms/master/clients/account")
+	if err != nil {
+		t.Fatalf("GetLocal returned error: %v", err)
+	}
+
+	if len(repositoryManager.getCalls) != 2 {
+		t.Fatalf("expected miss + one hydrated alias candidate get calls, got %#v", repositoryManager.getCalls)
+	}
+	if repositoryManager.getCalls[1] != "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c" {
+		t.Fatalf("expected second get call to hydrate matched alias candidate, got %#v", repositoryManager.getCalls)
+	}
+
+	payload, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map payload from local fallback, got %T", value)
+	}
+	if payload["clientId"] != "account" {
+		t.Fatalf("expected alias-matched fallback payload, got %#v", payload)
+	}
+}
+
 func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testing.T) {
 	t.Parallel()
 

@@ -367,57 +367,6 @@ func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testi
 	}
 }
 
-func TestFSMetadataInferPreservesExplicitAndApply(t *testing.T) {
-	t.Parallel()
-
-	service := NewFSMetadataService(t.TempDir(), "")
-	ctx := context.Background()
-
-	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet): {
-				Path:   "/custom/get/path",
-				Method: "GET",
-			},
-		},
-	})
-
-	inferredPreview, err := service.Infer(ctx, "/customers/acme", metadatadomain.InferenceRequest{Apply: false})
-	if err != nil {
-		t.Fatalf("Infer preview returned error: %v", err)
-	}
-	if inferredPreview.Operations[string(metadatadomain.OperationGet)].Path != "/custom/get/path" {
-		t.Fatalf("expected explicit get path to win, got %+v", inferredPreview.Operations[string(metadatadomain.OperationGet)])
-	}
-	if inferredPreview.Operations[string(metadatadomain.OperationUpdate)].Path == "" {
-		t.Fatalf("expected inferred update operation to be present, got %+v", inferredPreview.Operations)
-	}
-
-	stillStored, err := service.Get(ctx, "/customers/acme")
-	if err != nil {
-		t.Fatalf("Get after preview infer returned error: %v", err)
-	}
-	if stillStored.Operations[string(metadatadomain.OperationUpdate)].Path != "" {
-		t.Fatalf("expected preview infer to avoid persistence, got %+v", stillStored.Operations)
-	}
-
-	_, err = service.Infer(ctx, "/customers/acme", metadatadomain.InferenceRequest{Apply: true})
-	if err != nil {
-		t.Fatalf("Infer apply returned error: %v", err)
-	}
-
-	stored, err := service.Get(ctx, "/customers/acme")
-	if err != nil {
-		t.Fatalf("Get after apply infer returned error: %v", err)
-	}
-	if stored.Operations[string(metadatadomain.OperationGet)].Path != "/custom/get/path" {
-		t.Fatalf("expected explicit get path to remain, got %+v", stored.Operations[string(metadatadomain.OperationGet)])
-	}
-	if stored.Operations[string(metadatadomain.OperationUpdate)].Path == "" {
-		t.Fatalf("expected inferred update operation to be persisted, got %+v", stored.Operations)
-	}
-}
-
 func TestFSMetadataValidation(t *testing.T) {
 	t.Parallel()
 

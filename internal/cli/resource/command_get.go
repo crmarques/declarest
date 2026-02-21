@@ -64,7 +64,19 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 
 			if source == sourceRemoteServer && explicitCollectionTarget {
 				debugctx.Printf(command.Context(), "resource get treating %q as remote collection listing", resolvedPath)
-				return renderRemoteCollection(command, outputFormat, deps, orchestratorService, resolvedPath, showSecrets)
+				err = renderRemoteCollection(command, outputFormat, deps, orchestratorService, resolvedPath, showSecrets)
+				if err == nil {
+					return nil
+				}
+				if !isCollectionListShapeError(err) {
+					return err
+				}
+				debugctx.Printf(
+					command.Context(),
+					"resource get falling back to single-resource remote read for %q after collection-list shape error: %v",
+					resolvedPath,
+					err,
+				)
 			}
 
 			var value resource.Value
@@ -81,6 +93,32 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 				if source == sourceRepository && (isNotFoundError(err) || isRootResourceError(err)) {
 					debugctx.Printf(command.Context(), "resource get treating %q as collection listing", resolvedPath)
 					return renderRepositoryCollection(command, outputFormat, deps, orchestratorService, resolvedPath, showSecrets)
+				}
+				if source == sourceRemoteServer && !explicitCollectionTarget && isNotFoundError(err) {
+					debugctx.Printf(
+						command.Context(),
+						"resource get attempting empty-collection fallback for %q after remote not found",
+						resolvedPath,
+					)
+					handled, fallbackErr := renderRemoteEmptyCollectionFallback(
+						command,
+						outputFormat,
+						deps,
+						orchestratorService,
+						resolvedPath,
+						showSecrets,
+					)
+					if fallbackErr == nil && handled {
+						return nil
+					}
+					if fallbackErr != nil {
+						debugctx.Printf(
+							command.Context(),
+							"resource get empty-collection fallback failed for %q error=%v",
+							resolvedPath,
+							fallbackErr,
+						)
+					}
 				}
 				return err
 			}
@@ -162,6 +200,25 @@ func renderRemoteCollection(
 	return renderCollection(command, outputFormat, deps, items, showSecrets)
 }
 
+func renderRemoteEmptyCollectionFallback(
+	command *cobra.Command,
+	outputFormat string,
+	deps common.CommandDependencies,
+	orchestratorService orchestrator.Orchestrator,
+	logicalPath string,
+	showSecrets bool,
+) (bool, error) {
+	items, err := orchestratorService.ListRemote(command.Context(), logicalPath, orchestrator.ListPolicy{})
+	if err != nil {
+		return false, err
+	}
+	if len(items) != 0 {
+		return false, nil
+	}
+
+	return true, renderCollection(command, outputFormat, deps, items, showSecrets)
+}
+
 func renderCollection(
 	command *cobra.Command,
 	outputFormat string,
@@ -212,6 +269,23 @@ func renderCollection(
 func hasCollectionTargetMarker(rawPath string) bool {
 	trimmed := strings.TrimSpace(rawPath)
 	return trimmed != "" && trimmed != "/" && strings.HasSuffix(trimmed, "/")
+}
+
+func isCollectionListShapeError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+	if typedErr.Category != faults.ValidationError {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(typedErr.Message))
+	return strings.HasPrefix(message, "list response ") || strings.HasPrefix(message, "list payload ")
 }
 
 func maskGetSecretsForOutput(

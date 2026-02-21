@@ -348,6 +348,12 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 			}
 
 			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
+			if request.Recursive {
+				return common.ValidationError(
+					"metadata infer --recursive is not implemented yet",
+					nil,
+				)
+			}
 
 			_, openAPISpec := resolveOpenAPISpec(command.Context(), deps)
 
@@ -458,6 +464,9 @@ func resolveOperationSpecWithoutRendering(
 			spec = metadatadomain.MergeOperationSpec(spec, operationSpec)
 		}
 	}
+	if strings.TrimSpace(spec.Path) == "" {
+		spec.Path = defaultOperationPathTemplate(operation)
+	}
 
 	if strings.TrimSpace(spec.Path) == "" {
 		return metadatadomain.OperationSpec{}, common.ValidationError(
@@ -491,53 +500,28 @@ func extractRenderArgs(pathFlag string, args []string) ([]string, string, error)
 }
 
 func metadataPathNeedsSelectorMode(logicalPath string) bool {
-	trimmedPath := strings.TrimSpace(logicalPath)
-	if trimmedPath == "" {
+	descriptor, err := metadatadomain.ParsePathDescriptor(logicalPath)
+	if err != nil {
 		return false
 	}
-	if strings.HasSuffix(trimmedPath, "/") {
-		return true
-	}
-
-	normalized := strings.ReplaceAll(trimmedPath, "\\", "/")
-	for _, segment := range strings.Split(normalized, "/") {
-		segment = strings.TrimSpace(segment)
-		if segment == "" || segment == "." {
-			continue
-		}
-		if segment == "_" || strings.ContainsAny(segment, "*?[") {
-			return true
-		}
-	}
-	return false
+	return descriptor.SelectorMode
 }
 
 func metadataPathLooksCollection(logicalPath string) bool {
-	trimmedPath := strings.TrimSpace(logicalPath)
-	if trimmedPath == "" {
+	descriptor, err := metadatadomain.ParsePathDescriptor(logicalPath)
+	if err != nil {
 		return false
 	}
-	if strings.HasSuffix(trimmedPath, "/") {
-		return true
-	}
+	return descriptor.Collection
+}
 
-	normalized := strings.ReplaceAll(trimmedPath, "\\", "/")
-	segments := strings.Split(strings.Trim(normalized, "/"), "/")
-	if len(segments) == 0 {
-		return false
+func defaultOperationPathTemplate(operation metadatadomain.Operation) string {
+	switch operation {
+	case metadatadomain.OperationCreate, metadatadomain.OperationList:
+		return "."
+	default:
+		return "./{{.id}}"
 	}
-
-	lastSegment := strings.TrimSpace(segments[len(segments)-1])
-	if lastSegment == "_" {
-		return true
-	}
-	for _, segment := range segments {
-		segment = strings.TrimSpace(segment)
-		if segment == "_" || strings.ContainsAny(segment, "*?[") {
-			return true
-		}
-	}
-	return false
 }
 
 func inferMetadataFromAvailableEndpoints(

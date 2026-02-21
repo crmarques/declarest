@@ -51,7 +51,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 33. `simple-api-server` mTLS trust MUST be reloaded from configured client-certificate sources for new connections without process restart.
 34. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.
 35. `manual` with `repo-type=git` MUST run `repo init` after context assembly so repository-dependent checks (`config check`, `repo status`) are immediately usable.
-36. Resource-server components MAY include `openapi.yaml`; the runner copies it into the run directory and surfaces the resulting path as `resource-server.http.openapi` in the generated context so metadata-aware commands can infer the API surface.
+36. Components MAY include `openapi.yaml`; the runner copies any discovered spec into the run directory, exposes its path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets the component's `context` hook echo the resulting value (for example `resource-server.http.openapi`) so metadata-aware commands can infer the API surface.
 
 ## Data Contracts
 Runner flags:

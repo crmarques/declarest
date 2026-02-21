@@ -29,11 +29,12 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 12. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
 13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
 14. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
-15. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
-16. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
-17. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
-18. Metadata decoding SHOULD accept `operationInfo.<operation>.url.path` as a compatibility alias for `operationInfo.<operation>.path`.
-19. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
+15. Until recursive metadata inference traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
+16. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
+17. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
+18. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
+19. Metadata decoding SHOULD accept `operationInfo.<operation>.url.path` as a compatibility alias for `operationInfo.<operation>.path`.
+20. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
 
 ## Data Contracts
 Supported metadata groups:
@@ -51,7 +52,7 @@ Operation selector contract:
 
 Infer options contract:
 1. `apply`: whether inferred directives are persisted.
-2. `recursive`: whether inference traverses descendants.
+2. `recursive`: reserved for future traversal support; current behavior MUST reject `true` with a validation error.
 
 Template context contract:
 1. Current resource payload fields.
@@ -91,3 +92,4 @@ Template context contract:
 4. Inference for `/admin/realms/_/clients/` can propose `resourceInfo.idFromAttribute: id`, `resourceInfo.aliasFromAttribute: clientId`, and templated operation paths from OpenAPI selectors.
 5. For selector `/admin/realms/_/user-registry` with `resourceInfo.collectionPath: /admin/realms/{{.realm}}/components` and `operationInfo.getResource.path: ./{{.id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
 6. For selector `/admin/realms/_/user-registry/_/mappers/`, list `jq` MAY use `resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
+7. `metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.

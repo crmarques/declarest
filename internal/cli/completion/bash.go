@@ -12,8 +12,7 @@ var (
 	bashEqualsFlagSuggestionToken       = regexp.MustCompile(`\s*"--[^"=\s]+="`)
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
 	bashOutCompgenLoopPattern           = regexp.MustCompile(`(?m)^\s*while IFS='' read -r comp; do\s*\n\s*COMPREPLY\+=\("\$comp"\)\s*\n\s*done < <\(compgen\s+-W\s+"?\$\{?out\}?"?\s+--\s+"?\$\{?cur\}?"?\)\s*$`)
-	bashCompleteCommandPattern          = regexp.MustCompile(`^\s*complete\s+.*-o\s+default.*-F\s+__start_[^\s]+\s+[^\s]+\s*$`)
-	bashCompoptNoSpacePattern           = regexp.MustCompile(`compopt\s+-o\s+nospace`)
+	bashReplyCompgenLoopPattern         = regexp.MustCompile(`(?m)^\s*while IFS='' read -r comp; do\s*\n\s*COMPREPLY\+=\("\$comp"\)\s*\n\s*done < <\(compgen -W "\$\{completions\[\*\]\}" -- "\$cur"\)\s*$`)
 )
 
 func newBashCommand() *cobra.Command {
@@ -46,10 +45,6 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 		if bashEmptyArrayAppendPattern.Match(normalizedLine) {
 			continue
 		}
-		if bashCompleteCommandPattern.Match(normalizedLine) && !bytes.Contains(normalizedLine, []byte("-o filenames")) {
-			normalizedLine = bytes.Replace(normalizedLine, []byte("-o default"), []byte("-o default -o filenames"), 1)
-		}
-
 		filtered = append(filtered, normalizedLine)
 	}
 	normalized := bytes.Join(filtered, []byte{'\n'})
@@ -62,10 +57,14 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
             COMPREPLY+=( "$(printf '%q' "$comp")" )
         done < <(compgen -W "${out// /\\ }" -- "$cur")`),
 	)
-	normalized = bashCompoptNoSpacePattern.ReplaceAllLiteral(
+	normalized = bashReplyCompgenLoopPattern.ReplaceAllLiteral(
 		normalized,
-		[]byte(`compopt -o nospace -o filenames`),
+		[]byte(`    if [[ $(type -t compopt) = "builtin" ]]; then
+        compopt +o filenames
+    fi
+    while IFS='' read -r comp; do
+        COMPREPLY+=("$comp")
+    done < <(compgen -W "${completions[*]}" -- "$cur")`),
 	)
-
 	return normalized
 }

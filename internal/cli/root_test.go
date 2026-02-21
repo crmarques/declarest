@@ -337,6 +337,93 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("remote_collection_marker_falls_back_to_single_resource_on_invalid_list_shape", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.listRemoteErr = faults.NewTypedError(
+			faults.ValidationError,
+			`list response object is ambiguous: expected an "items" array or a single array field, found array fields [enabledEventTypes, eventsListeners]`,
+			nil,
+		)
+		orchestrator.getRemoteValue = map[string]any{
+			"id":    "master",
+			"realm": "master",
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/admin/realms/master/")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master"}) {
+			t.Fatalf("expected one remote collection list attempt, got %#v", orchestrator.listRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.getRemoteCalls, []string{"/admin/realms/master"}) {
+			t.Fatalf("expected one remote single-resource fallback attempt, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !strings.Contains(output, `"realm": "master"`) {
+			t.Fatalf("expected fallback single-resource output, got %q", output)
+		}
+	})
+
+	t.Run("remote_not_found_without_collection_marker_renders_empty_collection_when_list_is_empty", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master/clients/account",
+				Payload: map[string]any{
+					"id":       "account",
+					"clientId": "account",
+				},
+			},
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/admin/realms/master/user-registry")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(orchestrator.getRemoteCalls, []string{"/admin/realms/master/user-registry"}) {
+			t.Fatalf("expected one remote get call, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/user-registry"}) {
+			t.Fatalf("expected one remote list fallback call, got %#v", orchestrator.listRemoteCalls)
+		}
+		if strings.TrimSpace(output) != "[]" {
+			t.Fatalf("expected empty collection output, got %q", output)
+		}
+	})
+
+	t.Run("remote_not_found_without_collection_marker_keeps_not_found_when_list_has_items", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master/user-registry/ldap-1",
+				Payload: map[string]any{
+					"id":   "ldap-id-1",
+					"name": "ldap-1",
+				},
+			},
+		}
+
+		_, err := executeForTest(deps, "", "resource", "get", "/admin/realms/master/user-registry")
+		assertTypedCategory(t, err, faults.NotFoundError)
+		if !reflect.DeepEqual(orchestrator.getRemoteCalls, []string{"/admin/realms/master/user-registry"}) {
+			t.Fatalf("expected one remote get call, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/user-registry"}) {
+			t.Fatalf("expected one remote list fallback call, got %#v", orchestrator.listRemoteCalls)
+		}
+	})
+
 	t.Run("repository_and_remote_server_flags_conflict", func(t *testing.T) {
 		t.Parallel()
 
@@ -1934,6 +2021,54 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("render_selector_defaults_operation_paths_when_metadata_path_is_missing", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name         string
+			path         string
+			operationArg string
+			expectedPath string
+		}{
+			{
+				name:         "list_defaults_to_dot",
+				path:         "/admin/realms/_/clients/",
+				operationArg: "",
+				expectedPath: ".",
+			},
+			{
+				name:         "get_defaults_to_dot_id_template",
+				path:         "/admin/realms/_/clients/_",
+				operationArg: "get",
+				expectedPath: "./{{.id}}",
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
+
+				metadataService := newTestMetadata()
+				metadataService.items[test.path] = metadatadomain.ResourceMetadata{}
+				orchestrator := &testOrchestrator{metadataService: metadataService}
+
+				args := []string{"metadata", "render", test.path}
+				if strings.TrimSpace(test.operationArg) != "" {
+					args = append(args, test.operationArg)
+				}
+
+				output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", args...)
+				if err != nil {
+					t.Fatalf("unexpected selector render default-path error: %v", err)
+				}
+				if !strings.Contains(output, "\"path\": \""+test.expectedPath+"\"") {
+					t.Fatalf("expected selector render default path %q, got %q", test.expectedPath, output)
+				}
+			})
+		}
+	})
+
 	t.Run("infer_collection_selector_uses_openapi_and_omits_null_fields", func(t *testing.T) {
 		t.Parallel()
 
@@ -2212,6 +2347,41 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 		if len(stored.Operations) != 0 {
 			t.Fatalf("expected persisted metadata without default operations, got %#v", stored.Operations)
+		}
+	})
+
+	t.Run("infer_recursive_is_not_implemented_and_does_not_persist", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		orchestrator := &testOrchestrator{
+			metadataService: metadataService,
+			openAPISpec: map[string]any{
+				"paths": map[string]any{
+					"/admin/realms": map[string]any{
+						"get": map[string]any{},
+					},
+				},
+			},
+		}
+		initialCount := len(metadataService.items)
+
+		_, err := executeForTest(
+			testDepsWith(orchestrator, metadataService),
+			"",
+			"metadata",
+			"infer",
+			"/admin/realms/",
+			"--recursive",
+			"--apply",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+
+		if len(metadataService.items) != initialCount {
+			t.Fatalf("expected recursive infer to avoid persistence, metadata items=%#v", metadataService.items)
+		}
+		if _, found := metadataService.items["/admin/realms/"]; found {
+			t.Fatalf("expected recursive infer to avoid setting metadata at /admin/realms/, got %#v", metadataService.items["/admin/realms/"])
 		}
 	})
 }

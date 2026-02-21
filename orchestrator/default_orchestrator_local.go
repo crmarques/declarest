@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/resource/identity"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/resource/identity"
 )
 
 func (r *DefaultOrchestrator) resolveLocalResourceForRead(
@@ -59,38 +59,40 @@ func (r *DefaultOrchestrator) resolveLocalResourceForRead(
 		return resource.Resource{}, listErr
 	}
 
+	requestedSegment := requestedFallbackSegment(requestedInfo)
+	if requestedSegment != "" {
+		aliasMatches := make([]resource.Resource, 0, len(candidates))
+		for _, candidate := range candidates {
+			if listedResourceAlias(candidate) != requestedSegment {
+				continue
+			}
+			aliasMatches = append(aliasMatches, candidate)
+		}
+		if len(aliasMatches) == 1 {
+			hydrated, hydrateErr := r.hydrateLocalFallbackCandidate(ctx, manager, requestedInfo, aliasMatches[0])
+			if hydrateErr != nil {
+				return resource.Resource{}, hydrateErr
+			}
+			return hydrated, nil
+		}
+	}
+
 	matches := make([]resource.Resource, 0, len(candidates))
 	for _, candidate := range candidates {
-		candidateValue, getErr := manager.Get(ctx, candidate.LogicalPath)
-		if getErr != nil {
-			return resource.Resource{}, getErr
+		hydrated, hydrateErr := r.hydrateLocalFallbackCandidate(ctx, manager, requestedInfo, candidate)
+		if hydrateErr != nil {
+			return resource.Resource{}, hydrateErr
 		}
-
-		candidatePayload, normalizeErr := resource.Normalize(candidateValue)
-		if normalizeErr != nil {
-			return resource.Resource{}, normalizeErr
-		}
-
-		candidateAlias, resolvedRemoteID, identityErr := resolveResourceIdentity(
-			candidate.LogicalPath,
-			requestedInfo.Metadata,
-			candidatePayload,
-		)
-		if identityErr != nil {
-			return resource.Resource{}, identityErr
-		}
-		if !matchesLocalFallbackIdentity(requestedInfo, candidateAlias, resolvedRemoteID, candidatePayload) {
+		if !matchesLocalFallbackIdentity(
+			requestedInfo,
+			hydrated.LocalAlias,
+			hydrated.RemoteID,
+			hydrated.Payload,
+		) {
 			continue
 		}
 
-		matches = append(matches, resource.Resource{
-			LogicalPath:    candidate.LogicalPath,
-			CollectionPath: collectionPathFor(candidate.LogicalPath),
-			LocalAlias:     candidateAlias,
-			RemoteID:       resolvedRemoteID,
-			Metadata:       requestedInfo.Metadata,
-			Payload:        candidatePayload,
-		})
+		matches = append(matches, hydrated)
 	}
 
 	switch len(matches) {
@@ -107,16 +109,64 @@ func (r *DefaultOrchestrator) resolveLocalResourceForRead(
 	}
 }
 
+func (r *DefaultOrchestrator) hydrateLocalFallbackCandidate(
+	ctx context.Context,
+	manager repository.ResourceStore,
+	requestedInfo resource.Resource,
+	candidate resource.Resource,
+) (resource.Resource, error) {
+	candidateValue, getErr := manager.Get(ctx, candidate.LogicalPath)
+	if getErr != nil {
+		return resource.Resource{}, getErr
+	}
+
+	candidatePayload, normalizeErr := resource.Normalize(candidateValue)
+	if normalizeErr != nil {
+		return resource.Resource{}, normalizeErr
+	}
+
+	candidateAlias, resolvedRemoteID, identityErr := resolveResourceIdentity(
+		candidate.LogicalPath,
+		requestedInfo.Metadata,
+		candidatePayload,
+	)
+	if identityErr != nil {
+		return resource.Resource{}, identityErr
+	}
+
+	return resource.Resource{
+		LogicalPath:    candidate.LogicalPath,
+		CollectionPath: collectionPathFor(candidate.LogicalPath),
+		LocalAlias:     candidateAlias,
+		RemoteID:       resolvedRemoteID,
+		Metadata:       requestedInfo.Metadata,
+		Payload:        candidatePayload,
+	}, nil
+}
+
+func listedResourceAlias(item resource.Resource) string {
+	alias := strings.TrimSpace(item.LocalAlias)
+	if alias != "" && alias != "/" {
+		return alias
+	}
+	return logicalPathAlias(item.LogicalPath)
+}
+
+func requestedFallbackSegment(requestedInfo resource.Resource) string {
+	requestedSegment := strings.TrimSpace(requestedInfo.RemoteID)
+	if requestedSegment == "" {
+		requestedSegment = logicalPathAlias(requestedInfo.LogicalPath)
+	}
+	return requestedSegment
+}
+
 func matchesLocalFallbackIdentity(
 	requestedInfo resource.Resource,
 	candidateAlias string,
 	candidateRemoteID string,
 	candidatePayload resource.Value,
 ) bool {
-	requestedSegment := strings.TrimSpace(requestedInfo.RemoteID)
-	if requestedSegment == "" {
-		requestedSegment = logicalPathAlias(requestedInfo.LogicalPath)
-	}
+	requestedSegment := requestedFallbackSegment(requestedInfo)
 	if requestedSegment == "" {
 		return false
 	}

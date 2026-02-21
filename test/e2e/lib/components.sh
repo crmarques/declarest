@@ -144,14 +144,10 @@ e2e_component_install_openapi_spec() {
   return 0
 }
 
-e2e_prepare_resource_server_openapi_specs() {
+e2e_prepare_component_openapi_specs() {
   local component_key
 
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
-    if [[ "$(e2e_component_type "${component_key}")" != 'resource-server' ]]; then
-      continue
-    fi
-
     if ! e2e_component_install_openapi_spec "${component_key}"; then
       return 1
     fi

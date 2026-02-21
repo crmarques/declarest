@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	identitysupport "github.com/crmarques/declarest/resource/identity"
@@ -130,7 +131,7 @@ func addMetadataCollectionSuggestions(
 	suggestions map[string]struct{},
 	logicalPath string,
 ) {
-	resolver, ok := metadataService.(metadataCollectionChildResolver)
+	resolver, ok := metadataService.(metadatadomain.CollectionChildrenResolver)
 	if !ok {
 		return
 	}
@@ -200,10 +201,6 @@ type collectionSegmentResolver struct {
 	sourceStrategy      completionSourceStrategy
 	cache               map[string][]string
 	queryBudget         int
-}
-
-type metadataCollectionChildResolver interface {
-	ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error)
 }
 
 func newCollectionSegmentResolver(
