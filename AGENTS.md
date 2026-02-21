@@ -68,6 +68,14 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
 14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
 
+## Delivery Protocol
+1. After fulfilling a request, stage and commit the touched files before the final response unless the user explicitly forbids committing or technical blockers prevent a clean commit; document the blocker when a commit cannot be made.
+2. Commit messages MUST be a single line that follows `<type>(<component>): <description>`.
+   - `type` is restricted to `chore`, `fix`, or `feat` and reflects the nature of the change.
+   - `component` names the affected bounded context or visible area (for example `instructions`, `metadata`, `cli`).
+   - `description` is a succinct yet meaningful summary of the change.
+3. Keep the commit message concise (no multi-line bodies) so it doubles as the single-line comment that documents the change.
+
 ## Spec Quality Criteria
 1. Efficiency: keep workflows and rules minimal; reference canonical sources instead of repeating full rule sets.
 2. Assertivity: use `MUST`, `SHOULD`, and `MAY` consistently, with explicit conditions and outcomes.
