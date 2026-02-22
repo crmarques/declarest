@@ -1019,6 +1019,44 @@ func TestDefaultOrchestratorAdHocDelegatesToServer(t *testing.T) {
 	}
 }
 
+func TestDefaultOrchestratorAdHocPostResolvesPathFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		adHocValue: map[string]any{"ok": true},
+	}
+	metadataService := &fakeMetadata{
+		resolveValue: metadatadomain.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+		},
+	}
+	orchestrator := &DefaultOrchestrator{
+		Server:   serverManager,
+		Metadata: metadataService,
+	}
+
+	body := resource.Value(map[string]any{
+		"providerId": "ldap",
+		"name":       "AD Production",
+	})
+	_, err := orchestrator.AdHoc(context.Background(), "POST", "/admin/realms/acme/user-registry/", body)
+	if err != nil {
+		t.Fatalf("AdHoc returned error: %v", err)
+	}
+
+	if !serverManager.adHocCalled {
+		t.Fatal("expected ad-hoc request to be delegated to server")
+	}
+	if got := serverManager.adHocPath; got != "/admin/realms/acme/components" {
+		t.Fatalf("expected metadata-resolved ad-hoc path, got %q", got)
+	}
+	if len(metadataService.resolveCalls) != 1 || metadataService.resolveCalls[0] != "/admin/realms/acme/user-registry" {
+		t.Fatalf("expected metadata to resolve normalized logical path, got %#v", metadataService.resolveCalls)
+	}
+}
+
 func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
 	t.Parallel()
 
