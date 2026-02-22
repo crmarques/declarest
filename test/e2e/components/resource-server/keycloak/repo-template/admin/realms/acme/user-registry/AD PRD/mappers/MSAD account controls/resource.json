@@ -1,0 +1,12 @@
+{
+  "config": {
+    "always.read.enabled.value.from.ldap": [
+      "true"
+    ]
+  },
+  "id": "7e191129-fca1-492d-ac58-8d7a3afc8fb3",
+  "name": "MSAD account controls",
+  "parentId": "ldlOe2kYR2G5PSnSqDz9cg",
+  "providerId": "msad-user-account-control-mapper",
+  "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+}

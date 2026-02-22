@@ -1,0 +1,24 @@
+{
+  "config": {
+    "always.read.value.from.ldap": [
+      "false"
+    ],
+    "is.mandatory.in.ldap": [
+      "false"
+    ],
+    "ldap.attribute": [
+      "mail"
+    ],
+    "read.only": [
+      "true"
+    ],
+    "user.model.attribute": [
+      "email"
+    ]
+  },
+  "id": "815ea622-4f43-400c-94c3-2c9afa41dee2",
+  "name": "email",
+  "parentId": "ldlOe2kYR2G5PSnSqDz9cg",
+  "providerId": "user-attribute-ldap-mapper",
+  "providerType": "org.keycloak.storage.ldap.mappers.LDAPStorageMapper"
+}
