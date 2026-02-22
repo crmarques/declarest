@@ -64,7 +64,9 @@ func (r *DefaultOrchestrator) resolveAdHocEndpointPath(
 	endpointPath string,
 	body resource.Value,
 ) (string, error) {
-	operation, ok := adHocMetadataOperation(method)
+	normalizedMethod := strings.ToUpper(strings.TrimSpace(method))
+
+	operation, ok := adHocMetadataOperation(normalizedMethod)
 	if !ok {
 		return endpointPath, nil
 	}
@@ -74,9 +76,13 @@ func (r *DefaultOrchestrator) resolveAdHocEndpointPath(
 		return "", err
 	}
 
-	// Ad-hoc POST targets a collection endpoint. Preserve the requested logical
-	// path as the default collection path when metadata does not override it.
-	if operation == metadata.OperationCreate {
+	if normalizedMethod == "GET" && shouldResolveAdHocGetAsList(resourceInfo) {
+		operation = metadata.OperationList
+	}
+
+	// Collection-target operations should preserve the requested logical path as
+	// the default collection path when metadata does not override it.
+	if operation == metadata.OperationCreate || operation == metadata.OperationList {
 		resourceInfo.CollectionPath = resourceInfo.LogicalPath
 	}
 
@@ -97,7 +103,9 @@ func (r *DefaultOrchestrator) resolveAdHocEndpointPath(
 }
 
 func adHocMetadataOperation(method string) (metadata.Operation, bool) {
-	switch strings.ToUpper(strings.TrimSpace(method)) {
+	switch method {
+	case "GET":
+		return metadata.OperationGet, true
 	case "POST":
 		return metadata.OperationCreate, true
 	case "PUT", "PATCH":
@@ -107,6 +115,35 @@ func adHocMetadataOperation(method string) (metadata.Operation, bool) {
 	default:
 		return "", false
 	}
+}
+
+func shouldResolveAdHocGetAsList(resourceInfo resource.Resource) bool {
+	md := resourceInfo.Metadata
+	if strings.TrimSpace(md.CollectionPath) == "" {
+		return false
+	}
+
+	if md.Operations != nil {
+		if getSpec, ok := md.Operations[string(metadata.OperationGet)]; ok && strings.TrimSpace(getSpec.Path) != "" {
+			return false
+		}
+	}
+
+	templateDepth := len(splitLogicalPathSegments(md.CollectionPath))
+	if templateDepth == 0 {
+		return false
+	}
+
+	logicalDepth := len(splitLogicalPathSegments(resourceInfo.LogicalPath))
+	if logicalDepth == 0 {
+		return false
+	}
+
+	// Selector-depth logical paths (for example /.../user-registry) often map to
+	// remote collection endpoints via metadata collectionPath overrides. For
+	// ad-hoc GET, prefer the list path in this case so the raw request targets
+	// the correct collection endpoint (for example /components) before fallback.
+	return logicalDepth <= templateDepth
 }
 
 func (r *DefaultOrchestrator) GetOpenAPISpec(ctx context.Context) (resource.Value, error) {

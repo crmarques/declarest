@@ -1057,6 +1057,42 @@ func TestDefaultOrchestratorAdHocPostResolvesPathFromMetadata(t *testing.T) {
 	}
 }
 
+func TestDefaultOrchestratorAdHocGetSelectorDepthResolvesListPathFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	serverManager := &fakeServer{
+		adHocValue: []any{},
+	}
+	metadataService := &fakeMetadata{
+		resolveValue: metadatadomain.ResourceMetadata{
+			IDFromAttribute:    "id",
+			AliasFromAttribute: "name",
+			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			Operations: map[string]metadatadomain.OperationSpec{
+				string(metadatadomain.OperationList): {
+					JQ: "[ .[] | select(.providerId == \"ldap\") ]",
+				},
+			},
+		},
+	}
+	orchestrator := &DefaultOrchestrator{
+		Server:   serverManager,
+		Metadata: metadataService,
+	}
+
+	_, err := orchestrator.AdHoc(context.Background(), "GET", "/admin/realms/master/user-registry", nil)
+	if err != nil {
+		t.Fatalf("AdHoc returned error: %v", err)
+	}
+
+	if !serverManager.adHocCalled {
+		t.Fatal("expected ad-hoc request to be delegated to server")
+	}
+	if got := serverManager.adHocPath; got != "/admin/realms/master/components" {
+		t.Fatalf("expected metadata-resolved list path for selector-depth GET, got %q", got)
+	}
+}
+
 func TestDefaultOrchestratorAdHocRequiresServer(t *testing.T) {
 	t.Parallel()
 
