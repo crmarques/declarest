@@ -22,15 +22,22 @@ import (
 )
 
 func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, operation metadata.Operation) (metadata.OperationSpec, error) {
-	spec, explicitMethod, explicitAccept, explicitContentType := operationSpecFromMetadata(resourceInfo.Metadata, operation)
+	spec, explicitPath, explicitMethod, explicitAccept, explicitContentType := operationSpecFromMetadata(resourceInfo.Metadata, operation)
 
-	if strings.TrimSpace(spec.Path) == "" && strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
-		spec.Path = resourceInfo.ResolvedRemotePath
-	}
 	var err error
-	spec, err = resolveOperationSpecTemplates(ctx, resourceInfo.Metadata, operation, spec, resourceInfo)
-	if err != nil {
-		return metadata.OperationSpec{}, err
+	if g.metadataRenderer != nil {
+		spec, err = g.metadataRenderer.RenderOperationSpecForResource(ctx, resourceInfo, operation)
+		if err != nil {
+			return metadata.OperationSpec{}, err
+		}
+	} else {
+		spec, err = resolveOperationSpecTemplates(ctx, resourceInfo.Metadata, operation, spec, resourceInfo)
+		if err != nil {
+			return metadata.OperationSpec{}, err
+		}
+	}
+	if !explicitPath && strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
+		spec.Path = resourceInfo.ResolvedRemotePath
 	}
 	spec.Path = normalizeRequestPath(spec.Path)
 	if spec.Path == "" {
@@ -397,19 +404,20 @@ func (g *HTTPResourceServerGateway) resolveListJQResource(ctx context.Context, l
 	return resource.Normalize(resolved)
 }
 
-func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool) {
+func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool, bool) {
 	var spec metadata.OperationSpec
 	if md.Operations != nil {
 		spec = md.Operations[string(operation)]
 	}
 
+	explicitPath := strings.TrimSpace(spec.Path) != ""
 	explicitMethod := strings.TrimSpace(spec.Method) != ""
 	explicitAccept := strings.TrimSpace(spec.Accept) != ""
 	explicitContentType := strings.TrimSpace(spec.ContentType) != ""
 
 	spec.Query = cloneStringMap(spec.Query)
 	spec.Headers = cloneStringMap(spec.Headers)
-	return spec, explicitMethod, explicitAccept, explicitContentType
+	return spec, explicitPath, explicitMethod, explicitAccept, explicitContentType
 }
 
 func defaultOperationMethod(operation metadata.Operation) string {

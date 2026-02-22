@@ -2,12 +2,15 @@ package fsmetadata
 
 import (
 	"context"
+	"errors"
+	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	debugctx "github.com/crmarques/declarest/internal/support/debug"
-	"github.com/crmarques/declarest/resource/identity"
-	"github.com/crmarques/declarest/metadata/templatescope"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/resource/identity"
 )
 
 func (s *FSMetadataService) RenderOperationSpec(
@@ -88,6 +91,84 @@ func (s *FSMetadataService) RenderOperationSpec(
 	return spec, nil
 }
 
+func (s *FSMetadataService) RenderOperationSpecForResource(
+	ctx context.Context,
+	resourceInfo resource.Resource,
+	operation metadatadomain.Operation,
+) (metadatadomain.OperationSpec, error) {
+	debugctx.Printf(
+		ctx,
+		"metadata fs render-resource start logical_path=%q operation=%q payload_type=%T",
+		resourceInfo.LogicalPath,
+		operation,
+		resourceInfo.Payload,
+	)
+
+	targetPath, err := normalizeResolvePath(resourceInfo.LogicalPath)
+	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs render-resource invalid logical_path=%q operation=%q error=%v",
+			resourceInfo.LogicalPath,
+			operation,
+			err,
+		)
+		return metadatadomain.OperationSpec{}, err
+	}
+
+	resolvedMetadata := metadatadomain.CloneResourceMetadata(resourceInfo.Metadata)
+	if metadataEmpty(resolvedMetadata) {
+		resolvedMetadata, err = s.ResolveForPath(ctx, targetPath)
+		if err != nil {
+			if isTypedCategory(err, faults.NotFoundError) {
+				resolvedMetadata = metadatadomain.ResourceMetadata{}
+			} else {
+				debugctx.Printf(
+					ctx,
+					"metadata fs render-resource resolve failed logical_path=%q operation=%q error=%v",
+					targetPath,
+					operation,
+					err,
+				)
+				return metadatadomain.OperationSpec{}, err
+			}
+		}
+	}
+
+	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resourceInfo)
+	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs render-resource template-scope failed logical_path=%q operation=%q error=%v",
+			targetPath,
+			operation,
+			err,
+		)
+		return metadatadomain.OperationSpec{}, err
+	}
+
+	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
+	if err != nil {
+		debugctx.Printf(
+			ctx,
+			"metadata fs render-resource failed logical_path=%q operation=%q error=%v",
+			targetPath,
+			operation,
+			err,
+		)
+		return metadatadomain.OperationSpec{}, err
+	}
+
+	debugctx.Printf(
+		ctx,
+		"metadata fs render-resource done logical_path=%q operation=%q resolved_path=%q",
+		targetPath,
+		operation,
+		spec.Path,
+	)
+	return spec, nil
+}
+
 func buildTemplateValue(
 	logicalPath string,
 	metadata metadatadomain.ResourceMetadata,
@@ -111,4 +192,76 @@ func buildTemplateValue(
 		Metadata:       metadata,
 		Payload:        normalizedPayload,
 	})
+}
+
+func buildTemplateScopeForResource(
+	logicalPath string,
+	resolvedMetadata metadatadomain.ResourceMetadata,
+	resourceInfo resource.Resource,
+) (map[string]any, error) {
+	normalizedPayload, err := resource.Normalize(resourceInfo.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	localAlias := strings.TrimSpace(resourceInfo.LocalAlias)
+	remoteID := strings.TrimSpace(resourceInfo.RemoteID)
+	if localAlias == "" || remoteID == "" {
+		derivedAlias, derivedRemoteID, identityErr := identity.ResolveAliasAndRemoteID(
+			logicalPath,
+			resolvedMetadata,
+			normalizedPayload,
+		)
+		if identityErr != nil {
+			return nil, identityErr
+		}
+		if localAlias == "" {
+			localAlias = derivedAlias
+		}
+		if remoteID == "" {
+			remoteID = derivedRemoteID
+		}
+	}
+
+	collectionPath := strings.TrimSpace(resourceInfo.CollectionPath)
+	if collectionPath == "" {
+		collectionPath = collectionPathForLogicalPath(logicalPath)
+	} else {
+		collectionPath, err = resource.NormalizeLogicalPath(collectionPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return templatescope.BuildResourceScope(resource.Resource{
+		LogicalPath:    logicalPath,
+		CollectionPath: collectionPath,
+		LocalAlias:     localAlias,
+		RemoteID:       remoteID,
+		Metadata:       resolvedMetadata,
+		Payload:        normalizedPayload,
+	})
+}
+
+func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
+	return strings.TrimSpace(value.IDFromAttribute) == "" &&
+		strings.TrimSpace(value.AliasFromAttribute) == "" &&
+		strings.TrimSpace(value.CollectionPath) == "" &&
+		value.SecretsFromAttributes == nil &&
+		value.Operations == nil &&
+		value.Filter == nil &&
+		value.Suppress == nil &&
+		strings.TrimSpace(value.JQ) == ""
+}
+
+func isTypedCategory(err error, category faults.ErrorCategory) bool {
+	if err == nil {
+		return false
+	}
+
+	var typedErr *faults.TypedError
+	if !errors.As(err, &typedErr) {
+		return false
+	}
+	return typedErr.Category == category
 }

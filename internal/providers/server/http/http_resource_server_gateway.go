@@ -24,12 +24,15 @@ const (
 var _ server.ResourceServer = (*HTTPResourceServerGateway)(nil)
 
 type HTTPResourceServerGateway struct {
-	baseURL        *url.URL
-	defaultHeaders map[string]string
-	auth           authConfig
-	client         *http.Client
-	tlsDebug       tlsDebugInfo
-	openAPISource  string
+	baseURL          *url.URL
+	defaultHeaders   map[string]string
+	auth             authConfig
+	client           *http.Client
+	tlsDebug         tlsDebugInfo
+	openAPISource    string
+	metadataRenderer interface {
+		RenderOperationSpecForResource(context.Context, resource.Resource, metadata.Operation) (metadata.OperationSpec, error)
+	}
 
 	openapiMu     sync.Mutex
 	openapiLoaded bool
@@ -75,6 +78,21 @@ func NewHTTPResourceServerGateway(cfg config.HTTPServer) (*HTTPResourceServerGat
 		tlsDebug:      newTLSDebugInfo(cfg.TLS),
 		openAPISource: strings.TrimSpace(cfg.OpenAPI),
 	}, nil
+}
+
+func (g *HTTPResourceServerGateway) SetMetadataService(service metadata.MetadataService) {
+	if g == nil {
+		return
+	}
+
+	if renderer, ok := service.(interface {
+		RenderOperationSpecForResource(context.Context, resource.Resource, metadata.Operation) (metadata.OperationSpec, error)
+	}); ok {
+		g.metadataRenderer = renderer
+		return
+	}
+
+	g.metadataRenderer = nil
 }
 
 func (g *HTTPResourceServerGateway) Get(ctx context.Context, resourceInfo resource.Resource) (resource.Value, error) {

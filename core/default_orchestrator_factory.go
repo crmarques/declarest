@@ -58,6 +58,7 @@ func buildDefaultOrchestrator(
 		if err != nil {
 			return nil, err
 		}
+		serverManager.SetMetadataService(defaultOrchestrator.Metadata)
 		defaultOrchestrator.Server = serverManager
 	}
 

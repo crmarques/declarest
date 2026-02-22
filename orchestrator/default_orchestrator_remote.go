@@ -685,6 +685,12 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	templateResource.Metadata = metadataCopy
 	templateResource.Payload = value
 
+	if renderer, ok := r.Metadata.(interface {
+		RenderOperationSpecForResource(context.Context, resource.Resource, metadata.Operation) (metadata.OperationSpec, error)
+	}); ok {
+		return renderer.RenderOperationSpecForResource(ctx, templateResource, operation)
+	}
+
 	scope, err := templatescope.BuildResourceScope(templateResource)
 	if err != nil {
 		return metadata.OperationSpec{}, err
