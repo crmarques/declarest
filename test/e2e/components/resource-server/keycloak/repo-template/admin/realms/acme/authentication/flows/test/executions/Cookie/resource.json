@@ -1,0 +1,5 @@
+{
+	"displayName": "Cookie",
+	"providerId": "auth-cookie",
+	"requirement": "ALTERNATIVE"
+}

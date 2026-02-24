@@ -1,0 +1,5 @@
+{
+    "realm": "acme",
+    "displayName": "ACME Realm",
+    "organizationsEnabled": true
+}

@@ -1,0 +1,64 @@
+# ---- Go binaries & build dirs
+/bin/
+/build/
+/dist/
+/out/
+/tmp/
+/.cache/
+/.gocache/
+/.gomodcache/
+
+# Executables & shared libs (any OS)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test/build artifacts
+*.test           # from `go test -c`
+*.out            # generic temp/output
+*.log
+
+# Coverage & profiling
+cover.*
+*.cover
+*.coverprofile
+coverage.*
+coverage/
+coverage.out
+coverage.txt
+profile.out
+cpu.prof
+mem.prof
+block.prof
+mutex.prof
+*.pprof
+
+# Go workspace files (ignore unless you intentionally commit multi-module config)
+go.work
+go.work.sum
+
+# Dependency vendor dir (UNCOMMENT to ignore vendor; keep commented if you commit vendored deps)
+// vendor/
+
+# Editor/IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.code-workspace
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Env/secrets (adjust to your project)
+.env
+.env.*
+.venv/
+
+# E2E runtime artifacts
+test/e2e/.runs/

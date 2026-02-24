@@ -1,0 +1,28 @@
+services:
+  gitlab:
+    image: docker.io/gitlab/gitlab-ce:18.7.4-ce.0
+    hostname: gitlab.local
+    shm_size: '256m'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://127.0.0.1:${GITLAB_HTTP_PORT}'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        puma['worker_processes'] = 0
+        sidekiq['max_concurrency'] = 5
+
+        # Disable non-essential services for E2E git HTTP + API coverage to reduce startup time.
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+        gitlab_kas['enable'] = false
+        registry['enable'] = false
+        gitlab_pages['enable'] = false
+        mattermost['enable'] = false
+        letsencrypt['enable'] = false
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD}
+    ports:
+      - "${GITLAB_HTTP_PORT}:80"

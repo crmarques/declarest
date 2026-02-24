@@ -1,0 +1,28 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "slug"
+  },
+  "operationInfo": {
+    "createResource": {
+      "httpMethod": "PUT",
+      "path": "/api/projects/{{.project}}/widgets/{{.id}}"
+    },
+    "getResource": {
+      "path": "/api/projects/{{.project}}/widgets/{{.id}}"
+    },
+    "updateResource": {
+      "httpMethod": "PUT",
+      "path": "/api/projects/{{.project}}/widgets/{{.id}}"
+    },
+    "deleteResource": {
+      "path": "/api/projects/{{.project}}/widgets/{{.id}}"
+    },
+    "listCollection": {
+      "httpMethod": "GET"
+    },
+    "compareResources": {
+      "path": "/api/projects/{{.project}}/widgets/{{.id}}"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "name",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
+      "httpMethod": "PUT",
+      "path": "/v1/sys/policies/acl/{{.name}}"
+    },
+    "getResource": {
+      "path": "/v1/sys/policies/acl/{{.name}}"
+    },
+    "updateResource": {
+      "httpMethod": "PUT",
+      "path": "/v1/sys/policies/acl/{{.name}}"
+    },
+    "deleteResource": {
+      "path": "/v1/sys/policies/acl/{{.name}}"
+    },
+    "listCollection": {
+      "path": "/v1/sys/policies/acl"
+    },
+    "compareResources": {
+      "path": "/v1/sys/policies/acl/{{.name}}"
+    }
+  }
+}

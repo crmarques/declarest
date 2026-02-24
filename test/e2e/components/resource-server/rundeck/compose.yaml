@@ -1,0 +1,9 @@
+services:
+  rundeck:
+    image: docker.io/rundeck/rundeck:5.19.0
+    environment:
+      RUNDECK_GRAILS_URL: ${RUNDECK_BASE_URL}
+      RUNDECK_SERVER_ADDRESS: 0.0.0.0
+      RUNDECK_ADMIN_PASSWORD: ${RUNDECK_ADMIN_PASSWORD}
+    ports:
+      - "${RUNDECK_HTTP_PORT}:4440"

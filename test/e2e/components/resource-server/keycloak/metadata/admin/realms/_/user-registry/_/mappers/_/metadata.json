@@ -1,0 +1,14 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name",
+    "collectionPath": "/admin/realms/{{.realm}}/components"
+  },
+  "operationInfo": {
+    "listCollection": {
+      "payload": {
+        "jqExpression": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.name}}/\") | .id)) ]"
+      }
+    }
+  }
+}

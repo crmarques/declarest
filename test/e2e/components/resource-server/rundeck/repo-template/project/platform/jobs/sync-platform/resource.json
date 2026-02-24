@@ -1,0 +1,6 @@
+{
+  "id": "job-platform-sync",
+  "name": "sync-platform",
+  "project": "platform",
+  "description": "Synchronize platform configuration"
+}

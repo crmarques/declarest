@@ -1,0 +1,7 @@
+{
+  "alias": "alpha",
+  "name": "Alpha Org",
+  "domains": [
+    "acme.org"
+  ]
+}

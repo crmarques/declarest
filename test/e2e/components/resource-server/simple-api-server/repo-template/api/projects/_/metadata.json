@@ -1,0 +1,28 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "id",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
+      "httpMethod": "PUT",
+      "path": "/api/projects/{{.id}}"
+    },
+    "getResource": {
+      "path": "/api/projects/{{.id}}"
+    },
+    "updateResource": {
+      "httpMethod": "PUT",
+      "path": "/api/projects/{{.id}}"
+    },
+    "deleteResource": {
+      "path": "/api/projects/{{.id}}"
+    },
+    "listCollection": {
+      "path": "/api/projects"
+    },
+    "compareResources": {
+      "path": "/api/projects/{{.id}}"
+    }
+  }
+}

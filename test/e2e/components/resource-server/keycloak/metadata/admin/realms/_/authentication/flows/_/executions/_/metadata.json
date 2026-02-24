@@ -1,0 +1,24 @@
+{
+	"resourceInfo": {
+		"idFromAttribute": "id",
+		"aliasFromAttribute": "displayName"
+	},
+	"operationInfo": {
+		"createResource": {
+			"path": "./execution",
+			"payload": {
+				"jqExpression": ". | .provider = .providerId",
+				"suppressAttributes": [
+					"providerId"
+				]
+			}
+		},
+		"updateResource": {
+			"path": "./"
+		},
+		"deleteResource": {
+			"httpMethod": "DELETE",
+			"path": "/admin/realms/{{.realm}}/authentication/executions/{{.id}}"
+		}
+	}
+}

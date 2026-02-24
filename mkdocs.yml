@@ -1,0 +1,45 @@
+site_name: DeclaREST
+site_description: Declarative resource sync between Git and REST APIs
+repo_url: https://github.com/crmarques/declarest
+repo_name: crmarques/declarest
+
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.png
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+  - Concepts:
+    - Overview: concepts/overview.md
+    - Paths and Selectors: concepts/paths-and-selectors.md
+    - Resource Files: concepts/resource.md
+    - Repository: concepts/repository.md
+    - Metadata Overview: concepts/metadata.md
+    - Metadata Overrides: concepts/metadata-overrides.md
+    - Custom Paths: concepts/metadata-custom-paths.md
+    - Secrets: concepts/secrets.md
+  - Workflows:
+    - Sync Resources: workflows/sync.md
+    - Inspect and Debug Mappings: workflows/ad-hoc.md
+    - Editing Metadata and Contexts: workflows/editing.md
+    - Repository Operations: workflows/repository.md
+    - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
+    - Custom API Modeling Recipes: workflows/custom-api-modeling.md
+    - Secrets and Safe Save: workflows/secrets-and-safe-save.md
+  - Reference:
+    - Configuration: reference/configuration.md
+    - CLI: reference/cli.md
+  - Contributing: contributing.md

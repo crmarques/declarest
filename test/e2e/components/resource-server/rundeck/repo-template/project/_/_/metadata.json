@@ -1,0 +1,26 @@
+{
+  "resourceInfo": {
+    "idFromAttribute": "name",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "createResource": {
+      "path": "/projects"
+    },
+    "getResource": {
+      "path": "/project/{{.name}}"
+    },
+    "updateResource": {
+      "path": "/project/{{.name}}"
+    },
+    "deleteResource": {
+      "path": "/project/{{.name}}"
+    },
+    "listCollection": {
+      "path": "/projects"
+    },
+    "compareResources": {
+      "path": "/project/{{.name}}"
+    }
+  }
+}

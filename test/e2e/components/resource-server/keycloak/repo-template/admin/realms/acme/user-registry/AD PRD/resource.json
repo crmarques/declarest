@@ -1,0 +1,10 @@
+{
+    "providerId": "ldap",
+    "providerType": "org.keycloak.storage.UserStorageProvider",
+    "name": "AD PRD",
+    "config": {
+        "editMode": [
+            "READ_ONLY"
+        ]
+    }
+}
