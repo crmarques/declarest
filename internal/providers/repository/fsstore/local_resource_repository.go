@@ -108,6 +108,10 @@ func (r *LocalResourceRepository) Refresh(context.Context) error {
 	return nil
 }
 
+func (r *LocalResourceRepository) Clean(context.Context) error {
+	return nil
+}
+
 func (r *LocalResourceRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }

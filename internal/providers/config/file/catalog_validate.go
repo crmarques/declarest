@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/crmarques/declarest/config"
 )
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
+	contextCatalog.DefaultEditor = strings.TrimSpace(contextCatalog.DefaultEditor)
+
 	if len(contextCatalog.Contexts) == 0 {
 		if contextCatalog.CurrentCtx != "" {
 			return validationError("current-ctx must be empty when contexts list is empty", nil)

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
@@ -14,6 +17,8 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	gitcfg "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	httpauth "github.com/go-git/go-git/v5/plumbing/transport/http"
 	sshauth "github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -21,6 +26,9 @@ import (
 
 var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
+var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
+var _ repository.RepositoryHistoryReader = (*GitResourceRepository)(nil)
+var _ repository.RepositoryStatusDetailsReader = (*GitResourceRepository)(nil)
 
 const (
 	defaultRemoteName = "origin"
@@ -28,42 +36,271 @@ const (
 )
 
 type GitResourceRepository struct {
-	local   *fsstore.LocalResourceRepository
-	baseDir string
-	remote  *config.GitRemote
+	local    *fsstore.LocalResourceRepository
+	baseDir  string
+	remote   *config.GitRemote
+	autoInit bool
 }
 
 func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string) *GitResourceRepository {
 	return &GitResourceRepository{
-		local:   fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
-		baseDir: repoConfig.Local.BaseDir,
-		remote:  repoConfig.Remote,
+		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
+		baseDir:  repoConfig.Local.BaseDir,
+		remote:   repoConfig.Remote,
+		autoInit: repoConfig.Local.AutoInitEnabled(),
 	}
 }
 
 func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, value resource.Value) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
 	return r.local.Save(ctx, logicalPath, value)
 }
 
 func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return nil, err
+	}
 	return r.local.Get(ctx, logicalPath)
 }
 
 func (r *GitResourceRepository) Delete(ctx context.Context, logicalPath string, policy repository.DeletePolicy) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
 	return r.local.Delete(ctx, logicalPath, policy)
 }
 
 func (r *GitResourceRepository) List(ctx context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return nil, err
+	}
 	return r.local.List(ctx, logicalPath, policy)
 }
 
 func (r *GitResourceRepository) Exists(ctx context.Context, logicalPath string) (bool, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return false, err
+	}
 	return r.local.Exists(ctx, logicalPath)
+}
+
+func (r *GitResourceRepository) Commit(ctx context.Context, message string) (bool, error) {
+	repo, err := r.openRepositoryForOperation(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return false, internalError("failed to open git worktree", err)
+	}
+
+	status, err := worktree.Status()
+	if err != nil {
+		return false, internalError("failed to inspect git worktree status", err)
+	}
+	if status.IsClean() {
+		return false, nil
+	}
+
+	if err := worktree.AddGlob("."); err != nil {
+		return false, internalError("failed to stage git changes", err)
+	}
+
+	commitMessage := strings.TrimSpace(message)
+	if commitMessage == "" {
+		commitMessage = "declarest: update repository resources"
+	}
+
+	if _, err := worktree.Commit(commitMessage, &gogit.CommitOptions{
+		Author: &object.Signature{
+			Name:  "declarest",
+			Email: "declarest@local",
+			When:  time.Now(),
+		},
+	}); err != nil {
+		return false, internalError("failed to commit git changes", err)
+	}
+
+	return true, nil
+}
+
+func (r *GitResourceRepository) History(ctx context.Context, filter repository.HistoryFilter) ([]repository.HistoryEntry, error) {
+	repo, err := r.openRepositoryForOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	logOptions := &gogit.LogOptions{
+		Order: gogit.LogOrderCommitterTime,
+		Since: filter.Since,
+		Until: filter.Until,
+	}
+	if pathFilter := buildGitHistoryPathFilter(filter.Paths); pathFilter != nil {
+		logOptions.PathFilter = pathFilter
+	}
+
+	iter, err := repo.Log(logOptions)
+	if err != nil {
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			return []repository.HistoryEntry{}, nil
+		}
+		return nil, internalError("failed to read git history", err)
+	}
+
+	entriesCap := 0
+	if filter.MaxCount > 0 {
+		entriesCap = filter.MaxCount
+	}
+	entries := make([]repository.HistoryEntry, 0, entriesCap)
+	authorFilter := strings.ToLower(strings.TrimSpace(filter.Author))
+	grepFilter := strings.ToLower(strings.TrimSpace(filter.Grep))
+
+	for {
+		commit, nextErr := iter.Next()
+		if nextErr != nil {
+			if errors.Is(nextErr, io.EOF) {
+				break
+			}
+			if errors.Is(nextErr, storer.ErrStop) {
+				break
+			}
+			return nil, internalError("failed to iterate git history", nextErr)
+		}
+
+		entry := historyEntryFromCommit(commit)
+		if !matchesGitHistoryEntryFilter(entry, authorFilter, grepFilter) {
+			continue
+		}
+
+		entries = append(entries, entry)
+		if filter.MaxCount > 0 && len(entries) >= filter.MaxCount {
+			break
+		}
+	}
+
+	if filter.Reverse {
+		for left, right := 0, len(entries)-1; left < right; left, right = left+1, right-1 {
+			entries[left], entries[right] = entries[right], entries[left]
+		}
+	}
+
+	return entries, nil
+}
+
+func (r *GitResourceRepository) WorktreeStatus(ctx context.Context) ([]repository.WorktreeStatusEntry, error) {
+	repo, err := r.openRepositoryForOperation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, internalError("failed to open git worktree", err)
+	}
+	status, err := worktree.Status()
+	if err != nil {
+		return nil, internalError("failed to inspect git worktree status", err)
+	}
+
+	paths := make([]string, 0, len(status))
+	for changedPath := range status {
+		paths = append(paths, changedPath)
+	}
+	sort.Strings(paths)
+
+	entries := make([]repository.WorktreeStatusEntry, 0, len(paths))
+	for _, changedPath := range paths {
+		fileStatus := status[changedPath]
+		entries = append(entries, repository.WorktreeStatusEntry{
+			Path:     changedPath,
+			Staging:  gitStatusCodeString(fileStatus.Staging),
+			Worktree: gitStatusCodeString(fileStatus.Worktree),
+		})
+	}
+	return entries, nil
+}
+
+func buildGitHistoryPathFilter(paths []string) func(string) bool {
+	trimmedPaths := make([]string, 0, len(paths))
+	for _, raw := range paths {
+		value := strings.Trim(strings.TrimSpace(raw), "/")
+		if value == "" {
+			continue
+		}
+		trimmedPaths = append(trimmedPaths, value)
+	}
+	if len(trimmedPaths) == 0 {
+		return nil
+	}
+
+	return func(changedPath string) bool {
+		candidate := strings.Trim(strings.TrimSpace(changedPath), "/")
+		for _, prefix := range trimmedPaths {
+			if candidate == prefix || strings.HasPrefix(candidate, prefix+"/") {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func gitStatusCodeString(code gogit.StatusCode) string {
+	if code == 0 {
+		return " "
+	}
+	return string(code)
+}
+
+func historyEntryFromCommit(commit *object.Commit) repository.HistoryEntry {
+	message := strings.ReplaceAll(commit.Message, "\r\n", "\n")
+	lines := strings.Split(message, "\n")
+	subject := ""
+	if len(lines) > 0 {
+		subject = strings.TrimSpace(lines[0])
+	}
+
+	body := ""
+	if len(lines) > 1 {
+		body = strings.TrimSpace(strings.Join(lines[1:], "\n"))
+	}
+
+	return repository.HistoryEntry{
+		Hash:    commit.Hash.String(),
+		Author:  strings.TrimSpace(commit.Author.Name),
+		Email:   strings.TrimSpace(commit.Author.Email),
+		Date:    commit.Author.When,
+		Subject: subject,
+		Body:    body,
+	}
+}
+
+func matchesGitHistoryEntryFilter(entry repository.HistoryEntry, authorFilter string, grepFilter string) bool {
+	if authorFilter != "" {
+		authorHaystack := strings.ToLower(strings.TrimSpace(entry.Author + " " + entry.Email))
+		if !strings.Contains(authorHaystack, authorFilter) {
+			return false
+		}
+	}
+
+	if grepFilter != "" {
+		messageHaystack := strings.ToLower(strings.TrimSpace(entry.Subject + "\n" + entry.Body))
+		if !strings.Contains(messageHaystack, grepFilter) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Deprecated: Move is a concrete helper and is not part of the repository
 // interfaces. Prefer interface-based flows for new call sites.
 func (r *GitResourceRepository) Move(ctx context.Context, fromPath string, toPath string) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
 	return r.local.Move(ctx, fromPath, toPath)
 }
 
@@ -89,17 +326,14 @@ func (r *GitResourceRepository) Init(ctx context.Context) error {
 	return nil
 }
 
-func (r *GitResourceRepository) Refresh(context.Context) error {
+func (r *GitResourceRepository) Refresh(ctx context.Context) error {
 	if !r.hasRemote() {
 		return nil
 	}
 
-	repo, err := gogit.PlainOpen(r.baseDir)
+	repo, err := r.openRepositoryForOperation(ctx)
 	if err != nil {
-		if errors.Is(err, gogit.ErrRepositoryNotExists) {
-			return notFoundError("git repository not initialized")
-		}
-		return internalError("failed to open git repository", err)
+		return err
 	}
 
 	if err := r.ensureRemote(repo); err != nil {
@@ -125,13 +359,31 @@ func (r *GitResourceRepository) Refresh(context.Context) error {
 	return nil
 }
 
-func (r *GitResourceRepository) Reset(_ context.Context, policy repository.ResetPolicy) error {
-	repo, err := gogit.PlainOpen(r.baseDir)
+func (r *GitResourceRepository) Clean(ctx context.Context) error {
+	if err := r.Reset(ctx, repository.ResetPolicy{Hard: true}); err != nil {
+		return err
+	}
+
+	repo, err := r.openRepositoryForOperation(ctx)
 	if err != nil {
-		if errors.Is(err, gogit.ErrRepositoryNotExists) {
-			return notFoundError("git repository not initialized")
-		}
-		return internalError("failed to open git repository", err)
+		return err
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return internalError("failed to open git worktree", err)
+	}
+
+	if err := worktree.Clean(&gogit.CleanOptions{Dir: true}); err != nil {
+		return internalError("failed to clean git worktree", err)
+	}
+	return nil
+}
+
+func (r *GitResourceRepository) Reset(ctx context.Context, policy repository.ResetPolicy) error {
+	repo, err := r.openRepositoryForOperation(ctx)
+	if err != nil {
+		return err
 	}
 
 	worktree, err := repo.Worktree()
@@ -152,30 +404,26 @@ func (r *GitResourceRepository) Reset(_ context.Context, policy repository.Reset
 
 func (r *GitResourceRepository) Check(ctx context.Context) error {
 	if err := r.local.Check(ctx); err != nil {
-		return err
+		if !faults.IsCategory(err, faults.NotFoundError) {
+			return err
+		}
 	}
 
-	_, err := gogit.PlainOpen(r.baseDir)
+	_, err := r.openRepositoryForOperation(ctx)
 	if err != nil {
-		if errors.Is(err, gogit.ErrRepositoryNotExists) {
-			return notFoundError("git repository not initialized")
-		}
-		return internalError("failed to open git repository", err)
+		return err
 	}
 	return nil
 }
 
-func (r *GitResourceRepository) Push(_ context.Context, policy repository.PushPolicy) error {
+func (r *GitResourceRepository) Push(ctx context.Context, policy repository.PushPolicy) error {
 	if !r.hasRemote() {
 		return validationError("push requires remote configuration", nil)
 	}
 
-	repo, err := gogit.PlainOpen(r.baseDir)
+	repo, err := r.openRepositoryForOperation(ctx)
 	if err != nil {
-		if errors.Is(err, gogit.ErrRepositoryNotExists) {
-			return notFoundError("git repository not initialized")
-		}
-		return internalError("failed to open git repository", err)
+		return err
 	}
 
 	if err := r.ensureRemote(repo); err != nil {
@@ -207,13 +455,10 @@ func (r *GitResourceRepository) Push(_ context.Context, policy repository.PushPo
 	return nil
 }
 
-func (r *GitResourceRepository) SyncStatus(_ context.Context) (repository.SyncReport, error) {
-	repo, err := gogit.PlainOpen(r.baseDir)
+func (r *GitResourceRepository) SyncStatus(ctx context.Context) (repository.SyncReport, error) {
+	repo, err := r.openRepositoryForOperation(ctx)
 	if err != nil {
-		if errors.Is(err, gogit.ErrRepositoryNotExists) {
-			return repository.SyncReport{}, notFoundError("git repository not initialized")
-		}
-		return repository.SyncReport{}, internalError("failed to open git repository", err)
+		return repository.SyncReport{}, err
 	}
 
 	worktree, err := repo.Worktree()
@@ -313,6 +558,35 @@ func (r *GitResourceRepository) ensureRemote(repo *gogit.Repository) error {
 		return internalError("failed to update git remote config", setErr)
 	}
 	return nil
+}
+
+func (r *GitResourceRepository) ensureInitializedForOperation(ctx context.Context) error {
+	_, err := r.openRepositoryForOperation(ctx)
+	return err
+}
+
+func (r *GitResourceRepository) openRepositoryForOperation(ctx context.Context) (*gogit.Repository, error) {
+	repo, err := gogit.PlainOpen(r.baseDir)
+	if err == nil {
+		return repo, nil
+	}
+	if !errors.Is(err, gogit.ErrRepositoryNotExists) {
+		return nil, internalError("failed to open git repository", err)
+	}
+
+	if !r.autoInit {
+		return nil, notFoundError("local git repository is not initialized and repository.git.local.auto-init is false")
+	}
+
+	if initErr := r.Init(ctx); initErr != nil {
+		return nil, initErr
+	}
+
+	repo, err = gogit.PlainOpen(r.baseDir)
+	if err != nil {
+		return nil, internalError("failed to open git repository after initialization", err)
+	}
+	return repo, nil
 }
 
 func (r *GitResourceRepository) authMethod() (transport.AuthMethod, error) {

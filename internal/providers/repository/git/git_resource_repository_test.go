@@ -39,6 +39,132 @@ func TestGitRepositoryNoRemoteStatus(t *testing.T) {
 	}
 }
 
+func TestGitRepositoryAutoInitOnSyncStatus(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+
+	status, err := provider.SyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SyncStatus returned error: %v", err)
+	}
+	if status.State != repository.SyncStateNoRemote {
+		t.Fatalf("expected no_remote after auto-init, got %q", status.State)
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
+func TestGitRepositoryAutoInitOnHistoryReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+
+	history, err := provider.History(context.Background(), repository.HistoryFilter{})
+	if err != nil {
+		t.Fatalf("History returned error: %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("expected empty history for fresh auto-initialized repo, got %#v", history)
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
+func TestGitRepositoryAutoInitOnCommitWithoutChanges(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+
+	committed, err := provider.Commit(context.Background(), "test commit")
+	if err != nil {
+		t.Fatalf("Commit returned error: %v", err)
+	}
+	if committed {
+		t.Fatal("expected committed=false for fresh auto-initialized repo without changes")
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
+func TestGitRepositoryAutoInitOnCheck(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+
+	if err := provider.Check(context.Background()); err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
+func TestGitRepositoryAutoInitDisabledSyncStatusFailsWithoutInitialization(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{
+			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
+		},
+		config.ResourceFormatJSON,
+	)
+
+	_, err := provider.SyncStatus(context.Background())
+	assertCategory(t, err, faults.NotFoundError)
+	assertGitRepoNotInitialized(t, repoDir)
+}
+
+func TestGitRepositoryAutoInitDisabledResourceOpsFailWithoutInitialization(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{
+			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
+		},
+		config.ResourceFormatJSON,
+	)
+
+	_, err := provider.Exists(context.Background(), "/customers/acme")
+	assertCategory(t, err, faults.NotFoundError)
+	assertGitRepoNotInitialized(t, repoDir)
+}
+
+func TestGitRepositoryExplicitInitStillWorksWhenAutoInitDisabled(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{
+			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
+		},
+		config.ResourceFormatJSON,
+	)
+
+	if err := provider.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
 func TestGitRepositoryPushWithoutRemote(t *testing.T) {
 	t.Parallel()
 
@@ -53,6 +179,68 @@ func TestGitRepositoryPushWithoutRemote(t *testing.T) {
 
 	err := provider.Push(context.Background(), repository.PushPolicy{})
 	assertCategory(t, err, faults.ValidationError)
+}
+
+func TestGitRepositoryCleanRemovesUncommittedTrackedAndUntrackedChanges(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+	if err := provider.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(repoDir)
+	if err != nil {
+		t.Fatalf("failed to open repo: %v", err)
+	}
+	commitFile(t, repo, repoDir, "tracked.txt", "v1", "seed tracked file")
+
+	trackedPath := filepath.Join(repoDir, "tracked.txt")
+	if err := os.WriteFile(trackedPath, []byte("v2"), 0o600); err != nil {
+		t.Fatalf("failed to modify tracked file: %v", err)
+	}
+	untrackedPath := filepath.Join(repoDir, "tmp", "scratch.txt")
+	if err := os.MkdirAll(filepath.Dir(untrackedPath), 0o755); err != nil {
+		t.Fatalf("failed to create untracked dir: %v", err)
+	}
+	if err := os.WriteFile(untrackedPath, []byte("scratch"), 0o600); err != nil {
+		t.Fatalf("failed to create untracked file: %v", err)
+	}
+
+	statusBefore, err := provider.SyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SyncStatus before clean returned error: %v", err)
+	}
+	if !statusBefore.HasUncommitted {
+		t.Fatal("expected hasUncommitted=true before clean")
+	}
+
+	if err := provider.Clean(context.Background()); err != nil {
+		t.Fatalf("Clean returned error: %v", err)
+	}
+
+	statusAfter, err := provider.SyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SyncStatus after clean returned error: %v", err)
+	}
+	if statusAfter.HasUncommitted {
+		t.Fatal("expected hasUncommitted=false after clean")
+	}
+
+	trackedContent, err := os.ReadFile(trackedPath)
+	if err != nil {
+		t.Fatalf("failed to read tracked file after clean: %v", err)
+	}
+	if string(trackedContent) != "v1" {
+		t.Fatalf("expected tracked file to be reset to committed content, got %q", string(trackedContent))
+	}
+	if _, err := os.Stat(untrackedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected untracked file to be removed, got err=%v", err)
+	}
 }
 
 func TestGitRepositoryTargetBranchDefaultsToMain(t *testing.T) {
@@ -260,6 +448,30 @@ func cloneMainBranch(t *testing.T, remoteDir string) string {
 	return localDir
 }
 
+func assertGitRepoInitialized(t *testing.T, repoDir string) {
+	t.Helper()
+
+	info, err := os.Stat(filepath.Join(repoDir, ".git"))
+	if err != nil {
+		t.Fatalf("expected initialized git repo at %q, stat error: %v", repoDir, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected .git directory at %q", repoDir)
+	}
+}
+
+func assertGitRepoNotInitialized(t *testing.T, repoDir string) {
+	t.Helper()
+
+	_, err := os.Stat(filepath.Join(repoDir, ".git"))
+	if err == nil {
+		t.Fatalf("did not expect initialized git repo at %q", repoDir)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected missing .git directory at %q, got error: %v", repoDir, err)
+	}
+}
+
 func commitFile(t *testing.T, repo *gogit.Repository, repoDir string, filename string, content string, message string) {
 	t.Helper()
 
@@ -318,4 +530,8 @@ func assertCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	if typed.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typed.Category)
 	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

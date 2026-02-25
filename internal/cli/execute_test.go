@@ -73,6 +73,7 @@ func TestCommandPathSupportsExecutionStatus(t *testing.T) {
 		{path: "declarest resource create", want: true},
 		{path: "declarest resource update", want: true},
 		{path: "declarest resource delete", want: true},
+		{path: "declarest repo commit", want: true},
 		{path: "declarest resource get", want: false},
 		{path: "declarest resource list", want: false},
 		{path: "declarest resource diff", want: false},

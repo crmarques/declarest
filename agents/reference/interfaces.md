@@ -101,6 +101,9 @@ Required fields:
 1. `Contexts`: list of full `config.Context` objects.
 2. `CurrentCtx`: active context name mapped to YAML key `current-ctx`.
 
+Optional fields:
+1. `DefaultEditor`: default editor command mapped to YAML key `default-editor`.
+
 Invariants:
 1. context names MUST be unique and non-empty.
 2. `CurrentCtx` MUST reference an existing context when contexts are present.
@@ -203,6 +206,58 @@ Required fields:
 3. `Behind`.
 4. `HasUncommitted`.
 
+### Type: `repository.WorktreeStatusEntry`
+Represents one file-level local worktree change entry for verbose repository status output.
+
+Required fields:
+1. `Path`.
+2. `Staging` (git-style index status code, for example `M` or `?`).
+3. `Worktree` (git-style worktree status code, for example `M` or `?`).
+
+### Type: `repository.RepositoryStatusDetailsReader`
+Represents optional repository capability for verbose local worktree status inspection.
+
+Method contract:
+1. `WorktreeStatus(ctx)` MUST return deterministic path ordering for identical repository state.
+2. `WorktreeStatus(ctx)` MUST return only local worktree/index change details and MUST NOT mutate repository state.
+
+### Type: `repository.RepositoryTreeReader`
+Represents optional repository capability for directory-tree inspection of local repository layout.
+
+Method contract:
+1. `Tree(ctx)` MUST return deterministic lexicographically sorted slash-delimited directory paths relative to the repository root.
+2. `Tree(ctx)` MUST return directories only (no files) and MUST exclude the repository root path itself.
+3. `Tree(ctx)` MUST exclude hidden control directories (for example `.git`) and reserved metadata namespace directories named `_`.
+
+### Type: `repository.HistoryFilter`
+Represents local VCS history query filters for repository backends that support history.
+
+Fields:
+1. `MaxCount`.
+2. `Author`.
+3. `Grep`.
+4. `Since`.
+5. `Until`.
+6. `Paths`.
+7. `Reverse`.
+
+Invariants:
+1. `Since` and `Until` MAY be nil to indicate open-ended ranges.
+2. `Paths` entries MUST be interpreted as repository-relative logical prefixes by history-capable providers.
+
+### Type: `repository.HistoryEntry`
+Represents one local VCS commit entry returned by repository history readers.
+
+Required fields:
+1. `Hash`.
+2. `Author`.
+3. `Email`.
+4. `Date`.
+5. `Subject`.
+
+Optional fields:
+1. `Body`.
+
 ### Type: `orchestrator.DeletePolicy`
 Represents local delete behavior options.
 
@@ -294,6 +349,14 @@ Method families:
 1. `List`.
 2. `GetCurrent`.
 
+### Interface: `config.ContextCatalogEditor`
+Responsibilities:
+1. Read and replace the persisted full context catalog as one validated document.
+
+Method families:
+1. `GetCatalog`.
+2. `ReplaceCatalog`.
+
 ### Interface: `config.ContextResolver`
 Responsibilities:
 1. Resolve one effective context from catalog state plus runtime/environment overrides.
@@ -317,13 +380,38 @@ Responsibilities:
 Method families:
 1. `Save/Get/Delete(policy)/List(policy)/Exists`.
 
+### Interface: `repository.RepositoryCommitter`
+Responsibilities:
+1. Create a local VCS commit for repository mutations when supported by the active backend.
+
+Method families:
+1. `Commit(message)`.
+
+Invariants:
+1. `Commit` MUST return `(false, nil)` when there are no local changes to commit.
+
+### Interface: `repository.RepositoryHistoryReader`
+Responsibilities:
+1. Read local VCS commit history with deterministic filtering when supported by the active backend.
+
+Method families:
+1. `History(filter)`.
+
+### Interface: `repository.RepositoryTreeReader`
+Responsibilities:
+1. Expose a deterministic local repository directory tree view for CLI inspection workflows.
+
+Method families:
+1. `Tree`.
+
 ### Interface: `repository.RepositorySync`
 Responsibilities:
 1. Manage repository lifecycle and synchronization operations.
 2. Expose deterministic sync status.
+3. Expose destructive local cleanup of uncommitted repository changes.
 
 Method families:
-1. Lifecycle: `Init/Refresh/Reset/Check`.
+1. Lifecycle: `Init/Refresh/Clean/Reset/Check`.
 2. Sync: `Push/SyncStatus`.
 
 ### Interface: `metadata.MetadataService`

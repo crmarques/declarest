@@ -17,7 +17,7 @@ declarest <group> <command> --help
 - `config` - manage contexts and validation
 - `metadata` - inspect, infer, render, set, and unset metadata
 - `repo` - manage local repository state
-- `resource` - save/get/list/diff/apply/create/update/delete resources
+- `resource` - save/get/list/diff/apply/create/update/delete/edit/copy resources
 - `resource-server` - inspect connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
@@ -56,6 +56,7 @@ declarest resource get /corporations/acme
 declarest resource get --source repository /corporations/acme
 declarest resource get /corporations/acme --show-metadata
 declarest resource list /customers/
+declarest resource list /customers/ --output text
 declarest resource explain /corporations/acme
 declarest resource diff /corporations/acme
 ```
@@ -65,6 +66,8 @@ declarest resource diff /corporations/acme
 ```bash
 declarest resource save /corporations/acme
 declarest resource save /corporations/acme --overwrite
+declarest resource save /corporations/acme --payload '{"id":"acme","name":"Acme"}' --overwrite
+declarest resource save /corporations/acme --payload 'id=acme,name=Acme,spec.tier=gold' --overwrite --message ticket-123
 declarest resource save /corporations/acme --handle-secrets
 declarest resource save /customers/ --as-one-resource
 ```
@@ -76,15 +79,19 @@ declarest resource apply /corporations/acme
 declarest resource create /corporations/acme
 declarest resource update /corporations/acme
 declarest resource delete /corporations/acme --confirm-delete
+declarest resource delete /corporations/acme --confirm-delete --repository --message-override "cleanup customer"
+declarest resource edit /corporations/acme --editor "vi"
+declarest resource copy /corporations/acme /corporations/acme-copy --overrides name=acme-copy
 ```
 
 Useful mutation flags:
 
-- `--payload <path|->` for explicit input payloads
+- `--payload <path|->` for file/stdin payloads, and also inline JSON/YAML object text or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
 - `--format <json|yaml>` for payload decoding
 - `--recursive` for collection recursion on supported commands
 - `--refresh-repository` (apply/create/update)
 - `--http-method <METHOD>` override for remote calls
+- `--message <text>` / `--message-override <text>` for git commit messages on `resource save` and repository-backed `resource delete`
 
 ## `metadata` command family (advanced API modeling)
 
@@ -107,7 +114,11 @@ declarest metadata unset /customers/
 ## `config` command family (context management)
 
 ```bash
-declarest config create
+declarest config add
+declarest config add dev
+declarest config edit
+declarest config edit dev
+declarest config edit dev --editor "vi"
 declarest config print-template
 declarest config validate --payload contexts.yaml
 declarest config add --file contexts.yaml --set-current
@@ -127,6 +138,9 @@ declarest config resolve --set resource-server.http.base-url=https://staging-api
 
 ```bash
 declarest repo status
+declarest repo clean
+declarest repo history
+declarest repo history --oneline --max-count 10 --author alice --grep fix --path customers
 declarest repo init
 declarest repo refresh
 declarest repo push
@@ -137,6 +151,9 @@ declarest repo check
 Notes:
 
 - `repo push` is only valid for `git` repository contexts.
+- `repo history` is only supported for `git` repositories; filesystem repositories return a not-supported message.
+- `repo clean` discards local uncommitted changes (tracked and untracked) for `git` repositories and is a no-op for `filesystem` repositories.
+- Git-backed repo operations auto-initialize the local `.git` repository on first use when the repository base dir exists but Git metadata is missing.
 - `repo reset` is destructive; review local changes before running it.
 
 ## `secret` command family
@@ -166,6 +183,7 @@ These commands are useful when debugging auth or connectivity independently from
 ## Output and scripting tips
 
 - Prefer `-o json` or `-o yaml` for automation.
+- `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.

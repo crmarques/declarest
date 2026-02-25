@@ -147,8 +147,19 @@ func promptRepositoryConfig(
 			return "", err
 		}
 
+		autoInit, err := prompter.Confirm(command, "Enable git local auto-init?", true)
+		if err != nil {
+			return "", err
+		}
+
+		localConfig := configdomain.GitLocal{BaseDir: baseDir}
+		if !autoInit {
+			autoInitFalse := false
+			localConfig.AutoInit = &autoInitFalse
+		}
+
 		repo := &configdomain.GitRepository{
-			Local: configdomain.GitLocal{BaseDir: baseDir},
+			Local: localConfig,
 		}
 
 		includeRemote, err := prompter.Confirm(command, "Configure git remote?", false)

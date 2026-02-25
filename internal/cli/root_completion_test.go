@@ -2,11 +2,14 @@ package cli
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func TestCompletionBashGeneratesScript(t *testing.T) {
@@ -498,6 +501,32 @@ func TestPathCompletionUsesMetadataOnlyBranchWhenOpenAPIHasNoPath(t *testing.T) 
 	}
 }
 
+func TestPathCompletionIncludesMetadataWildcardSelectorSegments(t *testing.T) {
+	t.Parallel()
+
+	deps := testDeps()
+	orchestrator := deps.Orchestrator.(*testOrchestrator)
+	orchestrator.openAPISpec = map[string]any{"paths": map[string]any{}}
+
+	metadataService := deps.Metadata.(*testMetadata)
+	metadataService.collectionChildren["/admin/realms"] = []string{"_"}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"__complete",
+		"metadata",
+		"get",
+		"/admin/realms/",
+	)
+	if err != nil {
+		t.Fatalf("unexpected completion error: %v", err)
+	}
+	if !strings.Contains(output, "/admin/realms/_") {
+		t.Fatalf("expected completion to include metadata wildcard selector segment, got %q", output)
+	}
+}
+
 func TestPathCompletionRendersCollectionsWithTrailingSlash(t *testing.T) {
 	t.Parallel()
 
@@ -724,6 +753,84 @@ func TestResourceSourceFlagCompletionShowsSupportedValues(t *testing.T) {
 	}
 	if !strings.Contains(output, "repository") || !strings.Contains(output, "remote-server") {
 		t.Fatalf("expected source values in completion output, got %q", output)
+	}
+}
+
+func TestHTTPMethodFlagCompletionShowsSupportedValues(t *testing.T) {
+	t.Parallel()
+
+	resourceCommands := [][]string{
+		{"resource", "get"},
+		{"resource", "list"},
+		{"resource", "apply"},
+		{"resource", "create"},
+		{"resource", "update"},
+		{"resource", "delete"},
+	}
+	expectedValues := []string{"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE", "TRACE", "CONNECT"}
+
+	for _, commandPath := range resourceCommands {
+		commandPath := append([]string{}, commandPath...)
+		t.Run(joinPath(commandPath), func(t *testing.T) {
+			args := append([]string{"__complete"}, commandPath...)
+			args = append(args, "--http-method", "")
+			output, err := executeForTest(testDeps(), "", args...)
+			if err != nil {
+				t.Fatalf("unexpected completion error: %v", err)
+			}
+			for _, value := range expectedValues {
+				if !strings.Contains(output, value) {
+					t.Fatalf("expected http-method completion value %q, got %q", value, output)
+				}
+			}
+
+			lowerArgs := append([]string{"__complete"}, commandPath...)
+			lowerArgs = append(lowerArgs, "--http-method", "p")
+			lowerOutput, err := executeForTest(testDeps(), "", lowerArgs...)
+			if err != nil {
+				t.Fatalf("unexpected completion error for lowercase prefix: %v", err)
+			}
+			if !strings.Contains(lowerOutput, "PATCH") || !strings.Contains(lowerOutput, "POST") || !strings.Contains(lowerOutput, "PUT") {
+				t.Fatalf("expected lowercase prefix to match uppercase suggestions, got %q", lowerOutput)
+			}
+		})
+	}
+}
+
+func TestFlagCompletionShowsAllVisibleLongFlagsForRunnableCommands(t *testing.T) {
+	t.Parallel()
+
+	command := NewRootCommand(testDeps())
+	paths := append([][]string{{}}, registeredPaths(command, nil)...)
+
+	for _, commandPath := range paths {
+		commandPath := append([]string{}, commandPath...)
+		target := commandByPath(command, commandPath...)
+		if target == nil || !target.Runnable() || !target.IsAvailableCommand() {
+			continue
+		}
+
+		t.Run(joinPathOrRoot(commandPath), func(t *testing.T) {
+			expectedFlags := visibleLongFlags(target)
+
+			args := append([]string{"__complete"}, commandPath...)
+			args = append(args, "--")
+			output, err := executeForTest(testDeps(), "", args...)
+			if err != nil {
+				t.Fatalf("unexpected completion error: %v", err)
+			}
+
+			completedFlags := completionLongFlags(output)
+			missing := make([]string, 0)
+			for _, flagName := range expectedFlags {
+				if _, ok := completedFlags[flagName]; !ok {
+					missing = append(missing, flagName)
+				}
+			}
+			if len(missing) > 0 {
+				t.Fatalf("expected visible flags to be completable, missing=%v output=%q", missing, output)
+			}
+		})
 	}
 }
 
@@ -958,4 +1065,52 @@ func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
 			t.Fatalf("expected operation completion value %q with --path, got %q", value, withPathFlagOutput)
 		}
 	}
+}
+
+func joinPathOrRoot(path []string) string {
+	if len(path) == 0 {
+		return "root"
+	}
+	return joinPath(path)
+}
+
+func visibleLongFlags(command *cobra.Command) []string {
+	flags := map[string]struct{}{}
+	add := func(set *pflag.FlagSet) {
+		if set == nil {
+			return
+		}
+		set.VisitAll(func(flag *pflag.Flag) {
+			if flag.Hidden || flag.Name == "" {
+				return
+			}
+			flags["--"+flag.Name] = struct{}{}
+		})
+	}
+
+	add(command.NonInheritedFlags())
+	add(command.InheritedFlags())
+	add(command.PersistentFlags())
+
+	items := make([]string, 0, len(flags))
+	for flagName := range flags {
+		items = append(items, flagName)
+	}
+	sort.Strings(items)
+	return items
+}
+
+func completionLongFlags(output string) map[string]struct{} {
+	flags := make(map[string]struct{})
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, "--") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		flags[fields[0]] = struct{}{}
+	}
+	return flags
 }

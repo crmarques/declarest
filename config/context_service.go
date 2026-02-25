@@ -15,6 +15,13 @@ type ContextCatalogReader interface {
 	GetCurrent(ctx context.Context) (Context, error)
 }
 
+// ContextCatalogEditor is an optional capability for commands that need to
+// edit the full persisted catalog while preserving strict validation.
+type ContextCatalogEditor interface {
+	GetCatalog(ctx context.Context) (ContextCatalog, error)
+	ReplaceCatalog(ctx context.Context, catalog ContextCatalog) error
+}
+
 type ContextResolver interface {
 	ResolveContext(ctx context.Context, selection ContextSelection) (Context, error)
 }

@@ -128,6 +128,8 @@ func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags
 		newDeleteCommand(deps),
 		newDiffCommand(deps, globalFlags),
 		newListCommand(deps, globalFlags),
+		newEditCommand(deps, globalFlags),
+		newCopyCommand(deps, globalFlags),
 		newExplainCommand(deps, globalFlags),
 		newTemplateCommand(deps, globalFlags),
 		newRequestCommand(deps, globalFlags),

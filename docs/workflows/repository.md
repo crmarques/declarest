@@ -46,6 +46,14 @@ declarest repo reset
 
 Use this only when you intentionally want to discard local uncommitted/unpushed changes.
 
+## Discard local uncommitted changes only (destructive)
+
+```bash
+declarest repo clean
+```
+
+Use this to clean the local worktree (tracked edits and untracked files) without changing committed branch history.
+
 ## Recommended daily loop (git-backed repos)
 
 ```bash
@@ -64,3 +72,4 @@ declarest repo push
 - `filesystem` repos are good for ephemeral CI jobs that only need reconciliation behavior.
 - `git` repos are better when the job also manages promotion branches or pushes generated updates.
 - Run `repo status` before destructive or publish steps to surface divergence early.
+- Use `repo clean` when you need to remove local worktree noise before rerunning a workflow.

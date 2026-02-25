@@ -15,8 +15,9 @@ const (
 )
 
 type ContextCatalog struct {
-	Contexts   []Context `yaml:"contexts"`
-	CurrentCtx string    `yaml:"current-ctx"`
+	Contexts      []Context `yaml:"contexts"`
+	CurrentCtx    string    `yaml:"current-ctx"`
+	DefaultEditor string    `yaml:"default-editor,omitempty"`
 }
 
 type Context struct {
@@ -40,7 +41,15 @@ type GitRepository struct {
 }
 
 type GitLocal struct {
-	BaseDir string `yaml:"base-dir"`
+	BaseDir  string `yaml:"base-dir"`
+	AutoInit *bool  `yaml:"auto-init,omitempty"`
+}
+
+func (g GitLocal) AutoInitEnabled() bool {
+	if g.AutoInit == nil {
+		return true
+	}
+	return *g.AutoInit
 }
 
 type GitRemote struct {

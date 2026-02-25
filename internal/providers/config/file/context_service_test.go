@@ -28,6 +28,75 @@ func TestDecodeCatalogSuccess(t *testing.T) {
 	}
 }
 
+func TestDecodeCatalogGitLocalAutoInitDefaultsTrueWhenOmitted(t *testing.T) {
+	t.Parallel()
+
+	contextCatalog, err := decodeCatalog([]byte(`
+contexts:
+  - name: git
+    repository:
+      git:
+        local:
+          base-dir: /tmp/repo
+    resource-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
+current-ctx: git
+`))
+	if err != nil {
+		t.Fatalf("decodeCatalog returned error: %v", err)
+	}
+	if len(contextCatalog.Contexts) != 1 || contextCatalog.Contexts[0].Repository.Git == nil {
+		t.Fatalf("expected one git context, got %#v", contextCatalog.Contexts)
+	}
+
+	local := contextCatalog.Contexts[0].Repository.Git.Local
+	if !local.AutoInitEnabled() {
+		t.Fatal("expected repository.git.local.auto-init to default to true when omitted")
+	}
+	if local.AutoInit != nil {
+		t.Fatalf("expected omitted auto-init to remain nil for compact persistence, got %#v", local.AutoInit)
+	}
+}
+
+func TestDecodeCatalogGitLocalAutoInitHonorsFalse(t *testing.T) {
+	t.Parallel()
+
+	contextCatalog, err := decodeCatalog([]byte(`
+contexts:
+  - name: git
+    repository:
+      git:
+        local:
+          base-dir: /tmp/repo
+          auto-init: false
+    resource-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: secret-token
+current-ctx: git
+`))
+	if err != nil {
+		t.Fatalf("decodeCatalog returned error: %v", err)
+	}
+	if len(contextCatalog.Contexts) != 1 || contextCatalog.Contexts[0].Repository.Git == nil {
+		t.Fatalf("expected one git context, got %#v", contextCatalog.Contexts)
+	}
+
+	local := contextCatalog.Contexts[0].Repository.Git.Local
+	if local.AutoInit == nil {
+		t.Fatal("expected explicit auto-init=false to be preserved")
+	}
+	if local.AutoInitEnabled() {
+		t.Fatal("expected repository.git.local.auto-init=false to be respected")
+	}
+}
+
 func TestDecodeCatalogRejectsUnknownField(t *testing.T) {
 	t.Parallel()
 

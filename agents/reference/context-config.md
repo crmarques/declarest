@@ -29,11 +29,14 @@ Define the canonical context catalog schema, file location, validation rules, an
 12. `metadata.base-dir` MUST default to the selected repository base-dir when unset.
 13. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
 14. Every context MUST define `resource-server.http` with one configured auth mode.
+15. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
+16. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 
 ## Data Contracts
 Top-level catalog fields:
 1. `contexts`: list of context objects.
 2. `current-ctx`: active context name.
+3. optional `default-editor`: editor command used by CLI editor workflows when `--editor` is not provided.
 
 Per-context fields:
 1. `name`.
@@ -175,6 +178,7 @@ contexts:
         base-dir: /other/repo
 
 current-ctx: xxx
+# default-editor: vi
 ```
 
 ## Failure Modes
@@ -197,6 +201,7 @@ current-ctx: xxx
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.
+7. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
@@ -205,3 +210,4 @@ current-ctx: xxx
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
 6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
+7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.

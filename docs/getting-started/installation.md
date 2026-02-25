@@ -55,6 +55,13 @@ source <(declarest completion bash)
 
 Persist by adding the same line to `~/.bashrc`.
 
+For `bash-completion` based setups, you can install it permanently as:
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+declarest completion bash > ~/.local/share/bash-completion/completions/declarest
+```
+
 ### Zsh
 
 ```bash

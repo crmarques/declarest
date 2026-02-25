@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 )
 
 var _ config.ContextService = (*FileContextService)(nil)
+var _ config.ContextCatalogEditor = (*FileContextService)(nil)
 
 type FileContextService struct {
 	contextCatalogPath string
@@ -191,6 +193,14 @@ func (m *FileContextService) Validate(_ context.Context, cfg config.Context) err
 	return validateConfig(normalizeConfig(cfg))
 }
 
+func (m *FileContextService) GetCatalog(_ context.Context) (config.ContextCatalog, error) {
+	return m.loadCatalog()
+}
+
+func (m *FileContextService) ReplaceCatalog(_ context.Context, catalog config.ContextCatalog) error {
+	return m.saveCatalog(catalog)
+}
+
 func (m *FileContextService) saveCatalog(contextCatalog config.ContextCatalog) error {
 	contextCatalog = compactContextCatalogForPersistence(contextCatalog)
 
@@ -287,6 +297,8 @@ func validationError(message string, cause error) error {
 }
 
 func compactContextCatalogForPersistence(contextCatalog config.ContextCatalog) config.ContextCatalog {
+	contextCatalog.DefaultEditor = strings.TrimSpace(contextCatalog.DefaultEditor)
+
 	if len(contextCatalog.Contexts) == 0 {
 		return contextCatalog
 	}

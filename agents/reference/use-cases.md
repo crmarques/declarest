@@ -349,3 +349,44 @@ Expected outputs:
 
 Failure expectation:
 1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `metadata` commands run.
+
+### Example 17: Repository History by Backend Type (Corner)
+Goal: expose local git history when available while keeping filesystem repos deterministic and non-mutating.
+
+Inputs:
+1. Context `dev-fs` with `repository.filesystem`.
+2. Context `dev-git` with `repository.git` and a repository base dir that may exist without `.git/` initialized yet.
+3. Optional filters `--max-count`, `--author`, `--grep`, `--since`, `--until`, `--path`, `--oneline`.
+
+Execution:
+1. Run `declarest --context dev-fs repo history`.
+2. Run `declarest --context dev-git repo history --oneline --max-count 5 --author alice --grep fix --path customers`.
+
+Expected outputs:
+1. Step 1 prints a stable not-supported message for filesystem repositories and exits successfully.
+2. Step 2 auto-initializes the local git repo when needed and prints filtered local git commit history (empty on a fresh repo) without additional unexpected mutations.
+
+Failure expectation:
+1. Invalid `--since` or `--until` date input fails with `ValidationError` before repository history lookup.
+
+### Example 18: Git Auto-Commit for Repository Mutations
+Goal: commit repository changes after local mutation commands while protecting against unrelated worktree changes.
+
+Inputs:
+1. Git repository context with clean worktree.
+2. `resource save` or `resource delete --repository`.
+3. Optional commit-message flags `--message` or `--message-override`.
+
+Execution:
+1. Run `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123`.
+2. Run `declarest resource delete /customers/acme --confirm-delete --repository --message-override 'cleanup customer'`.
+3. Re-run one command after creating an unrelated uncommitted change in the repo.
+4. Run one command with both `--message` and `--message-override`.
+
+Expected outputs:
+1. Step 1 saves repository content and creates one local commit whose message appends `ticket-123` to the default save message.
+2. Step 2 deletes local repository content and creates one local commit using the override message exactly.
+
+Failure expectation:
+1. Step 3 fails with `ValidationError` before mutation because auto-commit commands require a clean git worktree.
+2. Step 4 fails with `ValidationError` because commit-message flags are mutually exclusive.

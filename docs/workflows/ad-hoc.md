@@ -16,9 +16,11 @@ Use this when a command fails or hits the wrong endpoint and you need to inspect
 ```bash
 declarest resource list --source repository /customers/
 declarest resource list --source remote-server /customers/
+declarest resource list --source remote-server /customers/ --output text
 ```
 
 This catches simple path mistakes before deeper debugging.
+Use `--output text` for a concise `alias (id)` view when metadata identity mapping is configured.
 
 ## 2. Inspect metadata (effective vs overrides)
 

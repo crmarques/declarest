@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
@@ -145,5 +146,99 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		root.AddCommand(command)
 	}
 
+	wrapUsageForMissingPositionalParameterErrors(root)
+
 	return root
+}
+
+func wrapUsageForMissingPositionalParameterErrors(root *cobra.Command) {
+	if root == nil {
+		return
+	}
+
+	var wrapCommandTree func(*cobra.Command)
+	wrapCommandTree = func(command *cobra.Command) {
+		if command == nil {
+			return
+		}
+
+		command.Args = wrapCommandErrorHandlerWithUsage(command.Args)
+		command.PersistentPreRunE = wrapCommandErrorHandlerWithUsage(command.PersistentPreRunE)
+		command.PreRunE = wrapCommandErrorHandlerWithUsage(command.PreRunE)
+		command.RunE = wrapCommandErrorHandlerWithUsage(command.RunE)
+
+		for _, child := range command.Commands() {
+			wrapCommandTree(child)
+		}
+	}
+
+	wrapCommandTree(root)
+}
+
+func wrapCommandErrorHandlerWithUsage(handler func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	if handler == nil {
+		return nil
+	}
+
+	return func(command *cobra.Command, args []string) error {
+		err := handler(command, args)
+		if shouldPrintUsageForMissingPositionalParameter(command, err, args) {
+			printCommandUsageOnError(command)
+		}
+		return err
+	}
+}
+
+func shouldPrintUsageForMissingPositionalParameter(command *cobra.Command, err error, args []string) bool {
+	if err == nil || len(args) != 0 {
+		return false
+	}
+	if !commandDeclaresPositionalParameters(command) {
+		return false
+	}
+
+	message := strings.TrimSpace(strings.ToLower(err.Error()))
+	if message == "" {
+		return false
+	}
+
+	if faults.IsCategory(err, faults.ValidationError) {
+		if strings.HasPrefix(message, "flag ") {
+			return false
+		}
+		if strings.Contains(message, "input is required") {
+			return false
+		}
+		if strings.Contains(message, "interactive terminal is required") {
+			return false
+		}
+		if strings.Contains(message, "value is required") {
+			return false
+		}
+		return strings.Contains(message, " is required")
+	}
+
+	return strings.Contains(message, "arg(s)") && strings.Contains(message, "received 0")
+}
+
+func commandDeclaresPositionalParameters(command *cobra.Command) bool {
+	if command == nil {
+		return false
+	}
+
+	use := strings.TrimSpace(command.Use)
+	return strings.Contains(use, "[") || strings.Contains(use, "<")
+}
+
+func printCommandUsageOnError(command *cobra.Command) {
+	if command == nil {
+		return
+	}
+
+	rendered := strings.TrimRight(command.UsageString(), "\n")
+	if rendered == "" {
+		return
+	}
+
+	_, _ = fmt.Fprintln(command.ErrOrStderr(), rendered)
 }

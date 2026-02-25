@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -20,6 +21,8 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	var ignore bool
 	var handleSecrets string
 	var overwrite bool
+	var commitMessageAppend string
+	var commitMessageOverride string
 
 	command := &cobra.Command{
 		Use:   "save [path]",
@@ -39,12 +42,29 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			value, hasInput, err := resourceinputapp.DecodeOptionalPayloadInput(command, input)
+			value, hasInput, err := resourceinputapp.DecodeOptionalMutationPayloadInput(command, input)
 			if err != nil {
 				return err
 			}
 
 			handleSecretsEnabled, requestedSecretCandidates, err := parseSaveHandleSecretsFlag(command, handleSecrets)
+			if err != nil {
+				return err
+			}
+
+			cfg, err := resolveActiveResourceContext(command.Context(), deps, nil)
+			if err != nil {
+				return err
+			}
+			if err := ensureCleanGitWorktreeForAutoCommit(command.Context(), deps, cfg, "resource save"); err != nil {
+				return err
+			}
+			commitMessage, err := resolveRepositoryCommitMessage(
+				command,
+				fmt.Sprintf("declarest: save resource %s", resolvedPath),
+				commitMessageAppend,
+				commitMessageOverride,
+			)
 			if err != nil {
 				return err
 			}
@@ -58,7 +78,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			return resourcesave.Execute(
+			if err := resourcesave.Execute(
 				command.Context(),
 				resourcesave.Dependencies{
 					Orchestrator: orchestratorService,
@@ -77,7 +97,11 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 					HandleSecretsEnabled:      handleSecretsEnabled,
 					RequestedSecretCandidates: requestedSecretCandidates,
 				},
-			)
+			); err != nil {
+				return err
+			}
+
+			return commitRepositoryIfGit(command.Context(), deps, cfg, commitMessage)
 		},
 	}
 
@@ -85,6 +109,9 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
+	if flag := command.Flags().Lookup("payload"); flag != nil {
+		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
+	}
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
 	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
@@ -92,6 +119,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")
 	command.Flags().BoolVar(&overwrite, "override", false, "legacy alias for --overwrite")
 	_ = command.Flags().MarkHidden("override")
+	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
 	handleSecretsFlag := command.Flags().Lookup("handle-secrets")
 	handleSecretsFlag.NoOptDefVal = handleSecretsAllSentinel
 	return command

@@ -50,7 +50,7 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			value, hasExplicitInput, err := resourceinputapp.DecodeOptionalPayloadInput(command, input)
+			value, hasExplicitInput, err := resourceinputapp.DecodeOptionalMutationPayloadInput(command, input)
 			if err != nil {
 				return err
 			}
@@ -126,6 +126,9 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
+	if flag := command.Flags().Lookup("payload"); flag != nil {
+		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
+	}
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	command.Flags().BoolVar(&refreshRepository, "refresh-repository", false, "re-fetch remote mutation results into the repository")
 	bindHTTPMethodFlag(command, &httpMethod)

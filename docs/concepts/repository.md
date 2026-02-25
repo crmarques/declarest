@@ -44,6 +44,7 @@ This is useful when you want:
 
 ```bash
 declarest repo status
+declarest repo clean
 declarest repo init
 declarest repo refresh
 declarest repo push
@@ -53,6 +54,7 @@ declarest repo reset
 Notes:
 
 - `repo push` is only valid for `git` repositories.
+- `repo clean` discards local uncommitted git worktree changes and is a no-op on `filesystem` repositories.
 - `repo reset` is destructive to local uncommitted changes.
 - `repo status` is the fastest way to confirm local/remote sync state before automation.
 

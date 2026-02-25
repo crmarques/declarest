@@ -987,8 +987,8 @@ func TestEnsureSaveTargetAllowed(t *testing.T) {
 
 	err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", false)
 	assertTypedCategory(t, err, faults.ValidationError)
-	if !strings.Contains(err.Error(), "--override") {
-		t.Fatalf("expected --override hint, got %v", err)
+	if !strings.Contains(err.Error(), "--overwrite") {
+		t.Fatalf("expected --overwrite hint, got %v", err)
 	}
 
 	if err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", true); err != nil {
@@ -1241,6 +1241,7 @@ func (f *fakeSaveRepository) Exists(_ context.Context, logicalPath string) (bool
 func (f *fakeSaveRepository) Move(context.Context, string, string) error { return nil }
 func (f *fakeSaveRepository) Init(context.Context) error                 { return nil }
 func (f *fakeSaveRepository) Refresh(context.Context) error              { return nil }
+func (f *fakeSaveRepository) Clean(context.Context) error                { return nil }
 func (f *fakeSaveRepository) Reset(context.Context, repositorydomain.ResetPolicy) error {
 	return nil
 }

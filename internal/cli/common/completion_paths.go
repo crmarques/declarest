@@ -129,7 +129,7 @@ func addMetadataCollectionSuggestions(
 	}
 	for _, child := range children {
 		segment := strings.TrimSpace(child)
-		if segment == "" || segment == "_" || containsTemplateSegments(segment) {
+		if segment == "" || containsTemplateSegments(segment) {
 			continue
 		}
 		addPathSuggestion(suggestions, appendPathSegment(normalizedPath, segment))

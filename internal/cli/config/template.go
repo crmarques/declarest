@@ -2,6 +2,8 @@ package config
 
 const contextTemplateYAML = `# Context catalog template for declarest.
 # Fill the fields you need and remove examples/comments as desired.
+# Optional default editor for commands that open an editor (defaults to vi).
+# default-editor: vi
 contexts:
   - name: my-context
     repository:
@@ -13,6 +15,7 @@ contexts:
       git:
         local:
           base-dir: /path/to/repository
+          # auto-init: true
 
         # Optional remote configuration.
         # remote:

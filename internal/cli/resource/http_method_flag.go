@@ -9,8 +9,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var httpMethodCompletionValues = []string{
+	"CONNECT",
+	"DELETE",
+	"GET",
+	"HEAD",
+	"OPTIONS",
+	"PATCH",
+	"POST",
+	"PUT",
+	"TRACE",
+}
+
 func bindHTTPMethodFlag(command *cobra.Command, httpMethod *string) {
 	command.Flags().StringVar(httpMethod, "http-method", "", "override metadata operation HTTP method for remote server calls")
+	_ = command.RegisterFlagCompletionFunc("http-method", func(
+		_ *cobra.Command,
+		_ []string,
+		toComplete string,
+	) ([]string, cobra.ShellCompDirective) {
+		return common.CompleteValues(httpMethodCompletionValues, strings.ToUpper(toComplete))
+	})
 }
 
 func validateHTTPMethodOverride(raw string) (string, bool, error) {

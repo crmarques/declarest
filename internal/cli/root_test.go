@@ -8,11 +8,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	serverdomain "github.com/crmarques/declarest/server"
 )
@@ -22,9 +24,9 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 
 	requiredPaths := []string{
 		"config",
-		"config create",
 		"config print-template",
 		"config add",
+		"config edit",
 		"config use",
 		"config current",
 		"config check",
@@ -32,6 +34,8 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"resource",
 		"resource get",
 		"resource delete",
+		"resource edit",
+		"resource copy",
 		"resource-server",
 		"resource-server get",
 		"resource-server get base-url",
@@ -42,7 +46,11 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"metadata resolve",
 		"metadata render",
 		"repo",
+		"repo clean",
+		"repo commit",
 		"repo status",
+		"repo tree",
+		"repo history",
 		"secret",
 		"secret resolve",
 		"completion",
@@ -101,6 +109,36 @@ func TestRootWithoutArgsShowsHelp(t *testing.T) {
 	if !strings.Contains(output, "\n  resource ") {
 		t.Fatalf("expected resource command to be present in root help, got %q", output)
 	}
+}
+
+func TestMissingPositionalParameterValidationPrintsUsage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing positionals prints usage", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "resource", "copy")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "path is required") {
+			t.Fatalf("expected missing path validation error, got %v", err)
+		}
+		if !strings.Contains(stderr, "Usage:") {
+			t.Fatalf("expected usage output on stderr, got %q", stderr)
+		}
+		if !strings.Contains(stderr, "declarest resource copy [path] [target-path]") {
+			t.Fatalf("expected resource copy usage line, got %q", stderr)
+		}
+	})
+
+	t.Run("validation with provided args does not print usage", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "resource", "get", "/customers/a", "--path", "/customers/b")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if strings.Contains(stderr, "Usage:") {
+			t.Fatalf("did not expect usage output for mismatch validation, got %q", stderr)
+		}
+	})
 }
 
 func TestResourceServerGet(t *testing.T) {
@@ -235,6 +273,12 @@ func TestOutputPolicyValidation(t *testing.T) {
 	t.Run("resource_server_plain_text_commands_reject_structured_output", func(t *testing.T) {
 		t.Parallel()
 		_, err := executeForTest(testDeps(), "", "--output", "json", "resource-server", "get", "base-url")
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("repo_tree_rejects_structured_output", func(t *testing.T) {
+		t.Parallel()
+		_, err := executeForTest(testDeps(), "", "--output", "json", "repo", "tree")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -1256,6 +1300,156 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 	})
 }
 
+func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("create_accepts_inline_json_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "create",
+			"/customers/acme",
+			"--payload", `{"id":"acme","name":"Acme"}`,
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
+		}
+		if len(orchestrator.createCalls) != 1 {
+			t.Fatalf("expected one create call, got %d", len(orchestrator.createCalls))
+		}
+		body, ok := orchestrator.createCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", orchestrator.createCalls[0].value)
+		}
+		if body["name"] != "Acme" {
+			t.Fatalf("expected inline payload name to be forwarded, got %#v", body)
+		}
+	})
+
+	t.Run("apply_accepts_dotted_assignment_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "apply",
+			"/customers/acme",
+			"--payload", "id=acme,name=Acme,spec.tier=gold",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected apply output to be empty without --verbose, got %q", output)
+		}
+		if len(orchestrator.updateCalls) != 1 {
+			t.Fatalf("expected explicit apply to perform update in test double, got %d update calls", len(orchestrator.updateCalls))
+		}
+		body, ok := orchestrator.updateCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", orchestrator.updateCalls[0].value)
+		}
+		spec, ok := body["spec"].(map[string]any)
+		if !ok || spec["tier"] != "gold" {
+			t.Fatalf("expected dotted assignment payload to build nested object, got %#v", body)
+		}
+	})
+
+	t.Run("create_rejects_identity_attribute_mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource", "create",
+			"/customers/acme",
+			"--payload", `{"id":"other","name":"Acme"}`,
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "does not match path segment") {
+			t.Fatalf("expected explanatory mismatch error, got %v", err)
+		}
+		if len(orchestrator.createCalls) != 0 {
+			t.Fatalf("expected create to be skipped on identity mismatch, got %#v", orchestrator.createCalls)
+		}
+	})
+
+	t.Run("update_accepts_inline_json_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "update",
+			"/customers/acme",
+			"--payload", `{"id":"acme","name":"Updated"}`,
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected update output to be empty without --verbose, got %q", output)
+		}
+		if len(orchestrator.updateCalls) != 1 {
+			t.Fatalf("expected one update call, got %d", len(orchestrator.updateCalls))
+		}
+		body, ok := orchestrator.updateCalls[0].value.(map[string]any)
+		if !ok || body["name"] != "Updated" {
+			t.Fatalf("expected inline update payload to be forwarded, got %#v", orchestrator.updateCalls[0].value)
+		}
+	})
+
+	t.Run("save_accepts_dotted_assignment_payload", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", "id=acme,name=Acme,spec.tier=gold",
+			"--overwrite",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected save output to be empty without --verbose, got %q", output)
+		}
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected one save call, got %d", len(orchestrator.saveCalls))
+		}
+		body, ok := orchestrator.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object save payload, got %#v", orchestrator.saveCalls[0].value)
+		}
+		spec, ok := body["spec"].(map[string]any)
+		if !ok || spec["tier"] != "gold" {
+			t.Fatalf("expected dotted assignments to build nested object for save, got %#v", body)
+		}
+	})
+}
+
 func TestResourceSaveInputModes(t *testing.T) {
 	t.Parallel()
 
@@ -2188,6 +2382,119 @@ func TestResourceSaveWildcardPaths(t *testing.T) {
 	})
 }
 
+func TestResourceSaveGitCommitMessages(t *testing.T) {
+	t.Parallel()
+
+	t.Run("git_context_commits_with_default_message", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme","name":"Acme"}`,
+			"--overwrite",
+		)
+		if err != nil {
+			t.Fatalf("unexpected save error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "declarest: save resource /customers/acme" {
+			t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
+		}
+		if repoService.pushCalls != 0 {
+			t.Fatalf("expected save auto-commit to avoid push, got %d push calls", repoService.pushCalls)
+		}
+	})
+
+	t.Run("message_appends_to_default_commit_message", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme"}`,
+			"--overwrite",
+			"--message", "ticket-123",
+		)
+		if err != nil {
+			t.Fatalf("unexpected save error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "declarest: save resource /customers/acme - ticket-123" {
+			t.Fatalf("unexpected appended commit message: %q", repoService.commitCalls[0])
+		}
+	})
+
+	t.Run("message_override_replaces_default_commit_message", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme"}`,
+			"--overwrite",
+			"--message-override", "custom commit",
+		)
+		if err != nil {
+			t.Fatalf("unexpected save error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "custom commit" {
+			t.Fatalf("unexpected override commit message: %q", repoService.commitCalls[0])
+		}
+	})
+
+	t.Run("message_flags_are_mutually_exclusive", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme"}`,
+			"--overwrite",
+			"--message", "suffix",
+			"--message-override", "override",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--message") {
+			t.Fatalf("expected message flag validation error, got %v", err)
+		}
+		if len(repoService.commitCalls) != 0 {
+			t.Fatalf("expected no commit calls on validation failure, got %#v", repoService.commitCalls)
+		}
+	})
+}
+
 func TestResourceDefaultOutputUsesContextResourceFormat(t *testing.T) {
 	t.Parallel()
 
@@ -2420,6 +2727,142 @@ func TestResourceDeleteFallsBackToRequestedPathWhenNoLocalTargetsMatch(t *testin
 	if !orchestrator.deleteCalls[0].recursive {
 		t.Fatalf("expected fallback delete to preserve recursive=true policy")
 	}
+}
+
+func TestResourceDeleteGitCommitMessages(t *testing.T) {
+	t.Parallel()
+
+	t.Run("legacy_repository_flag_commits_to_git_repo", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "delete",
+			"/customers/acme",
+			"--confirm-delete",
+			"--repository",
+		)
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(repoService.deleteCalls) != 1 {
+			t.Fatalf("expected one repository delete call, got %d", len(repoService.deleteCalls))
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "declarest: delete resource /customers/acme" {
+			t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
+		}
+	})
+
+	t.Run("message_appends_to_default_commit_message", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "delete",
+			"/customers/acme",
+			"--confirm-delete",
+			"--source", "repository",
+			"--message", "ticket-456",
+		)
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "declarest: delete resource /customers/acme - ticket-456" {
+			t.Fatalf("unexpected appended commit message: %q", repoService.commitCalls[0])
+		}
+	})
+
+	t.Run("message_override_replaces_default_commit_message", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "delete",
+			"/customers/acme",
+			"--confirm-delete",
+			"--source", "repository",
+			"--message-override", "custom delete commit",
+		)
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.commitCalls[0] != "custom delete commit" {
+			t.Fatalf("unexpected override commit message: %q", repoService.commitCalls[0])
+		}
+	})
+
+	t.Run("remote_only_delete_does_not_commit", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "delete",
+			"/customers/acme",
+			"--confirm-delete",
+			"--source", "remote-server",
+		)
+		if err != nil {
+			t.Fatalf("unexpected delete error: %v", err)
+		}
+		if len(repoService.commitCalls) != 0 {
+			t.Fatalf("expected no commit calls for remote-only delete, got %#v", repoService.commitCalls)
+		}
+	})
+
+	t.Run("message_flags_are_mutually_exclusive", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "delete",
+			"/customers/acme",
+			"--confirm-delete",
+			"--source", "repository",
+			"--message", "suffix",
+			"--message-override", "override",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--message") {
+			t.Fatalf("expected message flag validation error, got %v", err)
+		}
+		if len(repoService.commitCalls) != 0 {
+			t.Fatalf("expected no commit calls on validation failure, got %#v", repoService.commitCalls)
+		}
+	})
 }
 
 func TestMetadataPathCommands(t *testing.T) {
@@ -3600,6 +4043,102 @@ func TestRepoStatusOutput(t *testing.T) {
 			t.Fatalf("expected structured json status output, got %q", jsonOutput)
 		}
 	})
+
+	t.Run("git_context_verbose_outputs_worktree_details", func(t *testing.T) {
+		t.Parallel()
+
+		repoService := &testRepository{
+			syncStatus: &repository.SyncReport{
+				State:          repository.SyncStateNoRemote,
+				Ahead:          0,
+				Behind:         0,
+				HasUncommitted: true,
+			},
+			worktreeStatus: []repository.WorktreeStatusEntry{
+				{Path: "customers/acme.json", Staging: " ", Worktree: "M"},
+				{Path: "customers/new.json", Staging: "?", Worktree: "?"},
+			},
+		}
+		deps := testDeps()
+		deps.ResourceStore = repoService
+		deps.RepositorySync = repoService
+
+		textOutput, err := executeForTest(deps, "", "--context", "git", "repo", "status", "--verbose")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(textOutput, "worktree:\n") {
+			t.Fatalf("expected verbose worktree header, got %q", textOutput)
+		}
+		if !strings.Contains(textOutput, " M customers/acme.json") {
+			t.Fatalf("expected modified file in verbose status output, got %q", textOutput)
+		}
+		if !strings.Contains(textOutput, "?? customers/new.json") {
+			t.Fatalf("expected untracked file in verbose status output, got %q", textOutput)
+		}
+	})
+}
+
+func TestRepoCommitCommand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("filesystem_context_fails_fast", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "repo", "commit", "--message", "manual changes")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "filesystem repositories") {
+			t.Fatalf("expected filesystem-specific validation error, got %v", err)
+		}
+	})
+
+	t.Run("git_context_commits_manual_changes", func(t *testing.T) {
+		t.Parallel()
+
+		repoService := &testRepository{}
+		deps := testDeps()
+		deps.ResourceStore = repoService
+		deps.RepositorySync = repoService
+
+		output, err := executeForTest(deps, "", "--context", "git", "repo", "commit", "--message", "manual changes")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 || repoService.commitCalls[0] != "manual changes" {
+			t.Fatalf("expected one manual commit call, got %#v", repoService.commitCalls)
+		}
+		if output != "" {
+			t.Fatalf("expected no text payload output for repo commit, got %q", output)
+		}
+	})
+
+	t.Run("missing_message_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "--context", "git", "repo", "commit")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--message") {
+			t.Fatalf("expected message validation error, got %v", err)
+		}
+	})
+
+	t.Run("clean_worktree_returns_no_changes", func(t *testing.T) {
+		t.Parallel()
+
+		committed := false
+		repoService := &testRepository{commitCommitted: &committed}
+		deps := testDeps()
+		deps.ResourceStore = repoService
+		deps.RepositorySync = repoService
+
+		output, err := executeForTest(deps, "", "--context", "git", "repo", "commit", "-m", "manual changes")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected no text payload output for repo commit no-op, got %q", output)
+		}
+	})
 }
 
 func TestRepoPushTypeAwareValidation(t *testing.T) {
@@ -3641,6 +4180,147 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 	})
 }
 
+func TestRepoCleanCallsRepositorySync(t *testing.T) {
+	t.Parallel()
+
+	repoService := &testRepository{}
+	deps := testDeps()
+	deps.RepositorySync = repoService
+
+	if _, err := executeForTest(deps, "", "repo", "clean"); err != nil {
+		t.Fatalf("unexpected clean error: %v", err)
+	}
+	if repoService.cleanCalls != 1 {
+		t.Fatalf("expected clean to be called once, got %d", repoService.cleanCalls)
+	}
+}
+
+func TestRepoTreeCommand(t *testing.T) {
+	t.Parallel()
+
+	repoService := &testRepository{
+		treeDirs: []string{
+			"admin",
+			"admin/realms",
+			"admin/realms/acme",
+			"admin/realms/acme/authentication",
+			"admin/realms/acme/authentication/flows",
+			"admin/realms/acme/authentication/flows/test",
+			"admin/realms/acme/authentication/flows/test/executions",
+			"admin/realms/acme/authentication/flows/test/executions/Cookie",
+			"admin/realms/acme/clients",
+			"admin/realms/acme/clients/test",
+			"admin/realms/acme/organizations",
+			"admin/realms/acme/organizations/alpha",
+			"admin/realms/acme/user-registry",
+			"admin/realms/acme/user-registry/AD PRD",
+		},
+	}
+	deps := testDeps()
+	deps.RepositorySync = repoService
+	deps.ResourceStore = repoService
+
+	output, err := executeForTest(deps, "", "repo", "tree")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := strings.Join([]string{
+		"admin",
+		"└── realms",
+		"    └── acme",
+		"        ├── authentication",
+		"        │   └── flows",
+		"        │       └── test",
+		"        │           └── executions",
+		"        │               └── Cookie",
+		"        ├── clients",
+		"        │   └── test",
+		"        ├── organizations",
+		"        │   └── alpha",
+		"        └── user-registry",
+		"            └── AD PRD",
+		"",
+	}, "\n")
+	if output != want {
+		t.Fatalf("unexpected repo tree output:\n%s", output)
+	}
+	if repoService.treeCalls != 1 {
+		t.Fatalf("expected tree to be called once, got %d", repoService.treeCalls)
+	}
+}
+
+func TestRepoHistoryCommand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("filesystem_context_reports_not_supported_message", func(t *testing.T) {
+		t.Parallel()
+
+		output, err := executeForTest(testDeps(), "", "repo", "history")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(strings.ToLower(output), "not supported") {
+			t.Fatalf("expected not-supported message, got %q", output)
+		}
+	})
+
+	t.Run("git_context_calls_history_and_applies_filters", func(t *testing.T) {
+		t.Parallel()
+
+		repoService := &testRepository{
+			history: []repository.HistoryEntry{
+				{
+					Hash:    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					Author:  "Alice",
+					Email:   "alice@example.invalid",
+					Date:    time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC),
+					Subject: "fix customer sync",
+				},
+			},
+		}
+		deps := testDeps()
+		deps.RepositorySync = repoService
+		deps.ResourceStore = repoService
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"repo", "history",
+			"--oneline",
+			"--max-count", "5",
+			"--author", "alice",
+			"--grep", "fix",
+			"--since", "2026-01-01",
+			"--until", "2026-02-01",
+			"--path", "customers",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, "aaaaaaaaaaaa fix customer sync") {
+			t.Fatalf("expected oneline history output, got %q", output)
+		}
+
+		if len(repoService.historyCalls) != 1 {
+			t.Fatalf("expected one history call, got %d", len(repoService.historyCalls))
+		}
+		call := repoService.historyCalls[0]
+		if call.MaxCount != 5 {
+			t.Fatalf("expected max-count=5, got %d", call.MaxCount)
+		}
+		if call.Author != "alice" || call.Grep != "fix" {
+			t.Fatalf("unexpected author/grep filters: %#v", call)
+		}
+		if len(call.Paths) != 1 || call.Paths[0] != "customers" {
+			t.Fatalf("unexpected path filters: %#v", call.Paths)
+		}
+		if call.Since == nil || call.Until == nil {
+			t.Fatalf("expected since/until to be parsed, got %#v", call)
+		}
+	})
+}
+
 func TestResourceListRecursiveFlag(t *testing.T) {
 	t.Parallel()
 
@@ -3664,6 +4344,47 @@ func TestResourceListRecursiveFlag(t *testing.T) {
 	}
 	if strings.Contains(recursiveOutput, "\"LogicalPath\"") {
 		t.Fatalf("expected payload-only recursive list output, got %q", recursiveOutput)
+	}
+}
+
+func TestResourceListTextOutputUsesAliasAndID(t *testing.T) {
+	t.Parallel()
+
+	orchestrator := &testOrchestrator{
+		metadataService: newTestMetadata(),
+		remoteList: []resource.Resource{
+			{
+				LogicalPath: "/customers/acme",
+				Metadata: metadatadomain.ResourceMetadata{
+					AliasFromAttribute: "name",
+					IDFromAttribute:    "id",
+				},
+				Payload: map[string]any{
+					"id":   "42",
+					"name": "acme",
+				},
+			},
+			{
+				LogicalPath: "/customers/beta",
+				LocalAlias:  "beta",
+				RemoteID:    "84",
+				Payload:     map[string]any{"id": "84"},
+			},
+		},
+	}
+
+	output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "-o", "text", "resource", "list", "/customers")
+	if err != nil {
+		t.Fatalf("unexpected list error: %v", err)
+	}
+	if strings.Contains(output, "/customers/acme") {
+		t.Fatalf("expected alias/id list output instead of logical paths, got %q", output)
+	}
+	if !strings.Contains(output, "acme (42)") {
+		t.Fatalf("expected metadata-derived alias/id output, got %q", output)
+	}
+	if !strings.Contains(output, "beta (84)") {
+		t.Fatalf("expected resource identity output, got %q", output)
 	}
 }
 

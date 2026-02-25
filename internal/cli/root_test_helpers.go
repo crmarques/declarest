@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
@@ -224,6 +225,7 @@ type testOrchestrator struct {
 	requestCalls     []requestCall
 	requestErr       error
 	getLocalCalls    []string
+	getLocalErr      error
 	listLocalCalls   []string
 	listLocalDetail  []listCall
 	listRemoteCalls  []string
@@ -270,6 +272,9 @@ func (r *testOrchestrator) Get(_ context.Context, logicalPath string) (resource.
 }
 func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
 	r.getLocalCalls = append(r.getLocalCalls, logicalPath)
+	if r.getLocalErr != nil {
+		return nil, r.getLocalErr
+	}
 	if r.getLocalValues != nil {
 		if value, ok := r.getLocalValues[logicalPath]; ok {
 			return value, nil
@@ -654,8 +659,21 @@ func (s *testSecretProvider) DetectSecretCandidates(_ context.Context, value res
 }
 
 type testRepository struct {
-	deleteCalls []deleteCall
-	pushCalls   int
+	deleteCalls     []deleteCall
+	cleanCalls      int
+	pushCalls       int
+	commitCalls     []string
+	commitErr       error
+	commitCommitted *bool
+	treeCalls       int
+	treeDirs        []string
+	treeErr         error
+	historyCalls    []repository.HistoryFilter
+	history         []repository.HistoryEntry
+	historyErr      error
+	syncStatus      *repository.SyncReport
+	worktreeStatus  []repository.WorktreeStatusEntry
+	worktreeErr     error
 }
 
 type testResourceServer struct {
@@ -718,23 +736,85 @@ func (r *testRepository) List(_ context.Context, logicalPath string, policy repo
 	}
 	return []resource.Resource{{LogicalPath: logicalPath}}, nil
 }
-func (r *testRepository) Exists(context.Context, string) (bool, error)        { return true, nil }
-func (r *testRepository) Move(context.Context, string, string) error          { return nil }
-func (r *testRepository) Init(context.Context) error                          { return nil }
-func (r *testRepository) Refresh(context.Context) error                       { return nil }
+func (r *testRepository) Exists(context.Context, string) (bool, error) { return true, nil }
+func (r *testRepository) Move(context.Context, string, string) error   { return nil }
+func (r *testRepository) Init(context.Context) error                   { return nil }
+func (r *testRepository) Refresh(context.Context) error                { return nil }
+func (r *testRepository) Clean(context.Context) error {
+	r.cleanCalls++
+	return nil
+}
 func (r *testRepository) Reset(context.Context, repository.ResetPolicy) error { return nil }
 func (r *testRepository) Check(context.Context) error                         { return nil }
 func (r *testRepository) Push(context.Context, repository.PushPolicy) error {
 	r.pushCalls++
 	return nil
 }
+func (r *testRepository) Commit(_ context.Context, message string) (bool, error) {
+	r.commitCalls = append(r.commitCalls, message)
+	if r.commitErr != nil {
+		return false, r.commitErr
+	}
+	if r.commitCommitted != nil {
+		return *r.commitCommitted, nil
+	}
+	return true, nil
+}
+func (r *testRepository) Tree(context.Context) ([]string, error) {
+	r.treeCalls++
+	if r.treeErr != nil {
+		return nil, r.treeErr
+	}
+	items := r.treeDirs
+	if len(items) == 0 {
+		items = []string{"admin", "admin/realms"}
+	}
+	out := make([]string, len(items))
+	copy(out, items)
+	return out, nil
+}
+func (r *testRepository) History(_ context.Context, filter repository.HistoryFilter) ([]repository.HistoryEntry, error) {
+	r.historyCalls = append(r.historyCalls, filter)
+	if r.historyErr != nil {
+		return nil, r.historyErr
+	}
+	if len(r.history) == 0 {
+		return []repository.HistoryEntry{
+			{
+				Hash:    "0123456789abcdef0123456789abcdef01234567",
+				Author:  "Test User",
+				Email:   "test@example.invalid",
+				Date:    time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC),
+				Subject: "initial commit",
+			},
+		}, nil
+	}
+	items := make([]repository.HistoryEntry, len(r.history))
+	copy(items, r.history)
+	return items, nil
+}
 func (r *testRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
+	if r.syncStatus != nil {
+		return *r.syncStatus, nil
+	}
 	return repository.SyncReport{
 		State:          repository.SyncStateNoRemote,
 		Ahead:          0,
 		Behind:         0,
 		HasUncommitted: false,
 	}, nil
+}
+
+func (r *testRepository) WorktreeStatus(context.Context) ([]repository.WorktreeStatusEntry, error) {
+	if r.worktreeErr != nil {
+		return nil, r.worktreeErr
+	}
+	if r.worktreeStatus == nil {
+		return []repository.WorktreeStatusEntry{}, nil
+	}
+	items := make([]repository.WorktreeStatusEntry, len(r.worktreeStatus))
+	copy(items, r.worktreeStatus)
+	return items, nil
 }
 
 type resourceSaveTestRepository struct {
@@ -773,6 +853,7 @@ func (r *resourceSaveTestRepository) Exists(context.Context, string) (bool, erro
 func (r *resourceSaveTestRepository) Move(context.Context, string, string) error          { return nil }
 func (r *resourceSaveTestRepository) Init(context.Context) error                          { return nil }
 func (r *resourceSaveTestRepository) Refresh(context.Context) error                       { return nil }
+func (r *resourceSaveTestRepository) Clean(context.Context) error                         { return nil }
 func (r *resourceSaveTestRepository) Reset(context.Context, repository.ResetPolicy) error { return nil }
 func (r *resourceSaveTestRepository) Check(context.Context) error                         { return nil }
 func (r *resourceSaveTestRepository) Push(context.Context, repository.PushPolicy) error   { return nil }

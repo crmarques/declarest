@@ -1417,6 +1417,7 @@ func (f *fakeRepository) Exists(_ context.Context, logicalPath string) (bool, er
 func (f *fakeRepository) Move(context.Context, string, string) error { return nil }
 func (f *fakeRepository) Init(context.Context) error                 { return nil }
 func (f *fakeRepository) Refresh(context.Context) error              { return nil }
+func (f *fakeRepository) Clean(context.Context) error                { return nil }
 func (f *fakeRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }

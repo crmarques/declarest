@@ -30,9 +30,9 @@ func newCommandWithPrompter(
 	}
 
 	command.AddCommand(
-		newCreateCommand(deps, globalFlags, prompter),
 		newPrintTemplateCommand(),
-		newAddCommand(deps),
+		newAddCommand(deps, globalFlags, prompter),
+		newEditCommand(deps, globalFlags),
 		newUpdateCommand(deps),
 		newDeleteCommand(deps, prompter),
 		newRenameCommand(deps, prompter),
@@ -60,66 +60,67 @@ func newPrintTemplateCommand() *cobra.Command {
 	}
 }
 
-func newCreateCommand(
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
-	prompter configPrompter,
-) *cobra.Command {
-	var input common.InputFlags
-
-	command := &cobra.Command{
-		Use:   "create [new-context-name]",
-		Short: "Create a context from input or interactive prompts",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
-			if err != nil {
-				return err
-			}
-			contextName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
-			if err != nil {
-				return err
-			}
-
-			cfg, err := resolveCreateContextInput(command, input, prompter, contextName)
-			if err != nil {
-				return err
-			}
-			return contexts.Create(command.Context(), cfg)
-		},
-	}
-
-	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
-	_ = command.Flags().MarkHidden("file")
-	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
-	common.RegisterInputFormatFlagCompletion(command)
-	return command
-}
-
 type addContextSelection struct {
 	Contexts   []configdomain.Context
 	CurrentCtx string
 }
 
-func newAddCommand(deps common.CommandDependencies) *cobra.Command {
+func newAddCommand(
+	deps common.CommandDependencies,
+	globalFlags *common.GlobalFlags,
+	prompter configPrompter,
+) *cobra.Command {
 	var input common.InputFlags
 	var contextName string
 	var setCurrent bool
 
 	command := &cobra.Command{
-		Use:   "add",
-		Short: "Add context definitions from input",
+		Use:   "add [new-context-name]",
+		Short: "Add contexts from input or create one interactively",
 		Example: strings.Join([]string{
 			"  declarest config add --file context.yaml",
 			"  declarest config add --file contexts.yaml --context-name prod",
 			"  cat contexts.yaml | declarest config add --set-current",
+			"  declarest config add dev",
 		}, "\n"),
-		Args: cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := common.RequireContexts(deps)
 			if err != nil {
 				return err
+			}
+			contextArgName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
+			if err != nil {
+				return err
+			}
+
+			effectiveImportContextName := strings.TrimSpace(contextName)
+			if effectiveImportContextName != "" && contextArgName != "" && effectiveImportContextName != contextArgName {
+				return common.ValidationError(
+					fmt.Sprintf(
+						"context name conflict: positional/--context %q differs from --context-name %q",
+						contextArgName,
+						effectiveImportContextName,
+					),
+					nil,
+				)
+			}
+			if effectiveImportContextName == "" {
+				effectiveImportContextName = contextArgName
+			}
+
+			if shouldUseInteractiveCreate(command, input, prompter) {
+				cfg, err := resolveCreateContextInput(command, input, prompter, effectiveImportContextName)
+				if err != nil {
+					return err
+				}
+				if err := contexts.Create(command.Context(), cfg); err != nil {
+					return err
+				}
+				if setCurrent {
+					return contexts.SetCurrent(command.Context(), cfg.Name)
+				}
+				return nil
 			}
 
 			decoded, err := decodeContextImportInputStrict(command, input)
@@ -127,7 +128,7 @@ func newAddCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			selection, err := selectContextsForAdd(decoded, contextName)
+			selection, err := selectContextsForAdd(decoded, effectiveImportContextName)
 			if err != nil {
 				return err
 			}
@@ -315,7 +316,7 @@ func newUpdateCommand(deps common.CommandDependencies) *cobra.Command {
 }
 
 func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Delete a context (interactive when name is omitted)",
 		Args:  cobra.MaximumNArgs(1),
@@ -345,10 +346,12 @@ func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) 
 			return contexts.Delete(command.Context(), name)
 		},
 	}
+	registerSingleContextArgCompletion(command, deps)
+	return command
 }
 
 func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "rename [from] [to]",
 		Short: "Rename a context (interactive when args are omitted)",
 		Args:  cobra.MaximumNArgs(2),
@@ -387,6 +390,8 @@ func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) 
 			return contexts.Rename(command.Context(), fromName, toName)
 		},
 	}
+	registerRenameFromArgCompletion(command, deps)
+	return command
 }
 
 func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
@@ -416,7 +421,7 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 }
 
 func newUseCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "use [name]",
 		Short: "Set current context (interactive when name is omitted)",
 		Args:  cobra.MaximumNArgs(1),
@@ -438,6 +443,8 @@ func newUseCommand(deps common.CommandDependencies, prompter configPrompter) *co
 			return contexts.SetCurrent(command.Context(), name)
 		},
 	}
+	registerSingleContextArgCompletion(command, deps)
+	return command
 }
 
 func newShowCommand(

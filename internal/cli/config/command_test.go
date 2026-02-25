@@ -31,7 +31,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
   "name": "dev",
   "repository": {"filesystem": {"base-dir": "/tmp/repo"}},
   "unknown": true
-}`, "create", "--format", "json")
+}`, "add", "--format", "json")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.createCalled {
 			t.Fatal("expected create service call to be skipped on decode failure")
@@ -174,7 +174,7 @@ repository:
   filesystem:
     base-dir: /tmp/dev
 `,
-		"create",
+		"add",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
@@ -202,7 +202,7 @@ repository:
   filesystem:
     base-dir: /tmp/dev
 `,
-		"create",
+		"add",
 		"from-arg",
 	)
 	if err != nil {
@@ -749,7 +749,7 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 		&common.GlobalFlags{},
 		prompter,
 		"",
-		"create",
+		"add",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
@@ -794,7 +794,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 		&common.GlobalFlags{},
 		prompter,
 		"",
-		"create",
+		"add",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
@@ -831,7 +831,7 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 		&common.GlobalFlags{},
 		prompter,
 		"",
-		"create",
+		"add",
 		"dev-from-arg",
 	)
 	if err != nil {
@@ -869,7 +869,7 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 		&common.GlobalFlags{Context: "dev-from-flag"},
 		prompter,
 		"",
-		"create",
+		"add",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
@@ -898,7 +898,7 @@ func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) 
 		service,
 		&common.GlobalFlags{Context: "dev-flag"},
 		"",
-		"create",
+		"add",
 		"dev-arg",
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
@@ -924,13 +924,54 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 		&common.GlobalFlags{},
 		prompter,
 		"",
-		"create",
+		"add",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
 	}
 	if service.createdContext.Repository.ResourceFormat != "" {
 		t.Fatalf("expected empty resource format for remote-default selection, got %q", service.createdContext.Repository.ResourceFormat)
+	}
+}
+
+func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "git", "bearer-token"},
+		confirms: []bool{
+			false, // git local auto-init
+			false, // configure git remote
+			false, // resource-server default headers
+			false, // resource-server tls
+			false, // configure secret-store
+			false, // configure preferences
+		},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&common.GlobalFlags{},
+		prompter,
+		"",
+		"add",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if service.createdContext.Repository.Git == nil {
+		t.Fatalf("expected git repository config, got %#v", service.createdContext.Repository)
+	}
+	if service.createdContext.Repository.Git.Local.AutoInitEnabled() {
+		t.Fatal("expected git local auto-init to be disabled")
+	}
+	if service.createdContext.Repository.Git.Local.AutoInit == nil {
+		t.Fatal("expected auto-init=false to be persisted explicitly")
 	}
 }
 
@@ -987,7 +1028,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 		&common.GlobalFlags{},
 		prompter,
 		"",
-		"create",
+		"add",
 		"full-context",
 	)
 	if err != nil {
@@ -1446,6 +1487,7 @@ func (s *testRepositoryService) Exists(context.Context, string) (bool, error) { 
 func (s *testRepositoryService) Move(context.Context, string, string) error   { return nil }
 func (s *testRepositoryService) Init(context.Context) error                   { return nil }
 func (s *testRepositoryService) Refresh(context.Context) error                { return nil }
+func (s *testRepositoryService) Clean(context.Context) error                  { return nil }
 func (s *testRepositoryService) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }

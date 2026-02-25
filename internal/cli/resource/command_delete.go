@@ -1,8 +1,10 @@
 package resource
 
 import (
+	"fmt"
 	"strings"
 
+	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
@@ -19,6 +21,8 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	var fromRemoteServer bool
 	var fromBoth bool
 	var httpMethod string
+	var commitMessageAppend string
+	var commitMessageOverride string
 
 	command := &cobra.Command{
 		Use:   "delete [path]",
@@ -50,6 +54,27 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			} else if hasOverride && !deleteFromRemote {
 				return common.ValidationError("flag --http-method requires remote-server source", nil)
+			}
+
+			var cfg configdomain.Context
+			var commitMessage string
+			if deleteFromRepository {
+				cfg, err = resolveActiveResourceContext(command.Context(), deps, nil)
+				if err != nil {
+					return err
+				}
+				if err := ensureCleanGitWorktreeForAutoCommit(command.Context(), deps, cfg, "resource delete"); err != nil {
+					return err
+				}
+				commitMessage, err = resolveRepositoryCommitMessage(
+					command,
+					fmt.Sprintf("declarest: delete resource %s", resolvedPath),
+					commitMessageAppend,
+					commitMessageOverride,
+				)
+				if err != nil {
+					return err
+				}
 			}
 
 			if deleteFromRemote {
@@ -90,7 +115,10 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return repositoryService.Delete(command.Context(), resolvedPath, repository.DeletePolicy{Recursive: recursive})
+			if err := repositoryService.Delete(command.Context(), resolvedPath, repository.DeletePolicy{Recursive: recursive}); err != nil {
+				return err
+			}
+			return commitRepositoryIfGit(command.Context(), deps, cfg, commitMessage)
 		},
 	}
 
@@ -103,5 +131,6 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete recursively")
 	bindDeleteSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer, &fromBoth)
 	bindHTTPMethodFlag(command, &httpMethod)
+	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
 	return command
 }

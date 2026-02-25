@@ -7,7 +7,7 @@ This is a happy-flow walkthrough: one context, one resource, one edit, one apply
 Interactive (recommended for first use):
 
 ```bash
-declarest config create
+declarest config add
 ```
 
 If you prefer file-based setup:

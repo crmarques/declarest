@@ -16,7 +16,7 @@ Instead of relying on scripts, *ad-hoc* `curl` commands, or manual UI clicks, yo
 4. Diff and apply.
 
 ```bash
-declarest config create
+declarest config add
 
 declarest resource save /corporations/acme
 # edit <repo>/corporations/acme/resource.json

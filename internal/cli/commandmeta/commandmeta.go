@@ -47,7 +47,10 @@ func EmitsExecutionStatusPath(path string) bool {
 		"declarest resource apply",
 		"declarest resource create",
 		"declarest resource update",
-		"declarest resource delete":
+		"declarest resource delete",
+		"declarest resource edit",
+		"declarest resource copy",
+		"declarest repo commit":
 		return true
 	default:
 		return false
@@ -60,6 +63,7 @@ func OutputPolicyForPath(path string) OutputPolicy {
 		return OutputPolicyYAMLDefaultTextOrYAML
 	case "declarest config print-template",
 		"declarest secret get",
+		"declarest repo tree",
 		"declarest resource-server check",
 		"declarest resource-server get base-url",
 		"declarest resource-server get token-url",

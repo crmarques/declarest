@@ -57,7 +57,7 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 				return err
 			}
 
-			value, hasExplicitInput, err := resourceinputapp.DecodeOptionalPayloadInput(command, input)
+			value, hasExplicitInput, err := resourceinputapp.DecodeOptionalMutationPayloadInput(command, input)
 			if err != nil {
 				return err
 			}
@@ -67,6 +67,15 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 						"flag --recursive cannot be combined with explicit input; remove input to apply resources from repository",
 						nil,
 					)
+				}
+				if err := validateExplicitMutationPayloadIdentity(
+					command.Context(),
+					command.CommandPath(),
+					deps,
+					resolvedPath,
+					value,
+				); err != nil {
+					return err
 				}
 
 				_, getRemoteErr := orchestratorService.GetRemote(runCtx, resolvedPath)
@@ -138,6 +147,9 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 	common.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
 	common.BindInputFlags(command, &input)
+	if flag := command.Flags().Lookup("payload"); flag != nil {
+		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
+	}
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	command.Flags().BoolVar(&refreshRepository, "refresh-repository", false, "re-fetch remote mutation results into the repository")
 	bindHTTPMethodFlag(command, &httpMethod)
