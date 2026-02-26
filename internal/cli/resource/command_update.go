@@ -62,7 +62,18 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 					)
 				}
 
-				item, updateErr := orchestratorService.Update(runCtx, resolvedPath, value)
+				mutationPath, err := resolveExplicitMutationPayloadPath(
+					command.Context(),
+					command.CommandPath(),
+					deps,
+					resolvedPath,
+					value,
+				)
+				if err != nil {
+					return err
+				}
+
+				item, updateErr := orchestratorService.Update(runCtx, mutationPath, value)
 				if updateErr != nil {
 					return updateErr
 				}
@@ -81,7 +92,7 @@ func newUpdateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				if outputErr != nil {
 					return outputErr
 				}
-				return writeCollectionMutationOutput(command, outputFormat, resolvedPath, []resource.Resource{item})
+				return writeCollectionMutationOutput(command, outputFormat, mutationPath, []resource.Resource{item})
 			}
 
 			targets, err := listLocalMutationTargets(runCtx, orchestratorService, resolvedPath, recursive)

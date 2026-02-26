@@ -211,14 +211,17 @@ auth:
     token: ${API_TOKEN}
 ```
 
-#### Custom header token example
+#### Custom header auth example
 
 ```yaml
 auth:
   custom-header:
-    header: X-API-Token
-    token: ${API_TOKEN}
+    header: Authorization
+    prefix: Bearer
+    value: ${API_TOKEN}
 ```
+
+`prefix` is optional. When set, DeclaREST sends `<prefix> <value>` in the configured header.
 
 ### OpenAPI (`resource-server.http.openapi`)
 

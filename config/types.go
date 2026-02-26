@@ -112,7 +112,8 @@ type BearerTokenAuth struct {
 
 type HeaderTokenAuth struct {
 	Header string `yaml:"header"`
-	Token  string `yaml:"token"`
+	Prefix string `yaml:"prefix,omitempty"`
+	Value  string `yaml:"value"`
 }
 
 type SSHAuth struct {

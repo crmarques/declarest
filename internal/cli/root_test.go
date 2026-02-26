@@ -1388,6 +1388,101 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 		}
 	})
 
+	t.Run("collection_path_explicit_payload_infers_resource_path_from_metadata_alias", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			name    string
+			command string
+		}{
+			{name: "create", command: "create"},
+			{name: "apply", command: "apply"},
+			{name: "update", command: "update"},
+		}
+
+		for _, testCase := range testCases {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				t.Parallel()
+
+				metadataService := newTestMetadata()
+				metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
+					IDFromAttribute:    "realm",
+					AliasFromAttribute: "realm",
+				}
+				metadataService.wildcardChildren["/admin/realms"] = true
+
+				orchestrator := &testOrchestrator{metadataService: metadataService}
+				deps := testDepsWith(orchestrator, metadataService)
+
+				output, err := executeForTest(
+					deps,
+					"",
+					"resource", testCase.command,
+					"/admin/realms",
+					"--payload", "realm=test",
+				)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if output != "" {
+					t.Fatalf("expected %s output to be empty without --verbose, got %q", testCase.command, output)
+				}
+
+				const wantPath = "/admin/realms/test"
+				switch testCase.command {
+				case "create":
+					if len(orchestrator.createCalls) != 1 || orchestrator.createCalls[0].logicalPath != wantPath {
+						t.Fatalf("expected create target %q, got %#v", wantPath, orchestrator.createCalls)
+					}
+				case "apply":
+					if len(orchestrator.getRemoteCalls) != 1 || orchestrator.getRemoteCalls[0] != wantPath {
+						t.Fatalf("expected apply existence check on %q, got %#v", wantPath, orchestrator.getRemoteCalls)
+					}
+					if len(orchestrator.updateCalls) != 1 || orchestrator.updateCalls[0].logicalPath != wantPath {
+						t.Fatalf("expected apply explicit payload update target %q, got %#v", wantPath, orchestrator.updateCalls)
+					}
+				case "update":
+					if len(orchestrator.updateCalls) != 1 || orchestrator.updateCalls[0].logicalPath != wantPath {
+						t.Fatalf("expected update target %q, got %#v", wantPath, orchestrator.updateCalls)
+					}
+				default:
+					t.Fatalf("unexpected command %q", testCase.command)
+				}
+			})
+		}
+	})
+
+	t.Run("create_explicit_resource_path_with_alias_metadata_still_works", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms/test"] = metadatadomain.ResourceMetadata{
+			IDFromAttribute:    "realm",
+			AliasFromAttribute: "realm",
+		}
+		metadataService.wildcardChildren["/admin/realms"] = true
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+		deps := testDepsWith(orchestrator, metadataService)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "create",
+			"/admin/realms/test",
+			"--payload", "realm=test",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected create output to be empty without --verbose, got %q", output)
+		}
+		if len(orchestrator.createCalls) != 1 || orchestrator.createCalls[0].logicalPath != "/admin/realms/test" {
+			t.Fatalf("expected create target to remain explicit resource path, got %#v", orchestrator.createCalls)
+		}
+	})
+
 	t.Run("update_accepts_inline_json_payload", func(t *testing.T) {
 		t.Parallel()
 

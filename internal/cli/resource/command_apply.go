@@ -68,22 +68,23 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 						nil,
 					)
 				}
-				if err := validateExplicitMutationPayloadIdentity(
+				mutationPath, err := resolveExplicitMutationPayloadPath(
 					command.Context(),
 					command.CommandPath(),
 					deps,
 					resolvedPath,
 					value,
-				); err != nil {
+				)
+				if err != nil {
 					return err
 				}
 
-				_, getRemoteErr := orchestratorService.GetRemote(runCtx, resolvedPath)
+				_, getRemoteErr := orchestratorService.GetRemote(runCtx, mutationPath)
 				var item resource.Resource
 				if getRemoteErr == nil {
-					item, err = orchestratorService.Update(runCtx, resolvedPath, value)
+					item, err = orchestratorService.Update(runCtx, mutationPath, value)
 				} else if isTypedErrorCategory(getRemoteErr, faults.NotFoundError) {
-					item, err = orchestratorService.Create(runCtx, resolvedPath, value)
+					item, err = orchestratorService.Create(runCtx, mutationPath, value)
 				} else {
 					return getRemoteErr
 				}
@@ -106,7 +107,7 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 					return outputErr
 				}
 
-				return writeCollectionMutationOutput(command, outputFormat, resolvedPath, []resource.Resource{item})
+				return writeCollectionMutationOutput(command, outputFormat, mutationPath, []resource.Resource{item})
 			}
 
 			targets, err := listLocalMutationTargets(runCtx, orchestratorService, resolvedPath, recursive)

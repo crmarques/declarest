@@ -196,8 +196,8 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 
 	if resourceServer.HTTP.Auth.CustomHeader != nil {
 		head := resourceServer.HTTP.Auth.CustomHeader
-		if head.Header == "" || head.Token == "" {
-			return validationError("resource-server.http.auth.custom-header requires header and token", nil)
+		if head.Header == "" || head.Value == "" {
+			return validationError("resource-server.http.auth.custom-header requires header and value", nil)
 		}
 	}
 

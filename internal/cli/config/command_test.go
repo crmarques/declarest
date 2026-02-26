@@ -96,6 +96,8 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"basic-auth:",
 		"bearer-token:",
 		"custom-header:",
+		"prefix: Bearer",
+		"value: change-me",
 		"secret-store:",
 		"file:",
 		"vault:",

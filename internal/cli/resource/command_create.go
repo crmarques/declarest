@@ -61,17 +61,18 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 						nil,
 					)
 				}
-				if err := validateExplicitMutationPayloadIdentity(
+				mutationPath, err := resolveExplicitMutationPayloadPath(
 					command.Context(),
 					command.CommandPath(),
 					deps,
 					resolvedPath,
 					value,
-				); err != nil {
+				)
+				if err != nil {
 					return err
 				}
 
-				item, createErr := orchestratorService.Create(runCtx, resolvedPath, value)
+				item, createErr := orchestratorService.Create(runCtx, mutationPath, value)
 				if createErr != nil {
 					return createErr
 				}
@@ -91,7 +92,7 @@ func newCreateCommand(deps common.CommandDependencies, globalFlags *common.Globa
 					return outputErr
 				}
 
-				return writeCollectionMutationOutput(command, outputFormat, resolvedPath, []resource.Resource{item})
+				return writeCollectionMutationOutput(command, outputFormat, mutationPath, []resource.Resource{item})
 			}
 
 			targets, err := listLocalMutationTargets(runCtx, orchestratorService, resolvedPath, recursive)

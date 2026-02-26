@@ -440,13 +440,18 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		token, inputErr := promptRequiredInput(command, prompter, "Custom auth token: ", "custom auth token")
+		prefix, inputErr := promptOptionalInput(command, prompter, "Custom auth header prefix (optional): ")
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		value, inputErr := promptRequiredInput(command, prompter, "Custom auth header value: ", "custom auth header value")
 		if inputErr != nil {
 			return nil, inputErr
 		}
 		auth.CustomHeader = &configdomain.HeaderTokenAuth{
 			Header: header,
-			Token:  token,
+			Prefix: prefix,
+			Value:  value,
 		}
 	default:
 		return nil, common.ValidationError("invalid resource-server auth method selected", nil)

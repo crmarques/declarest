@@ -76,8 +76,9 @@ contexts:
           #   username: change-me
           #   password: change-me
           # custom-header:
-          #   header: X-Api-Token
-          #   token: change-me
+          #   header: Authorization
+          #   prefix: Bearer
+          #   value: change-me
 
         # Optional TLS.
         # tls:

@@ -85,8 +85,11 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 		return authConfig{mode: authModeBearer, bearerToken: bearer}, nil
 	case cfg.CustomHeader != nil:
 		custom := *cfg.CustomHeader
-		if custom.Header == "" || custom.Token == "" {
-			return authConfig{}, validationError("resource-server.http.auth.custom-header requires header and token", nil)
+		custom.Header = strings.TrimSpace(custom.Header)
+		custom.Prefix = strings.TrimSpace(custom.Prefix)
+		custom.Value = strings.TrimSpace(custom.Value)
+		if custom.Header == "" || custom.Value == "" {
+			return authConfig{}, validationError("resource-server.http.auth.custom-header requires header and value", nil)
 		}
 		return authConfig{mode: authModeCustomHeader, customHeader: custom}, nil
 	default:
@@ -107,7 +110,11 @@ func (g *HTTPResourceServerGateway) applyAuth(ctx context.Context, request *http
 	case authModeBearer:
 		request.Header.Set("Authorization", "Bearer "+g.auth.bearerToken.Token)
 	case authModeCustomHeader:
-		request.Header.Set(g.auth.customHeader.Header, g.auth.customHeader.Token)
+		value := g.auth.customHeader.Value
+		if g.auth.customHeader.Prefix != "" {
+			value = g.auth.customHeader.Prefix + " " + value
+		}
+		request.Header.Set(g.auth.customHeader.Header, value)
 	default:
 		return validationError("resource-server.http.auth mode is not configured", nil)
 	}

@@ -52,6 +52,7 @@ Repository one-of contract:
 
 Resource server auth one-of contract:
 1. Exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header` MUST be set under `resource-server.http.auth`.
+2. `resource-server.http.auth.custom-header` MUST define `header` and `value`; it MAY define `prefix`, which is prepended as `<prefix> <value>`.
 
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
@@ -128,8 +129,9 @@ contexts:
           # bearer-token:
           #   token: change-me
           # custom-header:
-          #   header: X-Example-Token
-          #   token: change-me
+          #   header: Authorization
+          #   prefix: Bearer
+          #   value: change-me
         # tls:
         #   insecure-skip-verify: false
 
@@ -211,3 +213,4 @@ current-ctx: xxx
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
 6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
+8. Corner case: `resource-server.http.auth.custom-header` with `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.

@@ -767,7 +767,42 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		gateway := mustGateway(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				CustomHeader: &config.HeaderTokenAuth{Header: "X-Auth-Token", Token: "custom-token"},
+				CustomHeader: &config.HeaderTokenAuth{Header: "X-Auth-Token", Value: "custom-token"},
+			},
+		})
+
+		_, err := gateway.Get(context.Background(), resource.Resource{
+			LogicalPath: "/customers/acme",
+			Metadata: metadata.ResourceMetadata{
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationGet): {Path: "/resource"},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("Get returned error: %v", err)
+		}
+	})
+
+	t.Run("custom_header_auth_with_prefix", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "Bearer custom-token" {
+				t.Fatalf("expected custom header with prefix, got %q", got)
+			}
+			_, _ = fmt.Fprint(w, `{"ok":true}`)
+		}))
+		t.Cleanup(server.Close)
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				CustomHeader: &config.HeaderTokenAuth{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "custom-token",
+				},
 			},
 		})
 

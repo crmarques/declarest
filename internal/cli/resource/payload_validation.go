@@ -12,6 +12,60 @@ import (
 	identitysupport "github.com/crmarques/declarest/resource/identity"
 )
 
+func resolveExplicitMutationPayloadPath(
+	ctx context.Context,
+	commandPath string,
+	deps common.CommandDependencies,
+	logicalPath string,
+	value resourcedomain.Value,
+) (string, error) {
+	normalizedPath, err := resourcedomain.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return "", err
+	}
+	if deps.Metadata == nil {
+		return normalizedPath, nil
+	}
+	payloadMap, ok := value.(map[string]any)
+	if !ok {
+		return normalizedPath, nil
+	}
+
+	md, err := deps.Metadata.ResolveForPath(ctx, normalizedPath)
+	if err != nil {
+		return "", err
+	}
+
+	validationErr := validateExplicitMutationPayloadIdentityForPath(commandPath, normalizedPath, payloadMap, md)
+	if validationErr == nil {
+		return normalizedPath, nil
+	}
+	canInfer, err := canInferExplicitMutationChildPath(ctx, deps, normalizedPath)
+	if err != nil {
+		return "", err
+	}
+	if !canInfer {
+		return "", validationErr
+	}
+
+	identitySegment, ok := explicitMutationPayloadIdentitySegment(payloadMap, md)
+	if !ok {
+		// Keep the original validation error when payload does not expose a
+		// usable identity for collection-target inference.
+		return "", validationErr
+	}
+
+	inferredPath, err := resourcedomain.JoinLogicalPath(normalizedPath, identitySegment)
+	if err != nil {
+		return "", err
+	}
+
+	if err := validateExplicitMutationPayloadIdentityForPath(commandPath, inferredPath, payloadMap, md); err != nil {
+		return "", err
+	}
+	return inferredPath, nil
+}
+
 func validateExplicitMutationPayloadIdentity(
 	ctx context.Context,
 	commandPath string,
@@ -19,14 +73,14 @@ func validateExplicitMutationPayloadIdentity(
 	logicalPath string,
 	value resourcedomain.Value,
 ) error {
-	if deps.Metadata == nil {
-		return nil
-	}
-
 	normalizedPath, err := resourcedomain.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return err
 	}
+	if deps.Metadata == nil {
+		return nil
+	}
+
 	payloadMap, ok := value.(map[string]any)
 	if !ok {
 		return nil
@@ -36,7 +90,15 @@ func validateExplicitMutationPayloadIdentity(
 	if err != nil {
 		return err
 	}
+	return validateExplicitMutationPayloadIdentityForPath(commandPath, normalizedPath, payloadMap, md)
+}
 
+func validateExplicitMutationPayloadIdentityForPath(
+	commandPath string,
+	normalizedPath string,
+	payloadMap map[string]any,
+	md metadatadomain.ResourceMetadata,
+) error {
 	pathSegment := strings.TrimSpace(path.Base(strings.TrimSuffix(normalizedPath, "/")))
 	if pathSegment == "" || pathSegment == "/" {
 		return nil
@@ -50,6 +112,54 @@ func validateExplicitMutationPayloadIdentity(
 	}
 
 	return nil
+}
+
+func canInferExplicitMutationChildPath(
+	ctx context.Context,
+	deps common.CommandDependencies,
+	normalizedPath string,
+) (bool, error) {
+	if deps.Metadata == nil {
+		return false, nil
+	}
+
+	wildcardResolver, ok := deps.Metadata.(metadatadomain.CollectionWildcardResolver)
+	if !ok {
+		return false, nil
+	}
+
+	hasWildcard, err := wildcardResolver.HasCollectionWildcardChild(ctx, normalizedPath)
+	if err != nil {
+		return false, err
+	}
+	return hasWildcard, nil
+}
+
+func explicitMutationPayloadIdentitySegment(
+	payload map[string]any,
+	md metadatadomain.ResourceMetadata,
+) (string, bool) {
+	candidates := []string{
+		strings.TrimSpace(md.AliasFromAttribute),
+		strings.TrimSpace(md.IDFromAttribute),
+	}
+
+	for _, attributeName := range candidates {
+		if attributeName == "" {
+			continue
+		}
+		value, found := identitysupport.LookupScalarAttribute(payload, attributeName)
+		value = strings.TrimSpace(value)
+		if !found || value == "" {
+			continue
+		}
+		if strings.Contains(value, "/") {
+			return "", false
+		}
+		return value, true
+	}
+
+	return "", false
 }
 
 func validatePayloadIdentityAttributeMatch(
