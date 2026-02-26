@@ -48,9 +48,9 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 30. The runner MUST maintain one live execution log file and print its path at startup.
 31. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run, and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that the manual profile prepended so shells no longer reference cleaned runs.
 32. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
-33. Runner security selection flags MUST include `--resource-server-basic-auth`, `--resource-server-oauth2`, and `--resource-server-mtls` with defaults `false`, `true`, and `false`, respectively.
-34. `--resource-server-basic-auth` and `--resource-server-oauth2` MUST NOT both be `true` in the same run because `resource-server.http.auth` is one-of.
-35. `resource-server` components MUST declare security capabilities in `component.env`; runner selection MUST fail when requested security features are unsupported or required features are disabled.
+33. Runner security selection flags MUST include `--resource-server-auth-type <none|basic|oauth2|custom-header>` and `--resource-server-mtls`; `--resource-server-mtls` defaults to `false`, and auth type defaults MUST be elected by the selected resource-server component when the flag is omitted (preference order SHOULD be `oauth2`, then `custom-header`, then `basic`, then `none`).
+34. `resource-server` components MUST declare security capabilities in `component.env`, including at least one auth-type capability token (`none|basic-auth|oauth2|custom-header`) and optional `mtls`; runner selection MUST fail when requested auth-type or mTLS features are unsupported or required features are disabled.
+35. When a resource-server component cannot support a selected auth-type or mTLS combination for the chosen connection mode, its hooks MUST fail with actionable output if selection validation did not already reject the combination.
 36. `simple-api-server` mTLS trust MUST be reloaded from configured client-certificate sources for new connections without process restart.
 37. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.
 38. `manual` with `repo-type=git` MUST run `repo init` after context assembly so repository-dependent checks (`config check`, `repo status`) are immediately usable.
@@ -61,7 +61,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 Runner flags:
 1. Workload: `--profile`.
 2. Component selection: `--resource-server`, `--repo-type`, `--git-provider`, `--secret-provider`.
-3. Resource-server security selection: `--resource-server-basic-auth`, `--resource-server-oauth2`, `--resource-server-mtls`.
+3. Resource-server security selection: `--resource-server-auth-type`, `--resource-server-mtls`.
 4. Connection selection: `--resource-server-connection`, `--git-provider-connection`, `--secret-provider-connection`.
 5. Runtime controls: `--list-components`, `--validate-components`, `--keep-runtime`, `--verbose`.
 6. Cleanup controls: `--clean`, `--clean-all`.
@@ -74,8 +74,8 @@ Runner flags:
 5. `COMPONENT_RUNTIME_KIND` (`native|compose`).
 6. `COMPONENT_DEPENDS_ON` (space-separated dependency selectors using `<type>:<name>` or `<type>:*`).
 7. `DESCRIPTION`.
-8. `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `basic-auth oauth2 mtls`.
-9. `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`.
+8. `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`, including at least one auth-type capability token.
+9. `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`, with at most one auth-type capability token.
 
 Optional component hook:
 1. `scripts/manual-info.sh` may emit plain-text operator access details for `manual` profile output.
@@ -115,7 +115,7 @@ Manual handoff:
 6. Cleanup for unknown run ids returns actionable output and still attempts runner/compose teardown using deterministic project naming.
 7. Dependency selector wildcard (for example `git-provider:*`) resolves exactly one selected provider in some runs and multiple in others without changing correctness.
 8. Local `simple-api-server` with `ENABLE_MTLS=true` generates or consumes mounted cert material from a host directory and fails fast when required TLS files are missing.
-9. Selecting both `--resource-server-basic-auth=true` and `--resource-server-oauth2=true` fails fast before startup with actionable validation output.
+9. Selecting `--resource-server-auth-type` unsupported by the chosen resource-server component fails fast before startup with actionable validation output.
 10. Local `simple-api-server` mTLS trust directory can transition from non-empty to empty and back during runtime; API access follows the current trust set for new connections.
 11. `manual` with `repo-type=git` still initializes a local git repository so readiness checks do not fail with `git repository not initialized`.
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
@@ -124,7 +124,7 @@ Manual handoff:
 1. `./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
 2. `./run-e2e.sh --profile manual --repo-type git --git-provider github --git-provider-connection remote` fails initialization because manual mode is local-instantiable only.
 3. `./run-e2e.sh --profile basic --repo-type git --git-provider gitlab --resource-server simple-api-server` runs dependency-aware parallel hooks while ensuring `repo-type:git` waits for `git-provider:*` initialization.
-4. `./run-e2e.sh --resource-server keycloak --resource-server-oauth2 false` fails selection because keycloak requires oauth2 security support.
+4. `./run-e2e.sh --resource-server keycloak --resource-server-auth-type none` fails selection because keycloak requires oauth2 auth-type support.
 5. `./run-e2e.sh --profile full --resource-server simple-api-server --resource-server-mtls true` validates runtime mTLS trust reload by removing and re-adding trusted client certificates without restarting the server.
 6. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --resource-server simple-api-server --secret-provider file` runs git main-case coverage against a local compose-backed Gitea provider.
 7. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --git-provider-connection remote --resource-server simple-api-server --secret-provider none` fails `Preparing Components` when required `DECLAREST_E2E_GITEA_*` remote credentials are missing.

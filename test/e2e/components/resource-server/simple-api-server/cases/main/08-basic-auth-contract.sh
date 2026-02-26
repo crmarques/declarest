@@ -2,7 +2,7 @@
 
 CASE_ID='simple-api-server-basic-auth-contract'
 CASE_SCOPE='main'
-CASE_REQUIRES='resource-server=simple-api-server has-resource-server-basic-auth resource-server-oauth2=false'
+CASE_REQUIRES='resource-server=simple-api-server resource-server-auth-type=basic'
 
 # shellcheck disable=SC1091
 source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib.sh"

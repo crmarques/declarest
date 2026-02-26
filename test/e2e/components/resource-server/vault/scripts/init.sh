@@ -7,6 +7,12 @@ source "${E2E_DIR}/lib/common.sh"
 state_file=${E2E_COMPONENT_STATE_FILE}
 : >"${state_file}"
 
+selected_auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-custom-header}
+if [[ "${selected_auth_type}" != 'custom-header' ]]; then
+  e2e_die "resource-server vault does not support auth-type ${selected_auth_type} (supported: custom-header)"
+  exit 1
+fi
+
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   vault_port=$(e2e_pick_free_port)
   vault_token="root-${RANDOM}${RANDOM}${RANDOM}"

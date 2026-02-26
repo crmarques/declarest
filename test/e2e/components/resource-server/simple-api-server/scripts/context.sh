@@ -13,11 +13,41 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 enable_basic_auth=${SIMPLE_API_SERVER_ENABLE_BASIC_AUTH:-false}
 enable_oauth2=${SIMPLE_API_SERVER_ENABLE_OAUTH2:-true}
 enable_mtls=${SIMPLE_API_SERVER_ENABLE_MTLS:-false}
+selected_auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-oauth2}
 
 if [[ "${enable_basic_auth}" == 'true' && "${enable_oauth2}" == 'true' ]]; then
   printf 'simple-api-server context supports only one auth mode; both basic-auth and oauth2 are enabled\n' >&2
   exit 1
 fi
+
+case "${selected_auth_type}" in
+  none)
+    if [[ "${enable_basic_auth}" != 'false' || "${enable_oauth2}" != 'false' ]]; then
+      printf 'simple-api-server auth-type none requires both basic-auth and oauth2 to be disabled (got basic-auth=%s oauth2=%s)\n' "${enable_basic_auth}" "${enable_oauth2}" >&2
+      exit 1
+    fi
+    ;;
+  basic)
+    if [[ "${enable_basic_auth}" != 'true' || "${enable_oauth2}" != 'false' ]]; then
+      printf 'simple-api-server auth-type basic requires basic-auth=true and oauth2=false (got basic-auth=%s oauth2=%s)\n' "${enable_basic_auth}" "${enable_oauth2}" >&2
+      exit 1
+    fi
+    ;;
+  oauth2)
+    if [[ "${enable_basic_auth}" != 'false' || "${enable_oauth2}" != 'true' ]]; then
+      printf 'simple-api-server auth-type oauth2 requires basic-auth=false and oauth2=true (got basic-auth=%s oauth2=%s)\n' "${enable_basic_auth}" "${enable_oauth2}" >&2
+      exit 1
+    fi
+    ;;
+  custom-header)
+    printf 'simple-api-server does not support resource-server auth-type custom-header\n' >&2
+    exit 1
+    ;;
+  *)
+    printf 'invalid resource-server auth-type for simple-api-server: %s\n' "${selected_auth_type}" >&2
+    exit 1
+    ;;
+esac
 
 {
   printf 'resource-server:\n'

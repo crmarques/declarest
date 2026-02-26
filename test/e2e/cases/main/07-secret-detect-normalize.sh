@@ -51,6 +51,7 @@ case_run() {
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
   fi
+  case_repo_commit_setup_changes_if_git
 
   case_run_declarest metadata get "${metadata_target_path}" -o json
   case_expect_success

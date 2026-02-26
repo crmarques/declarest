@@ -69,15 +69,67 @@ e2e_component_validate_security_feature_spec() {
 
   for feature in ${feature_spec}; do
     case "${feature}" in
-      basic-auth|oauth2|mtls) ;;
+      none|basic-auth|oauth2|custom-header|mtls) ;;
       *)
-        e2e_die "component ${component_key} has invalid ${field_name} value: ${feature} (allowed: basic-auth, oauth2, mtls)"
+        e2e_die "component ${component_key} has invalid ${field_name} value: ${feature} (allowed: none, basic-auth, oauth2, custom-header, mtls)"
         return 1
         ;;
     esac
   done
 
   return 0
+}
+
+e2e_resource_server_auth_capability_count() {
+  local feature_spec=$1
+  local feature
+  local count=0
+
+  for feature in ${feature_spec}; do
+    if e2e_resource_server_security_feature_is_auth "${feature}"; then
+      ((count += 1))
+    fi
+  done
+
+  printf '%s\n' "${count}"
+}
+
+e2e_resource_server_first_required_auth_type() {
+  local required_features=$1
+  local feature
+
+  for feature in ${required_features}; do
+    if e2e_resource_server_security_feature_is_auth "${feature}"; then
+      e2e_resource_server_auth_type_for_feature "${feature}" || return 1
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+e2e_resource_server_default_auth_type() {
+  local component_name=$1
+  local supported_features=$2
+  local required_features=$3
+  local auth_type
+  local feature
+
+  if auth_type=$(e2e_resource_server_first_required_auth_type "${required_features}" 2>/dev/null); then
+    printf '%s\n' "${auth_type}"
+    return 0
+  fi
+
+  for auth_type in oauth2 custom-header basic none; do
+    feature=$(e2e_resource_server_auth_feature_for_type "${auth_type}") || return 1
+    if e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
+      printf '%s\n' "${auth_type}"
+      return 0
+    fi
+  done
+
+  e2e_die "resource-server ${component_name} does not declare any auth-type capability in SUPPORTED_SECURITY_FEATURES (expected one of none, basic-auth, oauth2, custom-header)"
+  return 1
 }
 
 e2e_component_validate_resource_server_security_contract() {
@@ -94,6 +146,13 @@ e2e_component_validate_resource_server_security_contract() {
 
   e2e_component_validate_security_feature_spec "${component_key}" 'SUPPORTED_SECURITY_FEATURES' "${supported_features}" || return 1
 
+  local supported_auth_count
+  supported_auth_count=$(e2e_resource_server_auth_capability_count "${supported_features}") || return 1
+  if ((supported_auth_count == 0)); then
+    e2e_die "resource-server component ${component_key} must declare at least one auth-type capability in SUPPORTED_SECURITY_FEATURES (none, basic-auth, oauth2, custom-header)"
+    return 1
+  fi
+
   if [[ "${has_required_features}" == '1' ]]; then
     e2e_component_validate_security_feature_spec "${component_key}" 'REQUIRED_SECURITY_FEATURES' "${required_features}" || return 1
 
@@ -104,6 +163,13 @@ e2e_component_validate_resource_server_security_contract() {
         return 1
       fi
     done
+
+    local required_auth_count
+    required_auth_count=$(e2e_resource_server_auth_capability_count "${required_features}") || return 1
+    if ((required_auth_count > 1)); then
+      e2e_die "component ${component_key} has multiple auth-type entries in REQUIRED_SECURITY_FEATURES (resource-server auth is one-of)"
+      return 1
+    fi
   fi
 
   return 0
@@ -415,12 +481,8 @@ e2e_validate_all_discovered_component_contracts() {
 
 e2e_validate_resource_server_security_selection() {
   if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
-    if e2e_is_explicit 'resource-server-basic-auth' && [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]; then
-      e2e_die '--resource-server-basic-auth requires a selected resource-server component'
-      return 1
-    fi
-    if e2e_is_explicit 'resource-server-oauth2' && [[ "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
-      e2e_die '--resource-server-oauth2 requires a selected resource-server component'
+    if e2e_is_explicit 'resource-server-auth-type'; then
+      e2e_die '--resource-server-auth-type requires a selected resource-server component'
       return 1
     fi
     if e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
@@ -430,11 +492,6 @@ e2e_validate_resource_server_security_selection() {
     return 0
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' && "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
-    e2e_die '--resource-server-basic-auth and --resource-server-oauth2 cannot both be true (resource-server auth is one-of)'
-    return 1
-  fi
-
   local component_key
   component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
 
@@ -442,11 +499,26 @@ e2e_validate_resource_server_security_selection() {
   local required_features=${E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
   local feature
   local selected
+  local selected_auth_feature
 
-  for feature in basic-auth oauth2 mtls; do
+  if [[ -z "${E2E_RESOURCE_SERVER_AUTH_TYPE:-}" ]]; then
+    E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_resource_server_default_auth_type "${E2E_RESOURCE_SERVER}" "${supported_features}" "${required_features}") || return 1
+    e2e_info "resource-server auth-type defaulted component=${E2E_RESOURCE_SERVER} auth-type=${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+  fi
+
+  selected_auth_feature=$(e2e_resource_server_auth_feature_for_type "${E2E_RESOURCE_SERVER_AUTH_TYPE}") || {
+    e2e_die "invalid selected resource-server auth-type: ${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+    return 1
+  }
+
+  for feature in "${selected_auth_feature}" mtls; do
     if e2e_resource_server_feature_enabled "${feature}"; then
       if ! e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
-        e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected security feature: ${feature}"
+        if e2e_resource_server_security_feature_is_auth "${feature}"; then
+          e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected auth-type: ${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+        else
+          e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected security feature: ${feature}"
+        fi
         return 1
       fi
     fi
@@ -458,7 +530,13 @@ e2e_validate_resource_server_security_selection() {
       selected='true'
     fi
     if [[ "${selected}" != 'true' ]]; then
-      e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires security feature ${feature}=true"
+      if e2e_resource_server_security_feature_is_auth "${feature}"; then
+        local required_auth_type
+        required_auth_type=$(e2e_resource_server_auth_type_for_feature "${feature}") || return 1
+        e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires auth-type ${required_auth_type}"
+      else
+        e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires security feature ${feature}=true"
+      fi
       return 1
     fi
   done
@@ -551,8 +629,7 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["repo-type=${E2E_REPO_TYPE}"]=1
   E2E_CAPABILITY_SET["resource-server=${E2E_RESOURCE_SERVER}"]=1
   E2E_CAPABILITY_SET["resource-server-connection=${E2E_RESOURCE_SERVER_CONNECTION}"]=1
-  E2E_CAPABILITY_SET["resource-server-basic-auth=${E2E_RESOURCE_SERVER_BASIC_AUTH}"]=1
-  E2E_CAPABILITY_SET["resource-server-oauth2=${E2E_RESOURCE_SERVER_OAUTH2}"]=1
+  E2E_CAPABILITY_SET["resource-server-auth-type=${E2E_RESOURCE_SERVER_AUTH_TYPE}"]=1
   E2E_CAPABILITY_SET["resource-server-mtls=${E2E_RESOURCE_SERVER_MTLS}"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
   E2E_CAPABILITY_SET["secret-provider-connection=${E2E_SECRET_PROVIDER_CONNECTION}"]=1
@@ -570,12 +647,6 @@ e2e_build_capabilities() {
     E2E_CAPABILITY_SET['has-resource-server']=1
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]; then
-    E2E_CAPABILITY_SET['has-resource-server-basic-auth']=1
-  fi
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]; then
-    E2E_CAPABILITY_SET['has-resource-server-oauth2']=1
-  fi
   if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
     E2E_CAPABILITY_SET['has-resource-server-mtls']=1
   fi

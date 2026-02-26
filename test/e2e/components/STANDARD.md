@@ -74,9 +74,9 @@ Field rules:
   - wildcard by type: `<type>:*` (for example `git-provider:*`)
   - use empty string when no dependencies (`COMPONENT_DEPENDS_ON=""`).
 - `DESCRIPTION`: short operator-facing description.
-- `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `basic-auth oauth2 mtls`; use empty string when none are supported.
-- `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; each listed feature MUST be enabled by runner selection.
-- Runner selection enforces `basic-auth` and `oauth2` as mutually exclusive because context `resource-server.http.auth` is a one-of contract.
+- `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
+- `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because resource-server auth selection is one-of.
+- Runner selection uses `--resource-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--resource-server-mtls` independently for mTLS.
 - Resource-server fixture metadata files (`*/_/metadata.json`) MUST include non-empty `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`.
 
 ## Hook Contract
@@ -113,7 +113,7 @@ Common exported variables:
 - `E2E_COMPONENT_DIR`, `E2E_COMPONENT_HOOK`
 - `E2E_COMPONENT_CONNECTION`
 - `E2E_COMPONENT_RUNTIME_KIND`, `E2E_COMPONENT_DEPENDS_ON`
-- `E2E_RESOURCE_SERVER_BASIC_AUTH`, `E2E_RESOURCE_SERVER_OAUTH2`, `E2E_RESOURCE_SERVER_MTLS`
+- `E2E_RESOURCE_SERVER_AUTH_TYPE`, `E2E_RESOURCE_SERVER_MTLS`
 - `E2E_COMPONENT_STATE_FILE`
 - `E2E_COMPONENT_PROJECT_NAME` (compose project when applicable)
 - `E2E_COMPONENT_CONTEXT_FRAGMENT`

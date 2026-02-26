@@ -123,6 +123,35 @@ case_jq_value() {
   jq -r "${jq_expr}" <<<"${CASE_LAST_OUTPUT}"
 }
 
+case_context_repo_base_dir() {
+  local context_file=${E2E_CONTEXT_FILE:-}
+  [[ -n "${context_file}" && -f "${context_file}" ]] || {
+    printf 'context file unavailable for repo base-dir lookup\n' >&2
+    return 1
+  }
+
+  awk '$1 == "base-dir:" { print $2; exit }' "${context_file}"
+}
+
+case_repo_commit_setup_changes_if_git() {
+  local repo_dir
+  local status_output
+
+  [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
+
+  repo_dir=$(case_context_repo_base_dir) || return 1
+  if [[ -z "${repo_dir}" ]] || [[ ! -d "${repo_dir}" ]]; then
+    printf 'git repo base-dir unavailable: %s\n' "${repo_dir:-<empty>}" >&2
+    return 1
+  fi
+
+  status_output=$(git -C "${repo_dir}" status --porcelain 2>/dev/null || true)
+  [[ -n "${status_output}" ]] || return 0
+
+  git -C "${repo_dir}" add -A
+  git -C "${repo_dir}" commit -m 'declarest-e2e: case setup' >/dev/null
+}
+
 case_repo_template_root() {
   local component_name=${1:-${E2E_RESOURCE_SERVER:-}}
   if [[ -z "${component_name}" || "${component_name}" == 'none' ]]; then
@@ -435,7 +464,7 @@ case_repo_template_sync_tree() {
   for ((index = ${#logical_paths[@]} - 1; index >= 0; index--)); do
     local logical_path=${logical_paths[${index}]}
     case_run_declarest resource delete "${logical_path}" -y
-    if ((CASE_LAST_STATUS != 0)) && ! grep -qi 'not found' <<<"${CASE_LAST_OUTPUT}"; then
+    if ((CASE_LAST_STATUS != 0)) && ! grep -qiE 'not found|status 404' <<<"${CASE_LAST_OUTPUT}"; then
       printf '%s pre-clean delete failed for %s\n' "${case_label}" "${logical_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1

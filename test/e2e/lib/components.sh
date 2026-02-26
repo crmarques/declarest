@@ -18,15 +18,74 @@ declare -ag E2E_COMPONENT_KEYS=()
 declare -ag E2E_SELECTED_COMPONENT_KEYS=()
 declare -ag E2E_STARTED_COMPONENT_KEYS=()
 
+e2e_resource_server_security_feature_is_auth() {
+  local feature=$1
+
+  case "${feature}" in
+    none|basic-auth|oauth2|custom-header)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+e2e_resource_server_auth_feature_for_type() {
+  local auth_type=$1
+
+  case "${auth_type}" in
+    none)
+      printf 'none\n'
+      ;;
+    basic)
+      printf 'basic-auth\n'
+      ;;
+    oauth2)
+      printf 'oauth2\n'
+      ;;
+    custom-header)
+      printf 'custom-header\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+e2e_resource_server_auth_type_for_feature() {
+  local feature=$1
+
+  case "${feature}" in
+    none)
+      printf 'none\n'
+      ;;
+    basic-auth)
+      printf 'basic\n'
+      ;;
+    oauth2)
+      printf 'oauth2\n'
+      ;;
+    custom-header)
+      printf 'custom-header\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 e2e_resource_server_feature_enabled() {
   local feature=$1
 
   case "${feature}" in
-    basic-auth)
-      [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]
-      ;;
-    oauth2)
-      [[ "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]
+    none|basic-auth|oauth2|custom-header)
+      local selected_auth_type
+      local selected_auth_feature
+      selected_auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-}
+      [[ -n "${selected_auth_type}" ]] || return 1
+      selected_auth_feature=$(e2e_resource_server_auth_feature_for_type "${selected_auth_type}") || return 1
+      [[ "${selected_auth_feature}" == "${feature}" ]]
       ;;
     mtls)
       [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]

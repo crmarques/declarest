@@ -20,7 +20,13 @@
       "path": "/projects"
     },
     "compareResources": {
-      "path": "/project/{{.name}}"
+      "path": "/project/{{.name}}",
+      "suppressAttributes": [
+        "/config",
+        "/created",
+        "/id",
+        "/url"
+      ]
     }
   }
 }

@@ -7,6 +7,12 @@ source "${E2E_DIR}/lib/common.sh"
 state_file=${E2E_COMPONENT_STATE_FILE}
 : >"${state_file}"
 
+selected_auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-oauth2}
+if [[ "${selected_auth_type}" != 'oauth2' ]]; then
+  e2e_die "resource-server keycloak does not support auth-type ${selected_auth_type} (supported: oauth2)"
+  exit 1
+fi
+
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   keycloak_port=$(e2e_pick_free_port)
   admin_user=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_USER' 'E2E_KEYCLOAK_ADMIN_USER' || true)

@@ -30,8 +30,7 @@ This repository uses a componentized Bash e2e harness.
 - `--profile <basic|full|manual>`
 - `--resource-server <name>` (mandatory; `none` is not supported)
 - `--resource-server-connection <local|remote>`
-- `--resource-server-basic-auth [<true|false>]` (default: `false`)
-- `--resource-server-oauth2 [<true|false>]` (default: `true`)
+- `--resource-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
 - `--resource-server-mtls [<true|false>]` (default: `false`)
 - `--repo-type <name>`
 - `--git-provider <name>`
@@ -47,8 +46,8 @@ This repository uses a componentized Bash e2e harness.
 
 Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and resource-server fixture metadata rules) and exit without running test cases.
-`--resource-server-basic-auth` and `--resource-server-oauth2` are mutually exclusive because context auth config is one-of.
-Selections are validated against each resource-server capability contract; for components without OAuth2 support, pass `--resource-server-oauth2 false`.
+When `--resource-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
+Selections are validated against each resource-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 
 Cleanup behavior:
 
@@ -179,7 +178,7 @@ Keycloak repo-template currently covers:
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
-  - defaults come from runner selection flags: `--resource-server-basic-auth`, `--resource-server-oauth2`, `--resource-server-mtls`
+  - defaults come from runner selection flags: `--resource-server-auth-type`, `--resource-server-mtls`
 - when basic-auth is enabled: `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_USERNAME`, `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_PASSWORD`
 - when oauth2 is enabled: `DECLAREST_E2E_SIMPLE_API_CLIENT_ID`, `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
 - optional oauth2: `DECLAREST_E2E_SIMPLE_API_TOKEN_URL`, `DECLAREST_E2E_SIMPLE_API_SCOPE`, `DECLAREST_E2E_SIMPLE_API_AUDIENCE`
@@ -199,12 +198,15 @@ Keycloak repo-template currently covers:
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
 - optional: `DECLAREST_E2E_RESOURCE_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_KV_VERSION`
+- remote vault currently supports `--resource-server-auth-type custom-header` only (`X-Vault-Token`)
 
 ### Resource Server (`rundeck`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
 - optional: `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_API_VERSION`, `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_AUTH_HEADER`
+- local `rundeck` with `--resource-server-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
+- remote rundeck currently supports `--resource-server-auth-type custom-header` only
 
 ### Git Provider (`gitlab`, remote)
 

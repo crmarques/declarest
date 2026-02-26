@@ -22,8 +22,7 @@ case_selected_value_for_key() {
     profile) printf '%s\n' "${E2E_PROFILE}" ;;
     resource-server) printf '%s\n' "${E2E_RESOURCE_SERVER}" ;;
     resource-server-connection) printf '%s\n' "${E2E_RESOURCE_SERVER_CONNECTION}" ;;
-    resource-server-basic-auth) printf '%s\n' "${E2E_RESOURCE_SERVER_BASIC_AUTH}" ;;
-    resource-server-oauth2) printf '%s\n' "${E2E_RESOURCE_SERVER_OAUTH2}" ;;
+    resource-server-auth-type) printf '%s\n' "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ;;
     resource-server-mtls) printf '%s\n' "${E2E_RESOURCE_SERVER_MTLS}" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
     git-provider) printf '%s\n' "${E2E_GIT_PROVIDER}" ;;
@@ -72,14 +71,6 @@ case_requirement_requested_explicitly() {
       ;;
     has-resource-server)
       e2e_is_explicit 'resource-server' && [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]
-      return
-      ;;
-    has-resource-server-basic-auth)
-      e2e_is_explicit 'resource-server-basic-auth' && [[ "${E2E_RESOURCE_SERVER_BASIC_AUTH}" == 'true' ]]
-      return
-      ;;
-    has-resource-server-oauth2)
-      e2e_is_explicit 'resource-server-oauth2' && [[ "${E2E_RESOURCE_SERVER_OAUTH2}" == 'true' ]]
       return
       ;;
     has-resource-server-mtls)
@@ -199,14 +190,13 @@ e2e_run_single_case() {
   {
     printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}"
     printf '[%s] CASE requires=%s\n' "$(e2e_now_utc)" "${case_requires:-<none>}"
-    printf '[%s] CASE stack profile=%s repo-type=%s resource-server=%s(%s) resource-server-security=basic-auth:%s oauth2:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] CASE stack profile=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_PROFILE}" \
       "${E2E_REPO_TYPE}" \
       "${E2E_RESOURCE_SERVER}" \
       "${E2E_RESOURCE_SERVER_CONNECTION}" \
-      "${E2E_RESOURCE_SERVER_BASIC_AUTH:-false}" \
-      "${E2E_RESOURCE_SERVER_OAUTH2:-true}" \
+      "${E2E_RESOURCE_SERVER_AUTH_TYPE:-auto}" \
       "${E2E_RESOURCE_SERVER_MTLS:-false}" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION}" \

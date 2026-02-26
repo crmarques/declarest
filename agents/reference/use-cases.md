@@ -288,7 +288,7 @@ Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts co
 
 Inputs:
 1. `resource-server=simple-api-server`.
-2. `--resource-server-basic-auth=true`.
+2. `--resource-server-auth-type basic`.
 3. Basic auth username/password configured in component state.
 
 Execution:
@@ -302,7 +302,7 @@ Expected outputs:
 3. Step 3 succeeds with HTTP `200`.
 
 Failure expectation:
-1. Selecting both `--resource-server-basic-auth=true` and `--resource-server-oauth2=true` fails run selection before startup.
+1. Selecting `--resource-server-auth-type` unsupported by the selected resource-server component fails run selection before startup.
 
 ### Example 15: Secret Detect Metadata Autofix
 Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.

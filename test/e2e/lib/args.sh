@@ -4,8 +4,7 @@ declare -Ag E2E_EXPLICIT
 
 E2E_RESOURCE_SERVER='simple-api-server'
 E2E_RESOURCE_SERVER_CONNECTION='local'
-E2E_RESOURCE_SERVER_BASIC_AUTH='false'
-E2E_RESOURCE_SERVER_OAUTH2='true'
+E2E_RESOURCE_SERVER_AUTH_TYPE=''
 E2E_RESOURCE_SERVER_MTLS='false'
 E2E_REPO_TYPE='filesystem'
 E2E_GIT_PROVIDER=''
@@ -117,6 +116,29 @@ e2e_parse_bool_value() {
   esac
 }
 
+e2e_parse_resource_server_auth_type_value() {
+  local raw_value=$1
+
+  case "${raw_value,,}" in
+    none)
+      printf 'none\n'
+      ;;
+    basic)
+      printf 'basic\n'
+      ;;
+    oauth2)
+      printf 'oauth2\n'
+      ;;
+    custom-header)
+      printf 'custom-header\n'
+      ;;
+    *)
+      e2e_die "invalid --resource-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header)"
+      return 1
+      ;;
+  esac
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -135,7 +157,7 @@ Profiles (required, defaults to basic when omitted):
 
 Component selection (choose values for each flag; see notes below):
   --resource-server <simple-api-server|keycloak|rundeck|vault>         default: simple-api-server
-    simple-api-server : Lightweight JSON API with optional basic-auth, OAuth2, and mTLS enforcement.
+    simple-api-server : Lightweight JSON API with selectable auth modes (none/basic/oauth2) and optional mTLS.
     keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
     rundeck           : Rundeck HTTP API surface for job-centric operations.
     vault             : HashiCorp Vault HTTP API acting as the resource server.
@@ -143,12 +165,9 @@ Component selection (choose values for each flag; see notes below):
   --resource-server-connection <local|remote>           default: local
     local  : Start the chosen resource server via the provided fixtures and scripts.
     remote : Assume the server already exists and reach it via the configured connection details.
-  --resource-server-basic-auth [<true|false>]         default: false
-    true  : Enable HTTP basic authentication on servers that publish the capability.
-    false : Disable basic auth so other security guards can run.
-  --resource-server-oauth2 [<true|false>]             default: true
-    true  : Require OAuth2 bearer tokens and validate the token issuance flow.
-    false : Disable OAuth2 to exercise alternate auth paths when supported.
+  --resource-server-auth-type <none|basic|oauth2|custom-header>
+    Select the resource-server auth mode. When omitted, the selected component elects a default auth type
+    (preference order: oauth2, custom-header, basic, none) subject to its capability contract.
   --resource-server-mtls [<true|false>]               default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
@@ -194,8 +213,8 @@ Examples:
   ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
   ./run-e2e.sh --profile full --repo-type git --git-provider gitea --resource-server simple-api-server
-  ./run-e2e.sh --resource-server keycloak --resource-server-oauth2 true --resource-server-basic-auth false
-  ./run-e2e.sh --resource-server simple-api-server --resource-server-oauth2 false --resource-server-basic-auth true --resource-server-mtls true
+  ./run-e2e.sh --resource-server keycloak --resource-server-auth-type oauth2
+  ./run-e2e.sh --resource-server simple-api-server --resource-server-auth-type basic --resource-server-mtls true
   ./run-e2e.sh --profile manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
@@ -244,12 +263,12 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--resource-server|--resource-server-connection|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--resource-server|--resource-server-connection|--resource-server-auth-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
         ;;
-      --resource-server-basic-auth|--resource-server-oauth2|--resource-server-mtls)
+      --resource-server-mtls)
         has_workload_flag=1
         shift
         if [[ $# -gt 0 && "${1}" != -* ]]; then
@@ -323,27 +342,14 @@ e2e_parse_args() {
         e2e_mark_explicit 'resource-server-connection'
         shift 2
         ;;
-      --resource-server-basic-auth)
-        local basic_auth_value='true'
-        if [[ $# -ge 2 && "${2}" != -* ]]; then
-          basic_auth_value=$2
-          shift 2
-        else
-          shift
-        fi
-        E2E_RESOURCE_SERVER_BASIC_AUTH=$(e2e_parse_bool_value '--resource-server-basic-auth' "${basic_auth_value}") || return 1
-        e2e_mark_explicit 'resource-server-basic-auth'
-        ;;
-      --resource-server-oauth2)
-        local oauth2_value='true'
-        if [[ $# -ge 2 && "${2}" != -* ]]; then
-          oauth2_value=$2
-          shift 2
-        else
-          shift
-        fi
-        E2E_RESOURCE_SERVER_OAUTH2=$(e2e_parse_bool_value '--resource-server-oauth2' "${oauth2_value}") || return 1
-        e2e_mark_explicit 'resource-server-oauth2'
+      --resource-server-auth-type)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--resource-server-auth-type requires a value'
+          return 1
+        }
+        E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_parse_resource_server_auth_type_value "$2") || return 1
+        e2e_mark_explicit 'resource-server-auth-type'
+        shift 2
         ;;
       --resource-server-mtls)
         local mtls_value='true'
@@ -451,8 +457,9 @@ e2e_parse_args() {
       ;;
   esac
 
-  E2E_RESOURCE_SERVER_BASIC_AUTH=$(e2e_parse_bool_value '--resource-server-basic-auth' "${E2E_RESOURCE_SERVER_BASIC_AUTH}") || return 1
-  E2E_RESOURCE_SERVER_OAUTH2=$(e2e_parse_bool_value '--resource-server-oauth2' "${E2E_RESOURCE_SERVER_OAUTH2}") || return 1
+  if [[ -n "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ]]; then
+    E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_parse_resource_server_auth_type_value "${E2E_RESOURCE_SERVER_AUTH_TYPE}") || return 1
+  fi
   E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1

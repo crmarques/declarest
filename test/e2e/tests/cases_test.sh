@@ -28,6 +28,22 @@ test_requirement_requested_explicitly_tracks_capability_selection() {
   fi
 }
 
+test_requirement_requested_explicitly_tracks_resource_server_auth_type_selector() {
+  load_case_libs
+
+  E2E_EXPLICIT=()
+  E2E_RESOURCE_SERVER_AUTH_TYPE='oauth2'
+
+  if case_requirement_requested_explicitly 'resource-server-auth-type=oauth2'; then
+    fail "expected implicit auth-type selection not to be marked explicit"
+  fi
+
+  e2e_mark_explicit 'resource-server-auth-type'
+  if ! case_requirement_requested_explicitly 'resource-server-auth-type=oauth2'; then
+    fail "expected explicit auth-type selection to be marked explicit"
+  fi
+}
+
 test_collect_case_files_is_deterministic_global_then_component() {
   load_case_libs
   local tmp
@@ -68,4 +84,5 @@ EOF
 }
 
 test_requirement_requested_explicitly_tracks_capability_selection
+test_requirement_requested_explicitly_tracks_resource_server_auth_type_selector
 test_collect_case_files_is_deterministic_global_then_component

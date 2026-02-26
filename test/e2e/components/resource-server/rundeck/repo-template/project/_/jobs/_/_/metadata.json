@@ -16,6 +16,9 @@
     "deleteResource": {
       "path": "/job/{{.id}}"
     },
+    "listCollection": {
+      "path": "/project/{{.project}}/jobs"
+    },
     "compareResources": {
       "path": "/job/{{.id}}"
     }

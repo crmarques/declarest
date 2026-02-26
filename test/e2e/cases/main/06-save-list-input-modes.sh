@@ -23,6 +23,7 @@ case_run() {
 
   case_run_declarest metadata set "${as_items_collection}/_" -f "${metadata_file}" -i json
   case_expect_success
+  case_repo_commit_setup_changes_if_git
 
   case_run_declarest resource save "${as_items_collection}" -f "${list_payload_file}" -i json --as-items
   case_expect_success

@@ -27,6 +27,30 @@ normalize_bool() {
   esac
 }
 
+simple_api_auth_defaults_for_selected_type() {
+  local auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-oauth2}
+
+  case "${auth_type}" in
+    none)
+      printf 'false false\n'
+      ;;
+    basic)
+      printf 'true false\n'
+      ;;
+    oauth2)
+      printf 'false true\n'
+      ;;
+    custom-header)
+      printf 'simple-api-server does not support resource-server auth-type custom-header\n' >&2
+      return 1
+      ;;
+    *)
+      printf 'invalid resource-server auth-type for simple-api-server: %s\n' "${auth_type}" >&2
+      return 1
+      ;;
+  esac
+}
+
 generate_server_certificate() {
   local cert_file=$1
   local key_file=$2
@@ -151,12 +175,14 @@ ensure_local_mtls_material() {
 }
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
+  simple_api_auth_defaults=$(simple_api_auth_defaults_for_selected_type) || exit 1
+  read -r simple_api_default_basic_auth simple_api_default_oauth2 <<<"${simple_api_auth_defaults}"
   simple_api_port=$(e2e_pick_free_port)
   simple_api_enable_basic_auth_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' 'E2E_SIMPLE_API_ENABLE_BASIC_AUTH' || true)
   simple_api_enable_oauth2_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' 'E2E_SIMPLE_API_ENABLE_OAUTH2' || true)
   simple_api_enable_mtls_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS' 'E2E_SIMPLE_API_ENABLE_MTLS' || true)
-  simple_api_enable_basic_auth=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' "${simple_api_enable_basic_auth_raw}" "${E2E_RESOURCE_SERVER_BASIC_AUTH:-false}") || exit 1
-  simple_api_enable_oauth2=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' "${simple_api_enable_oauth2_raw}" "${E2E_RESOURCE_SERVER_OAUTH2:-true}") || exit 1
+  simple_api_enable_basic_auth=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' "${simple_api_enable_basic_auth_raw}" "${simple_api_default_basic_auth}") || exit 1
+  simple_api_enable_oauth2=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' "${simple_api_enable_oauth2_raw}" "${simple_api_default_oauth2}") || exit 1
   simple_api_enable_mtls=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS' "${simple_api_enable_mtls_raw}" "${E2E_RESOURCE_SERVER_MTLS:-false}") || exit 1
   if [[ "${simple_api_enable_basic_auth}" == 'true' && "${simple_api_enable_oauth2}" == 'true' ]]; then
     printf 'simple-api-server supports basic-auth and oauth2, but e2e context auth is one-of: enable only one\n' >&2
@@ -246,11 +272,13 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
 fi
 
 simple_api_base_url=$(e2e_require_env 'DECLAREST_E2E_RESOURCE_SERVER_BASE_URL' 'E2E_RESOURCE_SERVER_BASE_URL') || exit 1
+simple_api_auth_defaults=$(simple_api_auth_defaults_for_selected_type) || exit 1
+read -r simple_api_default_basic_auth simple_api_default_oauth2 <<<"${simple_api_auth_defaults}"
 simple_api_enable_basic_auth_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' 'E2E_SIMPLE_API_ENABLE_BASIC_AUTH' || true)
 simple_api_enable_oauth2_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' 'E2E_SIMPLE_API_ENABLE_OAUTH2' || true)
 simple_api_enable_mtls_raw=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS' 'E2E_SIMPLE_API_ENABLE_MTLS' || true)
-simple_api_enable_basic_auth=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' "${simple_api_enable_basic_auth_raw}" "${E2E_RESOURCE_SERVER_BASIC_AUTH:-false}") || exit 1
-simple_api_enable_oauth2=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' "${simple_api_enable_oauth2_raw}" "${E2E_RESOURCE_SERVER_OAUTH2:-true}") || exit 1
+simple_api_enable_basic_auth=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH' "${simple_api_enable_basic_auth_raw}" "${simple_api_default_basic_auth}") || exit 1
+simple_api_enable_oauth2=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2' "${simple_api_enable_oauth2_raw}" "${simple_api_default_oauth2}") || exit 1
 simple_api_enable_mtls=$(normalize_bool 'DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS' "${simple_api_enable_mtls_raw}" "${E2E_RESOURCE_SERVER_MTLS:-false}") || exit 1
 if [[ "${simple_api_enable_basic_auth}" == 'true' && "${simple_api_enable_oauth2}" == 'true' ]]; then
   printf 'simple-api-server supports basic-auth and oauth2, but e2e context auth is one-of: enable only one\n' >&2
