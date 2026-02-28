@@ -32,6 +32,7 @@ This repository uses a componentized Bash e2e harness.
 - `--resource-server-connection <local|remote>`
 - `--resource-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
 - `--resource-server-mtls [<true|false>]` (default: `false`)
+- `--metadata <bundle|local-dir>` (default: `bundle`)
 - `--repo-type <name>`
 - `--git-provider <name>`
 - `--git-provider-connection <local|remote>`
@@ -48,6 +49,8 @@ Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and resource-server fixture metadata rules) and exit without running test cases.
 When `--resource-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each resource-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
+`--metadata bundle` uses shorthand `metadata.bundle` mappings for supported resource-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `resource-server.http.openapi` stays unset.
+`--metadata local-dir` uses the selected resource-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:
 

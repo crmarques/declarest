@@ -19,6 +19,7 @@ prepare_runtime_globals() {
   E2E_CONTEXT_FILE="${tmp}/contexts.yaml"
   E2E_METADATA_DIR=''
   E2E_METADATA_BUNDLE=''
+  E2E_METADATA='bundle'
   E2E_RESOURCE_SERVER='demo'
   E2E_RESOURCE_SERVER_CONNECTION='local'
   E2E_RESOURCE_SERVER_AUTH_TYPE='oauth2'
@@ -159,7 +160,7 @@ test_parallel_hook_failures_retain_component_logs_in_run_artifacts() {
   assert_file_contains "${beta_log}" "beta hook failed"
 }
 
-test_prepare_metadata_workspace_prefers_keycloak_bundle() {
+test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -167,6 +168,28 @@ test_prepare_metadata_workspace_prefers_keycloak_bundle() {
   prepare_runtime_globals "${tmp}"
 
   E2E_RESOURCE_SERVER='keycloak'
+  E2E_METADATA='local-dir'
+  E2E_COMPONENT_PATH=()
+  local component_dir="${tmp}/components/resource-server/keycloak"
+  local component_metadata="${component_dir}/metadata"
+  mkdir -p "${component_metadata}"
+  E2E_COMPONENT_PATH['resource-server:keycloak']="${component_dir}"
+
+  e2e_prepare_metadata_workspace
+
+  assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected metadata bundle to stay unset for local-dir mode"
+  assert_eq "${E2E_METADATA_DIR}" "${component_metadata}" "expected metadata dir to reference component metadata path"
+}
+
+test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  E2E_RESOURCE_SERVER='keycloak'
+  E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_PATH['resource-server:keycloak']="${tmp}/components/resource-server/keycloak"
 
@@ -174,9 +197,23 @@ test_prepare_metadata_workspace_prefers_keycloak_bundle() {
 
   assert_eq "${E2E_METADATA_BUNDLE}" "keycloak-bundle:0.0.1" "expected keycloak shorthand metadata bundle"
   assert_eq "${E2E_METADATA_DIR:-}" "" "expected metadata workspace dir to stay unset when bundle is selected"
-  if [[ -d "${E2E_RUN_DIR}/metadata" ]]; then
-    fail "expected metadata workspace directory to be skipped when bundle is selected"
-  fi
+}
+
+test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  E2E_RESOURCE_SERVER='simple-api-server'
+  E2E_METADATA='bundle'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_PATH['resource-server:simple-api-server']="${tmp}/components/resource-server/simple-api-server"
+
+  e2e_prepare_metadata_workspace
+  assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
+  assert_eq "${E2E_METADATA_DIR:-}" "" "expected unsupported bundle mode to keep metadata dir unset"
 }
 
 context_metadata_line() {
@@ -233,8 +270,96 @@ EOF
   done
 }
 
+create_openapi_component() {
+  local root=$1
+  local key=$2
+  local type=${key%%:*}
+  local name=${key#*:}
+  local dir="${root}/${type}/${name}"
+  mkdir -p "${dir}"
+  cat >"${dir}/openapi.yaml" <<'EOF'
+openapi: 3.0.0
+paths: {}
+EOF
+  printf '%s\n' "${dir}"
+}
+
+test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local component_dir
+  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+
+  E2E_METADATA='bundle'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_OPENAPI_SPEC=()
+  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
+  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+
+  e2e_prepare_component_openapi_specs
+
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}" ]]; then
+    fail "expected bundle mode to skip local openapi spec wiring"
+  fi
+}
+
+test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local component_dir
+  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+
+  E2E_METADATA='local-dir'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_OPENAPI_SPEC=()
+  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
+  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+
+  e2e_prepare_component_openapi_specs
+
+  local copied_spec="${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}"
+  [[ -n "${copied_spec}" ]] || fail "expected local-dir mode to wire local openapi spec"
+  assert_path_exists "${copied_spec}"
+}
+
+test_prepare_component_openapi_specs_defaults_to_bundle_mode() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local component_dir
+  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+
+  unset E2E_METADATA
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_OPENAPI_SPEC=()
+  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
+  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+
+  e2e_prepare_component_openapi_specs
+
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}" ]]; then
+    fail "expected default metadata mode to skip local openapi spec wiring"
+  fi
+}
+
 test_dependency_ordering_respects_dependencies
 test_cycle_detection_fails_with_actionable_message
 test_parallel_hook_failures_retain_component_logs_in_run_artifacts
-test_prepare_metadata_workspace_prefers_keycloak_bundle
+test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode
+test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode
+test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
 test_repo_context_scripts_emit_metadata_bundle_when_set
+test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode
+test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode
+test_prepare_component_openapi_specs_defaults_to_bundle_mode

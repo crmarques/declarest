@@ -6,6 +6,7 @@ E2E_RESOURCE_SERVER='simple-api-server'
 E2E_RESOURCE_SERVER_CONNECTION='local'
 E2E_RESOURCE_SERVER_AUTH_TYPE=''
 E2E_RESOURCE_SERVER_MTLS='false'
+E2E_METADATA='bundle'
 E2E_REPO_TYPE='filesystem'
 E2E_GIT_PROVIDER=''
 E2E_GIT_PROVIDER_CONNECTION='local'
@@ -139,6 +140,23 @@ e2e_parse_resource_server_auth_type_value() {
   esac
 }
 
+e2e_parse_metadata_mode_value() {
+  local raw_value=$1
+
+  case "${raw_value,,}" in
+    bundle)
+      printf 'bundle\n'
+      ;;
+    local-dir)
+      printf 'local-dir\n'
+      ;;
+    *)
+      e2e_die "invalid --metadata value: ${raw_value} (allowed: bundle, local-dir)"
+      return 1
+      ;;
+  esac
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -171,6 +189,9 @@ Component selection (choose values for each flag; see notes below):
   --resource-server-mtls [<true|false>]               default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
+  --metadata <bundle|local-dir>                     default: bundle
+    bundle    : Use metadata.bundle shorthand from the selected resource-server contract and ignore component openapi.yaml.
+    local-dir : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
   --repo-type <filesystem|git>                        default: filesystem
     filesystem : Use the local filesystem repository backend.
     git        : Use the git repository backend (requires a git provider selection).
@@ -211,6 +232,7 @@ Environment overrides:
 
 Examples:
   ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
+  ./run-e2e.sh --profile basic --resource-server simple-api-server --metadata local-dir
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
   ./run-e2e.sh --profile full --repo-type git --git-provider gitea --resource-server simple-api-server
   ./run-e2e.sh --resource-server keycloak --resource-server-auth-type oauth2
@@ -263,7 +285,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--resource-server|--resource-server-connection|--resource-server-auth-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--resource-server|--resource-server-connection|--resource-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -361,6 +383,15 @@ e2e_parse_args() {
         fi
         E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${mtls_value}") || return 1
         e2e_mark_explicit 'resource-server-mtls'
+        ;;
+      --metadata)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--metadata requires a value'
+          return 1
+        }
+        E2E_METADATA=$(e2e_parse_metadata_mode_value "$2") || return 1
+        e2e_mark_explicit 'metadata'
+        shift 2
         ;;
       --repo-type)
         [[ $# -ge 2 ]] || {
@@ -461,6 +492,7 @@ e2e_parse_args() {
     E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_parse_resource_server_auth_type_value "${E2E_RESOURCE_SERVER_AUTH_TYPE}") || return 1
   fi
   E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
+  E2E_METADATA=$(e2e_parse_metadata_mode_value "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
 

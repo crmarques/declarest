@@ -14,6 +14,7 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_CONTEXT_FILE:=}"
 : "${E2E_BIN:=}"
 : "${E2E_START_EPOCH:=0}"
+: "${E2E_METADATA:=bundle}"
 : "${E2E_METADATA_DIR:=}"
 : "${E2E_METADATA_BUNDLE:=}"
 

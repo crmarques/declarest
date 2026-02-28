@@ -174,14 +174,6 @@ e2e_prepare_metadata_workspace() {
     return 0
   fi
 
-  local metadata_bundle
-  if metadata_bundle=$(e2e_default_metadata_bundle_for_resource_server "${E2E_RESOURCE_SERVER}"); then
-    E2E_METADATA_BUNDLE="${metadata_bundle}"
-    export E2E_METADATA_BUNDLE
-    e2e_info "resource-server metadata bundle selected bundle=${metadata_bundle}"
-    return 0
-  fi
-
   local resource_component_key
   resource_component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
   local component_dir="${E2E_COMPONENT_PATH[${resource_component_key}]:-}"
@@ -189,24 +181,34 @@ e2e_prepare_metadata_workspace() {
     return 0
   fi
 
-  local metadata_source="${component_dir}/metadata"
-  if [[ ! -d "${metadata_source}" ]]; then
-    return 0
-  fi
+  case "${E2E_METADATA:-bundle}" in
+    bundle)
+      local metadata_bundle
+      if ! metadata_bundle=$(e2e_default_metadata_bundle_for_resource_server "${E2E_RESOURCE_SERVER}"); then
+        e2e_info "metadata mode bundle has no shorthand mapping for resource-server=${E2E_RESOURCE_SERVER}; continuing without metadata.bundle"
+        return 0
+      fi
+      E2E_METADATA_BUNDLE="${metadata_bundle}"
+      export E2E_METADATA_BUNDLE
+      e2e_info "resource-server metadata bundle selected bundle=${metadata_bundle}"
+      return 0
+      ;;
+    local-dir)
+      local metadata_source="${component_dir}/metadata"
+      if [[ ! -d "${metadata_source}" ]]; then
+        return 0
+      fi
 
-  local metadata_dest="${E2E_RUN_DIR}/metadata"
-  rm -rf "${metadata_dest}"
-  mkdir -p "${metadata_dest}"
-
-  if ! cp -a "${metadata_source}/." "${metadata_dest}/"; then
-    e2e_die "failed to populate metadata workspace from ${metadata_source}"
-    return 1
-  fi
-
-  E2E_METADATA_DIR="${metadata_dest}"
-  export E2E_METADATA_DIR
-  e2e_info "resource-server metadata workspace prepared dir=${metadata_dest}"
-  return 0
+      E2E_METADATA_DIR="${metadata_source}"
+      export E2E_METADATA_DIR
+      e2e_info "resource-server metadata directory selected dir=${metadata_source}"
+      return 0
+      ;;
+    *)
+      e2e_die "invalid metadata mode: ${E2E_METADATA:-}"
+      return 1
+      ;;
+  esac
 }
 
 e2e_component_context_fragment_path() {
@@ -262,6 +264,12 @@ e2e_component_install_openapi_spec() {
 }
 
 e2e_prepare_component_openapi_specs() {
+  if [[ "${E2E_METADATA:-bundle}" == 'bundle' ]]; then
+    E2E_COMPONENT_OPENAPI_SPEC=()
+    e2e_info 'resource-server openapi spec copy skipped: metadata mode bundle'
+    return 0
+  fi
+
   local component_key
 
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
