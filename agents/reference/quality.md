@@ -45,7 +45,7 @@ Acceptance contracts:
 7. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
 8. Context config: strict decode, one-of validation, overrides precedence, and missing-catalog behavior.
 9. Metadata bundles: manifest validation (`bundle.yaml` required fields), shorthand name/version contract checks, secure tar.gz extraction safeguards, and deterministic cache reuse behavior.
-10. Bundle OpenAPI wiring: `resource-server.http.openapi` precedence over bundle hints, fallback to `bundle.yaml declarest.openapi` and peer `openapi.yaml`, and cross-origin OpenAPI fetches without leaked auth headers.
+10. Bundle OpenAPI wiring: `resource-server.http.openapi` precedence over bundle hints, fallback to `bundle.yaml declarest.openapi`, bundle-root/metadata-root OpenAPI files (`openapi.yaml|openapi.yml|openapi.json`), recursive bundle OpenAPI file discovery, and cross-origin OpenAPI fetches without leaked auth headers.
 10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repo status` output contract, and verbose worktree-detail coverage for `repo status --verbose`.
 11. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
@@ -128,3 +128,4 @@ Acceptance contracts:
 5. CLI test verifies `metadata infer --apply` persists the same compact payload printed to output and that `metadata get` default vs `--overrides-only` output contracts (including endpoint-gated fallback inference) are preserved.
 6. CLI + repository tests verify `repo tree` text output is deterministic, rejects structured output, omits files/hidden or reserved directories, and preserves directory names containing spaces.
 7. CLI test verifies explicit payload collection-target inference (`resource create /admin/realms --payload realm=test`) resolves the concrete child path from metadata alias/id hints while the equivalent explicit resource path (`/admin/realms/test`) continues to pass identity validation.
+8. Bundle metadata tests verify OpenAPI fallback discovery order when `resource-server.http.openapi` is empty: `declarest.openapi` hint, bundle-root/metadata-root OpenAPI files, then deterministic recursive bundle-file fallback.

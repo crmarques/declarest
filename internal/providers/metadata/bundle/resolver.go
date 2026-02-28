@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -311,7 +312,7 @@ func buildResolution(root string, manifest BundleManifest, source bundleSource) 
 		return BundleResolution{}, err
 	}
 
-	openAPISource, err := resolveBundleOpenAPISource(root, manifest)
+	openAPISource, err := resolveBundleOpenAPISource(root, metadataRoot, manifest)
 	if err != nil {
 		return BundleResolution{}, err
 	}
@@ -333,7 +334,7 @@ func buildResolution(root string, manifest BundleManifest, source bundleSource) 
 	return resolution, nil
 }
 
-func resolveBundleOpenAPISource(root string, manifest BundleManifest) (string, error) {
+func resolveBundleOpenAPISource(root string, metadataRoot string, manifest BundleManifest) (string, error) {
 	configuredRef := strings.TrimSpace(manifest.Declarest.OpenAPI)
 	if configuredRef != "" {
 		value, err := resolveBundleOpenAPIReference(root, configuredRef)
@@ -352,21 +353,105 @@ func resolveBundleOpenAPISource(root string, manifest BundleManifest) (string, e
 		return value, nil
 	}
 
-	peerPath := filepath.Join(root, "openapi.yaml")
-	info, err := os.Stat(peerPath)
+	bundledPath, err := resolveBundledOpenAPIFile(root, metadataRoot)
+	if err != nil {
+		return "", err
+	}
+	return bundledPath, nil
+}
+
+func resolveBundledOpenAPIFile(root string, metadataRoot string) (string, error) {
+	openAPIFileNames := []string{"openapi.yaml", "openapi.yml", "openapi.json"}
+
+	checkedPaths := map[string]struct{}{}
+	priorityCandidates := make([]string, 0, len(openAPIFileNames)*2)
+	for _, fileName := range openAPIFileNames {
+		priorityCandidates = append(priorityCandidates, filepath.Join(root, fileName))
+	}
+	trimmedMetadataRoot := strings.TrimSpace(metadataRoot)
+	if trimmedMetadataRoot != "" {
+		for _, fileName := range openAPIFileNames {
+			priorityCandidates = append(priorityCandidates, filepath.Join(root, trimmedMetadataRoot, fileName))
+		}
+	}
+
+	for _, candidate := range priorityCandidates {
+		normalizedCandidate := filepath.Clean(candidate)
+		if _, seen := checkedPaths[normalizedCandidate]; seen {
+			continue
+		}
+		checkedPaths[normalizedCandidate] = struct{}{}
+
+		normalizedPath, ok, err := bundledOpenAPIFilePath(root, normalizedCandidate)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return normalizedPath, nil
+		}
+	}
+
+	allowedNames := map[string]struct{}{
+		"openapi.yaml": {},
+		"openapi.yml":  {},
+		"openapi.json": {},
+	}
+	recursiveCandidates := make([]string, 0, 1)
+	walkErr := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+
+		if _, ok := allowedNames[strings.ToLower(strings.TrimSpace(entry.Name()))]; !ok {
+			return nil
+		}
+
+		recursiveCandidates = append(recursiveCandidates, path)
+		return nil
+	})
+	if walkErr != nil {
+		return "", internalError("failed to inspect bundled OpenAPI fallback files", walkErr)
+	}
+
+	sort.Strings(recursiveCandidates)
+	for _, candidate := range recursiveCandidates {
+		normalizedCandidate := filepath.Clean(candidate)
+		if _, seen := checkedPaths[normalizedCandidate]; seen {
+			continue
+		}
+		checkedPaths[normalizedCandidate] = struct{}{}
+
+		normalizedPath, ok, err := bundledOpenAPIFilePath(root, normalizedCandidate)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return normalizedPath, nil
+		}
+	}
+
+	return "", nil
+}
+
+func bundledOpenAPIFilePath(root string, candidate string) (string, bool, error) {
+	if !fsutil.IsPathUnderRoot(root, candidate) {
+		return "", false, validationError("bundled openapi candidate escapes extracted bundle directory", nil)
+	}
+
+	info, err := os.Stat(candidate)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", nil
+			return "", false, nil
 		}
-		return "", internalError("failed to inspect bundled openapi.yaml", err)
+		return "", false, internalError("failed to inspect bundled openapi candidate", err)
 	}
 	if info.IsDir() {
-		return "", validationError("bundled openapi.yaml must be a file", nil)
+		return "", false, nil
 	}
-	if !fsutil.IsPathUnderRoot(root, peerPath) {
-		return "", validationError("bundled openapi.yaml escapes extracted bundle directory", nil)
-	}
-	return peerPath, nil
+	return candidate, true, nil
 }
 
 func ensureBundleFilePath(root string, path string, field string) error {

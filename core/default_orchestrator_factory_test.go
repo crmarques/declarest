@@ -345,6 +345,47 @@ distribution:
 	})
 }
 
+func TestEffectiveOpenAPISource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		configOpenAPI   string
+		metadataOpenAPI string
+		want            string
+	}{
+		{
+			name:            "context_openapi_has_precedence",
+			configOpenAPI:   "/tmp/context-openapi.yaml",
+			metadataOpenAPI: "/tmp/bundle-openapi.yaml",
+			want:            "/tmp/context-openapi.yaml",
+		},
+		{
+			name:            "bundle_openapi_used_when_context_is_empty",
+			configOpenAPI:   "   ",
+			metadataOpenAPI: "/tmp/bundle-openapi.yaml",
+			want:            "/tmp/bundle-openapi.yaml",
+		},
+		{
+			name:            "empty_when_both_sources_empty",
+			configOpenAPI:   "",
+			metadataOpenAPI: "   ",
+			want:            "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := effectiveOpenAPISource(tt.configOpenAPI, tt.metadataOpenAPI)
+			if got != tt.want {
+				t.Fatalf("expected openapi source %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 	t.Parallel()
 

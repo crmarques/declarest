@@ -69,9 +69,7 @@ func buildDefaultOrchestrator(
 		}
 
 		serverConfig := *resolvedContext.ResourceServer.HTTP
-		if strings.TrimSpace(serverConfig.OpenAPI) == "" && strings.TrimSpace(metadataSource.OpenAPI) != "" {
-			serverConfig.OpenAPI = metadataSource.OpenAPI
-		}
+		serverConfig.OpenAPI = effectiveOpenAPISource(serverConfig.OpenAPI, metadataSource.OpenAPI)
 
 		serverFormat := resolvedContext.Repository.ResourceFormat
 		if serverFormat == "" {
@@ -113,6 +111,13 @@ func buildDefaultOrchestrator(
 	}
 
 	return defaultOrchestrator, nil
+}
+
+func effectiveOpenAPISource(configOpenAPI string, metadataOpenAPI string) string {
+	if strings.TrimSpace(configOpenAPI) != "" {
+		return configOpenAPI
+	}
+	return strings.TrimSpace(metadataOpenAPI)
 }
 
 type metadataSourceResolution struct {

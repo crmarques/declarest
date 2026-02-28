@@ -304,6 +304,88 @@ paths: {}
 	}
 }
 
+func TestResolveBundleUsesMetadataRootOpenAPIWhenRootOpenAPIMissing(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+`,
+		"metadata/openapi.yaml": `
+openapi: 3.0.3
+paths: {}
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive: %v", err)
+	}
+
+	resolved, err := ResolveBundle(context.Background(), archivePath)
+	if err != nil {
+		t.Fatalf("ResolveBundle returned error: %v", err)
+	}
+	if strings.TrimSpace(resolved.OpenAPI) == "" {
+		t.Fatal("expected metadata-root bundled openapi.yaml to be resolved")
+	}
+	if filepath.Base(resolved.OpenAPI) != "openapi.yaml" {
+		t.Fatalf("expected metadata-root OpenAPI file path, got %q", resolved.OpenAPI)
+	}
+	if !strings.Contains(resolved.OpenAPI, string(filepath.Separator)+"metadata"+string(filepath.Separator)) {
+		t.Fatalf("expected metadata-root OpenAPI path, got %q", resolved.OpenAPI)
+	}
+}
+
+func TestResolveBundleUsesRecursiveOpenAPIFallbackWhenCommonLocationsMissing(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archivePath := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+`,
+		"docs/reference/openapi.yaml": `
+openapi: 3.1.0
+paths: {}
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive: %v", err)
+	}
+
+	resolved, err := ResolveBundle(context.Background(), archivePath)
+	if err != nil {
+		t.Fatalf("ResolveBundle returned error: %v", err)
+	}
+	if strings.TrimSpace(resolved.OpenAPI) == "" {
+		t.Fatal("expected recursive bundled openapi.yaml fallback to be resolved")
+	}
+	if filepath.Base(resolved.OpenAPI) != "openapi.yaml" {
+		t.Fatalf("expected recursive OpenAPI file path, got %q", resolved.OpenAPI)
+	}
+	if !strings.Contains(resolved.OpenAPI, string(filepath.Separator)+"docs"+string(filepath.Separator)+"reference"+string(filepath.Separator)) {
+		t.Fatalf("expected recursive fallback OpenAPI path, got %q", resolved.OpenAPI)
+	}
+}
+
 func TestResolveBundlePrefersManifestOpenAPIOverPeerOpenAPIYaml(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
