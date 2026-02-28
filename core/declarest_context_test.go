@@ -180,16 +180,16 @@ current-ctx: remote-only
 }
 
 func TestNewDeclarestContextSupportsMetadataBundle(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HOME", t.TempDir())
 
 	tempDir := t.TempDir()
-	bundlePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
+	bundlePath := filepath.Join(tempDir, "keycloak-bundle-0.0.14.tar.gz")
 	writeBundleArchiveForTest(t, bundlePath, map[string]string{
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.1
+version: 0.0.14
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle

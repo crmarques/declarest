@@ -34,6 +34,9 @@ const (
 )
 
 var shorthandNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var versionedArtifactStemPattern = regexp.MustCompile(
+	`^([a-z0-9][a-z0-9-]*)-(v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$`,
+)
 var shorthandReleaseBaseURL = "https://github.com"
 
 type BundleResolution struct {
@@ -106,12 +109,14 @@ func parseBundleSource(ref string) (bundleSource, error) {
 	if parsed, err := url.Parse(value); err == nil && parsed.Scheme != "" {
 		switch strings.ToLower(parsed.Scheme) {
 		case "http", "https":
-			prefix := sanitizedCachePrefix(filepath.Base(parsed.Path))
-			hashValue := shortStableHash("url:" + parsed.String())
+			cacheDirName := cacheDirNameForSourceArtifact(
+				filepath.Base(parsed.Path),
+				"url:"+parsed.String(),
+			)
 			return bundleSource{
 				kind:         sourceKindURL,
 				remoteURL:    parsed.String(),
-				cacheDirName: fmt.Sprintf("%s-%s", prefix, hashValue),
+				cacheDirName: cacheDirName,
 			}, nil
 		default:
 			return bundleSource{}, validationError("metadata.bundle URL must use http or https", nil)
@@ -123,12 +128,14 @@ func parseBundleSource(ref string) (bundleSource, error) {
 		return bundleSource{}, validationError("metadata.bundle local path is invalid", err)
 	}
 
-	prefix := sanitizedCachePrefix(filepath.Base(absolutePath))
-	hashValue := shortStableHash("local:" + absolutePath)
+	cacheDirName := cacheDirNameForSourceArtifact(
+		filepath.Base(absolutePath),
+		"local:"+absolutePath,
+	)
 	return bundleSource{
 		kind:         sourceKindLocal,
 		localPath:    absolutePath,
-		cacheDirName: fmt.Sprintf("%s-%s", prefix, hashValue),
+		cacheDirName: cacheDirName,
 	}, nil
 }
 
@@ -633,7 +640,6 @@ func extractTarGz(stream io.Reader, destination string) error {
 func sanitizedCachePrefix(raw string) string {
 	prefix := strings.ToLower(strings.TrimSpace(raw))
 	prefix = strings.TrimSuffix(prefix, ".tar.gz")
-	prefix = strings.TrimSuffix(prefix, filepath.Ext(prefix))
 	if prefix == "" {
 		prefix = "bundle"
 	}
@@ -660,4 +666,37 @@ func sanitizedCachePrefix(raw string) string {
 func shortStableHash(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])[:12]
+}
+
+func cacheDirNameForSourceArtifact(artifactName string, hashInput string) string {
+	if name, version, ok := parseVersionedArtifactFileName(artifactName); ok {
+		return fmt.Sprintf("%s-%s", name, version)
+	}
+
+	prefix := sanitizedCachePrefix(artifactName)
+	hashValue := shortStableHash(hashInput)
+	return fmt.Sprintf("%s-%s", prefix, hashValue)
+}
+
+func parseVersionedArtifactFileName(fileName string) (string, string, bool) {
+	value := strings.TrimSpace(fileName)
+	if value == "" {
+		return "", "", false
+	}
+
+	lowerValue := strings.ToLower(value)
+	if !strings.HasSuffix(lowerValue, ".tar.gz") {
+		return "", "", false
+	}
+	stem := value[:len(value)-len(".tar.gz")]
+	matches := versionedArtifactStemPattern.FindStringSubmatch(stem)
+	if len(matches) != 3 {
+		return "", "", false
+	}
+
+	version, err := normalizeSemver(matches[2])
+	if err != nil {
+		return "", "", false
+	}
+	return matches[1], version, true
 }

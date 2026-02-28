@@ -24,7 +24,7 @@ import (
 )
 
 func TestBuildDefaultOrchestratorWiring(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HOME", t.TempDir())
 
 	t.Run("filesystem_context_without_optional_managers", func(t *testing.T) {
 		t.Parallel()
@@ -64,13 +64,13 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 		t.Parallel()
 
 		tempDir := t.TempDir()
-		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.11.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.1
+version: 0.0.11
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle
@@ -138,13 +138,13 @@ paths: {}
 		}))
 		t.Cleanup(openAPIServer.Close)
 
-		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.12.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.1
+version: 0.0.12
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle
@@ -207,13 +207,13 @@ distribution:
 			t.Fatalf("failed to write context openapi file: %v", err)
 		}
 
-		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.13.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.1
+version: 0.0.13
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle

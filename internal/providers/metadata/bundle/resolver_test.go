@@ -620,6 +620,23 @@ func TestResolveBundleURLSourceUsesDeterministicCacheKey(t *testing.T) {
 	}
 }
 
+func TestResolveBundleURLSourceUsesVersionCacheKeyForVersionedArtifacts(t *testing.T) {
+	sourceA, err := parseBundleSource("https://example.com/bundles/keycloak-bundle-1.2.3.tar.gz?X-Amz-Signature=a")
+	if err != nil {
+		t.Fatalf("parseBundleSource returned error: %v", err)
+	}
+	sourceB, err := parseBundleSource("https://example.com/bundles/keycloak-bundle-1.2.3.tar.gz?X-Amz-Signature=b")
+	if err != nil {
+		t.Fatalf("parseBundleSource returned error: %v", err)
+	}
+	if got, want := sourceA.cacheDirName, "keycloak-bundle-1.2.3"; got != want {
+		t.Fatalf("expected version cache dir %q, got %q", want, got)
+	}
+	if sourceA.cacheDirName != sourceB.cacheDirName {
+		t.Fatalf("expected version cache dir reuse, got %q and %q", sourceA.cacheDirName, sourceB.cacheDirName)
+	}
+}
+
 func TestResolveBundleLocalSourceUsesDeterministicCacheKey(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "my-bundle.tar.gz")
 	if err := os.WriteFile(archivePath, []byte("not-used"), 0o600); err != nil {
@@ -636,6 +653,35 @@ func TestResolveBundleLocalSourceUsesDeterministicCacheKey(t *testing.T) {
 	}
 	if sourceA.cacheDirName != sourceB.cacheDirName {
 		t.Fatalf("expected deterministic cache dir names, got %q and %q", sourceA.cacheDirName, sourceB.cacheDirName)
+	}
+}
+
+func TestResolveBundleLocalSourceUsesVersionCacheKeyForVersionedArtifacts(t *testing.T) {
+	baseName := "keycloak-bundle-1.2.3.tar.gz"
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	archivePathA := filepath.Join(dirA, baseName)
+	archivePathB := filepath.Join(dirB, baseName)
+	if err := os.WriteFile(archivePathA, []byte("not-used"), 0o600); err != nil {
+		t.Fatalf("failed to write placeholder archive A: %v", err)
+	}
+	if err := os.WriteFile(archivePathB, []byte("not-used"), 0o600); err != nil {
+		t.Fatalf("failed to write placeholder archive B: %v", err)
+	}
+
+	sourceA, err := parseBundleSource(archivePathA)
+	if err != nil {
+		t.Fatalf("parseBundleSource returned error: %v", err)
+	}
+	sourceB, err := parseBundleSource(archivePathB)
+	if err != nil {
+		t.Fatalf("parseBundleSource returned error: %v", err)
+	}
+	if got, want := sourceA.cacheDirName, "keycloak-bundle-1.2.3"; got != want {
+		t.Fatalf("expected version cache dir %q, got %q", want, got)
+	}
+	if sourceA.cacheDirName != sourceB.cacheDirName {
+		t.Fatalf("expected version cache dir reuse, got %q and %q", sourceA.cacheDirName, sourceB.cacheDirName)
 	}
 }
 

@@ -172,8 +172,8 @@ func (m BundleManifest) MetadataFileNameOrDefault() string {
 
 func normalizeSemver(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
-	if strings.HasPrefix(value, "v") {
-		value = strings.TrimPrefix(value, "v")
+	if after, ok := strings.CutPrefix(value, "v"); ok {
+		value = after
 	}
 	if !semverPattern.MatchString(value) {
 		return "", validationError("invalid semver", nil)
