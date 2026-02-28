@@ -26,11 +26,13 @@ Define the canonical context catalog schema, file location, validation rules, an
 9. Config precedence MUST be: runtime flags, environment overrides, persisted context values, engine defaults.
 10. Unknown override keys MUST fail validation.
 11. Missing context catalog files MUST be treated as an empty catalog state.
-12. `metadata.base-dir` MUST default to the selected repository base-dir when unset.
-13. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
-14. Every context MUST define `resource-server.http` with one configured auth mode.
-15. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
-16. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
+12. `metadata` MUST define at most one source: `base-dir` or `bundle`.
+13. `metadata.base-dir` MUST default to the selected repository base-dir when both metadata sources are unset.
+14. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
+15. Every context MUST define `resource-server.http` with one configured auth mode.
+16. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
+17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
+18. When `resource-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -70,6 +72,7 @@ Runtime override keys:
 3. `repository.filesystem.base-dir`.
 4. `resource-server.http.base-url`.
 5. `metadata.base-dir`.
+6. `metadata.bundle`.
 
 ## Canonical YAML Template
 ```yaml
@@ -170,8 +173,10 @@ contexts:
       #     insecure-skip-verify: false
 
     metadata:
-      # Metadata files default to repository base dir when unset.
-      base-dir: /path/to/metadata
+      # Metadata source defaults to repository base-dir when both are unset.
+      # Choose at most one metadata source.
+      # base-dir: /path/to/metadata
+      # bundle: keycloak:0.1.0
 
   - name: yyy
     repository:
@@ -192,9 +197,10 @@ current-ctx: xxx
 6. Resource server auth one-of violation.
 7. Secret store one-of violation.
 8. Secret file key source one-of violation.
-9. Config path resolution failure for home expansion or file access.
-10. Runtime override key not in the supported override-key list.
-11. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
+9. Metadata source one-of violation (`metadata.base-dir` and `metadata.bundle` both set).
+10. Config path resolution failure for home expansion or file access.
+11. Runtime override key not in the supported override-key list.
+12. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
@@ -203,14 +209,18 @@ current-ctx: xxx
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.
-7. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
+7. `metadata.bundle` configured; resolve keeps `metadata.base-dir` empty and startup resolves metadata from the bundle cache.
+8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `resource-server.http.openapi` is unset.
+9. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
 2. `SetCurrent("yyy")` updates `current-ctx` and preserves context list order.
 3. `Validate` rejects a config that defines both `repository.git` and `repository.filesystem`.
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
+5. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle":"keycloak:0.1.0"}})` resolves bundle metadata source and clears `metadata.base-dir`.
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
 6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
 8. Corner case: `resource-server.http.auth.custom-header` with `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
+9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `resource-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.

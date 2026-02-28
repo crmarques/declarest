@@ -54,6 +54,7 @@ contexts:
       http:
         base-url: https://example.com/api
         # openapi: /path/to/openapi.yaml
+        # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
 
         # Optional default request headers.
         # default-headers:
@@ -124,9 +125,11 @@ contexts:
     #   #     client-key-file: /path/to/client-key.pem
     #   #     insecure-skip-verify: false
 
-    # Optional metadata directory override.
+    # Optional metadata source.
     # metadata:
-    #   base-dir: /path/to/metadata
+    #   # Choose at most one metadata source.
+    #   # base-dir: /path/to/metadata
+    #   # bundle: keycloak:0.1.0
 
     # Optional arbitrary key/value preferences.
     # preferences:

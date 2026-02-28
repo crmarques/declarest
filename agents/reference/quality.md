@@ -44,7 +44,9 @@ Acceptance contracts:
 6. CLI execution footer: resource mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) emit deterministic `[OK|ERROR] ...` status lines to stderr unless `--no-status` is set, interactive terminals apply bold color tags, `--no-color`/`NO_COLOR` disable ANSI color tags, nil payload outputs stay empty, state-changing commands suppress payload output by default, and `--verbose` restores that payload output.
 7. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
 8. Context config: strict decode, one-of validation, overrides precedence, and missing-catalog behavior.
-9. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
+9. Metadata bundles: manifest validation (`bundle.yaml` required fields), shorthand name/version contract checks, secure tar.gz extraction safeguards, and deterministic cache reuse behavior.
+10. Bundle OpenAPI wiring: `resource-server.http.openapi` precedence over bundle hints, fallback to `bundle.yaml declarest.openapi` and peer `openapi.yaml`, and cross-origin OpenAPI fetches without leaked auth headers.
+10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repo status` output contract, and verbose worktree-detail coverage for `repo status --verbose`.
 11. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
 12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.

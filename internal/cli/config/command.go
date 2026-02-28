@@ -740,6 +740,12 @@ func checkMetadata(command *cobra.Command, deps common.CommandDependencies, cfg 
 		return result
 	}
 
+	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
+		result.Status = configCheckOK
+		result.Details = "metadata bundle is accessible"
+		return result
+	}
+
 	baseDir := strings.TrimSpace(cfg.Metadata.BaseDir)
 	if baseDir == "" {
 		result.Status = configCheckFail

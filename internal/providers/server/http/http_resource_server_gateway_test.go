@@ -855,7 +855,7 @@ func TestGetOpenAPISpecFromHTTPSCachesDocument(t *testing.T) {
 	}
 }
 
-func TestGetOpenAPISpecFromHTTPSRejectsCrossOriginOpenAPIURL(t *testing.T) {
+func TestGetOpenAPISpecFromHTTPSAllowsCrossOriginOpenAPIURLWithoutAuthHeader(t *testing.T) {
 	t.Parallel()
 
 	baseServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -866,6 +866,9 @@ func TestGetOpenAPISpecFromHTTPSRejectsCrossOriginOpenAPIURL(t *testing.T) {
 	var openAPICalls int32
 	openAPIServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&openAPICalls, 1)
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("expected no auth header on cross-origin openapi request, got %q", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprint(w, `{"openapi":"3.0.0","paths":{}}`)
 	}))
@@ -882,10 +885,56 @@ func TestGetOpenAPISpecFromHTTPSRejectsCrossOriginOpenAPIURL(t *testing.T) {
 		OpenAPI: openAPIServer.URL + "/openapi.json",
 	})
 
-	_, err := gateway.GetOpenAPISpec(context.Background())
-	assertTypedCategory(t, err, faults.ValidationError)
-	if got := atomic.LoadInt32(&openAPICalls); got != 0 {
-		t.Fatalf("expected no cross-origin openapi request, got %d calls", got)
+	value, err := gateway.GetOpenAPISpec(context.Background())
+	if err != nil {
+		t.Fatalf("expected cross-origin openapi request to succeed, got error: %v", err)
+	}
+	if value == nil {
+		t.Fatal("expected non-nil OpenAPI payload")
+	}
+	if got := atomic.LoadInt32(&openAPICalls); got != 1 {
+		t.Fatalf("expected one cross-origin openapi request, got %d calls", got)
+	}
+}
+
+func TestGetOpenAPISpecFromHTTPSSameOriginAppliesAuthHeader(t *testing.T) {
+	t.Parallel()
+
+	var openAPICalls int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openapi.json" {
+			http.NotFound(w, r)
+			return
+		}
+		atomic.AddInt32(&openAPICalls, 1)
+		if got := r.Header.Get("Authorization"); got != "Bearer token" {
+			t.Fatalf("expected auth header on same-origin openapi request, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"openapi":"3.0.0","paths":{}}`)
+	}))
+	t.Cleanup(server.Close)
+
+	gateway := mustGateway(t, config.HTTPServer{
+		BaseURL: server.URL,
+		Auth: &config.HTTPAuth{
+			BearerToken: &config.BearerTokenAuth{Token: "token"},
+		},
+		TLS: &config.TLS{
+			InsecureSkipVerify: true,
+		},
+		OpenAPI: server.URL + "/openapi.json",
+	})
+
+	value, err := gateway.GetOpenAPISpec(context.Background())
+	if err != nil {
+		t.Fatalf("expected same-origin openapi request to succeed, got error: %v", err)
+	}
+	if value == nil {
+		t.Fatal("expected non-nil OpenAPI payload")
+	}
+	if got := atomic.LoadInt32(&openAPICalls); got != 1 {
+		t.Fatalf("expected one same-origin openapi request, got %d calls", got)
 	}
 }
 

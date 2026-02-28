@@ -63,6 +63,9 @@ func validateConfig(cfg config.Context) error {
 	if err := validateSecretStore(cfg.SecretStore); err != nil {
 		return err
 	}
+	if err := validateMetadata(cfg.Metadata); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -76,13 +79,17 @@ func normalizeConfig(cfg config.Context) config.Context {
 
 func applyConfigDefaults(cfg config.Context) config.Context {
 	cfg = normalizeConfig(cfg)
-	if cfg.Metadata.BaseDir == "" {
+	if strings.TrimSpace(cfg.Metadata.Bundle) == "" && cfg.Metadata.BaseDir == "" {
 		cfg.Metadata.BaseDir = contextRepositoryBaseDir(cfg)
 	}
 	return cfg
 }
 
 func compactConfigForPersistence(cfg config.Context) config.Context {
+	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
+		cfg.Metadata.BaseDir = ""
+		return cfg
+	}
 	if isDefaultMetadataBaseDir(cfg) {
 		cfg.Metadata.BaseDir = ""
 	}
@@ -90,6 +97,9 @@ func compactConfigForPersistence(cfg config.Context) config.Context {
 }
 
 func isDefaultMetadataBaseDir(cfg config.Context) bool {
+	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
+		return false
+	}
 	repoBaseDir := normalizeBaseDirPath(contextRepositoryBaseDir(cfg))
 	metadataBaseDir := normalizeBaseDirPath(cfg.Metadata.BaseDir)
 	return repoBaseDir != "" && metadataBaseDir != "" && repoBaseDir == metadataBaseDir
@@ -246,6 +256,17 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 	return nil
 }
 
+func validateMetadata(metadata config.Metadata) error {
+	baseDir := strings.TrimSpace(metadata.BaseDir)
+	bundle := strings.TrimSpace(metadata.Bundle)
+
+	if baseDir != "" && bundle != "" {
+		return validationError("metadata must define at most one of base-dir or bundle", nil)
+	}
+
+	return nil
+}
+
 func applyOverrides(cfg config.Context, overrides map[string]string) (config.Context, error) {
 	for _, key := range sortedOverrideKeys(overrides) {
 		value := overrides[key]
@@ -269,6 +290,14 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			cfg.ResourceServer.HTTP.BaseURL = value
 		case "metadata.base-dir":
 			cfg.Metadata.BaseDir = value
+			if strings.TrimSpace(value) != "" {
+				cfg.Metadata.Bundle = ""
+			}
+		case "metadata.bundle":
+			cfg.Metadata.Bundle = value
+			if strings.TrimSpace(value) != "" {
+				cfg.Metadata.BaseDir = ""
+			}
 		default:
 			return config.Context{}, unknownOverrideError(key)
 		}

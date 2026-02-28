@@ -178,3 +178,75 @@ current-ctx: remote-only
 		t.Fatal("expected metadata service when metadata.base-dir is configured")
 	}
 }
+
+func TestNewDeclarestContextSupportsMetadataBundle(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	bundlePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+	writeBundleArchiveForTest(t, bundlePath, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+`,
+		"openapi.yaml": `
+openapi: 3.0.0
+paths: {}
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+
+	contextCatalogPath := filepath.Join(tempDir, "contexts.yaml")
+	contextCatalog := []byte(`
+contexts:
+  - name: bundled
+    repository:
+      filesystem:
+        base-dir: ` + filepath.Join(tempDir, "repo") + `
+    resource-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          bearer-token:
+            token: dev-token
+    metadata:
+      bundle: ` + bundlePath + `
+current-ctx: bundled
+`)
+	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
+		t.Fatalf("failed to write catalog: %v", err)
+	}
+
+	declarestContext, err := NewDeclarestContext(
+		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
+		config.ContextSelection{Name: "bundled"},
+	)
+	if err != nil {
+		t.Fatalf("NewDeclarestContext returned error: %v", err)
+	}
+	if declarestContext.Metadata == nil {
+		t.Fatal("expected metadata service when metadata.bundle is configured")
+	}
+	if declarestContext.ResourceServer == nil {
+		t.Fatal("expected resource server when resource-server is configured")
+	}
+	openAPISpec, openAPIErr := declarestContext.ResourceServer.GetOpenAPISpec(context.Background())
+	if openAPIErr != nil {
+		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
+	}
+	specMap, ok := openAPISpec.(map[string]any)
+	if !ok {
+		t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+	}
+	if specMap["openapi"] != "3.0.0" {
+		t.Fatalf("expected bundled OpenAPI version 3.0.0, got %v", specMap["openapi"])
+	}
+}

@@ -184,4 +184,5 @@ type TLS struct {
 
 type Metadata struct {
 	BaseDir string `yaml:"base-dir,omitempty"`
+	Bundle  string `yaml:"bundle,omitempty"`
 }

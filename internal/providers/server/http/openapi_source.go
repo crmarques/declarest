@@ -92,18 +92,14 @@ func (g *HTTPResourceServerGateway) loadOpenAPIDocument(ctx context.Context) (ma
 			return nil, notFoundError("resource-server.http.openapi file could not be read", err)
 		}
 	case "https":
-		if !sameURLOffsetOrigin(g.baseURL, parsed) {
-			return nil, validationError(
-				"resource-server.http.openapi URL must match resource-server.http.base-url origin",
-				nil,
-			)
-		}
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 		if err != nil {
 			return nil, internalError("failed to create OpenAPI request", err)
 		}
-		if err := g.applyAuth(ctx, request); err != nil {
-			return nil, err
+		if sameURLOffsetOrigin(g.baseURL, parsed) {
+			if err := g.applyAuth(ctx, request); err != nil {
+				return nil, err
+			}
 		}
 
 		response, err := g.doRequest(ctx, "openapi", request)

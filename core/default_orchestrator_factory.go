@@ -2,9 +2,13 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
@@ -32,12 +36,18 @@ func buildDefaultOrchestrator(
 	defaultOrchestrator := &orchestrator.DefaultOrchestrator{}
 	defaultOrchestrator.SetResourceFormat(resolvedContext.Repository.ResourceFormat)
 
-	metadataBaseDir := resolveMetadataBaseDir(resolvedContext)
-	if metadataBaseDir != "" {
+	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)
+	if err != nil {
+		return nil, err
+	}
+	if metadataSource.BaseDir != "" {
 		defaultOrchestrator.Metadata = fsmetadata.NewFSMetadataService(
-			metadataBaseDir,
+			metadataSource.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)
+		if strings.TrimSpace(metadataSource.DeprecatedWarning) != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: %s\n", metadataSource.DeprecatedWarning)
+		}
 	}
 
 	switch {
@@ -57,6 +67,12 @@ func buildDefaultOrchestrator(
 		if resolvedContext.ResourceServer.HTTP == nil {
 			return nil, faults.NewTypedError(faults.InternalError, "resource server provider is invalid", nil)
 		}
+
+		serverConfig := *resolvedContext.ResourceServer.HTTP
+		if strings.TrimSpace(serverConfig.OpenAPI) == "" && strings.TrimSpace(metadataSource.OpenAPI) != "" {
+			serverConfig.OpenAPI = metadataSource.OpenAPI
+		}
+
 		serverFormat := resolvedContext.Repository.ResourceFormat
 		if serverFormat == "" {
 			serverFormat = config.ResourceFormatJSON
@@ -68,7 +84,7 @@ func buildDefaultOrchestrator(
 			serverOptions = append(serverOptions, httpserver.WithMetadataRenderer(renderer))
 		}
 		serverManager, err := httpserver.NewHTTPResourceServerGateway(
-			*resolvedContext.ResourceServer.HTTP,
+			serverConfig,
 			serverOptions...,
 		)
 		if err != nil {
@@ -99,17 +115,35 @@ func buildDefaultOrchestrator(
 	return defaultOrchestrator, nil
 }
 
-func resolveMetadataBaseDir(context config.Context) string {
+type metadataSourceResolution struct {
+	BaseDir           string
+	OpenAPI           string
+	DeprecatedWarning string
+}
+
+func resolveMetadataSource(ctx context.Context, context config.Context) (metadataSourceResolution, error) {
+	if strings.TrimSpace(context.Metadata.Bundle) != "" {
+		resolution, err := bundlemetadata.ResolveBundle(ctx, context.Metadata.Bundle)
+		if err != nil {
+			return metadataSourceResolution{}, err
+		}
+		return metadataSourceResolution{
+			BaseDir:           resolution.MetadataDir,
+			OpenAPI:           resolution.OpenAPI,
+			DeprecatedWarning: resolution.DeprecatedWarning,
+		}, nil
+	}
+
 	if context.Metadata.BaseDir != "" {
-		return context.Metadata.BaseDir
+		return metadataSourceResolution{BaseDir: context.Metadata.BaseDir}, nil
 	}
 
 	switch {
 	case context.Repository.Filesystem != nil:
-		return context.Repository.Filesystem.BaseDir
+		return metadataSourceResolution{BaseDir: context.Repository.Filesystem.BaseDir}, nil
 	case context.Repository.Git != nil:
-		return context.Repository.Git.Local.BaseDir
+		return metadataSourceResolution{BaseDir: context.Repository.Git.Local.BaseDir}, nil
 	default:
-		return ""
+		return metadataSourceResolution{}, nil
 	}
 }

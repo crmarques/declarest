@@ -235,6 +235,13 @@ When configured, DeclaREST can:
 
 Explicit metadata overrides still win.
 
+When omitted, and `metadata.bundle` is configured, DeclaREST attempts OpenAPI fallback from the bundle:
+
+- `bundle.yaml` `declarest.openapi` (URL or relative path inside the bundle)
+- bundled `openapi.yaml` at bundle root (peer of `bundle.yaml`)
+
+Precedence is deterministic: context `resource-server.http.openapi` overrides bundle-provided OpenAPI sources.
+
 ## Secret store configuration (`secret-store`, optional)
 
 Exactly one provider when `secret-store` is configured:
@@ -293,14 +300,25 @@ Vault auth under `secret-store.vault.auth` is also one-of:
 
 ## Metadata configuration (`metadata`, optional)
 
+Choose at most one metadata source:
+
 ```yaml
 metadata:
-  base-dir: /path/to/metadata
+  # local metadata tree
+  # base-dir: /path/to/metadata
+  #
+  # or bundle reference (shorthand, URL, or local tar.gz path)
+  # bundle: keycloak:0.1.0
+  # bundle: https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.1.0/declarest-bundle-keycloak-0.1.0.tar.gz
+  # bundle: /path/to/declarest-bundle-keycloak-0.1.0.tar.gz
 ```
 
-When omitted, `metadata.base-dir` defaults to the selected repository base dir.
+When both metadata sources are omitted, `metadata.base-dir` defaults to the selected repository base dir.
 
-Use this when you want metadata files stored separately from resource payload files.
+Use `metadata.base-dir` when you want metadata files stored separately from resource payload files.
+Use `metadata.bundle` when you want metadata definitions to be consumed from a bundle archive and cached under `~/.declarest/metadata-bundles/`.
+
+Bundle OpenAPI hints (when present) can also supply `resource-server.http.openapi` automatically if context OpenAPI is not set.
 
 ## Preferences (optional)
 
@@ -401,13 +419,14 @@ The canonical override keys are:
 - `repository.filesystem.base-dir`
 - `resource-server.http.base-url`
 - `metadata.base-dir`
+- `metadata.bundle`
 
 Example:
 
 ```bash
 declarest config resolve \
   --set resource-server.http.base-url=https://staging-api.example.com \
-  --set metadata.base-dir=/tmp/declarest-metadata
+  --set metadata.bundle=keycloak:0.1.0
 ```
 
 ## Environment variables
@@ -431,3 +450,4 @@ declarest config list
 - unknown YAML key (strict decoding)
 - `current-ctx` points to a non-existent context name
 - invalid secret-store one-of configuration
+- both `metadata.base-dir` and `metadata.bundle` set in the same context

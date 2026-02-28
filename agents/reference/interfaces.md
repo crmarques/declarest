@@ -52,6 +52,7 @@ Factory contract:
 1. `core.NewDeclarestContext` MUST assemble default provider implementations.
 2. `core.NewDeclarestContext` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
+4. when `metadata.bundle` is configured and `resource-server.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
 
 Corner case example:
 1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `core.NewDeclarestContext` MUST return an `InternalError`.
@@ -93,6 +94,7 @@ One-of invariants:
 2. `resource-server.http.auth` MUST define exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header`.
 3. `secret-store` MUST define exactly one of `file` or `vault`.
 4. `secret-store.file` MUST define exactly one of `key`, `key-file`, `passphrase`, `passphrase-file`.
+5. `metadata` MUST define at most one of `base-dir` or `bundle`.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.

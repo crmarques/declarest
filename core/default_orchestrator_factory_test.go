@@ -1,8 +1,16 @@
 package core
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
@@ -49,6 +57,213 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 		}
 		if defaultOrchestrator.Secrets != nil {
 			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.Secrets)
+		}
+	})
+
+	t.Run("metadata_bundle_local_archive", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		writeBundleArchiveForTest(t, archivePath, map[string]string{
+			"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+`,
+			"openapi.yaml": `
+openapi: 3.0.0
+paths: {}
+`,
+			"metadata/admin/realms/_/metadata.json": `{}`,
+		})
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "bundle",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
+				},
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						Auth: &config.HTTPAuth{
+							BearerToken: &config.BearerTokenAuth{Token: "token"},
+						},
+					},
+				},
+				Metadata: config.Metadata{
+					Bundle: archivePath,
+				},
+			},
+		}
+
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		if err != nil {
+			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+		}
+		if _, ok := defaultOrchestrator.Metadata.(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", defaultOrchestrator.Metadata)
+		}
+		if defaultOrchestrator.Server == nil {
+			t.Fatal("expected server manager")
+		}
+		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		if openAPIErr != nil {
+			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
+		}
+		specMap, ok := openAPISpec.(map[string]any)
+		if !ok {
+			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+		}
+		if specMap["openapi"] != "3.0.0" {
+			t.Fatalf("expected bundled openapi version 3.0.0, got %v", specMap["openapi"])
+		}
+	})
+
+	t.Run("metadata_bundle_manifest_openapi_url", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		openAPIServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/yaml")
+			_, _ = fmt.Fprint(w, "openapi: 3.0.2\npaths: {}\n")
+		}))
+		t.Cleanup(openAPIServer.Close)
+
+		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		writeBundleArchiveForTest(t, archivePath, map[string]string{
+			"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak
+  metadataRoot: metadata
+  openapi: ` + openAPIServer.URL + `/openapi.yaml
+distribution:
+  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+`,
+			"metadata/admin/realms/_/metadata.json": `{}`,
+		})
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "bundle",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
+				},
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						Auth: &config.HTTPAuth{
+							BearerToken: &config.BearerTokenAuth{Token: "token"},
+						},
+						TLS: &config.TLS{InsecureSkipVerify: true},
+					},
+				},
+				Metadata: config.Metadata{
+					Bundle: archivePath,
+				},
+			},
+		}
+
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		if err != nil {
+			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+		}
+		if defaultOrchestrator.Server == nil {
+			t.Fatal("expected server manager")
+		}
+
+		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		if openAPIErr != nil {
+			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
+		}
+		specMap, ok := openAPISpec.(map[string]any)
+		if !ok {
+			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+		}
+		if specMap["openapi"] != "3.0.2" {
+			t.Fatalf("expected bundle manifest OpenAPI version 3.0.2, got %v", specMap["openapi"])
+		}
+	})
+
+	t.Run("context_openapi_has_precedence_over_bundle_openapi", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		contextOpenAPIPath := filepath.Join(tempDir, "context-openapi.yaml")
+		if err := os.WriteFile(contextOpenAPIPath, []byte("openapi: 3.0.1\npaths: {}\n"), 0o600); err != nil {
+			t.Fatalf("failed to write context openapi file: %v", err)
+		}
+
+		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		writeBundleArchiveForTest(t, archivePath, map[string]string{
+			"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak
+version: 0.1.0
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak
+  metadataRoot: metadata
+  openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
+distribution:
+  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+`,
+			"metadata/admin/realms/_/metadata.json": `{}`,
+		})
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "bundle",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
+				},
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						OpenAPI: contextOpenAPIPath,
+						Auth: &config.HTTPAuth{
+							BearerToken: &config.BearerTokenAuth{Token: "token"},
+						},
+					},
+				},
+				Metadata: config.Metadata{
+					Bundle: archivePath,
+				},
+			},
+		}
+
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		if err != nil {
+			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+		}
+		if defaultOrchestrator.Server == nil {
+			t.Fatal("expected server manager")
+		}
+
+		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		if openAPIErr != nil {
+			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
+		}
+		specMap, ok := openAPISpec.(map[string]any)
+		if !ok {
+			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+		}
+		if specMap["openapi"] != "3.0.1" {
+			t.Fatalf("expected context OpenAPI version 3.0.1, got %v", specMap["openapi"])
 		}
 	})
 
@@ -262,5 +477,39 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 	}
 	if typedErr.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
+	}
+}
+
+func writeBundleArchiveForTest(t *testing.T, archivePath string, files map[string]string) {
+	t.Helper()
+
+	buffer := bytes.NewBuffer(nil)
+	gzipWriter := gzip.NewWriter(buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	for path, content := range files {
+		data := []byte(content)
+		header := &tar.Header{
+			Name: filepath.ToSlash(path),
+			Mode: 0o644,
+			Size: int64(len(data)),
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("failed to write tar header for %q: %v", path, err)
+		}
+		if _, err := tarWriter.Write(data); err != nil {
+			t.Fatalf("failed to write tar data for %q: %v", path, err)
+		}
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("failed to close tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("failed to close gzip writer: %v", err)
+	}
+
+	if err := os.WriteFile(archivePath, buffer.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write test bundle archive %q: %v", archivePath, err)
 	}
 }

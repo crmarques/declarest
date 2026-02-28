@@ -501,6 +501,7 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 			"",
 			"resolve",
 			"--set", "metadata.base-dir=/tmp/meta",
+			"--set", "metadata.bundle=keycloak:0.1.0",
 			"--set", "repository.resource-format=yaml",
 		)
 		if err != nil {
@@ -512,6 +513,9 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 		}
 		if got := service.resolveSelection.Overrides["metadata.base-dir"]; got != "/tmp/meta" {
 			t.Fatalf("expected metadata override to be forwarded, got %q", got)
+		}
+		if got := service.resolveSelection.Overrides["metadata.bundle"]; got != "keycloak:0.1.0" {
+			t.Fatalf("expected metadata bundle override to be forwarded, got %q", got)
 		}
 		if got := service.resolveSelection.Overrides["repository.resource-format"]; got != "yaml" {
 			t.Fatalf("expected resource format override to be forwarded, got %q", got)
@@ -623,6 +627,44 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		"[OK] metadata",
 		"[SKIP] resource-server",
 		"[SKIP] secret-store",
+		"Result: PASS",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected output to contain %q, got %q", snippet, output)
+		}
+	}
+}
+
+func TestCheckReportsMetadataBundleAsAccessible(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "dev",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+			},
+			Metadata: configdomain.Metadata{Bundle: "keycloak:0.1.0"},
+		},
+	}
+
+	deps := common.CommandDependencies{
+		Contexts:       contextService,
+		ResourceStore:  &testRepositoryService{},
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
+	}
+	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+
+	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
+	if err != nil {
+		t.Fatalf("check returned error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"[OK] metadata",
+		"metadata bundle is accessible",
 		"Result: PASS",
 	}
 	for _, snippet := range expectedSnippets {
