@@ -69,7 +69,7 @@ GitHub Pages is published via `.github/workflows/docs.yml`.
 ## Release workflow (CLI binaries)
 
 Release artifacts are built with GoReleaser via `.github/workflows/release.yml` and `.goreleaser.yaml`.
-Tag a version (for example `v1.2.3`) to trigger a release build.
+Tag a semver version (for example `v1.2.3`) to trigger a release build and make `go get github.com/crmarques/declarest/...@v1.2.3` resolve cleanly for downstream Go programs.
 
 ## Contribution checklist
 
