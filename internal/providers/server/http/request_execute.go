@@ -39,6 +39,27 @@ func (g *HTTPResourceServerGateway) Request(
 		spec.ContentType = defaultMediaType
 	}
 
+	operation, hasOperation := requestMethodOperation(resolvedMethod)
+	validationResource := resource.Resource{}
+	if ctxOperation, resourceInput, validateSpec, ok := metadata.RequestOperationValidation(ctx); ok {
+		operation = ctxOperation
+		hasOperation = true
+		spec.Validate = validateSpec
+		validationResource = resource.Resource{
+			LogicalPath:    resourceInput.LogicalPath,
+			CollectionPath: resourceInput.CollectionPath,
+			LocalAlias:     resourceInput.LocalAlias,
+			RemoteID:       resourceInput.RemoteID,
+			Metadata:       resourceInput.Metadata,
+			Payload:        resourceInput.Payload,
+		}
+	}
+	if hasOperation && spec.Validate != nil {
+		if err := g.validateOperationPayload(ctx, operation, validationResource, spec); err != nil {
+			return nil, err
+		}
+	}
+
 	responseBody, _, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err

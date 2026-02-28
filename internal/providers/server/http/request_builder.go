@@ -92,6 +92,9 @@ func (g *HTTPResourceServerGateway) BuildRequestFromMetadata(ctx context.Context
 	if err := g.validateOpenAPIMethodSupport(ctx, spec.Path, spec.Method); err != nil {
 		return metadata.OperationSpec{}, err
 	}
+	if err := g.validateOperationPayload(ctx, operation, resourceInfo, spec); err != nil {
+		return metadata.OperationSpec{}, err
+	}
 
 	return spec, nil
 }

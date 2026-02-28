@@ -291,3 +291,211 @@ func mergeAttributeSets(target map[string]struct{}, source map[string]struct{}) 
 		target[key] = struct{}{}
 	}
 }
+
+func inferOpenAPIOperationValidationSpec(
+	candidate openAPICandidate,
+	method string,
+	pathItems map[string]map[string]any,
+	openAPISpec any,
+) *OperationValidationSpec {
+	if candidate.path == "" || len(pathItems) == 0 {
+		return nil
+	}
+
+	pathItem, found := pathItems[candidate.path]
+	if !found {
+		return nil
+	}
+
+	operationValue, found := pathItem[strings.ToLower(strings.TrimSpace(method))]
+	if !found {
+		return nil
+	}
+	operationItem, ok := asStringMap(operationValue)
+	if !ok {
+		return nil
+	}
+
+	requestBodySchema, found := inferOpenAPIRequestBodySchema(operationItem, openAPISpec)
+	if !found {
+		return nil
+	}
+
+	spec := &OperationValidationSpec{
+		SchemaRef: "openapi:request-body",
+	}
+
+	required := inferOpenAPISchemaRequiredAttributes(requestBodySchema, openAPISpec, map[string]struct{}{}, 0)
+	if len(required) > 0 {
+		names := make([]string, 0, len(required))
+		for key := range required {
+			names = append(names, key)
+		}
+		sort.Strings(names)
+		spec.RequiredAttributes = names
+	}
+
+	return spec
+}
+
+func inferOpenAPIRequestBodySchema(operation map[string]any, openAPISpec any) (any, bool) {
+	requestBodyValue, found := operation["requestBody"]
+	if !found {
+		return nil, false
+	}
+
+	requestBody, ok := resolveOpenAPIValueRefForInference(openAPISpec, requestBodyValue, map[string]struct{}{}, 0)
+	if !ok {
+		return nil, false
+	}
+	requestBodyMap, ok := asStringMap(requestBody)
+	if !ok {
+		return nil, false
+	}
+
+	contentValue, found := requestBodyMap["content"]
+	if !found {
+		return nil, false
+	}
+	content, ok := asStringMap(contentValue)
+	if !ok || len(content) == 0 {
+		return nil, false
+	}
+
+	mediaTypes := make([]string, 0, len(content))
+	for mediaType := range content {
+		mediaTypes = append(mediaTypes, mediaType)
+	}
+	sort.Slice(mediaTypes, func(i int, j int) bool {
+		leftPriority := openAPIMediaTypePriority(mediaTypes[i])
+		rightPriority := openAPIMediaTypePriority(mediaTypes[j])
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		return mediaTypes[i] < mediaTypes[j]
+	})
+
+	for _, mediaType := range mediaTypes {
+		mediaValue, ok := asStringMap(content[mediaType])
+		if !ok {
+			continue
+		}
+		schemaValue, hasSchema := mediaValue["schema"]
+		if !hasSchema {
+			continue
+		}
+		return schemaValue, true
+	}
+
+	return nil, false
+}
+
+func openAPIMediaTypePriority(mediaType string) int {
+	normalized := strings.ToLower(strings.TrimSpace(mediaType))
+	switch {
+	case normalized == "application/json":
+		return 0
+	case strings.HasPrefix(normalized, "application/") && strings.HasSuffix(normalized, "+json"):
+		return 1
+	default:
+		return 2
+	}
+}
+
+func inferOpenAPISchemaRequiredAttributes(
+	schema any,
+	openAPISpec any,
+	visitedRefs map[string]struct{},
+	depth int,
+) map[string]struct{} {
+	if depth > 24 {
+		return nil
+	}
+
+	schemaValue, ok := resolveOpenAPIValueRefForInference(openAPISpec, schema, visitedRefs, depth+1)
+	if !ok {
+		return nil
+	}
+	schemaMap, ok := asStringMap(schemaValue)
+	if !ok {
+		return nil
+	}
+
+	required := map[string]struct{}{}
+	if requiredValue, found := schemaMap["required"]; found {
+		requiredNames, ok := requiredValue.([]any)
+		if ok {
+			for _, nameValue := range requiredNames {
+				name, ok := nameValue.(string)
+				if !ok {
+					continue
+				}
+				trimmed := strings.TrimSpace(name)
+				if trimmed == "" {
+					continue
+				}
+				required[trimmed] = struct{}{}
+			}
+		}
+	}
+
+	if allOfValue, found := schemaMap["allOf"]; found {
+		allOfItems, ok := allOfValue.([]any)
+		if ok {
+			for _, item := range allOfItems {
+				mergeAttributeSets(
+					required,
+					inferOpenAPISchemaRequiredAttributes(item, openAPISpec, visitedRefs, depth+1),
+				)
+			}
+		}
+	}
+
+	if len(required) == 0 {
+		return nil
+	}
+	return required
+}
+
+func resolveOpenAPIValueRefForInference(
+	openAPISpec any,
+	value any,
+	visitedRefs map[string]struct{},
+	depth int,
+) (any, bool) {
+	if depth > 24 {
+		return nil, false
+	}
+
+	valueMap, ok := asStringMap(value)
+	if !ok {
+		return value, true
+	}
+
+	refValue, hasRef := valueMap["$ref"]
+	if !hasRef {
+		return valueMap, true
+	}
+
+	ref, ok := refValue.(string)
+	if !ok {
+		return nil, false
+	}
+	trimmedRef := strings.TrimSpace(ref)
+	if trimmedRef == "" {
+		return nil, false
+	}
+	if _, seen := visitedRefs[trimmedRef]; seen {
+		return nil, false
+	}
+
+	resolved, found := resolveOpenAPIRef(openAPISpec, trimmedRef)
+	if !found {
+		return nil, false
+	}
+
+	visitedRefs[trimmedRef] = struct{}{}
+	nextValue, ok := resolveOpenAPIValueRefForInference(openAPISpec, resolved, visitedRefs, depth+1)
+	delete(visitedRefs, trimmedRef)
+	return nextValue, ok
+}

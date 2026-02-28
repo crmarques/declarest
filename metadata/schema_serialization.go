@@ -81,19 +81,31 @@ type payloadTransformWire struct {
 	Order []string `json:"-" yaml:"-"`
 }
 
+type validationAssertionWire struct {
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+	JQ      string `json:"jq,omitempty" yaml:"jq,omitempty"`
+}
+
+type operationValidationWire struct {
+	RequiredAttributes *stringListWire            `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
+	Assertions         *[]validationAssertionWire `json:"assertions,omitempty" yaml:"assertions,omitempty"`
+	SchemaRef          string                     `json:"schemaRef,omitempty" yaml:"schemaRef,omitempty"`
+}
+
 type httpHeaderWire struct {
 	Name  string `json:"name" yaml:"name"`
 	Value string `json:"value" yaml:"value"`
 }
 
 type resourceOperationWire struct {
-	HTTPMethod  string                `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
-	Path        string                `json:"path,omitempty" yaml:"path,omitempty"`
-	URL         *resourceURLWire      `json:"url,omitempty" yaml:"url,omitempty"`
-	Query       *map[string]string    `json:"query,omitempty" yaml:"query,omitempty"`
-	HTTPHeaders *[]httpHeaderWire     `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
-	Body        any                   `json:"body,omitempty" yaml:"body,omitempty"`
-	Payload     *payloadTransformWire `json:"payload,omitempty" yaml:"payload,omitempty"`
+	HTTPMethod  string                   `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
+	Path        string                   `json:"path,omitempty" yaml:"path,omitempty"`
+	URL         *resourceURLWire         `json:"url,omitempty" yaml:"url,omitempty"`
+	Query       *map[string]string       `json:"query,omitempty" yaml:"query,omitempty"`
+	HTTPHeaders *[]httpHeaderWire        `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
+	Body        any                      `json:"body,omitempty" yaml:"body,omitempty"`
+	Payload     *payloadTransformWire    `json:"payload,omitempty" yaml:"payload,omitempty"`
+	Validate    *operationValidationWire `json:"validate,omitempty" yaml:"validate,omitempty"`
 
 	// CompareResources transform fields (ignoreAttributes kept for compatibility decode).
 	IgnoreAttributes   *stringListWire `json:"ignoreAttributes,omitempty" yaml:"ignoreAttributes,omitempty"`
@@ -446,6 +458,9 @@ func operationSpecToWire(operation Operation, spec OperationSpec) *resourceOpera
 	} else {
 		wire.Payload = payloadTransformToWire(spec.Filter, spec.Suppress, spec.JQ)
 	}
+	if spec.Validate != nil {
+		wire.Validate = operationValidationToWire(spec.Validate)
+	}
 
 	return wire
 }
@@ -484,6 +499,7 @@ func operationSpecFromWire(operation Operation, spec resourceOperationWire) Oper
 	}
 	promoteMediaHeadersFromOperationHeaders(&decoded, preserveExplicitEmptyHeaders)
 	applyOperationTransformsFromWire(&decoded, operation == OperationCompare, spec)
+	decoded.Validate = operationValidationFromWire(spec.Validate)
 
 	return decoded
 }
@@ -579,6 +595,61 @@ func payloadTransformToWire(filter []string, suppress []string, jq string) *payl
 		SuppressAttributes: stringListWirePointer(suppress),
 		JQExpression:       stringPointer(jq),
 	}
+}
+
+func operationValidationToWire(value *OperationValidationSpec) *operationValidationWire {
+	if value == nil {
+		return nil
+	}
+
+	wire := &operationValidationWire{
+		SchemaRef: value.SchemaRef,
+	}
+	if value.RequiredAttributes != nil {
+		wire.RequiredAttributes = stringListWirePointer(value.RequiredAttributes)
+	}
+	if value.Assertions != nil {
+		items := make([]validationAssertionWire, len(value.Assertions))
+		for idx, assertion := range value.Assertions {
+			items[idx] = validationAssertionWire{
+				Message: assertion.Message,
+				JQ:      assertion.JQ,
+			}
+		}
+		wire.Assertions = &items
+	}
+	return wire
+}
+
+func operationValidationFromWire(value *operationValidationWire) *OperationValidationSpec {
+	if value == nil {
+		return nil
+	}
+
+	decoded := &OperationValidationSpec{
+		SchemaRef: value.SchemaRef,
+	}
+	if value.RequiredAttributes != nil {
+		decoded.RequiredAttributes = cloneStringListWire(value.RequiredAttributes)
+	}
+	if value.Assertions != nil {
+		items := make([]ValidationAssertion, len(*value.Assertions))
+		for idx, assertion := range *value.Assertions {
+			items[idx] = ValidationAssertion{
+				Message: assertion.Message,
+				JQ:      assertion.JQ,
+			}
+		}
+		decoded.Assertions = items
+	}
+
+	if decoded.RequiredAttributes == nil &&
+		decoded.Assertions == nil &&
+		strings.TrimSpace(decoded.SchemaRef) == "" {
+		return nil
+	}
+
+	return decoded
 }
 
 func payloadTransformOrderFromJSON(data []byte) []string {

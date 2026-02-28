@@ -120,9 +120,16 @@ func inferMetadataFromOpenAPISpec(
 			}
 		}
 		if hasOpenAPIMethod(collectionCandidate.methods, "post") {
+			createValidation := inferOpenAPIOperationValidationSpec(
+				collectionCandidate,
+				"post",
+				pathItems,
+				openAPISpec,
+			)
 			operations[string(OperationCreate)] = OperationSpec{
-				Method: "POST",
-				Path:   metadataCollectionPath,
+				Method:   "POST",
+				Path:     metadataCollectionPath,
+				Validate: createValidation,
 			}
 		}
 	}
@@ -148,14 +155,28 @@ func inferMetadataFromOpenAPISpec(
 			}
 		}
 		if hasOpenAPIMethod(resourceCandidate.methods, "put") {
+			updateValidation := inferOpenAPIOperationValidationSpec(
+				resourceCandidate,
+				"put",
+				pathItems,
+				openAPISpec,
+			)
 			operations[string(OperationUpdate)] = OperationSpec{
-				Method: "PUT",
-				Path:   metadataResourcePath,
+				Method:   "PUT",
+				Path:     metadataResourcePath,
+				Validate: updateValidation,
 			}
 		} else if hasOpenAPIMethod(resourceCandidate.methods, "patch") {
+			updateValidation := inferOpenAPIOperationValidationSpec(
+				resourceCandidate,
+				"patch",
+				pathItems,
+				openAPISpec,
+			)
 			operations[string(OperationUpdate)] = OperationSpec{
-				Method: "PATCH",
-				Path:   metadataResourcePath,
+				Method:   "PATCH",
+				Path:     metadataResourcePath,
+				Validate: updateValidation,
 			}
 		}
 		if hasOpenAPIMethod(resourceCandidate.methods, "delete") {

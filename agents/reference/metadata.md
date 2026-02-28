@@ -37,6 +37,8 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 20. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
 21. Metadata template-rendered string fields MUST support `{{resource_format .}}`, which resolves to the active repository resource format (`json` or `yaml`) and defaults to `json` when the configured format is empty.
 22. Default metadata operation media directives SHOULD use repository-format-aware templates in `httpHeaders` entries (`Accept: application/{{resource_format .}}` for all default operations and `Content-Type: application/{{resource_format .}}` for `create|update`).
+23. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
+24. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 
 ## Data Contracts
 Supported metadata groups:
@@ -45,7 +47,8 @@ Supported metadata groups:
 3. `operationInfo.defaults`: shared transform defaults applied before operation-specific overrides.
 4. Operation wire fields: `path`, `httpMethod`, `query`, `httpHeaders`, `body` (including media headers such as `Accept` and `Content-Type` as `httpHeaders` entries).
 5. Transform wire fields: `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression` (with compare-specific top-level fields `compareResources.filterAttributes|suppressAttributes|jqExpression`).
-6. Resource-level secret detection fields: `secretInAttributes`.
+6. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
+7. Resource-level secret detection fields: `secretInAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -99,3 +102,4 @@ Template context contract:
 6. For selector `/admin/realms/_/user-registry/_/mappers/`, `operationInfo.listCollection.payload.jqExpression` MAY use `resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
 7. `metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.
 8. `metadata get` resolves `{{resource_format .}}` tokens in metadata string fields to `application/json` or `application/yaml` based on repository format while preserving unrelated templates such as `{{.id}}`.
+9. `operationInfo.createResource.validate.requiredAttributes: ["realm"]` is satisfied for `/admin/realms/platform/...` when `realm` is derived from the logical path template context.

@@ -272,6 +272,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 		Body:                  spec.Body,
 		Filter:                cloneStringSlice(spec.Filter),
 		Suppress:              cloneStringSlice(spec.Suppress),
+		Validate:              cloneOperationValidationSpec(spec.Validate),
 		PayloadTransformOrder: cloneStringSlice(spec.PayloadTransformOrder),
 	}
 

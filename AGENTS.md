@@ -59,7 +59,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 - Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `resource-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
 - Each logical change needs a focused justification so that a Conventional Commit can still be composed if the user consents to committing; agents should reserve the actual phrasing until the user explicitly asks or approves the commit.
 - Before handing off, agents MUST:
-  - run the repo’s standard test command(s) (or at least unit tests when the full suite is impractically slow),
+  - run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked),
   - scan diffs for secrets or unexpected large/binary files,
   - review the prepared diff (for example via `git diff`/`git diff --staged`) for correctness.
 - Agents MUST include in their final response:
@@ -85,7 +85,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
 
 ## Delivery Protocol
-1. After fulfilling a request, stage/prepare the touched files and run the required verification commands, but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
+1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (code modifications always include `go test -race ./...` at completion, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
 2. If the user agrees and asks for help composing the commit, ensure each resulting Conventional Commit message follows the `Commit guidance (agents)` rules and the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting them.
 3. When multiple logical concerns exist and the user asks for multiple commits, propose multiple Conventional Commit messages by numbering each message and describing its individual scope.
 

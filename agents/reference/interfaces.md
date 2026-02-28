@@ -128,7 +128,7 @@ Contract groups:
 1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`) and optional `collectionPath` override.
 2. `resourceInfo` secret mapping (`secretInAttributes`).
 3. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
-4. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+4. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
 5. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
 6. metadata template helper functions include `{{resource_format .}}` for repository-format-aware values (`json` or `yaml`) in template-rendered metadata string fields.
 
@@ -143,6 +143,24 @@ Required fields:
 5. `Accept`.
 6. `ContentType`.
 7. `Body`.
+
+Optional fields:
+1. `Validate` (`metadata.OperationValidationSpec`).
+
+### Type: `metadata.OperationValidationSpec`
+Represents operation payload validation directives.
+
+Fields:
+1. `RequiredAttributes`: required top-level payload attributes.
+2. `Assertions`: list of jq assertions that must evaluate truthy.
+3. `SchemaRef`: OpenAPI schema reference (`openapi:request-body` or `openapi:#/...`).
+
+### Type: `metadata.ValidationAssertion`
+Represents one jq-based payload assertion.
+
+Fields:
+1. `Message`.
+2. `JQ`.
 
 ### Type: `metadata.ResourceOperationSpecInput`
 Represents a provider-safe resource descriptor used for operation-spec rendering without requiring `resource.Resource`.

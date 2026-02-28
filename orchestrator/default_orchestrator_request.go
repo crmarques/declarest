@@ -22,7 +22,7 @@ func (r *DefaultOrchestrator) Request(
 		return nil, err
 	}
 
-	resolvedPath, err := r.resolveRequestEndpointPath(ctx, method, endpointPath, body)
+	resolvedPath, requestCtx, err := r.resolveRequestEndpointPath(ctx, method, endpointPath, body)
 	if err != nil {
 		return nil, err
 	}
@@ -36,10 +36,10 @@ func (r *DefaultOrchestrator) Request(
 		body != nil,
 	)
 
-	value, err := serverManager.Request(ctx, method, resolvedPath, body)
+	value, err := serverManager.Request(requestCtx, method, resolvedPath, body)
 	if err != nil {
 		if fallbackValue, handled, fallbackErr := r.retryRequestResolvedMutationWithLiteralPath(
-			ctx,
+			requestCtx,
 			serverManager,
 			method,
 			endpointPath,
@@ -70,7 +70,13 @@ func (r *DefaultOrchestrator) Request(
 		}
 
 		if isTypedCategory(err, faults.NotFoundError) {
-			fallbackValue, handled, fallbackErr := r.retryRequestNotFoundWithMetadata(ctx, serverManager, method, endpointPath, body)
+			fallbackValue, handled, fallbackErr := r.retryRequestNotFoundWithMetadata(
+				requestCtx,
+				serverManager,
+				method,
+				endpointPath,
+				body,
+			)
 			if handled {
 				if fallbackErr != nil {
 					debugctx.Printf(
@@ -198,17 +204,17 @@ func (r *DefaultOrchestrator) resolveRequestEndpointPath(
 	method string,
 	endpointPath string,
 	body resource.Value,
-) (string, error) {
+) (string, context.Context, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(method))
 
 	operation, ok := requestMetadataOperation(normalizedMethod)
 	if !ok {
-		return endpointPath, nil
+		return endpointPath, ctx, nil
 	}
 
 	resourceInfo, err := r.buildResourceInfoForRemoteRead(ctx, endpointPath)
 	if err != nil {
-		return "", err
+		return "", ctx, err
 	}
 
 	if normalizedMethod == "GET" && shouldResolveRequestGetAsList(resourceInfo) {
@@ -224,17 +230,31 @@ func (r *DefaultOrchestrator) resolveRequestEndpointPath(
 	if body != nil {
 		normalizedBody, normalizeErr := resource.Normalize(body)
 		if normalizeErr != nil {
-			return "", normalizeErr
+			return "", ctx, normalizeErr
 		}
 		resourceInfo.Payload = normalizedBody
 	}
 
 	spec, err := r.renderOperationSpec(ctx, resourceInfo, operation, resourceInfo.Payload)
 	if err != nil {
-		return "", err
+		return "", ctx, err
 	}
 
-	return spec.Path, nil
+	ctxWithValidation := metadata.WithRequestOperationValidation(
+		ctx,
+		operation,
+		metadata.ResourceOperationSpecInput{
+			LogicalPath:    resourceInfo.LogicalPath,
+			CollectionPath: resourceInfo.CollectionPath,
+			LocalAlias:     resourceInfo.LocalAlias,
+			RemoteID:       resourceInfo.RemoteID,
+			Metadata:       resourceInfo.Metadata,
+			Payload:        resourceInfo.Payload,
+		},
+		spec.Validate,
+	)
+
+	return spec.Path, ctxWithValidation, nil
 }
 
 func requestMetadataOperation(method string) (metadata.Operation, bool) {

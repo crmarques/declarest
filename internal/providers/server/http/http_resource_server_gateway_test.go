@@ -437,6 +437,253 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsInMetadataPayloadFieldO
 	}
 }
 
+func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
+	t.Parallel()
+
+	t.Run("required_attributes_accept_path_derived_fields", func(t *testing.T) {
+		t.Parallel()
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+			CollectionPath: "/admin/realms/platform/clients",
+			Payload: map[string]any{
+				"clientId": "declarest-cli",
+			},
+			Metadata: metadata.ResourceMetadata{
+				CollectionPath: "/admin/realms/{{.realm}}/clients",
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Path: "/admin/realms/{{.realm}}/clients",
+						Validate: &metadata.OperationValidationSpec{
+							RequiredAttributes: []string{"realm", "clientId"},
+						},
+					},
+				},
+			},
+		}, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+	})
+
+	t.Run("required_attributes_fail_when_missing", func(t *testing.T) {
+		t.Parallel()
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/acme",
+			Payload: map[string]any{
+				"name": "Acme",
+			},
+			Metadata: metadata.ResourceMetadata{
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Path: "/customers",
+						Validate: &metadata.OperationValidationSpec{
+							RequiredAttributes: []string{"realm"},
+						},
+					},
+				},
+			},
+		}, metadata.OperationCreate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "missing required attributes") {
+			t.Fatalf("expected missing required attributes validation error, got %v", err)
+		}
+	})
+
+	t.Run("assertion_failure_uses_assertion_message", func(t *testing.T) {
+		t.Parallel()
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+		})
+
+		_, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/acme",
+			Payload: map[string]any{
+				"name": "Acme",
+			},
+			Metadata: metadata.ResourceMetadata{
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Path: "/customers",
+						Validate: &metadata.OperationValidationSpec{
+							Assertions: []metadata.ValidationAssertion{
+								{
+									Message: "realm is mandatory to create a resource.",
+									JQ:      `has("realm") and (.realm | type=="string") and (.realm|length>0)`,
+								},
+							},
+						},
+					},
+				},
+			},
+		}, metadata.OperationCreate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "realm is mandatory to create a resource.") {
+			t.Fatalf("expected assertion message in validation error, got %v", err)
+		}
+	})
+
+	t.Run("schema_ref_request_body_uses_path_fields_and_required_properties", func(t *testing.T) {
+		t.Parallel()
+
+		openAPI := `
+openapi: 3.0.0
+paths:
+  /admin/realms/{realm}/clients:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - realm
+                - clientId
+              properties:
+                realm:
+                  type: string
+                clientId:
+                  type: string
+      responses:
+        "201":
+          content:
+            application/json: {}
+`
+		tempDir := t.TempDir()
+		specPath := filepath.Join(tempDir, "openapi.yaml")
+		if err := os.WriteFile(specPath, []byte(openAPI), 0o600); err != nil {
+			t.Fatalf("failed to write openapi fixture: %v", err)
+		}
+
+		gateway := mustGateway(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+			OpenAPI: specPath,
+		})
+
+		_, err := gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+			CollectionPath: "/admin/realms/platform/clients",
+			Payload: map[string]any{
+				"clientId": "declarest-cli",
+			},
+			Metadata: metadata.ResourceMetadata{
+				CollectionPath: "/admin/realms/{{.realm}}/clients",
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Path: "/admin/realms/{{.realm}}/clients",
+						Validate: &metadata.OperationValidationSpec{
+							SchemaRef: "openapi:request-body",
+						},
+					},
+				},
+			},
+		}, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		_, err = gateway.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+			CollectionPath: "/admin/realms/platform/clients",
+			Payload:        map[string]any{},
+			Metadata: metadata.ResourceMetadata{
+				CollectionPath: "/admin/realms/{{.realm}}/clients",
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Path: "/admin/realms/{{.realm}}/clients",
+						Validate: &metadata.OperationValidationSpec{
+							SchemaRef: "openapi:request-body",
+						},
+					},
+				},
+			},
+		}, metadata.OperationCreate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "missing required property") {
+			t.Fatalf("expected schema required-property validation error, got %v", err)
+		}
+	})
+}
+
+func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
+	t.Parallel()
+
+	var requestCount int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requestCount, 1)
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST method, got %s", r.Method)
+		}
+		_, _ = fmt.Fprint(w, `{"ok":true}`)
+	}))
+	t.Cleanup(server.Close)
+
+	gateway := mustGateway(t, config.HTTPServer{
+		BaseURL: server.URL,
+		Auth: &config.HTTPAuth{
+			BearerToken: &config.BearerTokenAuth{Token: "token"},
+		},
+	})
+
+	validationCtx := metadata.WithRequestOperationValidation(
+		context.Background(),
+		metadata.OperationCreate,
+		metadata.ResourceOperationSpecInput{
+			LogicalPath:    "/admin/realms/platform/clients",
+			CollectionPath: "/admin/realms/platform/clients",
+			Metadata: metadata.ResourceMetadata{
+				CollectionPath: "/admin/realms/{{.realm}}/clients",
+			},
+		},
+		&metadata.OperationValidationSpec{
+			RequiredAttributes: []string{"realm", "clientId"},
+		},
+	)
+
+	_, err := gateway.Request(
+		validationCtx,
+		http.MethodPost,
+		"/admin/realms/platform/clients",
+		map[string]any{"clientId": "declarest-cli"},
+	)
+	if err != nil {
+		t.Fatalf("Request returned error: %v", err)
+	}
+
+	_, err = gateway.Request(
+		validationCtx,
+		http.MethodPost,
+		"/admin/realms/platform/clients",
+		map[string]any{},
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if got := atomic.LoadInt32(&requestCount); got != 1 {
+		t.Fatalf("expected one successful remote request after validation short-circuit, got %d", got)
+	}
+}
+
 func TestGetAppliesPayloadTransformsAfterResponseDecode(t *testing.T) {
 	t.Parallel()
 

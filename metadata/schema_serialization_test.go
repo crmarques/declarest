@@ -19,6 +19,16 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 				Path:        "/api/customers",
 				Accept:      "application/json",
 				ContentType: "application/json",
+				Validate: &OperationValidationSpec{
+					RequiredAttributes: []string{},
+					Assertions: []ValidationAssertion{
+						{
+							Message: "name must be present",
+							JQ:      `has("name")`,
+						},
+					},
+					SchemaRef: "openapi:request-body",
+				},
 			},
 			string(OperationGet): {
 				Path: "/api/customers/{{.id}}",
@@ -108,6 +118,28 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	}
 	assertHeader("Accept", "application/json")
 	assertHeader("Content-Type", "application/json")
+	validateValue, ok := createResource["validate"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected createResource.validate object, got %#v", createResource["validate"])
+	}
+	requiredAttributes, ok := validateValue["requiredAttributes"].([]any)
+	if !ok || len(requiredAttributes) != 0 {
+		t.Fatalf("expected explicit empty validate.requiredAttributes array, got %#v", validateValue["requiredAttributes"])
+	}
+	assertions, ok := validateValue["assertions"].([]any)
+	if !ok || len(assertions) != 1 {
+		t.Fatalf("expected one validate assertion, got %#v", validateValue["assertions"])
+	}
+	assertion, ok := assertions[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected assertion object, got %#v", assertions[0])
+	}
+	if assertion["message"] != "name must be present" || assertion["jq"] != `has("name")` {
+		t.Fatalf("unexpected assertion payload %#v", assertion)
+	}
+	if validateValue["schemaRef"] != "openapi:request-body" {
+		t.Fatalf("expected validate.schemaRef openapi:request-body, got %#v", validateValue["schemaRef"])
+	}
 	compareResource, ok := operationInfo["compareResources"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected compareResources operation entry, got %#v", operationInfo["compareResources"])
@@ -208,7 +240,11 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		    },
 		    "createResource": {
 		      "httpMethod": "POST",
-		      "path": "/admin/realms"
+		      "path": "/admin/realms",
+		      "validate": {
+		        "requiredAttributes": ["realm"],
+		        "schemaRef": "openapi:request-body"
+		      }
 		    },
 		    "getResource": {
 		      "httpMethod": "GET",
@@ -216,6 +252,14 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		      "httpHeaders": [
 		        {"name": "X-Tenant", "value": "platform"}
 		      ],
+		      "validate": {
+		        "assertions": [
+		          {
+		            "message": "realm must be a non-empty string",
+		            "jq": "has(\"realm\") and (.realm | type==\"string\") and (.realm | length > 0)"
+		          }
+		        ]
+		      },
 		      "payload": {
 		        "filterAttributes": []
 		      }
@@ -254,6 +298,26 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		}
 		if decoded.Operations[string(OperationCreate)].Method != "POST" {
 			t.Fatalf("unexpected create method: %#v", decoded.Operations[string(OperationCreate)])
+		}
+		createValidate := decoded.Operations[string(OperationCreate)].Validate
+		if createValidate == nil {
+			t.Fatal("expected create validate block to be decoded")
+		}
+		if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"realm"}) {
+			t.Fatalf("unexpected create validate.requiredAttributes: %#v", createValidate.RequiredAttributes)
+		}
+		if createValidate.SchemaRef != "openapi:request-body" {
+			t.Fatalf("unexpected create validate.schemaRef: %q", createValidate.SchemaRef)
+		}
+		getValidate := decoded.Operations[string(OperationGet)].Validate
+		if getValidate == nil || len(getValidate.Assertions) != 1 {
+			t.Fatalf("expected get validate assertions to be decoded, got %#v", getValidate)
+		}
+		if getValidate.Assertions[0].Message != "realm must be a non-empty string" {
+			t.Fatalf("unexpected get validate assertion message: %#v", getValidate.Assertions[0].Message)
+		}
+		if getValidate.Assertions[0].JQ == "" {
+			t.Fatal("expected get validate assertion jq to be populated")
 		}
 		if decoded.Filter == nil || len(decoded.Filter) != 0 {
 			t.Fatalf("expected explicit empty filter, got %#v", decoded.Filter)
@@ -325,6 +389,33 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarPayloadTransformAttributes(t
 	createSpec := decoded.Operations[string(OperationCreate)]
 	if !reflect.DeepEqual(createSpec.Suppress, []string{"secret"}) {
 		t.Fatalf("expected scalar create payload suppress to decode as single-item list, got %#v", createSpec.Suppress)
+	}
+}
+
+func TestResourceMetadataUnmarshalJSONSupportsScalarValidateRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{
+	  "operationInfo": {
+	    "createResource": {
+	      "validate": {
+	        "requiredAttributes": "realm"
+	      }
+	    }
+	  }
+	}`)
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+
+	createValidate := decoded.Operations[string(OperationCreate)].Validate
+	if createValidate == nil {
+		t.Fatal("expected create validate block to be decoded")
+	}
+	if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"realm"}) {
+		t.Fatalf("expected scalar requiredAttributes to decode as single-item list, got %#v", createValidate.RequiredAttributes)
 	}
 }
 

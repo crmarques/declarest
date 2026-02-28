@@ -518,6 +518,96 @@ func TestInferFromOpenAPITreatsCollectionPathWithoutSelectorAsCollection(t *test
 	}
 }
 
+func TestInferFromOpenAPISetsOperationValidationFromRequestBodySchema(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/admin/realms": map[string]any{
+				"get": map[string]any{},
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"type": "object",
+									"required": []any{
+										"realm",
+										"displayName",
+									},
+									"properties": map[string]any{
+										"realm":       map[string]any{"type": "string"},
+										"displayName": map[string]any{"type": "string"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/admin/realms/{realm}": map[string]any{
+				"get": map[string]any{},
+				"put": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"allOf": []any{
+										map[string]any{
+											"type": "object",
+											"required": []any{
+												"enabled",
+											},
+										},
+										map[string]any{
+											"type": "object",
+											"required": []any{
+												"displayName",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/admin/realms", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	createValidation := inferred.Operations[string(OperationCreate)].Validate
+	if createValidation == nil {
+		t.Fatal("expected inferred create validate block")
+	}
+	if createValidation.SchemaRef != "openapi:request-body" {
+		t.Fatalf("expected create validate.schemaRef, got %#v", createValidation.SchemaRef)
+	}
+	if len(createValidation.RequiredAttributes) != 2 ||
+		createValidation.RequiredAttributes[0] != "displayName" ||
+		createValidation.RequiredAttributes[1] != "realm" {
+		t.Fatalf("unexpected create validate.requiredAttributes %#v", createValidation.RequiredAttributes)
+	}
+
+	updateValidation := inferred.Operations[string(OperationUpdate)].Validate
+	if updateValidation == nil {
+		t.Fatal("expected inferred update validate block")
+	}
+	if updateValidation.SchemaRef != "openapi:request-body" {
+		t.Fatalf("expected update validate.schemaRef, got %#v", updateValidation.SchemaRef)
+	}
+	if len(updateValidation.RequiredAttributes) != 2 ||
+		updateValidation.RequiredAttributes[0] != "displayName" ||
+		updateValidation.RequiredAttributes[1] != "enabled" {
+		t.Fatalf("unexpected update validate.requiredAttributes %#v", updateValidation.RequiredAttributes)
+	}
+}
+
 func TestCompactInferredMetadataDefaultsOmitsFallbackOperations(t *testing.T) {
 	t.Parallel()
 
@@ -595,6 +685,63 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIDefaultOperationsWithNonTemp
 
 	if len(compact.Operations) != 0 {
 		t.Fatalf("expected openapi-default operations to be omitted, got %#v", compact.Operations)
+	}
+}
+
+func TestCompactInferredMetadataDefaultsOmitsOpenAPIValidationDefaults(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/admin/realms": map[string]any{
+				"get": map[string]any{},
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"type": "object",
+									"required": []any{
+										"realm",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"/admin/realms/{realm}": map[string]any{
+				"get": map[string]any{},
+				"put": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"type": "object",
+									"required": []any{
+										"realm",
+									},
+								},
+							},
+						},
+					},
+				},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/admin/realms", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	compact, err := CompactInferredMetadataDefaults("/admin/realms", inferred, openAPISpec)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+	if len(compact.Operations) != 0 {
+		t.Fatalf("expected openapi validation defaults to be omitted, got %#v", compact.Operations)
 	}
 }
 

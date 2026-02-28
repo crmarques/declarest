@@ -103,6 +103,7 @@ Acceptance contracts:
 59. Resource git auto-commit contract: `resource save` and repository-backed `resource delete` on git contexts create local commits after successful repository mutation, reject combined `--message` + `--message-override`, and preserve remote-only delete behavior (no repository commit).
 60. Resource auto-commit worktree safeguard: `resource save|delete|edit` fail with `ValidationError` before mutation when git worktree has unrelated uncommitted changes.
 61. Git repository auto-init contract: git-backed repository status/history/check and git-backed repository mutation commit/status flows initialize a missing local `.git/` repository automatically and continue with normal operation semantics (including empty-history handling for fresh repos).
+62. Operation payload validation contract: `resource create|update` and metadata-resolved `resource request post|put|patch` enforce `validate.requiredAttributes`, jq `validate.assertions`, and OpenAPI-backed `validate.schemaRef`; path-derived template fields satisfy required attributes without mutating the transmitted body, and validation failures short-circuit before remote HTTP execution.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.

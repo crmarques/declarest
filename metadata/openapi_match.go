@@ -109,6 +109,7 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 		ContentType: strings.TrimSpace(spec.ContentType),
 		Body:        spec.Body,
 		JQ:          strings.TrimSpace(spec.JQ),
+		Validate:    normalizeOperationValidationSpecForComparison(spec.Validate),
 	}
 
 	if len(spec.Query) > 0 {
@@ -122,6 +123,30 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	}
 	if len(spec.Suppress) > 0 {
 		normalized.Suppress = cloneStringSlice(spec.Suppress)
+	}
+
+	return normalized
+}
+
+func normalizeOperationValidationSpecForComparison(value *OperationValidationSpec) *OperationValidationSpec {
+	if value == nil {
+		return nil
+	}
+
+	normalized := &OperationValidationSpec{
+		SchemaRef: strings.TrimSpace(value.SchemaRef),
+	}
+	if len(value.RequiredAttributes) > 0 {
+		normalized.RequiredAttributes = cloneStringSlice(value.RequiredAttributes)
+	}
+	if len(value.Assertions) > 0 {
+		normalized.Assertions = cloneValidationAssertions(value.Assertions)
+	}
+
+	if len(normalized.RequiredAttributes) == 0 &&
+		len(normalized.Assertions) == 0 &&
+		normalized.SchemaRef == "" {
+		return nil
 	}
 
 	return normalized

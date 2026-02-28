@@ -92,6 +92,21 @@ func operationRequiresBody(operation metadata.Operation) bool {
 	return operation == metadata.OperationCreate || operation == metadata.OperationUpdate
 }
 
+func requestMethodOperation(method string) (metadata.Operation, bool) {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet:
+		return metadata.OperationGet, true
+	case http.MethodPost:
+		return metadata.OperationCreate, true
+	case http.MethodPut, http.MethodPatch:
+		return metadata.OperationUpdate, true
+	case http.MethodDelete:
+		return metadata.OperationDelete, true
+	default:
+		return "", false
+	}
+}
+
 func normalizeRequestPath(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

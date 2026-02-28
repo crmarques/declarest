@@ -39,7 +39,19 @@ type OperationSpec struct {
 	Filter                []string          `json:"filter,omitempty" yaml:"filter,omitempty"`
 	Suppress              []string          `json:"suppress,omitempty" yaml:"suppress,omitempty"`
 	JQ                    string            `json:"jq,omitempty" yaml:"jq,omitempty"`
-	PayloadTransformOrder []string          `json:"-" yaml:"-"`
+	Validate              *OperationValidationSpec
+	PayloadTransformOrder []string `json:"-" yaml:"-"`
+}
+
+type OperationValidationSpec struct {
+	RequiredAttributes []string              `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
+	Assertions         []ValidationAssertion `json:"assertions,omitempty" yaml:"assertions,omitempty"`
+	SchemaRef          string                `json:"schemaRef,omitempty" yaml:"schemaRef,omitempty"`
+}
+
+type ValidationAssertion struct {
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+	JQ      string `json:"jq,omitempty" yaml:"jq,omitempty"`
 }
 
 func (o Operation) IsValid() bool {

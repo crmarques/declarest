@@ -27,6 +27,8 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
 12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to `application/<repository.resource-format>` (`json` when omitted); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
+13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload.
+14. Payload validation context MUST include path-derived template fields (for example `realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
 
 ## Data Contracts
 Request spec fields:
@@ -37,6 +39,7 @@ Request spec fields:
 5. `Accept`.
 6. `ContentType`.
 7. `Body` resource payload.
+8. Optional `Validate` operation validation directives.
 
 Server interface operations:
 1. `Get/Create/Update/Delete/List/Exists`.
@@ -59,9 +62,11 @@ Auth modes:
 2. Non-unique alias returned by list operation.
 3. Server returns non-JSON payload for configured JSON operation.
 4. OpenAPI path exists but method unsupported for operation type.
+5. Validation schema reference is configured but OpenAPI request-body/schema pointer cannot be resolved.
 
 ## Examples
 1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/<repository.resource-format>` (for example `application/yaml` in YAML repositories).
 2. `Update` operation resolves `ContentType` from metadata or defaults to `application/<repository.resource-format>` and sends normalized payload body.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).
+5. `Create` operation validation can require `realm` while resolving `realm` implicitly from `/admin/realms/<realm>/...` logical paths.

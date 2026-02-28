@@ -27,6 +27,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 			Filter:                cloneStringSlice(operationSpec.Filter),
 			Suppress:              cloneStringSlice(operationSpec.Suppress),
 			JQ:                    operationSpec.JQ,
+			Validate:              cloneOperationValidationSpec(operationSpec.Validate),
 			PayloadTransformOrder: cloneStringSlice(operationSpec.PayloadTransformOrder),
 		}
 	}
@@ -94,6 +95,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 		Filter:                cloneStringSlice(base.Filter),
 		Suppress:              cloneStringSlice(base.Suppress),
 		JQ:                    base.JQ,
+		Validate:              cloneOperationValidationSpec(base.Validate),
 		PayloadTransformOrder: cloneStringSlice(base.PayloadTransformOrder),
 	}
 
@@ -147,6 +149,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 	if overlay.JQ != "" {
 		merged.JQ = overlay.JQ
 	}
+	merged.Validate = mergeOperationValidationSpec(merged.Validate, overlay.Validate)
 	merged.PayloadTransformOrder = mergePayloadTransformOrder(merged.PayloadTransformOrder, overlay.PayloadTransformOrder)
 
 	return merged
@@ -179,10 +182,63 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 			Filter:                cloneStringSlice(value.Filter),
 			Suppress:              cloneStringSlice(value.Suppress),
 			JQ:                    value.JQ,
+			Validate:              cloneOperationValidationSpec(value.Validate),
 			PayloadTransformOrder: cloneStringSlice(value.PayloadTransformOrder),
 		}
 	}
 	return cloned
+}
+
+func cloneOperationValidationSpec(value *OperationValidationSpec) *OperationValidationSpec {
+	if value == nil {
+		return nil
+	}
+
+	cloned := &OperationValidationSpec{
+		RequiredAttributes: cloneStringSlice(value.RequiredAttributes),
+		Assertions:         cloneValidationAssertions(value.Assertions),
+		SchemaRef:          value.SchemaRef,
+	}
+	return cloned
+}
+
+func cloneValidationAssertions(values []ValidationAssertion) []ValidationAssertion {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make([]ValidationAssertion, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+func mergeOperationValidationSpec(
+	base *OperationValidationSpec,
+	overlay *OperationValidationSpec,
+) *OperationValidationSpec {
+	if base == nil && overlay == nil {
+		return nil
+	}
+	if overlay == nil {
+		return cloneOperationValidationSpec(base)
+	}
+
+	merged := cloneOperationValidationSpec(base)
+	if merged == nil {
+		merged = &OperationValidationSpec{}
+	}
+
+	if overlay.RequiredAttributes != nil {
+		merged.RequiredAttributes = cloneStringSlice(overlay.RequiredAttributes)
+	}
+	if overlay.Assertions != nil {
+		merged.Assertions = cloneValidationAssertions(overlay.Assertions)
+	}
+	if overlay.SchemaRef != "" {
+		merged.SchemaRef = overlay.SchemaRef
+	}
+
+	return merged
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
