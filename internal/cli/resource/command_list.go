@@ -44,6 +44,9 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			if err != nil {
 				return err
 			}
+			if globalFlags != nil && globalFlags.Output == common.OutputAuto {
+				outputFormat = common.OutputAuto
+			}
 
 			orchestratorService, err := common.RequireOrchestrator(deps)
 			if err != nil {

@@ -4423,22 +4423,16 @@ func TestResourceListRecursiveFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected direct list error: %v", err)
 	}
-	if !strings.Contains(directOutput, "\"path\": \"/customers\"") {
-		t.Fatalf("expected direct list payload output, got %q", directOutput)
-	}
-	if strings.Contains(directOutput, "\"LogicalPath\"") {
-		t.Fatalf("expected payload-only direct list output, got %q", directOutput)
+	if !strings.Contains(directOutput, "customers (customers)") {
+		t.Fatalf("expected direct list text output, got %q", directOutput)
 	}
 
 	recursiveOutput, err := executeForTest(testDeps(), "", "resource", "list", "/customers", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive list error: %v", err)
 	}
-	if !strings.Contains(recursiveOutput, "\"path\": \"/customers/nested\"") {
-		t.Fatalf("expected recursive list payload output, got %q", recursiveOutput)
-	}
-	if strings.Contains(recursiveOutput, "\"LogicalPath\"") {
-		t.Fatalf("expected payload-only recursive list output, got %q", recursiveOutput)
+	if !strings.Contains(recursiveOutput, "nested (nested)") {
+		t.Fatalf("expected recursive list text output, got %q", recursiveOutput)
 	}
 }
 
@@ -4498,14 +4492,28 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "\"id\": \"remote-only\"") {
-			t.Fatalf("expected remote-server output by default, got %q", output)
+		if !strings.Contains(output, "remote-only (remote-only)") {
+			t.Fatalf("expected remote-server text output by default, got %q", output)
 		}
-		if strings.Contains(output, "\"id\": \"repo-only\"") {
+		if strings.Contains(output, "repo-only (repo-only)") {
 			t.Fatalf("expected repository output to be absent by default, got %q", output)
 		}
-		if strings.Contains(output, "\"LogicalPath\"") {
-			t.Fatalf("expected payload-only list output, got %q", output)
+	})
+
+	t.Run("default_auto_output_can_be_overridden_to_json", func(t *testing.T) {
+		t.Parallel()
+
+		orchestrator := &testOrchestrator{
+			metadataService: newTestMetadata(),
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+		}
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "--output", "json", "resource", "list", "/")
+		if err != nil {
+			t.Fatalf("unexpected list error: %v", err)
+		}
+		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected json payload output with --output json, got %q", output)
 		}
 	})
 
@@ -4521,14 +4529,11 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+		if !strings.Contains(output, "remote-only (remote-only)") {
 			t.Fatalf("expected remote-server output with --remote-server, got %q", output)
 		}
-		if strings.Contains(output, "\"id\": \"repo-only\"") {
+		if strings.Contains(output, "repo-only (repo-only)") {
 			t.Fatalf("expected repository output to be absent with --remote-server, got %q", output)
-		}
-		if strings.Contains(output, "\"LogicalPath\"") {
-			t.Fatalf("expected payload-only list output, got %q", output)
 		}
 	})
 
@@ -4544,14 +4549,11 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "\"id\": \"repo-only\"") {
+		if !strings.Contains(output, "repo-only (repo-only)") {
 			t.Fatalf("expected repository output, got %q", output)
 		}
-		if strings.Contains(output, "\"id\": \"remote-only\"") {
+		if strings.Contains(output, "remote-only (remote-only)") {
 			t.Fatalf("expected remote output to be absent with --repository, got %q", output)
-		}
-		if strings.Contains(output, "\"LogicalPath\"") {
-			t.Fatalf("expected payload-only list output, got %q", output)
 		}
 	})
 

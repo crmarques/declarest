@@ -245,12 +245,12 @@ Interactive config commands:
 2. Structured output mode MUST define stable keys for automation.
 3. Error output MUST include category and actionable next step where possible.
 4. Diff output MUST present deterministic ordering.
-5. When `--output` is `auto` (default), resource-oriented output MUST follow the active context `repository.resource-format` (`json` or `yaml`).
+5. When `--output` is `auto` (default), resource-oriented output MUST follow the active context `repository.resource-format` (`json` or `yaml`) except for `resource list`, which MUST default to text rendering.
 6. `repo status` with `--output auto` MUST render deterministic text summary by default.
 7. `repo status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
 8. `repo commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
 9. `repo tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
-9. `resource list --output text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present.
+9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present.
 7. `config show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
@@ -331,7 +331,7 @@ Interactive config commands:
 23. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
 24. `repo clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
 24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
-25. `resource list --output text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
+25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
 26. `resource-server get token-url` or `resource-server get access-token` is invoked for a context configured with `basic-auth`, `bearer-token`, or `custom-header` and fails with `ValidationError`.
 27. `resource-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
