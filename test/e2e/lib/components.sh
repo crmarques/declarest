@@ -152,9 +152,33 @@ e2e_component_state_file() {
   printf '%s/%s-%s.env\n' "${E2E_STATE_DIR}" "${component_type}" "${component_name}"
 }
 
+e2e_default_metadata_bundle_for_resource_server() {
+  local resource_server=$1
+
+  case "${resource_server}" in
+    keycloak)
+      # Use shorthand so the resolver fetches from the default release remote.
+      printf 'keycloak-bundle:0.0.1\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 e2e_prepare_metadata_workspace() {
+  unset E2E_METADATA_DIR
+  unset E2E_METADATA_BUNDLE
+
   if [[ "${E2E_RESOURCE_SERVER:-}" == 'none' ]]; then
-    unset E2E_METADATA_DIR
+    return 0
+  fi
+
+  local metadata_bundle
+  if metadata_bundle=$(e2e_default_metadata_bundle_for_resource_server "${E2E_RESOURCE_SERVER}"); then
+    E2E_METADATA_BUNDLE="${metadata_bundle}"
+    export E2E_METADATA_BUNDLE
+    e2e_info "resource-server metadata bundle selected bundle=${metadata_bundle}"
     return 0
   fi
 
@@ -162,13 +186,11 @@ e2e_prepare_metadata_workspace() {
   resource_component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
   local component_dir="${E2E_COMPONENT_PATH[${resource_component_key}]:-}"
   if [[ -z "${component_dir}" ]]; then
-    unset E2E_METADATA_DIR
     return 0
   fi
 
   local metadata_source="${component_dir}/metadata"
   if [[ ! -d "${metadata_source}" ]]; then
-    unset E2E_METADATA_DIR
     return 0
   fi
 

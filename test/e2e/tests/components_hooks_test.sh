@@ -18,6 +18,7 @@ prepare_runtime_globals() {
   E2E_CONTEXT_DIR="${tmp}/context"
   E2E_CONTEXT_FILE="${tmp}/contexts.yaml"
   E2E_METADATA_DIR=''
+  E2E_METADATA_BUNDLE=''
   E2E_RESOURCE_SERVER='demo'
   E2E_RESOURCE_SERVER_CONNECTION='local'
   E2E_RESOURCE_SERVER_AUTH_TYPE='oauth2'
@@ -158,6 +159,82 @@ test_parallel_hook_failures_retain_component_logs_in_run_artifacts() {
   assert_file_contains "${beta_log}" "beta hook failed"
 }
 
+test_prepare_metadata_workspace_prefers_keycloak_bundle() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  E2E_RESOURCE_SERVER='keycloak'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_PATH['resource-server:keycloak']="${tmp}/components/resource-server/keycloak"
+
+  e2e_prepare_metadata_workspace
+
+  assert_eq "${E2E_METADATA_BUNDLE}" "keycloak-bundle:0.0.1" "expected keycloak shorthand metadata bundle"
+  assert_eq "${E2E_METADATA_DIR:-}" "" "expected metadata workspace dir to stay unset when bundle is selected"
+  if [[ -d "${E2E_RUN_DIR}/metadata" ]]; then
+    fail "expected metadata workspace directory to be skipped when bundle is selected"
+  fi
+}
+
+context_metadata_line() {
+  local fragment=$1
+  awk '/^metadata:/{getline; print; exit}' "${fragment}"
+}
+
+run_repo_context_script() {
+  local script_path=$1
+  local state_file=$2
+  local fragment_file=$3
+  local metadata_bundle=${4:-}
+  local metadata_dir=${5:-}
+
+  E2E_COMPONENT_STATE_FILE="${state_file}" \
+    E2E_COMPONENT_CONTEXT_FRAGMENT="${fragment_file}" \
+    E2E_METADATA_BUNDLE="${metadata_bundle}" \
+    E2E_METADATA_DIR="${metadata_dir}" \
+    bash "${script_path}"
+}
+
+test_repo_context_scripts_emit_metadata_bundle_when_set() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local state_file="${tmp}/state.env"
+  local repo_dir="${tmp}/repo"
+  local metadata_dir="${tmp}/metadata"
+  mkdir -p "${repo_dir}" "${metadata_dir}"
+
+  cat >"${state_file}" <<EOF
+REPO_BASE_DIR=${repo_dir}
+REPO_RESOURCE_FORMAT=json
+GIT_REMOTE_URL=https://example.com/acme/repo.git
+GIT_REMOTE_PROVIDER=github
+GIT_REMOTE_BRANCH=main
+EOF
+
+  local script_path
+  for script_path in \
+    "${E2E_SCRIPT_DIR}/components/repo-type/filesystem/scripts/context.sh" \
+    "${E2E_SCRIPT_DIR}/components/repo-type/git/scripts/context.sh"; do
+    local component_name
+    component_name=$(basename "$(dirname "$(dirname "${script_path}")")")
+    local fragment_file="${tmp}/${component_name}.yaml"
+
+    run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "keycloak-bundle:0.0.1" ""
+    assert_eq "$(context_metadata_line "${fragment_file}")" "  bundle: keycloak-bundle:0.0.1" "expected ${script_path} to emit metadata.bundle"
+
+    run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "" "${metadata_dir}"
+    assert_eq "$(context_metadata_line "${fragment_file}")" "  base-dir: ${metadata_dir}" "expected ${script_path} to emit metadata.base-dir fallback"
+  done
+}
+
 test_dependency_ordering_respects_dependencies
 test_cycle_detection_fails_with_actionable_message
 test_parallel_hook_failures_retain_component_logs_in_run_artifacts
+test_prepare_metadata_workspace_prefers_keycloak_bundle
+test_repo_context_scripts_emit_metadata_bundle_when_set

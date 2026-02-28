@@ -15,6 +15,7 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_BIN:=}"
 : "${E2E_START_EPOCH:=0}"
 : "${E2E_METADATA_DIR:=}"
+: "${E2E_METADATA_BUNDLE:=}"
 
 : "${E2E_VERBOSE:=0}"
 : "${E2E_KEEP_RUNTIME:=0}"

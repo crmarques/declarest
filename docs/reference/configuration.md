@@ -308,9 +308,9 @@ metadata:
   # base-dir: /path/to/metadata
   #
   # or bundle reference (shorthand, URL, or local tar.gz path)
-  # bundle: keycloak:0.1.0
-  # bundle: https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.1.0/declarest-bundle-keycloak-0.1.0.tar.gz
-  # bundle: /path/to/declarest-bundle-keycloak-0.1.0.tar.gz
+  # bundle: keycloak-bundle:0.0.1
+  # bundle: https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.0.1/keycloak-bundle-0.0.1.tar.gz
+  # bundle: /path/to/keycloak-bundle-0.0.1.tar.gz
 ```
 
 When both metadata sources are omitted, `metadata.base-dir` defaults to the selected repository base dir.
@@ -426,7 +426,7 @@ Example:
 ```bash
 declarest config resolve \
   --set resource-server.http.base-url=https://staging-api.example.com \
-  --set metadata.bundle=keycloak:0.1.0
+  --set metadata.bundle=keycloak-bundle:0.0.1
 ```
 
 ## Environment variables

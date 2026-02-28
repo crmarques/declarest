@@ -176,7 +176,7 @@ contexts:
       # Metadata source defaults to repository base-dir when both are unset.
       # Choose at most one metadata source.
       # base-dir: /path/to/metadata
-      # bundle: keycloak:0.1.0
+      # bundle: keycloak-bundle:0.0.1
 
   - name: yyy
     repository:
@@ -218,7 +218,7 @@ current-ctx: xxx
 2. `SetCurrent("yyy")` updates `current-ctx` and preserves context list order.
 3. `Validate` rejects a config that defines both `repository.git` and `repository.filesystem`.
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
-5. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle":"keycloak:0.1.0"}})` resolves bundle metadata source and clears `metadata.base-dir`.
+5. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle":"keycloak-bundle:0.0.1"}})` resolves bundle metadata source and clears `metadata.base-dir`.
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
 6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.

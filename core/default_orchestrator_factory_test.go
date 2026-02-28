@@ -64,19 +64,19 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 		t.Parallel()
 
 		tempDir := t.TempDir()
-		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
-version: 0.1.0
+name: keycloak-bundle
+version: 0.0.1
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 			"openapi.yaml": `
 openapi: 3.0.0
@@ -138,20 +138,20 @@ paths: {}
 		}))
 		t.Cleanup(openAPIServer.Close)
 
-		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
-version: 0.1.0
+name: keycloak-bundle
+version: 0.0.1
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: ` + openAPIServer.URL + `/openapi.yaml
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 			"metadata/admin/realms/_/metadata.json": `{}`,
 		})
@@ -207,20 +207,20 @@ distribution:
 			t.Fatalf("failed to write context openapi file: %v", err)
 		}
 
-		archivePath := filepath.Join(tempDir, "declarest-bundle-keycloak-0.1.0.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.1.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
-version: 0.1.0
+name: keycloak-bundle
+version: 0.0.1
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 			"metadata/admin/realms/_/metadata.json": `{}`,
 		})

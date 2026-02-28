@@ -129,7 +129,7 @@ contexts:
     # metadata:
     #   # Choose at most one metadata source.
     #   # base-dir: /path/to/metadata
-    #   # bundle: keycloak:0.1.0
+    #   # bundle: keycloak-bundle:0.0.1
 
     # Optional arbitrary key/value preferences.
     # preferences:

@@ -28,6 +28,7 @@ e2e_component_export_env() {
   export E2E_COMPONENT_CONTEXT_FRAGMENT="$(e2e_component_context_fragment_path "${component_key}")"
   export E2E_COMPONENT_OPENAPI_SPEC="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   export E2E_METADATA_DIR
+  export E2E_METADATA_BUNDLE
   export E2E_ROOT_DIR
   export E2E_DIR
   export E2E_RUN_DIR

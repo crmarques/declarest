@@ -34,8 +34,11 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
     printf '          token: %s\n' "${GIT_AUTH_TOKEN}"
   fi
 
-  metadata_base_dir=${E2E_METADATA_DIR:-${REPO_BASE_DIR}}
-
   printf 'metadata:\n'
-  printf '  base-dir: %s\n' "${metadata_base_dir}"
+  if [[ -n "${E2E_METADATA_BUNDLE:-}" ]]; then
+    printf '  bundle: %s\n' "${E2E_METADATA_BUNDLE}"
+  else
+    metadata_base_dir=${E2E_METADATA_DIR:-${REPO_BASE_DIR}}
+    printf '  base-dir: %s\n' "${metadata_base_dir}"
+  fi
 } >"${fragment_file}"

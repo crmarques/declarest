@@ -201,7 +201,7 @@ func normalizeBundleRelativePath(raw string) (string, error) {
 }
 
 func expectedArtifactTemplate(name string) string {
-	return fmt.Sprintf("declarest-bundle-%s-{version}.tar.gz", strings.TrimSpace(name))
+	return fmt.Sprintf("%s-{version}.tar.gz", strings.TrimSpace(name))
 }
 
 func resolveBundleOpenAPIReference(root string, raw string) (string, error) {

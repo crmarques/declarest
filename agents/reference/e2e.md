@@ -56,6 +56,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 38. `manual` with `repo-type=git` MUST run `repo init` after context assembly so repository-dependent checks (`config check`, `repo status`) are immediately usable.
 39. Components MAY include `openapi.yaml`; the runner copies any discovered spec into the run directory, exposes its path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets the component's `context` hook echo the resulting value (for example `resource-server.http.openapi`) so metadata-aware commands can infer the API surface.
 40. Resource-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST mirror that directory under `<run-dir>/metadata`, set `E2E_METADATA_DIR` to the mirrored path, and ensure repository-type context fragments emit `metadata.base-dir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset) so metadata-aware commands resolve fixture directives from the copied directory.
+41. When `resource-server=keycloak`, the runner MUST set `metadata.bundle` to shorthand `keycloak-bundle:0.0.1` so metadata resolves from the default remote bundle path, and repository-type context fragments MUST emit that bundle value instead of `metadata.base-dir`.
 
 ## Data Contracts
 Runner flags:
@@ -119,6 +120,7 @@ Manual handoff:
 10. Local `simple-api-server` mTLS trust directory can transition from non-empty to empty and back during runtime; API access follows the current trust set for new connections.
 11. `manual` with `repo-type=git` still initializes a local git repository so readiness checks do not fail with `git repository not initialized`.
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
+13. `resource-server=keycloak` runs fail during context validation when shorthand bundle `keycloak-bundle:0.0.1` cannot be resolved from the default remote path.
 
 ## Examples
 1. `./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
@@ -130,3 +132,4 @@ Manual handoff:
 7. `./run-e2e.sh --profile basic --repo-type git --git-provider gitea --git-provider-connection remote --resource-server simple-api-server --secret-provider none` fails `Preparing Components` when required `DECLAREST_E2E_GITEA_*` remote credentials are missing.
 8. `./run-e2e.sh --profile manual --repo-type git --git-provider gitea --resource-server simple-api-server --secret-provider none` yields a handoff context where `declarest-e2e config check` and `declarest-e2e repo status` can run without `git repository not initialized`.
 9. `./run-e2e.sh --validate-components` validates all discovered component manifests, hook scripts, dependency catalog, and resource-server fixture metadata, then exits without running test cases.
+10. `./run-e2e.sh --profile basic --resource-server keycloak` emits a context with `metadata.bundle: keycloak-bundle:0.0.1` (and no `metadata.base-dir`) so keycloak runs consume metadata from the default remote bundle source.

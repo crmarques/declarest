@@ -205,7 +205,7 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 				ResourceServer: validResourceServer(),
 				Metadata: config.Metadata{
 					BaseDir: "/tmp/metadata",
-					Bundle:  "keycloak:0.1.0",
+					Bundle:  "keycloak-bundle:0.0.1",
 				},
 			},
 		},
@@ -701,7 +701,7 @@ contexts:
           bearer-token:
             token: secret-token
     metadata:
-      bundle: keycloak:0.1.0
+      bundle: keycloak-bundle:0.0.1
 current-ctx: dev
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
@@ -715,8 +715,8 @@ current-ctx: dev
 	if resolved.Metadata.BaseDir != "" {
 		t.Fatalf("expected metadata base-dir to stay empty for bundle contexts, got %q", resolved.Metadata.BaseDir)
 	}
-	if resolved.Metadata.Bundle != "keycloak:0.1.0" {
-		t.Fatalf("expected metadata bundle keycloak:0.1.0, got %q", resolved.Metadata.Bundle)
+	if resolved.Metadata.Bundle != "keycloak-bundle:0.0.1" {
+		t.Fatalf("expected metadata bundle keycloak-bundle:0.0.1, got %q", resolved.Metadata.Bundle)
 	}
 }
 
@@ -732,14 +732,14 @@ func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"metadata.bundle": "keycloak:0.1.0",
+			"metadata.bundle": "keycloak-bundle:0.0.1",
 		},
 	})
 	if err != nil {
 		t.Fatalf("expected metadata bundle override to succeed, got %v", err)
 	}
-	if resolved.Metadata.Bundle != "keycloak:0.1.0" {
-		t.Fatalf("expected metadata bundle override keycloak:0.1.0, got %q", resolved.Metadata.Bundle)
+	if resolved.Metadata.Bundle != "keycloak-bundle:0.0.1" {
+		t.Fatalf("expected metadata bundle override keycloak-bundle:0.0.1, got %q", resolved.Metadata.Bundle)
 	}
 	if resolved.Metadata.BaseDir != "" {
 		t.Fatalf("expected metadata base-dir to be cleared when bundle override is configured, got %q", resolved.Metadata.BaseDir)

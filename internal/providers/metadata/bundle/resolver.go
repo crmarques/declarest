@@ -80,7 +80,8 @@ func parseBundleSource(ref string) (bundleSource, error) {
 	}
 
 	if name, version, ok := parseShorthandRef(value); ok {
-		repoName := fmt.Sprintf("declarest-bundle-%s", name)
+		repoName := shorthandRepositoryName(name)
+		artifactName := shorthandArtifactName(name, version)
 		baseURL := strings.TrimRight(strings.TrimSpace(shorthandReleaseBaseURL), "/")
 		if baseURL == "" {
 			baseURL = "https://github.com"
@@ -90,15 +91,14 @@ func parseBundleSource(ref string) (bundleSource, error) {
 			shorthandName:    name,
 			shorthandVersion: version,
 			remoteURL: fmt.Sprintf(
-				"%s/%s/%s/releases/download/v%s/%s-%s.tar.gz",
+				"%s/%s/%s/releases/download/v%s/%s",
 				baseURL,
 				defaultBundleOwner,
 				repoName,
 				version,
-				repoName,
-				version,
+				artifactName,
 			),
-			cacheDirName: fmt.Sprintf("%s-%s", repoName, version),
+			cacheDirName: fmt.Sprintf("%s-%s", name, version),
 		}, nil
 	}
 
@@ -460,6 +460,19 @@ func openBundleStream(ctx context.Context, source bundleSource) (io.ReadCloser, 
 	default:
 		return nil, validationError("unsupported metadata bundle source", nil)
 	}
+}
+
+func shorthandRepositoryName(name string) string {
+	value := strings.TrimSpace(name)
+	base := strings.TrimSuffix(value, "-bundle")
+	if base == "" {
+		base = value
+	}
+	return fmt.Sprintf("declarest-bundle-%s", base)
+}
+
+func shorthandArtifactName(name string, version string) string {
+	return fmt.Sprintf("%s-%s.tar.gz", strings.TrimSpace(name), strings.TrimSpace(version))
 }
 
 func extractTarGz(stream io.Reader, destination string) error {

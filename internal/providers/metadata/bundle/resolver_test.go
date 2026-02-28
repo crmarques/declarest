@@ -24,15 +24,15 @@ func TestResolveBundleShorthandUsesManifestAndCache(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   metadataFileName: metadata.json
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 		"metadata/admin/realms/_/metadata.json": `{}`,
 	})
@@ -49,15 +49,15 @@ distribution:
 		shorthandReleaseBaseURL = previousBase
 	}()
 
-	resolved, err := ResolveBundle(context.Background(), "keycloak:0.1.0")
+	resolved, err := ResolveBundle(context.Background(), "keycloak-bundle:0.1.0")
 	if err != nil {
 		t.Fatalf("ResolveBundle returned error: %v", err)
 	}
 	if !resolved.Shorthand {
 		t.Fatal("expected shorthand resolution")
 	}
-	if resolved.Manifest.Name != "keycloak" {
-		t.Fatalf("expected bundle name keycloak, got %q", resolved.Manifest.Name)
+	if resolved.Manifest.Name != "keycloak-bundle" {
+		t.Fatalf("expected bundle name keycloak-bundle, got %q", resolved.Manifest.Name)
 	}
 	if _, err := os.Stat(filepath.Join(resolved.MetadataDir, "admin", "realms", "_", "metadata.json")); err != nil {
 		t.Fatalf("expected metadata tree under resolved metadata directory: %v", err)
@@ -65,7 +65,7 @@ distribution:
 
 	// Ensure cache is reused when source is unavailable.
 	server.Close()
-	resolvedAgain, err := ResolveBundle(context.Background(), "keycloak:v0.1.0")
+	resolvedAgain, err := ResolveBundle(context.Background(), "keycloak-bundle:v0.1.0")
 	if err != nil {
 		t.Fatalf("ResolveBundle cache hit returned error: %v", err)
 	}
@@ -83,11 +83,11 @@ func TestResolveBundleFailsWhenMetadataRootMissing(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 	})
@@ -115,14 +115,14 @@ func TestResolveBundleFailsWhenShorthandVersionDiffersFromManifest(t *testing.T)
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.2.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 		"metadata/admin/realms/_/metadata.json": `{}`,
 	})
@@ -139,7 +139,7 @@ distribution:
 		shorthandReleaseBaseURL = previousBase
 	}()
 
-	_, err := ResolveBundle(context.Background(), "keycloak:0.1.0")
+	_, err := ResolveBundle(context.Background(), "keycloak-bundle:0.1.0")
 	if err == nil {
 		t.Fatal("expected shorthand version mismatch error")
 	}
@@ -156,11 +156,11 @@ func TestResolveBundleFailsWhenArtifactTemplateDiffersFromNamingContract(t *test
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
   artifactTemplate: keycloak-{version}.tar.gz
@@ -180,7 +180,7 @@ distribution:
 		shorthandReleaseBaseURL = previousBase
 	}()
 
-	_, err := ResolveBundle(context.Background(), "keycloak:0.1.0")
+	_, err := ResolveBundle(context.Background(), "keycloak-bundle:0.1.0")
 	if err == nil {
 		t.Fatal("expected artifact template validation error")
 	}
@@ -197,15 +197,15 @@ func TestResolveBundleDeprecatedShorthandReturnsWarning(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 deprecated: true
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `,
 		"metadata/admin/realms/_/metadata.json": `{}`,
 	})
@@ -222,7 +222,7 @@ distribution:
 		shorthandReleaseBaseURL = previousBase
 	}()
 
-	resolved, err := ResolveBundle(context.Background(), "keycloak:0.1.0")
+	resolved, err := ResolveBundle(context.Background(), "keycloak-bundle:0.1.0")
 	if err != nil {
 		t.Fatalf("ResolveBundle returned error: %v", err)
 	}
@@ -240,11 +240,11 @@ func TestResolveBundleUsesManifestOpenAPIURL(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
 `,
@@ -272,11 +272,11 @@ func TestResolveBundleUsesPeerOpenAPIYamlWhenManifestOpenAPIMissing(t *testing.T
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 `,
 		"openapi.yaml": `
@@ -313,11 +313,11 @@ func TestResolveBundlePrefersManifestOpenAPIOverPeerOpenAPIYaml(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: https://www.keycloak.org/docs-api/26.4.7/rest-api/openapi.yaml
 `,
@@ -349,11 +349,11 @@ func TestResolveBundleFailsWhenManifestOpenAPIReferenceIsInvalid(t *testing.T) {
 		"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
   openapi: ftp://example.com/openapi.yaml
 `,
@@ -405,14 +405,14 @@ func buildTestBundleArchive(t *testing.T, files map[string]string) []byte {
 }
 
 func TestParseShorthandRefRejectsInvalidSemver(t *testing.T) {
-	_, _, ok := parseShorthandRef("keycloak:latest")
+	_, _, ok := parseShorthandRef("keycloak-bundle:latest")
 	if ok {
 		t.Fatal("expected shorthand parsing to reject non-semver versions")
 	}
 }
 
 func TestExpectedArtifactTemplate(t *testing.T) {
-	if got, want := expectedArtifactTemplate("keycloak"), "declarest-bundle-keycloak-{version}.tar.gz"; got != want {
+	if got, want := expectedArtifactTemplate("keycloak-bundle"), "keycloak-bundle-{version}.tar.gz"; got != want {
 		t.Fatalf("expected artifact template %q, got %q", want, got)
 	}
 }
@@ -460,26 +460,26 @@ func buildBundleArchiveWithUnsupportedEntry(t *testing.T) []byte {
 			header: &tar.Header{Name: "bundle.yaml", Mode: 0o644, Size: int64(len(`
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `))},
 			data: []byte(`
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
-name: keycloak
+name: keycloak-bundle
 version: 0.1.0
 description: Keycloak metadata bundle.
 declarest:
-  shorthand: keycloak
+  shorthand: keycloak-bundle
   metadataRoot: metadata
 distribution:
-  artifactTemplate: declarest-bundle-keycloak-{version}.tar.gz
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
 `),
 		},
 		{
@@ -508,19 +508,19 @@ distribution:
 }
 
 func TestResolveBundleShorthandSourceURLContract(t *testing.T) {
-	source, err := parseBundleSource("keycloak:v1.2.3")
+	source, err := parseBundleSource("keycloak-bundle:v1.2.3")
 	if err != nil {
 		t.Fatalf("parseBundleSource returned error: %v", err)
 	}
 	if source.kind != sourceKindShort {
 		t.Fatalf("expected shorthand source kind, got %q", source.kind)
 	}
-	expectedURL := "https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v1.2.3/declarest-bundle-keycloak-1.2.3.tar.gz"
+	expectedURL := "https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v1.2.3/keycloak-bundle-1.2.3.tar.gz"
 	if source.remoteURL != expectedURL {
 		t.Fatalf("expected shorthand URL %q, got %q", expectedURL, source.remoteURL)
 	}
-	if source.cacheDirName != "declarest-bundle-keycloak-1.2.3" {
-		t.Fatalf("expected shorthand cache dir declarest-bundle-keycloak-1.2.3, got %q", source.cacheDirName)
+	if source.cacheDirName != "keycloak-bundle-1.2.3" {
+		t.Fatalf("expected shorthand cache dir keycloak-bundle-1.2.3, got %q", source.cacheDirName)
 	}
 }
 
@@ -558,6 +558,6 @@ func TestResolveBundleLocalSourceUsesDeterministicCacheKey(t *testing.T) {
 }
 
 func Example_expectedArtifactTemplate() {
-	fmt.Println(expectedArtifactTemplate("keycloak"))
-	// Output: declarest-bundle-keycloak-{version}.tar.gz
+	fmt.Println(expectedArtifactTemplate("keycloak-bundle"))
+	// Output: keycloak-bundle-{version}.tar.gz
 }
