@@ -24,7 +24,7 @@ func (r *DefaultOrchestrator) Get(ctx context.Context, logicalPath string) (reso
 		return nil, err
 	}
 
-	if r == nil || r.Server == nil {
+	if r == nil || r.server == nil {
 		debugctx.Printf(ctx, "orchestrator get local miss path=%q remote_fallback=false", logicalPath)
 		return nil, err
 	}

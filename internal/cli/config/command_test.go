@@ -12,7 +12,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -27,7 +27,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
 		t.Parallel()
 
 		service := &testContextService{}
-		_, err := executeConfigCommand(t, service, &common.GlobalFlags{}, `{
+		_, err := executeConfigCommand(t, service, &shared.GlobalFlags{}, `{
   "name": "dev",
   "repository": {"filesystem": {"base-dir": "/tmp/repo"}},
   "unknown": true
@@ -42,7 +42,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
 		t.Parallel()
 
 		service := &testContextService{}
-		_, err := executeConfigCommand(t, service, &common.GlobalFlags{}, `
+		_, err := executeConfigCommand(t, service, &shared.GlobalFlags{}, `
 name: dev
 repository:
   filesystem:
@@ -59,7 +59,7 @@ unknown: true
 		t.Parallel()
 
 		service := &testContextService{}
-		_, err := executeConfigCommand(t, service, &common.GlobalFlags{}, `{
+		_, err := executeConfigCommand(t, service, &shared.GlobalFlags{}, `{
   "name": "dev",
   "repository": {"filesystem": {"base-dir": "/tmp/repo", "extra": true}}
 }`, "validate")
@@ -76,7 +76,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 	output, err := executeConfigCommand(
 		t,
 		nil,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		"",
 		"print-template",
 	)
@@ -117,7 +117,7 @@ func TestPrintTemplateRejectsUnexpectedArguments(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		nil,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		"",
 		"print-template",
 		"unexpected",
@@ -134,7 +134,7 @@ func TestAddImportsSingleContextAndSupportsRename(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 name: dev
 repository:
@@ -169,7 +169,7 @@ func TestCreateDefaultsInputFormatToYAML(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 name: dev
 repository:
@@ -197,7 +197,7 @@ func TestCreateInputModeAppliesContextNameFromPositionalArg(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 name: from-input
 repository:
@@ -226,7 +226,7 @@ func TestAddImportsCatalogContexts(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 contexts:
   - name: dev
@@ -260,7 +260,7 @@ func TestAddSetCurrentForSingleContext(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 name: dev
 repository:
@@ -294,7 +294,7 @@ func TestAddCatalogContextSelectionAndSetCurrent(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 contexts:
   - name: dev
@@ -334,7 +334,7 @@ func TestAddSetCurrentFromCatalogCurrentCtxForMultiImport(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 contexts:
   - name: dev
@@ -370,7 +370,7 @@ func TestAddSetCurrentRequiresResolvableTarget(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 contexts:
   - name: dev
@@ -399,7 +399,7 @@ func TestAddRejectsUnknownCatalogContextName(t *testing.T) {
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		`
 contexts:
   - name: dev
@@ -429,7 +429,7 @@ func TestAddRejectsCollisionsBeforeCreate(t *testing.T) {
 		_, err := executeConfigCommand(
 			t,
 			service,
-			&common.GlobalFlags{},
+			&shared.GlobalFlags{},
 			`
 name: dev
 repository:
@@ -452,7 +452,7 @@ repository:
 		_, err := executeConfigCommand(
 			t,
 			service,
-			&common.GlobalFlags{},
+			&shared.GlobalFlags{},
 			`
 contexts:
   - name: dev
@@ -489,9 +489,9 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 				},
 			},
 		}
-		globalFlags := &common.GlobalFlags{
+		globalFlags := &shared.GlobalFlags{
 			Context: "dev",
-			Output:  common.OutputText,
+			Output:  shared.OutputText,
 		}
 
 		_, err := executeConfigCommand(
@@ -526,7 +526,7 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 		t.Parallel()
 
 		service := &testContextService{}
-		_, err := executeConfigCommand(t, service, &common.GlobalFlags{}, "", "resolve", "--set", "missing-equals")
+		_, err := executeConfigCommand(t, service, &shared.GlobalFlags{}, "", "resolve", "--set", "missing-equals")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.resolveCalled {
 			t.Fatal("expected resolve service call to be skipped on override parse failure")
@@ -543,15 +543,15 @@ func TestConfigOutputAcrossFormats(t *testing.T) {
 		commandArgs     []string
 		expectedSnippet string
 	}{
-		{name: "list_text", format: common.OutputText, commandArgs: []string{"list"}, expectedSnippet: "dev\nprod\n"},
-		{name: "list_json", format: common.OutputJSON, commandArgs: []string{"list"}, expectedSnippet: "\"Name\": \"dev\""},
-		{name: "list_yaml", format: common.OutputYAML, commandArgs: []string{"list"}, expectedSnippet: "- name: dev"},
-		{name: "current_text", format: common.OutputText, commandArgs: []string{"current"}, expectedSnippet: "dev\n"},
-		{name: "current_json", format: common.OutputJSON, commandArgs: []string{"current"}, expectedSnippet: "\"Name\": \"dev\""},
-		{name: "current_yaml", format: common.OutputYAML, commandArgs: []string{"current"}, expectedSnippet: "name: dev"},
-		{name: "resolve_text", format: common.OutputText, commandArgs: []string{"resolve"}, expectedSnippet: "prod\n"},
-		{name: "resolve_json", format: common.OutputJSON, commandArgs: []string{"resolve"}, expectedSnippet: "\"Name\": \"prod\""},
-		{name: "resolve_yaml", format: common.OutputYAML, commandArgs: []string{"resolve"}, expectedSnippet: "name: prod"},
+		{name: "list_text", format: shared.OutputText, commandArgs: []string{"list"}, expectedSnippet: "dev\nprod\n"},
+		{name: "list_json", format: shared.OutputJSON, commandArgs: []string{"list"}, expectedSnippet: "\"Name\": \"dev\""},
+		{name: "list_yaml", format: shared.OutputYAML, commandArgs: []string{"list"}, expectedSnippet: "- name: dev"},
+		{name: "current_text", format: shared.OutputText, commandArgs: []string{"current"}, expectedSnippet: "dev\n"},
+		{name: "current_json", format: shared.OutputJSON, commandArgs: []string{"current"}, expectedSnippet: "\"Name\": \"dev\""},
+		{name: "current_yaml", format: shared.OutputYAML, commandArgs: []string{"current"}, expectedSnippet: "name: dev"},
+		{name: "resolve_text", format: shared.OutputText, commandArgs: []string{"resolve"}, expectedSnippet: "prod\n"},
+		{name: "resolve_json", format: shared.OutputJSON, commandArgs: []string{"resolve"}, expectedSnippet: "\"Name\": \"prod\""},
+		{name: "resolve_yaml", format: shared.OutputYAML, commandArgs: []string{"resolve"}, expectedSnippet: "name: prod"},
 	}
 
 	for _, tt := range tests {
@@ -573,7 +573,7 @@ func TestConfigOutputAcrossFormats(t *testing.T) {
 				},
 			}
 
-			globalFlags := &common.GlobalFlags{
+			globalFlags := &shared.GlobalFlags{
 				Context: "prod",
 				Output:  tt.format,
 			}
@@ -607,13 +607,13 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		},
 	}
 
-	deps := common.CommandDependencies{
+	deps := shared.CommandDependencies{
 		Contexts:       contextService,
 		ResourceStore:  &testRepositoryService{},
 		RepositorySync: &testRepositoryService{},
 		Metadata:       &testMetadataService{},
 	}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	if err != nil {
@@ -649,13 +649,13 @@ func TestCheckReportsMetadataBundleAsAccessible(t *testing.T) {
 		},
 	}
 
-	deps := common.CommandDependencies{
+	deps := shared.CommandDependencies{
 		Contexts:       contextService,
 		ResourceStore:  &testRepositoryService{},
 		RepositorySync: &testRepositoryService{},
 		Metadata:       &testMetadataService{},
 	}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	if err != nil {
@@ -701,14 +701,14 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 		},
 	}
 
-	deps := common.CommandDependencies{
+	deps := shared.CommandDependencies{
 		Contexts:       contextService,
 		ResourceStore:  &testRepositoryService{},
 		RepositorySync: &testRepositoryService{},
 		Metadata:       &testMetadataService{},
 		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
 	}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	if err != nil {
@@ -752,7 +752,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 		},
 	}
 
-	deps := common.CommandDependencies{
+	deps := shared.CommandDependencies{
 		Contexts:       contextService,
 		ResourceStore:  &testRepositoryService{},
 		RepositorySync: &testRepositoryService{},
@@ -760,7 +760,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "resource server auth failed", nil)},
 		Secrets:        &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
 	}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	assertTypedCategory(t, err, faults.ValidationError)
@@ -790,7 +790,7 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -835,7 +835,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -872,7 +872,7 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -910,7 +910,7 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{Context: "dev-from-flag"},
+		&shared.GlobalFlags{Context: "dev-from-flag"},
 		prompter,
 		"",
 		"add",
@@ -940,7 +940,7 @@ func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) 
 	_, err := executeConfigCommand(
 		t,
 		service,
-		&common.GlobalFlags{Context: "dev-flag"},
+		&shared.GlobalFlags{Context: "dev-flag"},
 		"",
 		"add",
 		"dev-arg",
@@ -965,7 +965,7 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -999,7 +999,7 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -1069,7 +1069,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	_, err := executeConfigCommandWithPrompter(
 		t,
 		service,
-		&common.GlobalFlags{},
+		&shared.GlobalFlags{},
 		prompter,
 		"",
 		"add",
@@ -1155,7 +1155,7 @@ func TestUseInteractiveSelection(t *testing.T) {
 		selects:     []string{"prod"},
 	}
 
-	_, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "use")
+	_, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "use")
 	if err != nil {
 		t.Fatalf("use returned error: %v", err)
 	}
@@ -1177,9 +1177,9 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 		},
 	}
 	prompter := &mockPrompter{interactive: true}
-	globalFlags := &common.GlobalFlags{
+	globalFlags := &shared.GlobalFlags{
 		Context: "prod",
-		Output:  common.OutputText,
+		Output:  shared.OutputText,
 	}
 
 	output, err := executeConfigCommandWithPrompter(t, service, globalFlags, prompter, "", "show")
@@ -1214,7 +1214,7 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 		interactive: true,
 		selects:     []string{"dev"},
 	}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	output, err := executeConfigCommandWithPrompter(t, service, globalFlags, prompter, "", "show")
 	if err != nil {
@@ -1238,7 +1238,7 @@ func TestShowRequiresContextInNonInteractiveModeWhenFlagMissing(t *testing.T) {
 		listValue: []configdomain.Context{{Name: "dev"}},
 	}
 	prompter := &mockPrompter{interactive: false}
-	globalFlags := &common.GlobalFlags{Output: common.OutputText}
+	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}
 
 	_, err := executeConfigCommandWithPrompter(t, service, globalFlags, prompter, "", "show")
 	assertTypedCategory(t, err, faults.ValidationError)
@@ -1256,7 +1256,7 @@ func TestRenameInteractiveSelectionAndInput(t *testing.T) {
 		inputs:      []string{"development"},
 	}
 
-	_, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "rename")
+	_, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "rename")
 	if err != nil {
 		t.Fatalf("rename returned error: %v", err)
 	}
@@ -1277,7 +1277,7 @@ func TestDeleteInteractiveSelectionAndConfirm(t *testing.T) {
 		confirms:    []bool{true},
 	}
 
-	_, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "delete")
+	_, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "delete")
 	if err != nil {
 		t.Fatalf("delete returned error: %v", err)
 	}
@@ -1298,7 +1298,7 @@ func TestDeleteInteractiveCanceled(t *testing.T) {
 		confirms:    []bool{false},
 	}
 
-	output, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "delete")
+	output, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "delete")
 	if err != nil {
 		t.Fatalf("delete returned error: %v", err)
 	}
@@ -1332,7 +1332,7 @@ func TestInteractiveCommandsRequireNameInNonInteractiveMode(t *testing.T) {
 			}
 			prompter := &mockPrompter{interactive: false}
 
-			_, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", tt.args...)
+			_, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", tt.args...)
 			assertTypedCategory(t, err, faults.ValidationError)
 		})
 	}
@@ -1344,21 +1344,21 @@ func TestUseRenameDeleteWithArgsBypassInteractive(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{interactive: false}
 
-	if _, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "use", "prod"); err != nil {
+	if _, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "use", "prod"); err != nil {
 		t.Fatalf("use returned error: %v", err)
 	}
 	if service.setCurrentName != "prod" {
 		t.Fatalf("expected set current prod, got %q", service.setCurrentName)
 	}
 
-	if _, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "rename", "dev", "development"); err != nil {
+	if _, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "rename", "dev", "development"); err != nil {
 		t.Fatalf("rename returned error: %v", err)
 	}
 	if service.renameFrom != "dev" || service.renameTo != "development" {
 		t.Fatalf("unexpected rename call: %q -> %q", service.renameFrom, service.renameTo)
 	}
 
-	if _, err := executeConfigCommandWithPrompter(t, service, &common.GlobalFlags{}, prompter, "", "delete", "legacy"); err != nil {
+	if _, err := executeConfigCommandWithPrompter(t, service, &shared.GlobalFlags{}, prompter, "", "delete", "legacy"); err != nil {
 		t.Fatalf("delete returned error: %v", err)
 	}
 	if service.deletedName != "legacy" {
@@ -1369,7 +1369,7 @@ func TestUseRenameDeleteWithArgsBypassInteractive(t *testing.T) {
 func executeConfigCommand(
 	t *testing.T,
 	contexts configdomain.ContextService,
-	globalFlags *common.GlobalFlags,
+	globalFlags *shared.GlobalFlags,
 	stdin string,
 	args ...string,
 ) (string, error) {
@@ -1377,7 +1377,7 @@ func executeConfigCommand(
 
 	return executeConfigCommandWithDeps(
 		t,
-		common.CommandDependencies{Contexts: contexts},
+		shared.CommandDependencies{Contexts: contexts},
 		globalFlags,
 		stdin,
 		args...,
@@ -1386,8 +1386,8 @@ func executeConfigCommand(
 
 func executeConfigCommandWithDeps(
 	t *testing.T,
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	stdin string,
 	args ...string,
 ) (string, error) {
@@ -1407,7 +1407,7 @@ func executeConfigCommandWithDeps(
 func executeConfigCommandWithPrompter(
 	t *testing.T,
 	contexts configdomain.ContextService,
-	globalFlags *common.GlobalFlags,
+	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 	stdin string,
 	args ...string,
@@ -1416,7 +1416,7 @@ func executeConfigCommandWithPrompter(
 
 	return executeConfigCommandWithDepsAndPrompter(
 		t,
-		common.CommandDependencies{Contexts: contexts},
+		shared.CommandDependencies{Contexts: contexts},
 		globalFlags,
 		prompter,
 		stdin,
@@ -1426,8 +1426,8 @@ func executeConfigCommandWithPrompter(
 
 func executeConfigCommandWithDepsAndPrompter(
 	t *testing.T,
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 	stdin string,
 	args ...string,

@@ -7,40 +7,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
-	"github.com/crmarques/declarest/internal/cli/common"
-	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/orchestrator"
-	"github.com/crmarques/declarest/repository"
-	"github.com/crmarques/declarest/secrets"
-	"github.com/crmarques/declarest/server"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-type Dependencies struct {
-	Orchestrator   orchestrator.Orchestrator
-	Contexts       config.ContextService
-	ResourceStore  repository.ResourceStore
-	RepositorySync repository.RepositorySync
-	Metadata       metadata.MetadataService
-	Secrets        secrets.SecretProvider
-	ResourceServer server.ResourceServer
-}
-
-func (d Dependencies) commandDependencies() common.CommandDependencies {
-	return common.CommandDependencies{
-		Orchestrator:   d.Orchestrator,
-		Contexts:       d.Contexts,
-		ResourceStore:  d.ResourceStore,
-		RepositorySync: d.RepositorySync,
-		Metadata:       d.Metadata,
-		Secrets:        d.Secrets,
-		ResourceServer: d.ResourceServer,
-	}
-}
+type Dependencies = shared.CommandDependencies
 
 func Execute(deps Dependencies) error {
 	root := NewRootCommand(deps)

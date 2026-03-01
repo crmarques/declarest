@@ -8,14 +8,14 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "metadata",
 		Short: "Manage metadata",
@@ -34,7 +34,7 @@ func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags
 	return command
 }
 
-func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newGetCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var overridesOnly bool
 
@@ -43,20 +43,20 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 		Short: "Read metadata",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
 			debugctx.Printf(command.Context(), "metadata get requested path=%q", resolvedPath)
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -91,40 +91,40 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 
 			debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
 
-			return common.WriteOutput(command, outputFormat, item, nil)
+			return shared.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&overridesOnly, "overrides-only", false, "print only resolved metadata overrides without default fields")
 	return command
 }
 
-func newSetCommand(deps common.CommandDependencies) *cobra.Command {
+func newSetCommand(deps shared.CommandDependencies) *cobra.Command {
 	var pathFlag string
-	var input common.InputFlags
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "set [path]",
 		Short: "Set metadata",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
 			debugctx.Printf(command.Context(), "metadata set requested path=%q", resolvedPath)
 
-			item, err := common.DecodeInput[metadatadomain.ResourceMetadata](command, input)
+			item, err := shared.DecodeInput[metadatadomain.ResourceMetadata](command, input)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata set failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata set failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -139,14 +139,14 @@ func newSetCommand(deps common.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
-	common.BindInputFlags(command, &input)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
+	shared.BindInputFlags(command, &input)
 	return command
 }
 
-func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
+func newUnsetCommand(deps shared.CommandDependencies) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -154,14 +154,14 @@ func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
 		Short: "Unset metadata",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
 			debugctx.Printf(command.Context(), "metadata unset requested path=%q", resolvedPath)
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata unset failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -176,13 +176,13 @@ func newUnsetCommand(deps common.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	return command
 }
 
-func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -190,20 +190,20 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 		Short: "Resolve metadata for a path",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
 			debugctx.Printf(command.Context(), "metadata resolve requested path=%q", resolvedPath)
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata resolve failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata resolve failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -217,17 +217,17 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 
 			debugctx.Printf(command.Context(), "metadata resolve succeeded path=%q", resolvedPath)
 
-			return common.WriteOutput(command, outputFormat, item, nil)
+			return shared.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	return command
 }
 
-func newRenderCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newRenderCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -245,7 +245,7 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			resolvedPath, err := common.ResolvePathInput(pathFlag, pathArgs, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, pathArgs, true)
 			if err != nil {
 				return err
 			}
@@ -259,13 +259,13 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 
 			debugctx.Printf(command.Context(), "metadata render requested path=%q operation=%q", resolvedPath, operation)
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata render failed path=%q operation=%q error=%v", resolvedPath, operation, err)
 				return err
@@ -289,12 +289,12 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 
 			debugctx.Printf(command.Context(), "metadata render succeeded path=%q operation=%q", resolvedPath, operation)
 
-			return common.WriteOutput(command, outputFormat, item, nil)
+			return shared.WriteOutput(command, outputFormat, item, nil)
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
 	operationValues := []string{
 		string(metadatadomain.OperationGet),
 		string(metadatadomain.OperationCreate),
@@ -312,14 +312,14 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			return common.CompleteValues(operationValues, toComplete)
+			return shared.CompleteValues(operationValues, toComplete)
 		}
 
 		switch len(args) {
 		case 0:
-			return common.CompleteLogicalPaths(command, deps, toComplete)
+			return shared.CompleteLogicalPaths(command, deps, toComplete)
 		case 1:
-			return common.CompleteValues(operationValues, toComplete)
+			return shared.CompleteValues(operationValues, toComplete)
 		default:
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -327,7 +327,7 @@ func newRenderCommand(deps common.CommandDependencies, globalFlags *common.Globa
 	return command
 }
 
-func newInferCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newInferCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var apply bool
 	var recursive bool
@@ -341,7 +341,7 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -354,13 +354,13 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 				recursive,
 			)
 
-			service, err := common.RequireMetadataService(deps)
+			service, err := shared.RequireMetadataService(deps)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
@@ -368,7 +368,7 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 
 			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
 			if request.Recursive {
-				return common.ValidationError(
+				return shared.ValidationError(
 					"metadata infer --recursive is not implemented yet",
 					nil,
 				)
@@ -408,13 +408,13 @@ func newInferCommand(deps common.CommandDependencies, globalFlags *common.Global
 
 			debugctx.Printf(command.Context(), "metadata infer succeeded path=%q", resolvedPath)
 
-			return common.WriteOutput(command, outputFormat, outputItem, nil)
+			return shared.WriteOutput(command, outputFormat, outputItem, nil)
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&apply, "apply", "a", false, "apply inferred metadata")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "infer recursively")
 	_ = command.Flags().MarkHidden("recursive")
@@ -436,7 +436,7 @@ func parseOperation(value string) (metadatadomain.Operation, error) {
 	case string(metadatadomain.OperationCompare):
 		return metadatadomain.OperationCompare, nil
 	default:
-		return "", common.ValidationError("invalid operation", nil)
+		return "", shared.ValidationError("invalid operation", nil)
 	}
 }
 
@@ -489,7 +489,7 @@ func resolveOperationSpecWithoutRendering(
 	}
 
 	if strings.TrimSpace(spec.Path) == "" {
-		return metadatadomain.OperationSpec{}, common.ValidationError(
+		return metadatadomain.OperationSpec{}, shared.ValidationError(
 			fmt.Sprintf("metadata operation %q path is required", operation),
 			nil,
 		)
@@ -503,19 +503,19 @@ func extractRenderArgs(pathFlag string, args []string) ([]string, string, error)
 		if pathFlag != "" {
 			return nil, "", nil
 		}
-		return nil, "", common.ValidationError("path is required", nil)
+		return nil, "", shared.ValidationError("path is required", nil)
 	case 1:
 		if pathFlag != "" {
 			return nil, args[0], nil
 		}
 		if _, err := parseOperation(args[0]); err == nil {
-			return nil, "", common.ValidationError("path is required", nil)
+			return nil, "", shared.ValidationError("path is required", nil)
 		}
 		return []string{args[0]}, "", nil
 	case 2:
 		return []string{args[0]}, args[1], nil
 	default:
-		return nil, "", common.ValidationError("invalid render arguments", nil)
+		return nil, "", shared.ValidationError("invalid render arguments", nil)
 	}
 }
 
@@ -546,7 +546,7 @@ func defaultOperationPathTemplate(operation metadatadomain.Operation) string {
 
 func inferMetadataFromAvailableEndpoints(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	logicalPath string,
 ) (metadatadomain.ResourceMetadata, bool, error) {
 	orchestratorService, openAPISpec := resolveOpenAPISpec(ctx, deps)
@@ -578,7 +578,7 @@ func inferMetadataFromAvailableEndpoints(
 
 func resolvedMetadataForGet(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	service metadatadomain.MetadataService,
 	logicalPath string,
 ) (metadatadomain.ResourceMetadata, error) {
@@ -650,9 +650,9 @@ func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
 
 func resolveOpenAPISpec(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 ) (metadataPathProbe, resource.Value) {
-	orchestratorService, err := common.RequireCompletionService(deps)
+	orchestratorService, err := shared.RequireCompletionService(deps)
 	if err != nil {
 		return nil, nil
 	}

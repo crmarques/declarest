@@ -4,12 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	readapp "github.com/crmarques/declarest/internal/app/resource/read"
-	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/orchestrator"
-	"github.com/crmarques/declarest/secrets"
 )
 
 const (
@@ -17,12 +13,9 @@ const (
 	SourceRemoteServer = readapp.SourceRemoteServer
 )
 
-type Dependencies struct {
-	Orchestrator orchestrator.Orchestrator
-	Contexts     config.ContextService
-	Metadata     metadata.MetadataService
-	Secrets      secrets.SecretProvider
-}
+// Dependencies matches readapp.Dependencies; use a type alias to avoid
+// duplicating the same struct and the manual field-by-field mapping.
+type Dependencies = readapp.Dependencies
 
 type ReconcileRequest struct {
 	LogicalPath  string
@@ -51,12 +44,7 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 
 	explicitCollectionTarget := logicalPath != "/" && strings.HasSuffix(logicalPath, "/")
 
-	result, err := readapp.Execute(ctx, readapp.Dependencies{
-		Orchestrator: deps.Orchestrator,
-		Contexts:     deps.Contexts,
-		Metadata:     deps.Metadata,
-		Secrets:      deps.Secrets,
-	}, readapp.Request{
+	result, err := readapp.Execute(ctx, deps, readapp.Request{
 		LogicalPath:              logicalPath,
 		Source:                   source,
 		ExplicitCollectionTarget: explicitCollectionTarget,

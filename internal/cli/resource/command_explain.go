@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newExplainCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newExplainCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -17,16 +17,16 @@ func newExplainCommand(deps common.CommandDependencies, globalFlags *common.Glob
 		Short: "Explain planned changes",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
 
-			orchestratorService, err := common.RequireOrchestrator(deps)
+			orchestratorService, err := shared.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -35,7 +35,7 @@ func newExplainCommand(deps common.CommandDependencies, globalFlags *common.Glob
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.DiffEntry) error {
+			return shared.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.DiffEntry) error {
 				for _, item := range value {
 					if _, writeErr := fmt.Fprintf(w, "%s %s\n", item.Operation, joinDiffEntryPath(item)); writeErr != nil {
 						return writeErr
@@ -46,8 +46,8 @@ func newExplainCommand(deps common.CommandDependencies, globalFlags *common.Glob
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	return command
 }

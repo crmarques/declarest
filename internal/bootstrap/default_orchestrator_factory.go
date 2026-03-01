@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"context"
@@ -17,6 +17,9 @@ import (
 	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/secrets"
+	"github.com/crmarques/declarest/server"
 )
 
 func buildDefaultOrchestrator(
@@ -33,15 +36,14 @@ func buildDefaultOrchestrator(
 		return nil, err
 	}
 
-	defaultOrchestrator := &orchestrator.DefaultOrchestrator{}
-	defaultOrchestrator.SetResourceFormat(resolvedContext.Repository.ResourceFormat)
-
 	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)
 	if err != nil {
 		return nil, err
 	}
+
+	var metadataService metadata.MetadataService
 	if metadataSource.BaseDir != "" {
-		defaultOrchestrator.Metadata = fsmetadata.NewFSMetadataService(
+		metadataService = fsmetadata.NewFSMetadataService(
 			metadataSource.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)
@@ -50,19 +52,21 @@ func buildDefaultOrchestrator(
 		}
 	}
 
+	var repo repository.ResourceStore
 	switch {
 	case resolvedContext.Repository.Filesystem != nil:
-		defaultOrchestrator.Repository = fsstore.NewLocalResourceRepository(
+		repo = fsstore.NewLocalResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
 		)
 	case resolvedContext.Repository.Git != nil:
-		defaultOrchestrator.Repository = gitrepository.NewGitResourceRepository(
+		repo = gitrepository.NewGitResourceRepository(
 			*resolvedContext.Repository.Git,
 			resolvedContext.Repository.ResourceFormat,
 		)
 	}
 
+	var srv server.ResourceServer
 	if resolvedContext.ResourceServer != nil {
 		if resolvedContext.ResourceServer.HTTP == nil {
 			return nil, faults.NewTypedError(faults.InternalError, "resource server provider is invalid", nil)
@@ -78,7 +82,7 @@ func buildDefaultOrchestrator(
 		serverOptions := []httpserver.GatewayOption{
 			httpserver.WithResourceFormat(serverFormat),
 		}
-		if renderer, ok := defaultOrchestrator.Metadata.(metadata.ResourceOperationSpecRenderer); ok {
+		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
 			serverOptions = append(serverOptions, httpserver.WithMetadataRenderer(renderer))
 		}
 		serverManager, err := httpserver.NewHTTPResourceServerGateway(
@@ -88,9 +92,10 @@ func buildDefaultOrchestrator(
 		if err != nil {
 			return nil, err
 		}
-		defaultOrchestrator.Server = serverManager
+		srv = serverManager
 	}
 
+	var sec secrets.SecretProvider
 	if resolvedContext.SecretStore != nil {
 		switch {
 		case resolvedContext.SecretStore.File != nil:
@@ -98,19 +103,25 @@ func buildDefaultOrchestrator(
 			if err != nil {
 				return nil, err
 			}
-			defaultOrchestrator.Secrets = secretService
+			sec = secretService
 		case resolvedContext.SecretStore.Vault != nil:
 			secretService, err := vaultsecrets.NewVaultSecretService(*resolvedContext.SecretStore.Vault)
 			if err != nil {
 				return nil, err
 			}
-			defaultOrchestrator.Secrets = secretService
+			sec = secretService
 		default:
 			return nil, faults.NewTypedError(faults.InternalError, "secret store provider is invalid", nil)
 		}
 	}
 
-	return defaultOrchestrator, nil
+	return orchestrator.NewDefaultOrchestrator(
+		repo,
+		metadataService,
+		srv,
+		sec,
+		resolvedContext.Repository.ResourceFormat,
+	), nil
 }
 
 func effectiveOpenAPISource(configOpenAPI string, metadataOpenAPI string) string {

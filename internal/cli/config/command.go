@@ -9,18 +9,18 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	return newCommandWithPrompter(deps, globalFlags, terminalPrompter{})
 }
 
 func newCommandWithPrompter(
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
 	command := &cobra.Command{
@@ -66,11 +66,11 @@ type addContextSelection struct {
 }
 
 func newAddCommand(
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
-	var input common.InputFlags
+	var input shared.InputFlags
 	var contextName string
 	var setCurrent bool
 
@@ -85,7 +85,7 @@ func newAddCommand(
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -96,7 +96,7 @@ func newAddCommand(
 
 			effectiveImportContextName := strings.TrimSpace(contextName)
 			if effectiveImportContextName != "" && contextArgName != "" && effectiveImportContextName != contextArgName {
-				return common.ValidationError(
+				return shared.ValidationError(
 					fmt.Sprintf(
 						"context name conflict: positional/--context %q differs from --context-name %q",
 						contextArgName,
@@ -162,10 +162,10 @@ func newAddCommand(
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
 	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
 	_ = command.Flags().MarkHidden("file")
-	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
+	command.Flags().StringVarP(&input.Format, "format", "i", shared.OutputYAML, "input format: json|yaml")
 	command.Flags().StringVar(&contextName, "context-name", "", "context name to import (catalog) or assign (single context)")
 	command.Flags().BoolVar(&setCurrent, "set-current", false, "set imported context as current")
-	common.RegisterInputFormatFlagCompletion(command)
+	shared.RegisterInputFormatFlagCompletion(command)
 	return command
 }
 
@@ -182,7 +182,7 @@ func selectContextsForAdd(input contextImportInput, contextName string) (addCont
 		}, nil
 	case contextImportInputCatalog:
 		if len(input.Catalog.Contexts) == 0 {
-			return addContextSelection{}, common.ValidationError("input context catalog has no contexts", nil)
+			return addContextSelection{}, shared.ValidationError("input context catalog has no contexts", nil)
 		}
 
 		if trimmedContextName == "" {
@@ -202,12 +202,12 @@ func selectContextsForAdd(input contextImportInput, contextName string) (addCont
 			}
 		}
 
-		return addContextSelection{}, common.ValidationError(
+		return addContextSelection{}, shared.ValidationError(
 			fmt.Sprintf("context %q not found in input catalog", trimmedContextName),
 			nil,
 		)
 	default:
-		return addContextSelection{}, common.ValidationError("unsupported config input shape", nil)
+		return addContextSelection{}, shared.ValidationError("unsupported config input shape", nil)
 	}
 }
 
@@ -222,13 +222,13 @@ func resolveSetCurrentContext(selection addContextSelection) (string, error) {
 				return selection.CurrentCtx, nil
 			}
 		}
-		return "", common.ValidationError(
+		return "", shared.ValidationError(
 			fmt.Sprintf("input current-ctx %q is not present in imported contexts", selection.CurrentCtx),
 			nil,
 		)
 	}
 
-	return "", common.ValidationError(
+	return "", shared.ValidationError(
 		"set-current requires a single imported context or a catalog current-ctx value",
 		nil,
 	)
@@ -242,7 +242,7 @@ func resolveCreateContextName(args []string, contextFlagName string) (string, er
 
 	flagName := strings.TrimSpace(contextFlagName)
 	if positionalName != "" && flagName != "" && positionalName != flagName {
-		return "", common.ValidationError(
+		return "", shared.ValidationError(
 			fmt.Sprintf("context name conflict: positional %q differs from --context %q", positionalName, flagName),
 			nil,
 		)
@@ -256,7 +256,7 @@ func resolveCreateContextName(args []string, contextFlagName string) (string, er
 
 func validateAddTargets(command *cobra.Command, contexts configdomain.ContextService, items []configdomain.Context) error {
 	if len(items) == 0 {
-		return common.ValidationError("no contexts found in input", nil)
+		return shared.ValidationError("no contexts found in input", nil)
 	}
 
 	existing, err := contexts.List(command.Context())
@@ -273,13 +273,13 @@ func validateAddTargets(command *cobra.Command, contexts configdomain.ContextSer
 	for _, item := range items {
 		name := strings.TrimSpace(item.Name)
 		if name == "" {
-			return common.ValidationError("context name is required", nil)
+			return shared.ValidationError("context name is required", nil)
 		}
 		if _, duplicated := seen[name]; duplicated {
-			return common.ValidationError(fmt.Sprintf("input contains duplicate context %q", name), nil)
+			return shared.ValidationError(fmt.Sprintf("input contains duplicate context %q", name), nil)
 		}
 		if _, exists := existingNames[name]; exists {
-			return common.ValidationError(fmt.Sprintf("context %q already exists", name), nil)
+			return shared.ValidationError(fmt.Sprintf("context %q already exists", name), nil)
 		}
 		seen[name] = struct{}{}
 	}
@@ -287,15 +287,15 @@ func validateAddTargets(command *cobra.Command, contexts configdomain.ContextSer
 	return nil
 }
 
-func newUpdateCommand(deps common.CommandDependencies) *cobra.Command {
-	var input common.InputFlags
+func newUpdateCommand(deps shared.CommandDependencies) *cobra.Command {
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "update",
 		Short: "Update a context from input",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -310,18 +310,18 @@ func newUpdateCommand(deps common.CommandDependencies) *cobra.Command {
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
 	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
 	_ = command.Flags().MarkHidden("file")
-	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
-	common.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVarP(&input.Format, "format", "i", shared.OutputYAML, "input format: json|yaml")
+	shared.RegisterInputFormatFlagCompletion(command)
 	return command
 }
 
-func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
+func newDeleteCommand(deps shared.CommandDependencies, prompter configPrompter) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "delete [name]",
 		Short: "Delete a context (interactive when name is omitted)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) 
 					return err
 				}
 				if !confirmed {
-					return common.WriteText(command, common.OutputText, "delete canceled")
+					return shared.WriteText(command, shared.OutputText, "delete canceled")
 				}
 				name = selected
 			}
@@ -350,13 +350,13 @@ func newDeleteCommand(deps common.CommandDependencies, prompter configPrompter) 
 	return command
 }
 
-func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
+func newRenameCommand(deps shared.CommandDependencies, prompter configPrompter) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "rename [from] [to]",
 		Short: "Rename a context (interactive when args are omitted)",
 		Args:  cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -370,7 +370,7 @@ func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) 
 			case 1:
 				fromName = args[0]
 				if !prompter.IsInteractive(command) {
-					return common.ValidationError("new context name is required", nil)
+					return shared.ValidationError("new context name is required", nil)
 				}
 				toName, err = prompter.Input(command, "New context name: ", true)
 				if err != nil {
@@ -394,13 +394,13 @@ func newRenameCommand(deps common.CommandDependencies, prompter configPrompter) 
 	return command
 }
 
-func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List contexts",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -408,7 +408,7 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			if err != nil {
 				return err
 			}
-			return common.WriteOutput(command, globalFlags.Output, items, func(w io.Writer, value []configdomain.Context) error {
+			return shared.WriteOutput(command, globalFlags.Output, items, func(w io.Writer, value []configdomain.Context) error {
 				for _, item := range value {
 					if _, writeErr := fmt.Fprintln(w, item.Name); writeErr != nil {
 						return writeErr
@@ -420,13 +420,13 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 	}
 }
 
-func newUseCommand(deps common.CommandDependencies, prompter configPrompter) *cobra.Command {
+func newUseCommand(deps shared.CommandDependencies, prompter configPrompter) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "use [name]",
 		Short: "Set current context (interactive when name is omitted)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -448,8 +448,8 @@ func newUseCommand(deps common.CommandDependencies, prompter configPrompter) *co
 }
 
 func newShowCommand(
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
 	return &cobra.Command{
@@ -457,7 +457,7 @@ func newShowCommand(
 		Short: "Show a context from --context or interactive selection",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -478,18 +478,18 @@ func newShowCommand(
 				return err
 			}
 
-			return common.WriteOutput(command, common.OutputYAML, shown, nil)
+			return shared.WriteOutput(command, shared.OutputYAML, shown, nil)
 		},
 	}
 }
 
-func newCurrentCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newCurrentCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "current",
 		Short: "Get current context",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -497,7 +497,7 @@ func newCurrentCommand(deps common.CommandDependencies, globalFlags *common.Glob
 			if err != nil {
 				return err
 			}
-			return common.WriteOutput(command, globalFlags.Output, current, func(w io.Writer, value configdomain.Context) error {
+			return shared.WriteOutput(command, globalFlags.Output, current, func(w io.Writer, value configdomain.Context) error {
 				_, writeErr := fmt.Fprintln(w, value.Name)
 				return writeErr
 			})
@@ -505,7 +505,7 @@ func newCurrentCommand(deps common.CommandDependencies, globalFlags *common.Glob
 	}
 }
 
-func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var overrides []string
 
 	command := &cobra.Command{
@@ -518,7 +518,7 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -536,7 +536,7 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 				return err
 			}
 
-			return common.WriteOutput(command, globalFlags.Output, resolved, func(w io.Writer, value configdomain.Context) error {
+			return shared.WriteOutput(command, globalFlags.Output, resolved, func(w io.Writer, value configdomain.Context) error {
 				_, writeErr := fmt.Fprintln(w, value.Name)
 				return writeErr
 			})
@@ -547,15 +547,15 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 	return command
 }
 
-func newValidateCommand(deps common.CommandDependencies) *cobra.Command {
-	var input common.InputFlags
+func newValidateCommand(deps shared.CommandDependencies) *cobra.Command {
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate a context from input",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -570,12 +570,12 @@ func newValidateCommand(deps common.CommandDependencies) *cobra.Command {
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
 	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
 	_ = command.Flags().MarkHidden("file")
-	command.Flags().StringVarP(&input.Format, "format", "i", common.OutputYAML, "input format: json|yaml")
-	common.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVarP(&input.Format, "format", "i", shared.OutputYAML, "input format: json|yaml")
+	shared.RegisterInputFormatFlagCompletion(command)
 	return command
 }
 
-func newCheckCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newCheckCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check",
 		Short: "Check configured component availability and connectivity",
@@ -585,7 +585,7 @@ func newCheckCommand(deps common.CommandDependencies, globalFlags *common.Global
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
@@ -598,12 +598,12 @@ func newCheckCommand(deps common.CommandDependencies, globalFlags *common.Global
 			}
 
 			report := runConfigCheck(command, deps, resolvedContext)
-			if err := common.WriteOutput(command, selectedOutputFormat(globalFlags), report, renderConfigCheckText); err != nil {
+			if err := shared.WriteOutput(command, selectedOutputFormat(globalFlags), report, renderConfigCheckText); err != nil {
 				return err
 			}
 
 			if report.Summary.Fail > 0 {
-				return common.ValidationError(
+				return shared.ValidationError(
 					fmt.Sprintf("config check failed for context %q: %d component(s) unavailable", report.Context, report.Summary.Fail),
 					nil,
 				)
@@ -643,7 +643,7 @@ type configCheckReport struct {
 	Components []configCheckResult `json:"components" yaml:"components"`
 }
 
-func runConfigCheck(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckReport {
+func runConfigCheck(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckReport {
 	items := []configCheckResult{
 		{
 			Component: "context",
@@ -678,12 +678,12 @@ func runConfigCheck(command *cobra.Command, deps common.CommandDependencies, cfg
 	}
 }
 
-func checkRepository(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkRepository(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
 		Component: "repository",
 	}
 
-	repositoryService, err := common.RequireRepositorySync(deps)
+	repositoryService, err := shared.RequireRepositorySync(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
@@ -722,12 +722,12 @@ func checkRepository(command *cobra.Command, deps common.CommandDependencies, cf
 	}
 }
 
-func checkMetadata(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkMetadata(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
 		Component: "metadata",
 	}
 
-	metadataService, err := common.RequireMetadataService(deps)
+	metadataService, err := shared.RequireMetadataService(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
@@ -770,7 +770,7 @@ func checkMetadata(command *cobra.Command, deps common.CommandDependencies, cfg 
 	return result
 }
 
-func checkResourceServer(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkResourceServer(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
 		Component: "resource-server",
 	}
@@ -781,7 +781,7 @@ func checkResourceServer(command *cobra.Command, deps common.CommandDependencies
 		return result
 	}
 
-	orchestratorService, err := common.RequireOrchestrator(deps)
+	orchestratorService, err := shared.RequireOrchestrator(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
@@ -808,7 +808,7 @@ func checkResourceServer(command *cobra.Command, deps common.CommandDependencies
 	}
 }
 
-func checkSecretStore(command *cobra.Command, deps common.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkSecretStore(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
 		Component: "secret-store",
 	}
@@ -819,7 +819,7 @@ func checkSecretStore(command *cobra.Command, deps common.CommandDependencies, c
 		return result
 	}
 
-	secretProvider, err := common.RequireSecretProvider(deps)
+	secretProvider, err := shared.RequireSecretProvider(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
@@ -882,16 +882,16 @@ func renderConfigCheckText(writer io.Writer, report configCheckReport) error {
 	return err
 }
 
-func selectedContextName(globalFlags *common.GlobalFlags) string {
+func selectedContextName(globalFlags *shared.GlobalFlags) string {
 	if globalFlags == nil {
 		return ""
 	}
 	return strings.TrimSpace(globalFlags.Context)
 }
 
-func selectedOutputFormat(globalFlags *common.GlobalFlags) string {
+func selectedOutputFormat(globalFlags *shared.GlobalFlags) string {
 	if globalFlags == nil || strings.TrimSpace(globalFlags.Output) == "" {
-		return common.OutputAuto
+		return shared.OutputAuto
 	}
 	return globalFlags.Output
 }
@@ -913,7 +913,7 @@ func parseOverrides(values []string) (map[string]string, error) {
 	for _, value := range values {
 		parts := strings.SplitN(value, "=", 2)
 		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
-			return nil, common.ValidationError("invalid override: expected key=value", nil)
+			return nil, shared.ValidationError("invalid override: expected key=value", nil)
 		}
 		parsed[strings.TrimSpace(parts[0])] = parts[1]
 	}

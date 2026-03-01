@@ -9,14 +9,14 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	detectapp "github.com/crmarques/declarest/internal/app/secret/detect"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
 
-func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "secret",
 		Short: "Manage secrets",
@@ -38,13 +38,13 @@ func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags
 	return command
 }
 
-func newInitCommand(deps common.CommandDependencies) *cobra.Command {
+func newInitCommand(deps shared.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize secret store",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
@@ -54,13 +54,13 @@ func newInitCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newStoreCommand(deps common.CommandDependencies) *cobra.Command {
+func newStoreCommand(deps shared.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "store <key> <value>",
 		Short: "Store a secret",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
@@ -70,7 +70,7 @@ func newStoreCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newGetCommand(deps common.CommandDependencies) *cobra.Command {
+func newGetCommand(deps shared.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var keyFlag string
 
@@ -86,7 +86,7 @@ func newGetCommand(deps common.CommandDependencies) *cobra.Command {
 		}, "\n"),
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
@@ -109,9 +109,9 @@ func newGetCommand(deps common.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	command.Flags().StringVar(&keyFlag, "key", "", "secret key under --path")
 	return command
 }
@@ -148,16 +148,16 @@ func resolveSecretGetRequest(pathFlag string, keyFlag string, args []string) (se
 	case 2:
 		return resolveSecretGetFromPathAndKeyArgs(normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0], args[1])
 	default:
-		return secretGetRequest{}, common.ValidationError("secret get accepts at most two positional arguments", nil)
+		return secretGetRequest{}, shared.ValidationError("secret get accepts at most two positional arguments", nil)
 	}
 }
 
 func resolveSecretGetFromFlagsOnly(pathFlag string, hasPathFlag bool, keyFlag string) (secretGetRequest, error) {
 	if !hasPathFlag {
 		if keyFlag != "" {
-			return secretGetRequest{}, common.ValidationError("--key requires --path", nil)
+			return secretGetRequest{}, shared.ValidationError("--key requires --path", nil)
 		}
-		return secretGetRequest{}, common.ValidationError("secret get requires a key, path, or --path", nil)
+		return secretGetRequest{}, shared.ValidationError("secret get requires a key, path, or --path", nil)
 	}
 
 	if keyFlag == "" {
@@ -169,12 +169,12 @@ func resolveSecretGetFromFlagsOnly(pathFlag string, hasPathFlag bool, keyFlag st
 func resolveSecretGetFromSingleArg(pathFlag string, hasPathFlag bool, keyFlag string, rawArg string) (secretGetRequest, error) {
 	arg := strings.TrimSpace(rawArg)
 	if arg == "" {
-		return secretGetRequest{}, common.ValidationError("secret get argument must not be empty", nil)
+		return secretGetRequest{}, shared.ValidationError("secret get argument must not be empty", nil)
 	}
 
 	if hasPathFlag {
 		if keyFlag != "" && keyFlag != arg {
-			return secretGetRequest{}, common.ValidationError("flag --key conflicts with positional key argument", nil)
+			return secretGetRequest{}, shared.ValidationError("flag --key conflicts with positional key argument", nil)
 		}
 		if keyFlag != "" {
 			return secretGetRequest{Path: pathFlag, Key: keyFlag}, nil
@@ -193,7 +193,7 @@ func resolveSecretGetFromSingleArg(pathFlag string, hasPathFlag bool, keyFlag st
 	if strings.HasPrefix(arg, "/") && strings.Contains(arg, ":") {
 		pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(arg)
 		if !composite {
-			return secretGetRequest{}, common.ValidationError("invalid secret target format: expected <path>:<key>", nil)
+			return secretGetRequest{}, shared.ValidationError("invalid secret target format: expected <path>:<key>", nil)
 		}
 		return secretGetRequest{Path: pathFromComposite, Key: keyFromComposite}, nil
 	}
@@ -224,14 +224,14 @@ func resolveSecretGetFromPathAndKeyArgs(
 
 	keyArg := strings.TrimSpace(rawKeyArg)
 	if keyArg == "" {
-		return secretGetRequest{}, common.ValidationError("secret key must not be empty", nil)
+		return secretGetRequest{}, shared.ValidationError("secret key must not be empty", nil)
 	}
 
 	if hasPathFlag && pathFlag != normalizedPathArg {
-		return secretGetRequest{}, common.ValidationError("flag --path conflicts with positional path argument", nil)
+		return secretGetRequest{}, shared.ValidationError("flag --path conflicts with positional path argument", nil)
 	}
 	if keyFlag != "" && keyFlag != keyArg {
-		return secretGetRequest{}, common.ValidationError("flag --key conflicts with positional key argument", nil)
+		return secretGetRequest{}, shared.ValidationError("flag --key conflicts with positional key argument", nil)
 	}
 
 	return secretGetRequest{Path: normalizedPathArg, Key: keyArg}, nil
@@ -252,10 +252,10 @@ func normalizeGetPathFlag(pathFlag string) (string, bool, error) {
 func normalizeSecretPathForGet(rawPath string) (string, error) {
 	trimmed := strings.TrimSpace(rawPath)
 	if trimmed == "" {
-		return "", common.ValidationError("path is required", nil)
+		return "", shared.ValidationError("path is required", nil)
 	}
 	if !strings.HasPrefix(trimmed, "/") {
-		return "", common.ValidationError("path must be absolute", nil)
+		return "", shared.ValidationError("path must be absolute", nil)
 	}
 	return resource.NormalizeLogicalPath(trimmed)
 }
@@ -326,13 +326,13 @@ func writeSecretsByPath(
 	return err
 }
 
-func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
+func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <key>",
 		Short: "Delete a secret",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
@@ -342,18 +342,18 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List secrets",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -363,30 +363,30 @@ func newListCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, items, nil)
+			return shared.WriteOutput(command, outputFormat, items, nil)
 		},
 	}
 }
 
-func newMaskCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
-	var input common.InputFlags
+func newMaskCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "mask",
 		Short: "Mask secret values in payload",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			value, err := common.DecodeInput[resource.Value](command, input)
+			value, err := shared.DecodeInput[resource.Value](command, input)
 			if err != nil {
 				return err
 			}
 
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -396,33 +396,33 @@ func newMaskCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, masked, nil)
+			return shared.WriteOutput(command, outputFormat, masked, nil)
 		},
 	}
 
-	common.BindInputFlags(command, &input)
+	shared.BindInputFlags(command, &input)
 	return command
 }
 
-func newResolveCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
-	var input common.InputFlags
+func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "resolve",
 		Short: "Resolve secret placeholders in payload",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			value, err := common.DecodeInput[resource.Value](command, input)
+			value, err := shared.DecodeInput[resource.Value](command, input)
 			if err != nil {
 				return err
 			}
 
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -432,33 +432,33 @@ func newResolveCommand(deps common.CommandDependencies, globalFlags *common.Glob
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, resolved, nil)
+			return shared.WriteOutput(command, outputFormat, resolved, nil)
 		},
 	}
 
-	common.BindInputFlags(command, &input)
+	shared.BindInputFlags(command, &input)
 	return command
 }
 
-func newNormalizeCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
-	var input common.InputFlags
+func newNormalizeCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+	var input shared.InputFlags
 
 	command := &cobra.Command{
 		Use:   "normalize",
 		Short: "Normalize secret placeholders",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			value, err := common.DecodeInput[resource.Value](command, input)
+			value, err := shared.DecodeInput[resource.Value](command, input)
 			if err != nil {
 				return err
 			}
 
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -468,16 +468,16 @@ func newNormalizeCommand(deps common.CommandDependencies, globalFlags *common.Gl
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, normalized, nil)
+			return shared.WriteOutput(command, outputFormat, normalized, nil)
 		},
 	}
 
-	common.BindInputFlags(command, &input)
+	shared.BindInputFlags(command, &input)
 	return command
 }
 
-func newDetectCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
-	var input common.InputFlags
+func newDetectCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+	var input shared.InputFlags
 	var pathFlag string
 	var fix bool
 	var secretAttribute string
@@ -493,7 +493,7 @@ func newDetectCommand(deps common.CommandDependencies, globalFlags *common.Globa
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, false)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, false)
 			if err != nil {
 				return err
 			}
@@ -503,12 +503,12 @@ func newDetectCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			secretProvider, err := common.RequireSecretProvider(deps)
+			secretProvider, err := shared.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -528,21 +528,21 @@ func newDetectCommand(deps common.CommandDependencies, globalFlags *common.Globa
 				return err
 			}
 
-			return common.WriteOutput(command, outputFormat, result.Output, nil)
+			return shared.WriteOutput(command, outputFormat, result.Output, nil)
 		},
 	}
 
-	common.BindInputFlags(command, &input)
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindInputFlags(command, &input)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&fix, "fix", false, "write detected secret attributes to metadata")
 	command.Flags().StringVar(&secretAttribute, "secret-attribute", "", "apply only one detected secret attribute")
 	return command
 }
 
-func decodeDetectInput(command *cobra.Command, flags common.InputFlags) (resource.Value, bool, error) {
-	data, err := common.ReadInput(command, flags)
+func decodeDetectInput(command *cobra.Command, flags shared.InputFlags) (resource.Value, bool, error) {
+	data, err := shared.ReadInput(command, flags)
 	if err != nil {
 		if isInputRequiredError(err) {
 			return nil, false, nil
@@ -552,16 +552,16 @@ func decodeDetectInput(command *cobra.Command, flags common.InputFlags) (resourc
 
 	var value resource.Value
 	switch flags.Format {
-	case "", common.OutputJSON:
+	case "", shared.OutputJSON:
 		if err := json.Unmarshal(data, &value); err != nil {
-			return nil, false, common.ValidationError("invalid json input", err)
+			return nil, false, shared.ValidationError("invalid json input", err)
 		}
-	case common.OutputYAML:
+	case shared.OutputYAML:
 		if err := yaml.Unmarshal(data, &value); err != nil {
-			return nil, false, common.ValidationError("invalid yaml input", err)
+			return nil, false, shared.ValidationError("invalid yaml input", err)
 		}
 	default:
-		return nil, false, common.ValidationError("invalid input format: use json or yaml", nil)
+		return nil, false, shared.ValidationError("invalid input format: use json or yaml", nil)
 	}
 
 	return value, true, nil

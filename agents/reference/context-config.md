@@ -200,7 +200,7 @@ current-ctx: xxx
 9. Metadata source one-of violation (`metadata.base-dir` and `metadata.bundle` both set).
 10. Config path resolution failure for home expansion or file access.
 11. Runtime override key not in the supported override-key list.
-12. Composition root startup (`core.NewDeclarestContext`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
+12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
@@ -220,7 +220,7 @@ current-ctx: xxx
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
 5. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle":"keycloak-bundle:0.0.1"}})` resolves bundle metadata source and clears `metadata.base-dir`.
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
-6. `core.NewDeclarestContext(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
+6. `bootstrap.NewSession(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
 8. Corner case: `resource-server.http.auth.custom-header` with `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
 9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `resource-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.

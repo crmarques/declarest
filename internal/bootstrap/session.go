@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"context"
@@ -13,20 +13,20 @@ func NewContextService(opts BootstrapConfig) config.ContextService {
 	return configfile.NewFileContextService(opts.ContextCatalogPath)
 }
 
-func NewDeclarestContext(opts BootstrapConfig, selection config.ContextSelection) (DeclarestContext, error) {
+func NewSession(opts BootstrapConfig, selection config.ContextSelection) (Session, error) {
 	contextService := NewContextService(opts)
 	defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, selection)
 
 	if err != nil {
-		return DeclarestContext{}, err
+		return Session{}, err
 	}
 
 	var repositorySync repository.RepositorySync
-	if defaultOrchestrator.Repository != nil {
+	if defaultOrchestrator.RepositoryStore() != nil {
 		var ok bool
-		repositorySync, ok = defaultOrchestrator.Repository.(repository.RepositorySync)
+		repositorySync, ok = defaultOrchestrator.RepositoryStore().(repository.RepositorySync)
 		if !ok {
-			return DeclarestContext{}, faults.NewTypedError(
+			return Session{}, faults.NewTypedError(
 				faults.InternalError,
 				"repository provider does not implement sync capabilities",
 				nil,
@@ -34,13 +34,13 @@ func NewDeclarestContext(opts BootstrapConfig, selection config.ContextSelection
 		}
 	}
 
-	return DeclarestContext{
+	return Session{
 		Contexts:       contextService,
 		Orchestrator:   defaultOrchestrator,
-		ResourceStore:  defaultOrchestrator.Repository,
+		ResourceStore:  defaultOrchestrator.RepositoryStore(),
 		RepositorySync: repositorySync,
-		Metadata:       defaultOrchestrator.Metadata,
-		Secrets:        defaultOrchestrator.Secrets,
-		ResourceServer: defaultOrchestrator.Server,
+		Metadata:       defaultOrchestrator.MetadataService(),
+		Secrets:        defaultOrchestrator.SecretProvider(),
+		ResourceServer: defaultOrchestrator.ResourceServer(),
 	}, nil
 }

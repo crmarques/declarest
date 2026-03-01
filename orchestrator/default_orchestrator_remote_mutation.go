@@ -65,9 +65,9 @@ func (r *DefaultOrchestrator) resolvePayloadForRemote(
 	}
 
 	var getSecret func(string) (string, error)
-	if r != nil && r.Secrets != nil {
+	if r != nil && r.secrets != nil {
 		getSecret = func(key string) (string, error) {
-			return r.Secrets.Get(ctx, key)
+			return r.secrets.Get(ctx, key)
 		}
 	}
 

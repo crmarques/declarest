@@ -32,7 +32,7 @@ Fields:
 1. `Name`: explicit context name, optional.
 2. `Overrides`: runtime key-value overrides.
 
-### Type: `core.DeclarestContext`
+### Type: `bootstrap.Session`
 Represents client-facing application state assembled at startup.
 
 Required fields:
@@ -46,18 +46,18 @@ Required fields:
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
-2. clients MUST consume `core.DeclarestContext` as their primary dependency entrypoint.
+2. clients MUST consume `bootstrap.Session` as their primary dependency entrypoint.
 
 Factory contract:
-1. `core.NewDeclarestContext` MUST assemble default provider implementations.
-2. `core.NewDeclarestContext` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
+1. `bootstrap.NewSession` MUST assemble default provider implementations.
+2. `bootstrap.NewSession` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
 4. when `metadata.bundle` is configured and `resource-server.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
 
 Corner case example:
-1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `core.NewDeclarestContext` MUST return an `InternalError`.
+1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `bootstrap.NewSession` MUST return an `InternalError`.
 
-### Type: `core.BootstrapConfig`
+### Type: `bootstrap.BootstrapConfig`
 Represents startup wiring inputs.
 
 Fields:

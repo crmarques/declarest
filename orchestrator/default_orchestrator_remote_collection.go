@@ -87,16 +87,16 @@ func (r *DefaultOrchestrator) collectionHintFromRepository(
 	ctx context.Context,
 	logicalPath string,
 ) bool {
-	if r == nil || r.Repository == nil {
+	if r == nil || r.repository == nil {
 		return false
 	}
 
-	exists, err := r.Repository.Exists(ctx, logicalPath)
+	exists, err := r.repository.Exists(ctx, logicalPath)
 	if err != nil || !exists {
 		return false
 	}
 
-	_, err = r.Repository.Get(ctx, logicalPath)
+	_, err = r.repository.Get(ctx, logicalPath)
 	if err == nil {
 		return false
 	}
@@ -349,7 +349,7 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	templateResource.Metadata = metadataCopy
 	templateResource.Payload = value
 
-	if renderer, ok := r.Metadata.(metadata.ResourceOperationSpecRenderer); ok {
+	if renderer, ok := r.metadata.(metadata.ResourceOperationSpecRenderer); ok {
 		spec, err := renderer.RenderOperationSpecForResource(ctx, metadata.ResourceOperationSpecInput{
 			LogicalPath:    templateResource.LogicalPath,
 			CollectionPath: templateResource.CollectionPath,

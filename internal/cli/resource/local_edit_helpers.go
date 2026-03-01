@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -18,10 +18,10 @@ import (
 
 func resolveActiveResourceContext(
 	ctx context.Context,
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 ) (configdomain.Context, error) {
-	contexts, err := common.RequireContexts(deps)
+	contexts, err := shared.RequireContexts(deps)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
@@ -31,7 +31,7 @@ func resolveActiveResourceContext(
 		contextName = strings.TrimSpace(globalFlags.Context)
 	}
 	if contextName == "" {
-		contextName = strings.TrimSpace(common.ContextName(ctx))
+		contextName = strings.TrimSpace(shared.ContextName(ctx))
 	}
 
 	return contexts.ResolveContext(ctx, configdomain.ContextSelection{Name: contextName})
@@ -40,14 +40,14 @@ func resolveActiveResourceContext(
 func resourcePayloadEditFormat(cfg configdomain.Context) string {
 	switch strings.TrimSpace(cfg.Repository.ResourceFormat) {
 	case configdomain.ResourceFormatYAML:
-		return common.OutputYAML
+		return shared.OutputYAML
 	default:
-		return common.OutputJSON
+		return shared.OutputJSON
 	}
 }
 
 func resourcePayloadEditFilename(cfg configdomain.Context) string {
-	if resourcePayloadEditFormat(cfg) == common.OutputYAML {
+	if resourcePayloadEditFormat(cfg) == shared.OutputYAML {
 		return "resource.yaml"
 	}
 	return "resource.json"
@@ -60,7 +60,7 @@ func encodeResourcePayloadForEdit(cfg configdomain.Context, value resourcedomain
 	}
 
 	switch resourcePayloadEditFormat(cfg) {
-	case common.OutputYAML:
+	case shared.OutputYAML:
 		return yaml.Marshal(normalized)
 	default:
 		return json.MarshalIndent(normalized, "", "  ")
@@ -68,12 +68,12 @@ func encodeResourcePayloadForEdit(cfg configdomain.Context, value resourcedomain
 }
 
 func decodeResourcePayloadFromEdit(cfg configdomain.Context, data []byte) (resourcedomain.Value, error) {
-	return common.DecodeInputData[resourcedomain.Value](data, resourcePayloadEditFormat(cfg))
+	return shared.DecodeInputData[resourcedomain.Value](data, resourcePayloadEditFormat(cfg))
 }
 
 func commitAndMaybeAutoSyncRepository(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	cfg configdomain.Context,
 	message string,
 ) error {
@@ -97,7 +97,7 @@ func commitAndMaybeAutoSyncRepository(
 		return nil
 	}
 
-	syncService, err := common.RequireRepositorySync(deps)
+	syncService, err := shared.RequireRepositorySync(deps)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func commitAndMaybeAutoSyncRepository(
 
 func commitRepositoryIfGit(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	cfg configdomain.Context,
 	message string,
 ) error {
@@ -122,7 +122,7 @@ func commitRepositoryIfGit(
 	return err
 }
 
-func resolveRepositoryCommitter(deps common.CommandDependencies) (repository.RepositoryCommitter, error) {
+func resolveRepositoryCommitter(deps shared.CommandDependencies) (repository.RepositoryCommitter, error) {
 	var committer repository.RepositoryCommitter
 	if candidate, ok := deps.RepositorySync.(repository.RepositoryCommitter); ok {
 		committer = candidate
@@ -130,14 +130,14 @@ func resolveRepositoryCommitter(deps common.CommandDependencies) (repository.Rep
 		committer = candidate
 	}
 	if committer == nil {
-		return nil, common.ValidationError("git repository commit capability is not available", nil)
+		return nil, shared.ValidationError("git repository commit capability is not available", nil)
 	}
 	return committer, nil
 }
 
 func ensureCleanGitWorktreeForResourceEdit(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	cfg configdomain.Context,
 ) error {
 	return ensureCleanGitWorktreeForAutoCommit(ctx, deps, cfg, "resource edit")
@@ -145,7 +145,7 @@ func ensureCleanGitWorktreeForResourceEdit(
 
 func ensureCleanGitWorktreeForAutoCommit(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	cfg configdomain.Context,
 	commandName string,
 ) error {
@@ -156,7 +156,7 @@ func ensureCleanGitWorktreeForAutoCommit(
 		return nil
 	}
 
-	syncService, err := common.RequireRepositorySync(deps)
+	syncService, err := shared.RequireRepositorySync(deps)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func ensureCleanGitWorktreeForAutoCommit(
 		return nil
 	}
 	if status.HasUncommitted {
-		return common.ValidationError(
+		return shared.ValidationError(
 			fmt.Sprintf(
 				"%s requires a clean git worktree before mutating repository files so auto-commit does not include unrelated changes",
 				commandName,
@@ -209,7 +209,7 @@ func shouldSkipCleanGitWorktreeCheckForAutoInitBootstrap(cfg configdomain.Contex
 
 func shouldSkipCleanGitWorktreeCheckForFreshBootstrapRepo(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	cfg configdomain.Context,
 ) bool {
 	if cfg.Repository.Git == nil {
@@ -262,13 +262,13 @@ func resolveRepositoryCommitMessage(
 	overrideChanged := command.Flags().Changed("message-override")
 
 	if appendChanged && overrideChanged {
-		return "", common.ValidationError("flags --message and --message-override cannot be used together", nil)
+		return "", shared.ValidationError("flags --message and --message-override cannot be used together", nil)
 	}
 
 	if overrideChanged {
 		resolved := strings.TrimSpace(messageOverride)
 		if resolved == "" {
-			return "", common.ValidationError("flag --message-override cannot be empty", nil)
+			return "", shared.ValidationError("flag --message-override cannot be empty", nil)
 		}
 		return resolved, nil
 	}
@@ -280,7 +280,7 @@ func resolveRepositoryCommitMessage(
 
 	appendValue := strings.TrimSpace(messageAppend)
 	if appendValue == "" {
-		return "", common.ValidationError("flag --message cannot be empty", nil)
+		return "", shared.ValidationError("flag --message cannot be empty", nil)
 	}
 	if base == "" {
 		return appendValue, nil

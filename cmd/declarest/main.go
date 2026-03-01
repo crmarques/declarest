@@ -6,18 +6,18 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/core"
+	"github.com/crmarques/declarest/internal/bootstrap"
 	"github.com/crmarques/declarest/internal/cli"
 )
 
 func main() {
 	args := os.Args[1:]
 	deps := cli.Dependencies{
-		Contexts: core.NewContextService(core.BootstrapConfig{}),
+		Contexts: bootstrap.NewContextService(bootstrap.BootstrapConfig{}),
 	}
 	if !shouldSkipContextBootstrap(args) {
-		declarestContext, err := core.NewDeclarestContext(
-			core.BootstrapConfig{},
+		session, err := bootstrap.NewSession(
+			bootstrap.BootstrapConfig{},
 			config.ContextSelection{Name: contextNameFromArgs(args)},
 		)
 		if err != nil {
@@ -26,7 +26,7 @@ func main() {
 				os.Exit(exitCodeForError(err))
 			}
 		} else {
-			deps = dependenciesFromDeclarestContext(declarestContext)
+			deps = dependenciesFromSession(session)
 		}
 	}
 
@@ -39,15 +39,15 @@ func exitCodeForError(err error) int {
 	return cli.ExitCodeForError(err)
 }
 
-func dependenciesFromDeclarestContext(ctx core.DeclarestContext) cli.Dependencies {
+func dependenciesFromSession(s bootstrap.Session) cli.Dependencies {
 	return cli.Dependencies{
-		Orchestrator:   ctx.Orchestrator,
-		Contexts:       ctx.Contexts,
-		ResourceStore:  ctx.ResourceStore,
-		RepositorySync: ctx.RepositorySync,
-		Metadata:       ctx.Metadata,
-		Secrets:        ctx.Secrets,
-		ResourceServer: ctx.ResourceServer,
+		Orchestrator:   s.Orchestrator,
+		Contexts:       s.Contexts,
+		ResourceStore:  s.ResourceStore,
+		RepositorySync: s.RepositorySync,
+		Metadata:       s.Metadata,
+		Secrets:        s.Secrets,
+		ResourceServer: s.ResourceServer,
 	}
 }
 

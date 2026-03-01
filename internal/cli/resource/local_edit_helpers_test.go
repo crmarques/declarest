@@ -9,7 +9,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/repository"
 )
 
@@ -25,7 +25,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitSkipsBootstrapWhenRepoNotInitialized
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		common.CommandDependencies{RepositorySync: sync},
+		shared.CommandDependencies{RepositorySync: sync},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -59,7 +59,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitStillFailsDirtyInitializedRepo(t *te
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		common.CommandDependencies{RepositorySync: sync},
+		shared.CommandDependencies{RepositorySync: sync},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -95,7 +95,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitSkipsDirtyFreshInitializedRepoWithou
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		common.CommandDependencies{RepositorySync: sync},
+		shared.CommandDependencies{RepositorySync: sync},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -129,7 +129,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitStillChecksWhenAutoInitDisabled(t *t
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		common.CommandDependencies{RepositorySync: sync},
+		shared.CommandDependencies{RepositorySync: sync},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{

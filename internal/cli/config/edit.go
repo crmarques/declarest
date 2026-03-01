@@ -7,12 +7,12 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
 
-func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newEditCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var editor string
 
 	command := &cobra.Command{
@@ -25,14 +25,14 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		}, " "),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			contexts, err := common.RequireContexts(deps)
+			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
 
 			editorService, ok := contexts.(configdomain.ContextCatalogEditor)
 			if !ok {
-				return common.ValidationError("config edit requires a file-backed context catalog editor service", nil)
+				return shared.ValidationError("config edit requires a file-backed context catalog editor service", nil)
 			}
 
 			targetName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
@@ -45,7 +45,7 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 
-			resolvedEditor := common.ResolveEditorCommand(command.Context(), deps, editor)
+			resolvedEditor := shared.ResolveEditorCommand(command.Context(), deps, editor)
 			if strings.TrimSpace(targetName) == "" {
 				return editContextCatalog(command, editorService, resolvedEditor, catalog)
 			}
@@ -53,7 +53,7 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		},
 	}
 
-	common.BindEditorFlag(command, &editor)
+	shared.BindEditorFlag(command, &editor)
 	registerSingleContextArgCompletion(command, deps)
 	return command
 }
@@ -66,18 +66,18 @@ func editContextCatalog(
 ) error {
 	encoded, err := yaml.Marshal(catalog)
 	if err != nil {
-		return common.ValidationError("failed to encode context catalog for editing", err)
+		return shared.ValidationError("failed to encode context catalog for editing", err)
 	}
 
-	edited, err := common.EditTempFile(command, editor, "contexts.yaml", encoded)
+	edited, err := shared.EditTempFile(command, editor, "contexts.yaml", encoded)
 	if err != nil {
 		return err
 	}
 	if len(bytes.TrimSpace(edited)) == 0 {
-		return common.ValidationError("context catalog edit is empty", nil)
+		return shared.ValidationError("context catalog edit is empty", nil)
 	}
 
-	decoded, err := decodeContextCatalogStrictFromData(edited, common.OutputYAML)
+	decoded, err := decodeContextCatalogStrictFromData(edited, shared.OutputYAML)
 	if err != nil {
 		return err
 	}
@@ -105,18 +105,18 @@ func editSingleContext(
 
 	encoded, err := yaml.Marshal(catalog.Contexts[idx])
 	if err != nil {
-		return common.ValidationError("failed to encode context for editing", err)
+		return shared.ValidationError("failed to encode context for editing", err)
 	}
 
-	edited, err := common.EditTempFile(command, editor, fmt.Sprintf("%s.yaml", name), encoded)
+	edited, err := shared.EditTempFile(command, editor, fmt.Sprintf("%s.yaml", name), encoded)
 	if err != nil {
 		return err
 	}
 	if len(bytes.TrimSpace(edited)) == 0 {
-		return common.ValidationError("context edit is empty", nil)
+		return shared.ValidationError("context edit is empty", nil)
 	}
 
-	decoded, err := decodeContextStrictFromData(edited, common.OutputYAML)
+	decoded, err := decodeContextStrictFromData(edited, shared.OutputYAML)
 	if err != nil {
 		return err
 	}

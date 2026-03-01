@@ -13,17 +13,17 @@ import (
 )
 
 func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, error) {
-	if r == nil || r.Repository == nil {
+	if r == nil || r.repository == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "repository store is not configured", nil)
 	}
-	return r.Repository, nil
+	return r.repository, nil
 }
 
 func (r *DefaultOrchestrator) requireServer() (server.ResourceServer, error) {
-	if r == nil || r.Server == nil {
+	if r == nil || r.server == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "resource server is not configured", nil)
 	}
-	return r.Server, nil
+	return r.server, nil
 }
 
 func (r *DefaultOrchestrator) resolveMetadataForPath(
@@ -31,14 +31,14 @@ func (r *DefaultOrchestrator) resolveMetadataForPath(
 	normalizedPath string,
 	allowMissing bool,
 ) (metadata.ResourceMetadata, error) {
-	if r == nil || r.Metadata == nil {
+	if r == nil || r.metadata == nil {
 		if allowMissing {
 			return metadata.ResourceMetadata{}, nil
 		}
 		return metadata.ResourceMetadata{}, faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
 	}
 
-	resolvedMetadata, err := r.Metadata.ResolveForPath(ctx, normalizedPath)
+	resolvedMetadata, err := r.metadata.ResolveForPath(ctx, normalizedPath)
 	if err != nil {
 		if allowMissing && isTypedCategory(err, faults.NotFoundError) {
 			debugctx.Printf(ctx, "metadata missing for path=%q; using empty metadata fallback", normalizedPath)

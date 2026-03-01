@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 )
 
-func TestNewDeclarestContext(t *testing.T) {
+func TestNewSession(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -20,30 +20,30 @@ func TestNewDeclarestContext(t *testing.T) {
 	contextCatalogPath := filepath.Join(tempDir, "contexts.yaml")
 	writeContextCatalog(t, contextCatalogPath, repoDir, repoDir)
 
-	declarestContext, err := NewDeclarestContext(
+	session, err := NewSession(
 		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
 		config.ContextSelection{Name: "dev"},
 	)
 	if err != nil {
-		t.Fatalf("NewDeclarestContext returned error: %v", err)
+		t.Fatalf("NewSession returned error: %v", err)
 	}
 
-	if declarestContext.Contexts == nil {
+	if session.Contexts == nil {
 		t.Fatal("expected non-nil contexts service")
 	}
-	if declarestContext.Orchestrator == nil {
+	if session.Orchestrator == nil {
 		t.Fatal("expected non-nil resource orchestrator")
 	}
 
-	if _, ok := declarestContext.Contexts.(*configfile.FileContextService); !ok {
-		t.Fatalf("expected FileContextService, got %T", declarestContext.Contexts)
+	if _, ok := session.Contexts.(*configfile.FileContextService); !ok {
+		t.Fatalf("expected FileContextService, got %T", session.Contexts)
 	}
-	if _, ok := declarestContext.Orchestrator.(*orchestratordomain.DefaultOrchestrator); !ok {
-		t.Fatalf("expected DefaultOrchestrator, got %T", declarestContext.Orchestrator)
+	if _, ok := session.Orchestrator.(*orchestratordomain.DefaultOrchestrator); !ok {
+		t.Fatalf("expected DefaultOrchestrator, got %T", session.Orchestrator)
 	}
 }
 
-func TestNewDeclarestContextUsesContextCatalogPathAndSelection(t *testing.T) {
+func TestNewSessionUsesContextCatalogPathAndSelection(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -53,15 +53,15 @@ func TestNewDeclarestContextUsesContextCatalogPathAndSelection(t *testing.T) {
 
 	writeContextCatalog(t, contextCatalogPath, devRepo, prodRepo)
 
-	declarestContext, err := NewDeclarestContext(
+	session, err := NewSession(
 		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
 		config.ContextSelection{Name: "prod"},
 	)
 	if err != nil {
-		t.Fatalf("NewDeclarestContext returned error: %v", err)
+		t.Fatalf("NewSession returned error: %v", err)
 	}
 
-	if err := declarestContext.Orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"}); err != nil {
+	if err := session.Orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"}); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
@@ -108,7 +108,7 @@ current-ctx: dev
 	}
 }
 
-func TestNewDeclarestContextFailsFastWhenCurrentContextMissing(t *testing.T) {
+func TestNewSessionFailsFastWhenCurrentContextMissing(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -118,7 +118,7 @@ func TestNewDeclarestContextFailsFastWhenCurrentContextMissing(t *testing.T) {
 		t.Fatalf("failed to write catalog: %v", err)
 	}
 
-	_, err := NewDeclarestContext(
+	_, err := NewSession(
 		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
 		config.ContextSelection{},
 	)
@@ -129,7 +129,7 @@ func TestNewDeclarestContextFailsFastWhenCurrentContextMissing(t *testing.T) {
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
-func TestNewDeclarestContextAllowsRemoteOnlyContextWithoutRepository(t *testing.T) {
+func TestNewSessionAllowsRemoteOnlyContextWithoutRepository(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -155,31 +155,31 @@ current-ctx: remote-only
 		t.Fatalf("failed to write catalog: %v", err)
 	}
 
-	declarestContext, err := NewDeclarestContext(
+	session, err := NewSession(
 		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
 		config.ContextSelection{Name: "remote-only"},
 	)
 	if err != nil {
 		t.Fatalf("expected remote-only context to bootstrap, got error: %v", err)
 	}
-	if declarestContext.Orchestrator == nil {
+	if session.Orchestrator == nil {
 		t.Fatal("expected orchestrator")
 	}
-	if declarestContext.ResourceStore != nil {
-		t.Fatalf("expected nil repository store, got %T", declarestContext.ResourceStore)
+	if session.ResourceStore != nil {
+		t.Fatalf("expected nil repository store, got %T", session.ResourceStore)
 	}
-	if declarestContext.RepositorySync != nil {
-		t.Fatalf("expected nil repository sync, got %T", declarestContext.RepositorySync)
+	if session.RepositorySync != nil {
+		t.Fatalf("expected nil repository sync, got %T", session.RepositorySync)
 	}
-	if declarestContext.ResourceServer == nil {
+	if session.ResourceServer == nil {
 		t.Fatal("expected resource server to be configured")
 	}
-	if declarestContext.Metadata == nil {
+	if session.Metadata == nil {
 		t.Fatal("expected metadata service when metadata.base-dir is configured")
 	}
 }
 
-func TestNewDeclarestContextSupportsMetadataBundle(t *testing.T) {
+func TestNewSessionSupportsMetadataBundle(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	tempDir := t.TempDir()
@@ -225,20 +225,20 @@ current-ctx: bundled
 		t.Fatalf("failed to write catalog: %v", err)
 	}
 
-	declarestContext, err := NewDeclarestContext(
+	session, err := NewSession(
 		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
 		config.ContextSelection{Name: "bundled"},
 	)
 	if err != nil {
-		t.Fatalf("NewDeclarestContext returned error: %v", err)
+		t.Fatalf("NewSession returned error: %v", err)
 	}
-	if declarestContext.Metadata == nil {
+	if session.Metadata == nil {
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
-	if declarestContext.ResourceServer == nil {
+	if session.ResourceServer == nil {
 		t.Fatal("expected resource server when resource-server is configured")
 	}
-	openAPISpec, openAPIErr := declarestContext.ResourceServer.GetOpenAPISpec(context.Background())
+	openAPISpec, openAPIErr := session.ResourceServer.GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
 	}

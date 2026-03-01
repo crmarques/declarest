@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"archive/tar"
@@ -46,17 +46,17 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.Repository.(*fsstore.LocalResourceRepository); !ok {
-			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.Repository)
+		if _, ok := defaultOrchestrator.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.Metadata.(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.Metadata)
+		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.MetadataService())
 		}
-		if defaultOrchestrator.Server != nil {
-			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.Server)
+		if defaultOrchestrator.ResourceServer() != nil {
+			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.ResourceServer())
 		}
-		if defaultOrchestrator.Secrets != nil {
-			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.Secrets)
+		if defaultOrchestrator.SecretProvider() != nil {
+			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.SecretProvider())
 		}
 	})
 
@@ -109,13 +109,13 @@ paths: {}
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
-		if _, ok := defaultOrchestrator.Metadata.(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", defaultOrchestrator.Metadata)
+		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", defaultOrchestrator.MetadataService())
 		}
-		if defaultOrchestrator.Server == nil {
+		if defaultOrchestrator.ResourceServer() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -181,11 +181,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.Server == nil {
+		if defaultOrchestrator.ResourceServer() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
 		}
@@ -250,11 +250,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.Server == nil {
+		if defaultOrchestrator.ResourceServer() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.Server.GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
 		}
@@ -300,14 +300,14 @@ distribution:
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.Repository.(*gitrepository.GitResourceRepository); !ok {
-			t.Fatalf("expected GitResourceRepository, got %T", defaultOrchestrator.Repository)
+		if _, ok := defaultOrchestrator.RepositoryStore().(*gitrepository.GitResourceRepository); !ok {
+			t.Fatalf("expected GitResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.Server.(*httpserver.HTTPResourceServerGateway); !ok {
-			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultOrchestrator.Server)
+		if _, ok := defaultOrchestrator.ResourceServer().(*httpserver.HTTPResourceServerGateway); !ok {
+			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultOrchestrator.ResourceServer())
 		}
-		if _, ok := defaultOrchestrator.Secrets.(*filesecrets.FileSecretService); !ok {
-			t.Fatalf("expected FileSecretService, got %T", defaultOrchestrator.Secrets)
+		if _, ok := defaultOrchestrator.SecretProvider().(*filesecrets.FileSecretService); !ok {
+			t.Fatalf("expected FileSecretService, got %T", defaultOrchestrator.SecretProvider())
 		}
 	})
 
@@ -336,11 +336,11 @@ distribution:
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.Repository.(*fsstore.LocalResourceRepository); !ok {
-			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.Repository)
+		if _, ok := defaultOrchestrator.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.Secrets.(*vaultsecrets.VaultSecretService); !ok {
-			t.Fatalf("expected VaultSecretService, got %T", defaultOrchestrator.Secrets)
+		if _, ok := defaultOrchestrator.SecretProvider().(*vaultsecrets.VaultSecretService); !ok {
+			t.Fatalf("expected VaultSecretService, got %T", defaultOrchestrator.SecretProvider())
 		}
 	})
 }
@@ -426,8 +426,8 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected missing repository to be allowed, got error: %v", err)
 		}
-		if defaultOrchestrator.Repository != nil {
-			t.Fatalf("expected nil repository manager, got %T", defaultOrchestrator.Repository)
+		if defaultOrchestrator.RepositoryStore() != nil {
+			t.Fatalf("expected nil repository manager, got %T", defaultOrchestrator.RepositoryStore())
 		}
 	})
 

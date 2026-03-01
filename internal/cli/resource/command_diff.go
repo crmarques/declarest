@@ -8,12 +8,12 @@ import (
 	"strings"
 
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newDiffCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 
 	command := &cobra.Command{
@@ -21,16 +21,16 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		Short: "Compare local and remote state",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
 
-			orchestratorService, err := common.RequireOrchestrator(deps)
+			orchestratorService, err := shared.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -58,7 +58,7 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return items[i].ResourcePath < items[j].ResourcePath
 			})
 
-			return common.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.DiffEntry) error {
+			return shared.WriteOutput(command, outputFormat, items, func(w io.Writer, value []resource.DiffEntry) error {
 				for _, item := range value {
 					line, lineErr := renderDiffTextLine(resolvedPath, item)
 					if lineErr != nil {
@@ -73,9 +73,9 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	return command
 }
 

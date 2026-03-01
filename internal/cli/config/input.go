@@ -7,7 +7,7 @@ import (
 	"io"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -25,8 +25,8 @@ type contextImportInput struct {
 	Catalog configdomain.ContextCatalog
 }
 
-func decodeContextStrict(command *cobra.Command, flags common.InputFlags) (configdomain.Context, error) {
-	data, err := common.ReadInput(command, flags)
+func decodeContextStrict(command *cobra.Command, flags shared.InputFlags) (configdomain.Context, error) {
+	data, err := shared.ReadInput(command, flags)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
@@ -34,8 +34,8 @@ func decodeContextStrict(command *cobra.Command, flags common.InputFlags) (confi
 	return decodeContextStrictFromData(data, flags.Format)
 }
 
-func decodeContextImportInputStrict(command *cobra.Command, flags common.InputFlags) (contextImportInput, error) {
-	data, err := common.ReadInput(command, flags)
+func decodeContextImportInputStrict(command *cobra.Command, flags shared.InputFlags) (contextImportInput, error) {
+	data, err := shared.ReadInput(command, flags)
 	if err != nil {
 		return contextImportInput{}, err
 	}
@@ -56,7 +56,7 @@ func decodeContextImportInputStrict(command *cobra.Command, flags common.InputFl
 		}, nil
 	}
 
-	return contextImportInput{}, common.ValidationError(
+	return contextImportInput{}, shared.ValidationError(
 		"input must be a context object or a context catalog",
 		errors.Join(contextErr, catalogErr),
 	)
@@ -80,38 +80,38 @@ func decodeContextCatalogStrictFromData(data []byte, format string) (configdomai
 
 func decodeInputStrict(data []byte, format string, output any) error {
 	switch format {
-	case "", common.OutputJSON:
+	case "", shared.OutputJSON:
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(output); err != nil {
-			return common.ValidationError("invalid json input", err)
+			return shared.ValidationError("invalid json input", err)
 		}
 
 		var extra json.RawMessage
 		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 			if err == nil {
-				return common.ValidationError("invalid json input", errors.New("multiple JSON values are not supported"))
+				return shared.ValidationError("invalid json input", errors.New("multiple JSON values are not supported"))
 			}
-			return common.ValidationError("invalid json input", err)
+			return shared.ValidationError("invalid json input", err)
 		}
 
-	case common.OutputYAML:
+	case shared.OutputYAML:
 		decoder := yaml.NewDecoder(bytes.NewReader(data))
 		decoder.KnownFields(true)
 		if err := decoder.Decode(output); err != nil {
-			return common.ValidationError("invalid yaml input", err)
+			return shared.ValidationError("invalid yaml input", err)
 		}
 
 		var extra any
 		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 			if err == nil {
-				return common.ValidationError("invalid yaml input", errors.New("multiple YAML documents are not supported"))
+				return shared.ValidationError("invalid yaml input", errors.New("multiple YAML documents are not supported"))
 			}
-			return common.ValidationError("invalid yaml input", err)
+			return shared.ValidationError("invalid yaml input", err)
 		}
 
 	default:
-		return common.ValidationError("invalid input format: use json or yaml", nil)
+		return shared.ValidationError("invalid input format: use json or yaml", nil)
 	}
 
 	return nil

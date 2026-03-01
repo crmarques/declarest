@@ -3,11 +3,11 @@ package config
 import (
 	"context"
 
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 )
 
-func registerSingleContextArgCompletion(command *cobra.Command, deps common.CommandDependencies) {
+func registerSingleContextArgCompletion(command *cobra.Command, deps shared.CommandDependencies) {
 	command.ValidArgsFunction = func(
 		_ *cobra.Command,
 		args []string,
@@ -20,7 +20,7 @@ func registerSingleContextArgCompletion(command *cobra.Command, deps common.Comm
 	}
 }
 
-func registerRenameFromArgCompletion(command *cobra.Command, deps common.CommandDependencies) {
+func registerRenameFromArgCompletion(command *cobra.Command, deps shared.CommandDependencies) {
 	command.ValidArgsFunction = func(
 		_ *cobra.Command,
 		args []string,
@@ -33,8 +33,8 @@ func registerRenameFromArgCompletion(command *cobra.Command, deps common.Command
 	}
 }
 
-func completeContextNames(deps common.CommandDependencies, toComplete string) ([]string, cobra.ShellCompDirective) {
-	service, err := common.RequireContexts(deps)
+func completeContextNames(deps shared.CommandDependencies, toComplete string) ([]string, cobra.ShellCompDirective) {
+	service, err := shared.RequireContexts(deps)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -48,5 +48,5 @@ func completeContextNames(deps common.CommandDependencies, toComplete string) ([
 	for _, item := range items {
 		names = append(names, item.Name)
 	}
-	return common.CompleteValues(names, toComplete)
+	return shared.CompleteValues(names, toComplete)
 }

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/core"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/bootstrap"
 	"github.com/crmarques/declarest/internal/operator"
 )
 
@@ -34,8 +34,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	declarestContext, err := core.NewDeclarestContext(
-		core.BootstrapConfig{},
+	session, err := bootstrap.NewSession(
+		bootstrap.BootstrapConfig{},
 		config.ContextSelection{Name: strings.TrimSpace(contextName)},
 	)
 	if err != nil {
@@ -44,10 +44,10 @@ func main() {
 	}
 
 	result, err := operator.ReconcileOnce(context.Background(), operator.Dependencies{
-		Orchestrator: declarestContext.Orchestrator,
-		Contexts:     declarestContext.Contexts,
-		Metadata:     declarestContext.Metadata,
-		Secrets:      declarestContext.Secrets,
+		Orchestrator: session.Orchestrator,
+		Contexts:     session.Contexts,
+		Metadata:     session.Metadata,
+		Secrets:      session.Secrets,
 	}, operator.ReconcileRequest{
 		LogicalPath:  path,
 		Source:       source,

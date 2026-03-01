@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"github.com/crmarques/declarest/config"
@@ -9,7 +9,7 @@ import (
 	"github.com/crmarques/declarest/server"
 )
 
-type DeclarestContext struct {
+type Session struct {
 	Contexts       config.ContextService
 	Orchestrator   orchestrator.Orchestrator
 	ResourceStore  repository.ResourceStore

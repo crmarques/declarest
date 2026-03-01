@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 )
 
-func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newEditCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var editor string
 
@@ -18,12 +18,12 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 		Short: "Edit a local repository resource in an editor",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
-			repositoryService, err := common.RequireResourceStore(deps)
+			repositoryService, err := shared.RequireResourceStore(deps)
 			if err != nil {
 				return err
 			}
@@ -44,9 +44,9 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 
-			editedBytes, err := common.EditTempFile(
+			editedBytes, err := shared.EditTempFile(
 				command,
-				common.ResolveEditorCommand(command.Context(), deps, editor),
+				shared.ResolveEditorCommand(command.Context(), deps, editor),
 				resourcePayloadEditFilename(cfg),
 				encoded,
 			)
@@ -54,7 +54,7 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 			if len(bytes.TrimSpace(editedBytes)) == 0 {
-				return common.ValidationError("edited resource payload is empty", nil)
+				return shared.ValidationError("edited resource payload is empty", nil)
 			}
 
 			editedValue, err := decodeResourcePayloadFromEdit(cfg, editedBytes)
@@ -90,16 +90,16 @@ func newEditCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 				return err
 			}
 
-			if common.IsVerbose(globalFlags) {
-				return common.WriteText(command, common.OutputText, resolvedPath)
+			if shared.IsVerbose(globalFlags) {
+				return shared.WriteText(command, shared.OutputText, resolvedPath)
 			}
 			return nil
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
-	common.BindEditorFlag(command, &editor)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
+	shared.BindEditorFlag(command, &editor)
 	return command
 }

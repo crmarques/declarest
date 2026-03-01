@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	identitysupport "github.com/crmarques/declarest/resource/identity"
@@ -15,7 +15,7 @@ import (
 func resolveExplicitMutationPayloadPath(
 	ctx context.Context,
 	commandPath string,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	logicalPath string,
 	value resourcedomain.Value,
 ) (string, error) {
@@ -69,7 +69,7 @@ func resolveExplicitMutationPayloadPath(
 func validateExplicitMutationPayloadIdentity(
 	ctx context.Context,
 	commandPath string,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	logicalPath string,
 	value resourcedomain.Value,
 ) error {
@@ -116,7 +116,7 @@ func validateExplicitMutationPayloadIdentityForPath(
 
 func canInferExplicitMutationChildPath(
 	ctx context.Context,
-	deps common.CommandDependencies,
+	deps shared.CommandDependencies,
 	normalizedPath string,
 ) (bool, error) {
 	if deps.Metadata == nil {
@@ -195,7 +195,7 @@ func validatePayloadIdentityAttributeMatch(
 		return nil
 	}
 
-	return common.ValidationError(
+	return shared.ValidationError(
 		fmt.Sprintf(
 			"%s explicit payload %s attribute %q=%q does not match path segment %q for %q",
 			strings.TrimSpace(commandPath),

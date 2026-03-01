@@ -8,7 +8,7 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
 	metadatacmd "github.com/crmarques/declarest/internal/cli/metadata"
@@ -53,8 +53,8 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 `
 
 func NewRootCommand(deps Dependencies) *cobra.Command {
-	commandDeps := deps.commandDependencies()
-	var globalFlags common.GlobalFlags
+	commandDeps := deps
+	var globalFlags shared.GlobalFlags
 
 	root := &cobra.Command{
 		Use:   "declarest",
@@ -64,15 +64,15 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		},
 		Args: cobra.NoArgs,
 		PersistentPreRunE: func(command *cobra.Command, _ []string) error {
-			if err := common.ValidateOutputFormat(globalFlags.Output); err != nil {
+			if err := shared.ValidateOutputFormat(globalFlags.Output); err != nil {
 				return err
 			}
-			if err := common.ValidateOutputFormatForCommandPath(command.CommandPath(), globalFlags.Output); err != nil {
+			if err := shared.ValidateOutputFormatForCommandPath(command.CommandPath(), globalFlags.Output); err != nil {
 				return err
 			}
 
 			commandContext := context.Background()
-			commandContext = common.WithContextName(commandContext, globalFlags.Context)
+			commandContext = shared.WithContextName(commandContext, globalFlags.Context)
 			commandContext = debugctx.WithEnabled(commandContext, globalFlags.Debug)
 			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
 			command.SetContext(commandContext)
@@ -115,8 +115,8 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		_, _ = fmt.Fprintln(originalOut, rendered)
 	})
 
-	common.BindGlobalFlags(root, &globalFlags)
-	common.RegisterContextFlagCompletion(root, commandDeps)
+	shared.BindGlobalFlags(root, &globalFlags)
+	shared.RegisterContextFlagCompletion(root, commandDeps)
 	root.PersistentFlags().BoolP("help", "h", false, "help for command")
 
 	root.AddGroup(

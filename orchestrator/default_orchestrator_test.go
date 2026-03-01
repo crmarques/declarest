@@ -26,7 +26,7 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: fakeRepo,
+		repository: fakeRepo,
 	}
 
 	value, err := orchestrator.Get(context.Background(), "/customers/acme")
@@ -66,7 +66,7 @@ func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 
 	serverManager := &fakeServer{}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	if err := orchestrator.Delete(context.Background(), "/customers/acme", DeletePolicy{}); err != nil {
@@ -97,13 +97,13 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: &fakeRepository{
+		repository: &fakeRepository{
 			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		},
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveErr: faults.NewTypedError(faults.NotFoundError, "metadata not found", nil),
 		},
-		Server: &fakeServer{
+		server: &fakeServer{
 			getValue: map[string]any{"realm": "master"},
 		},
 	}
@@ -113,7 +113,7 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 		t.Fatalf("Get returned error: %v", err)
 	}
 
-	serverManager := orchestrator.Server.(*fakeServer)
+	serverManager := orchestrator.server.(*fakeServer)
 	if !serverManager.getCalled {
 		t.Fatal("expected remote fallback get call")
 	}
@@ -132,16 +132,16 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: &fakeRepository{
+		repository: &fakeRepository{
 			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 		},
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "realm",
 				AliasFromAttribute: "realm",
 			},
 		},
-		Server: &fakeServer{
+		server: &fakeServer{
 			getValue: map[string]any{"realm": "platform"},
 		},
 	}
@@ -151,7 +151,7 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 		t.Fatalf("Get returned error: %v", err)
 	}
 
-	serverManager := orchestrator.Server.(*fakeServer)
+	serverManager := orchestrator.server.(*fakeServer)
 	payload, ok := serverManager.lastResource.Payload.(map[string]any)
 	if !ok {
 		t.Fatalf("expected payload map, got %T", serverManager.lastResource.Payload)
@@ -168,13 +168,13 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
 			},
 		},
-		Server: &fakeServer{
+		server: &fakeServer{
 			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 			listValue: []resource.Resource{
 				{
@@ -195,7 +195,7 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
-	serverManager := orchestrator.Server.(*fakeServer)
+	serverManager := orchestrator.server.(*fakeServer)
 	if !serverManager.listCalled {
 		t.Fatal("expected fallback list call after not found get")
 	}
@@ -250,7 +250,7 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "name",
@@ -262,7 +262,7 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 				},
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	value, err := orchestrator.GetRemote(context.Background(), requestPath)
@@ -318,7 +318,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "name",
@@ -330,7 +330,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 				},
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), requestPath)
@@ -367,14 +367,14 @@ func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "name",
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), requestPath)
@@ -425,7 +425,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
 					IDFromAttribute:    "id",
@@ -437,7 +437,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 				},
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	value, err := orchestrator.GetRemote(context.Background(), aliasPath)
@@ -513,7 +513,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
 					IDFromAttribute:    "id",
@@ -537,7 +537,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 				},
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	value, err := orchestrator.GetRemote(context.Background(), aliasPath)
@@ -580,13 +580,13 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "alias",
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), requestPath)
@@ -634,7 +634,7 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIH
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
@@ -677,8 +677,8 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenReposito
 		),
 	}
 	orchestrator := &DefaultOrchestrator{
-		Repository: repositoryManager,
-		Server:     serverManager,
+		repository: repositoryManager,
+		server:     serverManager,
 	}
 
 	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
@@ -714,7 +714,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 		),
 	}
 	orchestrator := &DefaultOrchestrator{
-		Metadata: &fakeMetadata{
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
@@ -724,7 +724,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 				},
 			},
 		},
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/master/organizations")
@@ -765,7 +765,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpe
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/acme")
@@ -811,7 +811,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourc
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/acme/organizations")
@@ -836,7 +836,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadI
 		),
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/publico/organizatio")
@@ -863,8 +863,8 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repositoryManager,
-		Metadata: &fakeMetadata{
+		repository: repositoryManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
@@ -909,8 +909,8 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repositoryManager,
-		Metadata: &fakeMetadata{
+		repository: repositoryManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "clientId",
 				AliasFromAttribute: "clientId",
@@ -959,8 +959,8 @@ func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t 
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repositoryManager,
-		Metadata: &fakeMetadata{
+		repository: repositoryManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
@@ -1005,14 +1005,14 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repositoryManager,
-		Metadata: &fakeMetadata{
+		repository: repositoryManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
 			},
 		},
-		Server: &fakeServer{
+		server: &fakeServer{
 			existsValue: true,
 			updateValue: map[string]any{
 				"id":       "f88c68f3-3253-49f9-94a9-fe7553d33b5c",
@@ -1026,7 +1026,7 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		t.Fatalf("Apply returned error: %v", err)
 	}
 
-	serverManager := orchestrator.Server.(*fakeServer)
+	serverManager := orchestrator.server.(*fakeServer)
 	if !serverManager.updateCalled {
 		t.Fatal("expected update mutation after local id fallback")
 	}
@@ -1061,8 +1061,8 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
-		Metadata: &fakeMetadata{
+		server: serverManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
@@ -1092,7 +1092,7 @@ func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
 		requestValue: map[string]any{"ok": true},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
+		server: serverManager,
 	}
 
 	body := resource.Value(map[string]any{"id": "a"})
@@ -1132,8 +1132,8 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server:   serverManager,
-		Metadata: metadataService,
+		server:   serverManager,
+		metadata: metadataService,
 	}
 
 	body := resource.Value(map[string]any{
@@ -1175,8 +1175,8 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server:   serverManager,
-		Metadata: metadataService,
+		server:   serverManager,
+		metadata: metadataService,
 	}
 
 	_, err := orchestrator.Request(context.Background(), "GET", "/admin/realms/master/user-registry", nil)
@@ -1211,8 +1211,8 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
-		Metadata: &fakeMetadata{
+		server: serverManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "clientId",
@@ -1260,8 +1260,8 @@ func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterN
 		},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
-		Metadata: &fakeMetadata{
+		server: serverManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "alias",
@@ -1296,8 +1296,8 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 		requestValue: map[string]any{"ok": true},
 	}
 	orchestrator := &DefaultOrchestrator{
-		Server: serverManager,
-		Metadata: &fakeMetadata{
+		server: serverManager,
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "id",
 				AliasFromAttribute: "displayName",
@@ -1697,10 +1697,10 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repo,
-		Metadata:   metadataService,
-		Server:     serverManager,
-		Secrets:    secretProvider,
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+		secrets:    secretProvider,
 	}
 
 	item, err := orchestrator.Apply(context.Background(), "/customers/acme")
@@ -1778,10 +1778,10 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repo,
-		Metadata:   metadataService,
-		Server:     serverManager,
-		Secrets:    secretProvider,
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+		secrets:    secretProvider,
 	}
 
 	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
@@ -1823,9 +1823,9 @@ func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T)
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repo,
-		Metadata:   metadataService,
-		Server:     serverManager,
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
 	}
 
 	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
@@ -1882,9 +1882,9 @@ func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T)
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repo,
-		Metadata:   metadataService,
-		Server:     serverManager,
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
 	}
 
 	_, err := orchestrator.Diff(context.Background(), "/customers/acme")
@@ -1936,9 +1936,9 @@ func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: repo,
-		Metadata:   metadataService,
-		Server:     serverManager,
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
 	}
 
 	_, err := orchestrator.Diff(context.Background(), "/customers/local")
@@ -1949,9 +1949,9 @@ func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: &fakeRepository{},
-		Metadata:   &fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{}},
-		Server: &fakeServer{
+		repository: &fakeRepository{},
+		metadata:   &fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{}},
+		server: &fakeServer{
 			listValue: []resource.Resource{
 				{LogicalPath: "/customers/zeta"},
 				{LogicalPath: "/customers/acme"},
@@ -2070,9 +2070,9 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 	}
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: &fakeRepository{},
-		Metadata:   metadataService,
-		Server:     serverManager,
+		repository: &fakeRepository{},
+		metadata:   metadataService,
+		server:     serverManager,
 	}
 
 	items, err := orchestrator.ListRemote(
@@ -2096,8 +2096,8 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Repository: &fakeRepository{},
-		Metadata: &fakeMetadata{
+		repository: &fakeRepository{},
+		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
@@ -2105,7 +2105,7 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 			},
 		},
 	}
-	orchestrator.SetResourceFormat("yaml")
+	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	templated, err := orchestrator.Template(context.Background(), "/customers/acme", map[string]any{
 		"id":     "42",
@@ -2137,7 +2137,7 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithout
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{}
-	orchestrator.SetResourceFormat("yaml")
+	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	resolved, err := orchestrator.resolvePayloadForRemote(
 		context.Background(),
@@ -2167,13 +2167,13 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithSec
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		Secrets: &fakeSecretProvider{
+		secrets: &fakeSecretProvider{
 			values: map[string]string{
 				"/customers/acme:token": "super-secret",
 			},
 		},
 	}
-	orchestrator.SetResourceFormat("yaml")
+	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	resolved, err := orchestrator.resolvePayloadForRemote(
 		context.Background(),
@@ -2257,7 +2257,7 @@ func TestDefaultOrchestratorRenderOperationSpecSupportsResourceFormatTemplateFun
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{}
-	orchestrator.SetResourceFormat("yaml")
+	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	spec, err := orchestrator.renderOperationSpec(
 		context.Background(),

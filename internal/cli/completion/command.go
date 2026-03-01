@@ -1,11 +1,11 @@
 package completion
 
 import (
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	_ = deps
 	_ = globalFlags
 

@@ -1,4 +1,4 @@
-package core
+package bootstrap
 
 import (
 	"go/parser"
@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-func TestOnlyCoreAndProvidersImportProviderImplementations(t *testing.T) {
+func TestOnlyBootstrapAndProvidersImportProviderImplementations(t *testing.T) {
 	t.Parallel()
 
-	repoRoot := filepath.Clean("..")
+	repoRoot := filepath.Clean("../..")
 	forbiddenPrefix := "github.com/crmarques/declarest/internal/providers/"
 
 	fset := token.NewFileSet()
@@ -35,7 +35,7 @@ func TestOnlyCoreAndProvidersImportProviderImplementations(t *testing.T) {
 			return err
 		}
 		normalizedRelPath := filepath.ToSlash(relPath)
-		isAllowedImporter := strings.HasPrefix(normalizedRelPath, "core/") || strings.HasPrefix(normalizedRelPath, "internal/providers/")
+		isAllowedImporter := strings.HasPrefix(normalizedRelPath, "internal/bootstrap/") || strings.HasPrefix(normalizedRelPath, "internal/providers/")
 
 		parsedFile, parseErr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if parseErr != nil {
@@ -59,7 +59,7 @@ func TestOnlyCoreAndProvidersImportProviderImplementations(t *testing.T) {
 func TestDomainPackagesDoNotImportInternalPackages(t *testing.T) {
 	t.Parallel()
 
-	repoRoot := filepath.Clean("..")
+	repoRoot := filepath.Clean("../..")
 	const (
 		modulePrefix         = "github.com/crmarques/declarest/"
 		forbiddenInternalPkg = modulePrefix + "internal/"

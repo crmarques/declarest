@@ -7,13 +7,13 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	readapp "github.com/crmarques/declarest/internal/app/resource/read"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newGetCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
 	var fromRepository bool
@@ -33,7 +33,7 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			requestedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			requestedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -50,10 +50,10 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return common.ValidationError("flag --http-method requires remote-server source", nil)
+				return shared.ValidationError("flag --http-method requires remote-server source", nil)
 			}
 
-			outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 			}
 			debugctx.Printf(runCtx, "resource get succeeded path=%q value_type=%T source=%q", resolvedPath, result.OutputValue, source)
 
-			return common.WriteOutput(command, outputFormat, result.OutputValue, func(w io.Writer, value any) error {
+			return shared.WriteOutput(command, outputFormat, result.OutputValue, func(w io.Writer, value any) error {
 				if !result.HasTextLines() {
 					_, writeErr := fmt.Fprintln(w, value)
 					return writeErr
@@ -107,9 +107,9 @@ func newGetCommand(deps common.CommandDependencies, globalFlags *common.GlobalFl
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer)
 	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "show plaintext values for metadata-declared secret attributes")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	requestapp "github.com/crmarques/declarest/internal/app/resource/request"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +20,7 @@ type requestMethodConfig struct {
 	supportsRecursive    bool
 }
 
-func newRequestCommand(deps common.CommandDependencies, globalFlags *common.GlobalFlags) *cobra.Command {
+func newRequestCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "request",
 		Short: "Send raw HTTP requests to the resource server",
@@ -49,8 +49,8 @@ func newRequestCommand(deps common.CommandDependencies, globalFlags *common.Glob
 }
 
 func newRequestMethodCommand(
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	cfg requestMethodConfig,
 ) *cobra.Command {
 	var pathFlag string
@@ -66,7 +66,7 @@ func newRequestMethodCommand(
 		Short: cfg.short,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -76,13 +76,13 @@ func newRequestMethodCommand(
 			}
 
 			if cfg.requireDeleteConfirm && !confirmDelete {
-				return common.ValidationError(
+				return shared.ValidationError(
 					"flag --confirm-delete is required: are you sure you want to delete?",
 					nil,
 				)
 			}
 			if !cfg.supportsRecursive && recursive {
-				return common.ValidationError("flag --recursive is only supported for resource request delete", nil)
+				return shared.ValidationError("flag --recursive is only supported for resource request delete", nil)
 			}
 
 			body, hasBody, err := decodeOptionalRequestPayload(command, inputFormat, payloadInputs, cfg.allowInlinePayload)
@@ -107,13 +107,13 @@ func newRequestMethodCommand(
 			}
 
 			if cfg.requireDeleteConfirm {
-				if !common.IsVerbose(globalFlags) {
+				if !shared.IsVerbose(globalFlags) {
 					return nil
 				}
 				return writeRequestOutput(command, deps, globalFlags, result.Values)
 			}
 
-			if isStateChangingRequestMethod(methodUpper) && !common.IsVerbose(globalFlags) {
+			if isStateChangingRequestMethod(methodUpper) && !shared.IsVerbose(globalFlags) {
 				return nil
 			}
 			if len(result.Values) == 0 {
@@ -123,9 +123,9 @@ func newRequestMethodCommand(
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
 
 	command.Flags().StringArrayVarP(
 		&payloadInputs,
@@ -134,8 +134,8 @@ func newRequestMethodCommand(
 		nil,
 		"payload file path (use '-' for stdin); post/put also accept inline payload",
 	)
-	command.Flags().StringVarP(&inputFormat, "format", "i", common.OutputJSON, "input format: json|yaml")
-	common.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVarP(&inputFormat, "format", "i", shared.OutputJSON, "input format: json|yaml")
+	shared.RegisterInputFormatFlagCompletion(command)
 
 	if cfg.requireDeleteConfirm {
 		command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
@@ -154,18 +154,18 @@ func decodeOptionalRequestPayload(
 	allowInlinePayload bool,
 ) (resource.Value, bool, error) {
 	if len(payloadInputs) > 1 {
-		return nil, false, common.ValidationError("flag --payload cannot be provided more than once", nil)
+		return nil, false, shared.ValidationError("flag --payload cannot be provided more than once", nil)
 	}
 
 	if len(payloadInputs) == 0 {
-		data, err := common.ReadOptionalInput(command, common.InputFlags{})
+		data, err := shared.ReadOptionalInput(command, shared.InputFlags{})
 		if err != nil {
 			return nil, false, err
 		}
 		if len(data) == 0 {
 			return nil, false, nil
 		}
-		value, err := common.DecodeInputData[resource.Value](data, inputFormat)
+		value, err := shared.DecodeInputData[resource.Value](data, inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
@@ -174,41 +174,41 @@ func decodeOptionalRequestPayload(
 
 	payloadArg := strings.TrimSpace(payloadInputs[0])
 	if payloadArg == "" {
-		return nil, false, common.ValidationError("input is empty", nil)
+		return nil, false, shared.ValidationError("input is empty", nil)
 	}
 	if payloadArg == "-" {
-		data, err := common.ReadInput(command, common.InputFlags{Payload: "-", Format: inputFormat})
+		data, err := shared.ReadInput(command, shared.InputFlags{Payload: "-", Format: inputFormat})
 		if err != nil {
 			return nil, false, err
 		}
-		value, err := common.DecodeInputData[resource.Value](data, inputFormat)
+		value, err := shared.DecodeInputData[resource.Value](data, inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
 		return value, true, nil
 	}
 
-	stdinData, err := common.ReadOptionalInput(command, common.InputFlags{})
+	stdinData, err := shared.ReadOptionalInput(command, shared.InputFlags{})
 	if err != nil {
 		return nil, false, err
 	}
 	if len(stdinData) > 0 {
-		return nil, false, common.ValidationError("flag --payload cannot be combined with stdin input", nil)
+		return nil, false, shared.ValidationError("flag --payload cannot be combined with stdin input", nil)
 	}
 
 	if allowInlinePayload && !requestPayloadLooksLikeExistingFile(payloadArg) {
-		value, err := common.DecodeInputData[resource.Value]([]byte(payloadArg), inputFormat)
+		value, err := shared.DecodeInputData[resource.Value]([]byte(payloadArg), inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
 		return value, true, nil
 	}
 
-	data, err := common.ReadInput(command, common.InputFlags{Payload: payloadArg, Format: inputFormat})
+	data, err := shared.ReadInput(command, shared.InputFlags{Payload: payloadArg, Format: inputFormat})
 	if err != nil {
 		return nil, false, err
 	}
-	value, err := common.DecodeInputData[resource.Value](data, inputFormat)
+	value, err := shared.DecodeInputData[resource.Value](data, inputFormat)
 	if err != nil {
 		return nil, false, err
 	}
@@ -234,16 +234,16 @@ func isStateChangingRequestMethod(method string) bool {
 
 func writeRequestOutput[T any](
 	command *cobra.Command,
-	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	deps shared.CommandDependencies,
+	globalFlags *shared.GlobalFlags,
 	value T,
 ) error {
-	outputFormat, err := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+	outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 	if err != nil {
 		return err
 	}
 
-	return common.WriteOutput(command, outputFormat, value, func(w io.Writer, item T) error {
+	return shared.WriteOutput(command, outputFormat, value, func(w io.Writer, item T) error {
 		_, writeErr := fmt.Fprintln(w, item)
 		return writeErr
 	})

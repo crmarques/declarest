@@ -6,16 +6,16 @@ import (
 	"strings"
 
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
 	"github.com/spf13/cobra"
 )
 
 const handleSecretsAllSentinel = "__all__"
 
-func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
+func newSaveCommand(deps shared.CommandDependencies) *cobra.Command {
 	var pathFlag string
-	var input common.InputFlags
+	var input shared.InputFlags
 	var asItems bool
 	var asOneResource bool
 	var ignore bool
@@ -37,7 +37,7 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := common.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -69,11 +69,11 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			orchestratorService, err := common.RequireOrchestrator(deps)
+			orchestratorService, err := shared.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
-			repositoryService, err := common.RequireResourceStore(deps)
+			repositoryService, err := shared.RequireResourceStore(deps)
 			if err != nil {
 				return err
 			}
@@ -105,10 +105,10 @@ func newSaveCommand(deps common.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	common.BindPathFlag(command, &pathFlag)
-	common.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = common.SinglePathArgCompletionFunc(deps)
-	common.BindInputFlags(command, &input)
+	shared.BindPathFlag(command, &pathFlag)
+	shared.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
+	shared.BindInputFlags(command, &input)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
 		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
 	}
@@ -142,7 +142,7 @@ func parseSaveHandleSecretsFlag(command *cobra.Command, rawValue string) (bool, 
 	for _, raw := range items {
 		value := strings.TrimSpace(raw)
 		if value == "" {
-			return false, nil, common.ValidationError("--handle-secrets contains an empty attribute value", nil)
+			return false, nil, shared.ValidationError("--handle-secrets contains an empty attribute value", nil)
 		}
 		if _, found := seen[value]; found {
 			continue

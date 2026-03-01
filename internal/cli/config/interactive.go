@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/cli/common"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ const resourceFormatRemoteDefaultOption = "remote-default"
 
 func resolveCreateContextInput(
 	command *cobra.Command,
-	input common.InputFlags,
+	input shared.InputFlags,
 	prompter configPrompter,
 	contextName string,
 ) (configdomain.Context, error) {
@@ -34,11 +34,11 @@ func resolveCreateContextInput(
 	return cfg, nil
 }
 
-func shouldUseInteractiveCreate(command *cobra.Command, input common.InputFlags, prompter configPrompter) bool {
+func shouldUseInteractiveCreate(command *cobra.Command, input shared.InputFlags, prompter configPrompter) bool {
 	if input.Payload != "" {
 		return false
 	}
-	if common.HasPipedInput(command) {
+	if shared.HasPipedInput(command) {
 		return false
 	}
 	return prompter.IsInteractive(command)
@@ -177,7 +177,7 @@ func promptRepositoryConfig(
 		contextCfg.Repository.Git = repo
 		return baseDir, nil
 	default:
-		return "", common.ValidationError("invalid repository type selected", nil)
+		return "", shared.ValidationError("invalid repository type selected", nil)
 	}
 }
 
@@ -295,7 +295,7 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 		}
 		auth.AccessKey = &configdomain.AccessKeyAuth{Token: token}
 	default:
-		return nil, common.ValidationError("invalid git auth method selected", nil)
+		return nil, shared.ValidationError("invalid git auth method selected", nil)
 	}
 
 	return auth, nil
@@ -454,7 +454,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Value:  value,
 		}
 	default:
-		return nil, common.ValidationError("invalid resource-server auth method selected", nil)
+		return nil, shared.ValidationError("invalid resource-server auth method selected", nil)
 	}
 
 	return auth, nil
@@ -481,7 +481,7 @@ func promptSecretStore(command *cobra.Command, prompter configPrompter) (*config
 		}
 		store.Vault = vaultStore
 	default:
-		return nil, common.ValidationError("invalid secret-store provider selected", nil)
+		return nil, shared.ValidationError("invalid secret-store provider selected", nil)
 	}
 
 	return store, nil
@@ -527,7 +527,7 @@ func promptFileSecretStore(command *cobra.Command, prompter configPrompter) (*co
 			"secret-store file passphrase-file",
 		)
 	default:
-		return nil, common.ValidationError("invalid secret-store file key source selected", nil)
+		return nil, shared.ValidationError("invalid secret-store file key source selected", nil)
 	}
 	if err != nil {
 		return nil, err
@@ -678,7 +678,7 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 			Mount:    mount,
 		}
 	default:
-		return nil, common.ValidationError("invalid vault auth method selected", nil)
+		return nil, shared.ValidationError("invalid vault auth method selected", nil)
 	}
 
 	return auth, nil
@@ -763,7 +763,7 @@ func promptRequiredInput(
 	}
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", common.ValidationError(fmt.Sprintf("%s is required", field), nil)
+		return "", shared.ValidationError(fmt.Sprintf("%s is required", field), nil)
 	}
 	return trimmed, nil
 }
@@ -792,7 +792,7 @@ func promptOptionalInt(
 
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, false, common.ValidationError(fmt.Sprintf("invalid integer value for %s", field), err)
+		return 0, false, shared.ValidationError(fmt.Sprintf("invalid integer value for %s", field), err)
 	}
 	return parsed, true, nil
 }
@@ -808,10 +808,10 @@ func selectContextForAction(
 		return "", err
 	}
 	if len(items) == 0 {
-		return "", common.ValidationError("no contexts available", nil)
+		return "", shared.ValidationError("no contexts available", nil)
 	}
 	if !prompter.IsInteractive(command) {
-		return "", common.ValidationError(fmt.Sprintf("context name is required: declarest config %s <name>", actionLabel), nil)
+		return "", shared.ValidationError(fmt.Sprintf("context name is required: declarest config %s <name>", actionLabel), nil)
 	}
 
 	options := make([]string, 0, len(items))

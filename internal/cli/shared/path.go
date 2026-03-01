@@ -1,4 +1,4 @@
-package common
+package shared
 
 func ResolvePathInput(pathFlag string, args []string, required bool) (string, error) {
 	var pathArg string

@@ -13,9 +13,9 @@ func TestDeclarestCmdImportBoundary(t *testing.T) {
 	t.Parallel()
 
 	allowedImports := map[string]struct{}{
-		"github.com/crmarques/declarest/config":       {},
-		"github.com/crmarques/declarest/core":         {},
-		"github.com/crmarques/declarest/internal/cli": {},
+		"github.com/crmarques/declarest/config":             {},
+		"github.com/crmarques/declarest/internal/bootstrap": {},
+		"github.com/crmarques/declarest/internal/cli":       {},
 	}
 
 	fset := token.NewFileSet()

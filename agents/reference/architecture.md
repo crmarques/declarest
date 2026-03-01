@@ -31,14 +31,14 @@ Define component boundaries, dependency direction, and orchestration ownership f
 4. Public domain packages: `config`, `resource`, `metadata`, `repository`, `server`, `secrets`, `orchestrator`.
 5. Public shared primitives: `faults`.
 6. Private provider implementations: `internal/providers/*`.
-7. Public composition root: `core`.
+7. Bootstrap/wiring: `internal/bootstrap`.
 
 ## Allowed Dependency Directions
-1. `cmd/declarest` -> `core`, `internal/cli`.
-2. `internal/cli/*` -> `internal/cli/common`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
+1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.
+2. `internal/cli/*` -> `internal/cli/shared`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
 3. `internal/app/*` -> domain contracts (`orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`).
 4. `orchestrator` -> `repository`, `metadata`, `server`, `secrets`, `resource`.
-5. `core` -> provider implementations in `internal/providers/*`.
+5. `internal/bootstrap` -> provider implementations in `internal/providers/*`.
 6. `internal/providers/*` -> owner package interfaces/types.
 
 ## Forbidden Dependencies
