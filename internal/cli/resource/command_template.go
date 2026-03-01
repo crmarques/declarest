@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/crmarques/declarest/internal/cli/shared"
 	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )

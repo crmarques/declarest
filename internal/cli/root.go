@@ -8,7 +8,6 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
 	metadatacmd "github.com/crmarques/declarest/internal/cli/metadata"
@@ -16,6 +15,7 @@ import (
 	resourcecmd "github.com/crmarques/declarest/internal/cli/resource"
 	resourceservercmd "github.com/crmarques/declarest/internal/cli/resourceserver"
 	"github.com/crmarques/declarest/internal/cli/secret"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/internal/cli/version"
 	"github.com/spf13/cobra"
 )

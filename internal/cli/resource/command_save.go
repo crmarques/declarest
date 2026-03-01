@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
+	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 )
 

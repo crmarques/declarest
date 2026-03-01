@@ -43,6 +43,7 @@ go.work.sum
 // vendor/
 
 # Editor/IDE
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
