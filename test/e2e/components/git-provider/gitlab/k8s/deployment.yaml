@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git-provider-gitlab
+  labels:
+    app.kubernetes.io/name: git-provider-gitlab
+    declarest.e2e/component-key: git-provider-gitlab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: git-provider-gitlab
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: git-provider-gitlab
+        declarest.e2e/component-key: git-provider-gitlab
+    spec:
+      containers:
+        - name: gitlab
+          image: docker.io/gitlab/gitlab-ce:18.7.4-ce.0
+          env:
+            - name: GITLAB_OMNIBUS_CONFIG
+              value: |
+                external_url 'http://127.0.0.1:${GITLAB_HTTP_PORT}'
+                nginx['listen_port'] = 80
+                nginx['listen_https'] = false
+                puma['worker_processes'] = 0
+                sidekiq['max_concurrency'] = 5
+
+                prometheus_monitoring['enable'] = false
+                alertmanager['enable'] = false
+                node_exporter['enable'] = false
+                redis_exporter['enable'] = false
+                postgres_exporter['enable'] = false
+                gitlab_exporter['enable'] = false
+                gitlab_kas['enable'] = false
+                registry['enable'] = false
+                gitlab_pages['enable'] = false
+                mattermost['enable'] = false
+                letsencrypt['enable'] = false
+            - name: GITLAB_ROOT_PASSWORD
+              value: "${GITLAB_ROOT_PASSWORD}"
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi

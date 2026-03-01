@@ -33,9 +33,11 @@ Components MAY also ship `openapi.yaml`. When provided, the runner copies it int
 Additional runtime files:
 
 - `compose` runtime components MUST include:
-  - `compose.yaml`
+  - `compose/compose.yaml`
+  - `k8s/*.yaml`
+    - Service manifests SHOULD declare `declarest.e2e/port-forward` annotation entries (for example `18080:8080`) used by the generic kubernetes runtime adapter.
   - `scripts/health.sh`
-- `native` runtime components MAY omit `compose.yaml` and `scripts/health.sh`.
+- `native` runtime components MAY omit `compose/` and `k8s/` runtime artifact directories and `scripts/health.sh`.
 - Optional hook: `scripts/manual-info.sh`.
 
 ## `component.env` Contract
@@ -84,8 +86,8 @@ Field rules:
 Runner-managed hook sequence:
 
 1. `init`
-2. `start` (compose runtime only; built-in unless overridden by `scripts/start.sh`)
-3. `health` (compose runtime only)
+2. `start` (containerized runtime-kind only; built-in unless overridden by `scripts/start.sh`)
+3. `health` (containerized runtime-kind only)
 4. `configure-auth`
 5. `context`
 6. `stop` (built-in unless overridden by `scripts/stop.sh`)
@@ -116,7 +118,9 @@ Common exported variables:
 - `E2E_RESOURCE_SERVER_AUTH_TYPE`, `E2E_RESOURCE_SERVER_MTLS`
 - `E2E_COMPONENT_STATE_FILE`
 - `E2E_COMPONENT_PROJECT_NAME` (compose project when applicable)
+- `E2E_COMPONENT_COMPOSE_FILE`, `E2E_COMPONENT_K8S_DIR`, `E2E_COMPONENT_K8S_LABEL_KEY`
 - `E2E_COMPONENT_CONTEXT_FRAGMENT`
+- `E2E_PLATFORM`, `E2E_KUBECONFIG`, `E2E_KIND_CLUSTER_NAME`, `E2E_K8S_NAMESPACE`, `E2E_KIND_NODE_ROOT`
 - `E2E_RUN_DIR`, `E2E_STATE_DIR`, `E2E_LOG_DIR`, `E2E_CONTEXT_DIR`, `E2E_CONTEXT_FILE`
 
 ## Onboarding Checklist
@@ -124,7 +128,7 @@ Common exported variables:
 1. Copy an existing component from the same group as baseline.
 2. Implement required scripts (`init`, `configure-auth`, `context`).
 3. Set `COMPONENT_RUNTIME_KIND` and `COMPONENT_DEPENDS_ON` explicitly.
-4. Add `compose.yaml` and `health.sh` for `compose` runtime.
+4. Add `compose/compose.yaml`, `k8s/*.yaml`, and `health.sh` for `compose` runtime.
 5. Add component-specific `cases/main` and `cases/corner` when behavior differs.
 6. Run:
   - `bash -n test/e2e/run-e2e.sh test/e2e/lib/*.sh`

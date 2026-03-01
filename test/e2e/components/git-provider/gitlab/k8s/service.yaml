@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: git-provider-gitlab
+  labels:
+    app.kubernetes.io/name: git-provider-gitlab
+    declarest.e2e/component-key: git-provider-gitlab
+  annotations:
+    declarest.e2e/port-forward: "${GITLAB_HTTP_PORT}:80"
+spec:
+  selector:
+    app.kubernetes.io/name: git-provider-gitlab
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

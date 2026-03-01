@@ -631,24 +631,6 @@ func mustSetMetadata(
 	}
 }
 
-func writeRawMetadataFile(t *testing.T, filePath string, metadata metadatadomain.ResourceMetadata) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		t.Fatalf("failed to create metadata directory %q: %v", filepath.Dir(filePath), err)
-	}
-
-	encoded, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		t.Fatalf("failed to encode metadata for %q: %v", filePath, err)
-	}
-	encoded = append(encoded, '\n')
-
-	if err := os.WriteFile(filePath, encoded, 0o644); err != nil {
-		t.Fatalf("failed to write metadata file %q: %v", filePath, err)
-	}
-}
-
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	t.Helper()
 

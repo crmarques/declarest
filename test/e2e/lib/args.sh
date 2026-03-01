@@ -13,6 +13,7 @@ E2E_GIT_PROVIDER_CONNECTION='local'
 E2E_SECRET_PROVIDER='file'
 E2E_SECRET_PROVIDER_CONNECTION='local'
 E2E_PROFILE='basic'
+E2E_PLATFORM='kubernetes'
 E2E_LIST_COMPONENTS=0
 E2E_VALIDATE_COMPONENTS=0
 E2E_KEEP_RUNTIME=0
@@ -157,6 +158,23 @@ e2e_parse_metadata_mode_value() {
   esac
 }
 
+e2e_parse_platform_value() {
+  local raw_value=$1
+
+  case "${raw_value,,}" in
+    compose)
+      printf 'compose\n'
+      ;;
+    kubernetes)
+      printf 'kubernetes\n'
+      ;;
+    *)
+      e2e_die "invalid --platform value: ${raw_value} (allowed: compose, kubernetes)"
+      return 1
+      ;;
+  esac
+}
+
 e2e_usage() {
   cat <<'USAGE'
 Usage: ./run-e2e.sh [flags]
@@ -172,6 +190,11 @@ Profiles (required, defaults to basic when omitted):
     full    : Execute "main" plus "corner" cases to cover less-common paths and components.
     manual  : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
               Declarest commands interactively. Requires every selected connection to stay local.
+
+Platform selection:
+  --platform <compose|kubernetes>                 default: kubernetes
+    compose    : Start local containerized components with the selected compose engine (podman or docker).
+    kubernetes : Start local containerized components in a run-scoped kind cluster.
 
 Component selection (choose values for each flag; see notes below):
   --resource-server <simple-api-server|keycloak|rundeck|vault>         default: simple-api-server
@@ -231,6 +254,8 @@ Environment overrides:
   DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
 
 Examples:
+  ./run-e2e.sh --platform kubernetes --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
+  ./run-e2e.sh --platform compose --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile basic --resource-server simple-api-server --metadata local-dir
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
@@ -285,7 +310,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--resource-server|--resource-server-connection|--resource-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--resource-server|--resource-server-connection|--resource-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -344,6 +369,15 @@ e2e_parse_args() {
         }
         E2E_PROFILE=$2
         e2e_mark_explicit 'profile'
+        shift 2
+        ;;
+      --platform)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--platform requires a value'
+          return 1
+        }
+        E2E_PLATFORM=$(e2e_parse_platform_value "$2") || return 1
+        e2e_mark_explicit 'platform'
         shift 2
         ;;
       --resource-server)
@@ -473,6 +507,8 @@ e2e_parse_args() {
       return 1
       ;;
   esac
+
+  E2E_PLATFORM=$(e2e_parse_platform_value "${E2E_PLATFORM}") || return 1
 
   if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
     e2e_die '--resource-server none is not supported; select a resource-server component'

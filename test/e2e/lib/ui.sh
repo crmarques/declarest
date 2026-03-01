@@ -250,14 +250,16 @@ ui_write_step_log_header() {
 
   {
     printf '[%s] STEP %d/%d START %s\n' "$(e2e_now_utc)" "${step_number}" "${step_total}" "${step_title}"
-    printf '[%s] run-id=%s profile=%s keep-runtime=%s verbose=%s\n' \
+    printf '[%s] run-id=%s profile=%s platform=%s keep-runtime=%s verbose=%s\n' \
       "$(e2e_now_utc)" \
       "${E2E_RUN_ID:-n/a}" \
       "${E2E_PROFILE:-n/a}" \
+      "${E2E_PLATFORM:-n/a}" \
       "${E2E_KEEP_RUNTIME:-0}" \
       "${E2E_VERBOSE:-0}"
-    printf '[%s] stack repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] stack platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
+      "${E2E_PLATFORM:-n/a}" \
       "${E2E_REPO_TYPE:-n/a}" \
       "${E2E_RESOURCE_SERVER:-n/a}" \
       "${E2E_RESOURCE_SERVER_CONNECTION:-n/a}" \
@@ -496,6 +498,7 @@ ui_print_summary() {
     "${E2E_CASE_SKIPPED}"
 
   printf '  duration: %s\n' "$(e2e_format_duration "${total_elapsed}")"
+  printf '  platform: %s\n' "${E2E_PLATFORM:-n/a}"
   printf '  context:  %s\n' "${E2E_CONTEXT_FILE:-n/a}"
   printf '  logs:     %s\n' "${E2E_LOG_DIR:-n/a}"
   printf '  execution-log: %s\n' "${E2E_EXECUTION_LOG:-n/a}"

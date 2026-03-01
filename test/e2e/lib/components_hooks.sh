@@ -25,6 +25,9 @@ e2e_component_export_env() {
   export E2E_COMPONENT_DEPENDS_ON="${E2E_COMPONENT_DEPENDS_ON[${component_key}]:-}"
   export E2E_COMPONENT_STATE_FILE="$(e2e_component_state_file "${component_key}")"
   export E2E_COMPONENT_PROJECT_NAME="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
+  export E2E_COMPONENT_COMPOSE_FILE="$(e2e_component_compose_file "${component_key}")"
+  export E2E_COMPONENT_K8S_DIR="$(e2e_component_k8s_dir "${component_key}")"
+  export E2E_COMPONENT_K8S_LABEL_KEY="$(e2e_component_k8s_label_key "${component_key}")"
   export E2E_COMPONENT_CONTEXT_FRAGMENT="$(e2e_component_context_fragment_path "${component_key}")"
   export E2E_COMPONENT_OPENAPI_SPEC="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   export E2E_METADATA_DIR
@@ -36,6 +39,11 @@ e2e_component_export_env() {
   export E2E_LOG_DIR
   export E2E_CONTEXT_DIR
   export E2E_CONTEXT_FILE
+  export E2E_PLATFORM
+  export E2E_KUBECONFIG
+  export E2E_KIND_CLUSTER_NAME
+  export E2E_K8S_NAMESPACE
+  export E2E_KIND_NODE_ROOT
 
   export E2E_RESOURCE_SERVER
   export E2E_RESOURCE_SERVER_CONNECTION
@@ -61,7 +69,7 @@ e2e_component_source_state_env() {
 
 e2e_component_runtime_is_compose() {
   local component_key=$1
-  [[ "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]:-native}" == 'compose' ]]
+  e2e_component_is_containerized "${component_key}"
 }
 
 e2e_sanitize_project_name() {
@@ -93,7 +101,7 @@ e2e_component_builtin_start_compose() {
     return 0
   fi
 
-  compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+  compose_file=$(e2e_component_compose_file "${component_key}")
   if [[ ! -f "${compose_file}" ]]; then
     e2e_die "missing compose file for ${component_key}: ${compose_file}"
     return 1
@@ -125,6 +133,159 @@ e2e_component_builtin_start_compose() {
   return 0
 }
 
+e2e_component_k8s_manifest_files() {
+  local component_key=$1
+  local k8s_dir
+  k8s_dir=$(e2e_component_k8s_dir "${component_key}")
+  if [[ ! -d "${k8s_dir}" ]]; then
+    return 0
+  fi
+
+  find "${k8s_dir}" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | sort
+}
+
+e2e_component_render_k8s_manifest() {
+  local component_key=$1
+  local source_manifest=$2
+  local state_file=$3
+  local rendered_manifest=$4
+
+  (
+    set -a
+    [[ -f "${state_file}" ]] && source "${state_file}"
+    set +a
+    envsubst <"${source_manifest}" >"${rendered_manifest}"
+  )
+}
+
+e2e_component_start_k8s_port_forwards() {
+  local component_key=$1
+  local state_file=$2
+  local component_label
+  local service_rows
+  local service_name
+  local mappings
+  local mapping
+  local local_port
+  local remote_port
+  local -a pids=()
+  local safe_component_key
+
+  component_label=$(e2e_component_k8s_label_key "${component_key}")
+  service_rows=$(
+    kubectl \
+      --kubeconfig "${E2E_KUBECONFIG}" \
+      -n "${E2E_K8S_NAMESPACE}" \
+      get svc \
+      -l "declarest.e2e/component-key=${component_label}" \
+      -o json \
+      | jq -r '.items[] | [.metadata.name, (.metadata.annotations["declarest.e2e/port-forward"] // "")] | @tsv'
+  ) || return 1
+
+  safe_component_key=${component_key//[:\/]/-}
+  while IFS=$'\t' read -r service_name mappings; do
+    [[ -n "${service_name}" ]] || continue
+    [[ -n "${mappings}" ]] || continue
+
+    mappings=${mappings//,/ }
+    for mapping in ${mappings}; do
+      [[ -n "${mapping}" ]] || continue
+      local_port=${mapping%%:*}
+      remote_port=${mapping#*:}
+      if [[ -z "${local_port}" || -z "${remote_port}" || "${local_port}" == "${remote_port}" && "${mapping}" != *:* ]]; then
+        e2e_die "invalid k8s port-forward mapping for ${component_key} service/${service_name}: ${mapping}"
+        return 1
+      fi
+
+      local pf_log="${E2E_LOG_DIR}/port-forward-${safe_component_key}-${service_name}-${local_port}-${remote_port}.log"
+      kubectl \
+        --kubeconfig "${E2E_KUBECONFIG}" \
+        -n "${E2E_K8S_NAMESPACE}" \
+        port-forward "service/${service_name}" "${local_port}:${remote_port}" >"${pf_log}" 2>&1 &
+      local pf_pid=$!
+      sleep 1
+      if ! kill -0 "${pf_pid}" >/dev/null 2>&1; then
+        e2e_error "k8s port-forward failed for ${component_key} service/${service_name} mapping=${local_port}:${remote_port}"
+        tail -n 30 "${pf_log}" 2>/dev/null | sed 's/^/  | /' || true
+        return 1
+      fi
+      pids+=("${pf_pid}")
+      e2e_info "k8s port-forward started key=${component_key} service=${service_name} mapping=${local_port}:${remote_port} pid=${pf_pid}"
+    done
+  done <<<"${service_rows}"
+
+  if ((${#pids[@]} > 0)); then
+    e2e_write_state_value "${state_file}" K8S_PORT_FORWARD_PIDS "${pids[*]}"
+  fi
+
+  return 0
+}
+
+e2e_component_builtin_start_kubernetes() {
+  local component_key=$1
+  local connection
+  local state_file
+  local k8s_dir
+  local rendered_dir
+  local source_manifest
+  local rendered_manifest
+  local manifest_count=0
+  local component_label
+
+  connection=$(e2e_component_connection_for_key "${component_key}")
+  if [[ "${connection}" != 'local' ]]; then
+    e2e_info "component start skipped key=${component_key} reason=connection:${connection}"
+    return 0
+  fi
+
+  if ! e2e_component_runtime_is_compose "${component_key}"; then
+    e2e_info "component start skipped key=${component_key} reason=runtime:native"
+    return 0
+  fi
+
+  if [[ -z "${E2E_KUBECONFIG:-}" || -z "${E2E_K8S_NAMESPACE:-}" ]]; then
+    e2e_die "kubernetes runtime metadata missing for component ${component_key}"
+    return 1
+  fi
+
+  state_file=$(e2e_component_state_file "${component_key}")
+  k8s_dir=$(e2e_component_k8s_dir "${component_key}")
+  if [[ ! -d "${k8s_dir}" ]]; then
+    e2e_die "missing k8s artifact directory for ${component_key}: ${k8s_dir}"
+    return 1
+  fi
+
+  rendered_dir="${E2E_STATE_DIR}/k8s-rendered/${component_key//[:\/]/-}"
+  mkdir -p "${rendered_dir}" || return 1
+
+  while IFS= read -r source_manifest; do
+    [[ -n "${source_manifest}" ]] || continue
+    rendered_manifest="${rendered_dir}/$(basename -- "${source_manifest}")"
+    e2e_component_render_k8s_manifest "${component_key}" "${source_manifest}" "${state_file}" "${rendered_manifest}" || return 1
+    e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${E2E_K8S_NAMESPACE}" apply -f "${rendered_manifest}" || return 1
+    ((manifest_count += 1))
+  done < <(e2e_component_k8s_manifest_files "${component_key}")
+
+  if ((manifest_count == 0)); then
+    e2e_die "no k8s manifests found for component ${component_key} under ${k8s_dir}"
+    return 1
+  fi
+
+  component_label=$(e2e_component_k8s_label_key "${component_key}")
+  e2e_kubectl_cmd \
+    --kubeconfig "${E2E_KUBECONFIG}" \
+    -n "${E2E_K8S_NAMESPACE}" \
+    wait \
+    --for=condition=Ready \
+    pod \
+    -l "declarest.e2e/component-key=${component_label}" \
+    --timeout=180s || return 1
+
+  e2e_write_state_value "${state_file}" K8S_RENDERED_DIR "${rendered_dir}"
+  e2e_component_start_k8s_port_forwards "${component_key}" "${state_file}" || return 1
+  return 0
+}
+
 e2e_component_builtin_stop_compose() {
   local component_key=$1
   local compose_file
@@ -135,7 +296,7 @@ e2e_component_builtin_stop_compose() {
     return 0
   fi
 
-  compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+  compose_file=$(e2e_component_compose_file "${component_key}")
   [[ -f "${compose_file}" ]] || return 0
 
   project_name="${E2E_COMPONENT_PROJECT[${component_key}]:-}"
@@ -150,6 +311,31 @@ e2e_component_builtin_stop_compose() {
     e2e_component_source_state_env "${state_file}"
     e2e_compose_cmd -f "${compose_file}" -p "${project_name}" down -v --remove-orphans
   ) || true
+
+  return 0
+}
+
+e2e_component_builtin_stop_kubernetes() {
+  local component_key=$1
+  local state_file
+  local pids
+  local pid
+
+  if ! e2e_component_runtime_is_compose "${component_key}"; then
+    return 0
+  fi
+
+  state_file=$(e2e_component_state_file "${component_key}")
+  pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS' || true)
+  if [[ -z "${pids}" ]]; then
+    return 0
+  fi
+
+  for pid in ${pids}; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    kill "${pid}" >/dev/null 2>&1 || true
+    wait "${pid}" >/dev/null 2>&1 || true
+  done
 
   return 0
 }
@@ -186,10 +372,18 @@ e2e_component_run_hook() {
 
   case "${hook_name}" in
     start)
-      e2e_component_builtin_start_compose "${component_key}" || return 1
+      if [[ "${E2E_PLATFORM}" == 'kubernetes' ]]; then
+        e2e_component_builtin_start_kubernetes "${component_key}" || return 1
+      else
+        e2e_component_builtin_start_compose "${component_key}" || return 1
+      fi
       ;;
     stop)
-      e2e_component_builtin_stop_compose "${component_key}" || return 1
+      if [[ "${E2E_PLATFORM}" == 'kubernetes' ]]; then
+        e2e_component_builtin_stop_kubernetes "${component_key}" || return 1
+      else
+        e2e_component_builtin_stop_compose "${component_key}" || return 1
+      fi
       ;;
     *)
       return 0

@@ -20,6 +20,7 @@ case_selected_value_for_key() {
   local key=$1
   case "${key}" in
     profile) printf '%s\n' "${E2E_PROFILE}" ;;
+    platform) printf '%s\n' "${E2E_PLATFORM}" ;;
     resource-server) printf '%s\n' "${E2E_RESOURCE_SERVER}" ;;
     resource-server-connection) printf '%s\n' "${E2E_RESOURCE_SERVER_CONNECTION}" ;;
     resource-server-auth-type) printf '%s\n' "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ;;
@@ -190,9 +191,10 @@ e2e_run_single_case() {
   {
     printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}"
     printf '[%s] CASE requires=%s\n' "$(e2e_now_utc)" "${case_requires:-<none>}"
-    printf '[%s] CASE stack profile=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] CASE stack profile=%s platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_PROFILE}" \
+      "${E2E_PLATFORM}" \
       "${E2E_REPO_TYPE}" \
       "${E2E_RESOURCE_SERVER}" \
       "${E2E_RESOURCE_SERVER_CONNECTION}" \

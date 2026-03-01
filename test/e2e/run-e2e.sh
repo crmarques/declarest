@@ -33,6 +33,7 @@ source "${SCRIPT_DIR}/lib/runner_cleanup.sh"
 step_initialize() {
   e2e_parse_args "${E2E_CLI_ARGS[@]}" || return 1
   e2e_apply_profile_defaults || return 1
+  e2e_validate_platform || return 1
   e2e_validate_container_engine || return 1
 
   e2e_discover_components || return 1
@@ -60,7 +61,7 @@ step_initialize() {
   e2e_build_capabilities || return 1
   e2e_preflight_requirements || return 1
 
-  e2e_info "profile=${E2E_PROFILE} repo-type=${E2E_REPO_TYPE} resource-server=${E2E_RESOURCE_SERVER} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
+  e2e_info "profile=${E2E_PROFILE} platform=${E2E_PLATFORM} repo-type=${E2E_REPO_TYPE} resource-server=${E2E_RESOURCE_SERVER} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
   return 0
 }
 
@@ -82,6 +83,7 @@ step_prepare_runtime() {
   mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "$(dirname -- "${E2E_BIN}")" || return 1
   e2e_info "runtime paths run-dir=${E2E_RUN_DIR} state-dir=${E2E_STATE_DIR} log-dir=${E2E_LOG_DIR} context-file=${E2E_CONTEXT_FILE}"
   e2e_info "runtime binary path=${E2E_BIN}"
+  e2e_runtime_state_record_platform || return 1
 
   e2e_prepare_metadata_workspace || return 1
 

@@ -39,10 +39,9 @@ func (g *HTTPResourceServerGateway) Request(
 		spec.ContentType = defaultMediaType
 	}
 
-	operation, hasOperation := requestMethodOperation(resolvedMethod)
+	_, hasOperation := requestMethodOperation(resolvedMethod)
 	validationResource := resource.Resource{}
-	if ctxOperation, resourceInput, validateSpec, ok := metadata.RequestOperationValidation(ctx); ok {
-		operation = ctxOperation
+	if _, resourceInput, validateSpec, ok := metadata.RequestOperationValidation(ctx); ok {
 		hasOperation = true
 		spec.Validate = validateSpec
 		validationResource = resource.Resource{
@@ -55,7 +54,7 @@ func (g *HTTPResourceServerGateway) Request(
 		}
 	}
 	if hasOperation && spec.Validate != nil {
-		if err := g.validateOperationPayload(ctx, operation, validationResource, spec); err != nil {
+		if err := g.validateOperationPayload(ctx, validationResource, spec); err != nil {
 			return nil, err
 		}
 	}

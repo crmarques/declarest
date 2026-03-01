@@ -8,15 +8,6 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-const (
-	operationInfoGetResourceKey      = "getResource"
-	operationInfoCreateResourceKey   = "createResource"
-	operationInfoUpdateResourceKey   = "updateResource"
-	operationInfoDeleteResourceKey   = "deleteResource"
-	operationInfoListCollectionKey   = "listCollection"
-	operationInfoCompareResourcesKey = "compareResources"
-)
-
 type resourceMetadataWire struct {
 	ResourceInfo  *resourceInfoWire  `json:"resourceInfo,omitempty" yaml:"resourceInfo,omitempty"`
 	OperationInfo *operationInfoWire `json:"operationInfo,omitempty" yaml:"operationInfo,omitempty"`

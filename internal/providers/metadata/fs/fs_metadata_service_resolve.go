@@ -383,13 +383,6 @@ func hasWildcardPattern(segment string) bool {
 	return strings.ContainsAny(segment, "*?[")
 }
 
-func aliasForLogicalPath(logicalPath string) string {
-	if logicalPath == "/" {
-		return "/"
-	}
-	return path.Base(logicalPath)
-}
-
 func collectionPathForLogicalPath(logicalPath string) string {
 	if logicalPath == "/" {
 		return "/"

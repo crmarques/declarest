@@ -19,13 +19,6 @@ func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, err
 	return r.Repository, nil
 }
 
-func (r *DefaultOrchestrator) requireMetadata() (metadata.MetadataService, error) {
-	if r == nil || r.Metadata == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "metadata service is not configured", nil)
-	}
-	return r.Metadata, nil
-}
-
 func (r *DefaultOrchestrator) requireServer() (server.ResourceServer, error) {
 	if r == nil || r.Server == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "resource server is not configured", nil)

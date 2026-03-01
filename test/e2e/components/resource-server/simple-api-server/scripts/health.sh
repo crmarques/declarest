@@ -92,7 +92,7 @@ if [[ "${enable_oauth2}" == 'true' ]]; then
   access_token=$(wait_for_token 90 2) || {
     printf 'simple-api-server did not issue oauth2 token: %s\n' "${SIMPLE_API_SERVER_TOKEN_URL}" >&2
     if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
-      compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+      compose_file="${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}"
       if [[ -f "${compose_file}" ]]; then
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs simple-api-server >&2 || true
@@ -104,7 +104,7 @@ if [[ "${enable_oauth2}" == 'true' ]]; then
   wait_for_health "${access_token}" '' '' 45 2 || {
     printf 'simple-api-server health endpoint check failed: %s/health\n' "${SIMPLE_API_SERVER_BASE_URL}" >&2
     if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
-      compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+      compose_file="${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}"
       if [[ -f "${compose_file}" ]]; then
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs simple-api-server >&2 || true
@@ -119,7 +119,7 @@ if [[ "${enable_basic_auth}" == 'true' ]]; then
   wait_for_health '' "${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME}" "${SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD}" 45 2 || {
     printf 'simple-api-server health endpoint check failed: %s/health\n' "${SIMPLE_API_SERVER_BASE_URL}" >&2
     if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
-      compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+      compose_file="${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}"
       if [[ -f "${compose_file}" ]]; then
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
         e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs simple-api-server >&2 || true
@@ -133,7 +133,7 @@ fi
 wait_for_health '' '' '' 45 2 || {
   printf 'simple-api-server health endpoint check failed: %s/health\n' "${SIMPLE_API_SERVER_BASE_URL}" >&2
   if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
-    compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+    compose_file="${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}"
     if [[ -f "${compose_file}" ]]; then
       e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
       e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs simple-api-server >&2 || true

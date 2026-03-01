@@ -18,6 +18,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 ## Normative Rules
 1. The harness MUST expose repository entrypoint `run-e2e.sh` and delegate orchestration to `test/e2e/run-e2e.sh`.
 2. Supported profiles MUST be `basic`, `full`, and `manual`; default is `basic`.
+3. Runner platform selection MUST support `--platform <compose|kubernetes>` with default `kubernetes`.
 3. Default component selections MUST be `resource-server=simple-api-server`, `repo-type=filesystem`, and `secret-provider=file`.
 4. `basic` MUST run `main` cases only; `full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
 5. `manual` MUST start selected local-instantiable components, generate temporary context config, generate shell setup/reset scripts for handoff, and skip automated cases.
@@ -29,7 +30,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 11. Step output MUST resemble a table framed by divider lines above and below the header row `STEP | ACTION | SPAN | STATUS`, print that header once per run, center each header label within its column, render spinner glyphs inside the `ACTION` column while a step is running, populate `SPAN` only after the step finishes, and center `STEP`, `SPAN`, and `STATUS` values for every row.
 12. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
 13. Each component under `test/e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
-14. Local compose-backed components MUST also provide `compose.yaml` and `scripts/health.sh`.
+14. Local containerized (`COMPONENT_RUNTIME_KIND=compose`) components MUST provide `compose/compose.yaml`, at least one `k8s/*.yaml` manifest, and `scripts/health.sh`.
 15. `component.env` MUST declare `COMPONENT_CONTRACT_VERSION=1`, `COMPONENT_RUNTIME_KIND`, and `COMPONENT_DEPENDS_ON` explicitly.
 16. The runner MUST expose `--validate-components` to validate all discovered component contracts and resource-server fixture metadata, then short-circuit workload execution with deterministic summary output.
 17. The runner MUST reject `--resource-server none` with actionable validation output because resource-server selection is mandatory for E2E runs.
@@ -46,7 +47,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 28. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
 29. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
 30. The runner MUST maintain one live execution log file and print its path at startup.
-31. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus compose-backed runtime resources associated with each run, and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that the manual profile prepended so shells no longer reference cleaned runs.
+31. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus run-recorded runtime resources associated with each run (`compose` projects or `kind` clusters), and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that the manual profile prepended so shells no longer reference cleaned runs.
 32. Components MAY implement optional `scripts/manual-info.sh`; in `manual` profile, the runner MUST execute this hook for selected components after `Configuring Access` and print its output to terminal.
 33. Runner security selection flags MUST include `--resource-server-auth-type <none|basic|oauth2|custom-header>` and `--resource-server-mtls`; `--resource-server-mtls` defaults to `false`, and auth type defaults MUST be elected by the selected resource-server component when the flag is omitted (preference order SHOULD be `oauth2`, then `custom-header`, then `basic`, then `none`).
 34. `resource-server` components MUST declare security capabilities in `component.env`, including at least one auth-type capability token (`none|basic-auth|oauth2|custom-header`) and optional `mtls`; runner selection MUST fail when requested auth-type or mTLS features are unsupported or required features are disabled.
@@ -58,10 +59,14 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 40. In `bundle` mode, the runner MUST skip local `openapi.yaml` wiring so `resource-server.http.openapi` remains unset, and MUST use resource-server shorthand metadata bundle mappings when available (for example `keycloak-bundle:0.0.1` for `keycloak`).
 41. In `local-dir` mode, resource-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST set `E2E_METADATA_DIR` to that component-local directory and repository-type context fragments MUST emit `metadata.base-dir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset).
 42. In `bundle` mode, when the selected resource-server has no shorthand mapping, the runner MUST continue without setting `metadata.bundle`.
+43. Kubernetes runtime MUST use run-scoped `kind` clusters when platform is `kubernetes` and at least one local containerized component is selected; it MUST persist runtime state (`platform`, `container engine`, `cluster name`, `namespace`, `kubeconfig`) for cleanup/manual handoff.
+44. Kubernetes component startup MUST apply rendered `k8s/*.yaml` manifests in the run namespace and manage service port-forwards from `declarest.e2e/port-forward` service annotations, persisting forward PIDs in component state for stop/cleanup.
+45. For `DECLAREST_E2E_CONTAINER_ENGINE=podman`, kind operations MUST use provider mode `KIND_EXPERIMENTAL_PROVIDER=podman` and preflight MUST fail fast with actionable guidance when provider checks fail.
 
 ## Data Contracts
 Runner flags:
 1. Workload: `--profile`.
+2. Platform: `--platform`.
 2. Component selection: `--resource-server`, `--metadata`, `--repo-type`, `--git-provider`, `--secret-provider`.
 3. Resource-server security selection: `--resource-server-auth-type`, `--resource-server-mtls`.
 4. Connection selection: `--resource-server-connection`, `--git-provider-connection`, `--secret-provider-connection`.
@@ -82,6 +87,7 @@ Runner flags:
 Optional component hook:
 1. `scripts/manual-info.sh` may emit plain-text operator access details for `manual` profile output.
 2. `scripts/start.sh` and `scripts/stop.sh` may override built-in compose runtime lifecycle adapters.
+3. Built-in adapters are platform-aware: compose (`compose/compose.yaml`) or kubernetes (`k8s/*.yaml` + service annotation-driven port-forward).
 
 Case requirements (`CASE_REQUIRES`):
 1. Selector format: `key=value`.
@@ -98,6 +104,7 @@ Manual handoff:
 2. Emit setup/reset shell script paths; setup script MUST export runtime vars and define alias `declarest-e2e` to the run-local binary, and reset script MUST unset those vars and remove the alias.
 3. Print concrete follow-up `declarest-e2e` commands.
 4. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
+5. When platform is `kubernetes`, print cluster access details (`cluster`, `namespace`, `kubeconfig`) and example `kubectl` commands.
 
 ## Failure Modes
 1. Manual profile accepts unsupported remote selections.
@@ -114,7 +121,7 @@ Manual handoff:
 3. `full` runs validation/auth corner cases without marking run unstable when assertions pass.
 4. Remote-capable selections with missing env credentials fail fast with guidance.
 5. Nested fixture metadata patterns (for example `/x/_/y/_/_`) expand deterministically into concrete collection targets.
-6. Cleanup for unknown run ids returns actionable output and still attempts runner/compose teardown using deterministic project naming.
+6. Cleanup for unknown run ids returns actionable output and still attempts runner/runtime teardown using recorded runtime state (fallback compose naming when state is missing).
 7. Dependency selector wildcard (for example `git-provider:*`) resolves exactly one selected provider in some runs and multiple in others without changing correctness.
 8. Local `simple-api-server` with `ENABLE_MTLS=true` generates or consumes mounted cert material from a host directory and fails fast when required TLS files are missing.
 9. Selecting `--resource-server-auth-type` unsupported by the chosen resource-server component fails fast before startup with actionable validation output.
@@ -123,6 +130,7 @@ Manual handoff:
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
 13. `resource-server=keycloak` runs in `bundle` mode fail during context validation when shorthand bundle `keycloak-bundle:0.0.1` cannot be resolved from the default remote path.
 14. `bundle` mode with a resource-server that has no shorthand mapping continues without `metadata.bundle` and without local `openapi.yaml`.
+15. `--platform kubernetes` with only remote/native selections MUST not create a kind cluster.
 
 ## Examples
 1. `./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
@@ -136,3 +144,5 @@ Manual handoff:
 9. `./run-e2e.sh --validate-components` validates all discovered component manifests, hook scripts, dependency catalog, and resource-server fixture metadata, then exits without running test cases.
 10. `./run-e2e.sh --profile basic --resource-server keycloak` emits a context with `metadata.bundle: keycloak-bundle:0.0.1` (and no `metadata.base-dir`) so keycloak runs consume metadata from the default remote bundle source.
 11. `./run-e2e.sh --profile basic --resource-server simple-api-server --metadata local-dir` emits `metadata.base-dir` from `test/e2e/components/resource-server/simple-api-server/metadata` and keeps local `resource-server.http.openapi`.
+12. `./run-e2e.sh --profile basic --platform compose --repo-type git --git-provider gitea --resource-server simple-api-server --secret-provider file` runs local containerized components via compose artifacts under each selected component `compose/compose.yaml`.
+13. `./run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --resource-server keycloak --secret-provider file` starts a run-scoped kind cluster, prints kubeconfig/namespace details for manual interaction, and `./run-e2e.sh --clean <run-id>` deletes the run cluster.

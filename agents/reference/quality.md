@@ -107,6 +107,10 @@ Acceptance contracts:
 61. Git repository auto-init contract: git-backed repository status/history/check and git-backed repository mutation commit/status flows initialize a missing local `.git/` repository automatically and continue with normal operation semantics (including empty-history handling for fresh repos).
 62. Operation payload validation contract: `resource create|update` and metadata-resolved `resource request post|put|patch` enforce `validate.requiredAttributes`, jq `validate.assertions`, and OpenAPI-backed `validate.schemaRef`; path-derived template fields satisfy required attributes without mutating the transmitted body, and validation failures short-circuit before remote HTTP execution.
 63. E2E metadata mode contract: `run-e2e.sh` defaults `--metadata` to `bundle`; `bundle` mode skips component-local `openapi.yaml` wiring and uses shorthand `metadata.bundle` when mapped; `local-dir` mode uses component-local `metadata/` as `metadata.base-dir` and keeps local OpenAPI wiring.
+64. E2E platform contract: `run-e2e.sh` supports `--platform <compose|kubernetes>` with default `kubernetes`, rejects invalid platform values, and cleanup mode rejects mixed workload flags (including `--platform`) with deterministic parser errors.
+65. E2E containerized artifact contract: compose-runtime components require `compose/compose.yaml` and `k8s/*.yaml`; native components remain valid without runtime artifact directories.
+66. E2E kubernetes runtime contract: local containerized components on `--platform kubernetes` use run-scoped kind clusters, apply rendered manifests, create service-annotation-driven port-forwards, persist runtime/forward metadata for cleanup/manual handoff, and stop logic terminates recorded port-forward processes.
+67. E2E kind provider compatibility contract: podman engine selection enforces `KIND_EXPERIMENTAL_PROVIDER=podman` for kind operations, preflight validates provider readiness, and cleanup deletes recorded run clusters for `--clean`/`--clean-all`.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.
@@ -129,3 +133,4 @@ Acceptance contracts:
 6. CLI + repository tests verify `repo tree` text output is deterministic, rejects structured output, omits files/hidden or reserved directories, and preserves directory names containing spaces.
 7. CLI test verifies explicit payload collection-target inference (`resource create /admin/realms --payload realm=test`) resolves the concrete child path from metadata alias/id hints while the equivalent explicit resource path (`/admin/realms/test`) continues to pass identity validation.
 8. Bundle metadata tests verify OpenAPI fallback discovery order when `resource-server.http.openapi` is empty: `declarest.openapi` hint, bundle-root/metadata-root OpenAPI files, then deterministic recursive bundle-file fallback.
+9. E2E harness tests verify both platform paths (`--platform compose` and `--platform kubernetes`), including a corner case where `--platform kubernetes` with remote/native-only selections skips kind cluster creation.

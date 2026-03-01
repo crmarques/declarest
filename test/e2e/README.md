@@ -25,9 +25,18 @@ This repository uses a componentized Bash e2e harness.
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
+## Platform
+
+- `--platform <compose|kubernetes>` selects how local containerized components are started.
+- default platform is `kubernetes`.
+- `compose` uses `${DECLAREST_E2E_CONTAINER_ENGINE} compose`.
+- `kubernetes` uses run-scoped `kind` clusters and `kubectl` manifests from component `k8s/`.
+- when engine is `podman`, the runner uses `KIND_EXPERIMENTAL_PROVIDER=podman` for kind operations.
+
 ## Main Flags
 
 - `--profile <basic|full|manual>`
+- `--platform <compose|kubernetes>`
 - `--resource-server <name>` (mandatory; `none` is not supported)
 - `--resource-server-connection <local|remote>`
 - `--resource-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
@@ -54,8 +63,8 @@ Selections are validated against each resource-server capability contract; unsup
 
 Cleanup behavior:
 
--- `--clean <run-id>` stops the referenced `test/e2e/run-e2e.sh` process (when running), tears down local compose projects recorded for that run id, and removes `test/e2e/.runs/<run-id>`.
--- `--clean-all` stops all running `test/e2e/run-e2e.sh` processes and applies the same cleanup to every run directory under `test/e2e/.runs/`.
+- `--clean <run-id>` stops the referenced `test/e2e/run-e2e.sh` process (when running), tears down the run runtime (`compose` projects or `kind` cluster), and removes `test/e2e/.runs/<run-id>`.
+- `--clean-all` stops all running `test/e2e/run-e2e.sh` processes and applies the same cleanup to every run directory under `test/e2e/.runs/`.
 
 Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `PATH` when a manual profile exported runtime variables, so the shell no longer retains stale run-specific directories.
 
@@ -134,13 +143,15 @@ Each component directory under `test/e2e/components/<type>/<name>/` must include
 
 Compose-runtime components must also include:
 
-- `compose.yaml`
+- `compose/compose.yaml`
+- `k8s/*.yaml` manifests used by the kubernetes platform
+  - service manifests should expose `declarest.e2e/port-forward: "<local-port>:<service-port>[,...]"` annotation entries so the generic runtime can start port-forwards
 - `scripts/health.sh`
 
 Optional hooks:
 
 - `scripts/manual-info.sh`: printed after `Configuring Access` in `manual` profile
-- `scripts/start.sh` and `scripts/stop.sh`: override built-in compose start/stop behavior when needed
+- `scripts/start.sh` and `scripts/stop.sh`: override built-in start/stop adapters (compose or kubernetes) when needed
 
 Hook orchestration:
 

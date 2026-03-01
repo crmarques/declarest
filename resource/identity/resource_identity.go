@@ -115,9 +115,6 @@ func scalarString(value any) (string, bool) {
 	case fmt.Stringer:
 		text := strings.TrimSpace(typed.String())
 		return text, text != ""
-	case jsonNumberLike:
-		text := strings.TrimSpace(typed.String())
-		return text, text != ""
 	case int:
 		return strconv.Itoa(typed), true
 	case int8:
@@ -147,8 +144,4 @@ func scalarString(value any) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-type jsonNumberLike interface {
-	String() string
 }

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git-provider-gitea
+  labels:
+    app.kubernetes.io/name: git-provider-gitea
+    declarest.e2e/component-key: git-provider-gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: git-provider-gitea
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: git-provider-gitea
+        declarest.e2e/component-key: git-provider-gitea
+    spec:
+      containers:
+        - name: gitea
+          image: docker.io/gitea/gitea:1.25.4
+          env:
+            - name: USER_UID
+              value: "1000"
+            - name: USER_GID
+              value: "1000"
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__database__PATH
+              value: /data/gitea/gitea.db
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "true"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "false"
+            - name: GITEA__server__DOMAIN
+              value: 127.0.0.1
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__ROOT_URL
+              value: "http://127.0.0.1:${GITEA_HTTP_PORT}/"
+            - name: GITEA__server__START_SSH_SERVER
+              value: "false"
+            - name: GITEA__server__DISABLE_SSH
+              value: "true"
+            - name: GITEA__repository__DEFAULT_BRANCH
+              value: main
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /user/login
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 40

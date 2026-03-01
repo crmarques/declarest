@@ -268,8 +268,20 @@ e2e_component_validate_contract() {
   done
 
   if [[ "${runtime_kind}" == 'compose' ]]; then
-    if [[ ! -f "${component_path}/compose.yaml" ]]; then
-      e2e_die "component ${component_key} missing compose.yaml for compose runtime"
+    local compose_file
+    compose_file="${component_path}/compose/compose.yaml"
+    if [[ ! -f "${compose_file}" ]]; then
+      e2e_die "component ${component_key} missing compose/compose.yaml for containerized runtime"
+      return 1
+    fi
+    local k8s_dir
+    k8s_dir="${component_path}/k8s"
+    if [[ ! -d "${k8s_dir}" ]]; then
+      e2e_die "component ${component_key} missing k8s artifact directory for containerized runtime"
+      return 1
+    fi
+    if ! find "${k8s_dir}" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | grep -q .; then
+      e2e_die "component ${component_key} has no k8s manifests under ${k8s_dir}"
       return 1
     fi
     if [[ ! -f "${component_path}/scripts/health.sh" ]]; then
@@ -626,6 +638,7 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET=()
 
   E2E_CAPABILITY_SET["profile=${E2E_PROFILE}"]=1
+  E2E_CAPABILITY_SET["platform=${E2E_PLATFORM}"]=1
   E2E_CAPABILITY_SET["repo-type=${E2E_REPO_TYPE}"]=1
   E2E_CAPABILITY_SET["resource-server=${E2E_RESOURCE_SERVER}"]=1
   E2E_CAPABILITY_SET["resource-server-connection=${E2E_RESOURCE_SERVER_CONNECTION}"]=1
@@ -675,20 +688,39 @@ e2e_preflight_requirements() {
   e2e_require_command curl || return 1
 
   local needs_container_runtime=0
-  local component_key
-  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
-    local connection
-    connection=$(e2e_component_connection_for_key "${component_key}")
-    if [[ "${connection}" == 'local' ]] && e2e_component_runtime_is_compose "${component_key}"; then
-      needs_container_runtime=1
-      break
-    fi
-  done
+  if e2e_component_has_local_containerized_runtime; then
+    needs_container_runtime=1
+  fi
 
   if ((needs_container_runtime == 1)); then
-    e2e_info "preflight checking container runtime: ${E2E_CONTAINER_ENGINE}"
-    e2e_validate_container_engine || return 1
-    e2e_require_command "${E2E_CONTAINER_ENGINE}" || return 1
-    e2e_compose_cmd version >/dev/null || return 1
+    case "${E2E_PLATFORM}" in
+      compose)
+        e2e_info "preflight checking compose runtime: ${E2E_CONTAINER_ENGINE}"
+        e2e_validate_container_engine || return 1
+        e2e_require_command "${E2E_CONTAINER_ENGINE}" || return 1
+        e2e_compose_cmd version >/dev/null || return 1
+        ;;
+      kubernetes)
+        e2e_info "preflight checking kubernetes runtime with kind provider engine=${E2E_CONTAINER_ENGINE}"
+        e2e_validate_container_engine || return 1
+        e2e_require_command "${E2E_CONTAINER_ENGINE}" || return 1
+        e2e_require_command kind || return 1
+        e2e_require_command kubectl || return 1
+        e2e_require_command envsubst || return 1
+
+        if ! e2e_kind_run_raw get clusters >/dev/null 2>&1; then
+          if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+            e2e_die 'kind provider check failed for podman; verify kind supports podman on this host (KIND_EXPERIMENTAL_PROVIDER=podman)'
+          else
+            e2e_die "kind provider check failed for engine=${E2E_CONTAINER_ENGINE}"
+          fi
+          return 1
+        fi
+        ;;
+      *)
+        e2e_die "unsupported platform in preflight: ${E2E_PLATFORM}"
+        return 1
+        ;;
+    esac
   fi
 }

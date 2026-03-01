@@ -1,7 +1,7 @@
 services:
   simple-api-server:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     environment:
       SIMPLE_API_SERVER_BIND_HOST: 0.0.0.0

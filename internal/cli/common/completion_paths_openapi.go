@@ -278,7 +278,7 @@ func normalizeOpenAPIMethods(value any) map[string]struct{} {
 }
 
 func openAPIPathEntryMatchesAllowedMethods(entry openAPIPathEntry, allowed map[string]struct{}) bool {
-	if allowed == nil || len(allowed) == 0 {
+	if len(allowed) == 0 {
 		return true
 	}
 	if len(entry.Methods) == 0 {

@@ -17,6 +17,10 @@ prepare_manual_env_scripts() {
   export E2E_STATE_DIR="${E2E_RUN_DIR}/state"
   export E2E_CONTEXT_FILE="${E2E_RUN_DIR}/contexts.yaml"
   export E2E_BIN="${E2E_RUN_DIR}/bin/declarest"
+  export E2E_PLATFORM="${E2E_PLATFORM:-compose}"
+  export E2E_KUBECONFIG="${E2E_KUBECONFIG:-}"
+  export E2E_KIND_CLUSTER_NAME="${E2E_KIND_CLUSTER_NAME:-}"
+  export E2E_K8S_NAMESPACE="${E2E_K8S_NAMESPACE:-}"
 
   mkdir -p "${E2E_STATE_DIR}" "$(dirname -- "${E2E_BIN}")"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${E2E_BIN}"
@@ -121,5 +125,52 @@ EOF
   [[ -z "${output}" ]] || true
 }
 
+test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig() {
+  load_profile_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_PLATFORM='kubernetes'
+  export E2E_KUBECONFIG="${tmp}/manual-kubeconfig"
+  export E2E_KIND_CLUSTER_NAME='declarest-e2e-manual'
+  export E2E_K8S_NAMESPACE='declarest-manual'
+  : >"${E2E_KUBECONFIG}"
+
+  local SETUP_SCRIPT RESET_SCRIPT
+  prepare_manual_env_scripts "${tmp}"
+
+  assert_file_contains "${SETUP_SCRIPT}" "export DECLAREST_E2E_PLATFORM='kubernetes'"
+  assert_file_contains "${SETUP_SCRIPT}" "export DECLAREST_E2E_KUBECONFIG="
+  assert_file_contains "${SETUP_SCRIPT}" "export DECLAREST_E2E_KIND_CLUSTER='declarest-e2e-manual'"
+  assert_file_contains "${SETUP_SCRIPT}" "export DECLAREST_E2E_K8S_NAMESPACE='declarest-manual'"
+  assert_file_contains "${RESET_SCRIPT}" "unset DECLAREST_E2E_KUBECONFIG"
+  assert_file_contains "${RESET_SCRIPT}" "unset DECLAREST_E2E_KIND_CLUSTER"
+  assert_file_contains "${RESET_SCRIPT}" "unset DECLAREST_E2E_K8S_NAMESPACE"
+
+  local output status
+  set +e
+  output=$(
+    SETUP_SCRIPT="${SETUP_SCRIPT}" RESET_SCRIPT="${RESET_SCRIPT}" ORIGINAL_KUBECONFIG="${tmp}/original-kubeconfig" bash <<'EOF'
+set -euo pipefail
+export KUBECONFIG="${ORIGINAL_KUBECONFIG}"
+source "${SETUP_SCRIPT}"
+
+[[ "${DECLAREST_E2E_PLATFORM}" == 'kubernetes' ]]
+[[ "${KUBECONFIG}" == "${DECLAREST_E2E_KUBECONFIG}" ]]
+
+source "${RESET_SCRIPT}"
+[[ "${KUBECONFIG}" == "${ORIGINAL_KUBECONFIG}" ]]
+[[ -z "${DECLAREST_E2E_PLATFORM:-}" ]]
+EOF
+  )
+  status=$?
+  set -e
+  assert_status "${status}" "0"
+  [[ -z "${output}" ]] || true
+}
+
 test_manual_env_scripts_install_and_restore_prompt_hook
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
+test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig

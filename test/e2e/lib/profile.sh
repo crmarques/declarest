@@ -85,6 +85,10 @@ export DECLAREST_E2E_RUNS_DIR=${E2E_RUNS_DIR@Q}
 export DECLAREST_CONTEXTS_FILE=${E2E_CONTEXT_FILE@Q}
 export DECLAREST_E2E_CONTEXT=${context_name@Q}
 export DECLAREST_E2E_BIN=${E2E_BIN@Q}
+export DECLAREST_E2E_PLATFORM=${E2E_PLATFORM@Q}
+export DECLAREST_E2E_KUBECONFIG=${E2E_KUBECONFIG@Q}
+export DECLAREST_E2E_KIND_CLUSTER=${E2E_KIND_CLUSTER_NAME@Q}
+export DECLAREST_E2E_K8S_NAMESPACE=${E2E_K8S_NAMESPACE@Q}
 export DECLAREST_E2E_ENV_SETUP_SCRIPT=${setup_script@Q}
 export DECLAREST_E2E_ENV_RESET_SCRIPT=${reset_script@Q}
 export DECLAREST_E2E_STATE_ENV_KEYS=${state_key_list@Q}
@@ -97,6 +101,13 @@ case ":\${PATH}:" in
   *":\${DECLAREST_E2E_RUN_DIR}/bin:"*) ;;
   *) export PATH="\${DECLAREST_E2E_RUN_DIR}/bin:\${PATH}" ;;
 esac
+
+if [[ "\${DECLAREST_E2E_PLATFORM:-}" == 'kubernetes' && -n "\${DECLAREST_E2E_KUBECONFIG:-}" ]]; then
+  if [[ -z "\${DECLAREST_E2E_ORIGINAL_KUBECONFIG+x}" ]]; then
+    export DECLAREST_E2E_ORIGINAL_KUBECONFIG="\${KUBECONFIG-}"
+  fi
+  export KUBECONFIG="\${DECLAREST_E2E_KUBECONFIG}"
+fi
 
 __declarest_e2e_prune_deleted_run_bins_from_path() {
   local runs_dir="\${DECLAREST_E2E_RUNS_DIR:-}"
@@ -222,6 +233,15 @@ if [[ -n "${DECLAREST_E2E_ORIGINAL_PATH+x}" ]]; then
 fi
 unset DECLAREST_E2E_ORIGINAL_PATH
 
+if [[ -n "${DECLAREST_E2E_ORIGINAL_KUBECONFIG+x}" ]]; then
+  if [[ -n "${DECLAREST_E2E_ORIGINAL_KUBECONFIG}" ]]; then
+    export KUBECONFIG="${DECLAREST_E2E_ORIGINAL_KUBECONFIG}"
+  else
+    unset KUBECONFIG || true
+  fi
+fi
+unset DECLAREST_E2E_ORIGINAL_KUBECONFIG
+
 for state_var in ${DECLAREST_E2E_STATE_ENV_KEYS:-}; do
   unset "${state_var}"
 done
@@ -229,6 +249,10 @@ done
 unset DECLAREST_E2E_STATE_ENV_KEYS
 unset DECLAREST_E2E_ENV_SETUP_SCRIPT
 unset DECLAREST_E2E_ENV_RESET_SCRIPT
+unset DECLAREST_E2E_K8S_NAMESPACE
+unset DECLAREST_E2E_KIND_CLUSTER
+unset DECLAREST_E2E_KUBECONFIG
+unset DECLAREST_E2E_PLATFORM
 unset DECLAREST_E2E_BIN
 unset DECLAREST_E2E_CONTEXT
 unset DECLAREST_E2E_RUNS_DIR
@@ -281,6 +305,9 @@ Context file:
 Runtime binary alias:
   declarest-e2e -> ${E2E_BIN}
 
+Platform:
+  ${E2E_PLATFORM:-n/a}
+
 Shell scripts:
   setup: ${setup_script}
   reset: ${reset_script}
@@ -290,6 +317,23 @@ To use it in your current shell:
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" config show
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repo status -o json
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource list / --repository -o json
+EOFH
+
+  if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
+    cat <<EOFK8S
+
+Kubernetes access:
+  cluster: ${E2E_KIND_CLUSTER_NAME}
+  namespace: ${E2E_K8S_NAMESPACE:-default}
+  kubeconfig: ${E2E_KUBECONFIG:-n/a}
+
+Try:
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-}" get nodes
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-}" -n "${E2E_K8S_NAMESPACE:-default}" get pods,svc
+EOFK8S
+  fi
+
+  cat <<EOFH
 
 To reset environment variables and alias:
   source ${reset_script@Q}

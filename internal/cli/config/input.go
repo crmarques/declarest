@@ -34,15 +34,6 @@ func decodeContextStrict(command *cobra.Command, flags common.InputFlags) (confi
 	return decodeContextStrictFromData(data, flags.Format)
 }
 
-func decodeContextCatalogStrict(command *cobra.Command, flags common.InputFlags) (configdomain.ContextCatalog, error) {
-	data, err := common.ReadInput(command, flags)
-	if err != nil {
-		return configdomain.ContextCatalog{}, err
-	}
-
-	return decodeContextCatalogStrictFromData(data, flags.Format)
-}
-
 func decodeContextImportInputStrict(command *cobra.Command, flags common.InputFlags) (contextImportInput, error) {
 	data, err := common.ReadInput(command, flags)
 	if err != nil {

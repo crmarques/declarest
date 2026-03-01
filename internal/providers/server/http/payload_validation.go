@@ -15,7 +15,6 @@ import (
 
 func (g *HTTPResourceServerGateway) validateOperationPayload(
 	ctx context.Context,
-	operation metadata.Operation,
 	resourceInfo resource.Resource,
 	spec metadata.OperationSpec,
 ) error {

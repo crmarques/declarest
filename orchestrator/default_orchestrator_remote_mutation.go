@@ -78,15 +78,3 @@ func (r *DefaultOrchestrator) resolvePayloadForRemote(
 		getSecret,
 	)
 }
-
-func (r *DefaultOrchestrator) maskPayloadForLocal(ctx context.Context, value resource.Value) (resource.Value, error) {
-	if value == nil {
-		return nil, nil
-	}
-
-	if r == nil || r.Secrets == nil {
-		return resource.Normalize(value)
-	}
-
-	return r.Secrets.MaskPayload(ctx, value)
-}

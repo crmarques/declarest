@@ -282,23 +282,90 @@ e2e_kill_all_runner_processes() {
   return 0
 }
 
-e2e_cleanup_run_containers() {
+e2e_runtime_state_file_for_run_id() {
+  local run_id=$1
+  printf '%s/%s/state/runtime.env\n' "${E2E_RUNS_DIR}" "${run_id}"
+}
+
+e2e_runtime_state_get_for_run_id() {
+  local run_id=$1
+  local key=$2
+  local runtime_state
+  runtime_state=$(e2e_runtime_state_file_for_run_id "${run_id}")
+  e2e_state_get "${runtime_state}" "${key}" || return 1
+}
+
+e2e_cleanup_run_platform() {
+  local run_id=$1
+  local platform
+  platform=$(e2e_runtime_state_get_for_run_id "${run_id}" 'RUNTIME_PLATFORM' || true)
+  if [[ -z "${platform}" ]]; then
+    printf 'compose\n'
+    return 0
+  fi
+  printf '%s\n' "${platform}"
+}
+
+e2e_cleanup_run_container_engine() {
+  local run_id=$1
+  local engine
+  engine=$(e2e_runtime_state_get_for_run_id "${run_id}" 'RUNTIME_CONTAINER_ENGINE' || true)
+  if [[ -z "${engine}" ]]; then
+    engine="${E2E_CONTAINER_ENGINE}"
+  fi
+  printf '%s\n' "${engine}"
+}
+
+e2e_cleanup_k8s_port_forwards() {
+  local run_id=$1
+  local run_dir="${E2E_RUNS_DIR}/${run_id}"
+  local state_file
+  local pids
+  local pid
+
+  if [[ ! -d "${run_dir}/state" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r state_file; do
+    [[ -n "${state_file}" ]] || continue
+    pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS' || true)
+    if [[ -z "${pids}" ]]; then
+      continue
+    fi
+    for pid in ${pids}; do
+      [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+      kill "${pid}" >/dev/null 2>&1 || true
+      wait "${pid}" >/dev/null 2>&1 || true
+    done
+  done < <(find "${run_dir}/state" -maxdepth 1 -type f -name '*.env' | sort)
+}
+
+e2e_cleanup_run_compose_runtime() {
   local run_id=$1
   local run_dir="${E2E_RUNS_DIR}/${run_id}"
   local selected_file="${run_dir}/state/selected-components.txt"
   local started_file="${run_dir}/state/started-components.tsv"
   local component_key
+  local engine
+
+  engine=$(e2e_cleanup_run_container_engine "${run_id}")
+  case "${engine}" in
+    podman|docker) ;;
+    *)
+      e2e_warn "invalid run container engine in runtime state; falling back to ${E2E_CONTAINER_ENGINE}"
+      engine="${E2E_CONTAINER_ENGINE}"
+      ;;
+  esac
 
   e2e_discover_components || return 1
-  e2e_validate_container_engine || return 1
 
-  if ! command -v "${E2E_CONTAINER_ENGINE}" >/dev/null 2>&1; then
-    e2e_warn "container engine not found; skipping container cleanup: ${E2E_CONTAINER_ENGINE}"
+  if ! command -v "${engine}" >/dev/null 2>&1; then
+    e2e_warn "container engine not found; skipping container cleanup: ${engine}"
     return 0
   fi
 
   if [[ -f "${started_file}" ]]; then
-    local line
     local project_name
     local compose_file
     while IFS=$'\t' read -r component_key project_name; do
@@ -308,7 +375,7 @@ e2e_cleanup_run_containers() {
         continue
       fi
 
-      compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+      compose_file=$(e2e_component_compose_file "${component_key}")
       [[ -f "${compose_file}" ]] || continue
 
       if [[ -z "${project_name}" ]]; then
@@ -317,7 +384,7 @@ e2e_cleanup_run_containers() {
 
       e2e_info "cleanup container project=${project_name}"
       set +e
-      "${E2E_CONTAINER_ENGINE}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
       local rc=$?
       set -e
 
@@ -333,7 +400,8 @@ e2e_cleanup_run_containers() {
       [[ -n "${component_key}" ]] || continue
       e2e_component_runtime_is_compose "${component_key}" || continue
 
-      local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+      local compose_file
+      compose_file=$(e2e_component_compose_file "${component_key}")
       [[ -f "${compose_file}" ]] || continue
 
       local project_name
@@ -341,7 +409,7 @@ e2e_cleanup_run_containers() {
       e2e_info "cleanup container project=${project_name}"
 
       set +e
-      "${E2E_CONTAINER_ENGINE}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+      "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
       local rc=$?
       set -e
 
@@ -358,7 +426,8 @@ e2e_cleanup_run_containers() {
       continue
     fi
 
-    local compose_file="${E2E_COMPONENT_PATH[${component_key}]}/compose.yaml"
+    local compose_file
+    compose_file=$(e2e_component_compose_file "${component_key}")
     [[ -f "${compose_file}" ]] || continue
 
     local project_name
@@ -366,7 +435,7 @@ e2e_cleanup_run_containers() {
     e2e_info "cleanup container project=${project_name}"
 
     set +e
-    "${E2E_CONTAINER_ENGINE}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
+    "${engine}" compose -f "${compose_file}" -p "${project_name}" down -v --remove-orphans >/dev/null 2>&1
     local rc=$?
     set -e
 
@@ -374,6 +443,69 @@ e2e_cleanup_run_containers() {
       e2e_warn "container cleanup returned rc=${rc} for project=${project_name}"
     fi
   done
+
+  return 0
+}
+
+e2e_cleanup_run_kubernetes_runtime() {
+  local run_id=$1
+  local cluster_name
+  local engine
+  local rc
+
+  cluster_name=$(e2e_runtime_state_get_for_run_id "${run_id}" 'KIND_CLUSTER_NAME' || true)
+  engine=$(e2e_cleanup_run_container_engine "${run_id}")
+  e2e_cleanup_k8s_port_forwards "${run_id}"
+
+  if [[ -z "${cluster_name}" ]]; then
+    return 0
+  fi
+
+  if ! command -v kind >/dev/null 2>&1; then
+    e2e_warn "kind binary not found; skipping cluster cleanup: ${cluster_name}"
+    return 0
+  fi
+
+  e2e_info "cleanup kind cluster name=${cluster_name} engine=${engine}"
+  set +e
+  if [[ "${engine}" == 'podman' ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    rc=$?
+  else
+    kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    rc=$?
+  fi
+  set -e
+
+  if ((rc != 0 && E2E_VERBOSE == 1)); then
+    e2e_warn "kind cluster cleanup returned rc=${rc} for cluster=${cluster_name}"
+  fi
+
+  if ((rc != 0)); then
+    return 1
+  fi
+
+  return 0
+}
+
+e2e_cleanup_run_runtime() {
+  local run_id=$1
+  local platform
+
+  platform=$(e2e_cleanup_run_platform "${run_id}")
+  case "${platform}" in
+    kubernetes)
+      e2e_cleanup_run_kubernetes_runtime "${run_id}" || return 1
+      ;;
+    compose)
+      e2e_cleanup_run_compose_runtime "${run_id}" || return 1
+      ;;
+    *)
+      e2e_warn "unknown run platform in cleanup: ${platform}; attempting compose then kubernetes cleanup"
+      e2e_cleanup_run_compose_runtime "${run_id}" || return 1
+      e2e_cleanup_run_kubernetes_runtime "${run_id}" || return 1
+      ;;
+  esac
 
   return 0
 }
@@ -435,7 +567,7 @@ e2e_cleanup_run_id() {
   e2e_validate_cleanup_run_id "${run_id}" || return 1
   e2e_remove_run_bin_from_path "${run_id}"
   e2e_kill_runner_for_run_id "${run_id}" || return 1
-  e2e_cleanup_run_containers "${run_id}" || return 1
+  e2e_cleanup_run_runtime "${run_id}" || return 1
 
   if [[ -d "${run_dir}" ]]; then
     rm -rf "${run_dir}" || {

@@ -45,14 +45,39 @@ wait_for() {
   return 1
 }
 
-gitea_compose_exec() {
-  e2e_compose_cmd -f "${E2E_COMPONENT_DIR}/compose.yaml" -p "${E2E_COMPONENT_PROJECT_NAME}" exec -T --user git gitea "$@"
+gitea_admin_exec() {
+  if [[ "${E2E_PLATFORM:-compose}" == 'kubernetes' ]]; then
+    local pod_name
+    local -a cmd
+    local cmd_string
+    pod_name=$(
+      kubectl \
+        --kubeconfig "${E2E_KUBECONFIG}" \
+        -n "${E2E_K8S_NAMESPACE}" \
+        get pod \
+        -l "declarest.e2e/component-key=${E2E_COMPONENT_K8S_LABEL_KEY}" \
+        -o jsonpath='{.items[0].metadata.name}'
+    )
+    [[ -n "${pod_name}" ]] || {
+      printf 'failed to resolve gitea pod for label %s\n' "${E2E_COMPONENT_K8S_LABEL_KEY}" >&2
+      return 1
+    }
+
+    cmd=(/usr/local/bin/gitea "$@")
+    printf -v cmd_string '%q ' "${cmd[@]}"
+    cmd_string=${cmd_string% }
+
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${E2E_K8S_NAMESPACE}" exec "${pod_name}" -- su git -s /bin/sh -c "${cmd_string}"
+    return 0
+  fi
+
+  e2e_compose_cmd -f "${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}" -p "${E2E_COMPONENT_PROJECT_NAME}" exec -T --user git gitea "$@"
 }
 
 wait_for "${GITEA_BASE_URL}/user/login"
 
 if ! curl -fsS "${GITEA_BASE_URL}/api/v1/users/${GITEA_ADMIN_USERNAME}" >/dev/null 2>&1; then
-  gitea_compose_exec /usr/local/bin/gitea admin user create \
+  gitea_admin_exec admin user create \
     --username "${GITEA_ADMIN_USERNAME}" \
     --password "${GITEA_ADMIN_PASSWORD}" \
     --email "${GITEA_ADMIN_EMAIL}" \

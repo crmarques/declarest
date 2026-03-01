@@ -152,6 +152,30 @@ e2e_component_state_file() {
   printf '%s/%s-%s.env\n' "${E2E_STATE_DIR}" "${component_type}" "${component_name}"
 }
 
+e2e_component_compose_file() {
+  local component_key=$1
+  printf '%s/compose/compose.yaml\n' "${E2E_COMPONENT_PATH[${component_key}]}"
+}
+
+e2e_component_k8s_dir() {
+  local component_key=$1
+  printf '%s/k8s\n' "${E2E_COMPONENT_PATH[${component_key}]}"
+}
+
+e2e_component_is_containerized() {
+  local component_key=$1
+  [[ "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]:-native}" == 'compose' ]]
+}
+
+e2e_component_k8s_label_key() {
+  local component_key=$1
+  local component_type
+  local component_name
+  component_type=$(e2e_component_type "${component_key}")
+  component_name=$(e2e_component_name "${component_key}")
+  printf '%s-%s\n' "${component_type}" "${component_name}"
+}
+
 e2e_default_metadata_bundle_for_resource_server() {
   local resource_server=$1
 

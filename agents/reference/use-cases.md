@@ -259,6 +259,44 @@ Expected outputs:
 Failure expectation:
 1. Invalid client credentials at `/token` fail with OAuth2 `invalid_client` and HTTP `401`.
 
+### Example 13: Compose Platform Runtime
+Goal: run containerized components with compose artifacts explicitly.
+
+Inputs:
+1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --resource-server simple-api-server --secret-provider file`.
+
+Execution:
+1. Runner parses platform selection (`compose`).
+2. Component contract validation resolves `compose/compose.yaml` for each selected containerized component.
+3. Start/stop adapters execute compose up/down against run-scoped project names.
+
+Expected outputs:
+1. Local components become reachable via configured loopback ports.
+2. Runtime summary reports `platform: compose`.
+
+Failure expectation:
+1. Missing `compose/compose.yaml` in a selected containerized component fails component validation before startup.
+
+### Example 14: Kubernetes Platform Runtime and Cleanup (Corner)
+Goal: verify kind runtime lifecycle, manual handoff details, and cleanup.
+
+Inputs:
+1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --resource-server keycloak --secret-provider file`.
+2. Follow-up cleanup command `run-e2e.sh --clean <run-id>`.
+
+Execution:
+1. Runner creates run-scoped kind cluster and namespace (provider-aware for container engine).
+2. Runner applies selected component `k8s/*.yaml` manifests and starts service port-forwards from service annotations.
+3. Manual handoff prints kubeconfig/cluster/namespace details and kubectl examples.
+4. Cleanup reads run runtime state and deletes the recorded kind cluster.
+
+Expected outputs:
+1. `kubectl --kubeconfig <run-kubeconfig> -n <namespace> get pods,svc` succeeds during manual handoff.
+2. `--clean` removes run directory and associated kind cluster.
+
+Failure expectation:
+1. Podman provider preflight failures return actionable errors before runtime creation (`KIND_EXPERIMENTAL_PROVIDER=podman` guidance).
+
 ### Example 13: Simple API mTLS Client Certificate Allowlist
 Goal: ensure `simple-api-server` accepts only configured client certificates during TLS handshake when mTLS is enabled.
 

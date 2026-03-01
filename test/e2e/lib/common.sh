@@ -13,6 +13,9 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_CONTEXT_DIR:=}"
 : "${E2E_CONTEXT_FILE:=}"
 : "${E2E_BIN:=}"
+: "${E2E_KUBECONFIG:=}"
+: "${E2E_KIND_CLUSTER_NAME:=}"
+: "${E2E_K8S_NAMESPACE:=}"
 : "${E2E_START_EPOCH:=0}"
 : "${E2E_METADATA:=bundle}"
 : "${E2E_METADATA_DIR:=}"
@@ -21,8 +24,10 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_VERBOSE:=0}"
 : "${E2E_KEEP_RUNTIME:=0}"
 : "${E2E_PROFILE:=basic}"
+: "${E2E_PLATFORM:=kubernetes}"
 : "${E2E_CONTAINER_ENGINE:=${DECLAREST_E2E_CONTAINER_ENGINE:-podman}}"
 : "${E2E_EXECUTION_LOG:=${DECLAREST_E2E_EXECUTION_LOG:-}}"
+: "${E2E_KIND_NODE_ROOT:=/workspace/declarest}"
 
 : "${E2E_STEP_SKIP:=42}"
 
@@ -70,8 +75,42 @@ e2e_validate_container_engine() {
   esac
 }
 
+e2e_validate_platform() {
+  case "${E2E_PLATFORM}" in
+    compose|kubernetes)
+      return 0
+      ;;
+    *)
+      e2e_die "invalid e2e platform: ${E2E_PLATFORM} (allowed: compose, kubernetes)"
+      return 1
+      ;;
+  esac
+}
+
 e2e_compose_cmd() {
   e2e_run_cmd "${E2E_CONTAINER_ENGINE}" compose "$@"
+}
+
+e2e_kind_run_raw() {
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
+    return $?
+  fi
+
+  kind "$@"
+}
+
+e2e_kind_cmd() {
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+    e2e_run_cmd env KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
+    return $?
+  fi
+
+  e2e_run_cmd kind "$@"
+}
+
+e2e_kubectl_cmd() {
+  e2e_run_cmd kubectl "$@"
 }
 
 e2e_warn_deprecated_env() {

@@ -699,33 +699,6 @@ func (r *GitResourceRepository) computeAheadBehind(repo *gogit.Repository, local
 	return ahead, behind, nil
 }
 
-func (r *GitResourceRepository) collectCommitSet(repo *gogit.Repository, start plumbing.Hash) (map[plumbing.Hash]struct{}, error) {
-	set := make(map[plumbing.Hash]struct{})
-	if start == plumbing.ZeroHash {
-		return set, nil
-	}
-
-	stack := []plumbing.Hash{start}
-	for len(stack) > 0 {
-		last := len(stack) - 1
-		hash := stack[last]
-		stack = stack[:last]
-
-		if _, seen := set[hash]; seen {
-			continue
-		}
-
-		commit, err := repo.CommitObject(hash)
-		if err != nil {
-			return nil, internalError("failed to load git commit for status", err)
-		}
-		set[hash] = struct{}{}
-		stack = append(stack, commit.ParentHashes...)
-	}
-
-	return set, nil
-}
-
 func (r *GitResourceRepository) markCommitGraph(
 	repo *gogit.Repository,
 	start plumbing.Hash,
@@ -767,16 +740,6 @@ func (r *GitResourceRepository) targetBranch() string {
 		return strings.TrimSpace(r.remote.Branch)
 	}
 	return defaultBranchName
-}
-
-func countSetDifference(source map[plumbing.Hash]struct{}, target map[plumbing.Hash]struct{}) int {
-	count := 0
-	for hash := range source {
-		if _, exists := target[hash]; !exists {
-			count++
-		}
-	}
-	return count
 }
 
 func classifyRemoteError(message string, err error) error {

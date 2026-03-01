@@ -9,7 +9,7 @@ reload_args_lib() {
     E2E_RESOURCE_SERVER E2E_RESOURCE_SERVER_CONNECTION E2E_RESOURCE_SERVER_AUTH_TYPE E2E_RESOURCE_SERVER_MTLS \
     E2E_METADATA \
     E2E_REPO_TYPE E2E_GIT_PROVIDER E2E_GIT_PROVIDER_CONNECTION E2E_SECRET_PROVIDER E2E_SECRET_PROVIDER_CONNECTION \
-    E2E_PROFILE E2E_LIST_COMPONENTS E2E_VALIDATE_COMPONENTS E2E_KEEP_RUNTIME E2E_VERBOSE E2E_CLEAN_RUN_ID E2E_CLEAN_ALL \
+    E2E_PROFILE E2E_PLATFORM E2E_LIST_COMPONENTS E2E_VALIDATE_COMPONENTS E2E_KEEP_RUNTIME E2E_VERBOSE E2E_CLEAN_RUN_ID E2E_CLEAN_ALL \
     E2E_SELECTED_BY_PROFILE_DEFAULT || true
   source_e2e_lib "common"
   source_e2e_lib "args"
@@ -25,6 +25,34 @@ test_defaults_metadata_mode_to_bundle() {
   reload_args_lib
   e2e_parse_args
   assert_eq "${E2E_METADATA}" "bundle" "expected metadata mode default to bundle"
+}
+
+test_defaults_platform_to_kubernetes() {
+  reload_args_lib
+  e2e_parse_args
+  assert_eq "${E2E_PLATFORM}" "kubernetes" "expected platform default to kubernetes"
+}
+
+test_parses_platform_flag() {
+  reload_args_lib
+  e2e_parse_args --platform compose
+  assert_eq "${E2E_PLATFORM}" "compose" "expected --platform compose to be parsed"
+
+  reload_args_lib
+  e2e_parse_args --platform kubernetes
+  assert_eq "${E2E_PLATFORM}" "kubernetes" "expected --platform kubernetes to be parsed"
+}
+
+test_rejects_invalid_platform_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_args --platform nope 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid --platform value"
 }
 
 test_parses_resource_server_auth_type_flag() {
@@ -100,11 +128,32 @@ test_cleanup_parser_treats_metadata_flag_as_workload_flag() {
   assert_contains "${output}" "cannot be combined with workload flags"
 }
 
+test_cleanup_parser_treats_platform_flag_as_workload_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_cleanup_args --clean run-123 --platform compose 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "2"
+  assert_contains "${output}" "cannot be combined with workload flags"
+
+  set +e
+  output=$(e2e_parse_cleanup_args --clean-all --platform compose 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "2"
+  assert_contains "${output}" "cannot be combined with workload flags"
+}
+
 test_usage_mentions_validate_flag_and_no_none_resource_server() {
   reload_args_lib
   local output
   output=$(e2e_usage)
   assert_contains "${output}" "--validate-components"
+  assert_contains "${output}" "--platform <compose|kubernetes>"
   assert_contains "${output}" "--metadata <bundle|local-dir>"
   assert_contains "${output}" "--resource-server-auth-type <none|basic|oauth2|custom-header>"
   assert_not_contains "${output}" "--resource-server-basic-auth"
@@ -114,6 +163,9 @@ test_usage_mentions_validate_flag_and_no_none_resource_server() {
 
 test_parses_validate_components_flag
 test_defaults_metadata_mode_to_bundle
+test_defaults_platform_to_kubernetes
+test_parses_platform_flag
+test_rejects_invalid_platform_flag
 test_parses_resource_server_auth_type_flag
 test_parses_metadata_mode_flag
 test_rejects_invalid_metadata_mode_flag
@@ -121,4 +173,5 @@ test_rejects_legacy_resource_server_auth_flags
 test_rejects_resource_server_none
 test_cleanup_parser_treats_validate_mode_as_workload_flag
 test_cleanup_parser_treats_metadata_flag_as_workload_flag
+test_cleanup_parser_treats_platform_flag_as_workload_flag
 test_usage_mentions_validate_flag_and_no_none_resource_server

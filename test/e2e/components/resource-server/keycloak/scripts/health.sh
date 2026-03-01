@@ -26,7 +26,7 @@ wait_for() {
 
   printf 'healthcheck failed for %s: %s\n' "${name}" "${url}" >&2
   if [[ -n "${E2E_COMPONENT_PROJECT_NAME:-}" ]]; then
-    local compose_file="${E2E_COMPONENT_DIR}/compose.yaml"
+    local compose_file="${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}"
     if [[ -f "${compose_file}" ]]; then
       e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" ps >&2 || true
       e2e_compose_cmd -f "${compose_file}" -p "${E2E_COMPONENT_PROJECT_NAME}" logs keycloak >&2 || true

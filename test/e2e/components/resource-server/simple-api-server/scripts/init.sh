@@ -174,6 +174,24 @@ ensure_local_mtls_material() {
   return 0
 }
 
+kind_node_path_for_host_path() {
+  local host_path=$1
+  local host_root="${E2E_ROOT_DIR%/}"
+  local node_root="${E2E_KIND_NODE_ROOT%/}"
+
+  case "${host_path}" in
+    "${host_root}")
+      printf '%s\n' "${node_root}"
+      ;;
+    "${host_root}/"*)
+      printf '%s/%s\n' "${node_root}" "${host_path#${host_root}/}"
+      ;;
+    *)
+      printf '%s\n' "${host_path}"
+      ;;
+  esac
+}
+
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   simple_api_auth_defaults=$(simple_api_auth_defaults_for_selected_type) || exit 1
   read -r simple_api_default_basic_auth simple_api_default_oauth2 <<<"${simple_api_auth_defaults}"
@@ -193,6 +211,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   simple_api_certs_dir=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_CERTS_DIR' 'E2E_SIMPLE_API_CERTS_DIR' || true)
   : "${simple_api_certs_host_dir:=${E2E_RUN_DIR}/certs/resource-server-simple-api-server}"
   : "${simple_api_certs_dir:=/etc/simple-api-server/certs}"
+  simple_api_certs_node_dir=$(kind_node_path_for_host_path "${simple_api_certs_host_dir}")
 
   simple_api_tls_cert_file=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_TLS_CERT_FILE' 'E2E_SIMPLE_API_TLS_CERT_FILE' || true)
   simple_api_tls_key_file=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_TLS_KEY_FILE' 'E2E_SIMPLE_API_TLS_KEY_FILE' || true)
@@ -248,6 +267,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_OAUTH2 "${simple_api_enable_oauth2}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_MTLS "${simple_api_enable_mtls}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CERTS_HOST_DIR "${simple_api_certs_host_dir}"
+  e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CERTS_NODE_DIR "${simple_api_certs_node_dir}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CERTS_DIR "${simple_api_certs_dir}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TLS_CERT_FILE "${simple_api_tls_cert_file}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TLS_KEY_FILE "${simple_api_tls_key_file}"
