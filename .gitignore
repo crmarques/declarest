@@ -55,6 +55,10 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
+# Claude AI settings
+.claude
+.claude/*
+
 # Env/secrets (adjust to your project)
 .env
 .env.*
