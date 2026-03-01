@@ -1,0 +1,285 @@
+package mutate
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/crmarques/declarest/faults"
+	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
+	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
+)
+
+type Operation string
+
+const (
+	OperationApply  Operation = "apply"
+	OperationCreate Operation = "create"
+	OperationUpdate Operation = "update"
+)
+
+type Dependencies struct {
+	Orchestrator orchestratordomain.Orchestrator
+	Repository   repository.ResourceStore
+	Metadata     metadatadomain.MetadataService
+	Secrets      secretdomain.SecretProvider
+}
+
+type Request struct {
+	Operation        Operation
+	LogicalPath      string
+	Recursive        bool
+	Value            resource.Value
+	HasExplicitInput bool
+	RefreshLocal     bool
+}
+
+type Result struct {
+	ResolvedPath string
+	Items        []resource.Resource
+}
+
+func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
+	orchestratorService, err := requireOrchestrator(deps)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if req.HasExplicitInput {
+		if req.Recursive {
+			return Result{}, validationError(
+				fmt.Sprintf(
+					"flag --recursive cannot be combined with explicit input; remove input to %s resources from repository",
+					strings.TrimSpace(string(req.Operation)),
+				),
+				nil,
+			)
+		}
+
+		item, err := runExplicitMutation(ctx, orchestratorService, req.Operation, req.LogicalPath, req.Value)
+		if err != nil {
+			return Result{}, err
+		}
+		items := []resource.Resource{item}
+		if req.RefreshLocal {
+			if err := refreshRepositoryForPaths(ctx, deps, items); err != nil {
+				return Result{}, err
+			}
+		}
+
+		return Result{ResolvedPath: req.LogicalPath, Items: items}, nil
+	}
+
+	targets, err := ListLocalTargets(ctx, orchestratorService, req.LogicalPath, req.Recursive)
+	if err != nil {
+		return Result{}, err
+	}
+
+	items, err := executeMutationForTargets(ctx, targets, func(runCtx context.Context, logicalPath string) (resource.Resource, error) {
+		switch req.Operation {
+		case OperationApply:
+			return orchestratorService.Apply(runCtx, logicalPath)
+		case OperationCreate:
+			localValue, getErr := orchestratorService.GetLocal(runCtx, logicalPath)
+			if getErr != nil {
+				return resource.Resource{}, getErr
+			}
+			return orchestratorService.Create(runCtx, logicalPath, localValue)
+		case OperationUpdate:
+			localValue, getErr := orchestratorService.GetLocal(runCtx, logicalPath)
+			if getErr != nil {
+				return resource.Resource{}, getErr
+			}
+			return orchestratorService.Update(runCtx, logicalPath, localValue)
+		default:
+			return resource.Resource{}, validationError(
+				fmt.Sprintf("unsupported resource mutation operation %q", req.Operation),
+				nil,
+			)
+		}
+	})
+	if err != nil {
+		return Result{}, err
+	}
+
+	if req.RefreshLocal {
+		if err := refreshRepositoryForPaths(ctx, deps, items); err != nil {
+			return Result{}, err
+		}
+	}
+
+	return Result{ResolvedPath: req.LogicalPath, Items: items}, nil
+}
+
+func runExplicitMutation(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	operation Operation,
+	logicalPath string,
+	value resource.Value,
+) (resource.Resource, error) {
+	switch operation {
+	case OperationApply:
+		_, getRemoteErr := orchestratorService.GetRemote(ctx, logicalPath)
+		if getRemoteErr == nil {
+			return orchestratorService.Update(ctx, logicalPath, value)
+		}
+		if isTypedErrorCategory(getRemoteErr, faults.NotFoundError) {
+			return orchestratorService.Create(ctx, logicalPath, value)
+		}
+		return resource.Resource{}, getRemoteErr
+	case OperationCreate:
+		return orchestratorService.Create(ctx, logicalPath, value)
+	case OperationUpdate:
+		return orchestratorService.Update(ctx, logicalPath, value)
+	default:
+		return resource.Resource{}, validationError(
+			fmt.Sprintf("unsupported resource mutation operation %q", operation),
+			nil,
+		)
+	}
+}
+
+func ListLocalTargets(
+	ctx context.Context,
+	orchestratorService orchestratordomain.LocalReader,
+	logicalPath string,
+	recursive bool,
+) ([]resource.Resource, error) {
+	items, err := orchestratorService.ListLocal(ctx, logicalPath, orchestratordomain.ListPolicy{Recursive: recursive})
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 && !recursive && logicalPathDepth(logicalPath) > 1 {
+		localValue, getErr := orchestratorService.GetLocal(ctx, logicalPath)
+		if getErr == nil {
+			items = []resource.Resource{{
+				LogicalPath: logicalPath,
+				Payload:     localValue,
+			}}
+		} else if !isTypedErrorCategory(getErr, faults.NotFoundError) {
+			return nil, getErr
+		}
+	}
+	if len(items) == 0 {
+		return nil, faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("no local resources found under %q", logicalPath),
+			nil,
+		)
+	}
+
+	sort.Slice(items, func(i int, j int) bool {
+		return items[i].LogicalPath < items[j].LogicalPath
+	})
+	return items, nil
+}
+
+func ListLocalTargetsOrFallbackPath(
+	ctx context.Context,
+	orchestratorService orchestratordomain.LocalReader,
+	logicalPath string,
+	recursive bool,
+) ([]resource.Resource, error) {
+	items, err := ListLocalTargets(ctx, orchestratorService, logicalPath, recursive)
+	if err == nil {
+		return items, nil
+	}
+	if isRepositoryNotConfiguredValidation(err) {
+		if recursive {
+			return nil, validationError(
+				"flag --recursive requires a configured repository to resolve delete targets",
+				nil,
+			)
+		}
+		return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	}
+	if isTypedErrorCategory(err, faults.NotFoundError) {
+		return []resource.Resource{{LogicalPath: logicalPath}}, nil
+	}
+	return nil, err
+}
+
+func executeMutationForTargets(
+	ctx context.Context,
+	targets []resource.Resource,
+	runMutation func(context.Context, string) (resource.Resource, error),
+) ([]resource.Resource, error) {
+	results := make([]resource.Resource, 0, len(targets))
+	for _, target := range targets {
+		item, err := runMutation(ctx, target.LogicalPath)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+
+	sort.Slice(results, func(i int, j int) bool {
+		return results[i].LogicalPath < results[j].LogicalPath
+	})
+	return results, nil
+}
+
+func refreshRepositoryForPaths(ctx context.Context, deps Dependencies, items []resource.Resource) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	saveDeps := resourcesave.Dependencies{
+		Orchestrator: deps.Orchestrator,
+		Repository:   deps.Repository,
+		Metadata:     deps.Metadata,
+		Secrets:      deps.Secrets,
+	}
+
+	for _, item := range items {
+		if err := resourcesave.Execute(
+			ctx,
+			saveDeps,
+			item.LogicalPath,
+			nil,
+			false,
+			resourcesave.ExecuteOptions{Force: true},
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isRepositoryNotConfiguredValidation(err error) bool {
+	if !isTypedErrorCategory(err, faults.ValidationError) {
+		return false
+	}
+
+	message := strings.TrimSpace(err.Error())
+	return message == "repository store is not configured" || message == "repository manager is not configured"
+}
+
+func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
+	return faults.IsCategory(err, category)
+}
+
+func logicalPathDepth(logicalPath string) int {
+	trimmed := strings.Trim(strings.TrimSpace(logicalPath), "/")
+	if trimmed == "" {
+		return 0
+	}
+	return len(strings.Split(trimmed, "/"))
+}
+
+func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
+	if deps.Orchestrator == nil {
+		return nil, validationError("orchestrator is not configured", nil)
+	}
+	return deps.Orchestrator, nil
+}
+
+func validationError(message string, cause error) error {
+	return faults.NewTypedError(faults.ValidationError, message, cause)
+}

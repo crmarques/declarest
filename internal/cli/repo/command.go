@@ -2,17 +2,13 @@ package repo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
@@ -408,76 +404,13 @@ func requireRepositoryTreeReader(deps common.CommandDependencies) (repository.Re
 func resolveRepoTreePaths(
 	ctx context.Context,
 	deps common.CommandDependencies,
-	globalFlags *common.GlobalFlags,
+	_ *common.GlobalFlags,
 ) ([]string, error) {
 	if treeReader, ok := requireRepositoryTreeReader(deps); ok {
 		return treeReader.Tree(ctx)
 	}
 
-	if repositoryService, err := common.RequireRepositorySync(deps); err == nil {
-		if checkErr := repositoryService.Check(ctx); checkErr != nil {
-			return nil, checkErr
-		}
-	}
-
-	repositoryContext, err := resolveRepositoryContext(ctx, deps, globalFlags)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(repositoryContext.BaseDir) == "" {
-		return nil, common.ValidationError("repository base directory is not configured", nil)
-	}
-
-	return listRepositoryTreePaths(repositoryContext.BaseDir)
-}
-
-func listRepositoryTreePaths(baseDir string) ([]string, error) {
-	root := filepath.Clean(strings.TrimSpace(baseDir))
-	if root == "" || root == "." {
-		return nil, common.ValidationError("repository base directory is not configured", nil)
-	}
-
-	info, err := os.Stat(root)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, faults.NewTypedError(faults.NotFoundError, "repository base directory does not exist", nil)
-		}
-		return nil, faults.NewTypedError(faults.InternalError, "failed to inspect repository base directory", err)
-	}
-	if !info.IsDir() {
-		return nil, common.ValidationError("repository base directory is not a directory", nil)
-	}
-
-	paths := make([]string, 0, 32)
-	walkErr := filepath.WalkDir(root, func(current string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !entry.IsDir() {
-			return nil
-		}
-		if current == root {
-			return nil
-		}
-
-		name := entry.Name()
-		if name == "_" || strings.HasPrefix(name, ".") {
-			return filepath.SkipDir
-		}
-
-		relPath, relErr := filepath.Rel(root, current)
-		if relErr != nil {
-			return relErr
-		}
-		paths = append(paths, filepath.ToSlash(relPath))
-		return nil
-	})
-	if walkErr != nil {
-		return nil, faults.NewTypedError(faults.InternalError, "failed to walk repository directory tree", walkErr)
-	}
-
-	sort.Strings(paths)
-	return paths, nil
+	return nil, common.ValidationError("repository tree is not supported by the active repository provider", nil)
 }
 
 func resolveRepoStatusOutputFormat(globalFlags *common.GlobalFlags) string {

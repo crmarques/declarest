@@ -115,6 +115,26 @@ func TestGitRepositoryAutoInitOnCheck(t *testing.T) {
 	assertGitRepoInitialized(t, repoDir)
 }
 
+func TestGitRepositoryAutoInitOnTree(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	provider := NewGitResourceRepository(
+		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
+		config.ResourceFormatJSON,
+	)
+
+	paths, err := provider.Tree(context.Background())
+	if err != nil {
+		t.Fatalf("Tree returned error: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("expected empty tree for fresh repository, got %#v", paths)
+	}
+
+	assertGitRepoInitialized(t, repoDir)
+}
+
 func TestGitRepositoryAutoInitDisabledSyncStatusFailsWithoutInitialization(t *testing.T) {
 	t.Parallel()
 

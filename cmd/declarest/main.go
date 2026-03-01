@@ -26,15 +26,7 @@ func main() {
 				os.Exit(exitCodeForError(err))
 			}
 		} else {
-			deps = cli.Dependencies{
-				Orchestrator:   declarestContext.Orchestrator,
-				Contexts:       declarestContext.Contexts,
-				ResourceStore:  declarestContext.ResourceStore,
-				RepositorySync: declarestContext.RepositorySync,
-				Metadata:       declarestContext.Metadata,
-				Secrets:        declarestContext.Secrets,
-				ResourceServer: declarestContext.ResourceServer,
-			}
+			deps = dependenciesFromDeclarestContext(declarestContext)
 		}
 	}
 
@@ -45,6 +37,18 @@ func main() {
 
 func exitCodeForError(err error) int {
 	return cli.ExitCodeForError(err)
+}
+
+func dependenciesFromDeclarestContext(ctx core.DeclarestContext) cli.Dependencies {
+	return cli.Dependencies{
+		Orchestrator:   ctx.Orchestrator,
+		Contexts:       ctx.Contexts,
+		ResourceStore:  ctx.ResourceStore,
+		RepositorySync: ctx.RepositorySync,
+		Metadata:       ctx.Metadata,
+		Secrets:        ctx.Secrets,
+		ResourceServer: ctx.ResourceServer,
+	}
 }
 
 func contextNameFromArgs(args []string) string {

@@ -29,11 +29,6 @@ type ExecuteOptions struct {
 	RequestedSecretCandidates []string
 }
 
-type saveRemoteReader interface {
-	GetRemote(ctx context.Context, logicalPath string) (resource.Value, error)
-	ListRemote(ctx context.Context, logicalPath string, policy orchestratordomain.ListPolicy) ([]resource.Resource, error)
-}
-
 func Execute(
 	ctx context.Context,
 	deps Dependencies,

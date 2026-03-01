@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	requestapp "github.com/crmarques/declarest/internal/app/resource/request"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -92,46 +93,33 @@ func newRequestMethodCommand(
 				body = nil
 			}
 
-			orchestratorService, err := common.RequireOrchestrator(deps)
+			result, err := requestapp.Execute(command.Context(), requestapp.Dependencies{
+				Orchestrator: deps.Orchestrator,
+			}, requestapp.Request{
+				Method:         methodUpper,
+				LogicalPath:    normalizedPath,
+				Body:           body,
+				ResolveTargets: cfg.requireDeleteConfirm,
+				Recursive:      recursive,
+			})
 			if err != nil {
 				return err
 			}
 
 			if cfg.requireDeleteConfirm {
-				targets, err := listLocalMutationTargetsOrFallbackPath(
-					command.Context(),
-					orchestratorService,
-					normalizedPath,
-					recursive,
-				)
-				if err != nil {
-					return err
-				}
-
-				results := make([]resource.Value, 0, len(targets))
-				for _, target := range targets {
-					value, err := orchestratorService.Request(command.Context(), methodUpper, target.LogicalPath, body)
-					if err != nil {
-						return err
-					}
-					results = append(results, value)
-				}
-
 				if !common.IsVerbose(globalFlags) {
 					return nil
 				}
-				return writeRequestOutput(command, deps, globalFlags, results)
-			}
-
-			value, err := orchestratorService.Request(command.Context(), methodUpper, normalizedPath, body)
-			if err != nil {
-				return err
+				return writeRequestOutput(command, deps, globalFlags, result.Values)
 			}
 
 			if isStateChangingRequestMethod(methodUpper) && !common.IsVerbose(globalFlags) {
 				return nil
 			}
-			return writeRequestOutput(command, deps, globalFlags, value)
+			if len(result.Values) == 0 {
+				return writeRequestOutput(command, deps, globalFlags, resource.Value(nil))
+			}
+			return writeRequestOutput(command, deps, globalFlags, result.Values[0])
 		},
 	}
 

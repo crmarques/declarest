@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
+	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
@@ -87,7 +88,7 @@ func newDeleteCommand(deps common.CommandDependencies) *cobra.Command {
 					return err
 				}
 
-				targets, err := listLocalMutationTargetsOrFallbackPath(
+				targets, err := mutateapp.ListLocalTargetsOrFallbackPath(
 					runCtx,
 					orchestratorService,
 					resolvedPath,

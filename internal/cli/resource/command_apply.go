@@ -1,14 +1,12 @@
 package resource
 
 import (
-	"context"
 	"strings"
 
-	"github.com/crmarques/declarest/faults"
-	resourceinputapp "github.com/crmarques/declarest/internal/app/resource/input"
+	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/internal/cli/common"
+	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
 	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -43,10 +41,6 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 				return err
 			}
 
-			orchestratorService, err := common.RequireOrchestrator(deps)
-			if err != nil {
-				return err
-			}
 			runCtx, _, err := applyHTTPMethodOverride(
 				command.Context(),
 				httpMethod,
@@ -61,14 +55,10 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 			if err != nil {
 				return err
 			}
+
+			mutationPath := resolvedPath
 			if hasExplicitInput {
-				if recursive {
-					return common.ValidationError(
-						"flag --recursive cannot be combined with explicit input; remove input to apply resources from repository",
-						nil,
-					)
-				}
-				mutationPath, err := resolveExplicitMutationPayloadPath(
+				mutationPath, err = resolveExplicitMutationPayloadPath(
 					command.Context(),
 					command.CommandPath(),
 					deps,
@@ -78,57 +68,23 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 				if err != nil {
 					return err
 				}
-
-				_, getRemoteErr := orchestratorService.GetRemote(runCtx, mutationPath)
-				var item resource.Resource
-				if getRemoteErr == nil {
-					item, err = orchestratorService.Update(runCtx, mutationPath, value)
-				} else if isTypedErrorCategory(getRemoteErr, faults.NotFoundError) {
-					item, err = orchestratorService.Create(runCtx, mutationPath, value)
-				} else {
-					return getRemoteErr
-				}
-				if err != nil {
-					return err
-				}
-
-				if refreshRepository {
-					if err := refreshRepositoryForPaths(runCtx, deps, []resource.Resource{item}); err != nil {
-						return err
-					}
-				}
-
-				if !common.IsVerbose(globalFlags) {
-					return nil
-				}
-
-				outputFormat, outputErr := common.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-				if outputErr != nil {
-					return outputErr
-				}
-
-				return writeCollectionMutationOutput(command, outputFormat, mutationPath, []resource.Resource{item})
 			}
 
-			targets, err := listLocalMutationTargets(runCtx, orchestratorService, resolvedPath, recursive)
+			result, err := mutateapp.Execute(runCtx, mutateapp.Dependencies{
+				Orchestrator: deps.Orchestrator,
+				Repository:   deps.ResourceStore,
+				Metadata:     deps.Metadata,
+				Secrets:      deps.Secrets,
+			}, mutateapp.Request{
+				Operation:        mutateapp.OperationApply,
+				LogicalPath:      mutationPath,
+				Recursive:        recursive,
+				Value:            value,
+				HasExplicitInput: hasExplicitInput,
+				RefreshLocal:     refreshRepository,
+			})
 			if err != nil {
 				return err
-			}
-			items, err := executeMutationForTargets(
-				runCtx,
-				targets,
-				func(ctx context.Context, logicalPath string) (resource.Resource, error) {
-					return orchestratorService.Apply(ctx, logicalPath)
-				},
-			)
-			if err != nil {
-				return err
-			}
-
-			if refreshRepository {
-				if err := refreshRepositoryForPaths(runCtx, deps, items); err != nil {
-					return err
-				}
 			}
 
 			if !common.IsVerbose(globalFlags) {
@@ -140,7 +96,7 @@ func newApplyCommand(deps common.CommandDependencies, globalFlags *common.Global
 				return err
 			}
 
-			return writeCollectionMutationOutput(command, outputFormat, resolvedPath, items)
+			return writeCollectionMutationOutput(command, outputFormat, result.ResolvedPath, result.Items)
 		},
 	}
 

@@ -28,6 +28,7 @@ var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
 var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
 var _ repository.RepositoryHistoryReader = (*GitResourceRepository)(nil)
+var _ repository.RepositoryTreeReader = (*GitResourceRepository)(nil)
 var _ repository.RepositoryStatusDetailsReader = (*GitResourceRepository)(nil)
 
 const (
@@ -84,6 +85,13 @@ func (r *GitResourceRepository) Exists(ctx context.Context, logicalPath string) 
 		return false, err
 	}
 	return r.local.Exists(ctx, logicalPath)
+}
+
+func (r *GitResourceRepository) Tree(ctx context.Context) ([]string, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return nil, err
+	}
+	return r.local.Tree(ctx)
 }
 
 func (r *GitResourceRepository) Commit(ctx context.Context, message string) (bool, error) {

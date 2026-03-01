@@ -14,7 +14,7 @@ import (
 
 func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, error) {
 	if r == nil || r.Repository == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "repository manager is not configured", nil)
+		return nil, faults.NewTypedError(faults.ValidationError, "repository store is not configured", nil)
 	}
 	return r.Repository, nil
 }
@@ -28,7 +28,7 @@ func (r *DefaultOrchestrator) requireMetadata() (metadata.MetadataService, error
 
 func (r *DefaultOrchestrator) requireServer() (server.ResourceServer, error) {
 	if r == nil || r.Server == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "server manager is not configured", nil)
+		return nil, faults.NewTypedError(faults.ValidationError, "resource server is not configured", nil)
 	}
 	return r.Server, nil
 }

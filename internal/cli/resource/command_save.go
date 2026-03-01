@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	resourceinputapp "github.com/crmarques/declarest/internal/app/resource/input"
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
 	"github.com/crmarques/declarest/internal/cli/common"
+	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
 	"github.com/spf13/cobra"
 )
 

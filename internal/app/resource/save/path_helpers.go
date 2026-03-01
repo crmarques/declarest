@@ -54,7 +54,7 @@ func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {
 
 func resolveSaveRemoteValue(
 	ctx context.Context,
-	remoteReader saveRemoteReader,
+	remoteReader orchestratordomain.RemoteReader,
 	metadataService metadatadomain.MetadataService,
 	logicalPath string,
 	explicitCollectionTarget bool,

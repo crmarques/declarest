@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/internal/cli/common"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -33,7 +34,7 @@ func newDiffCommand(deps common.CommandDependencies, globalFlags *common.GlobalF
 			if err != nil {
 				return err
 			}
-			targets, err := listLocalMutationTargets(command.Context(), orchestratorService, resolvedPath, false)
+			targets, err := mutateapp.ListLocalTargets(command.Context(), orchestratorService, resolvedPath, false)
 			if err != nil {
 				return err
 			}
