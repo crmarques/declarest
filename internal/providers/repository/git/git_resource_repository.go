@@ -764,7 +764,6 @@ func classifyRemoteError(message string, err error) error {
 	}
 }
 
-
 func notFoundError(message string) error {
 	return faults.NewTypedError(faults.NotFoundError, message, nil)
 }

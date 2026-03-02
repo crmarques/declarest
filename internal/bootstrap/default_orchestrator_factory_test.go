@@ -15,12 +15,12 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
-	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 )
 
 func TestBuildDefaultOrchestratorWiring(t *testing.T) {

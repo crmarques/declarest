@@ -2,20 +2,20 @@ package shared
 
 import (
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
-	"github.com/crmarques/declarest/gateway"
 )
 
 type CommandDependencies struct {
-	Orchestrator   orchestrator.Orchestrator
-	Contexts       config.ContextService
-	ResourceStore  repository.ResourceStore
-	RepositorySync repository.RepositorySync
-	Metadata       metadata.MetadataService
-	Secrets        secrets.SecretProvider
+	Orchestrator    orchestrator.Orchestrator
+	Contexts        config.ContextService
+	ResourceStore   repository.ResourceStore
+	RepositorySync  repository.RepositorySync
+	Metadata        metadata.MetadataService
+	Secrets         secrets.SecretProvider
 	ResourceGateway gateway.ResourceGateway
 }
 

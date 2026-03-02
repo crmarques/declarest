@@ -11,10 +11,10 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/providers/shared/tlsconfig"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
-	"github.com/crmarques/declarest/gateway"
 )
 
 const (

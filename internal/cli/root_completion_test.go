@@ -274,8 +274,8 @@ func TestPathCompletionEscapedExactAliasFallsBackToRepositoryDescendants(t *test
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			CollectionPath: "/admin/realms/master/user-registry",
-			LocalAlias: "AD PRD",
-			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -317,8 +317,8 @@ func TestPathCompletionEscapedCollectionTokenCompletesNextSegment(t *testing.T) 
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			CollectionPath: "/admin/realms/master/user-registry",
-			LocalAlias: "AD PRD",
-			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -360,8 +360,8 @@ func TestPathCompletionAvoidsSelfAliasSegmentDuplication(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			LocalAlias: "AD PRD",
-			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -406,8 +406,8 @@ func TestPathCompletionAvoidsRepeatedAliasChildSuggestion(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			LocalAlias: "AD PRD",
-			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -452,8 +452,8 @@ func TestPathCompletionUsesMetadataOnlyBranchWhenOpenAPIHasNoPath(t *testing.T) 
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			LocalAlias: "AD PRD",
-			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",

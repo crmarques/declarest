@@ -9,9 +9,9 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/cli/shared"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/spf13/cobra"
 )
 

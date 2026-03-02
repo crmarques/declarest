@@ -731,4 +731,3 @@ func splitIdentifierTokens(value string) []string {
 	flush()
 	return tokens
 }
-

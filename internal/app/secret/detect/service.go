@@ -186,4 +186,3 @@ func applyDetectedSecretAttributes(ctx context.Context, deps Dependencies, logic
 	}
 	return secretworkflow.PersistDetectedAttributes(ctx, deps.Metadata, logicalPath, detected)
 }
-

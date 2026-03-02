@@ -124,12 +124,12 @@ func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata)
 	resourceServer := &testResourceServer{accessToken: "test-access-token"}
 
 	return Dependencies{
-		Orchestrator:   orchestrator,
-		Contexts:       &testContextService{},
-		ResourceStore:  repositoryService,
-		RepositorySync: repositoryService,
-		Metadata:       metadataService,
-		Secrets:        secretProvider,
+		Orchestrator:    orchestrator,
+		Contexts:        &testContextService{},
+		ResourceStore:   repositoryService,
+		RepositorySync:  repositoryService,
+		Metadata:        metadataService,
+		Secrets:         secretProvider,
 		ResourceGateway: resourceServer,
 	}
 }

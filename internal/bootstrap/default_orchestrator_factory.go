@@ -8,18 +8,18 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/gateway"
+	"github.com/crmarques/declarest/internal/defaultorch"
+	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
-	"github.com/crmarques/declarest/internal/defaultorch"
-	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
-	"github.com/crmarques/declarest/gateway"
 )
 
 func buildDefaultOrchestrator(

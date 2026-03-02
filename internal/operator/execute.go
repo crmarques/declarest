@@ -62,4 +62,3 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 		TextLines:   result.TextLines,
 	}, nil
 }
-

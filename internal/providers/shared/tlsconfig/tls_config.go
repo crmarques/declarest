@@ -56,4 +56,3 @@ func BuildTLSConfig(tlsSettings *config.TLS, scope string) (*tls.Config, error) 
 
 	return tlsConfig, nil
 }
-

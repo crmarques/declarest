@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func extractListItems(payload any) ([]any, error) {

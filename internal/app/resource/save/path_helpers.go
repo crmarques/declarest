@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {

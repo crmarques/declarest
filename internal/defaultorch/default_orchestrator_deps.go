@@ -7,9 +7,9 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
-	"github.com/crmarques/declarest/gateway"
 )
 
 func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, error) {

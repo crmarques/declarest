@@ -271,7 +271,6 @@ func saveResolvedPathPayload(
 	return nil
 }
 
-
 func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
 	if deps.Orchestrator == nil {
 		return nil, faults.NewValidationError("orchestrator is not configured", nil)

@@ -12,11 +12,11 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func TestRequiredCommandPathsRegistered(t *testing.T) {

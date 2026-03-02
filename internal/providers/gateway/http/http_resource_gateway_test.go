@@ -20,9 +20,9 @@ import (
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func TestNewHTTPResourceGatewayValidation(t *testing.T) {

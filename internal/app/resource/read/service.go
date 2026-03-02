@@ -9,6 +9,7 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	metadatadomain "github.com/crmarques/declarest/metadata"
@@ -16,7 +17,6 @@ import (
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 const (
@@ -316,7 +316,6 @@ func requireOrchestrator(deps Dependencies) (orchestrator.Orchestrator, error) {
 	}
 	return deps.Orchestrator, nil
 }
-
 
 func isNotFoundError(err error) bool {
 	var typedErr *faults.TypedError

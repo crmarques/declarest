@@ -237,7 +237,6 @@ func resolveBundleOpenAPIReference(root string, raw string) (string, error) {
 	}
 }
 
-
 func transportError(message string, cause error) error {
 	return faults.NewTypedError(faults.TransportError, message, cause)
 }

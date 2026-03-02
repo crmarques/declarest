@@ -8,8 +8,8 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	configfile "github.com/crmarques/declarest/internal/providers/config/file"
 	"github.com/crmarques/declarest/internal/defaultorch"
+	configfile "github.com/crmarques/declarest/internal/providers/config/file"
 )
 
 func TestNewSession(t *testing.T) {

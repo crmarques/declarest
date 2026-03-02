@@ -9,8 +9,8 @@ import (
 	"github.com/itchyny/gojq"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/resource"
 	gatewaydomain "github.com/crmarques/declarest/gateway"
+	"github.com/crmarques/declarest/resource"
 )
 
 var listJQCodeCache sync.Map
