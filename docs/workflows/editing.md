@@ -31,7 +31,7 @@ declarest config print-template > /tmp/contexts.yaml
 # edit /tmp/contexts.yaml
 
 declarest config validate --payload /tmp/contexts.yaml
-declarest config add --file /tmp/contexts.yaml --set-current
+declarest config add --payload /tmp/contexts.yaml --set-current
 ```
 
 Update an existing context catalog entry:

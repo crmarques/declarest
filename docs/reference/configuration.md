@@ -395,7 +395,7 @@ declarest config print-template > /tmp/contexts.yaml
 declarest config validate --payload /tmp/contexts.yaml
 
 # import and set current
-declarest config add --file /tmp/contexts.yaml --set-current
+declarest config add --payload /tmp/contexts.yaml --set-current
 
 # inspect resolved context
 declarest config resolve

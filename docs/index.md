@@ -4,16 +4,25 @@
   <img src="assets/logo.png" alt="DeclaREST logo" width="200">
 </p>
 
-DeclaREST lets you manage REST API resources as versioned files in a Git repository — bringing GitOps workflows to any system that offer tradicional HTTP API.
+DeclaREST gives REST APIs a GitOps-style workflow: store resources as files, review with Git, and sync with a deterministic CLI.
 
-Instead of relying on scripts, *ad-hoc* `curl` commands, or manual UI clicks, you define the desired state in `json` or `yaml`, review changes via Git, and use the CLI to sync those files to the API (and back) in a repeatable, auditable way.
+## What this project solves
 
-## Happy path (beginner flow)
+Teams usually manage REST-backed configuration through scripts, manual UI steps, and low-visibility changes.
 
-1. Create a context (repository + managed server auth).
-2. Save one resource from the API into your repository.
-3. Edit the local file.
-4. Diff and apply.
+DeclaREST standardizes this into:
+
+- stable logical paths (`/corporations/acme`, `/admin/realms/prod/clients/app`)
+- repository-managed desired state (`resource.json|yaml`)
+- repeatable `save -> diff -> apply` workflows
+- metadata-driven adaptation for APIs that are not clean REST
+- secret placeholders instead of plaintext in resource files
+
+## Architecture at a glance
+
+![DeclaREST architecture](assets/architecture.png)
+
+## Happy path (first 2 minutes)
 
 ```bash
 declarest config add
@@ -25,32 +34,26 @@ declarest resource diff /corporations/acme
 declarest resource apply /corporations/acme
 ```
 
-## What makes it useful
+## Capabilities snapshot
 
-- Git-friendly desired state for REST APIs
-- Deterministic logical paths across environments
-- Metadata to model non-REST or best-practices-drifting APIs
-- Secret placeholders instead of plaintext in repository files
-- Repeatable workflows for save/diff/apply/list/delete
+- Resource workflows: read/list/save/diff/explain/apply/create/update/delete/edit/copy
+- Raw requests: `declarest resource request <method> ...`
+- Metadata workflows: infer/render/set/resolve overrides for custom API shapes
+- Secret workflows: detect/store/mask/resolve with save-time safeguards
+- Repository workflows: status/tree/history/commit/refresh/push/reset/clean
 
 ## Start here
 
 - [Installation](getting-started/installation.md)
 - [Quickstart](getting-started/quickstart.md)
 - [Concepts overview](concepts/overview.md)
+- [CLI reference](reference/cli.md)
 
-## When your API is weird (and most are)
+## For advanced API modeling
 
-DeclaREST separates the **logical path** users operate on from the real HTTP endpoint shape.
-Use metadata to:
+When your API uses inconsistent paths, mixed collections, or per-operation payload quirks:
 
-- map a logical collection to a different API endpoint
-- override per-operation endpoints and methods
-- reshape payloads
-- filter noisy list endpoints into deterministic resource lists
-
-Start with [Metadata overview](concepts/metadata.md), then go deep on:
-
+- [Metadata overview](concepts/metadata.md)
 - [Metadata Overrides](concepts/metadata-overrides.md)
 - [Custom Paths](concepts/metadata-custom-paths.md)
-- [Advanced Metadata Configuration workflow](workflows/advanced-metadata-configuration.md)
+- [Advanced Metadata Configuration](workflows/advanced-metadata-configuration.md)

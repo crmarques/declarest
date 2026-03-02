@@ -1,6 +1,6 @@
 # CLI Reference
 
-This page summarizes the current CLI surface and the most important command/flag patterns.
+This page summarizes the current CLI surface and the most important command and flag patterns.
 
 For exact flags and examples, use built-in help (source of truth):
 
@@ -15,9 +15,9 @@ declarest <group> <command> --help
 ### Basic commands
 
 - `config` - manage contexts and validation
-- `metadata` - inspect, infer, render, set, and unset metadata
+- `metadata` - inspect, infer, render, set, unset, and resolve metadata
 - `repo` - manage local repository state
-- `resource` - save/get/list/diff/apply/create/update/delete/edit/copy resources
+- `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, plus raw requests and template rendering
 - `resource-server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
@@ -84,9 +84,17 @@ declarest resource edit /corporations/acme --editor "vi"
 declarest resource copy /corporations/acme /corporations/acme-copy --overrides name=acme-copy
 ```
 
-Useful mutation flags:
+### Raw HTTP and templates
 
-- `--payload <path|->` for file/stdin payloads, and also inline JSON/YAML object text or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
+```bash
+declarest resource request get /corporations/acme
+declarest resource request post /corporations --payload '{"id":"acme"}'
+declarest resource template /corporations/acme --payload resource.json
+```
+
+Useful flags for mutation and payload-driven workflows:
+
+- `--payload <path|->` for file/stdin payloads and inline JSON/YAML or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
 - `--format <json|yaml>` for payload decoding
 - `--recursive` for collection recursion on supported commands
 - `--refresh-repository` (apply/create/update)
@@ -121,7 +129,7 @@ declarest config edit dev
 declarest config edit dev --editor "vi"
 declarest config print-template
 declarest config validate --payload contexts.yaml
-declarest config add --file contexts.yaml --set-current
+declarest config add --payload contexts.yaml --set-current
 declarest config current
 declarest config show
 declarest config resolve
@@ -138,7 +146,9 @@ declarest config resolve --set resource-server.http.base-url=https://staging-api
 
 ```bash
 declarest repo status
+declarest repo tree
 declarest repo clean
+declarest repo commit --message "manual repository changes"
 declarest repo history
 declarest repo history --oneline --max-count 10 --author alice --grep fix --path customers
 declarest repo init
@@ -151,7 +161,8 @@ declarest repo check
 Notes:
 
 - `repo push` is only valid for `git` repository contexts.
-- `repo history` is only supported for `git` repositories; filesystem repositories return a not-supported message.
+- `repo commit` and `repo history` are only supported for `git` repositories.
+- `repo tree` prints local directory layout only (directories, deterministic order).
 - `repo clean` discards local uncommitted changes (tracked and untracked) for `git` repositories and is a no-op for `filesystem` repositories.
 - Git-backed repo operations auto-initialize the local `.git` repository on first use when the repository base dir exists but Git metadata is missing.
 - `repo reset` is destructive; review local changes before running it.
@@ -184,6 +195,7 @@ These commands are useful when debugging auth or connectivity independently from
 
 - Prefer `-o json` or `-o yaml` for automation.
 - `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
+- `repo tree`, `secret get`, `resource-server get`, `resource-server check`, and completion/config-template commands are text-only outputs.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.

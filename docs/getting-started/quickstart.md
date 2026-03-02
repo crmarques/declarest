@@ -15,7 +15,7 @@ If you prefer file-based setup:
 ```bash
 declarest config print-template > /tmp/contexts.yaml
 # edit /tmp/contexts.yaml
-declarest config add --file /tmp/contexts.yaml --set-current
+declarest config add --payload /tmp/contexts.yaml --set-current
 ```
 
 Check the active configuration:

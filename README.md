@@ -8,43 +8,27 @@
   Declarative resource sync between Git and REST APIs
 </p>
 
-DeclaREST lets you manage REST API resources as versioned files in a Git repository — bringing GitOps workflows to any system that offer tradicional HTTP API.
+DeclaREST turns REST API resources into versioned desired-state files you can review in Git and reconcile through a CLI.
 
-Instead of relying on scripts, *ad-hoc* `curl` commands, or manual UI clicks, you define the desired state in `json` or `yaml`, review changes via Git, and use the CLI to sync those files to the API (and back) in a repeatable, auditable way.
+## Project objective (10 seconds)
 
-## Why this project exists
+- Use stable logical paths (`/corporations/acme`) instead of raw endpoint shapes.
+- Keep desired state in `resource.json|yaml` files inside a repository.
+- Reconcile safely in both directions: `save` from API, `diff`, then `apply` back.
 
-Many teams want GitOps-style workflows for systems that are only exposed through REST APIs.
-That usually turns into:
+## How it works
 
-- one-off scripts
-- manual UI changes
-- hard-to-review diffs
-- drift between environments
-- secrets accidentally copied into repos
+![DeclaREST architecture](docs/assets/architecture.png)
 
-DeclaREST solves that by giving you:
+1. A **context** defines repository, resource-server, auth, and optional metadata/secret providers.
+2. **Metadata** maps logical paths to real API paths/methods/transforms.
+3. The **CLI** runs deterministic workflows for read, diff, and mutation.
 
-- a equivalent **logical path** model (`/corporations/acme`)
-- a **repository layout** for desired state files
-- **metadata** to map those paths to real API endpoints (even weird ones)
-- **secret placeholders** so plaintext credentials do not need to live in Git
-
-## 30-second mental model
-
-You work with paths like this:
-
-- `/corporations/acme`
-- `/users/user-001`
-
-Then DeclaREST can:
-
-1. read the resource from the remote API and save it locally
-2. let you edit the local file in Git
-3. diff local vs remote
-4. apply local desired state back to the API
+## Fast happy path
 
 ```bash
+declarest config add
+
 declarest resource save /corporations/acme
 # edit repository file
 
@@ -52,76 +36,52 @@ declarest resource diff /corporations/acme
 declarest resource apply /corporations/acme
 ```
 
-## What makes DeclaREST different
+## Current capabilities
 
-### Beginner-friendly happy flow
+- Resource workflows: `get|list|save|diff|explain|apply|create|update|delete|edit|copy`
+- Raw HTTP workflows: `resource request <method>` for targeted debugging or ad-hoc operations
+- Metadata workflows: `get|resolve|render|infer|set|unset` with OpenAPI and bundle-aware defaults
+- Secret safety workflows: detect/fix metadata, store/mask/resolve placeholders, safe-save guards
+- Repository workflows: `status|tree|history|commit|refresh|push|reset|clean|check`
+- Context workflows: template/validate/add/update/resolve with runtime override support
 
-You can start with a single resource and a single context:
+## Install
 
-- create a context
-- save one resource
-- edit the file
-- apply the change
-
-### Handles real-world APIs (including messy ones)
-
-DeclaREST is built for APIs that drift from REST best practices.
-Metadata lets you:
-
-- rename logical paths for better repository organization
-- map logical collections to different backend endpoints
-- override create/update/delete paths per operation
-- reshape payloads with jq transforms
-- filter mixed-type list endpoints into stable logical collections
-
-This is especially useful for APIs where a clean logical hierarchy may not match the raw endpoint structure.
-
-### REST API adapter
-
-Because it acts as a REST API adapter, DeclaREST lets you import, transform, and operate on any endpoint without rewriting existing APIs.
-
-## Quick start
-
-### 1. Install
-
-Download a release binary (recommended) or build from source.
+Use a release binary or build locally:
 
 ```bash
 go build -o bin/declarest ./cmd/declarest
 ./bin/declarest version
 ```
 
-### 2. Create a context
+## Quickstart
 
 ```bash
-declarest config create
-```
+declarest config add
 
-Or generate and edit a template:
-
-```bash
-declarest config print-template > /tmp/contexts.yaml
-declarest config add --payload /tmp/contexts.yaml --set-current
-```
-
-### 3. Save, diff, apply
-
-```bash
 declarest resource save /corporations/acme
 declarest resource diff /corporations/acme
 declarest resource apply /corporations/acme
 ```
 
-## Documentation
+If you prefer file-based context setup:
 
-### Start here (simple)
+```bash
+declarest config print-template > /tmp/contexts.yaml
+# edit /tmp/contexts.yaml
+declarest config add --payload /tmp/contexts.yaml --set-current
+```
+
+## Documentation map
+
+Start here:
 
 - `docs/index.md`
 - `docs/getting-started/installation.md`
 - `docs/getting-started/quickstart.md`
 - `docs/concepts/overview.md`
 
-### Go deeper (advanced metadata and custom APIs)
+Advanced modeling:
 
 - `docs/concepts/metadata.md`
 - `docs/concepts/metadata-overrides.md`
@@ -129,23 +89,11 @@ declarest resource apply /corporations/acme
 - `docs/workflows/advanced-metadata-configuration.md`
 - `docs/workflows/custom-api-modeling.md`
 
-### Reference
+Reference:
 
 - `docs/reference/configuration.md`
 - `docs/reference/cli.md`
 
-## Example use cases
-
-- manage system configuration (through its admin REST API) as versioned files
-- standardize API-managed configuration across environments
-- review and promote changes through Git workflows
-- keep secrets in a secret store while preserving declarative resource definitions
-
 ## Contributing
 
-See `docs/contributing.md` for development, test, docs, and release workflow notes.
-
-## Status
-
-The repository includes a growing CLI, metadata engine, and E2E harness with real API component fixtures to validate advanced behaviors.
-If you have a difficult API shape, DeclaREST is designed to model it rather than forcing your repository to mirror the API's quirks.
+See `docs/contributing.md` for development, testing, docs, and release workflows.
