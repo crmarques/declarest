@@ -122,11 +122,11 @@ Execution:
 Expected outputs:
 1. Command fails with `ValidationError`.
 
-### Example 6: Repo Status Contract
-Goal: ensure `repo status` is non-mutating and output-stable.
+### Example 6: Repository Status Contract
+Goal: ensure `repository status` is non-mutating and output-stable.
 
 Inputs:
-1. `declarest repo status` with `--output auto|json|yaml`.
+1. `declarest repository status` with `--output auto|json|yaml`.
 
 Execution:
 1. CLI resolves `repository.RepositorySync` from startup context.
@@ -418,8 +418,8 @@ Inputs:
 3. Optional filters `--max-count`, `--author`, `--grep`, `--since`, `--until`, `--path`, `--oneline`.
 
 Execution:
-1. Run `declarest --context dev-fs repo history`.
-2. Run `declarest --context dev-git repo history --oneline --max-count 5 --author alice --grep fix --path customers`.
+1. Run `declarest --context dev-fs repository history`.
+2. Run `declarest --context dev-git repository history --oneline --max-count 5 --author alice --grep fix --path customers`.
 
 Expected outputs:
 1. Step 1 prints a stable not-supported message for filesystem repositories and exits successfully.

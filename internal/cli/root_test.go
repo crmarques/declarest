@@ -46,12 +46,12 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"metadata",
 		"metadata resolve",
 		"metadata render",
-		"repo",
-		"repo clean",
-		"repo commit",
-		"repo status",
-		"repo tree",
-		"repo history",
+		"repository",
+		"repository clean",
+		"repository commit",
+		"repository status",
+		"repository tree",
+		"repository history",
 		"secret",
 		"secret resolve",
 		"completion",
@@ -80,6 +80,7 @@ func TestLegacyCommandNamesRemoved(t *testing.T) {
 		"config load-resolved-config",
 		"metadata resolve-for-path",
 		"metadata render-operation-spec",
+		"repository sync-status",
 		"repo sync-status",
 		"secret mask-payload",
 		"generic",
@@ -295,7 +296,7 @@ func TestOutputPolicyValidation(t *testing.T) {
 
 	t.Run("repo_tree_rejects_structured_output", func(t *testing.T) {
 		t.Parallel()
-		_, err := executeForTest(testDeps(), "", "--output", "json", "repo", "tree")
+		_, err := executeForTest(testDeps(), "", "--output", "json", "repository", "tree")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -2653,15 +2654,15 @@ func TestResourceDeleteRequiresConfirmDelete(t *testing.T) {
 func TestRepoPushHelpShowsForcePushFlag(t *testing.T) {
 	t.Parallel()
 
-	output, err := executeForTest(testDeps(), "", "repo", "push", "--help")
+	output, err := executeForTest(testDeps(), "", "repository", "push", "--help")
 	if err != nil {
-		t.Fatalf("expected repo push help output, got error: %v", err)
+		t.Fatalf("expected repository push help output, got error: %v", err)
 	}
 	if !strings.Contains(output, "--force-push") {
-		t.Fatalf("expected --force-push in repo push help output, got %q", output)
+		t.Fatalf("expected --force-push in repository push help output, got %q", output)
 	}
 	if strings.Contains(output, "--force ") {
-		t.Fatalf("expected legacy --force alias to be hidden from repo push help output, got %q", output)
+		t.Fatalf("expected legacy --force alias to be hidden from repository push help output, got %q", output)
 	}
 }
 
@@ -4111,43 +4112,43 @@ func TestRepoStatusOutput(t *testing.T) {
 	t.Run("filesystem_context_text_output", func(t *testing.T) {
 		t.Parallel()
 
-		textOutput, err := executeForTest(testDeps(), "", "repo", "status")
+		textOutput, err := executeForTest(testDeps(), "", "repository", "status")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(textOutput, "type=filesystem sync=not_applicable") {
-			t.Fatalf("expected filesystem text repo status output, got %q", textOutput)
+			t.Fatalf("expected filesystem text repository status output, got %q", textOutput)
 		}
 	})
 
 	t.Run("git_context_text_output", func(t *testing.T) {
 		t.Parallel()
 
-		textOutput, err := executeForTest(testDeps(), "", "--context", "git", "repo", "status")
+		textOutput, err := executeForTest(testDeps(), "", "--context", "git", "repository", "status")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(textOutput, "type=git state=no_remote") {
-			t.Fatalf("expected git text repo status output, got %q", textOutput)
+			t.Fatalf("expected git text repository status output, got %q", textOutput)
 		}
 	})
 
 	t.Run("git_context_without_remote_text_output", func(t *testing.T) {
 		t.Parallel()
 
-		textOutput, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repo", "status")
+		textOutput, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repository", "status")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(textOutput, "type=git state=no_remote remote=not_configured") {
-			t.Fatalf("expected git no-remote text repo status output, got %q", textOutput)
+			t.Fatalf("expected git no-remote text repository status output, got %q", textOutput)
 		}
 	})
 
 	t.Run("json_output_remains_structured", func(t *testing.T) {
 		t.Parallel()
 
-		jsonOutput, err := executeForTest(testDeps(), "", "-o", "json", "repo", "status")
+		jsonOutput, err := executeForTest(testDeps(), "", "-o", "json", "repository", "status")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4175,7 +4176,7 @@ func TestRepoStatusOutput(t *testing.T) {
 		deps.ResourceStore = repoService
 		deps.RepositorySync = repoService
 
-		textOutput, err := executeForTest(deps, "", "--context", "git", "repo", "status", "--verbose")
+		textOutput, err := executeForTest(deps, "", "--context", "git", "repository", "status", "--verbose")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4197,7 +4198,7 @@ func TestRepoCommitCommand(t *testing.T) {
 	t.Run("filesystem_context_fails_fast", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "repo", "commit", "--message", "manual changes")
+		_, err := executeForTest(testDeps(), "", "repository", "commit", "--message", "manual changes")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "filesystem repositories") {
 			t.Fatalf("expected filesystem-specific validation error, got %v", err)
@@ -4212,7 +4213,7 @@ func TestRepoCommitCommand(t *testing.T) {
 		deps.ResourceStore = repoService
 		deps.RepositorySync = repoService
 
-		output, err := executeForTest(deps, "", "--context", "git", "repo", "commit", "--message", "manual changes")
+		output, err := executeForTest(deps, "", "--context", "git", "repository", "commit", "--message", "manual changes")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4220,14 +4221,14 @@ func TestRepoCommitCommand(t *testing.T) {
 			t.Fatalf("expected one manual commit call, got %#v", repoService.commitCalls)
 		}
 		if output != "" {
-			t.Fatalf("expected no text payload output for repo commit, got %q", output)
+			t.Fatalf("expected no text payload output for repository commit, got %q", output)
 		}
 	})
 
 	t.Run("missing_message_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "--context", "git", "repo", "commit")
+		_, err := executeForTest(testDeps(), "", "--context", "git", "repository", "commit")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--message") {
 			t.Fatalf("expected message validation error, got %v", err)
@@ -4243,12 +4244,12 @@ func TestRepoCommitCommand(t *testing.T) {
 		deps.ResourceStore = repoService
 		deps.RepositorySync = repoService
 
-		output, err := executeForTest(deps, "", "--context", "git", "repo", "commit", "-m", "manual changes")
+		output, err := executeForTest(deps, "", "--context", "git", "repository", "commit", "-m", "manual changes")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if output != "" {
-			t.Fatalf("expected no text payload output for repo commit no-op, got %q", output)
+			t.Fatalf("expected no text payload output for repository commit no-op, got %q", output)
 		}
 	})
 }
@@ -4259,7 +4260,7 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 	t.Run("filesystem_context_fails_fast", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "repo", "push")
+		_, err := executeForTest(testDeps(), "", "repository", "push")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), "filesystem repositories") {
 			t.Fatalf("expected filesystem-specific validation error, got %v", err)
@@ -4273,7 +4274,7 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 		deps := testDeps()
 		deps.RepositorySync = repoService
 
-		if _, err := executeForTest(deps, "", "--context", "git", "repo", "push"); err != nil {
+		if _, err := executeForTest(deps, "", "--context", "git", "repository", "push"); err != nil {
 			t.Fatalf("unexpected push error: %v", err)
 		}
 		if repoService.pushCalls != 1 {
@@ -4284,7 +4285,7 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 	t.Run("git_context_without_remote_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repo", "push")
+		_, err := executeForTest(testDeps(), "", "--context", "git-no-remote", "repository", "push")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), "repository.git.remote") {
 			t.Fatalf("expected git remote validation error, got %v", err)
@@ -4299,7 +4300,7 @@ func TestRepoCleanCallsRepositorySync(t *testing.T) {
 	deps := testDeps()
 	deps.RepositorySync = repoService
 
-	if _, err := executeForTest(deps, "", "repo", "clean"); err != nil {
+	if _, err := executeForTest(deps, "", "repository", "clean"); err != nil {
 		t.Fatalf("unexpected clean error: %v", err)
 	}
 	if repoService.cleanCalls != 1 {
@@ -4332,7 +4333,7 @@ func TestRepoTreeCommand(t *testing.T) {
 	deps.RepositorySync = repoService
 	deps.ResourceStore = repoService
 
-	output, err := executeForTest(deps, "", "repo", "tree")
+	output, err := executeForTest(deps, "", "repository", "tree")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -4354,7 +4355,7 @@ func TestRepoTreeCommand(t *testing.T) {
 		"",
 	}, "\n")
 	if output != want {
-		t.Fatalf("unexpected repo tree output:\n%s", output)
+		t.Fatalf("unexpected repository tree output:\n%s", output)
 	}
 	if repoService.treeCalls != 1 {
 		t.Fatalf("expected tree to be called once, got %d", repoService.treeCalls)
@@ -4367,7 +4368,7 @@ func TestRepoHistoryCommand(t *testing.T) {
 	t.Run("filesystem_context_reports_not_supported_message", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "repo", "history")
+		output, err := executeForTest(testDeps(), "", "repository", "history")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -4398,7 +4399,7 @@ func TestRepoHistoryCommand(t *testing.T) {
 			deps,
 			"",
 			"--context", "git",
-			"repo", "history",
+			"repository", "history",
 			"--oneline",
 			"--max-count", "5",
 			"--author", "alice",
@@ -5395,7 +5396,7 @@ func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 	}{
 		{name: "config", args: []string{"config"}, expectedSnippet: "Manage contexts"},
 		{name: "metadata", args: []string{"metadata"}, expectedSnippet: "Manage metadata"},
-		{name: "repo", args: []string{"repo"}, expectedSnippet: "Manage local repository state"},
+		{name: "repository", args: []string{"repository"}, expectedSnippet: "Manage local repository state"},
 		{name: "resource", args: []string{"resource"}, expectedSnippet: "Manage resources"},
 		{name: "secret", args: []string{"secret"}, expectedSnippet: "Manage secrets"},
 		{name: "completion", args: []string{"completion"}, expectedSnippet: "Generate shell completion scripts"},

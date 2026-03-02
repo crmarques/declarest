@@ -32,7 +32,7 @@ func RequiresContextBootstrapPath(commandPath string) bool {
 		return true
 	case strings.HasPrefix(normalized, "declarest metadata "):
 		return true
-	case strings.HasPrefix(normalized, "declarest repo "):
+	case strings.HasPrefix(normalized, "declarest repository "):
 		return true
 	case strings.HasPrefix(normalized, "declarest secret "):
 		return true
@@ -52,7 +52,7 @@ func EmitsExecutionStatusPath(path string) bool {
 		"declarest resource delete",
 		"declarest resource edit",
 		"declarest resource copy",
-		"declarest repo commit":
+		"declarest repository commit":
 		return true
 	default:
 		return false
@@ -65,7 +65,7 @@ func OutputPolicyForPath(path string) OutputPolicy {
 		return OutputPolicyYAMLDefaultTextOrYAML
 	case "declarest config print-template",
 		"declarest secret get",
-		"declarest repo tree",
+		"declarest repository tree",
 		"declarest managed-server check",
 		"declarest managed-server get base-url",
 		"declarest managed-server get token-url",

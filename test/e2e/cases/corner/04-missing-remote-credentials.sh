@@ -12,12 +12,12 @@ case_run() {
   sed -i '/access-key:/,/token:/d' "${temp_context}"
 
   set +e
-  output=$(DECLAREST_CONTEXTS_FILE="${temp_context}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repo push 2>&1)
+  output=$(DECLAREST_CONTEXTS_FILE="${temp_context}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repository push 2>&1)
   status=$?
   set -e
 
   if ((status == 0)); then
-    printf 'expected repo push to fail with missing remote credentials\n' >&2
+    printf 'expected repository push to fail with missing remote credentials\n' >&2
     return 1
   fi
 

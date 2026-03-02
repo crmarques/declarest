@@ -70,9 +70,9 @@ Policy contracts:
 2. Set collection metadata for `/customers` writes `/customers/_/metadata.json`.
 3. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
 4. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
-5. `repo history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
-6. `repo history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
-7. `repo status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
-8. `repo clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
-9. `repo clean` on a filesystem repository succeeds without mutating repository files.
-10. `repo tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
+5. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
+6. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
+7. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
+8. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
+9. `repository clean` on a filesystem repository succeeds without mutating repository files.
+10. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.

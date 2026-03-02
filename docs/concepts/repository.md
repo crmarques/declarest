@@ -43,27 +43,27 @@ This is useful when you want:
 ## Repository command workflows
 
 ```bash
-declarest repo status
-declarest repo clean
-declarest repo init
-declarest repo refresh
-declarest repo push
-declarest repo reset
+declarest repository status
+declarest repository clean
+declarest repository init
+declarest repository refresh
+declarest repository push
+declarest repository reset
 ```
 
 Notes:
 
-- `repo push` is only valid for `git` repositories.
-- `repo clean` discards local uncommitted git worktree changes and is a no-op on `filesystem` repositories.
-- `repo reset` is destructive to local uncommitted changes.
-- `repo status` is the fastest way to confirm local/remote sync state before automation.
+- `repository push` is only valid for `git` repositories.
+- `repository clean` discards local uncommitted git worktree changes and is a no-op on `filesystem` repositories.
+- `repository reset` is destructive to local uncommitted changes.
+- `repository status` is the fastest way to confirm local/remote sync state before automation.
 
 ## Recommended GitOps loop
 
-1. `declarest repo refresh`
+1. `declarest repository refresh`
 2. `declarest resource diff <path>`
 3. `declarest resource apply <path>`
 4. Review local files in Git
-5. `declarest repo push`
+5. `declarest repository push`
 
 See [Repository Operations workflow](../workflows/repository.md) for examples.

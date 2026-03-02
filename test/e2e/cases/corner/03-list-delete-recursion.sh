@@ -11,7 +11,7 @@ case_run() {
   case_write_json "${payload_direct}" '{"id": "direct-item"}'
   case_write_json "${payload_nested}" '{"id": "nested-item"}'
 
-  case_run_declarest repo init
+  case_run_declarest repository init
   case_expect_success
 
   case_run_declarest resource save /customers-recursion/acme -f "${payload_direct}" -i json

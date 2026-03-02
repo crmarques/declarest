@@ -9,16 +9,16 @@ case_run() {
 
   case_write_json "${payload_file}" '{"id": "git-main", "name": "Git Main"}'
 
-  case_run_declarest repo init
+  case_run_declarest repository init
   case_expect_success
 
   case_run_declarest resource save /git-main/check -f "${payload_file}" -i json
   case_expect_success
 
-  case_run_declarest repo push
+  case_run_declarest repository push
   case_expect_success
 
-  case_run_declarest repo status -o json
+  case_run_declarest repository status -o json
   case_expect_success
   case_expect_output_contains '"state"'
 }

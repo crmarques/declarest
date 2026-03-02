@@ -36,7 +36,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 
 ## Data Contracts
 Command groups:
-1. Basic Commands: `config`, `metadata`, `repo`, `resource`, `managed-server`, `secret`.
+1. Basic Commands: `config`, `metadata`, `repository`, `resource`, `managed-server`, `secret`.
 2. Other Commands: `completion`, `version`.
 Global flags:
 1. `--context`, `-c`.
@@ -55,7 +55,7 @@ Input flags:
 5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation (legacy hidden alias `--force` MAY remain during migrations).
 6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation (legacy hidden alias `--override` MAY remain during migrations).
 7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation (legacy hidden alias `--force` MAY remain during migrations).
-8. `repo push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent (legacy hidden alias `--force` MAY remain during migrations).
+8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent (legacy hidden alias `--force` MAY remain during migrations).
 
 Path flags:
 1. Path-aware commands MUST accept `--path`, `-p`.
@@ -94,11 +94,11 @@ Selected command names:
 8. `config resolve`.
 8. `metadata resolve`.
 9. `metadata render`.
-10. `repo status`.
-11. `repo clean`.
-12. `repo commit`.
-13. `repo history`.
-14. `repo tree`.
+10. `repository status`.
+11. `repository clean`.
+12. `repository commit`.
+13. `repository history`.
+14. `repository tree`.
 15. `resource request`.
 14. `secret mask`.
 15. `secret resolve`.
@@ -217,31 +217,31 @@ Interactive config commands:
 75. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
 76. Interactive `config add` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth vs custom-headers) by collecting only the selected option's fields.
 77. `config print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
-78. `repo push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
-79. `repo clean` MUST discard uncommitted tracked and untracked changes for git repositories and MUST succeed as a no-op for filesystem repositories.
-80. `repo commit` MUST accept `--message`, `-m`, fail with `ValidationError` when the active repository type is `filesystem`, and create at most one local git commit from current worktree changes.
-81. `repo commit` on a clean git worktree MUST succeed as a no-op and report that no commit was created.
-82. `repo status --verbose` (global `--verbose`) MUST include deterministic local worktree change details for git repositories.
+78. `repository push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
+79. `repository clean` MUST discard uncommitted tracked and untracked changes for git repositories and MUST succeed as a no-op for filesystem repositories.
+80. `repository commit` MUST accept `--message`, `-m`, fail with `ValidationError` when the active repository type is `filesystem`, and create at most one local git commit from current worktree changes.
+81. `repository commit` on a clean git worktree MUST succeed as a no-op and report that no commit was created.
+82. `repository status --verbose` (global `--verbose`) MUST include deterministic local worktree change details for git repositories.
 79. Context-catalog mutations (`config add|edit|update|validate`) MUST fail validation when `managed-server` is omitted.
 80. Interactive `config add` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
-81. `repo history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
-82. `repo tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
+81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
+82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
 83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive.
 84. `resource delete` when repository deletion is selected (`--source repository|both` or legacy `--repository|--both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
-87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repo status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
+87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
 90. `managed-server get base-url` MUST print the active context `managed-server.http.base-url` and fail with `ValidationError` when `managed-server.http` is not configured.
 91. `managed-server get token-url` MUST print the active context `managed-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
 92. `managed-server get access-token` MUST fetch and print the OAuth2 access token from `managed-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
 93. `managed-server check` MUST probe managed-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
-94. Commands with plain-text-only output (`secret get`, `repo tree`, `managed-server get *`, `managed-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
+94. Commands with plain-text-only output (`secret get`, `repository tree`, `managed-server get *`, `managed-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
 95. `config show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
-96. `repo status --verbose` MAY include structured `worktree` entries when `--output json|yaml` is selected.
-97. `repo commit` MUST support `--output text|json|yaml`; `json|yaml` output MUST expose a stable `committed` success indicator, and text-mode success SHOULD use the standard CLI execution-status footer.
+96. `repository status --verbose` MAY include structured `worktree` entries when `--output json|yaml` is selected.
+97. `repository commit` MUST support `--output text|json|yaml`; `json|yaml` output MUST expose a stable `committed` success indicator, and text-mode success SHOULD use the standard CLI execution-status footer.
 
 ## Output Contract
 1. Success output MAY be human-readable by default.
@@ -249,10 +249,10 @@ Interactive config commands:
 3. Error output MUST include category and actionable next step where possible.
 4. Diff output MUST present deterministic ordering.
 5. When `--output` is `auto` (default), resource-oriented output MUST follow the active context `repository.resource-format` (`json` or `yaml`) except for `resource list`, which MUST default to text rendering.
-6. `repo status` with `--output auto` MUST render deterministic text summary by default.
-7. `repo status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
-8. `repo commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
-9. `repo tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
+6. `repository status` with `--output auto` MUST render deterministic text summary by default.
+7. `repository status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
+8. `repository commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
+9. `repository tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
 9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
 7. `config show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
@@ -268,7 +268,7 @@ Interactive config commands:
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
 20. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
-21. `repo status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
+21. `repository status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 22. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.
 23. `managed-server get base-url|token-url|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
 24. `managed-server check` text output MUST print a concise probe result line and MAY include one additional line with the probe error detail when connectivity is confirmed through a warning-category response.
@@ -300,7 +300,7 @@ Interactive config commands:
 23. `resource diff` targets a collection path with no local resources.
 24. `config add` receives both positional context name and `--context` with different values.
 25. `config print-template` receives positional arguments.
-26. `repo push` is invoked for a `filesystem` repository context.
+26. `repository push` is invoked for a `filesystem` repository context.
 27. Context-catalog mutation input omits required `managed-server`.
 28. `secret get --key <key>` is invoked without `--path`.
 29. `secret get <path>:` uses an empty key segment.
@@ -331,8 +331,8 @@ Interactive config commands:
 20. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
 21. `config add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
 22. `config print-template` works without a configured current context and still renders the full template.
-23. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
-24. `repo clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
+23. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
+24. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
 24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
@@ -381,12 +381,12 @@ Interactive config commands:
 33. `declarest metadata render /customers/acme get` renders metadata operation spec.
 34. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
 35. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
-36. `declarest repo push --force-push` executes force push with explicit safety acknowledgment.
-37. `declarest repo status` reports local/remote sync status without mutating repository state.
-38. `declarest repo status --verbose` prints sync summary plus git-style local worktree details (for example modified or untracked files) in git contexts.
-39. `declarest repo commit -m "manual changes"` commits manual local repository changes in git contexts and reports whether a commit was created.
-40. `declarest repo clean` discards uncommitted tracked and untracked changes in a git repository worktree.
-41. `declarest repo tree` prints a tree-style directory view of the local repository and preserves spaces in directory names (for example `AD PRD`) while omitting files.
+36. `declarest repository push --force-push` executes force push with explicit safety acknowledgment.
+37. `declarest repository status` reports local/remote sync status without mutating repository state.
+38. `declarest repository status --verbose` prints sync summary plus git-style local worktree details (for example modified or untracked files) in git contexts.
+39. `declarest repository commit -m "manual changes"` commits manual local repository changes in git contexts and reports whether a commit was created.
+40. `declarest repository clean` discards uncommitted tracked and untracked changes in a git repository worktree.
+41. `declarest repository tree` prints a tree-style directory view of the local repository and preserves spaces in directory names (for example `AD PRD`) while omitting files.
 42. `declarest config init prod` initializes repository state and preloads metadata dependencies (including bundle-backed metadata cache) for context `prod`.
 43. Corner case: `declarest config check prod --context dev` fails with `ValidationError` because positional and flag context selections conflict.
 44. `declarest completion bash` generates Bash completion output.
@@ -430,8 +430,8 @@ Interactive config commands:
 76. `declarest config add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
 77. `declarest config add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
 78. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
-79. `declarest repo push` fails with `ValidationError` when the active context repository type is `filesystem`.
-80. `declarest repo status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
+79. `declarest repository push` fails with `ValidationError` when the active context repository type is `filesystem`.
+80. `declarest repository status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
 81. `declarest config add` interactive flow always prompts `managed-server` fields and allows `resource-format` to remain unset via remote-default selection.
 82. `declarest config edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
 83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
@@ -439,8 +439,8 @@ Interactive config commands:
 85. `declarest resource copy /admin/realms/test /admin/realms/test2 --overrides realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
 85. `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123` saves a resource and appends `ticket-123` to the default git commit message when the active repository is git.
 86. `declarest resource delete /customers/acme --confirm-delete --repository --message-override 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
-87. `declarest repo history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
-88. `declarest repo history` in a filesystem context prints a deterministic not-supported message.
+87. `declarest repository history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
+88. `declarest repository history` in a filesystem context prints a deterministic not-supported message.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.
 83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasFromAttribute` (for example `account`) instead of ID-only segments.
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.

@@ -211,7 +211,7 @@ e2e_manual_init_repo_if_needed() {
   fi
 
   e2e_info 'manual profile initializing git repository'
-  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repo init >/dev/null || {
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repository init >/dev/null || {
     e2e_die 'manual profile git repository initialization failed'
     return 1
   }

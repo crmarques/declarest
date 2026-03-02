@@ -16,9 +16,10 @@ import (
 
 func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
-		Use:   "repo",
-		Short: "Manage local repository state",
-		Args:  cobra.NoArgs,
+		Use:     "repository",
+		Aliases: []string{"repo"},
+		Short:   "Manage local repository state",
+		Args:    cobra.NoArgs,
 	}
 
 	command.AddCommand(
@@ -51,10 +52,10 @@ func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 		Use:   "history",
 		Short: "Show local repository history (git repositories only)",
 		Example: strings.Join([]string{
-			"  declarest repo history",
-			"  declarest --context git repo history --max-count 10 --author alice",
-			"  declarest repo history --grep fix --since 2026-01-01",
-			"  declarest repo history --path customers --path admin/realms",
+			"  declarest repository history",
+			"  declarest --context git repository history --max-count 10 --author alice",
+			"  declarest repository history --grep fix --since 2026-01-01",
+			"  declarest repository history --path customers --path admin/realms",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
@@ -63,10 +64,10 @@ func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.WriteText(command, shared.OutputText, "repo history is not supported for filesystem repositories")
+				return shared.WriteText(command, shared.OutputText, "repository history is not supported for filesystem repositories")
 			}
 			if repositoryContext.Kind != repositoryContextGit {
-				return shared.ValidationError("repo history is only available for git repositories", nil)
+				return shared.ValidationError("repository history is only available for git repositories", nil)
 			}
 
 			historyReader, err := requireRepositoryHistoryReader(deps)
@@ -202,8 +203,8 @@ func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 		Use:   "push",
 		Short: "Push repository changes",
 		Example: strings.Join([]string{
-			"  declarest repo push",
-			"  declarest repo push --force-push",
+			"  declarest repository push",
+			"  declarest repository push --force-push",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
@@ -216,10 +217,10 @@ func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.ValidationError("repo push is not available for filesystem repositories", nil)
+				return shared.ValidationError("repository push is not available for filesystem repositories", nil)
 			}
 			if repositoryContext.Kind == repositoryContextGit && !repositoryContext.HasRemote {
-				return shared.ValidationError("repo push requires repository.git.remote configuration", nil)
+				return shared.ValidationError("repository push requires repository.git.remote configuration", nil)
 			}
 			return repositoryService.Push(command.Context(), repository.PushPolicy{Force: forcePush})
 		},
@@ -238,8 +239,8 @@ func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 		Use:   "commit",
 		Short: "Commit local repository changes (git repositories only)",
 		Example: strings.Join([]string{
-			`  declarest --context git repo commit --message "manual repository changes"`,
-			`  declarest repo commit -m "update local resources"`,
+			`  declarest --context git repository commit --message "manual repository changes"`,
+			`  declarest repository commit -m "update local resources"`,
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
@@ -248,10 +249,10 @@ func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.ValidationError("repo commit is not available for filesystem repositories", nil)
+				return shared.ValidationError("repository commit is not available for filesystem repositories", nil)
 			}
 			if repositoryContext.Kind != repositoryContextGit {
-				return shared.ValidationError("repo commit is only available for git repositories", nil)
+				return shared.ValidationError("repository commit is only available for git repositories", nil)
 			}
 
 			trimmedMessage := strings.TrimSpace(message)
@@ -285,9 +286,9 @@ func newStatusCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 		Use:   "status",
 		Short: "Show repository sync status",
 		Example: strings.Join([]string{
-			"  declarest repo status",
-			"  declarest repo status --verbose",
-			"  declarest repo status --output json",
+			"  declarest repository status",
+			"  declarest repository status --verbose",
+			"  declarest repository status --output json",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
@@ -378,7 +379,7 @@ func requireRepositoryStatusDetailsReader(deps shared.CommandDependencies) (repo
 	if candidate, ok := deps.ResourceStore.(repository.RepositoryStatusDetailsReader); ok {
 		return candidate, nil
 	}
-	return nil, shared.ValidationError("verbose repo status is not supported by the active repository provider", nil)
+	return nil, shared.ValidationError("verbose repository status is not supported by the active repository provider", nil)
 }
 
 func requireRepositoryCommitter(deps shared.CommandDependencies) (repository.RepositoryCommitter, error) {

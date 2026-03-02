@@ -291,8 +291,8 @@ func TestRequiresContextBootstrap(t *testing.T) {
 			want:        true,
 		},
 		{
-			name:        "repo commands require context",
-			commandPath: "declarest repo status",
+			name:        "repository commands require context",
+			commandPath: "declarest repository status",
 			want:        true,
 		},
 		{

@@ -71,7 +71,7 @@ gitea_admin_exec() {
     return 0
   fi
 
-  e2e_compose_cmd -f "${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}" -p "${E2E_COMPONENT_PROJECT_NAME}" exec -T --user git gitea "$@"
+  e2e_compose_cmd -f "${E2E_COMPONENT_COMPOSE_FILE:-${E2E_COMPONENT_DIR}/compose/compose.yaml}" -p "${E2E_COMPONENT_PROJECT_NAME}" exec -T --user git gitea /usr/local/bin/gitea "$@"
 }
 
 wait_for "${GITEA_BASE_URL}/user/login"

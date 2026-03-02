@@ -5,10 +5,10 @@ CASE_SCOPE='main'
 CASE_REQUIRES=''
 
 case_run() {
-  case_run_declarest repo init
+  case_run_declarest repository init
   case_expect_success
 
-  case_run_declarest repo status -o json
+  case_run_declarest repository status -o json
   case_expect_success
   case_expect_output_contains '"state"'
 }

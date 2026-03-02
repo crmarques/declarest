@@ -16,7 +16,7 @@ declarest <group> <command> --help
 
 - `config` - manage contexts and validation
 - `metadata` - inspect, infer, render, set, unset, and resolve metadata
-- `repo` - manage local repository state
+- `repository` - manage local repository state
 - `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, plus raw requests and template rendering
 - `managed-server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
@@ -142,30 +142,30 @@ Useful for environment-specific testing without editing stored config:
 declarest config resolve --set managed-server.http.base-url=https://staging-api.example.com
 ```
 
-## `repo` command family (git/filesystem backends)
+## `repository` command family (git/filesystem backends)
 
 ```bash
-declarest repo status
-declarest repo tree
-declarest repo clean
-declarest repo commit --message "manual repository changes"
-declarest repo history
-declarest repo history --oneline --max-count 10 --author alice --grep fix --path customers
-declarest repo init
-declarest repo refresh
-declarest repo push
-declarest repo reset
-declarest repo check
+declarest repository status
+declarest repository tree
+declarest repository clean
+declarest repository commit --message "manual repository changes"
+declarest repository history
+declarest repository history --oneline --max-count 10 --author alice --grep fix --path customers
+declarest repository init
+declarest repository refresh
+declarest repository push
+declarest repository reset
+declarest repository check
 ```
 
 Notes:
 
-- `repo push` is only valid for `git` repository contexts.
-- `repo commit` and `repo history` are only supported for `git` repositories.
-- `repo tree` prints local directory layout only (directories, deterministic order).
-- `repo clean` discards local uncommitted changes (tracked and untracked) for `git` repositories and is a no-op for `filesystem` repositories.
-- Git-backed repo operations auto-initialize the local `.git` repository on first use when the repository base dir exists but Git metadata is missing.
-- `repo reset` is destructive; review local changes before running it.
+- `repository push` is only valid for `git` repository contexts.
+- `repository commit` and `repository history` are only supported for `git` repositories.
+- `repository tree` prints local directory layout only (directories, deterministic order).
+- `repository clean` discards local uncommitted changes (tracked and untracked) for `git` repositories and is a no-op for `filesystem` repositories.
+- Git-backed repository operations auto-initialize the local `.git` repository on first use when the repository base dir exists but Git metadata is missing.
+- `repository reset` is destructive; review local changes before running it.
 
 ## `secret` command family
 
@@ -195,7 +195,7 @@ These commands are useful when debugging auth or connectivity independently from
 
 - Prefer `-o json` or `-o yaml` for automation.
 - `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
-- `repo tree`, `secret get`, `managed-server get`, `managed-server check`, and completion/config-template commands are text-only outputs.
+- `repository tree`, `secret get`, `managed-server get`, `managed-server check`, and completion/config-template commands are text-only outputs.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.
