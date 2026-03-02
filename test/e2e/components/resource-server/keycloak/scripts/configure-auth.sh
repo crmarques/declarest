@@ -37,7 +37,7 @@ keycloak_get_client_uuid() {
     | jq -r '.[0].id // empty'
 }
 
-wait_for 'keycloak' "${KEYCLOAK_BASE_URL}/realms/master"
+wait_for 'keycloak' "${KEYCLOAK_BASE_URL}/realms/master/account"
 
 admin_token=$(
   curl -fsS \

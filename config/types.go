@@ -78,6 +78,7 @@ type ResourceServer struct {
 
 type HTTPServer struct {
 	BaseURL        string            `yaml:"base-url"`
+	HealthCheck    string            `yaml:"health-check,omitempty"`
 	OpenAPI        string            `yaml:"openapi,omitempty"`
 	DefaultHeaders map[string]string `yaml:"default-headers,omitempty"`
 	Auth           *HTTPAuth         `yaml:"auth,omitempty"`

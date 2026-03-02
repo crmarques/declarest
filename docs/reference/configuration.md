@@ -172,6 +172,7 @@ repository:
 managed-server:
   http:
     base-url: https://api.example.com
+    health-check: /health
     openapi: /path/to/openapi.yaml
     default-headers:
       X-Env: prod
@@ -189,6 +190,15 @@ managed-server:
 ```
 
 Define any of the `managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited proxy for that component.
+
+### Health check (`managed-server.http.health-check`)
+
+Optional probe target used by `declarest resource-server check`.
+
+- when omitted, `resource-server check` probes `/` relative to `managed-server.http.base-url`
+- relative values (for example `/health`) are resolved against `managed-server.http.base-url`
+- absolute values (for example `https://api.example.com/health`) are allowed when scheme/host match the base URL
+- query parameters are not supported in this field
 
 ### `managed-server.http.auth` (required one-of)
 
@@ -465,6 +475,7 @@ The canonical override keys are:
 - `repository.git.local.base-dir`
 - `repository.filesystem.base-dir`
 - `managed-server.http.base-url`
+- `managed-server.http.health-check`
 - `metadata.base-dir`
 - `metadata.bundle`
 
@@ -494,6 +505,7 @@ declarest config list
 - both `repository.git` and `repository.filesystem` set
 - missing `managed-server`
 - missing/ambiguous `managed-server.http.auth` method
+- invalid `managed-server.http.health-check` (query parameters or unsupported URL form)
 - unknown YAML key (strict decoding)
 - `current-ctx` points to a non-existent context name
 - invalid secret-store one-of configuration

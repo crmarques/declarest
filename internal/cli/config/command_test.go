@@ -91,6 +91,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"git:",
 		"filesystem:",
 		"managed-server:",
+		"health-check:",
 		"auth:",
 		"proxy:",
 		"http-url:",

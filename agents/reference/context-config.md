@@ -36,6 +36,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 19. When any proxy block (`managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
 20. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
 21. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
+22. `managed-server.http.health-check` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -67,6 +68,12 @@ Resource server proxy contract:
 3. `managed-server.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
 4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secret-store.vault.proxy`, and `metadata.proxy`, and they inherit the shared proxy unless an empty `proxy:` block explicitly disables it for their component.
 
+Resource server health-check contract:
+1. `managed-server.http.health-check` MAY be omitted; when omitted, probe commands target the managed-server base path (`/` relative to `managed-server.http.base-url`).
+2. Relative `managed-server.http.health-check` values MUST be normalized as managed-server request paths.
+3. Absolute `managed-server.http.health-check` values MUST use `http` or `https` and MUST share scheme/host with `managed-server.http.base-url`.
+4. `managed-server.http.health-check` MUST NOT include query parameters.
+
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
 2. For `secret-store.file`, exactly one of `key`, `key-file`, `passphrase`, `passphrase-file` MUST be set.
@@ -83,13 +90,14 @@ Runtime override keys:
 2. `repository.git.local.base-dir`.
 3. `repository.filesystem.base-dir`.
 4. `managed-server.http.base-url`.
-5. `managed-server.http.proxy.http-url`.
-6. `managed-server.http.proxy.https-url`.
-7. `managed-server.http.proxy.no-proxy`.
-8. `managed-server.http.proxy.auth.username`.
-9. `managed-server.http.proxy.auth.password`.
-10. `metadata.base-dir`.
-11. `metadata.bundle`.
+5. `managed-server.http.health-check`.
+6. `managed-server.http.proxy.http-url`.
+7. `managed-server.http.proxy.https-url`.
+8. `managed-server.http.proxy.no-proxy`.
+9. `managed-server.http.proxy.auth.username`.
+10. `managed-server.http.proxy.auth.password`.
+11. `metadata.base-dir`.
+12. `metadata.bundle`.
 
 ## Canonical YAML Template
 ```yaml
@@ -136,6 +144,7 @@ contexts:
     managed-server:
       http:
         base-url: https://example.com/api
+        # health-check: /health
         # openapi: /path/to/openapi-or-swagger.yaml
         # default-headers:
         #   X-Example: value
@@ -245,6 +254,7 @@ current-ctx: xxx
 11. Runtime override key not in the supported override-key list.
 12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
 13. `managed-server.http.proxy` is configured without at least one proxy URL, or with incomplete auth credentials.
+14. `managed-server.http.health-check` is configured with query parameters or an invalid URL form.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
@@ -257,6 +267,7 @@ current-ctx: xxx
 8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `managed-server.http.openapi` is unset.
 9. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
 10. `managed-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
+11. `managed-server.http.health-check` can be absolute and still resolves to a managed-server-relative probe when scheme/host match `managed-server.http.base-url`.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.

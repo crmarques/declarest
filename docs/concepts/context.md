@@ -9,7 +9,7 @@ A context is the combination of repository backend, resource server, secrets, an
 - Context names MUST be unique, non-empty, and appear exactly once in the `contexts` list. Duplicate names fail validation before any CLI operation mutates remote state.
 - Each context object MUST include `repository` plus `managed-server`. Optional blocks are `secret-store`, `metadata`, and `preferences`.
 - The repository block MUST set exactly one of `git` or `filesystem` and may optionally declare `resource-format` (`json` or `yaml`).
-- The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`).
+- The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`). `managed-server.http.health-check` is optional and defines the probe target used by `resource-server check`.
 - `managed-server.http.proxy` MAY be configured. If present, it MUST define at least one of `http-url` or `https-url`. When proxy auth is set, both `username` and `password` are REQUIRED.
 - The optional `secret-store` block MUST define exactly one of `file` or `vault`. File-based stores require one of `key`, `key-file`, `passphrase`, or `passphrase-file`.
 - The optional `metadata` block MAY point to `base-dir` or `bundle`; at most one source is allowed. When both are unset, merge logic defaults to the repository base dir and `metadata.base-dir` SHOULD be omitted in persisted YAML when it matches that default.
@@ -19,7 +19,7 @@ A context is the combination of repository backend, resource server, secrets, an
 ## Selecting the active context
 
 - `current-ctx` points to the context that `ResolveContext` returns when no explicit name is provided. If the catalog is missing or empty, the resolver treats it as an empty catalog and `current-ctx` is effectively unset. `ResolveContext` therefore guarantees that `current-ctx` must reference an existing entry when any contexts exist.
-- Runtime inputs follow this precedence: CLI flags (for example `--context`) override `DECLAREST_CONTEXTS_FILE` overrides, which override persisted catalog values, which override library defaults. That means an override key like `managed-server.http.base-url` can be supplied at runtime and will shadow the catalog value without mutating the file.
+- Runtime inputs follow this precedence: CLI flags (for example `--context`) override `DECLAREST_CONTEXTS_FILE` overrides, which override persisted catalog values, which override library defaults. That means an override key like `managed-server.http.base-url` or `managed-server.http.health-check` can be supplied at runtime and will shadow the catalog value without mutating the file.
 - Context selection happens through the `config` subcommands. `declarest config current` prints the active context name; `declarest config use <name>` updates `current-ctx` after validating the target context; `declarest config resolve [<name>]` runs the same `ResolveContext` logic with optional override flags.
 - `SetCurrent`, `GetCurrent`, and `ResolveContext` operations expose the same invariants the CLI enforces: missing contexts return `NotFoundError`, duplicate names are rejected, and override keys outside the supported list (for example `unknown.key`) raise `ValidationError` before CLI execution proceeds.
 
@@ -43,6 +43,7 @@ Each workflow enforces strict decoding and failure-fast validation before procee
 - `current-ctx` missing or referencing a non-existent context causes `ResolveContext` to return `NotFoundError` and forces CLI commands to fail fast before making remote calls.
 - Duplicate context names or unknown override keys (`ContextSelection.Overrides`) cause `ValidationError` during `config edit`, `config add`, or override resolution.
 - Omitting `managed-server` or its `http` block results in validation failure before the bootstrap session is created.
+- Invalid `managed-server.http.health-check` values (unsupported URL form or query parameters) fail validation before command execution.
 - Proxy configurations without `http-url` or `https-url`, or with incomplete auth, are rejected during validation.
 - `metadata.bundle` without an accompanying OpenAPI hint can still provide metadata defaults, but you MUST keep `managed-server.http.openapi` empty so the bundle hints are used instead of conflicting files.
 

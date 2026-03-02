@@ -205,13 +205,25 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 		Repository: repositoryConfig,
 		ResourceServer: &config.ResourceServer{
 			HTTP: &config.HTTPServer{
-				BaseURL: "https://api.example.invalid",
-				Auth:    resourceServerAuth,
+				BaseURL:     "https://api.example.invalid",
+				HealthCheck: resolveManagedServerHealthCheckForTestContext(name),
+				Auth:        resourceServerAuth,
 			},
 		},
 	}, nil
 }
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
+
+func resolveManagedServerHealthCheckForTestContext(name string) string {
+	switch name {
+	case "health-check-relative":
+		return "/healthz"
+	case "health-check-absolute":
+		return "https://api.example.invalid/realms/master/account"
+	default:
+		return ""
+	}
+}
 
 type testOrchestrator struct {
 	metadataService  *testMetadata
@@ -691,6 +703,8 @@ type testRepository struct {
 type testManagedServerClient struct {
 	accessToken string
 	tokenErr    error
+	requestErr  error
+	requests    []requestCall
 }
 
 func (s *testManagedServerClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
@@ -717,7 +731,15 @@ func (s *testManagedServerClient) Exists(context.Context, resource.Resource, met
 	return true, nil
 }
 
-func (s *testManagedServerClient) Request(context.Context, string, string, resource.Value) (resource.Value, error) {
+func (s *testManagedServerClient) Request(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+	s.requests = append(s.requests, requestCall{
+		method: method,
+		path:   endpointPath,
+		body:   body,
+	})
+	if s.requestErr != nil {
+		return nil, s.requestErr
+	}
 	return map[string]any{"ok": true}, nil
 }
 

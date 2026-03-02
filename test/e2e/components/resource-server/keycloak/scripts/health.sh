@@ -35,4 +35,4 @@ wait_for() {
   return 1
 }
 
-wait_for 'keycloak' "${KEYCLOAK_BASE_URL}/realms/master"
+wait_for 'keycloak' "${KEYCLOAK_BASE_URL}/realms/master/account"

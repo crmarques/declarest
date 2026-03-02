@@ -84,6 +84,7 @@ Optional fields:
 1. `SecretStore` typed secret store configuration object.
 2. `Preferences` settings map.
 3. `Metadata` typed metadata configuration object.
+4. `managed-server.http.health-check` optional probe target used by `resource-server check`.
 
 YAML key contract:
 1. keys MUST use kebab-case.

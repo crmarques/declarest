@@ -53,6 +53,7 @@ contexts:
     managed-server:
       http:
         base-url: https://example.com/api
+        # health-check: /health
         # openapi: /path/to/openapi-or-swagger.yaml
         # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
 

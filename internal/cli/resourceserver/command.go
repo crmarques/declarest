@@ -2,16 +2,16 @@ package resourceserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/shared"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
-	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/spf13/cobra"
 )
 
@@ -146,43 +146,103 @@ func newCheckCommand(deps shared.CommandDependencies) *cobra.Command {
 		Short: "Check resource-server connectivity",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			remoteReader, err := shared.RequireRemoteReader(deps)
+			httpConfig, err := resolveHTTPServerConfig(command.Context(), deps)
 			if err != nil {
 				return err
 			}
 
-			_, err = remoteReader.ListRemote(command.Context(), "/", orchestratordomain.ListPolicy{Recursive: false})
-			if err == nil {
-				_, writeErr := io.WriteString(command.OutOrStdout(), "resource-server check: OK (probe succeeded)\n")
-				return writeErr
-			}
-
-			switch typedCategory(err) {
-			case faults.NotFoundError, faults.ValidationError, faults.ConflictError:
-				_, writeErr := io.WriteString(
-					command.OutOrStdout(),
-					fmt.Sprintf("resource-server check: OK (probe reached server and returned %s)\n", typedCategory(err)),
-				)
-				if writeErr != nil {
-					return writeErr
-				}
-				_, writeErr = io.WriteString(command.OutOrStdout(), strings.TrimSpace(err.Error())+"\n")
-				return writeErr
-			default:
+			managedServerClient, err := shared.RequireManagedServerClient(deps)
+			if err != nil {
 				return err
 			}
+
+			probePath, err := resolveHealthCheckProbePath(httpConfig)
+			if err != nil {
+				return err
+			}
+
+			if _, err := managedServerClient.Request(command.Context(), http.MethodGet, probePath, nil); err != nil {
+				return err
+			}
+
+			_, writeErr := io.WriteString(
+				command.OutOrStdout(),
+				fmt.Sprintf("resource-server check: OK (probe succeeded: GET %s)\n", renderHealthCheckTarget(httpConfig)),
+			)
+			return writeErr
 		},
 	}
 }
 
-func typedCategory(err error) faults.ErrorCategory {
-	if err == nil {
-		return ""
+func renderHealthCheckTarget(httpConfig configdomain.HTTPServer) string {
+	healthCheck := strings.TrimSpace(httpConfig.HealthCheck)
+	if healthCheck != "" {
+		return healthCheck
+	}
+	return "/"
+}
+
+func resolveHealthCheckProbePath(httpConfig configdomain.HTTPServer) (string, error) {
+	healthCheck := strings.TrimSpace(httpConfig.HealthCheck)
+	if healthCheck == "" {
+		return "/", nil
 	}
 
-	var typedErr *faults.TypedError
-	if !errors.As(err, &typedErr) {
-		return ""
+	parsed, err := url.Parse(healthCheck)
+	if err != nil {
+		return "", shared.ValidationError("managed-server.http.health-check is invalid", err)
 	}
-	return typedErr.Category
+	if strings.TrimSpace(parsed.RawQuery) != "" {
+		return "", shared.ValidationError("managed-server.http.health-check must not include query parameters", nil)
+	}
+
+	// Relative paths are resolved against managed-server.http.base-url by the managed-server provider.
+	if parsed.Scheme == "" && parsed.Host == "" {
+		parsedPath := strings.TrimSpace(parsed.Path)
+		if parsedPath == "" {
+			return "", shared.ValidationError("managed-server.http.health-check is invalid", nil)
+		}
+		if !strings.HasPrefix(parsedPath, "/") {
+			parsedPath = "/" + parsedPath
+		}
+		return parsedPath, nil
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", shared.ValidationError("managed-server.http.health-check URL must use http or https", nil)
+	}
+	if parsed.Host == "" {
+		return "", shared.ValidationError("managed-server.http.health-check URL host is required", nil)
+	}
+
+	baseURL, err := url.Parse(strings.TrimSpace(httpConfig.BaseURL))
+	if err != nil {
+		return "", shared.ValidationError("managed-server.http.base-url is invalid", err)
+	}
+	if !strings.EqualFold(parsed.Scheme, baseURL.Scheme) || !strings.EqualFold(parsed.Host, baseURL.Host) {
+		return "", shared.ValidationError(
+			"managed-server.http.health-check URL must share scheme and host with managed-server.http.base-url",
+			nil,
+		)
+	}
+
+	basePath := baseURL.EscapedPath()
+	if strings.TrimSpace(basePath) == "" {
+		basePath = "/"
+	}
+	targetPath := parsed.EscapedPath()
+	if strings.TrimSpace(targetPath) == "" {
+		targetPath = "/"
+	}
+
+	relativePath, err := filepath.Rel(basePath, targetPath)
+	if err != nil {
+		return "", shared.ValidationError("managed-server.http.health-check URL path is invalid", err)
+	}
+	relativePath = strings.ReplaceAll(relativePath, "\\", "/")
+	if relativePath == "." {
+		return "/", nil
+	}
+
+	return "/" + relativePath, nil
 }

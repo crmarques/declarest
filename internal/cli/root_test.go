@@ -217,7 +217,7 @@ func TestResourceServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		orchestratorService := deps.Orchestrator.(*testOrchestrator)
+		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
 
 		output, err := executeForTest(deps, "", "resource-server", "check")
 		if err != nil {
@@ -226,45 +226,61 @@ func TestResourceServerCheck(t *testing.T) {
 		if !strings.Contains(output, "resource-server check: OK") {
 			t.Fatalf("expected success output, got %q", output)
 		}
-		if !containsListCall(orchestratorService.listRemoteDetail, "/", false) {
-			t.Fatalf("expected root remote probe, got %#v", orchestratorService.listRemoteDetail)
+		if len(managedServerClient.requests) != 1 {
+			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		}
+		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/" {
+			t.Fatalf("expected GET / probe request, got %#v", managedServerClient.requests[0])
 		}
 	})
 
-	t.Run("warn_categories_return_ok", func(t *testing.T) {
+	t.Run("uses_health_check_absolute_url_from_context", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Orchestrator.(*testOrchestrator).listRemoteErr = faults.NewTypedError(
-			faults.NotFoundError,
-			"collection not found",
-			nil,
-		)
+		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "resource-server", "check")
+		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "resource-server", "check")
 		if err != nil {
-			t.Fatalf("expected warning probe to return success, got %v", err)
+			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
-		if !strings.Contains(output, "returned NotFoundError") {
-			t.Fatalf("expected warning category in output, got %q", output)
+		if !strings.Contains(output, "https://api.example.invalid/realms/master/account") {
+			t.Fatalf("expected output to include configured health-check target, got %q", output)
 		}
-		if !strings.Contains(output, "collection not found") {
-			t.Fatalf("expected underlying error detail in output, got %q", output)
+		if len(managedServerClient.requests) != 1 {
+			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		}
+		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/realms/master/account" {
+			t.Fatalf("expected GET /realms/master/account probe request, got %#v", managedServerClient.requests[0])
 		}
 	})
 
-	t.Run("auth_error_fails", func(t *testing.T) {
+	t.Run("uses_health_check_relative_path_from_context", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Orchestrator.(*testOrchestrator).listRemoteErr = faults.NewTypedError(
-			faults.AuthError,
-			"managed server auth failed",
-			nil,
-		)
+		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+
+		_, err := executeForTest(deps, "", "--context", "health-check-relative", "resource-server", "check")
+		if err != nil {
+			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
+		}
+		if len(managedServerClient.requests) != 1 {
+			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		}
+		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/healthz" {
+			t.Fatalf("expected GET /healthz probe request, got %#v", managedServerClient.requests[0])
+		}
+	})
+
+	t.Run("non_success_probe_fails", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		deps.ManagedServerClient.(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
 
 		_, err := executeForTest(deps, "", "resource-server", "check")
-		assertTypedCategory(t, err, faults.AuthError)
+		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 }
 
