@@ -48,9 +48,6 @@ func (m *FileContextService) Create(_ context.Context, cfg config.Context) error
 
 func (m *FileContextService) Update(_ context.Context, cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
-	if err := validateConfig(cfg); err != nil {
-		return err
-	}
 
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
@@ -60,6 +57,11 @@ func (m *FileContextService) Update(_ context.Context, cfg config.Context) error
 	idx := findContextIndex(contextCatalog.Contexts, cfg.Name)
 	if idx < 0 {
 		return notFoundError(fmt.Sprintf("context %q not found", cfg.Name))
+	}
+
+	cfg = preserveProxyOmissions(cfg, normalizeConfig(contextCatalog.Contexts[idx]))
+	if err := validateConfig(cfg); err != nil {
+		return err
 	}
 
 	contextCatalog.Contexts[idx] = cfg

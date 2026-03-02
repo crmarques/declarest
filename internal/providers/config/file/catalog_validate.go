@@ -2,6 +2,7 @@ package file
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -80,6 +81,7 @@ func normalizeConfig(cfg config.Context) config.Context {
 		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
 	}
 	if cfg.ResourceServer != nil && cfg.ResourceServer.HTTP != nil {
+		cfg.ResourceServer.HTTP.HealthCheck = strings.TrimSpace(cfg.ResourceServer.HTTP.HealthCheck)
 		cfg.ResourceServer.HTTP.Proxy = normalizeProxy(cfg.ResourceServer.HTTP.Proxy)
 	}
 	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
@@ -120,6 +122,47 @@ func applyProxyDefaults(cfg config.Context) config.Context {
 		}
 		if proxyhelper.IsExplicitDisable(current) {
 			continue
+		}
+	}
+
+	return cfg
+}
+
+func preserveProxyOmissions(cfg config.Context, baseline config.Context) config.Context {
+	targets := buildProxyTargets(&cfg)
+	baselineTargets := buildProxyTargets(&baseline)
+	if len(targets) == 0 || len(baselineTargets) == 0 {
+		return cfg
+	}
+
+	baselineByName := make(map[string]*config.HTTPProxy, len(baselineTargets))
+	for _, target := range baselineTargets {
+		baselineByName[target.name] = *target.proxy
+	}
+
+	var canonical *config.HTTPProxy
+	for _, target := range targets {
+		current := *target.proxy
+		if current != nil && proxyhelper.HasURLs(current) {
+			canonical = current
+			break
+		}
+	}
+	if canonical == nil {
+		return cfg
+	}
+
+	for _, target := range targets {
+		current := *target.proxy
+		if current == nil || proxyhelper.IsExplicitDisable(current) {
+			continue
+		}
+		existing, ok := baselineByName[target.name]
+		if !ok || existing != nil {
+			continue
+		}
+		if proxyhelper.Equal(current, canonical) {
+			*target.proxy = nil
 		}
 	}
 
@@ -306,12 +349,52 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 	if err := validateResourceServerProxy(resourceServer.HTTP.Proxy); err != nil {
 		return err
 	}
+	if err := validateResourceServerHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func validateResourceServerProxy(proxy *config.HTTPProxy) error {
 	return validateProxy("managed-server.http.proxy", proxy)
+}
+
+func validateResourceServerHealthCheck(value string) error {
+	healthCheck := strings.TrimSpace(value)
+	if healthCheck == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(healthCheck)
+	if err != nil {
+		return faults.NewValidationError("managed-server.http.health-check is invalid", err)
+	}
+	if strings.TrimSpace(parsed.RawQuery) != "" {
+		return faults.NewValidationError("managed-server.http.health-check must not include query parameters", nil)
+	}
+
+	// Relative paths are interpreted against managed-server.http.base-url.
+	if parsed.Scheme == "" && parsed.Host == "" {
+		if strings.TrimSpace(parsed.Path) == "" {
+			return faults.NewValidationError("managed-server.http.health-check is invalid", nil)
+		}
+		return nil
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return faults.NewValidationError("managed-server.http.health-check URL must use http or https", nil)
+	}
+	if parsed.Host == "" {
+		return faults.NewValidationError("managed-server.http.health-check URL host is required", nil)
+	}
+
+	_, err = filepath.Rel("/", parsed.Path)
+	if err != nil {
+		return faults.NewValidationError("managed-server.http.health-check URL path is invalid", err)
+	}
+
+	return nil
 }
 
 func validateSecretStore(secretStore *config.SecretStore) error {
@@ -407,6 +490,11 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override managed-server.http.base-url requires managed-server.http to be configured", nil)
 			}
 			cfg.ResourceServer.HTTP.BaseURL = value
+		case "managed-server.http.health-check":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managed-server.http.health-check requires managed-server.http to be configured", nil)
+			}
+			cfg.ResourceServer.HTTP.HealthCheck = value
 		case "managed-server.http.proxy.http-url":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.http-url requires managed-server.http to be configured", nil)

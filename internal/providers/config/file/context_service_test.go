@@ -189,9 +189,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 				Repository: validFilesystemRepository(),
 			},
 		},
-        {
-            name: "resource_server_proxy_auth_incomplete",
-            cfg: config.Context{
+		{
+			name: "resource_server_proxy_auth_incomplete",
+			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
 				ResourceServer: &config.ResourceServer{
@@ -205,6 +205,22 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 							Auth: &config.ProxyAuth{
 								Username: "user",
 							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resource_server_health_check_query_not_supported",
+			cfg: config.Context{
+				Name:       "dev",
+				Repository: validFilesystemRepository(),
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL:     "https://example.com",
+						HealthCheck: "https://example.com/health?probe=true",
+						Auth: &config.HTTPAuth{
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 					},
 				},
@@ -813,6 +829,30 @@ func TestResolveContextOverrideSupportsResourceServerWhenConfigured(t *testing.T
 	}
 }
 
+func TestResolveContextOverrideSupportsResourceServerHealthCheckWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+		Name:      "fs",
+		Overrides: map[string]string{"managed-server.http.health-check": "https://override.example.com/healthz"},
+	})
+	if err != nil {
+		t.Fatalf("expected managed-server health-check override to succeed, got %v", err)
+	}
+	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil {
+		t.Fatalf("expected managed-server configuration, got %#v", resolved.ResourceServer)
+	}
+	if resolved.ResourceServer.HTTP.HealthCheck != "https://override.example.com/healthz" {
+		t.Fatalf("expected managed-server health-check override, got %q", resolved.ResourceServer.HTTP.HealthCheck)
+	}
+}
+
 func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *testing.T) {
 	t.Parallel()
 
@@ -905,6 +945,62 @@ func TestResolveContextProxyExplicitDisable(t *testing.T) {
 	}
 	if resolved.Metadata.Proxy.Auth != nil {
 		t.Fatalf("expected metadata proxy auth to remain empty when explicitly disabled, got %#v", resolved.Metadata.Proxy.Auth)
+	}
+}
+
+func TestUpdatePreservesProxyOmissionsFromStoredContext(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(proxyPersistenceContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write proxy persistence context catalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "persist"})
+	if err != nil {
+		t.Fatalf("expected resolve to succeed, got %v", err)
+	}
+
+	if resolved.Repository.Git == nil || resolved.Repository.Git.Remote == nil || resolved.Repository.Git.Remote.Proxy == nil {
+		t.Fatalf("expected resolved repository proxy to be inherited, got %#v", resolved.Repository.Git)
+	}
+	if resolved.SecretStore == nil || resolved.SecretStore.Vault == nil || resolved.SecretStore.Vault.Proxy == nil {
+		t.Fatalf("expected resolved vault proxy to be inherited, got %#v", resolved.SecretStore)
+	}
+	if resolved.Metadata.Proxy == nil {
+		t.Fatalf("expected resolved metadata proxy to be inherited, got %#v", resolved.Metadata)
+	}
+
+	if err := contextService.Update(context.Background(), resolved); err != nil {
+		t.Fatalf("expected update with resolved context to succeed, got %v", err)
+	}
+
+	contextCatalog, err := decodeCatalogFile(path)
+	if err != nil {
+		t.Fatalf("failed to decode persisted context catalog: %v", err)
+	}
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
+	}
+	persisted := contextCatalog.Contexts[0]
+	if persisted.ResourceServer == nil || persisted.ResourceServer.HTTP == nil || persisted.ResourceServer.HTTP.Proxy == nil {
+		t.Fatalf("expected managed-server proxy to remain persisted, got %#v", persisted.ResourceServer)
+	}
+	if persisted.Repository.Git == nil || persisted.Repository.Git.Remote == nil {
+		t.Fatalf("expected git repository to remain persisted, got %#v", persisted.Repository.Git)
+	}
+	if persisted.Repository.Git.Remote.Proxy != nil {
+		t.Fatalf("expected repository proxy omission to be preserved, got %#v", persisted.Repository.Git.Remote.Proxy)
+	}
+	if persisted.SecretStore == nil || persisted.SecretStore.Vault == nil {
+		t.Fatalf("expected vault configuration to remain persisted, got %#v", persisted.SecretStore)
+	}
+	if persisted.SecretStore.Vault.Proxy != nil {
+		t.Fatalf("expected vault proxy omission to be preserved, got %#v", persisted.SecretStore.Vault.Proxy)
+	}
+	if persisted.Metadata.Proxy != nil {
+		t.Fatalf("expected metadata proxy omission to be preserved, got %#v", persisted.Metadata.Proxy)
 	}
 }
 
@@ -1238,4 +1334,43 @@ contexts:
       base-dir: /tmp/metadata
       proxy: {}
 current-ctx: disable
+`
+
+const proxyPersistenceContextCatalogYAML = `
+contexts:
+  - name: persist
+    repository:
+      resource-format: json
+      git:
+        local:
+          base-dir: /tmp/repo
+        remote:
+          url: https://example.com/config.git
+          auth:
+            basic-auth:
+              username: git
+              password: secret
+    managed-server:
+      http:
+        base-url: https://api.example.com
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+        proxy:
+          http-url: http://proxy.example.com:3128
+          https-url: https://proxy.example.com:3128
+          no-proxy: localhost,127.0.0.1
+          auth:
+            username: proxy-user
+            password: proxy-pass
+    secret-store:
+      vault:
+        address: https://vault.example.com
+        auth:
+          token: vault-token
+    metadata:
+      base-dir: /tmp/metadata
+current-ctx: persist
 `
