@@ -24,6 +24,7 @@ nav:
     - Quickstart: getting-started/quickstart.md
   - Concepts:
     - Overview: concepts/overview.md
+    - Contexts: concepts/context.md
     - Paths and Selectors: concepts/paths-and-selectors.md
     - Resource Files: concepts/resource.md
     - Repository: concepts/repository.md
