@@ -62,7 +62,7 @@ Useful for checking:
 - whether secret attributes are being redacted as expected
 - whether the path is being treated as a resource vs collection
 
-## 6. Check resource-server auth/connectivity directly
+## 6. Check managed server auth/connectivity directly
 
 ```bash
 declarest resource-server check
@@ -78,7 +78,7 @@ declarest resource-server get access-token
 
 ## 7. Add debug output when needed
 
-Global debug output can help surface repository/resource-server context around failures:
+Global debug output can help surface repository/managed-server context around failures:
 
 ```bash
 declarest -d resource get /corporations/acme

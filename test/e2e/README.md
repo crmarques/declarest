@@ -188,7 +188,7 @@ Keycloak repo-template currently covers:
 
 ## Remote Environment Variables
 
-### Resource Server (`simple-api-server`, remote)
+### Managed Server (`simple-api-server`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
@@ -199,7 +199,7 @@ Keycloak repo-template currently covers:
 - when mTLS is enabled: `DECLAREST_E2E_SIMPLE_API_TLS_CA_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_KEY_FILE`
   - local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `test/e2e/.runs/<run-id>/certs/resource-server-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
 
-### Resource Server (`keycloak`, remote)
+### Managed Server (`keycloak`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_KEYCLOAK_TOKEN_URL`
@@ -207,14 +207,14 @@ Keycloak repo-template currently covers:
 - `DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET`
 - optional: `DECLAREST_E2E_KEYCLOAK_SCOPE`, `DECLAREST_E2E_KEYCLOAK_AUDIENCE`
 
-### Resource Server (`vault`, remote)
+### Managed Server (`vault`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
 - optional: `DECLAREST_E2E_RESOURCE_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_KV_VERSION`
 - remote vault currently supports `--resource-server-auth-type custom-header` only (`X-Vault-Token`)
 
-### Resource Server (`rundeck`, remote)
+### Managed Server (`rundeck`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`

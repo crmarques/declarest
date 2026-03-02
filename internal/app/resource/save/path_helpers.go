@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
@@ -107,7 +107,7 @@ func saveListPayloadFromResources(items []resource.Resource) resource.Value {
 }
 
 func isCollectionListShapeError(err error) bool {
-	return gatewaydomain.IsListPayloadShapeError(err)
+	return managedserverdomain.IsListPayloadShapeError(err)
 }
 
 func splitSavePathSegments(logicalPath string) []string {

@@ -18,7 +18,7 @@ declarest <group> <command> --help
 - `metadata` - inspect, infer, render, set, and unset metadata
 - `repo` - manage local repository state
 - `resource` - save/get/list/diff/apply/create/update/delete/edit/copy resources
-- `resource-server` - inspect connectivity and auth-derived values
+- `resource-server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
 ### Utility commands

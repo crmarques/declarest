@@ -8,15 +8,15 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/gateway"
-	"github.com/crmarques/declarest/internal/defaultorch"
-	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
+	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
+	httpmanagedserver "github.com/crmarques/declarest/internal/providers/managedserver/http"
 	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
+	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
@@ -26,7 +26,7 @@ func buildDefaultOrchestrator(
 	ctx context.Context,
 	contextService config.ContextService,
 	selection config.ContextSelection,
-) (*defaultorch.DefaultOrchestrator, error) {
+) (*internalorchestrator.DefaultOrchestrator, error) {
 	if contextService == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
 	}
@@ -66,10 +66,10 @@ func buildDefaultOrchestrator(
 		)
 	}
 
-	var srv gateway.ResourceGateway
+	var srv managedserver.ManagedServerClient
 	if resolvedContext.ResourceServer != nil {
 		if resolvedContext.ResourceServer.HTTP == nil {
-			return nil, faults.NewTypedError(faults.InternalError, "resource server provider is invalid", nil)
+			return nil, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
 		}
 
 		serverConfig := *resolvedContext.ResourceServer.HTTP
@@ -79,13 +79,13 @@ func buildDefaultOrchestrator(
 		if serverFormat == "" {
 			serverFormat = config.ResourceFormatJSON
 		}
-		serverOptions := []httpgateway.GatewayOption{
-			httpgateway.WithResourceFormat(serverFormat),
+		serverOptions := []httpmanagedserver.ManagedServerClientOption{
+			httpmanagedserver.WithResourceFormat(serverFormat),
 		}
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
-			serverOptions = append(serverOptions, httpgateway.WithMetadataRenderer(renderer))
+			serverOptions = append(serverOptions, httpmanagedserver.WithMetadataRenderer(renderer))
 		}
-		serverManager, err := httpgateway.NewHTTPResourceGateway(
+		serverManager, err := httpmanagedserver.NewHTTPManagedServerClient(
 			serverConfig,
 			serverOptions...,
 		)
@@ -115,7 +115,7 @@ func buildDefaultOrchestrator(
 		}
 	}
 
-	return defaultorch.NewDefaultOrchestrator(
+	return internalorchestrator.NewDefaultOrchestrator(
 		repo,
 		metadataService,
 		srv,

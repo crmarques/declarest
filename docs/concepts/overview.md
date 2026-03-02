@@ -23,7 +23,7 @@ Think in this order:
 A named configuration that combines:
 
 - repository backend (`filesystem` or `git`)
-- resource-server config (`base-url`, auth, optional OpenAPI)
+- managed server config (`resource-server`: `base-url`, auth, optional OpenAPI)
 - optional secret store
 - optional metadata base-dir override
 

@@ -6,7 +6,7 @@ This page shows practical save/diff/apply flows, from one resource to larger col
 
 - `declarest` installed
 - an active context (`declarest config current`)
-- a reachable resource server (`declarest resource-server check`)
+- a reachable managed server (`declarest resource-server check`)
 
 ## 1. Confirm context and connectivity
 

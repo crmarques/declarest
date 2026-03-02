@@ -28,7 +28,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 1. `cmd/declarest`: executable entrypoint only.
 2. `internal/cli`: command parsing, validation, and output formatting.
 3. `internal/app`: application use-case services composed from domain interfaces.
-4. Public domain packages: `config`, `resource`, `metadata`, `repository`, `server`, `secrets`, `orchestrator`.
+4. Public domain packages: `config`, `resource`, `metadata`, `repository`, `managedserver`, `secrets`, `orchestrator`.
 5. Public shared primitives: `faults`.
 6. Private provider implementations: `internal/providers/*`.
 7. Bootstrap/wiring: `internal/bootstrap`.
@@ -37,7 +37,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.
 2. `internal/cli/*` -> `internal/cli/shared`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
 3. `internal/app/*` -> domain contracts (`orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`).
-4. `orchestrator` -> `repository`, `metadata`, `server`, `secrets`, `resource`.
+4. `orchestrator` -> `repository`, `metadata`, `managedserver`, `secrets`, `resource`.
 5. `internal/bootstrap` -> provider implementations in `internal/providers/*`.
 6. `internal/providers/*` -> owner package interfaces/types.
 
@@ -45,7 +45,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 1. `internal/cli` importing provider implementation packages.
 2. `internal/app` importing `internal/cli` packages.
 3. Domain packages (`resource`, `metadata`, `orchestrator`, `core`) importing `cmd` or `internal/cli`.
-4. `repository` directly invoking `server` provider code.
+4. `repository` directly invoking `managedserver` provider code.
 5. Any non-module consumer importing `internal/*`.
 
 ## Component Interaction
@@ -70,7 +70,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 1. Circular dependencies between domain contracts and providers.
 2. CLI bypasses orchestrator and calls providers directly.
 3. App workflows leak into provider packages or CLI argument parsing code.
-4. Orchestration logic leaks into repository/server packages.
+4. Orchestration logic leaks into repository/managedserver packages.
 
 ## Edge Cases
 1. Context without remote server where local-only operations remain valid.
@@ -78,5 +78,5 @@ Define component boundaries, dependency direction, and orchestration ownership f
 3. Metadata inference available with manual operation execution.
 
 ## Examples
-1. Correct: orchestrator depends on `server.ResourceServer` interface and receives HTTP provider through `core`.
-2. Incorrect: CLI imports `internal/providers/server/http` and issues requests directly.
+1. Correct: orchestrator depends on `managedserver.ManagedServerClient` and receives HTTP provider through `core`.
+2. Incorrect: CLI imports `internal/providers/managedserver/http` and issues requests directly.

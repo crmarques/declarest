@@ -9,8 +9,8 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/cli/shared"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/spf13/cobra"
 )
@@ -94,15 +94,15 @@ func newGetTokenURLCommand(deps shared.CommandDependencies) *cobra.Command {
 func newGetAccessTokenCommand(deps shared.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "access-token",
-		Short: "Fetch OAuth2 access token from the resource server",
+		Short: "Fetch OAuth2 access token from the managed server",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			resourceServer, err := shared.RequireResourceGateway(deps)
+			managedServerClient, err := shared.RequireManagedServerClient(deps)
 			if err != nil {
 				return err
 			}
 
-			provider, ok := resourceServer.(gatewaydomain.AccessTokenProvider)
+			provider, ok := managedServerClient.(managedserverdomain.AccessTokenProvider)
 			if !ok {
 				return shared.ValidationError(
 					"resource-server get access-token requires resource-server.http.auth.oauth2 configuration",

@@ -23,7 +23,7 @@ type requestMethodConfig struct {
 func newRequestCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "request",
-		Short: "Send raw HTTP requests to the resource server",
+		Short: "Send raw HTTP requests to the managed server",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()

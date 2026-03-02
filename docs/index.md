@@ -10,7 +10,7 @@ Instead of relying on scripts, *ad-hoc* `curl` commands, or manual UI clicks, yo
 
 ## Happy path (beginner flow)
 
-1. Create a context (repository + resource-server auth).
+1. Create a context (repository + managed server auth).
 2. Save one resource from the API into your repository.
 3. Edit the local file.
 4. Diff and apply.

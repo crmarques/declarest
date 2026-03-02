@@ -2,7 +2,7 @@ package shared
 
 import (
 	"github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/gateway"
+	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -10,13 +10,13 @@ import (
 )
 
 type CommandDependencies struct {
-	Orchestrator    orchestrator.Orchestrator
-	Contexts        config.ContextService
-	ResourceStore   repository.ResourceStore
-	RepositorySync  repository.RepositorySync
-	Metadata        metadata.MetadataService
-	Secrets         secrets.SecretProvider
-	ResourceGateway gateway.ResourceGateway
+	Orchestrator        orchestrator.Orchestrator
+	Contexts            config.ContextService
+	ResourceStore       repository.ResourceStore
+	RepositorySync      repository.RepositorySync
+	Metadata            metadata.MetadataService
+	Secrets             secrets.SecretProvider
+	ManagedServerClient managedserver.ManagedServerClient
 }
 
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
@@ -77,9 +77,9 @@ func RequireSecretProvider(deps CommandDependencies) (secrets.SecretProvider, er
 	return deps.Secrets, nil
 }
 
-func RequireResourceGateway(deps CommandDependencies) (gateway.ResourceGateway, error) {
-	if deps.ResourceGateway == nil {
-		return nil, ValidationError("resource gateway is not configured", nil)
+func RequireManagedServerClient(deps CommandDependencies) (managedserver.ManagedServerClient, error) {
+	if deps.ManagedServerClient == nil {
+		return nil, ValidationError("managed server client is not configured", nil)
 	}
-	return deps.ResourceGateway, nil
+	return deps.ManagedServerClient, nil
 }

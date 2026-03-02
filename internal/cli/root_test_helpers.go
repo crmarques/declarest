@@ -121,16 +121,16 @@ func testDeps() Dependencies {
 func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
-	resourceServer := &testResourceServer{accessToken: "test-access-token"}
+	managedServerClient := &testManagedServerClient{accessToken: "test-access-token"}
 
 	return Dependencies{
-		Orchestrator:    orchestrator,
-		Contexts:        &testContextService{},
-		ResourceStore:   repositoryService,
-		RepositorySync:  repositoryService,
-		Metadata:        metadataService,
-		Secrets:         secretProvider,
-		ResourceGateway: resourceServer,
+		Orchestrator:        orchestrator,
+		Contexts:            &testContextService{},
+		ResourceStore:       repositoryService,
+		RepositorySync:      repositoryService,
+		Metadata:            metadataService,
+		Secrets:             secretProvider,
+		ManagedServerClient: managedServerClient,
 	}
 }
 
@@ -688,42 +688,44 @@ type testRepository struct {
 	worktreeErr     error
 }
 
-type testResourceServer struct {
+type testManagedServerClient struct {
 	accessToken string
 	tokenErr    error
 }
 
-func (s *testResourceServer) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (s *testManagedServerClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (s *testManagedServerClient) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (s *testManagedServerClient) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
+func (s *testManagedServerClient) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
 	return nil
 }
 
-func (s *testResourceServer) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (s *testManagedServerClient) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	return nil, nil
 }
 
-func (s *testResourceServer) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
+func (s *testManagedServerClient) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
 	return true, nil
 }
 
-func (s *testResourceServer) Request(context.Context, string, string, resource.Value) (resource.Value, error) {
+func (s *testManagedServerClient) Request(context.Context, string, string, resource.Value) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) GetOpenAPISpec(context.Context) (resource.Value, error) { return nil, nil }
+func (s *testManagedServerClient) GetOpenAPISpec(context.Context) (resource.Value, error) {
+	return nil, nil
+}
 
-func (s *testResourceServer) GetAccessToken(context.Context) (string, error) {
+func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error) {
 	if s.tokenErr != nil {
 		return "", s.tokenErr
 	}

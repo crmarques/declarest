@@ -791,7 +791,7 @@ func checkResourceServer(command *cobra.Command, deps shared.CommandDependencies
 	_, err = orchestratorService.ListRemote(command.Context(), "/", orchestratordomain.ListPolicy{Recursive: false})
 	if err == nil {
 		result.Status = configCheckOK
-		result.Details = "resource server probe succeeded"
+		result.Details = "managed server probe succeeded"
 		return result
 	}
 

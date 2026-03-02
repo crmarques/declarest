@@ -28,7 +28,7 @@ scripts/configure-auth.sh
 scripts/context.sh
 ```
 
-Components MAY also ship `openapi.yaml`. When provided, the runner copies it into the run directory, exposes the run-scoped path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets each component (for example resource servers) surface it inside their generated context so context-aware commands can infer the API surface.
+Components MAY also ship `openapi.yaml`. When provided, the runner copies it into the run directory, exposes the run-scoped path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets each component (for example managed servers) surface it inside their generated context so context-aware commands can infer the API surface.
 
 Additional runtime files:
 

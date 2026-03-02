@@ -136,7 +136,7 @@ Interactive config commands:
 7. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
 8. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
 9. `metadata get` MUST return resolved repository metadata overrides merged with default metadata fields by default; `metadata get --overrides-only` MUST return only the resolved/inferred override object without merged defaults.
-10. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the resource server; otherwise it MUST keep the `NotFoundError`.
+10. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
 11. Mutations from stdin MUST validate payload format before side effects.
 12. Option conflicts MUST produce usage errors.
 13. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
@@ -443,5 +443,5 @@ Interactive config commands:
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.
 87. `declarest resource-server get base-url` prints the active context resource-server HTTP base URL.
 88. `declarest resource-server get token-url` prints the active context resource-server OAuth2 token URL.
-89. `declarest resource-server get access-token` prints only the OAuth2 access token for the active context resource server.
+89. `declarest resource-server get access-token` prints only the OAuth2 access token for the active context managed server.
 90. `declarest resource-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.

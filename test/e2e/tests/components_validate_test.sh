@@ -96,7 +96,7 @@ EOF
     printf 'COMPONENT_DEPENDS_ON=""\n'
     printf 'SUPPORTED_SECURITY_FEATURES="oauth2"\n'
     printf 'REQUIRED_SECURITY_FEATURES=""\n'
-    printf 'DESCRIPTION="Demo resource server"\n'
+    printf 'DESCRIPTION="Demo managed server"\n'
   } >"${component_dir}/component.env"
 }
 

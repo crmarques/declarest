@@ -41,13 +41,13 @@ func exitCodeForError(err error) int {
 
 func dependenciesFromSession(s bootstrap.Session) cli.Dependencies {
 	return cli.Dependencies{
-		Orchestrator:    s.Orchestrator,
-		Contexts:        s.Contexts,
-		ResourceStore:   s.Services.RepositoryStore(),
-		RepositorySync:  s.Services.RepositorySync(),
-		Metadata:        s.Services.MetadataService(),
-		Secrets:         s.Services.SecretProvider(),
-		ResourceGateway: s.Services.ResourceGateway(),
+		Orchestrator:        s.Orchestrator,
+		Contexts:            s.Contexts,
+		ResourceStore:       s.Services.RepositoryStore(),
+		RepositorySync:      s.Services.RepositorySync(),
+		Metadata:            s.Services.MetadataService(),
+		Secrets:             s.Services.SecretProvider(),
+		ManagedServerClient: s.Services.ManagedServerClient(),
 	}
 }
 

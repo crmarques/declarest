@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"context"
 
-	"github.com/crmarques/declarest/gateway"
+	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -20,7 +20,7 @@ type ServiceAccessor interface {
 	RepositorySync() repository.RepositorySync
 	MetadataService() metadata.MetadataService
 	SecretProvider() secrets.SecretProvider
-	ResourceGateway() gateway.ResourceGateway
+	ManagedServerClient() managedserver.ManagedServerClient
 }
 
 type LocalReader interface {

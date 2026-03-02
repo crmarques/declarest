@@ -1,4 +1,4 @@
-# Resource Server, HTTP, and OpenAPI
+# Managed Server, HTTP, and OpenAPI
 
 ## Purpose
 Define remote server interaction contracts, request generation rules, and OpenAPI-assisted behavior.
@@ -15,7 +15,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 3. CLI completion internals.
 
 ## Normative Rules
-1. Remote operations MUST be executed through `server.ResourceServer` only.
+1. Remote operations MUST be executed through `managedserver.ManagedServerClient` only.
 2. Request method, path, query, and headers MUST derive from resolved metadata plus explicit overrides.
 3. Auth mode precedence MUST be deterministic and documented.
 4. TLS configuration errors MUST fail fast during initialization.

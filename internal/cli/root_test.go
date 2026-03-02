@@ -12,8 +12,8 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -182,7 +182,7 @@ func TestResourceServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ResourceGateway = &testResourceServer{accessToken: "oauth-access-token"}
+		deps.ManagedServerClient = &testManagedServerClient{accessToken: "oauth-access-token"}
 
 		output, err := executeForTest(deps, "", "resource-server", "get", "access-token")
 		if err != nil {
@@ -197,7 +197,7 @@ func TestResourceServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ResourceGateway = &testResourceServer{
+		deps.ManagedServerClient = &testManagedServerClient{
 			tokenErr: faults.NewTypedError(faults.ValidationError, "resource-server.http.auth.oauth2 is not configured", nil),
 		}
 
@@ -258,7 +258,7 @@ func TestResourceServerCheck(t *testing.T) {
 		deps := testDeps()
 		deps.Orchestrator.(*testOrchestrator).listRemoteErr = faults.NewTypedError(
 			faults.AuthError,
-			"resource server auth failed",
+			"managed server auth failed",
 			nil,
 		)
 
@@ -542,7 +542,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.listRemoteErr = gatewaydomain.NewListPayloadShapeError(
+		orchestrator.listRemoteErr = managedserverdomain.NewListPayloadShapeError(
 			`list response object is ambiguous: expected an "items" array or a single array field, found array fields [enabledEventTypes, eventsListeners]`,
 			nil,
 		)

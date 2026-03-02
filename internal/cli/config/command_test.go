@@ -715,7 +715,7 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 		t.Fatalf("check returned error: %v", err)
 	}
 	if !strings.Contains(output, "[WARN] resource-server") {
-		t.Fatalf("expected warn status for resource server probe, got %q", output)
+		t.Fatalf("expected warn status for managed server probe, got %q", output)
 	}
 	if !strings.Contains(output, "Result: PASS") {
 		t.Fatalf("expected pass result when only warnings are present, got %q", output)
@@ -757,7 +757,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 		ResourceStore:  &testRepositoryService{},
 		RepositorySync: &testRepositoryService{},
 		Metadata:       &testMetadataService{},
-		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "resource server auth failed", nil)},
+		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
 		Secrets:        &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
 	}
 	globalFlags := &shared.GlobalFlags{Output: shared.OutputText}

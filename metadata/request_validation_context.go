@@ -12,7 +12,7 @@ type requestOperationValidationContext struct {
 
 // WithRequestOperationValidation stores operation validation metadata for
 // generic request flows (for example `resource request post|put|patch`) so the
-// resource-server adapter can enforce metadata validation rules.
+// managed-server adapter can enforce metadata validation rules.
 func WithRequestOperationValidation(
 	ctx context.Context,
 	operation Operation,

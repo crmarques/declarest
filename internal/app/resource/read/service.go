@@ -9,9 +9,9 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	metadataRender "github.com/crmarques/declarest/metadata/render"
 	"github.com/crmarques/declarest/orchestrator"
@@ -64,7 +64,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		if err == nil {
 			return result, nil
 		}
-		if !gatewaydomain.IsListPayloadShapeError(err) {
+		if !managedserverdomain.IsListPayloadShapeError(err) {
 			return Result{}, err
 		}
 		debugctx.Printf(

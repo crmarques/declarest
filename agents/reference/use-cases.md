@@ -54,7 +54,7 @@ Inputs:
 Execution:
 1. `orchestrator.Orchestrator` loads resource and resolved metadata.
 2. `secrets.SecretProvider` resolves placeholders.
-3. `server.ResourceServer` executes update.
+3. `managedserver.ManagedServerClient` executes update.
 4. Orchestrator returns normalized remote mutation output without implicit local persistence.
 
 Expected outputs:
@@ -378,7 +378,7 @@ Inputs:
 
 Execution:
 1. The runner copies each selected component's `openapi.yaml` to the run directory before context hooks execute.
-2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for resource servers, `resource-server.http.openapi`) pointing at the run-scoped spec file.
+2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed servers, `resource-server.http.openapi`) pointing at the run-scoped spec file.
 3. `e2e_context_build` aggregates fragments, producing a context YAML that references the copied spec.
 
 Expected outputs:

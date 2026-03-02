@@ -42,7 +42,7 @@ Required fields:
 4. `RepositorySync`: `repository.RepositorySync` instance.
 5. `Metadata`: optional `metadata.MetadataService` instance.
 6. `Secrets`: optional `secrets.SecretProvider` instance.
-7. `ResourceServer`: optional `server.ResourceServer` instance.
+7. `ManagedServerClient`: optional `managedserver.ManagedServerClient` instance.
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
@@ -69,7 +69,7 @@ Represents the default concrete orchestrator assembled by the composition root.
 Required fields:
 1. `Repository`: `repository.ResourceStore` instance.
 2. `Metadata`: `metadata.MetadataService` instance.
-3. `Server`: optional `server.ResourceServer` instance.
+3. `Server`: optional `managedserver.ManagedServerClient` instance.
 4. `Secrets`: optional `secrets.SecretProvider` instance.
 
 ### Type: `config.Context`
@@ -325,7 +325,7 @@ Field semantics:
 Corner case example:
 1. When the entire payload for `/customers/acme` differs (for example remote resource missing), the diff entry MUST use `ResourcePath="/customers/acme"` and `Path=""`.
 
-### Type: `server.ListJQResourceResolver`
+### Type: `managedserver.ListJQResourceResolver`
 Represents logical-path resource resolution callback used by list-operation `jq` `resource("<logical-path>")` calls.
 
 Signature:
@@ -476,10 +476,10 @@ Responsibilities:
 Method families:
 1. `RenderOperationSpecForResource`.
 
-### Interface: `server.ResourceServer`
+### Interface: `managedserver.ManagedServerClient`
 Responsibilities:
 1. Execute remote CRUD/list operations.
-2. Execute request HTTP operations against resource-server endpoints.
+2. Execute request HTTP operations against managed server endpoints.
 3. Resolve OpenAPI hints for operations.
 4. Expose typed transport failures.
 5. Honor list-operation `jq` resolver context when list transforms call `resource("<logical-path>")`.
@@ -490,21 +490,21 @@ Method families:
 3. `GetOpenAPISpec`.
 
 Optional capability:
-1. providers MAY additionally implement `server.AccessTokenProvider` for token inspection workflows.
+1. providers MAY additionally implement `managedserver.AccessTokenProvider` for token inspection workflows.
 
-### Interface: `server.AccessTokenProvider`
+### Interface: `managedserver.AccessTokenProvider`
 Responsibilities:
-1. Fetch a resource-server access token using configured auth settings.
+1. Fetch a managed server access token using configured auth settings.
 
 Method families:
 1. `GetAccessToken`.
 
 Corner case example:
-1. Callers MUST treat missing `server.AccessTokenProvider` capability as a validation/configuration error, not a transport error.
+1. Callers MUST treat missing `managedserver.AccessTokenProvider` capability as a validation/configuration error, not a transport error.
 
 Context helper contract:
-1. `server.WithListJQResourceResolver` MUST attach one resolver per request context and preserve deterministic cache/cycle-guard state for nested resolution calls.
-2. `server.ResolveListJQResource` MUST return `(value, resolved=true, err=nil)` on success, `(nil, resolved=false, err=nil)` when no resolver is attached, and `(nil, resolved=true, err!=nil)` when resolution fails.
+1. `managedserver.WithListJQResourceResolver` MUST attach one resolver per request context and preserve deterministic cache/cycle-guard state for nested resolution calls.
+2. `managedserver.ResolveListJQResource` MUST return `(value, resolved=true, err=nil)` on success, `(nil, resolved=false, err=nil)` when no resolver is attached, and `(nil, resolved=true, err!=nil)` when resolution fails.
 
 ### Interface: `secrets.SecretProvider`
 Responsibilities:
@@ -547,7 +547,7 @@ Method families:
 
 ### Interface: `orchestrator.Orchestrator`
 Responsibilities:
-1. Orchestrate repository-store, metadata, server, and secret-provider workflows.
+1. Orchestrate repository-store, metadata, managed-server, and secret-provider workflows.
 2. Apply desired state to remote systems.
 3. Refresh local state from remote systems.
 4. Compute explain/diff/list outputs.
@@ -581,7 +581,7 @@ Error categories:
 1. `ValidationError`: invalid input, shape, path, or config.
 2. `NotFoundError`: missing local or remote resource.
 3. `ConflictError`: divergence, non-unique identity, or write collision.
-4. `AuthError`: authn/authz failure for repository, server, or secret store.
+4. `AuthError`: authn/authz failure for repository, managed server, or secret store.
 5. `TransportError`: network, TLS, timeout, and protocol issues.
 6. `InternalError`: unexpected invariant violations.
 

@@ -10,7 +10,7 @@ Use `declarest config print-template` to generate the full commented template, a
 - Override catalog path with `DECLAREST_CONTEXTS_FILE`
 - YAML keys use `kebab-case`
 - Unknown keys fail validation (strict decode)
-- `resource-server` is required in every context
+- `resource-server` (managed server settings) is required in every context
 
 ## Top-level catalog shape
 
@@ -40,7 +40,7 @@ Each context may include:
 
 - `name` (required)
 - `repository` (required)
-- `resource-server` (required)
+- `resource-server` (required managed server settings)
 - `secret-store` (optional)
 - `metadata` (optional)
 - `preferences` (optional free-form map)
@@ -145,7 +145,7 @@ tls:
   insecure-skip-verify: false
 ```
 
-## Resource-server configuration (`resource-server`)
+## Managed server configuration (`resource-server`)
 
 `resource-server.http` is required.
 

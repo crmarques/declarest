@@ -19,7 +19,7 @@ PRIMARY GOALS
 
 4) Efficiency and duplication reduction
 - Identify duplicated parsing, validation, metadata rendering, git IO, REST client creation, or output formatting across commands.
-- Propose centralization via cohesive managers/facades (e.g., Metadata, Config/Context, Secrets, ResourceRepo/Git, ResourceServer/API client, Output/Formatter).
+- Propose centralization via cohesive managers/facades (e.g., Metadata, Config/Context, Secrets, ResourceRepo/Git, ManagedServer/API client, Output/Formatter).
 
 REVIEW METHOD (do this in order)
 

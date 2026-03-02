@@ -8,7 +8,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/defaultorch"
+	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
 )
 
@@ -38,7 +38,7 @@ func TestNewSession(t *testing.T) {
 	if _, ok := session.Contexts.(*configfile.FileContextService); !ok {
 		t.Fatalf("expected FileContextService, got %T", session.Contexts)
 	}
-	if _, ok := session.Orchestrator.(*defaultorch.DefaultOrchestrator); !ok {
+	if _, ok := session.Orchestrator.(*internalorchestrator.DefaultOrchestrator); !ok {
 		t.Fatalf("expected DefaultOrchestrator, got %T", session.Orchestrator)
 	}
 }
@@ -168,8 +168,8 @@ current-ctx: remote-only
 	if session.Services.RepositoryStore() != nil {
 		t.Fatalf("expected nil repository store, got %T", session.Services.RepositoryStore())
 	}
-	if session.Services.ResourceGateway() == nil {
-		t.Fatal("expected resource server to be configured")
+	if session.Services.ManagedServerClient() == nil {
+		t.Fatal("expected managed server to be configured")
 	}
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.base-dir is configured")
@@ -232,10 +232,10 @@ current-ctx: bundled
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
-	if session.Services.ResourceGateway() == nil {
-		t.Fatal("expected resource server when resource-server is configured")
+	if session.Services.ManagedServerClient() == nil {
+		t.Fatal("expected managed server when resource-server is configured")
 	}
-	openAPISpec, openAPIErr := session.Services.ResourceGateway().GetOpenAPISpec(context.Background())
+	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
 	}

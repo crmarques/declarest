@@ -201,10 +201,10 @@ Component selection (choose values for each flag; see notes below):
     simple-api-server : Lightweight JSON API with selectable auth modes (none/basic/oauth2) and optional mTLS.
     keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
     rundeck           : Rundeck HTTP API surface for job-centric operations.
-    vault             : HashiCorp Vault HTTP API acting as the resource server.
+    vault             : HashiCorp Vault HTTP API acting as the managed server.
     A resource-server selection is mandatory for e2e runs; `none` is not supported.
   --resource-server-connection <local|remote>           default: local
-    local  : Start the chosen resource server via the provided fixtures and scripts.
+    local  : Start the chosen managed server via the provided fixtures and scripts.
     remote : Assume the server already exists and reach it via the configured connection details.
   --resource-server-auth-type <none|basic|oauth2|custom-header>
     Select the resource-server auth mode. When omitted, the selected component elects a default auth type
