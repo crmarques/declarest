@@ -33,8 +33,9 @@ Define the canonical context catalog schema, file location, validation rules, an
 16. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 18. When `managed-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-19. When `managed-server.http.proxy` is configured, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
-20. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
+19. When any proxy block (`managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
+20. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
+21. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -47,12 +48,13 @@ Per-context fields:
 2. `repository`.
 3. required `managed-server`.
 4. optional `secret-store`.
-5. optional `metadata` (omit when equivalent to default repository base-dir behavior).
+5. optional `metadata` (omit when equivalent to default repository base-dir behavior); `metadata.proxy` configures the HTTP proxy used for bundle downloads and participates in the shared proxy semantics.
 6. optional `preferences`.
 
 Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
 2. `repository.resource-format` allowed values: `json` or `yaml`.
+3. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
 
 Resource server auth one-of contract:
 1. Exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be set under `managed-server.http.auth`.
@@ -63,10 +65,12 @@ Resource server proxy contract:
 1. `managed-server.http.proxy` MAY define `http-url` and/or `https-url`.
 2. `managed-server.http.proxy.no-proxy` MAY define comma-separated bypass rules.
 3. `managed-server.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
+4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secret-store.vault.proxy`, and `metadata.proxy`, and they inherit the shared proxy unless an empty `proxy:` block explicitly disables it for their component.
 
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
 2. For `secret-store.file`, exactly one of `key`, `key-file`, `passphrase`, `passphrase-file` MUST be set.
+3. `secret-store.vault.proxy` MAY configure HTTP/HTTPS proxies for Vault operations and follows the shared proxy inheritance rules; use an empty `proxy:` block to opt out.
 
 Context manager operations:
 1. `Create/Update/Delete/Rename/List`.
@@ -119,6 +123,13 @@ contexts:
         #       token: change-me
         #   tls:
         #     insecure-skip-verify: false
+        #   proxy:
+        #     http-url: http://proxy.example.com:3128
+        #     https-url: http://proxy.example.com:3128
+        #     no-proxy: localhost,127.0.0.1
+        #     auth:
+        #       username: proxy-user
+        #       password: proxy-pass
       # filesystem:
       #   base-dir: /path/to/repo
 
@@ -189,12 +200,26 @@ contexts:
       #     client-cert-file: /path/to/client.pem
       #     client-key-file: /path/to/client-key.pem
       #     insecure-skip-verify: false
+      #   proxy:
+      #     http-url: http://proxy.example.com:3128
+      #     https-url: http://proxy.example.com:3128
+      #     no-proxy: localhost,127.0.0.1
+      #     auth:
+      #       username: proxy-user
+      #       password: proxy-pass
 
     metadata:
       # Metadata source defaults to repository base-dir when both are unset.
       # Choose at most one metadata source.
       # base-dir: /path/to/metadata
       # bundle: keycloak-bundle:0.0.1
+      # proxy:
+      #   http-url: http://proxy.example.com:3128
+      #   https-url: http://proxy.example.com:3128
+      #   no-proxy: localhost,127.0.0.1
+      #   auth:
+      #     username: proxy-user
+      #     password: proxy-pass
 
   - name: yyy
     repository:

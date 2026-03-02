@@ -139,7 +139,11 @@ type metadataSourceResolution struct {
 
 func resolveMetadataSource(ctx context.Context, context config.Context) (metadataSourceResolution, error) {
 	if strings.TrimSpace(context.Metadata.Bundle) != "" {
-		resolution, err := bundlemetadata.ResolveBundle(ctx, context.Metadata.Bundle)
+		resolution, err := bundlemetadata.ResolveBundle(
+			ctx,
+			context.Metadata.Bundle,
+			bundlemetadata.WithProxyConfig(context.Metadata.Proxy),
+		)
 		if err != nil {
 			return metadataSourceResolution{}, err
 		}

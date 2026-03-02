@@ -189,25 +189,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 				Repository: validFilesystemRepository(),
 			},
 		},
-		{
-			name: "resource_server_proxy_missing_urls",
-			cfg: config.Context{
-				Name:       "dev",
-				Repository: validFilesystemRepository(),
-				ResourceServer: &config.ResourceServer{
-					HTTP: &config.HTTPServer{
-						BaseURL: "https://example.com",
-						Auth: &config.HTTPAuth{
-							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
-						},
-						Proxy: &config.HTTPProxy{},
-					},
-				},
-			},
-		},
-		{
-			name: "resource_server_proxy_auth_incomplete",
-			cfg: config.Context{
+        {
+            name: "resource_server_proxy_auth_incomplete",
+            cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
 				ResourceServer: &config.ResourceServer{
@@ -260,6 +244,22 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 				t.Fatalf("expected validation failure for %s", tt.name)
 			}
 		})
+	}
+}
+
+func TestValidateConfigAllowsExplicitProxyDisable(t *testing.T) {
+	t.Parallel()
+
+	server := validResourceServer()
+	server.HTTP.Proxy = &config.HTTPProxy{}
+
+	err := validateConfig(config.Context{
+		Name:           "proxy-disable",
+		Repository:     validFilesystemRepository(),
+		ResourceServer: server,
+	})
+	if err != nil {
+		t.Fatalf("expected explicit proxy disable to be valid, got %v", err)
 	}
 }
 
@@ -859,6 +859,80 @@ func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *test
 	}
 }
 
+func TestResolveContextProxyInheritance(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(proxyInheritanceContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write proxy inheritance context catalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "shared"})
+	if err != nil {
+		t.Fatalf("expected proxy inheritance to succeed, got %v", err)
+	}
+
+	assertProxyConfig(t, "managed-server", resolved.ResourceServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "metadata", resolved.Metadata.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+}
+
+func TestResolveContextProxyExplicitDisable(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(proxyDisableContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write proxy disable context catalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "disable"})
+	if err != nil {
+		t.Fatalf("expected proxy disable scenario to succeed, got %v", err)
+	}
+
+	assertProxyConfig(t, "managed-server", resolved.ResourceServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+
+	if resolved.Metadata.Proxy == nil {
+		t.Fatalf("expected metadata proxy block to remain present even when disabling, got nil")
+	}
+	if resolved.Metadata.Proxy.HTTPURL != "" || resolved.Metadata.Proxy.HTTPSURL != "" || resolved.Metadata.Proxy.NoProxy != "" {
+		t.Fatalf("expected metadata proxy to remain empty when explicitly disabled, got %#v", resolved.Metadata.Proxy)
+	}
+	if resolved.Metadata.Proxy.Auth != nil {
+		t.Fatalf("expected metadata proxy auth to remain empty when explicitly disabled, got %#v", resolved.Metadata.Proxy.Auth)
+	}
+}
+
+func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, httpURL, httpsURL, noProxy, username, password string) {
+	t.Helper()
+	if proxy == nil {
+		t.Fatalf("expected %s proxy to be configured, got nil", component)
+	}
+	if proxy.HTTPURL != httpURL {
+		t.Fatalf("expected %s proxy http-url %q, got %q", component, httpURL, proxy.HTTPURL)
+	}
+	if proxy.HTTPSURL != httpsURL {
+		t.Fatalf("expected %s proxy https-url %q, got %q", component, httpsURL, proxy.HTTPSURL)
+	}
+	if proxy.NoProxy != noProxy {
+		t.Fatalf("expected %s proxy no-proxy %q, got %q", component, noProxy, proxy.NoProxy)
+	}
+	if proxy.Auth == nil {
+		t.Fatalf("expected %s proxy auth to be configured", component)
+	}
+	if proxy.Auth.Username != username {
+		t.Fatalf("expected %s proxy auth username %q, got %q", component, username, proxy.Auth.Username)
+	}
+	if proxy.Auth.Password != password {
+		t.Fatalf("expected %s proxy auth password %q, got %q", component, password, proxy.Auth.Password)
+	}
+}
+
 func TestResolveContextOverrideFailureIsDeterministic(t *testing.T) {
 	t.Parallel()
 
@@ -1085,4 +1159,83 @@ contexts:
               prefix: Bearer
               value: secret-token
 current-ctx: dev
+`
+
+const proxyInheritanceContextCatalogYAML = `
+contexts:
+  - name: shared
+    repository:
+      resource-format: json
+      git:
+        local:
+          base-dir: /tmp/repo
+        remote:
+          url: https://example.com/config.git
+          auth:
+            basic-auth:
+              username: git
+              password: secret
+    managed-server:
+      http:
+        base-url: https://api.example.com
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+    secret-store:
+      vault:
+        address: https://vault.example.com
+        auth:
+          token: vault-token
+        proxy:
+          http-url: http://proxy.example.com:3128
+          https-url: https://proxy.example.com:3128
+          no-proxy: localhost,127.0.0.1
+          auth:
+            username: proxy-user
+            password: proxy-pass
+    metadata:
+      base-dir: /tmp/metadata
+current-ctx: shared
+`
+
+const proxyDisableContextCatalogYAML = `
+contexts:
+  - name: disable
+    repository:
+      resource-format: json
+      git:
+        local:
+          base-dir: /tmp/repo
+        remote:
+          url: https://example.com/config.git
+          auth:
+            basic-auth:
+              username: git
+              password: secret
+    managed-server:
+      http:
+        base-url: https://api.example.com
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+        proxy:
+          http-url: http://proxy.example.com:3128
+          https-url: https://proxy.example.com:3128
+          no-proxy: localhost,127.0.0.1
+          auth:
+            username: proxy-user
+            password: proxy-pass
+    secret-store:
+      vault:
+        address: https://vault.example.com
+        auth:
+          token: vault-token
+    metadata:
+      base-dir: /tmp/metadata
+      proxy: {}
+current-ctx: disable
 `

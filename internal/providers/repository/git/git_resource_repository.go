@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/providers/repository/fsstore"
+	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	gogit "github.com/go-git/go-git/v5"
@@ -40,14 +42,20 @@ type GitResourceRepository struct {
 	local    *fsstore.LocalResourceRepository
 	baseDir  string
 	remote   *config.GitRemote
+	proxy    *config.HTTPProxy
 	autoInit bool
 }
 
 func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string) *GitResourceRepository {
+	var remoteProxy *config.HTTPProxy
+	if repoConfig.Remote != nil {
+		remoteProxy = proxyhelper.Clone(repoConfig.Remote.Proxy)
+	}
 	return &GitResourceRepository{
 		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
 		baseDir:  repoConfig.Local.BaseDir,
 		remote:   repoConfig.Remote,
+		proxy:    remoteProxy,
 		autoInit: repoConfig.Local.AutoInitEnabled(),
 	}
 }
@@ -353,13 +361,15 @@ func (r *GitResourceRepository) Refresh(ctx context.Context) error {
 		return err
 	}
 
-	fetchErr := repo.Fetch(&gogit.FetchOptions{
-		RemoteName: defaultRemoteName,
-		Auth:       auth,
-		RefSpecs: []gitcfg.RefSpec{
-			gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
-		},
-		Force: true,
+	fetchErr := r.withProxyEnv(func() error {
+		return repo.Fetch(&gogit.FetchOptions{
+			RemoteName: defaultRemoteName,
+			Auth:       auth,
+			RefSpecs: []gitcfg.RefSpec{
+				gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
+			},
+			Force: true,
+		})
 	})
 	if fetchErr != nil && !errors.Is(fetchErr, gogit.NoErrAlreadyUpToDate) {
 		return classifyRemoteError("failed to refresh repository from remote", fetchErr)
@@ -449,13 +459,15 @@ func (r *GitResourceRepository) Push(ctx context.Context, policy repository.Push
 		return err
 	}
 
-	pushErr := repo.Push(&gogit.PushOptions{
-		RemoteName: defaultRemoteName,
-		Auth:       auth,
-		Force:      policy.Force,
-		RefSpecs: []gitcfg.RefSpec{
-			gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", sourceBranch, targetBranch)),
-		},
+	pushErr := r.withProxyEnv(func() error {
+		return repo.Push(&gogit.PushOptions{
+			RemoteName: defaultRemoteName,
+			Auth:       auth,
+			Force:      policy.Force,
+			RefSpecs: []gitcfg.RefSpec{
+				gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", sourceBranch, targetBranch)),
+			},
+		})
 	})
 	if pushErr != nil && !errors.Is(pushErr, gogit.NoErrAlreadyUpToDate) {
 		return classifyRemoteError("failed to push repository changes", pushErr)
@@ -494,13 +506,15 @@ func (r *GitResourceRepository) SyncStatus(ctx context.Context) (repository.Sync
 		return repository.SyncReport{}, err
 	}
 
-	fetchErr := repo.Fetch(&gogit.FetchOptions{
-		RemoteName: defaultRemoteName,
-		Auth:       auth,
-		RefSpecs: []gitcfg.RefSpec{
-			gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
-		},
-		Force: true,
+	fetchErr := r.withProxyEnv(func() error {
+		return repo.Fetch(&gogit.FetchOptions{
+			RemoteName: defaultRemoteName,
+			Auth:       auth,
+			RefSpecs: []gitcfg.RefSpec{
+				gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
+			},
+			Force: true,
+		})
 	})
 	if fetchErr != nil && !errors.Is(fetchErr, gogit.NoErrAlreadyUpToDate) {
 		return repository.SyncReport{}, classifyRemoteError("failed to refresh remote refs for status", fetchErr)
@@ -761,6 +775,48 @@ func classifyRemoteError(message string, err error) error {
 		return faults.NewTypedError(faults.TransportError, message, nil)
 	default:
 		return faults.NewTypedError(faults.InternalError, message, nil)
+	}
+}
+
+func (r *GitResourceRepository) withProxyEnv(fn func() error) error {
+	if r.proxy == nil || proxyhelper.IsExplicitDisable(r.proxy) {
+		return fn()
+	}
+	proxyConfig, err := proxyhelper.Build("repository.git.remote.proxy", r.proxy)
+	if err != nil {
+		return err
+	}
+	envVars := proxyConfig.Env()
+	if len(envVars) == 0 {
+		return fn()
+	}
+
+	saved := make(map[string]*string, len(envVars))
+	for key, value := range envVars {
+		if old, ok := os.LookupEnv(key); ok {
+			temp := old
+			saved[key] = &temp
+		} else {
+			saved[key] = nil
+		}
+		if err := os.Setenv(key, value); err != nil {
+			restoreEnv(saved)
+			return err
+		}
+	}
+
+	err = fn()
+	restoreEnv(saved)
+	return err
+}
+
+func restoreEnv(saved map[string]*string) {
+	for key, value := range saved {
+		if value != nil {
+			_ = os.Setenv(key, *value)
+		} else {
+			_ = os.Unsetenv(key)
+		}
 	}
 }
 

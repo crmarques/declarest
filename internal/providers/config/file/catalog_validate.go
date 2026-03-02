@@ -2,13 +2,13 @@ package file
 
 import (
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
@@ -76,6 +76,16 @@ func normalizeConfig(cfg config.Context) config.Context {
 	if cfg.Repository.ResourceFormat == "" {
 		cfg.Repository.ResourceFormat = config.ResourceFormatJSON
 	}
+	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
+		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
+	}
+	if cfg.ResourceServer != nil && cfg.ResourceServer.HTTP != nil {
+		cfg.ResourceServer.HTTP.Proxy = normalizeProxy(cfg.ResourceServer.HTTP.Proxy)
+	}
+	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
+		cfg.SecretStore.Vault.Proxy = normalizeProxy(cfg.SecretStore.Vault.Proxy)
+	}
+	cfg.Metadata.Proxy = normalizeProxy(cfg.Metadata.Proxy)
 	return cfg
 }
 
@@ -84,7 +94,87 @@ func applyConfigDefaults(cfg config.Context) config.Context {
 	if strings.TrimSpace(cfg.Metadata.Bundle) == "" && cfg.Metadata.BaseDir == "" {
 		cfg.Metadata.BaseDir = contextRepositoryBaseDir(cfg)
 	}
+	cfg = applyProxyDefaults(cfg)
 	return cfg
+}
+
+func applyProxyDefaults(cfg config.Context) config.Context {
+	targets := buildProxyTargets(&cfg)
+	var canonical *config.HTTPProxy
+	for _, target := range targets {
+		current := *target.proxy
+		if current != nil && proxyhelper.HasURLs(current) {
+			canonical = proxyhelper.Clone(current)
+			break
+		}
+	}
+	if canonical == nil {
+		return cfg
+	}
+
+	for _, target := range targets {
+		current := *target.proxy
+		if current == nil {
+			*target.proxy = proxyhelper.Clone(canonical)
+			continue
+		}
+		if proxyhelper.IsExplicitDisable(current) {
+			continue
+		}
+	}
+
+	return cfg
+}
+
+type proxyTarget struct {
+	name  string
+	proxy **config.HTTPProxy
+}
+
+func buildProxyTargets(cfg *config.Context) []proxyTarget {
+	targets := make([]proxyTarget, 0, 4)
+	if cfg.ResourceServer != nil && cfg.ResourceServer.HTTP != nil {
+		targets = append(targets, proxyTarget{
+			name:  "managed-server.http.proxy",
+			proxy: &cfg.ResourceServer.HTTP.Proxy,
+		})
+	}
+	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
+		targets = append(targets, proxyTarget{
+			name:  "repository.git.remote.proxy",
+			proxy: &cfg.Repository.Git.Remote.Proxy,
+		})
+	}
+	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
+		targets = append(targets, proxyTarget{
+			name:  "secret-store.vault.proxy",
+			proxy: &cfg.SecretStore.Vault.Proxy,
+		})
+	}
+	targets = append(targets, proxyTarget{
+		name:  "metadata.proxy",
+		proxy: &cfg.Metadata.Proxy,
+	})
+	return targets
+}
+
+func normalizeProxy(proxy *config.HTTPProxy) *config.HTTPProxy {
+	if proxy == nil {
+		return nil
+	}
+
+	normalized := &config.HTTPProxy{
+		HTTPURL:  strings.TrimSpace(proxy.HTTPURL),
+		HTTPSURL: strings.TrimSpace(proxy.HTTPSURL),
+		NoProxy:  strings.TrimSpace(proxy.NoProxy),
+	}
+	if proxy.Auth != nil {
+		normalized.Auth = &config.ProxyAuth{
+			Username: strings.TrimSpace(proxy.Auth.Username),
+			Password: strings.TrimSpace(proxy.Auth.Password),
+		}
+	}
+	return normalized
 }
 
 func compactConfigForPersistence(cfg config.Context) config.Context {
@@ -155,6 +245,9 @@ func validateRepository(repository config.Repository) error {
 					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basic-auth, ssh, access-key", nil)
 				}
 			}
+			if err := validateProxy("repository.git.remote.proxy", repository.Git.Remote.Proxy); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -218,50 +311,7 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 }
 
 func validateResourceServerProxy(proxy *config.HTTPProxy) error {
-	if proxy == nil {
-		return nil
-	}
-
-	httpURL := strings.TrimSpace(proxy.HTTPURL)
-	httpsURL := strings.TrimSpace(proxy.HTTPSURL)
-
-	if httpURL == "" && httpsURL == "" {
-		return faults.NewValidationError("managed-server.http.proxy must define at least one of http-url or https-url", nil)
-	}
-
-	if httpURL != "" {
-		if err := validateResourceServerProxyURL("managed-server.http.proxy.http-url", httpURL); err != nil {
-			return err
-		}
-	}
-
-	if httpsURL != "" {
-		if err := validateResourceServerProxyURL("managed-server.http.proxy.https-url", httpsURL); err != nil {
-			return err
-		}
-	}
-
-	if proxy.Auth != nil {
-		if strings.TrimSpace(proxy.Auth.Username) == "" || strings.TrimSpace(proxy.Auth.Password) == "" {
-			return faults.NewValidationError("managed-server.http.proxy.auth requires username and password", nil)
-		}
-	}
-
-	return nil
-}
-
-func validateResourceServerProxyURL(field string, raw string) error {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return faults.NewValidationError(field+" is invalid", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return faults.NewValidationError(field+" must use http or https", nil)
-	}
-	if parsed.Host == "" {
-		return faults.NewValidationError(field+" host is required", nil)
-	}
-	return nil
+	return validateProxy("managed-server.http.proxy", proxy)
 }
 
 func validateSecretStore(secretStore *config.SecretStore) error {
@@ -301,6 +351,9 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 		) != 1 {
 			return faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
 		}
+		if err := validateProxy("secret-store.vault.proxy", secretStore.Vault.Proxy); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -313,7 +366,23 @@ func validateMetadata(metadata config.Metadata) error {
 	if baseDir != "" && bundle != "" {
 		return faults.NewValidationError("metadata must define at most one of base-dir or bundle", nil)
 	}
+	if err := validateProxy("metadata.proxy", metadata.Proxy); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func validateProxy(field string, proxy *config.HTTPProxy) error {
+	if proxy == nil || proxyhelper.IsExplicitDisable(proxy) {
+		return nil
+	}
+	if !proxyhelper.HasURLs(proxy) {
+		return faults.NewValidationError(field+" must define at least one of http-url or https-url", nil)
+	}
+	if _, err := proxyhelper.Build(field, proxy); err != nil {
+		return err
+	}
 	return nil
 }
 

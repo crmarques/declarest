@@ -79,6 +79,7 @@ DeclaREST expects that and gives you metadata primitives to normalize the experi
 
 Start with:
 
+- [Contexts](context.md)
 - [Paths and Selectors](paths-and-selectors.md)
 - [Metadata Overview](metadata.md)
 - [Metadata Overrides](metadata-overrides.md)

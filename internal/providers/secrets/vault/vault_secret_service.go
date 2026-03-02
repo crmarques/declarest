@@ -10,6 +10,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
@@ -105,6 +106,15 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
+	if cfg.Proxy != nil && !proxyhelper.IsExplicitDisable(cfg.Proxy) {
+		proxyConfig, err := proxyhelper.Build("secret-store.vault.proxy", cfg.Proxy)
+		if err != nil {
+			return nil, err
+		}
+		if proxyConfig.HasProxy() {
+			transport.Proxy = proxyConfig.Resolver()
+		}
+	}
 
 	service := &VaultSecretService{
 		address:    address,

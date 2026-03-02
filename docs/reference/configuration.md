@@ -147,6 +147,23 @@ tls:
   insecure-skip-verify: false
 ```
 
+#### Git remote proxy (optional)
+
+```yaml
+repository:
+  git:
+    remote:
+      proxy:
+        http-url: http://proxy.example.com:3128
+        https-url: http://proxy.example.com:3128
+        no-proxy: localhost,127.0.0.1
+        auth:
+          username: proxy-user
+          password: proxy-pass
+```
+
+`proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. When unset, the component inherits the first configured proxy from `managed-server.http.proxy`, `secret-store.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly skip the inherited proxy for this component.
+
 ## Managed server configuration (`managed-server`)
 
 `managed-server.http` is required.
@@ -170,6 +187,8 @@ managed-server:
       client-key-file: /path/to/client-key.pem
       insecure-skip-verify: false
 ```
+
+Define any of the `managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited proxy for that component.
 
 ### `managed-server.http.auth` (required one-of)
 
@@ -293,6 +312,24 @@ Vault auth under `secret-store.vault.auth` is also one-of:
 - password (`password` block)
 - approle (`approle` block)
 
+### `secret-store.vault.proxy` (optional)
+
+Configure Vault HTTP proxy settings when connecting to the secret store:
+
+```yaml
+secret-store:
+  vault:
+    proxy:
+      http-url: http://proxy.example.com:3128
+      https-url: http://proxy.example.com:3128
+      no-proxy: localhost
+      auth:
+        username: proxy-user
+        password: proxy-pass
+```
+
+Proxy configuration uses the same propagation rules described above; an empty `proxy:` block disables any inherited proxy for Vault.
+
 ## Metadata configuration (`metadata`, optional)
 
 Choose at most one metadata source:
@@ -312,6 +349,21 @@ When both metadata sources are omitted, `metadata.base-dir` defaults to the sele
 
 Use `metadata.base-dir` when you want metadata files stored separately from resource payload files.
 Use `metadata.bundle` when you want metadata definitions to be consumed from a bundle archive and cached under `~/.declarest/metadata-bundles/`.
+
+### `metadata.proxy` (optional)
+
+```yaml
+metadata:
+  proxy:
+    http-url: http://proxy.example.com:3128
+    https-url: http://proxy.example.com:3128
+    no-proxy: localhost,127.0.0.1
+    auth:
+      username: proxy-user
+      password: proxy-pass
+```
+
+`metadata.proxy` configures the HTTP proxy used when downloading metadata bundles. It follows the same inheritance rules as other proxy blocks, and an empty `proxy:` block disables any inherited proxy for metadata.
 
 Bundle OpenAPI hints (when present) can also supply `managed-server.http.openapi` automatically if context OpenAPI is not set.
 

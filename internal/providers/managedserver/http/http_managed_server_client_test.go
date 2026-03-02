@@ -84,7 +84,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("proxy_requires_url", func(t *testing.T) {
+	t.Run("proxy_empty_block_disables_default", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
@@ -94,7 +94,9 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 			},
 			Proxy: &config.HTTPProxy{},
 		})
-		assertTypedCategory(t, err, faults.ValidationError)
+		if err != nil {
+			t.Fatalf("expected empty proxy block to be valid, got %v", err)
+		}
 	})
 
 	t.Run("proxy_auth_rejects_embedded_credentials", func(t *testing.T) {

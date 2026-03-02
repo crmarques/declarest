@@ -53,12 +53,13 @@ func (g GitLocal) AutoInitEnabled() bool {
 }
 
 type GitRemote struct {
-	URL      string   `yaml:"url"`
-	Branch   string   `yaml:"branch,omitempty"`
-	Provider string   `yaml:"provider,omitempty"`
-	AutoSync bool     `yaml:"auto-sync,omitempty"`
-	Auth     *GitAuth `yaml:"auth,omitempty"`
-	TLS      *TLS     `yaml:"tls,omitempty"`
+	URL      string     `yaml:"url"`
+	Branch   string     `yaml:"branch,omitempty"`
+	Provider string     `yaml:"provider,omitempty"`
+	AutoSync bool       `yaml:"auto-sync,omitempty"`
+	Auth     *GitAuth   `yaml:"auth,omitempty"`
+	TLS      *TLS       `yaml:"tls,omitempty"`
+	Proxy    *HTTPProxy `yaml:"proxy,omitempty"`
 }
 
 type GitAuth struct {
@@ -163,6 +164,7 @@ type VaultSecretStore struct {
 	KVVersion  int        `yaml:"kv-version,omitempty"`
 	Auth       *VaultAuth `yaml:"auth,omitempty"`
 	TLS        *TLS       `yaml:"tls,omitempty"`
+	Proxy      *HTTPProxy `yaml:"proxy,omitempty"`
 }
 
 type VaultAuth struct {
@@ -191,6 +193,7 @@ type TLS struct {
 }
 
 type Metadata struct {
-	BaseDir string `yaml:"base-dir,omitempty"`
-	Bundle  string `yaml:"bundle,omitempty"`
+	BaseDir string     `yaml:"base-dir,omitempty"`
+	Bundle  string     `yaml:"bundle,omitempty"`
+	Proxy   *HTTPProxy `yaml:"proxy,omitempty"`
 }

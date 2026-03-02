@@ -17,8 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
+	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
 
 const (
@@ -57,7 +59,25 @@ type bundleSource struct {
 	shorthandVersion string
 }
 
-func ResolveBundle(ctx context.Context, ref string) (BundleResolution, error) {
+type BundleResolverOption func(*bundleResolverOptions)
+
+type bundleResolverOptions struct {
+	proxy *config.HTTPProxy
+}
+
+func WithProxyConfig(proxy *config.HTTPProxy) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		opts.proxy = proxy
+	}
+}
+
+func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption) (BundleResolution, error) {
+	options := bundleResolverOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
 	source, err := parseBundleSource(ref)
 	if err != nil {
 		return BundleResolution{}, err
@@ -75,7 +95,7 @@ func ResolveBundle(ctx context.Context, ref string) (BundleResolution, error) {
 		_ = os.RemoveAll(cacheDir)
 	}
 
-	return installBundle(ctx, cacheRoot, cacheDir, source)
+	return installBundle(ctx, cacheRoot, cacheDir, source, options)
 }
 
 func parseBundleSource(ref string) (bundleSource, error) {
@@ -205,7 +225,7 @@ func loadCachedBundle(cacheDir string, source bundleSource) (BundleResolution, b
 	return resolution, true, nil
 }
 
-func installBundle(ctx context.Context, cacheRoot string, cacheDir string, source bundleSource) (BundleResolution, error) {
+func installBundle(ctx context.Context, cacheRoot string, cacheDir string, source bundleSource, opts bundleResolverOptions) (BundleResolution, error) {
 	if err := os.MkdirAll(cacheRoot, 0o755); err != nil {
 		return BundleResolution{}, internalError("failed to create metadata bundle cache directory", err)
 	}
@@ -221,7 +241,7 @@ func installBundle(ctx context.Context, cacheRoot string, cacheDir string, sourc
 		}
 	}()
 
-	if err := extractBundleArchive(ctx, source, tmpDir); err != nil {
+	if err := extractBundleArchive(ctx, source, tmpDir, opts); err != nil {
 		return BundleResolution{}, err
 	}
 
@@ -507,8 +527,8 @@ func ensureMetadataTreeHasDefinition(metadataDir string, metadataFileName string
 	return nil
 }
 
-func extractBundleArchive(ctx context.Context, source bundleSource, destination string) error {
-	stream, err := openBundleStream(ctx, source)
+func extractBundleArchive(ctx context.Context, source bundleSource, destination string, opts bundleResolverOptions) error {
+	stream, err := openBundleStream(ctx, source, opts)
 	if err != nil {
 		return err
 	}
@@ -517,7 +537,7 @@ func extractBundleArchive(ctx context.Context, source bundleSource, destination 
 	return extractTarGz(stream, destination)
 }
 
-func openBundleStream(ctx context.Context, source bundleSource) (io.ReadCloser, error) {
+func openBundleStream(ctx context.Context, source bundleSource, opts bundleResolverOptions) (io.ReadCloser, error) {
 	switch source.kind {
 	case sourceKindLocal:
 		file, err := os.Open(source.localPath)
@@ -534,7 +554,27 @@ func openBundleStream(ctx context.Context, source bundleSource) (io.ReadCloser, 
 			return nil, faults.NewValidationError("metadata bundle URL is invalid", err)
 		}
 
-		response, err := (&http.Client{Timeout: 60 * time.Second}).Do(request)
+		client := &http.Client{Timeout: 60 * time.Second}
+		if opts.proxy != nil && !proxyhelper.IsExplicitDisable(opts.proxy) {
+			proxyConfig, parseErr := proxyhelper.Build("metadata.proxy", opts.proxy)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			if proxyConfig.HasProxy() {
+				if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+					transportCopy := transport.Clone()
+					transportCopy.Proxy = proxyConfig.Resolver()
+					client.Transport = transportCopy
+				} else {
+					configuredTransport := &http.Transport{
+						Proxy: proxyConfig.Resolver(),
+					}
+					client.Transport = configuredTransport
+				}
+			}
+		}
+
+		response, err := client.Do(request)
 		if err != nil {
 			return nil, transportError("failed to download metadata bundle archive", err)
 		}
