@@ -9,7 +9,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
-	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/internal/defaultorch"
 )
 
 func TestNewSession(t *testing.T) {
@@ -38,7 +38,7 @@ func TestNewSession(t *testing.T) {
 	if _, ok := session.Contexts.(*configfile.FileContextService); !ok {
 		t.Fatalf("expected FileContextService, got %T", session.Contexts)
 	}
-	if _, ok := session.Orchestrator.(*orchestratordomain.DefaultOrchestrator); !ok {
+	if _, ok := session.Orchestrator.(*defaultorch.DefaultOrchestrator); !ok {
 		t.Fatalf("expected DefaultOrchestrator, got %T", session.Orchestrator)
 	}
 }
@@ -165,16 +165,13 @@ current-ctx: remote-only
 	if session.Orchestrator == nil {
 		t.Fatal("expected orchestrator")
 	}
-	if session.ResourceStore != nil {
-		t.Fatalf("expected nil repository store, got %T", session.ResourceStore)
+	if session.Services.RepositoryStore() != nil {
+		t.Fatalf("expected nil repository store, got %T", session.Services.RepositoryStore())
 	}
-	if session.RepositorySync != nil {
-		t.Fatalf("expected nil repository sync, got %T", session.RepositorySync)
-	}
-	if session.ResourceServer == nil {
+	if session.Services.ResourceGateway() == nil {
 		t.Fatal("expected resource server to be configured")
 	}
-	if session.Metadata == nil {
+	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.base-dir is configured")
 	}
 }
@@ -232,13 +229,13 @@ current-ctx: bundled
 	if err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
-	if session.Metadata == nil {
+	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
-	if session.ResourceServer == nil {
+	if session.Services.ResourceGateway() == nil {
 		t.Fatal("expected resource server when resource-server is configured")
 	}
-	openAPISpec, openAPIErr := session.ResourceServer.GetOpenAPISpec(context.Background())
+	openAPISpec, openAPIErr := session.Services.ResourceGateway().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
 	}

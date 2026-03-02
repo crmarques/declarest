@@ -29,7 +29,7 @@ func ResolveMetadataForSecretCheck(
 
 	resolvedMetadata, err := metadataService.ResolveForPath(ctx, normalizedPath)
 	if err != nil {
-		if isTypedErrorCategory(err, faults.NotFoundError) {
+		if faults.IsCategory(err, faults.NotFoundError) {
 			return metadatadomain.ResourceMetadata{}, nil
 		}
 		return metadatadomain.ResourceMetadata{}, err
@@ -232,7 +232,7 @@ func PersistDetectedAttributes(
 
 	currentMetadata, err := metadataService.Get(ctx, logicalPath)
 	if err != nil {
-		if !isTypedErrorCategory(err, faults.NotFoundError) {
+		if !faults.IsCategory(err, faults.NotFoundError) {
 			return err
 		}
 		currentMetadata = metadatadomain.ResourceMetadata{}
@@ -416,8 +416,4 @@ func collectCandidateAttributePaths(
 		// Arrays are intentionally skipped because metadata attributes are map-path based.
 		return
 	}
-}
-
-func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
 }

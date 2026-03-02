@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -26,7 +27,7 @@ func decodeCatalog(data []byte) (config.ContextCatalog, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&contextCatalog); err != nil {
-		return config.ContextCatalog{}, validationError("invalid context catalog yaml", err)
+		return config.ContextCatalog{}, faults.NewValidationError("invalid context catalog yaml", err)
 	}
 
 	return contextCatalog, nil
@@ -61,12 +62,12 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 	}
 
 	if path == "" {
-		return "", validationError("context catalog path is empty", nil)
+		return "", faults.NewValidationError("context catalog path is empty", nil)
 	}
 
 	cleanPath := filepath.Clean(path)
 	if cleanPath == "." {
-		return "", validationError("context catalog path is invalid", errors.New("resolved to current directory"))
+		return "", faults.NewValidationError("context catalog path is invalid", errors.New("resolved to current directory"))
 	}
 
 	if !filepath.IsAbs(cleanPath) {
@@ -77,5 +78,5 @@ func resolveCatalogPath(explicitPath string) (string, error) {
 }
 
 func unknownOverrideError(key string) error {
-	return validationError(fmt.Sprintf("unknown override key %q", key), nil)
+	return faults.NewValidationError(fmt.Sprintf("unknown override key %q", key), nil)
 }

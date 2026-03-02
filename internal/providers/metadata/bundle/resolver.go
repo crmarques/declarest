@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
 )
 
@@ -80,7 +81,7 @@ func ResolveBundle(ctx context.Context, ref string) (BundleResolution, error) {
 func parseBundleSource(ref string) (bundleSource, error) {
 	value := strings.TrimSpace(ref)
 	if value == "" {
-		return bundleSource{}, validationError("metadata.bundle is empty", nil)
+		return bundleSource{}, faults.NewValidationError("metadata.bundle is empty", nil)
 	}
 
 	if name, version, ok := parseShorthandRef(value); ok {
@@ -119,13 +120,13 @@ func parseBundleSource(ref string) (bundleSource, error) {
 				cacheDirName: cacheDirName,
 			}, nil
 		default:
-			return bundleSource{}, validationError("metadata.bundle URL must use http or https", nil)
+			return bundleSource{}, faults.NewValidationError("metadata.bundle URL must use http or https", nil)
 		}
 	}
 
 	absolutePath, err := filepath.Abs(value)
 	if err != nil {
-		return bundleSource{}, validationError("metadata.bundle local path is invalid", err)
+		return bundleSource{}, faults.NewValidationError("metadata.bundle local path is invalid", err)
 	}
 
 	cacheDirName := cacheDirNameForSourceArtifact(
@@ -181,7 +182,7 @@ func loadCachedBundle(cacheDir string, source bundleSource) (BundleResolution, b
 		return BundleResolution{}, false, internalError("failed to inspect bundle cache directory", err)
 	}
 	if !info.IsDir() {
-		return BundleResolution{}, false, validationError("bundle cache path is not a directory", nil)
+		return BundleResolution{}, false, faults.NewValidationError("bundle cache path is not a directory", nil)
 	}
 
 	if _, err := os.Stat(filepath.Join(cacheDir, bundleReadyMarkerFile)); err != nil {
@@ -278,19 +279,19 @@ func readBundleManifest(path string) (BundleManifest, error) {
 func buildResolution(root string, manifest BundleManifest, source bundleSource) (BundleResolution, error) {
 	if source.kind == sourceKindShort {
 		if strings.TrimSpace(manifest.Name) != source.shorthandName {
-			return BundleResolution{}, validationError("bundle name does not match shorthand target", nil)
+			return BundleResolution{}, faults.NewValidationError("bundle name does not match shorthand target", nil)
 		}
 
 		bundleVersion, err := normalizeSemver(manifest.Version)
 		if err != nil {
-			return BundleResolution{}, validationError("bundle version is invalid", err)
+			return BundleResolution{}, faults.NewValidationError("bundle version is invalid", err)
 		}
 		if bundleVersion != source.shorthandVersion {
-			return BundleResolution{}, validationError("bundle version does not match shorthand version", nil)
+			return BundleResolution{}, faults.NewValidationError("bundle version does not match shorthand version", nil)
 		}
 
 		if strings.TrimSpace(manifest.Distribution.ArtifactTemplate) == "" {
-			return BundleResolution{}, validationError("bundle shorthand requires distribution.artifactTemplate", nil)
+			return BundleResolution{}, faults.NewValidationError("bundle shorthand requires distribution.artifactTemplate", nil)
 		}
 	}
 
@@ -301,18 +302,18 @@ func buildResolution(root string, manifest BundleManifest, source bundleSource) 
 
 	metadataDir := filepath.Join(root, metadataRoot)
 	if !fsutil.IsPathUnderRoot(root, metadataDir) {
-		return BundleResolution{}, validationError("bundle metadata root escapes extracted bundle directory", nil)
+		return BundleResolution{}, faults.NewValidationError("bundle metadata root escapes extracted bundle directory", nil)
 	}
 
 	info, err := os.Stat(metadataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return BundleResolution{}, validationError("bundle metadata root does not exist", nil)
+			return BundleResolution{}, faults.NewValidationError("bundle metadata root does not exist", nil)
 		}
 		return BundleResolution{}, internalError("failed to inspect bundle metadata root", err)
 	}
 	if !info.IsDir() {
-		return BundleResolution{}, validationError("bundle metadata root is not a directory", nil)
+		return BundleResolution{}, faults.NewValidationError("bundle metadata root is not a directory", nil)
 	}
 
 	if err := ensureMetadataTreeHasDefinition(metadataDir, manifest.MetadataFileNameOrDefault()); err != nil {
@@ -346,7 +347,7 @@ func resolveBundleOpenAPISource(root string, metadataRoot string, manifest Bundl
 	if configuredRef != "" {
 		value, err := resolveBundleOpenAPIReference(root, configuredRef)
 		if err != nil {
-			return "", validationError("bundle declarest.openapi is invalid", err)
+			return "", faults.NewValidationError("bundle declarest.openapi is invalid", err)
 		}
 
 		parsed, parseErr := url.Parse(value)
@@ -445,7 +446,7 @@ func resolveBundledOpenAPIFile(root string, metadataRoot string) (string, error)
 
 func bundledOpenAPIFilePath(root string, candidate string) (string, bool, error) {
 	if !fsutil.IsPathUnderRoot(root, candidate) {
-		return "", false, validationError("bundled openapi candidate escapes extracted bundle directory", nil)
+		return "", false, faults.NewValidationError("bundled openapi candidate escapes extracted bundle directory", nil)
 	}
 
 	info, err := os.Stat(candidate)
@@ -463,18 +464,18 @@ func bundledOpenAPIFilePath(root string, candidate string) (string, bool, error)
 
 func ensureBundleFilePath(root string, path string, field string) error {
 	if !fsutil.IsPathUnderRoot(root, path) {
-		return validationError(field+" escapes extracted bundle directory", nil)
+		return faults.NewValidationError(field+" escapes extracted bundle directory", nil)
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return validationError(field+" file does not exist", nil)
+			return faults.NewValidationError(field+" file does not exist", nil)
 		}
 		return internalError("failed to inspect "+field+" file", err)
 	}
 	if info.IsDir() {
-		return validationError(field+" must point to a file", nil)
+		return faults.NewValidationError(field+" must point to a file", nil)
 	}
 	return nil
 }
@@ -498,7 +499,7 @@ func ensureMetadataTreeHasDefinition(metadataDir string, metadataFileName string
 		return internalError("failed to inspect metadata root tree", walkErr)
 	}
 	if !found {
-		return validationError(
+		return faults.NewValidationError(
 			fmt.Sprintf("bundle metadata root does not contain %q", metadataFileName),
 			nil,
 		)
@@ -530,7 +531,7 @@ func openBundleStream(ctx context.Context, source bundleSource) (io.ReadCloser, 
 	case sourceKindURL, sourceKindShort:
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, source.remoteURL, nil)
 		if err != nil {
-			return nil, validationError("metadata bundle URL is invalid", err)
+			return nil, faults.NewValidationError("metadata bundle URL is invalid", err)
 		}
 
 		response, err := (&http.Client{Timeout: 60 * time.Second}).Do(request)
@@ -550,7 +551,7 @@ func openBundleStream(ctx context.Context, source bundleSource) (io.ReadCloser, 
 		}
 		return response.Body, nil
 	default:
-		return nil, validationError("unsupported metadata bundle source", nil)
+		return nil, faults.NewValidationError("unsupported metadata bundle source", nil)
 	}
 }
 
@@ -570,7 +571,7 @@ func shorthandArtifactName(name string, version string) string {
 func extractTarGz(stream io.Reader, destination string) error {
 	gzipReader, err := gzip.NewReader(stream)
 	if err != nil {
-		return validationError("metadata bundle archive is not a valid gzip stream", err)
+		return faults.NewValidationError("metadata bundle archive is not a valid gzip stream", err)
 	}
 	defer gzipReader.Close()
 
@@ -581,7 +582,7 @@ func extractTarGz(stream io.Reader, destination string) error {
 			return nil
 		}
 		if err != nil {
-			return validationError("metadata bundle archive is not a valid tar stream", err)
+			return faults.NewValidationError("metadata bundle archive is not a valid tar stream", err)
 		}
 
 		entryName := strings.TrimSpace(header.Name)
@@ -593,12 +594,12 @@ func extractTarGz(stream io.Reader, destination string) error {
 			continue
 		}
 		if filepath.IsAbs(entryPath) || entryPath == ".." || strings.HasPrefix(entryPath, ".."+string(filepath.Separator)) {
-			return validationError("metadata bundle archive contains invalid path traversal entry", nil)
+			return faults.NewValidationError("metadata bundle archive contains invalid path traversal entry", nil)
 		}
 
 		targetPath := filepath.Join(destination, entryPath)
 		if !fsutil.IsPathUnderRoot(destination, targetPath) {
-			return validationError("metadata bundle archive contains path outside extraction root", nil)
+			return faults.NewValidationError("metadata bundle archive contains path outside extraction root", nil)
 		}
 
 		switch header.Typeflag {
@@ -608,7 +609,7 @@ func extractTarGz(stream io.Reader, destination string) error {
 			}
 		case tar.TypeReg, tar.TypeRegA:
 			if header.Size < 0 || header.Size > maxArchiveFileSizeByte {
-				return validationError("metadata bundle archive contains oversized file entry", nil)
+				return faults.NewValidationError("metadata bundle archive contains oversized file entry", nil)
 			}
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 				return internalError("failed to create bundle extraction parent directory", err)
@@ -629,10 +630,10 @@ func extractTarGz(stream io.Reader, destination string) error {
 				return internalError("failed to finalize bundle archive file", closeErr)
 			}
 			if written > maxArchiveFileSizeByte {
-				return validationError("metadata bundle archive contains oversized file entry", nil)
+				return faults.NewValidationError("metadata bundle archive contains oversized file entry", nil)
 			}
 		default:
-			return validationError("metadata bundle archive contains unsupported entry type", nil)
+			return faults.NewValidationError("metadata bundle archive contains unsupported entry type", nil)
 		}
 	}
 }

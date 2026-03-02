@@ -150,15 +150,14 @@ func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 		CollectionPath: "/admin/realms/platform",
 		LocalAlias:     "user-registry",
 		RemoteID:       "123",
-		Metadata: metadata.ResourceMetadata{
-			CollectionPath: "/admin/realms/{{.realm}}/components",
-			Operations: map[string]metadata.OperationSpec{
-				string(metadata.OperationGet): {
-					Path: "./{{.id}}",
-				},
+		Payload:        map[string]any{"id": "123"},
+	}, metadata.ResourceMetadata{
+		CollectionPath: "/admin/realms/{{.realm}}/components",
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationGet): {
+				Path: "./{{.id}}",
 			},
 		},
-		Payload: map[string]any{"id": "123"},
 	})
 	if err != nil {
 		t.Fatalf("BuildResourceScope returned error: %v", err)
@@ -184,15 +183,14 @@ func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 		CollectionPath: "/admin/realms/aaa/user-registry/bbb/mappers",
 		LocalAlias:     "ccc",
 		RemoteID:       "mapper-id",
-		Metadata: metadata.ResourceMetadata{
-			CollectionPath: "/admin/realms/{{.realm}}/components",
-			Operations: map[string]metadata.OperationSpec{
-				string(metadata.OperationList): {
-					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
-				},
+		Payload:        map[string]any{"id": "mapper-id"},
+	}, metadata.ResourceMetadata{
+		CollectionPath: "/admin/realms/{{.realm}}/components",
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationList): {
+				JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
 			},
 		},
-		Payload: map[string]any{"id": "mapper-id"},
 	})
 	if err != nil {
 		t.Fatalf("BuildResourceScope returned error: %v", err)

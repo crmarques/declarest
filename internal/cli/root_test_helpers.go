@@ -130,7 +130,7 @@ func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata)
 		RepositorySync: repositoryService,
 		Metadata:       metadataService,
 		Secrets:        secretProvider,
-		ResourceServer: resourceServer,
+		ResourceGateway: resourceServer,
 	}
 }
 
@@ -370,13 +370,19 @@ func (r *testOrchestrator) ListLocal(_ context.Context, logicalPath string, poli
 		return filtered, nil
 	}
 	if policy.Recursive {
+		localNestedAlias := path.Base(logicalPath + "/nested")
 		return []resource.Resource{{
 			LogicalPath: logicalPath + "/nested",
+			LocalAlias:  localNestedAlias,
+			RemoteID:    localNestedAlias,
 			Payload:     map[string]any{"path": logicalPath + "/nested"},
 		}}, nil
 	}
+	localDefaultAlias := path.Base(logicalPath)
 	return []resource.Resource{{
 		LogicalPath: logicalPath,
+		LocalAlias:  localDefaultAlias,
+		RemoteID:    localDefaultAlias,
 		Payload:     map[string]any{"path": logicalPath},
 	}}, nil
 }
@@ -405,13 +411,19 @@ func (r *testOrchestrator) ListRemote(_ context.Context, logicalPath string, pol
 		return filtered, nil
 	}
 	if policy.Recursive {
+		nestedAlias := path.Base(logicalPath + "/nested")
 		return []resource.Resource{{
 			LogicalPath: logicalPath + "/nested",
+			LocalAlias:  nestedAlias,
+			RemoteID:    nestedAlias,
 			Payload:     map[string]any{"path": logicalPath + "/nested"},
 		}}, nil
 	}
+	defaultAlias := path.Base(logicalPath)
 	return []resource.Resource{{
 		LogicalPath: logicalPath,
+		LocalAlias:  defaultAlias,
+		RemoteID:    defaultAlias,
 		Payload:     map[string]any{"path": logicalPath},
 	}}, nil
 }
@@ -681,25 +693,27 @@ type testResourceServer struct {
 	tokenErr    error
 }
 
-func (s *testResourceServer) Get(context.Context, resource.Resource) (resource.Value, error) {
+func (s *testResourceServer) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Create(context.Context, resource.Resource) (resource.Value, error) {
+func (s *testResourceServer) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Update(context.Context, resource.Resource) (resource.Value, error) {
+func (s *testResourceServer) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
 	return map[string]any{"ok": true}, nil
 }
 
-func (s *testResourceServer) Delete(context.Context, resource.Resource) error { return nil }
+func (s *testResourceServer) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
+	return nil
+}
 
 func (s *testResourceServer) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	return nil, nil
 }
 
-func (s *testResourceServer) Exists(context.Context, resource.Resource) (bool, error) {
+func (s *testResourceServer) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
 	return true, nil
 }
 

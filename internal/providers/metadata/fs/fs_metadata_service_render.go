@@ -101,7 +101,6 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		CollectionPath: input.CollectionPath,
 		LocalAlias:     input.LocalAlias,
 		RemoteID:       input.RemoteID,
-		Metadata:       input.Metadata,
 		Payload:        input.Payload,
 	}
 
@@ -125,11 +124,11 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	resolvedMetadata := metadatadomain.CloneResourceMetadata(resourceInfo.Metadata)
+	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
 	if metadataEmpty(resolvedMetadata) {
 		resolvedMetadata, err = s.ResolveForPath(ctx, targetPath)
 		if err != nil {
-			if isTypedCategory(err, faults.NotFoundError) {
+			if faults.IsCategory(err, faults.NotFoundError) {
 				resolvedMetadata = metadatadomain.ResourceMetadata{}
 			} else {
 				debugctx.Printf(
@@ -199,9 +198,8 @@ func buildTemplateValue(
 		CollectionPath: collectionPathForLogicalPath(logicalPath),
 		LocalAlias:     alias,
 		RemoteID:       remoteID,
-		Metadata:       metadata,
 		Payload:        normalizedPayload,
-	})
+	}, metadata)
 }
 
 func buildTemplateScopeForResource(
@@ -248,9 +246,8 @@ func buildTemplateScopeForResource(
 		CollectionPath: collectionPath,
 		LocalAlias:     localAlias,
 		RemoteID:       remoteID,
-		Metadata:       resolvedMetadata,
 		Payload:        normalizedPayload,
-	})
+	}, resolvedMetadata)
 }
 
 func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
@@ -262,8 +259,4 @@ func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
 		value.Filter == nil &&
 		value.Suppress == nil &&
 		strings.TrimSpace(value.JQ) == ""
-}
-
-func isTypedCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
 }

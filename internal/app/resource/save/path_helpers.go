@@ -12,30 +12,30 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
-	serverdomain "github.com/crmarques/declarest/server"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {
 	trimmedPath := strings.TrimSpace(rawPath)
 	if trimmedPath == "" {
-		return "", false, false, validationError("path is required", nil)
+		return "", false, false, faults.NewValidationError("path is required", nil)
 	}
 	explicitCollectionTarget := trimmedPath != "/" && strings.HasSuffix(trimmedPath, "/")
 
 	normalizedInput := strings.ReplaceAll(trimmedPath, "\\", "/")
 	if !strings.HasPrefix(normalizedInput, "/") {
-		return "", false, false, validationError("logical path must be absolute", nil)
+		return "", false, false, faults.NewValidationError("logical path must be absolute", nil)
 	}
 
 	for _, segment := range strings.Split(normalizedInput, "/") {
 		if segment == ".." {
-			return "", false, false, validationError("logical path must not contain traversal segments", nil)
+			return "", false, false, faults.NewValidationError("logical path must not contain traversal segments", nil)
 		}
 	}
 
 	normalizedPath := path.Clean(normalizedInput)
 	if !strings.HasPrefix(normalizedPath, "/") {
-		return "", false, false, validationError("logical path must be absolute", nil)
+		return "", false, false, faults.NewValidationError("logical path must be absolute", nil)
 	}
 	if normalizedPath != "/" {
 		normalizedPath = strings.TrimSuffix(normalizedPath, "/")
@@ -73,7 +73,7 @@ func resolveSaveRemoteValue(
 	if err == nil {
 		return remoteValue, nil
 	}
-	if !isTypedErrorCategory(err, faults.NotFoundError) {
+	if !faults.IsCategory(err, faults.NotFoundError) {
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func saveListPayloadFromResources(items []resource.Resource) resource.Value {
 }
 
 func isCollectionListShapeError(err error) bool {
-	return serverdomain.IsListPayloadShapeError(err)
+	return gatewaydomain.IsListPayloadShapeError(err)
 }
 
 func splitSavePathSegments(logicalPath string) []string {
@@ -125,7 +125,7 @@ func expandSaveWildcardPaths(
 ) ([]string, error) {
 	segments := splitSavePathSegments(wildcardPath)
 	if len(segments) == 0 {
-		return nil, validationError("wildcard save path must target a collection or resource", nil)
+		return nil, faults.NewValidationError("wildcard save path must target a collection or resource", nil)
 	}
 
 	currentPaths := []string{"/"}
@@ -178,7 +178,7 @@ func expandSaveWildcardPaths(
 func appendSavePathSegment(parentPath string, segment string) (string, error) {
 	trimmedSegment := strings.TrimSpace(segment)
 	if trimmedSegment == "" {
-		return "", validationError("wildcard path contains an empty segment", nil)
+		return "", faults.NewValidationError("wildcard path contains an empty segment", nil)
 	}
 	return resource.JoinLogicalPath(parentPath, trimmedSegment)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
+	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
@@ -216,12 +217,12 @@ func (s *FSMetadataService) decodeMetadata(data []byte) (metadatadomain.Resource
 	case config.ResourceFormatYAML:
 		decoded, err = metadatadomain.DecodeResourceMetadataYAML(data)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, validationError("invalid yaml metadata", err)
+			return metadatadomain.ResourceMetadata{}, faults.NewValidationError("invalid yaml metadata", err)
 		}
 	default:
 		decoded, err = metadatadomain.DecodeResourceMetadataJSON(data)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, validationError("invalid json metadata", err)
+			return metadatadomain.ResourceMetadata{}, faults.NewValidationError("invalid json metadata", err)
 		}
 	}
 

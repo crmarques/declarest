@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/resource"
 	"go.yaml.in/yaml/v3"
 )
@@ -20,7 +21,7 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, va
 		return err
 	}
 	if normalizedPath == "/" {
-		return validationError("logical path must target a resource, not root", nil)
+		return faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
 	normalizedValue, err := resource.Normalize(value)
@@ -84,7 +85,7 @@ func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (re
 		return nil, err
 	}
 	if normalizedPath == "/" {
-		return nil, validationError("logical path must target a resource, not root", nil)
+		return nil, faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
 	targetPath, err := r.payloadFilePath(normalizedPath)
@@ -134,7 +135,7 @@ func (r *LocalResourceRepository) decodePayload(data []byte) (resource.Value, er
 	case config.ResourceFormatYAML:
 		var decoded any
 		if err := yaml.Unmarshal(data, &decoded); err != nil {
-			return nil, validationError("invalid yaml payload", err)
+			return nil, faults.NewValidationError("invalid yaml payload", err)
 		}
 		return resource.Normalize(decoded)
 	case config.ResourceFormatJSON:
@@ -145,7 +146,7 @@ func (r *LocalResourceRepository) decodePayload(data []byte) (resource.Value, er
 
 		var decoded any
 		if err := decoder.Decode(&decoded); err != nil {
-			return nil, validationError("invalid json payload", err)
+			return nil, faults.NewValidationError("invalid json payload", err)
 		}
 		return resource.Normalize(decoded)
 	}

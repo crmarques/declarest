@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/crmarques/declarest/faults"
 )
 
 const maxVaultResponseBytes = 4 << 20
@@ -90,7 +92,7 @@ func mapVaultStatus(status int, response vaultResponse, allowNotFound bool, notF
 	case status >= 500:
 		return transportError(firstVaultError(response, "vault service is unavailable"), nil)
 	default:
-		return validationError(firstVaultError(response, "vault request failed"), nil)
+		return faults.NewValidationError(firstVaultError(response, "vault request failed"), nil)
 	}
 }
 

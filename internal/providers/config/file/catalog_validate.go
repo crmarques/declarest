@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
 )
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
@@ -14,7 +15,7 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 
 	if len(contextCatalog.Contexts) == 0 {
 		if contextCatalog.CurrentCtx != "" {
-			return validationError("current-ctx must be empty when contexts list is empty", nil)
+			return faults.NewValidationError("current-ctx must be empty when contexts list is empty", nil)
 		}
 		return nil
 	}
@@ -22,10 +23,10 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	seen := map[string]struct{}{}
 	for _, item := range contextCatalog.Contexts {
 		if item.Name == "" {
-			return validationError("context name must not be empty", nil)
+			return faults.NewValidationError("context name must not be empty", nil)
 		}
 		if _, exists := seen[item.Name]; exists {
-			return validationError(fmt.Sprintf("duplicate context name %q", item.Name), nil)
+			return faults.NewValidationError(fmt.Sprintf("duplicate context name %q", item.Name), nil)
 		}
 		seen[item.Name] = struct{}{}
 
@@ -35,11 +36,11 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	}
 
 	if contextCatalog.CurrentCtx == "" {
-		return validationError("current-ctx must be set when contexts are defined", nil)
+		return faults.NewValidationError("current-ctx must be set when contexts are defined", nil)
 	}
 
 	if _, exists := seen[contextCatalog.CurrentCtx]; !exists {
-		return validationError(fmt.Sprintf("current-ctx %q does not match any context", contextCatalog.CurrentCtx), nil)
+		return faults.NewValidationError(fmt.Sprintf("current-ctx %q does not match any context", contextCatalog.CurrentCtx), nil)
 	}
 
 	return nil
@@ -49,7 +50,7 @@ func validateConfig(cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
 
 	if cfg.Name == "" {
-		return validationError("context name must not be empty", nil)
+		return faults.NewValidationError("context name must not be empty", nil)
 	}
 
 	if err := validateRepository(cfg.Repository); err != nil {
@@ -127,7 +128,7 @@ func validateRepository(repository config.Repository) error {
 	if repository.ResourceFormat != "" &&
 		repository.ResourceFormat != config.ResourceFormatJSON &&
 		repository.ResourceFormat != config.ResourceFormatYAML {
-		return validationError("repository.resource-format must be json or yaml", nil)
+		return faults.NewValidationError("repository.resource-format must be json or yaml", nil)
 	}
 	if repository.ResourceFormat == "" {
 		repository.ResourceFormat = config.ResourceFormatJSON
@@ -137,27 +138,27 @@ func validateRepository(repository config.Repository) error {
 	}
 
 	if countSet(repository.Git != nil, repository.Filesystem != nil) != 1 {
-		return validationError("repository must define exactly one of git or filesystem", nil)
+		return faults.NewValidationError("repository must define exactly one of git or filesystem", nil)
 	}
 
 	if repository.Git != nil {
 		if repository.Git.Local.BaseDir == "" {
-			return validationError("repository.git.local.base-dir is required", nil)
+			return faults.NewValidationError("repository.git.local.base-dir is required", nil)
 		}
 		if repository.Git.Remote != nil {
 			if repository.Git.Remote.URL == "" {
-				return validationError("repository.git.remote.url is required", nil)
+				return faults.NewValidationError("repository.git.remote.url is required", nil)
 			}
 			if repository.Git.Remote.Auth != nil {
 				if countSet(repository.Git.Remote.Auth.BasicAuth != nil, repository.Git.Remote.Auth.SSH != nil, repository.Git.Remote.Auth.AccessKey != nil) != 1 {
-					return validationError("repository.git.remote.auth must define exactly one of basic-auth, ssh, access-key", nil)
+					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basic-auth, ssh, access-key", nil)
 				}
 			}
 		}
 	}
 
 	if repository.Filesystem != nil && repository.Filesystem.BaseDir == "" {
-		return validationError("repository.filesystem.base-dir is required", nil)
+		return faults.NewValidationError("repository.filesystem.base-dir is required", nil)
 	}
 
 	return nil
@@ -165,16 +166,16 @@ func validateRepository(repository config.Repository) error {
 
 func validateResourceServer(resourceServer *config.ResourceServer) error {
 	if resourceServer == nil {
-		return validationError("resource-server is required", nil)
+		return faults.NewValidationError("resource-server is required", nil)
 	}
 	if resourceServer.HTTP == nil {
-		return validationError("resource-server must define http", nil)
+		return faults.NewValidationError("resource-server must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return validationError("resource-server.http.base-url is required", nil)
+		return faults.NewValidationError("resource-server.http.base-url is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
-		return validationError("resource-server.http.auth is required", nil)
+		return faults.NewValidationError("resource-server.http.auth is required", nil)
 	}
 
 	if countSet(
@@ -183,31 +184,31 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 		resourceServer.HTTP.Auth.BearerToken != nil,
 		resourceServer.HTTP.Auth.CustomHeader != nil,
 	) != 1 {
-		return validationError("resource-server.http.auth must define exactly one of oauth2, basic-auth, bearer-token, custom-header", nil)
+		return faults.NewValidationError("resource-server.http.auth must define exactly one of oauth2, basic-auth, bearer-token, custom-header", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return validationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return faults.NewValidationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 	}
 
 	if resourceServer.HTTP.Auth.BasicAuth != nil {
 		basic := resourceServer.HTTP.Auth.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return validationError("resource-server.http.auth.basic-auth requires username and password", nil)
+			return faults.NewValidationError("resource-server.http.auth.basic-auth requires username and password", nil)
 		}
 	}
 
 	if resourceServer.HTTP.Auth.BearerToken != nil && resourceServer.HTTP.Auth.BearerToken.Token == "" {
-		return validationError("resource-server.http.auth.bearer-token.token is required", nil)
+		return faults.NewValidationError("resource-server.http.auth.bearer-token.token is required", nil)
 	}
 
 	if resourceServer.HTTP.Auth.CustomHeader != nil {
 		head := resourceServer.HTTP.Auth.CustomHeader
 		if head.Header == "" || head.Value == "" {
-			return validationError("resource-server.http.auth.custom-header requires header and value", nil)
+			return faults.NewValidationError("resource-server.http.auth.custom-header requires header and value", nil)
 		}
 	}
 
@@ -220,12 +221,12 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 	}
 
 	if countSet(secretStore.File != nil, secretStore.Vault != nil) != 1 {
-		return validationError("secret-store must define exactly one of file or vault", nil)
+		return faults.NewValidationError("secret-store must define exactly one of file or vault", nil)
 	}
 
 	if secretStore.File != nil {
 		if secretStore.File.Path == "" {
-			return validationError("secret-store.file.path is required", nil)
+			return faults.NewValidationError("secret-store.file.path is required", nil)
 		}
 		if countSet(
 			secretStore.File.Key != "",
@@ -233,23 +234,23 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 			secretStore.File.Passphrase != "",
 			secretStore.File.PassphraseFile != "",
 		) != 1 {
-			return validationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
+			return faults.NewValidationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
 		}
 	}
 
 	if secretStore.Vault != nil {
 		if secretStore.Vault.Address == "" {
-			return validationError("secret-store.vault.address is required", nil)
+			return faults.NewValidationError("secret-store.vault.address is required", nil)
 		}
 		if secretStore.Vault.Auth == nil {
-			return validationError("secret-store.vault.auth is required", nil)
+			return faults.NewValidationError("secret-store.vault.auth is required", nil)
 		}
 		if countSet(
 			secretStore.Vault.Auth.Token != "",
 			secretStore.Vault.Auth.Password != nil,
 			secretStore.Vault.Auth.AppRole != nil,
 		) != 1 {
-			return validationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
+			return faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
 		}
 	}
 
@@ -261,7 +262,7 @@ func validateMetadata(metadata config.Metadata) error {
 	bundle := strings.TrimSpace(metadata.Bundle)
 
 	if baseDir != "" && bundle != "" {
-		return validationError("metadata must define at most one of base-dir or bundle", nil)
+		return faults.NewValidationError("metadata must define at most one of base-dir or bundle", nil)
 	}
 
 	return nil
@@ -275,17 +276,17 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			cfg.Repository.ResourceFormat = value
 		case "repository.git.local.base-dir":
 			if cfg.Repository.Git == nil {
-				return config.Context{}, validationError("override repository.git.local.base-dir requires repository.git to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override repository.git.local.base-dir requires repository.git to be configured", nil)
 			}
 			cfg.Repository.Git.Local.BaseDir = value
 		case "repository.filesystem.base-dir":
 			if cfg.Repository.Filesystem == nil {
-				return config.Context{}, validationError("override repository.filesystem.base-dir requires repository.filesystem to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override repository.filesystem.base-dir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
 		case "resource-server.http.base-url":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, validationError("override resource-server.http.base-url requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override resource-server.http.base-url requires resource-server.http to be configured", nil)
 			}
 			cfg.ResourceServer.HTTP.BaseURL = value
 		case "metadata.base-dir":

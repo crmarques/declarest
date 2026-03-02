@@ -1032,19 +1032,19 @@ func TestResourceExistsPropagatesErrors(t *testing.T) {
 func TestIsTypedErrorCategory(t *testing.T) {
 	t.Parallel()
 
-	if isTypedErrorCategory(nil, faults.ValidationError) {
+	if faults.IsCategory(nil, faults.ValidationError) {
 		t.Fatal("expected nil error to not match typed category")
 	}
 
-	if isTypedErrorCategory(errors.New("plain error"), faults.ValidationError) {
+	if faults.IsCategory(errors.New("plain error"), faults.ValidationError) {
 		t.Fatal("expected non-typed error to not match typed category")
 	}
 
 	typedErr := faults.NewTypedError(faults.ValidationError, "bad input", nil)
-	if !isTypedErrorCategory(typedErr, faults.ValidationError) {
+	if !faults.IsCategory(typedErr, faults.ValidationError) {
 		t.Fatal("expected typed error to match category")
 	}
-	if isTypedErrorCategory(typedErr, faults.NotFoundError) {
+	if faults.IsCategory(typedErr, faults.NotFoundError) {
 		t.Fatal("expected typed error to not match different category")
 	}
 }

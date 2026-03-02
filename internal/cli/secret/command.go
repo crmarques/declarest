@@ -568,12 +568,8 @@ func decodeDetectInput(command *cobra.Command, flags shared.InputFlags) (resourc
 }
 
 func isInputRequiredError(err error) bool {
-	if !isTypedErrorCategory(err, faults.ValidationError) {
+	if !faults.IsCategory(err, faults.ValidationError) {
 		return false
 	}
 	return strings.Contains(err.Error(), "input is required")
-}
-
-func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
 }

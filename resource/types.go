@@ -1,9 +1,5 @@
 package resource
 
-import (
-	"github.com/crmarques/declarest/metadata"
-)
-
 type Value = any
 
 type Resource struct {
@@ -12,7 +8,6 @@ type Resource struct {
 	LocalAlias         string
 	RemoteID           string
 	ResolvedRemotePath string
-	Metadata           metadata.ResourceMetadata
 	Payload            Value
 }
 

@@ -3,8 +3,25 @@ package orchestrator
 import (
 	"context"
 
+	"github.com/crmarques/declarest/gateway"
+	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/secrets"
 )
+
+// ServiceAccessor provides access to the individual domain services held by an
+// orchestrator implementation. Clients that only need the orchestrator for
+// high-level operations (read, save, mutate) should depend on the Orchestrator
+// interface. Clients that need direct access to sub-services (e.g. CLI commands
+// for metadata inspection or secret management) use ServiceAccessor.
+type ServiceAccessor interface {
+	RepositoryStore() repository.ResourceStore
+	RepositorySync() repository.RepositorySync
+	MetadataService() metadata.MetadataService
+	SecretProvider() secrets.SecretProvider
+	ResourceGateway() gateway.ResourceGateway
+}
 
 type LocalReader interface {
 	GetLocal(ctx context.Context, logicalPath string) (resource.Value, error)

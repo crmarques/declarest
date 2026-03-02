@@ -38,7 +38,7 @@ type DetectedResourceSecrets struct {
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
 	if deps.SecretProvider == nil {
-		return Result{}, validationError("secret provider is not configured", nil)
+		return Result{}, faults.NewValidationError("secret provider is not configured", nil)
 	}
 
 	if req.HasInput {
@@ -54,13 +54,13 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 		if req.Fix {
 			if strings.TrimSpace(req.ResolvedPath) == "" {
-				return Result{}, validationError("path is required", nil)
+				return Result{}, faults.NewValidationError("path is required", nil)
 			}
 			if err := applyDetectedSecretAttributes(ctx, deps, req.ResolvedPath, appliedKeys); err != nil {
 				return Result{}, err
 			}
 		} else if strings.TrimSpace(req.ResolvedPath) != "" {
-			return Result{}, validationError("path input requires --fix when detecting from input payload", nil)
+			return Result{}, faults.NewValidationError("path input requires --fix when detecting from input payload", nil)
 		}
 
 		return Result{Output: appliedKeys}, nil
@@ -94,7 +94,7 @@ func detectSecretCandidatesFromRepository(
 	secretAttribute string,
 ) ([]DetectedResourceSecrets, error) {
 	if deps.Orchestrator == nil {
-		return nil, validationError("orchestrator is not configured", nil)
+		return nil, faults.NewValidationError("orchestrator is not configured", nil)
 	}
 
 	items, err := deps.Orchestrator.ListLocal(ctx, scanPath, orchestratordomain.ListPolicy{Recursive: true})
@@ -139,7 +139,7 @@ func detectSecretCandidatesFromRepository(
 	}
 
 	if requestedAttribute != "" && !requestedAttributeMatched {
-		return nil, validationError("requested --secret-attribute was not detected", nil)
+		return nil, faults.NewValidationError("requested --secret-attribute was not detected", nil)
 	}
 
 	return results, nil
@@ -171,7 +171,7 @@ func resolveDetectSecretAttributes(keys []string, secretAttribute string) ([]str
 	}
 
 	if strings.TrimSpace(secretAttribute) != "" {
-		return nil, validationError("requested --secret-attribute was not detected", nil)
+		return nil, faults.NewValidationError("requested --secret-attribute was not detected", nil)
 	}
 
 	return []string{}, nil
@@ -182,11 +182,8 @@ func applyDetectedSecretAttributes(ctx context.Context, deps Dependencies, logic
 		return nil
 	}
 	if deps.Metadata == nil {
-		return validationError("metadata service is not configured", nil)
+		return faults.NewValidationError("metadata service is not configured", nil)
 	}
 	return secretworkflow.PersistDetectedAttributes(ctx, deps.Metadata, logicalPath, detected)
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}

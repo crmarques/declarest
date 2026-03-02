@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -206,10 +205,8 @@ func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/master/clients/f88c68f3",
 			CollectionPath: "/admin/realms/master/clients",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "clientId",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias:     "account",
+			RemoteID:       "f88c68f3",
 			Payload: map[string]any{
 				"id":       "f88c68f3",
 				"clientId": "account",
@@ -243,10 +240,8 @@ func TestPathCompletionPreservesAliasesWithSpaces(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/publico-br/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			CollectionPath: "/admin/realms/publico-br/user-registry",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias:     "AD PRD",
+			RemoteID:       "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -279,10 +274,8 @@ func TestPathCompletionEscapedExactAliasFallsBackToRepositoryDescendants(t *test
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			CollectionPath: "/admin/realms/master/user-registry",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias: "AD PRD",
+			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -324,10 +317,8 @@ func TestPathCompletionEscapedCollectionTokenCompletesNextSegment(t *testing.T) 
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			CollectionPath: "/admin/realms/master/user-registry",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias: "AD PRD",
+			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -369,10 +360,8 @@ func TestPathCompletionAvoidsSelfAliasSegmentDuplication(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias: "AD PRD",
+			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -417,10 +406,8 @@ func TestPathCompletionAvoidsRepeatedAliasChildSuggestion(t *testing.T) {
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias: "AD PRD",
+			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",
@@ -465,10 +452,8 @@ func TestPathCompletionUsesMetadataOnlyBranchWhenOpenAPIHasNoPath(t *testing.T) 
 		{
 			LogicalPath:    "/admin/realms/master/user-registry/AD PRD/AD PRD",
 			CollectionPath: "/admin/realms/master/user-registry/AD PRD",
-			Metadata: metadatadomain.ResourceMetadata{
-				AliasFromAttribute: "name",
-				IDFromAttribute:    "id",
-			},
+			LocalAlias: "AD PRD",
+			RemoteID:   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 			Payload: map[string]any{
 				"id":   "13de4420-7c8d-4db7-b8f7-2d2a26f2053e",
 				"name": "AD PRD",

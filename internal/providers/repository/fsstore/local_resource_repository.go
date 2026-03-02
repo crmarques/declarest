@@ -53,7 +53,7 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 		return err
 	}
 	if fromNormalized == "/" || toNormalized == "/" {
-		return validationError("move requires resource paths", nil)
+		return faults.NewValidationError("move requires resource paths", nil)
 	}
 
 	fromFile, err := r.payloadFilePath(fromNormalized)
@@ -97,7 +97,7 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 
 func (r *LocalResourceRepository) Init(_ context.Context) error {
 	if r.baseDir == "" {
-		return validationError("repository base directory must not be empty", nil)
+		return faults.NewValidationError("repository base directory must not be empty", nil)
 	}
 	if err := os.MkdirAll(r.baseDir, 0o755); err != nil {
 		return internalError("failed to initialize repository directory", err)
@@ -126,13 +126,13 @@ func (r *LocalResourceRepository) Check(_ context.Context) error {
 		return internalError("failed to inspect repository base directory", err)
 	}
 	if !info.IsDir() {
-		return validationError("repository base directory is not a directory", nil)
+		return faults.NewValidationError("repository base directory is not a directory", nil)
 	}
 	return nil
 }
 
 func (r *LocalResourceRepository) Push(context.Context, repository.PushPolicy) error {
-	return validationError("push requires git repository with remote configuration", nil)
+	return faults.NewValidationError("push requires git repository with remote configuration", nil)
 }
 
 func (r *LocalResourceRepository) SyncStatus(context.Context) (repository.SyncReport, error) {
@@ -142,10 +142,6 @@ func (r *LocalResourceRepository) SyncStatus(context.Context) (repository.SyncRe
 		Behind:         0,
 		HasUncommitted: false,
 	}, nil
-}
-
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
 }
 
 func notFoundError(message string) error {

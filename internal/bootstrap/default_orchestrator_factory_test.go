@@ -20,7 +20,7 @@ import (
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
-	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
+	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 )
 
 func TestBuildDefaultOrchestratorWiring(t *testing.T) {
@@ -52,8 +52,8 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
 			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.MetadataService())
 		}
-		if defaultOrchestrator.ResourceServer() != nil {
-			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.ResourceServer())
+		if defaultOrchestrator.ResourceGateway() != nil {
+			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.ResourceGateway())
 		}
 		if defaultOrchestrator.SecretProvider() != nil {
 			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.SecretProvider())
@@ -112,10 +112,10 @@ paths: {}
 		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
 			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", defaultOrchestrator.MetadataService())
 		}
-		if defaultOrchestrator.ResourceServer() == nil {
+		if defaultOrchestrator.ResourceGateway() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceGateway().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -181,11 +181,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.ResourceServer() == nil {
+		if defaultOrchestrator.ResourceGateway() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceGateway().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
 		}
@@ -250,11 +250,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.ResourceServer() == nil {
+		if defaultOrchestrator.ResourceGateway() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.ResourceServer().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := defaultOrchestrator.ResourceGateway().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
 		}
@@ -303,8 +303,8 @@ distribution:
 		if _, ok := defaultOrchestrator.RepositoryStore().(*gitrepository.GitResourceRepository); !ok {
 			t.Fatalf("expected GitResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.ResourceServer().(*httpserver.HTTPResourceServerGateway); !ok {
-			t.Fatalf("expected HTTPResourceServerGateway, got %T", defaultOrchestrator.ResourceServer())
+		if _, ok := defaultOrchestrator.ResourceGateway().(*httpgateway.HTTPResourceGateway); !ok {
+			t.Fatalf("expected HTTPResourceGateway, got %T", defaultOrchestrator.ResourceGateway())
 		}
 		if _, ok := defaultOrchestrator.SecretProvider().(*filesecrets.FileSecretService); !ok {
 			t.Fatalf("expected FileSecretService, got %T", defaultOrchestrator.SecretProvider())

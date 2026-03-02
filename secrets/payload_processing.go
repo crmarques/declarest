@@ -26,7 +26,7 @@ func NormalizePlaceholders(value resource.Value) (resource.Value, error) {
 
 func MaskPayload(value resource.Value, storeFn func(key string, value string) error) (resource.Value, error) {
 	if storeFn == nil {
-		return nil, validationError("secret store function must not be nil", nil)
+		return nil, faults.NewValidationError("secret store function must not be nil", nil)
 	}
 
 	normalized, err := resource.Normalize(value)
@@ -87,7 +87,7 @@ func ResolvePayloadDirectivesForResource(
 
 	resolvedFormat, err := metadata.ValidateResourceFormat(resourceFormat)
 	if err != nil {
-		return nil, validationError("invalid repository resource format", err)
+		return nil, faults.NewValidationError("invalid repository resource format", err)
 	}
 
 	withFormat, err := resolveResourceFormatDirectivesValue(normalized, resolvedFormat)
@@ -113,7 +113,7 @@ func resolvePayloadWithResourceScope(
 	getFn func(key string) (string, error),
 ) (resource.Value, error) {
 	if getFn == nil {
-		return nil, validationError("secret get function must not be nil", nil)
+		return nil, faults.NewValidationError("secret get function must not be nil", nil)
 	}
 
 	normalized, err := resource.Normalize(value)
@@ -244,7 +244,7 @@ func collectMaskCandidates(
 				stringValue, isString := field.(string)
 				if !isString {
 					if field != nil {
-						return validationError("secret masking supports only string values for detected keys", nil)
+						return faults.NewValidationError("secret masking supports only string values for detected keys", nil)
 					}
 				} else {
 					_, _, isPlaceholder, err := parseSecretPlaceholder(stringValue)
@@ -253,12 +253,12 @@ func collectMaskCandidates(
 					}
 					if !isPlaceholder {
 						if existingPath, found := scopeByKey[key]; found && existingPath != attributePath {
-							return validationError("secret masking key scope is ambiguous", nil)
+							return faults.NewValidationError("secret masking key scope is ambiguous", nil)
 						}
 						scopeByKey[key] = attributePath
 
 						if _, found := candidates[attributePath]; found {
-							return validationError("secret masking key scope is ambiguous", nil)
+							return faults.NewValidationError("secret masking key scope is ambiguous", nil)
 						}
 						candidates[attributePath] = stringValue
 					}
@@ -435,7 +435,7 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 
 	argument := strings.TrimSpace(strings.TrimPrefix(inner, "secret"))
 	if argument == "" {
-		return "", false, true, validationError("secret placeholder argument is required", nil)
+		return "", false, true, faults.NewValidationError("secret placeholder argument is required", nil)
 	}
 
 	if argument == "." {
@@ -445,18 +445,18 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 	if strings.HasPrefix(argument, "\"") {
 		parsed, parseErr := strconv.Unquote(argument)
 		if parseErr != nil {
-			return "", false, true, validationError("secret placeholder key is invalid", parseErr)
+			return "", false, true, faults.NewValidationError("secret placeholder key is invalid", parseErr)
 		}
 
 		parsed = strings.TrimSpace(parsed)
 		if parsed == "" {
-			return "", false, true, validationError("secret placeholder key must not be empty", nil)
+			return "", false, true, faults.NewValidationError("secret placeholder key must not be empty", nil)
 		}
 		return parsed, false, true, nil
 	}
 
 	if strings.ContainsAny(argument, " \t\r\n") {
-		return "", false, true, validationError("secret placeholder key with spaces must be quoted", nil)
+		return "", false, true, faults.NewValidationError("secret placeholder key with spaces must be quoted", nil)
 	}
 
 	return argument, false, true, nil
@@ -481,10 +481,10 @@ func parseResourceFormatPlaceholder(value string) (isPlaceholder bool, err error
 
 	argument := strings.TrimSpace(strings.TrimPrefix(inner, "resource_format"))
 	if argument == "" {
-		return true, validationError("resource_format placeholder argument is required", nil)
+		return true, faults.NewValidationError("resource_format placeholder argument is required", nil)
 	}
 	if argument != "." {
-		return true, validationError("resource_format placeholder supports only {{resource_format .}}", nil)
+		return true, faults.NewValidationError("resource_format placeholder supports only {{resource_format .}}", nil)
 	}
 
 	return true, nil
@@ -516,14 +516,14 @@ func resolvePlaceholderAttribute(key string, isCurrent bool, currentPath string)
 	if !isCurrent {
 		resolved := strings.TrimSpace(key)
 		if resolved == "" {
-			return "", validationError("secret placeholder key must not be empty", nil)
+			return "", faults.NewValidationError("secret placeholder key must not be empty", nil)
 		}
 		return resolved, nil
 	}
 
 	resolved := strings.TrimSpace(currentPath)
 	if resolved == "" {
-		return "", validationError("secret placeholder {{secret .}} requires map field scope", nil)
+		return "", faults.NewValidationError("secret placeholder {{secret .}} requires map field scope", nil)
 	}
 
 	return resolved, nil
@@ -732,6 +732,3 @@ func splitIdentifierTokens(value string) []string {
 	return tokens
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}

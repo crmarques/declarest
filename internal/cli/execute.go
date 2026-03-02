@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -36,29 +35,7 @@ func Execute(deps Dependencies) error {
 }
 
 func ExitCodeForError(err error) int {
-	if err == nil {
-		return 0
-	}
-
-	var typedErr *faults.TypedError
-	if !errors.As(err, &typedErr) {
-		return 1
-	}
-
-	switch typedErr.Category {
-	case faults.ValidationError:
-		return 2
-	case faults.NotFoundError:
-		return 3
-	case faults.AuthError:
-		return 4
-	case faults.ConflictError:
-		return 5
-	case faults.TransportError:
-		return 6
-	default:
-		return 1
-	}
+	return faults.ExitCodeForError(err)
 }
 
 func writeExecutionOKStatus(w io.Writer) {

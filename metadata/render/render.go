@@ -56,11 +56,10 @@ func RenderResourceMetadataWithFormat(
 		CollectionPath: defaultCollection,
 		LocalAlias:     alias,
 		RemoteID:       remoteID,
-		Metadata:       metadataValue,
 		Payload:        normalizedPayload,
 	}
 
-	scope, err := templatescope.BuildResourceScope(resourceInfo)
+	scope, err := templatescope.BuildResourceScope(resourceInfo, metadataValue)
 	if err != nil {
 		return metadata.ResourceMetadata{}, err
 	}

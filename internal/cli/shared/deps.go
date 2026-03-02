@@ -6,7 +6,7 @@ import (
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
-	"github.com/crmarques/declarest/server"
+	"github.com/crmarques/declarest/gateway"
 )
 
 type CommandDependencies struct {
@@ -16,7 +16,7 @@ type CommandDependencies struct {
 	RepositorySync repository.RepositorySync
 	Metadata       metadata.MetadataService
 	Secrets        secrets.SecretProvider
-	ResourceServer server.ResourceServer
+	ResourceGateway gateway.ResourceGateway
 }
 
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
@@ -77,9 +77,9 @@ func RequireSecretProvider(deps CommandDependencies) (secrets.SecretProvider, er
 	return deps.Secrets, nil
 }
 
-func RequireResourceServer(deps CommandDependencies) (server.ResourceServer, error) {
-	if deps.ResourceServer == nil {
-		return nil, ValidationError("resource server is not configured", nil)
+func RequireResourceGateway(deps CommandDependencies) (gateway.ResourceGateway, error) {
+	if deps.ResourceGateway == nil {
+		return nil, ValidationError("resource gateway is not configured", nil)
 	}
-	return deps.ResourceServer, nil
+	return deps.ResourceGateway, nil
 }

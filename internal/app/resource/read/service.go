@@ -16,7 +16,7 @@ import (
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
-	serverdomain "github.com/crmarques/declarest/server"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 const (
@@ -64,7 +64,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		if err == nil {
 			return result, nil
 		}
-		if !serverdomain.IsListPayloadShapeError(err) {
+		if !gatewaydomain.IsListPayloadShapeError(err) {
 			return Result{}, err
 		}
 		debugctx.Printf(
@@ -82,7 +82,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	case SourceRemoteServer:
 		value, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
-		return Result{}, validationError("invalid source: use --repository or --remote-server", nil)
+		return Result{}, faults.NewValidationError("invalid source: use --repository or --remote-server", nil)
 	}
 	if err != nil {
 		debugctx.Printf(ctx, "resource read failed path=%q source=%q error=%v", req.LogicalPath, req.Source, err)
@@ -266,7 +266,7 @@ func resolveSecretsForOutput(
 
 	if deps.Secrets == nil {
 		return secretdomain.ResolvePayloadForResource(value, normalizedPath, func(string) (string, error) {
-			return "", validationError(
+			return "", faults.NewValidationError(
 				"flag --show-secrets requires a configured secret provider when payload includes placeholders",
 				nil,
 			)
@@ -286,7 +286,7 @@ func renderMetadataSnapshot(
 	contextName string,
 ) (metadatadomain.ResourceMetadata, error) {
 	if deps.Metadata == nil {
-		return metadatadomain.ResourceMetadata{}, validationError("metadata service is not configured", nil)
+		return metadatadomain.ResourceMetadata{}, faults.NewValidationError("metadata service is not configured", nil)
 	}
 
 	resolvedMetadata, err := deps.Metadata.ResolveForPath(ctx, logicalPath)
@@ -312,14 +312,11 @@ func renderMetadataSnapshot(
 
 func requireOrchestrator(deps Dependencies) (orchestrator.Orchestrator, error) {
 	if deps.Orchestrator == nil {
-		return nil, validationError("orchestrator is not configured", nil)
+		return nil, faults.NewValidationError("orchestrator is not configured", nil)
 	}
 	return deps.Orchestrator, nil
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}
 
 func isNotFoundError(err error) bool {
 	var typedErr *faults.TypedError
@@ -340,7 +337,7 @@ func HasCollectionTargetMarker(rawPath string) bool {
 
 func NormalizeSource(fromRepository bool, fromRemoteServer bool) (string, error) {
 	if fromRepository && fromRemoteServer {
-		return "", validationError("flags --repository and --remote-server cannot be used together", nil)
+		return "", faults.NewValidationError("flags --repository and --remote-server cannot be used together", nil)
 	}
 	if fromRepository {
 		return SourceRepository, nil

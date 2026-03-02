@@ -4,13 +4,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
 func (s *FSMetadataService) metadataFilePath(selector string, kind metadataPathKind) (string, error) {
 	if strings.TrimSpace(s.baseDir) == "" {
-		return "", validationError("metadata base directory must not be empty", nil)
+		return "", faults.NewValidationError("metadata base directory must not be empty", nil)
 	}
 
 	relativeSelector := strings.TrimPrefix(selector, "/")
@@ -25,7 +26,7 @@ func (s *FSMetadataService) metadataFilePath(selector string, kind metadataPathK
 		}
 	case metadataPathResource:
 		if relativeSelector == "" {
-			return "", validationError("resource metadata path must not target root", nil)
+			return "", faults.NewValidationError("resource metadata path must not target root", nil)
 		}
 		targetPath = filepath.Join(s.baseDir, filepath.FromSlash(relativeSelector), "metadata"+s.extension)
 	default:
@@ -33,14 +34,14 @@ func (s *FSMetadataService) metadataFilePath(selector string, kind metadataPathK
 	}
 
 	if !isPathUnderRoot(s.baseDir, targetPath) {
-		return "", validationError("metadata path escapes metadata base directory", nil)
+		return "", faults.NewValidationError("metadata path escapes metadata base directory", nil)
 	}
 	return targetPath, nil
 }
 
 func (s *FSMetadataService) selectorDirPath(selector string) (string, error) {
 	if strings.TrimSpace(s.baseDir) == "" {
-		return "", validationError("metadata base directory must not be empty", nil)
+		return "", faults.NewValidationError("metadata base directory must not be empty", nil)
 	}
 
 	relativeSelector := strings.TrimPrefix(selector, "/")
@@ -49,7 +50,7 @@ func (s *FSMetadataService) selectorDirPath(selector string) (string, error) {
 		targetPath = filepath.Join(s.baseDir, filepath.FromSlash(relativeSelector))
 	}
 	if !isPathUnderRoot(s.baseDir, targetPath) {
-		return "", validationError("metadata path escapes metadata base directory", nil)
+		return "", faults.NewValidationError("metadata path escapes metadata base directory", nil)
 	}
 	return targetPath, nil
 }
@@ -66,7 +67,7 @@ func parseMetadataPath(logicalPath string) (string, metadataPathKind, error) {
 	}
 
 	if kind == metadataPathResource && pathDescriptor.Selector == "/" {
-		return "", metadataPathResource, validationError("resource metadata path must not target root", nil)
+		return "", metadataPathResource, faults.NewValidationError("resource metadata path must not target root", nil)
 	}
 
 	return pathDescriptor.Selector, kind, nil

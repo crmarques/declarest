@@ -426,7 +426,7 @@ func (r *GitResourceRepository) Check(ctx context.Context) error {
 
 func (r *GitResourceRepository) Push(ctx context.Context, policy repository.PushPolicy) error {
 	if !r.hasRemote() {
-		return validationError("push requires remote configuration", nil)
+		return faults.NewValidationError("push requires remote configuration", nil)
 	}
 
 	repo, err := r.openRepositoryForOperation(ctx)
@@ -626,7 +626,7 @@ func (r *GitResourceRepository) authMethod() (transport.AuthMethod, error) {
 		}
 		return sshKeys, nil
 	default:
-		return nil, validationError("git remote auth configuration is invalid", nil)
+		return nil, faults.NewValidationError("git remote auth configuration is invalid", nil)
 	}
 }
 
@@ -636,7 +636,7 @@ func (r *GitResourceRepository) currentHeadBranch(repo *gogit.Repository) (strin
 		return "", internalError("failed to resolve git head", err)
 	}
 	if !head.Name().IsBranch() {
-		return "", validationError("cannot push from detached head", nil)
+		return "", faults.NewValidationError("cannot push from detached head", nil)
 	}
 	return head.Name().Short(), nil
 }
@@ -764,9 +764,6 @@ func classifyRemoteError(message string, err error) error {
 	}
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}
 
 func notFoundError(message string) error {
 	return faults.NewTypedError(faults.NotFoundError, message, nil)

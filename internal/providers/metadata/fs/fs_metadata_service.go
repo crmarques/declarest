@@ -42,10 +42,6 @@ func NewFSMetadataService(baseDir string, resourceFormat string) *FSMetadataServ
 	}
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}
-
 func notFoundError(message string) error {
 	return faults.NewTypedError(faults.NotFoundError, message, nil)
 }

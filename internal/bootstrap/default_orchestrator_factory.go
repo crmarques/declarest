@@ -14,19 +14,19 @@ import (
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
-	httpserver "github.com/crmarques/declarest/internal/providers/server/http"
+	"github.com/crmarques/declarest/internal/defaultorch"
+	httpgateway "github.com/crmarques/declarest/internal/providers/gateway/http"
 	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
-	"github.com/crmarques/declarest/server"
+	"github.com/crmarques/declarest/gateway"
 )
 
 func buildDefaultOrchestrator(
 	ctx context.Context,
 	contextService config.ContextService,
 	selection config.ContextSelection,
-) (*orchestrator.DefaultOrchestrator, error) {
+) (*defaultorch.DefaultOrchestrator, error) {
 	if contextService == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
 	}
@@ -66,7 +66,7 @@ func buildDefaultOrchestrator(
 		)
 	}
 
-	var srv server.ResourceServer
+	var srv gateway.ResourceGateway
 	if resolvedContext.ResourceServer != nil {
 		if resolvedContext.ResourceServer.HTTP == nil {
 			return nil, faults.NewTypedError(faults.InternalError, "resource server provider is invalid", nil)
@@ -79,13 +79,13 @@ func buildDefaultOrchestrator(
 		if serverFormat == "" {
 			serverFormat = config.ResourceFormatJSON
 		}
-		serverOptions := []httpserver.GatewayOption{
-			httpserver.WithResourceFormat(serverFormat),
+		serverOptions := []httpgateway.GatewayOption{
+			httpgateway.WithResourceFormat(serverFormat),
 		}
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
-			serverOptions = append(serverOptions, httpserver.WithMetadataRenderer(renderer))
+			serverOptions = append(serverOptions, httpgateway.WithMetadataRenderer(renderer))
 		}
-		serverManager, err := httpserver.NewHTTPResourceServerGateway(
+		serverManager, err := httpgateway.NewHTTPResourceGateway(
 			serverConfig,
 			serverOptions...,
 		)
@@ -115,7 +115,7 @@ func buildDefaultOrchestrator(
 		}
 	}
 
-	return orchestrator.NewDefaultOrchestrator(
+	return defaultorch.NewDefaultOrchestrator(
 		repo,
 		metadataService,
 		srv,

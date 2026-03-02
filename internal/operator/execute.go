@@ -34,7 +34,7 @@ type ReconcileResult struct {
 func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest) (ReconcileResult, error) {
 	logicalPath := strings.TrimSpace(req.LogicalPath)
 	if logicalPath == "" {
-		return ReconcileResult{}, validationError("logical path is required", nil)
+		return ReconcileResult{}, faults.NewValidationError("logical path is required", nil)
 	}
 
 	source := strings.TrimSpace(req.Source)
@@ -63,6 +63,3 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 	}, nil
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}

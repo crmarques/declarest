@@ -9,7 +9,6 @@ import (
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
-	identitysupport "github.com/crmarques/declarest/resource/identity"
 	"github.com/spf13/cobra"
 )
 
@@ -98,17 +97,6 @@ func renderListText(w io.Writer, items []resource.Resource) error {
 	for _, item := range items {
 		alias := strings.TrimSpace(item.LocalAlias)
 		remoteID := strings.TrimSpace(item.RemoteID)
-		if alias == "" || remoteID == "" {
-			resolvedAlias, resolvedRemoteID, err := identitysupport.ResolveAliasAndRemoteID(item.LogicalPath, item.Metadata, item.Payload)
-			if err == nil {
-				if alias == "" {
-					alias = strings.TrimSpace(resolvedAlias)
-				}
-				if remoteID == "" {
-					remoteID = strings.TrimSpace(resolvedRemoteID)
-				}
-			}
-		}
 		if alias == "" {
 			alias = strings.TrimSpace(item.LogicalPath)
 		}

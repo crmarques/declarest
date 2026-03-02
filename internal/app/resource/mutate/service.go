@@ -52,7 +52,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	if req.HasExplicitInput {
 		if req.Recursive {
-			return Result{}, validationError(
+			return Result{}, faults.NewValidationError(
 				fmt.Sprintf(
 					"flag --recursive cannot be combined with explicit input; remove input to %s resources from repository",
 					strings.TrimSpace(string(req.Operation)),
@@ -97,7 +97,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 			}
 			return orchestratorService.Update(runCtx, logicalPath, localValue)
 		default:
-			return resource.Resource{}, validationError(
+			return resource.Resource{}, faults.NewValidationError(
 				fmt.Sprintf("unsupported resource mutation operation %q", req.Operation),
 				nil,
 			)
@@ -129,7 +129,7 @@ func runExplicitMutation(
 		if getRemoteErr == nil {
 			return orchestratorService.Update(ctx, logicalPath, value)
 		}
-		if isTypedErrorCategory(getRemoteErr, faults.NotFoundError) {
+		if faults.IsCategory(getRemoteErr, faults.NotFoundError) {
 			return orchestratorService.Create(ctx, logicalPath, value)
 		}
 		return resource.Resource{}, getRemoteErr
@@ -138,7 +138,7 @@ func runExplicitMutation(
 	case OperationUpdate:
 		return orchestratorService.Update(ctx, logicalPath, value)
 	default:
-		return resource.Resource{}, validationError(
+		return resource.Resource{}, faults.NewValidationError(
 			fmt.Sprintf("unsupported resource mutation operation %q", operation),
 			nil,
 		)
@@ -162,7 +162,7 @@ func ListLocalTargets(
 				LogicalPath: logicalPath,
 				Payload:     localValue,
 			}}
-		} else if !isTypedErrorCategory(getErr, faults.NotFoundError) {
+		} else if !faults.IsCategory(getErr, faults.NotFoundError) {
 			return nil, getErr
 		}
 	}
@@ -192,14 +192,14 @@ func ListLocalTargetsOrFallbackPath(
 	}
 	if isRepositoryNotConfiguredValidation(err) {
 		if recursive {
-			return nil, validationError(
+			return nil, faults.NewValidationError(
 				"flag --recursive requires a configured repository to resolve delete targets",
 				nil,
 			)
 		}
 		return []resource.Resource{{LogicalPath: logicalPath}}, nil
 	}
-	if isTypedErrorCategory(err, faults.NotFoundError) {
+	if faults.IsCategory(err, faults.NotFoundError) {
 		return []resource.Resource{{LogicalPath: logicalPath}}, nil
 	}
 	return nil, err
@@ -253,16 +253,12 @@ func refreshRepositoryForPaths(ctx context.Context, deps Dependencies, items []r
 }
 
 func isRepositoryNotConfiguredValidation(err error) bool {
-	if !isTypedErrorCategory(err, faults.ValidationError) {
+	if !faults.IsCategory(err, faults.ValidationError) {
 		return false
 	}
 
 	message := strings.TrimSpace(err.Error())
 	return message == "repository store is not configured" || message == "repository manager is not configured"
-}
-
-func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
 }
 
 func logicalPathDepth(logicalPath string) int {
@@ -275,11 +271,8 @@ func logicalPathDepth(logicalPath string) int {
 
 func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
 	if deps.Orchestrator == nil {
-		return nil, validationError("orchestrator is not configured", nil)
+		return nil, faults.NewValidationError("orchestrator is not configured", nil)
 	}
 	return deps.Orchestrator, nil
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}

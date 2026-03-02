@@ -8,7 +8,6 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
-	identitysupport "github.com/crmarques/declarest/resource/identity"
 )
 
 func completionContext(base context.Context) (context.Context, context.CancelFunc) {
@@ -193,17 +192,6 @@ func completionResourcePath(item resource.Resource) string {
 }
 
 func completionAliasSegment(item resource.Resource) string {
-	if payloadMap, ok := item.Payload.(map[string]any); ok {
-		if aliasAttribute := strings.TrimSpace(item.Metadata.AliasFromAttribute); aliasAttribute != "" {
-			if value, found := identitysupport.LookupScalarAttribute(payloadMap, aliasAttribute); found {
-				trimmedValue := strings.TrimSpace(value)
-				if trimmedValue != "" {
-					return trimmedValue
-				}
-			}
-		}
-	}
-
 	trimmedAlias := strings.TrimSpace(item.LocalAlias)
 	if trimmedAlias != "" && trimmedAlias != "/" {
 		return trimmedAlias

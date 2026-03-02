@@ -50,7 +50,7 @@ func BuildOperationScope(
 	return scope, nil
 }
 
-func BuildResourceScope(resourceInfo resource.Resource) (map[string]any, error) {
+func BuildResourceScope(resourceInfo resource.Resource, md metadata.ResourceMetadata) (map[string]any, error) {
 	collectionPath := resourceInfo.CollectionPath
 	if strings.TrimSpace(collectionPath) == "" {
 		collectionPath = collectionPathForLogicalPath(resourceInfo.LogicalPath)
@@ -68,7 +68,7 @@ func BuildResourceScope(resourceInfo resource.Resource) (map[string]any, error) 
 	}
 
 	payloadMap, _ := scope["payload"].(map[string]any)
-	for key, value := range DerivePathTemplateFields(resourceInfo.LogicalPath, resourceInfo.Metadata) {
+	for key, value := range DerivePathTemplateFields(resourceInfo.LogicalPath, md) {
 		trimmedKey := strings.TrimSpace(key)
 		trimmedValue := strings.TrimSpace(value)
 		if trimmedKey == "" || trimmedValue == "" {

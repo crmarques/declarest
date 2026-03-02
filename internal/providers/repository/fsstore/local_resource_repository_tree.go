@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/crmarques/declarest/faults"
 )
 
 func (r *LocalResourceRepository) Tree(ctx context.Context) ([]string, error) {
@@ -15,7 +17,7 @@ func (r *LocalResourceRepository) Tree(ctx context.Context) ([]string, error) {
 
 	root := filepath.Clean(strings.TrimSpace(r.baseDir))
 	if root == "" || root == "." {
-		return nil, validationError("repository base directory is not configured", nil)
+		return nil, faults.NewValidationError("repository base directory is not configured", nil)
 	}
 
 	paths := make([]string, 0, 32)

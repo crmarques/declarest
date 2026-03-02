@@ -66,7 +66,7 @@ type secretSnapshot struct {
 func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error) {
 	path := strings.TrimSpace(cfg.Path)
 	if path == "" {
-		return nil, validationError("secret-store.file.path is required", nil)
+		return nil, faults.NewValidationError("secret-store.file.path is required", nil)
 	}
 
 	setCount := countSet(
@@ -76,7 +76,7 @@ func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error
 		strings.TrimSpace(cfg.PassphraseFile) != "",
 	)
 	if setCount != 1 {
-		return nil, validationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
+		return nil, faults.NewValidationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
 	}
 
 	kdf, err := resolveKDFSettings(cfg.KDF)
@@ -99,7 +99,7 @@ func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error
 	case strings.TrimSpace(cfg.KeyFile) != "":
 		keyFileData, err := os.ReadFile(strings.TrimSpace(cfg.KeyFile))
 		if err != nil {
-			return nil, validationError("secret-store.file.key-file could not be read", err)
+			return nil, faults.NewValidationError("secret-store.file.key-file could not be read", err)
 		}
 		key, err := parseEncryptionKey(string(keyFileData))
 		if err != nil {
@@ -111,15 +111,15 @@ func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error
 	case strings.TrimSpace(cfg.PassphraseFile) != "":
 		passphraseData, err := os.ReadFile(strings.TrimSpace(cfg.PassphraseFile))
 		if err != nil {
-			return nil, validationError("secret-store.file.passphrase-file could not be read", err)
+			return nil, faults.NewValidationError("secret-store.file.passphrase-file could not be read", err)
 		}
 		passphrase := strings.TrimSpace(string(passphraseData))
 		if passphrase == "" {
-			return nil, validationError("secret-store.file.passphrase-file must not be empty", nil)
+			return nil, faults.NewValidationError("secret-store.file.passphrase-file must not be empty", nil)
 		}
 		service.passphrase = []byte(passphrase)
 	default:
-		return nil, validationError("secret-store.file key material is invalid", nil)
+		return nil, faults.NewValidationError("secret-store.file key material is invalid", nil)
 	}
 
 	return service, nil
@@ -245,14 +245,14 @@ func (s *FileSecretService) DetectSecretCandidates(_ context.Context, value reso
 
 func (s *FileSecretService) initLocked() error {
 	if s == nil {
-		return validationError("file secret service must not be nil", nil)
+		return faults.NewValidationError("file secret service must not be nil", nil)
 	}
 	if strings.TrimSpace(s.path) == "" {
-		return validationError("secret store path must not be empty", nil)
+		return faults.NewValidationError("secret store path must not be empty", nil)
 	}
 
 	if len(s.key) == 0 && len(s.passphrase) == 0 {
-		return validationError("secret store key material is missing", nil)
+		return faults.NewValidationError("secret store key material is missing", nil)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
@@ -292,24 +292,24 @@ func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
 	}
 
 	if envelope.Version != encryptedStoreVersion {
-		return secretSnapshot{}, validationError("secret store format version is unsupported", nil)
+		return secretSnapshot{}, faults.NewValidationError("secret store format version is unsupported", nil)
 	}
 
 	nonce, err := base64.StdEncoding.DecodeString(envelope.Nonce)
 	if err != nil {
-		return secretSnapshot{}, validationError("secret store nonce is invalid", err)
+		return secretSnapshot{}, faults.NewValidationError("secret store nonce is invalid", err)
 	}
 
 	ciphertext, err := base64.StdEncoding.DecodeString(envelope.Ciphertext)
 	if err != nil {
-		return secretSnapshot{}, validationError("secret store ciphertext is invalid", err)
+		return secretSnapshot{}, faults.NewValidationError("secret store ciphertext is invalid", err)
 	}
 
 	salt := []byte(nil)
 	if envelope.Salt != "" {
 		salt, err = base64.StdEncoding.DecodeString(envelope.Salt)
 		if err != nil {
-			return secretSnapshot{}, validationError("secret store salt is invalid", err)
+			return secretSnapshot{}, faults.NewValidationError("secret store salt is invalid", err)
 		}
 	}
 
@@ -407,11 +407,11 @@ func (s *FileSecretService) deriveKey(salt []byte) ([]byte, error) {
 	}
 
 	if len(s.passphrase) == 0 {
-		return nil, validationError("secret store passphrase is missing", nil)
+		return nil, faults.NewValidationError("secret store passphrase is missing", nil)
 	}
 
 	if len(salt) == 0 {
-		return nil, validationError("secret store salt is missing", nil)
+		return nil, faults.NewValidationError("secret store salt is missing", nil)
 	}
 
 	key := argon2.IDKey(s.passphrase, salt, s.kdf.Time, s.kdf.Memory, s.kdf.Threads, keyLengthBytes)
@@ -430,7 +430,7 @@ func resolveKDFSettings(kdf *config.KDF) (kdfSettings, error) {
 	}
 
 	if kdf.Time < 0 || kdf.Memory < 0 || kdf.Threads < 0 {
-		return kdfSettings{}, validationError("secret-store.file.kdf values must be non-negative", nil)
+		return kdfSettings{}, faults.NewValidationError("secret-store.file.kdf values must be non-negative", nil)
 	}
 
 	if kdf.Time > 0 {
@@ -444,7 +444,7 @@ func resolveKDFSettings(kdf *config.KDF) (kdfSettings, error) {
 	}
 
 	if settings.Time == 0 || settings.Memory == 0 || settings.Threads == 0 {
-		return kdfSettings{}, validationError("secret-store.file.kdf values must be greater than zero", nil)
+		return kdfSettings{}, faults.NewValidationError("secret-store.file.kdf values must be greater than zero", nil)
 	}
 
 	return settings, nil
@@ -453,7 +453,7 @@ func resolveKDFSettings(kdf *config.KDF) (kdfSettings, error) {
 func parseEncryptionKey(raw string) ([]byte, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return nil, validationError("secret-store.file.key must not be empty", nil)
+		return nil, faults.NewValidationError("secret-store.file.key must not be empty", nil)
 	}
 
 	if decoded, err := hex.DecodeString(trimmed); err == nil && len(decoded) == keyLengthBytes {
@@ -470,20 +470,20 @@ func parseEncryptionKey(raw string) ([]byte, error) {
 		return []byte(trimmed), nil
 	}
 
-	return nil, validationError("secret-store.file.key must be 32-byte raw, base64, or hex", nil)
+	return nil, faults.NewValidationError("secret-store.file.key must be 32-byte raw, base64, or hex", nil)
 }
 
 func normalizeSecretKey(key string) (string, error) {
 	trimmed := strings.TrimSpace(key)
 	trimmed = strings.Trim(trimmed, "/")
 	if trimmed == "" {
-		return "", validationError("secret key must not be empty", nil)
+		return "", faults.NewValidationError("secret key must not be empty", nil)
 	}
 
 	parts := strings.Split(trimmed, "/")
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." {
-			return "", validationError("secret key contains invalid path segment", nil)
+			return "", faults.NewValidationError("secret key contains invalid path segment", nil)
 		}
 	}
 
@@ -543,10 +543,6 @@ func writeAtomicFile(path string, data []byte, mode os.FileMode) error {
 	}
 
 	return nil
-}
-
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
 }
 
 func notFoundError(message string) error {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
+	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -315,7 +316,7 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 		if hasWildcardPattern(childName) {
 			matched, matchErr := path.Match(childName, segment)
 			if matchErr != nil {
-				return nil, nil, validationError(
+				return nil, nil, faults.NewValidationError(
 					fmt.Sprintf("invalid wildcard selector %q", childSelector),
 					matchErr,
 				)
@@ -357,7 +358,7 @@ func normalizeResolvePath(logicalPath string) (string, error) {
 
 	for _, segment := range splitPathSegments(normalizedPath) {
 		if hasWildcardPattern(segment) {
-			return "", validationError("resolve path must not contain wildcard segments", nil)
+			return "", faults.NewValidationError("resolve path must not contain wildcard segments", nil)
 		}
 	}
 

@@ -11,7 +11,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/shared"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
-	serverdomain "github.com/crmarques/declarest/server"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 	"github.com/spf13/cobra"
 )
 
@@ -97,12 +97,12 @@ func newGetAccessTokenCommand(deps shared.CommandDependencies) *cobra.Command {
 		Short: "Fetch OAuth2 access token from the resource server",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			resourceServer, err := shared.RequireResourceServer(deps)
+			resourceServer, err := shared.RequireResourceGateway(deps)
 			if err != nil {
 				return err
 			}
 
-			provider, ok := resourceServer.(serverdomain.AccessTokenProvider)
+			provider, ok := resourceServer.(gatewaydomain.AccessTokenProvider)
 			if !ok {
 				return shared.ValidationError(
 					"resource-server get access-token requires resource-server.http.auth.oauth2 configuration",

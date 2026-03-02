@@ -379,7 +379,7 @@ func newInferCommand(deps shared.CommandDependencies, globalFlags *shared.Global
 			var existingMetadata *metadatadomain.ResourceMetadata
 			existing, err := service.Get(command.Context(), resolvedPath)
 			if err != nil {
-				if !isTypedErrorCategory(err, faults.NotFoundError) {
+				if !faults.IsCategory(err, faults.NotFoundError) {
 					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 					return err
 				}
@@ -587,7 +587,7 @@ func resolvedMetadataForGet(
 		if err == nil {
 			return explicit, nil
 		}
-		if !isTypedErrorCategory(err, faults.NotFoundError) {
+		if !faults.IsCategory(err, faults.NotFoundError) {
 			return metadatadomain.ResourceMetadata{}, err
 		}
 
@@ -615,7 +615,7 @@ func resolvedMetadataForGet(
 	if err == nil {
 		return explicit, nil
 	}
-	if !isTypedErrorCategory(err, faults.NotFoundError) {
+	if !faults.IsCategory(err, faults.NotFoundError) {
 		return metadatadomain.ResourceMetadata{}, err
 	}
 
@@ -698,7 +698,7 @@ func metadataPathExistsRemotely(
 		if err == nil {
 			return true, nil
 		}
-		if isTypedErrorCategory(err, faults.NotFoundError) {
+		if faults.IsCategory(err, faults.NotFoundError) {
 			return false, nil
 		}
 		return false, err
@@ -708,7 +708,7 @@ func metadataPathExistsRemotely(
 	if err == nil {
 		return true, nil
 	}
-	if isTypedErrorCategory(err, faults.NotFoundError) {
+	if faults.IsCategory(err, faults.NotFoundError) {
 		return false, nil
 	}
 	return false, err
@@ -723,12 +723,8 @@ func cloneStringSlice(values []string) []string {
 	return items
 }
 
-func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
-}
-
 func isOperationPathRequiredError(err error, operation metadatadomain.Operation) bool {
-	if !isTypedErrorCategory(err, faults.ValidationError) {
+	if !faults.IsCategory(err, faults.ValidationError) {
 		return false
 	}
 

@@ -3,6 +3,8 @@ package vault
 import (
 	"net/url"
 	"strings"
+
+	"github.com/crmarques/declarest/faults"
 )
 
 func (s *VaultSecretService) readEndpoint(key string) string {
@@ -41,18 +43,18 @@ func (s *VaultSecretService) fullSecretPath(key string) string {
 func normalizeVaultAddress(raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", validationError("secret-store.vault.address is required", nil)
+		return "", faults.NewValidationError("secret-store.vault.address is required", nil)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return "", validationError("secret-store.vault.address is invalid", err)
+		return "", faults.NewValidationError("secret-store.vault.address is invalid", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", validationError("secret-store.vault.address must use http or https", nil)
+		return "", faults.NewValidationError("secret-store.vault.address must use http or https", nil)
 	}
 	if strings.TrimSpace(parsed.Host) == "" {
-		return "", validationError("secret-store.vault.address host is required", nil)
+		return "", faults.NewValidationError("secret-store.vault.address host is required", nil)
 	}
 
 	return strings.TrimRight(parsed.String(), "/"), nil
@@ -65,13 +67,13 @@ func normalizeVaultPath(value string, allowEmpty bool) (string, error) {
 		if allowEmpty {
 			return "", nil
 		}
-		return "", validationError("vault path must not be empty", nil)
+		return "", faults.NewValidationError("vault path must not be empty", nil)
 	}
 
 	parts := strings.Split(trimmed, "/")
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." {
-			return "", validationError("vault path contains invalid segments", nil)
+			return "", faults.NewValidationError("vault path contains invalid segments", nil)
 		}
 	}
 

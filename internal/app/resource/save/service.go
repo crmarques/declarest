@@ -42,7 +42,7 @@ func Execute(
 		return err
 	}
 	if options.AsItems && options.AsOneResource {
-		return validationError("flags --as-items and --as-one-resource cannot be used together", nil)
+		return faults.NewValidationError("flags --as-items and --as-one-resource cannot be used together", nil)
 	}
 
 	orchestratorService, err := requireOrchestrator(deps)
@@ -56,7 +56,7 @@ func Execute(
 
 	if hasWildcard {
 		if hasInput {
-			return validationError("wildcard save paths are supported only when reading from remote server", nil)
+			return faults.NewValidationError("wildcard save paths are supported only when reading from remote server", nil)
 		}
 
 		targets, err := expandSaveWildcardPaths(ctx, orchestratorService, normalizedPath)
@@ -68,7 +68,7 @@ func Execute(
 		for _, targetPath := range targets {
 			remoteValue, err := orchestratorService.GetRemote(ctx, targetPath)
 			if err != nil {
-				if isTypedErrorCategory(err, faults.NotFoundError) {
+				if faults.IsCategory(err, faults.NotFoundError) {
 					continue
 				}
 				return err
@@ -187,7 +187,7 @@ func saveResolvedPathPayload(
 		return orchestratorService.Save(ctx, resolvedPath, value)
 	}
 	if !isListPayload {
-		return validationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
+		return faults.NewValidationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
 	}
 
 	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)
@@ -271,34 +271,31 @@ func saveResolvedPathPayload(
 	return nil
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}
 
 func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
 	if deps.Orchestrator == nil {
-		return nil, validationError("orchestrator is not configured", nil)
+		return nil, faults.NewValidationError("orchestrator is not configured", nil)
 	}
 	return deps.Orchestrator, nil
 }
 
 func requireResourceStore(deps Dependencies) (repository.ResourceStore, error) {
 	if deps.Repository == nil {
-		return nil, validationError("resource repository is not configured", nil)
+		return nil, faults.NewValidationError("resource repository is not configured", nil)
 	}
 	return deps.Repository, nil
 }
 
 func requireMetadataService(deps Dependencies) (metadatadomain.MetadataService, error) {
 	if deps.Metadata == nil {
-		return nil, validationError("metadata service is not configured", nil)
+		return nil, faults.NewValidationError("metadata service is not configured", nil)
 	}
 	return deps.Metadata, nil
 }
 
 func requireSecretProvider(deps Dependencies) (secretdomain.SecretProvider, error) {
 	if deps.Secrets == nil {
-		return nil, validationError("secret provider is not configured", nil)
+		return nil, faults.NewValidationError("secret provider is not configured", nil)
 	}
 	return deps.Secrets, nil
 }

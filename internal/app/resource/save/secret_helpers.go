@@ -90,7 +90,7 @@ func handleSaveSecrets(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, validationError("--handle-secrets requires object payloads", nil)
+		return nil, nil, faults.NewValidationError("--handle-secrets requires object payloads", nil)
 	}
 
 	secretProvider, err := requireSecretProvider(deps)
@@ -245,7 +245,7 @@ func applySaveSecretCandidates(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, validationError("--handle-secrets requires object payloads", nil)
+		return nil, nil, faults.NewValidationError("--handle-secrets requires object payloads", nil)
 	}
 
 	attributes := resolveSaveSecretAttributes(payload, selectedCandidates)
@@ -319,7 +319,7 @@ func selectSaveSecretCandidates(candidates []string, requested []string, allowMi
 			if allowMissingRequested {
 				continue
 			}
-			return nil, nil, validationError(
+			return nil, nil, faults.NewValidationError(
 				fmt.Sprintf("requested --handle-secrets attribute %q was not detected", requestedCandidate),
 				nil,
 			)
@@ -380,7 +380,7 @@ func filterSaveSecretCandidatesForSafety(candidates []string, declared []string,
 }
 
 func saveSecretSafetyError(logicalPath string, candidates []string) error {
-	return validationError(
+	return faults.NewValidationError(
 		fmt.Sprintf(
 			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --ignore",
 			logicalPath,
@@ -486,8 +486,4 @@ func storeAndMaskAttribute(
 	attribute string,
 ) error {
 	return secretworkflow.StoreAndMaskAttribute(ctx, secretProvider, payload, logicalPath, attribute)
-}
-
-func isTypedErrorCategory(err error, category faults.ErrorCategory) bool {
-	return faults.IsCategory(err, category)
 }

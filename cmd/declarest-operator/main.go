@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -46,8 +45,8 @@ func main() {
 	result, err := operator.ReconcileOnce(context.Background(), operator.Dependencies{
 		Orchestrator: session.Orchestrator,
 		Contexts:     session.Contexts,
-		Metadata:     session.Metadata,
-		Secrets:      session.Secrets,
+		Metadata:     session.Services.MetadataService(),
+		Secrets:      session.Services.SecretProvider(),
 	}, operator.ReconcileRequest{
 		LogicalPath:  path,
 		Source:       source,
@@ -69,27 +68,5 @@ func main() {
 }
 
 func exitCodeForError(err error) int {
-	if err == nil {
-		return 0
-	}
-
-	var typed *faults.TypedError
-	if !errors.As(err, &typed) {
-		return 1
-	}
-
-	switch typed.Category {
-	case faults.ValidationError:
-		return 2
-	case faults.NotFoundError:
-		return 3
-	case faults.AuthError:
-		return 4
-	case faults.ConflictError:
-		return 5
-	case faults.TransportError:
-		return 6
-	default:
-		return 1
-	}
+	return faults.ExitCodeForError(err)
 }

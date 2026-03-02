@@ -16,7 +16,7 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
-	serverdomain "github.com/crmarques/declarest/server"
+	gatewaydomain "github.com/crmarques/declarest/gateway"
 )
 
 func TestRequiredCommandPathsRegistered(t *testing.T) {
@@ -182,7 +182,7 @@ func TestResourceServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ResourceServer = &testResourceServer{accessToken: "oauth-access-token"}
+		deps.ResourceGateway = &testResourceServer{accessToken: "oauth-access-token"}
 
 		output, err := executeForTest(deps, "", "resource-server", "get", "access-token")
 		if err != nil {
@@ -197,7 +197,7 @@ func TestResourceServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ResourceServer = &testResourceServer{
+		deps.ResourceGateway = &testResourceServer{
 			tokenErr: faults.NewTypedError(faults.ValidationError, "resource-server.http.auth.oauth2 is not configured", nil),
 		}
 
@@ -542,7 +542,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.listRemoteErr = serverdomain.NewListPayloadShapeError(
+		orchestrator.listRemoteErr = gatewaydomain.NewListPayloadShapeError(
 			`list response object is ambiguous: expected an "items" array or a single array field, found array fields [enabledEventTypes, eventsListeners]`,
 			nil,
 		)
@@ -4444,10 +4444,8 @@ func TestResourceListTextOutputUsesAliasAndID(t *testing.T) {
 		remoteList: []resource.Resource{
 			{
 				LogicalPath: "/customers/acme",
-				Metadata: metadatadomain.ResourceMetadata{
-					AliasFromAttribute: "name",
-					IDFromAttribute:    "id",
-				},
+				LocalAlias:  "acme",
+				RemoteID:    "42",
 				Payload: map[string]any{
 					"id":   "42",
 					"name": "acme",
@@ -4485,8 +4483,8 @@ func TestResourceListSourceFlags(t *testing.T) {
 
 		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
-			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
-			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
 		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/")
 		if err != nil {
@@ -4505,8 +4503,8 @@ func TestResourceListSourceFlags(t *testing.T) {
 
 		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
-			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
-			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
 		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "--output", "json", "resource", "list", "/")
 		if err != nil {
@@ -4522,8 +4520,8 @@ func TestResourceListSourceFlags(t *testing.T) {
 
 		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
-			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
-			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
 		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "remote-server")
 		if err != nil {
@@ -4542,8 +4540,8 @@ func TestResourceListSourceFlags(t *testing.T) {
 
 		orchestrator := &testOrchestrator{
 			metadataService: newTestMetadata(),
-			localList:       []resource.Resource{{LogicalPath: "/repo-only", Payload: map[string]any{"id": "repo-only"}}},
-			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", Payload: map[string]any{"id": "remote-only"}}},
+			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
+			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
 		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "repository")
 		if err != nil {

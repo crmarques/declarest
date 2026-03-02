@@ -24,12 +24,12 @@ func BuildTLSConfig(tlsSettings *config.TLS, scope string) (*tls.Config, error) 
 	if strings.TrimSpace(tlsSettings.CACertFile) != "" {
 		caBytes, err := os.ReadFile(tlsSettings.CACertFile)
 		if err != nil {
-			return nil, validationError(fmt.Sprintf("%s.tls.ca-cert-file could not be read", scope), err)
+			return nil, faults.NewValidationError(fmt.Sprintf("%s.tls.ca-cert-file could not be read", scope), err)
 		}
 
 		pool := x509.NewCertPool()
 		if ok := pool.AppendCertsFromPEM(caBytes); !ok {
-			return nil, validationError(fmt.Sprintf("%s.tls.ca-cert-file is not valid PEM", scope), nil)
+			return nil, faults.NewValidationError(fmt.Sprintf("%s.tls.ca-cert-file is not valid PEM", scope), nil)
 		}
 		tlsConfig.RootCAs = pool
 	}
@@ -37,7 +37,7 @@ func BuildTLSConfig(tlsSettings *config.TLS, scope string) (*tls.Config, error) 
 	clientCertFile := strings.TrimSpace(tlsSettings.ClientCertFile)
 	clientKeyFile := strings.TrimSpace(tlsSettings.ClientKeyFile)
 	if (clientCertFile == "") != (clientKeyFile == "") {
-		return nil, validationError(
+		return nil, faults.NewValidationError(
 			fmt.Sprintf("%s.tls requires both client-cert-file and client-key-file", scope),
 			nil,
 		)
@@ -46,7 +46,7 @@ func BuildTLSConfig(tlsSettings *config.TLS, scope string) (*tls.Config, error) 
 	if clientCertFile != "" {
 		certificate, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
 		if err != nil {
-			return nil, validationError(
+			return nil, faults.NewValidationError(
 				fmt.Sprintf("%s.tls client certificate pair is invalid", scope),
 				err,
 			)
@@ -57,6 +57,3 @@ func BuildTLSConfig(tlsSettings *config.TLS, scope string) (*tls.Config, error) 
 	return tlsConfig, nil
 }
 
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
-}

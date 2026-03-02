@@ -35,7 +35,7 @@ func (m *FileContextService) Create(_ context.Context, cfg config.Context) error
 	}
 
 	if idx := findContextIndex(contextCatalog.Contexts, cfg.Name); idx >= 0 {
-		return validationError(fmt.Sprintf("context %q already exists", cfg.Name), nil)
+		return faults.NewValidationError(fmt.Sprintf("context %q already exists", cfg.Name), nil)
 	}
 
 	contextCatalog.Contexts = append(contextCatalog.Contexts, cfg)
@@ -92,7 +92,7 @@ func (m *FileContextService) Delete(_ context.Context, name string) error {
 
 func (m *FileContextService) Rename(_ context.Context, fromName string, toName string) error {
 	if toName == "" {
-		return validationError("context name must not be empty", nil)
+		return faults.NewValidationError("context name must not be empty", nil)
 	}
 
 	contextCatalog, err := m.loadCatalog()
@@ -105,7 +105,7 @@ func (m *FileContextService) Rename(_ context.Context, fromName string, toName s
 		return notFoundError(fmt.Sprintf("context %q not found", fromName))
 	}
 	if findContextIndex(contextCatalog.Contexts, toName) >= 0 {
-		return validationError(fmt.Sprintf("context %q already exists", toName), nil)
+		return faults.NewValidationError(fmt.Sprintf("context %q already exists", toName), nil)
 	}
 
 	contextCatalog.Contexts[fromIdx].Name = toName
@@ -290,10 +290,6 @@ func findContextIndex(contexts []config.Context, name string) int {
 		}
 	}
 	return -1
-}
-
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
 }
 
 func compactContextCatalogForPersistence(contextCatalog config.ContextCatalog) config.ContextCatalog {

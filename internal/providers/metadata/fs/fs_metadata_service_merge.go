@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
@@ -11,7 +12,7 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	keys := sortedOperationKeys(metadata.Operations)
 	for _, key := range keys {
 		if !metadatadomain.Operation(key).IsValid() {
-			return validationError(fmt.Sprintf("unsupported metadata operation %q", key), nil)
+			return faults.NewValidationError(fmt.Sprintf("unsupported metadata operation %q", key), nil)
 		}
 
 		operationSpec := metadata.Operations[key]
@@ -32,7 +33,7 @@ func validateOperationValidationSpec(
 
 	for idx, attribute := range spec.RequiredAttributes {
 		if strings.TrimSpace(attribute) == "" {
-			return validationError(
+			return faults.NewValidationError(
 				fmt.Sprintf("operation %q validate.requiredAttributes[%d] must not be empty", operation, idx),
 				nil,
 			)
@@ -41,7 +42,7 @@ func validateOperationValidationSpec(
 
 	for idx, assertion := range spec.Assertions {
 		if strings.TrimSpace(assertion.JQ) == "" {
-			return validationError(
+			return faults.NewValidationError(
 				fmt.Sprintf("operation %q validate.assertions[%d].jq must not be empty", operation, idx),
 				nil,
 			)
@@ -58,7 +59,7 @@ func validateOperationValidationSpec(
 	if strings.HasPrefix(schemaRef, "openapi:#/") {
 		return nil
 	}
-	return validationError(
+	return faults.NewValidationError(
 		fmt.Sprintf(
 			"operation %q validate.schemaRef %q is not supported (expected openapi:request-body or openapi:#/...)",
 			operation,

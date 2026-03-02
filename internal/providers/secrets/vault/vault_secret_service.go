@@ -70,7 +70,7 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 
 	mount, err := normalizeVaultPath(cfg.Mount, true)
 	if err != nil {
-		return nil, validationError("secret-store.vault.mount is invalid", err)
+		return nil, faults.NewValidationError("secret-store.vault.mount is invalid", err)
 	}
 	if mount == "" {
 		mount = defaultVaultMount
@@ -78,7 +78,7 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 
 	pathPrefix, err := normalizeVaultPath(cfg.PathPrefix, true)
 	if err != nil {
-		return nil, validationError("secret-store.vault.path-prefix is invalid", err)
+		return nil, faults.NewValidationError("secret-store.vault.path-prefix is invalid", err)
 	}
 
 	kvVersion := cfg.KVVersion
@@ -86,11 +86,11 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 		kvVersion = defaultVaultKV
 	}
 	if kvVersion != 1 && kvVersion != 2 {
-		return nil, validationError("secret-store.vault.kv-version must be 1 or 2", nil)
+		return nil, faults.NewValidationError("secret-store.vault.kv-version must be 1 or 2", nil)
 	}
 
 	if cfg.Auth == nil {
-		return nil, validationError("secret-store.vault.auth is required", nil)
+		return nil, faults.NewValidationError("secret-store.vault.auth is required", nil)
 	}
 
 	auth, err := buildVaultAuthConfig(*cfg.Auth)
@@ -285,7 +285,7 @@ func (s *VaultSecretService) ensureInitialized(ctx context.Context) error {
 
 func (s *VaultSecretService) initLocked(ctx context.Context) error {
 	if s == nil {
-		return validationError("vault secret service must not be nil", nil)
+		return faults.NewValidationError("vault secret service must not be nil", nil)
 	}
 	if s.initialized {
 		return nil
@@ -306,7 +306,7 @@ func (s *VaultSecretService) initLocked(ctx context.Context) error {
 			return err
 		}
 	default:
-		return validationError("vault auth mode is invalid", nil)
+		return faults.NewValidationError("vault auth mode is invalid", nil)
 	}
 
 	if strings.TrimSpace(s.token) == "" {
@@ -320,12 +320,12 @@ func (s *VaultSecretService) initLocked(ctx context.Context) error {
 func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 	credentials := s.auth.userPass
 	if credentials == nil {
-		return validationError("vault userpass auth configuration is invalid", nil)
+		return faults.NewValidationError("vault userpass auth configuration is invalid", nil)
 	}
 
 	mount, err := normalizeVaultPath(credentials.Mount, true)
 	if err != nil {
-		return validationError("secret-store.vault.auth.password.mount is invalid", err)
+		return faults.NewValidationError("secret-store.vault.auth.password.mount is invalid", err)
 	}
 	if mount == "" {
 		mount = "userpass"
@@ -334,7 +334,7 @@ func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 	username := strings.TrimSpace(credentials.Username)
 	password := strings.TrimSpace(credentials.Password)
 	if username == "" || password == "" {
-		return validationError("secret-store.vault.auth.password requires username and password", nil)
+		return faults.NewValidationError("secret-store.vault.auth.password requires username and password", nil)
 	}
 
 	endpoint := buildEndpoint("auth", mount, "login", username)
@@ -358,12 +358,12 @@ func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 func (s *VaultSecretService) loginAppRole(ctx context.Context) error {
 	credentials := s.auth.appRole
 	if credentials == nil {
-		return validationError("vault approle auth configuration is invalid", nil)
+		return faults.NewValidationError("vault approle auth configuration is invalid", nil)
 	}
 
 	mount, err := normalizeVaultPath(credentials.Mount, true)
 	if err != nil {
-		return validationError("secret-store.vault.auth.approle.mount is invalid", err)
+		return faults.NewValidationError("secret-store.vault.auth.approle.mount is invalid", err)
 	}
 	if mount == "" {
 		mount = "approle"
@@ -372,7 +372,7 @@ func (s *VaultSecretService) loginAppRole(ctx context.Context) error {
 	roleID := strings.TrimSpace(credentials.RoleID)
 	secretID := strings.TrimSpace(credentials.SecretID)
 	if roleID == "" || secretID == "" {
-		return validationError("secret-store.vault.auth.approle requires role-id and secret-id", nil)
+		return faults.NewValidationError("secret-store.vault.auth.approle requires role-id and secret-id", nil)
 	}
 
 	endpoint := buildEndpoint("auth", mount, "login")
@@ -424,10 +424,6 @@ func (s *VaultSecretService) extractValue(response vaultResponse) (string, error
 		return "", internalError("vault secret value is not a string", nil)
 	}
 	return value, nil
-}
-
-func validationError(message string, cause error) error {
-	return faults.NewTypedError(faults.ValidationError, message, cause)
 }
 
 func notFoundError(message string) error {
