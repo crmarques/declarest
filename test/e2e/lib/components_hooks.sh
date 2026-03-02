@@ -202,13 +202,31 @@ e2e_component_start_k8s_port_forwards() {
       pf_script="${E2E_LOG_DIR}/port-forward-${safe_component_key}-${service_name}-${local_port}-${remote_port}.sh"
       cat <<EOF >"${pf_script}"
 #!/usr/bin/env bash
-set -euo pipefail
-trap 'exit 0' TERM INT
+set -u
+port_forward_pid=''
+
+stop_port_forward() {
+  if [[ -n "\${port_forward_pid}" ]] && kill -0 "\${port_forward_pid}" >/dev/null 2>&1; then
+    kill "\${port_forward_pid}" >/dev/null 2>&1 || true
+    wait "\${port_forward_pid}" >/dev/null 2>&1 || true
+  fi
+  exit 0
+}
+
+trap stop_port_forward TERM INT
 while true; do
   kubectl \
     --kubeconfig "${E2E_KUBECONFIG}" \
     -n "${E2E_K8S_NAMESPACE}" \
-    port-forward "service/${service_name}" "${local_port}:${remote_port}"
+    port-forward "service/${service_name}" "${local_port}:${remote_port}" &
+  port_forward_pid=$!
+  wait "\${port_forward_pid}"
+  rc=$?
+  port_forward_pid=''
+
+  if ((rc != 0)); then
+    printf '[WARN] kubectl port-forward exited rc=%d for service/%s mapping=%s:%s; retrying in 1s\n' "\${rc}" "${service_name}" "${local_port}" "${remote_port}" >&2
+  fi
   sleep 1
 done
 EOF
@@ -243,6 +261,7 @@ e2e_component_builtin_start_kubernetes() {
   local rendered_manifest
   local manifest_count=0
   local component_label
+  local ready_timeout_seconds
 
   connection=$(e2e_component_connection_for_key "${component_key}")
   if [[ "${connection}" != 'local' ]]; then
@@ -283,6 +302,12 @@ e2e_component_builtin_start_kubernetes() {
     return 1
   fi
 
+  ready_timeout_seconds="${E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS:-600}"
+  if ! [[ "${ready_timeout_seconds}" =~ ^[0-9]+$ ]] || ((ready_timeout_seconds <= 0)); then
+    e2e_die "invalid kubernetes component readiness timeout: ${ready_timeout_seconds} (set DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS to a positive integer)"
+    return 1
+  fi
+
   component_label=$(e2e_component_k8s_label_key "${component_key}")
   e2e_kubectl_cmd \
     --kubeconfig "${E2E_KUBECONFIG}" \
@@ -291,7 +316,7 @@ e2e_component_builtin_start_kubernetes() {
     --for=condition=Ready \
     pod \
     -l "declarest.e2e/component-key=${component_label}" \
-    --timeout=180s || return 1
+    --timeout="${ready_timeout_seconds}s" || return 1
 
   e2e_write_state_value "${state_file}" K8S_RENDERED_DIR "${rendered_dir}"
   e2e_component_start_k8s_port_forwards "${component_key}" "${state_file}" || return 1

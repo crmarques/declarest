@@ -260,6 +260,8 @@ Global flags:
 
 Environment overrides:
   DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker>       default: podman
+  DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>
+                                                       default: 600 (kubernetes pod readiness wait per component)
   DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=<url>    optional managed-server proxy http-url
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL=<url>   optional managed-server proxy https-url

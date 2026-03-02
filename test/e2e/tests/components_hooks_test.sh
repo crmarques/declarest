@@ -456,6 +456,252 @@ EOF
   assert_file_contains "${fake_log}" "port-forward service/demo-service 18082:8081"
 }
 
+test_k8s_port_forward_retries_after_runtime_disconnect() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+
+  local fake_log="${tmp}/kubectl.log"
+  local counter_file="${tmp}/port-forward-count"
+  printf '0\n' >"${counter_file}"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == *" get svc "* ]]; then
+  cat <<'JSON'
+{"items":[{"metadata":{"name":"demo-service","annotations":{"declarest.e2e/port-forward":"18081:8080"}}}]}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *" port-forward "* ]]; then
+  count=$(cat "${FAKE_KUBECTL_COUNTER}")
+  count=$((count + 1))
+  printf '%s\n' "${count}" >"${FAKE_KUBECTL_COUNTER}"
+  if ((count == 1)); then
+    sleep 2
+    exit 1
+  fi
+
+  if [[ -n "${FAKE_KUBECTL_LOG:-}" ]]; then
+    printf '%s\n' "$*" >>"${FAKE_KUBECTL_LOG}"
+  fi
+  trap 'exit 0' TERM INT
+  while true; do
+    sleep 1
+  done
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_PATH['resource-server:demo']="${tmp}/components/resource-server/demo"
+  E2E_KUBECONFIG="${tmp}/kubeconfig"
+  E2E_K8S_NAMESPACE='declarest-tests'
+  : >"${E2E_KUBECONFIG}"
+
+  local state_file
+  state_file=$(e2e_component_state_file 'resource-server:demo')
+  : >"${state_file}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KUBECTL_LOG="${fake_log}"
+  export FAKE_KUBECTL_COUNTER="${counter_file}"
+
+  e2e_component_start_k8s_port_forwards 'resource-server:demo' "${state_file}"
+
+  local pids
+  pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS')
+  [[ -n "${pids}" ]] || fail "expected k8s port-forward pid to be persisted"
+
+  local -a pid_array=()
+  read -r -a pid_array <<<"${pids}"
+  if ((${#pid_array[@]} != 1)); then
+    fail "expected exactly 1 port-forward pid, got ${#pid_array[@]}"
+  fi
+
+  local restart_count=0
+  local _
+  for _ in $(seq 1 80); do
+    restart_count=$(cat "${counter_file}")
+    if ((restart_count >= 2)); then
+      break
+    fi
+    sleep 0.1
+  done
+  if ((restart_count < 2)); then
+    fail "expected port-forward wrapper to retry after disconnect, attempts=${restart_count}"
+  fi
+
+  kill -0 "${pid_array[0]}" >/dev/null 2>&1 || fail "expected restarted port-forward pid to stay alive"
+
+  e2e_component_builtin_stop_kubernetes 'resource-server:demo'
+  for _ in $(seq 1 20); do
+    if ! kill -0 "${pid_array[0]}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+  if kill -0 "${pid_array[0]}" >/dev/null 2>&1; then
+    fail "expected restarted port-forward pid to stop"
+  fi
+}
+
+test_k8s_component_start_uses_configurable_ready_timeout() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local fake_log="${tmp}/kubectl.log"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${FAKE_KUBECTL_LOG:-}" ]]; then
+  printf '%s\n' "$*" >>"${FAKE_KUBECTL_LOG}"
+fi
+
+if [[ "$*" == *" apply "* ]]; then
+  exit 0
+fi
+
+if [[ "$*" == *" wait "* ]]; then
+  exit 0
+fi
+
+if [[ "$*" == *" get svc "* ]]; then
+  cat <<'JSON'
+{"items":[]}
+JSON
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  local component_dir="${tmp}/components/resource-server/demo"
+  mkdir -p "${component_dir}/k8s"
+  cat >"${component_dir}/k8s/deployment.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-server-demo
+EOF
+
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_KUBECONFIG="${tmp}/kubeconfig"
+  E2E_K8S_NAMESPACE='declarest-tests'
+  E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS='601'
+  : >"${E2E_KUBECONFIG}"
+
+  local state_file
+  state_file=$(e2e_component_state_file 'resource-server:demo')
+  : >"${state_file}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KUBECTL_LOG="${fake_log}"
+
+  e2e_component_builtin_start_kubernetes 'resource-server:demo'
+
+  assert_file_contains "${fake_log}" "--timeout=601s"
+}
+
+test_k8s_component_start_rejects_invalid_ready_timeout() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == *" apply "* ]]; then
+  exit 0
+fi
+
+if [[ "$*" == *" get svc "* ]]; then
+  cat <<'JSON'
+{"items":[]}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *" wait "* ]]; then
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  local component_dir="${tmp}/components/resource-server/demo"
+  mkdir -p "${component_dir}/k8s"
+  cat >"${component_dir}/k8s/deployment.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-server-demo
+EOF
+
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_KUBECONFIG="${tmp}/kubeconfig"
+  E2E_K8S_NAMESPACE='declarest-tests'
+  E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS='invalid'
+  : >"${E2E_KUBECONFIG}"
+
+  local state_file
+  state_file=$(e2e_component_state_file 'resource-server:demo')
+  : >"${state_file}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+
+  local output status
+  set +e
+  output=$(e2e_component_builtin_start_kubernetes 'resource-server:demo' 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid kubernetes component readiness timeout"
+}
+
 test_dependency_ordering_respects_dependencies
 test_cycle_detection_fails_with_actionable_message
 test_parallel_hook_failures_retain_component_logs_in_run_artifacts
@@ -468,3 +714,6 @@ test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode
 test_prepare_component_openapi_specs_defaults_to_bundle_mode
 test_component_compose_file_resolves_compose_subdir
 test_k8s_port_forward_pid_tracking_and_stop
+test_k8s_port_forward_retries_after_runtime_disconnect
+test_k8s_component_start_uses_configurable_ready_timeout
+test_k8s_component_start_rejects_invalid_ready_timeout

@@ -196,6 +196,7 @@ test_usage_mentions_validate_flag_and_no_none_resource_server() {
   assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header>"
   assert_contains "${output}" "--managed-server-proxy [<true|false>]"
   assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
+  assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
   assert_not_contains "${output}" "--resource-server-basic-auth"
   assert_not_contains "${output}" "--resource-server-oauth2"
   assert_not_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault|none>"
