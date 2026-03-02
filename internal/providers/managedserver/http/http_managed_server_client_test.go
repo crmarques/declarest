@@ -83,6 +83,38 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
+
+	t.Run("proxy_requires_url", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+			BaseURL: "https://example.com",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+			Proxy: &config.HTTPProxy{},
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("proxy_auth_rejects_embedded_credentials", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+			BaseURL: "https://example.com",
+			Auth: &config.HTTPAuth{
+				BearerToken: &config.BearerTokenAuth{Token: "token"},
+			},
+			Proxy: &config.HTTPProxy{
+				HTTPURL: "http://user:pass@proxy.example.com:3128",
+				Auth: &config.ProxyAuth{
+					Username: "proxy-user",
+					Password: "proxy-pass",
+				},
+			},
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
 }
 
 func TestGetAccessToken(t *testing.T) {
@@ -1330,6 +1362,110 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		}
 		if !strings.Contains(contents, "token=%3Credacted%3E") {
 			t.Fatalf("expected redacted token query value in debug output, got %q", contents)
+		}
+	})
+}
+
+func TestManagedServerProxySupport(t *testing.T) {
+	t.Parallel()
+
+	t.Run("resource_and_oauth2_requests_use_configured_proxy", func(t *testing.T) {
+		t.Parallel()
+
+		var proxyRequests int32
+		proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&proxyRequests, 1)
+
+			switch r.URL.Path {
+			case "/oauth/token":
+				if got := r.Header.Get("Proxy-Authorization"); got == "" {
+					t.Fatalf("expected proxy authorization header, got empty value")
+				}
+				_, _ = fmt.Fprint(w, `{"access_token":"proxy-oauth-token","expires_in":3600}`)
+			case "/resource":
+				if got := r.Header.Get("Authorization"); got != "Bearer proxy-oauth-token" {
+					t.Fatalf("expected oauth2 bearer header via proxy, got %q", got)
+				}
+				_, _ = fmt.Fprint(w, `{"ok":true}`)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(proxy.Close)
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: "http://api.example.com",
+			Auth: &config.HTTPAuth{
+				OAuth2: &config.OAuth2{
+					TokenURL:     "http://auth.example.com/oauth/token",
+					GrantType:    config.OAuthClientCreds,
+					ClientID:     "client",
+					ClientSecret: "secret",
+				},
+			},
+			Proxy: &config.HTTPProxy{
+				HTTPURL: proxy.URL,
+				Auth: &config.ProxyAuth{
+					Username: "proxy-user",
+					Password: "proxy-pass",
+				},
+			},
+		})
+
+		md := metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {Path: "/resource"},
+			},
+		}
+		_, err := client.Get(context.Background(), resource.Resource{
+			LogicalPath: "/customers/acme",
+		}, md)
+		if err != nil {
+			t.Fatalf("Get returned error: %v", err)
+		}
+
+		if got := atomic.LoadInt32(&proxyRequests); got != 2 {
+			t.Fatalf("expected two proxy requests (oauth2 + resource), got %d", got)
+		}
+	})
+
+	t.Run("no_proxy_bypasses_proxy_for_matching_host", func(t *testing.T) {
+		t.Parallel()
+
+		proxyFunc, err := buildProxyFunc(&config.HTTPProxy{
+			HTTPURL: "http://proxy.example.com:3128",
+			NoProxy: "api.example.com",
+		})
+		if err != nil {
+			t.Fatalf("buildProxyFunc returned error: %v", err)
+		}
+
+		request, err := http.NewRequest(http.MethodGet, "http://api.example.com/resource", nil)
+		if err != nil {
+			t.Fatalf("failed to build request: %v", err)
+		}
+
+		resolvedProxy, err := proxyFunc(request)
+		if err != nil {
+			t.Fatalf("proxy resolver returned error: %v", err)
+		}
+		if resolvedProxy != nil {
+			t.Fatalf("expected no-proxy match to bypass proxy, got %q", resolvedProxy.String())
+		}
+
+		otherRequest, err := http.NewRequest(http.MethodGet, "http://other.example.com/resource", nil)
+		if err != nil {
+			t.Fatalf("failed to build secondary request: %v", err)
+		}
+		resolvedProxy, err = proxyFunc(otherRequest)
+		if err != nil {
+			t.Fatalf("proxy resolver returned error for secondary request: %v", err)
+		}
+		if resolvedProxy == nil {
+			t.Fatal("expected non-matching host to use configured proxy")
+		}
+		if resolvedProxy.String() != "http://proxy.example.com:3128" {
+			t.Fatalf("expected configured proxy URL, got %q", resolvedProxy.String())
 		}
 	})
 }

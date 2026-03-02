@@ -37,10 +37,11 @@ This repository uses a componentized Bash e2e harness.
 
 - `--profile <basic|full|manual>`
 - `--platform <compose|kubernetes>`
-- `--resource-server <name>` (mandatory; `none` is not supported)
-- `--resource-server-connection <local|remote>`
-- `--resource-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
-- `--resource-server-mtls [<true|false>]` (default: `false`)
+- `--managed-server <name>` (mandatory; `none` is not supported)
+- `--managed-server-connection <local|remote>`
+- `--managed-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
+- `--managed-server-mtls [<true|false>]` (default: `false`)
+- `--managed-server-proxy [<true|false>]` (default: `false`)
 - `--metadata <bundle|local-dir>` (default: `bundle`)
 - `--repo-type <name>`
 - `--git-provider <name>`
@@ -56,8 +57,9 @@ This repository uses a componentized Bash e2e harness.
 
 Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and resource-server fixture metadata rules) and exit without running test cases.
-When `--resource-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
+When `--managed-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each resource-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
+When `--managed-server-proxy true`, generated contexts include `resource-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
 `--metadata bundle` uses shorthand `metadata.bundle` mappings for supported resource-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `resource-server.http.openapi` stays unset.
 `--metadata local-dir` uses the selected resource-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
@@ -72,6 +74,11 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `resource-server.http.proxy.http-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `resource-server.http.proxy.https-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `resource-server.http.proxy.no-proxy` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME`: optional proxy auth username used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`: optional proxy auth password used when `--managed-server-proxy true`
 
 ## Runtime Steps
 
@@ -192,7 +199,7 @@ Keycloak repo-template currently covers:
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
-  - defaults come from runner selection flags: `--resource-server-auth-type`, `--resource-server-mtls`
+  - defaults come from runner selection flags: `--managed-server-auth-type`, `--managed-server-mtls`
 - when basic-auth is enabled: `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_USERNAME`, `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_PASSWORD`
 - when oauth2 is enabled: `DECLAREST_E2E_SIMPLE_API_CLIENT_ID`, `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
 - optional oauth2: `DECLAREST_E2E_SIMPLE_API_TOKEN_URL`, `DECLAREST_E2E_SIMPLE_API_SCOPE`, `DECLAREST_E2E_SIMPLE_API_AUDIENCE`
@@ -212,15 +219,15 @@ Keycloak repo-template currently covers:
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
 - optional: `DECLAREST_E2E_RESOURCE_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_KV_VERSION`
-- remote vault currently supports `--resource-server-auth-type custom-header` only (`X-Vault-Token`)
+- remote vault currently supports `--managed-server-auth-type custom-header` only (`X-Vault-Token`)
 
 ### Managed Server (`rundeck`, remote)
 
 - `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
 - `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
 - optional: `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_API_VERSION`, `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_AUTH_HEADER`
-- local `rundeck` with `--resource-server-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
-- remote rundeck currently supports `--resource-server-auth-type custom-header` only
+- local `rundeck` with `--managed-server-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
+- remote rundeck currently supports `--managed-server-auth-type custom-header` only
 
 ### Git Provider (`gitlab`, remote)
 

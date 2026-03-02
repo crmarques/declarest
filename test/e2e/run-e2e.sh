@@ -61,7 +61,7 @@ step_initialize() {
   e2e_build_capabilities || return 1
   e2e_preflight_requirements || return 1
 
-  e2e_info "profile=${E2E_PROFILE} platform=${E2E_PLATFORM} repo-type=${E2E_REPO_TYPE} resource-server=${E2E_RESOURCE_SERVER} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
+  e2e_info "profile=${E2E_PROFILE} platform=${E2E_PLATFORM} repo-type=${E2E_REPO_TYPE} resource-server=${E2E_RESOURCE_SERVER} managed-server-proxy=${E2E_MANAGED_SERVER_PROXY} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
   return 0
 }
 

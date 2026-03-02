@@ -95,6 +95,8 @@ One-of invariants:
 3. `secret-store` MUST define exactly one of `file` or `vault`.
 4. `secret-store.file` MUST define exactly one of `key`, `key-file`, `passphrase`, `passphrase-file`.
 5. `metadata` MUST define at most one of `base-dir` or `bundle`.
+6. `resource-server.http.proxy` MUST define at least one of `http-url` or `https-url` when configured.
+7. `resource-server.http.proxy.auth` MUST define both `username` and `password` when configured.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.

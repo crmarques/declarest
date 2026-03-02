@@ -494,11 +494,11 @@ e2e_validate_all_discovered_component_contracts() {
 e2e_validate_resource_server_security_selection() {
   if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
     if e2e_is_explicit 'resource-server-auth-type'; then
-      e2e_die '--resource-server-auth-type requires a selected resource-server component'
+      e2e_die '--managed-server-auth-type requires a selected resource-server component'
       return 1
     fi
     if e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
-      e2e_die '--resource-server-mtls requires a selected resource-server component'
+      e2e_die '--managed-server-mtls requires a selected resource-server component'
       return 1
     fi
     return 0
@@ -644,6 +644,7 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["resource-server-connection=${E2E_RESOURCE_SERVER_CONNECTION}"]=1
   E2E_CAPABILITY_SET["resource-server-auth-type=${E2E_RESOURCE_SERVER_AUTH_TYPE}"]=1
   E2E_CAPABILITY_SET["resource-server-mtls=${E2E_RESOURCE_SERVER_MTLS}"]=1
+  E2E_CAPABILITY_SET["managed-server-proxy=${E2E_MANAGED_SERVER_PROXY}"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
   E2E_CAPABILITY_SET["secret-provider-connection=${E2E_SECRET_PROVIDER_CONNECTION}"]=1
 
@@ -662,6 +663,10 @@ e2e_build_capabilities() {
 
   if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
     E2E_CAPABILITY_SET['has-resource-server-mtls']=1
+  fi
+
+  if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
+    E2E_CAPABILITY_SET['has-managed-server-proxy']=1
   fi
 
   if [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' || "${E2E_RESOURCE_SERVER_CONNECTION}" == 'remote' || "${E2E_SECRET_PROVIDER_CONNECTION}" == 'remote' ]]; then

@@ -87,6 +87,11 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
+	if proxyFunc, err := buildProxyFunc(cfg.Proxy); err != nil {
+		return nil, err
+	} else if proxyFunc != nil {
+		transport.Proxy = proxyFunc
+	}
 
 	client := &HTTPManagedServerClient{
 		baseURL:        baseURL,

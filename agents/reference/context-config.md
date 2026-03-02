@@ -33,6 +33,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 16. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 18. When `resource-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
+19. When `resource-server.http.proxy` is configured, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -56,6 +57,11 @@ Resource server auth one-of contract:
 1. Exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header` MUST be set under `resource-server.http.auth`.
 2. `resource-server.http.auth.custom-header` MUST define `header` and `value`; it MAY define `prefix`, which is prepended as `<prefix> <value>`.
 
+Resource server proxy contract:
+1. `resource-server.http.proxy` MAY define `http-url` and/or `https-url`.
+2. `resource-server.http.proxy.no-proxy` MAY define comma-separated bypass rules.
+3. `resource-server.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
+
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
 2. For `secret-store.file`, exactly one of `key`, `key-file`, `passphrase`, `passphrase-file` MUST be set.
@@ -71,8 +77,13 @@ Runtime override keys:
 2. `repository.git.local.base-dir`.
 3. `repository.filesystem.base-dir`.
 4. `resource-server.http.base-url`.
-5. `metadata.base-dir`.
-6. `metadata.bundle`.
+5. `resource-server.http.proxy.http-url`.
+6. `resource-server.http.proxy.https-url`.
+7. `resource-server.http.proxy.no-proxy`.
+8. `resource-server.http.proxy.auth.username`.
+9. `resource-server.http.proxy.auth.password`.
+10. `metadata.base-dir`.
+11. `metadata.bundle`.
 
 ## Canonical YAML Template
 ```yaml
@@ -115,6 +126,13 @@ contexts:
         # openapi: /path/to/openapi.yaml
         # default-headers:
         #   X-Example: value
+        # proxy:
+        #   http-url: http://proxy.example.com:3128
+        #   https-url: http://proxy.example.com:3128
+        #   no-proxy: localhost,127.0.0.1
+        #   auth:
+        #     username: proxy-user
+        #     password: proxy-pass
         auth:
           # Choose exactly one auth method: oauth2, basic-auth, bearer-token, custom-header.
           oauth2:
@@ -201,6 +219,7 @@ current-ctx: xxx
 10. Config path resolution failure for home expansion or file access.
 11. Runtime override key not in the supported override-key list.
 12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
+13. `resource-server.http.proxy` is configured without at least one proxy URL, or with incomplete auth credentials.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
@@ -212,6 +231,7 @@ current-ctx: xxx
 7. `metadata.bundle` configured; resolve keeps `metadata.base-dir` empty and startup resolves metadata from the bundle cache.
 8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `resource-server.http.openapi` is unset.
 9. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
+10. `resource-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
@@ -224,3 +244,4 @@ current-ctx: xxx
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
 8. Corner case: `resource-server.http.auth.custom-header` with `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
 9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `resource-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
+10. Corner case: `ResolveContext({Name: "dev", Overrides: {"resource-server.http.proxy.http-url":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.

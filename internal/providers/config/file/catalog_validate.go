@@ -2,6 +2,7 @@ package file
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -212,6 +213,57 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 		}
 	}
 
+	if err := validateResourceServerProxy(resourceServer.HTTP.Proxy); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateResourceServerProxy(proxy *config.HTTPProxy) error {
+	if proxy == nil {
+		return nil
+	}
+
+	httpURL := strings.TrimSpace(proxy.HTTPURL)
+	httpsURL := strings.TrimSpace(proxy.HTTPSURL)
+
+	if httpURL == "" && httpsURL == "" {
+		return faults.NewValidationError("resource-server.http.proxy must define at least one of http-url or https-url", nil)
+	}
+
+	if httpURL != "" {
+		if err := validateResourceServerProxyURL("resource-server.http.proxy.http-url", httpURL); err != nil {
+			return err
+		}
+	}
+
+	if httpsURL != "" {
+		if err := validateResourceServerProxyURL("resource-server.http.proxy.https-url", httpsURL); err != nil {
+			return err
+		}
+	}
+
+	if proxy.Auth != nil {
+		if strings.TrimSpace(proxy.Auth.Username) == "" || strings.TrimSpace(proxy.Auth.Password) == "" {
+			return faults.NewValidationError("resource-server.http.proxy.auth requires username and password", nil)
+		}
+	}
+
+	return nil
+}
+
+func validateResourceServerProxyURL(field string, raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return faults.NewValidationError(field+" is invalid", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return faults.NewValidationError(field+" must use http or https", nil)
+	}
+	if parsed.Host == "" {
+		return faults.NewValidationError(field+" host is required", nil)
+	}
 	return nil
 }
 
@@ -289,6 +341,52 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override resource-server.http.base-url requires resource-server.http to be configured", nil)
 			}
 			cfg.ResourceServer.HTTP.BaseURL = value
+		case "resource-server.http.proxy.http-url":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.http-url requires resource-server.http to be configured", nil)
+			}
+			if cfg.ResourceServer.HTTP.Proxy == nil {
+				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			}
+			cfg.ResourceServer.HTTP.Proxy.HTTPURL = value
+		case "resource-server.http.proxy.https-url":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.https-url requires resource-server.http to be configured", nil)
+			}
+			if cfg.ResourceServer.HTTP.Proxy == nil {
+				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			}
+			cfg.ResourceServer.HTTP.Proxy.HTTPSURL = value
+		case "resource-server.http.proxy.no-proxy":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.no-proxy requires resource-server.http to be configured", nil)
+			}
+			if cfg.ResourceServer.HTTP.Proxy == nil {
+				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			}
+			cfg.ResourceServer.HTTP.Proxy.NoProxy = value
+		case "resource-server.http.proxy.auth.username":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.auth.username requires resource-server.http to be configured", nil)
+			}
+			if cfg.ResourceServer.HTTP.Proxy == nil {
+				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			}
+			if cfg.ResourceServer.HTTP.Proxy.Auth == nil {
+				cfg.ResourceServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
+			}
+			cfg.ResourceServer.HTTP.Proxy.Auth.Username = value
+		case "resource-server.http.proxy.auth.password":
+			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.auth.password requires resource-server.http to be configured", nil)
+			}
+			if cfg.ResourceServer.HTTP.Proxy == nil {
+				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			}
+			if cfg.ResourceServer.HTTP.Proxy.Auth == nil {
+				cfg.ResourceServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
+			}
+			cfg.ResourceServer.HTTP.Proxy.Auth.Password = value
 		case "metadata.base-dir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {

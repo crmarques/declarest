@@ -92,6 +92,10 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"filesystem:",
 		"resource-server:",
 		"auth:",
+		"proxy:",
+		"http-url:",
+		"https-url:",
+		"no-proxy:",
 		"oauth2:",
 		"basic-auth:",
 		"bearer-token:",
@@ -784,7 +788,7 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
 		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false},
+		confirms:    []bool{false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -829,7 +833,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "token-dev"},
 		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false},
+		confirms:    []bool{false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -858,6 +862,77 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	}
 }
 
+func TestCreateInteractivePromptFlowSupportsResourceServerProxy(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{
+		interactive: true,
+		inputs: []string{
+			"dev",
+			"/tmp/repo",
+			"/tmp/meta",
+			"https://api.example.com",
+			"",
+			"http://proxy.example.com:3128",
+			"",
+			"localhost,127.0.0.1",
+			"proxy-user",
+			"proxy-pass",
+			"token-dev",
+		},
+		selects: []string{
+			configdomain.ResourceFormatYAML,
+			"filesystem",
+			"bearer-token",
+		},
+		confirms: []bool{
+			false, // resource-server default headers
+			true,  // configure resource-server proxy
+			true,  // configure proxy auth
+			false, // configure resource-server tls
+			false, // configure secret-store
+			false, // configure preferences
+		},
+	}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&shared.GlobalFlags{},
+		prompter,
+		"",
+		"add",
+	)
+	if err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
+		t.Fatal("expected resource-server configuration")
+	}
+	if service.createdContext.ResourceServer.HTTP.Proxy == nil {
+		t.Fatal("expected resource-server proxy configuration")
+	}
+
+	proxy := service.createdContext.ResourceServer.HTTP.Proxy
+	if proxy.HTTPURL != "http://proxy.example.com:3128" {
+		t.Fatalf("expected proxy http-url, got %q", proxy.HTTPURL)
+	}
+	if proxy.HTTPSURL != "" {
+		t.Fatalf("expected empty proxy https-url, got %q", proxy.HTTPSURL)
+	}
+	if proxy.NoProxy != "localhost,127.0.0.1" {
+		t.Fatalf("expected proxy no-proxy, got %q", proxy.NoProxy)
+	}
+	if proxy.Auth == nil {
+		t.Fatal("expected proxy auth configuration")
+	}
+	if proxy.Auth.Username != "proxy-user" || proxy.Auth.Password != "proxy-pass" {
+		t.Fatalf("unexpected proxy auth values: %#v", proxy.Auth)
+	}
+}
+
 func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	t.Parallel()
 
@@ -866,7 +941,7 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
 		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false},
+		confirms:    []bool{false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -904,7 +979,7 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
 		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false},
+		confirms:    []bool{false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -959,7 +1034,7 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
 		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false},
+		confirms:    []bool{false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -990,6 +1065,7 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 			false, // git local auto-init
 			false, // configure git remote
 			false, // resource-server default headers
+			false, // configure resource-server proxy
 			false, // resource-server tls
 			false, // configure secret-store
 			false, // configure preferences
@@ -1059,6 +1135,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 		},
 		confirms: []bool{
 			true,  // configure default headers
+			false, // configure resource-server proxy
 			false, // configure resource-server tls
 			true,  // configure secret-store
 			true,  // configure file kdf

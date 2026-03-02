@@ -60,6 +60,18 @@ contexts:
         # default-headers:
         #   X-Example: value
 
+        # Optional managed-server proxy.
+        # proxy:
+        #   # Configure one or both proxy URLs.
+        #   http-url: http://proxy.example.com:3128
+        #   https-url: http://proxy.example.com:3128
+        #   # Optional comma-separated bypass rules.
+        #   no-proxy: localhost,127.0.0.1,.svc.cluster.local
+        #   # Optional proxy auth.
+        #   auth:
+        #     username: proxy-user
+        #     password: proxy-pass
+
         # Mutually exclusive: choose exactly one auth method.
         auth:
           bearer-token:

@@ -257,7 +257,7 @@ ui_write_step_log_header() {
       "${E2E_PLATFORM:-n/a}" \
       "${E2E_KEEP_RUNTIME:-0}" \
       "${E2E_VERBOSE:-0}"
-    printf '[%s] stack platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] stack platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s proxy:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_PLATFORM:-n/a}" \
       "${E2E_REPO_TYPE:-n/a}" \
@@ -265,6 +265,7 @@ ui_write_step_log_header() {
       "${E2E_RESOURCE_SERVER_CONNECTION:-n/a}" \
       "${E2E_RESOURCE_SERVER_AUTH_TYPE:-auto}" \
       "${E2E_RESOURCE_SERVER_MTLS:-false}" \
+      "${E2E_MANAGED_SERVER_PROXY:-false}" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION:-n/a}" \
       "${E2E_SECRET_PROVIDER:-n/a}" \

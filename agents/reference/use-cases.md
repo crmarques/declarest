@@ -263,7 +263,7 @@ Failure expectation:
 Goal: run containerized components with compose artifacts explicitly.
 
 Inputs:
-1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --resource-server simple-api-server --secret-provider file`.
+1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --managed-server simple-api-server --secret-provider file`.
 
 Execution:
 1. Runner parses platform selection (`compose`).
@@ -281,7 +281,7 @@ Failure expectation:
 Goal: verify kind runtime lifecycle, manual handoff details, and cleanup.
 
 Inputs:
-1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --resource-server keycloak --secret-provider file`.
+1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --managed-server keycloak --secret-provider file`.
 2. Follow-up cleanup command `run-e2e.sh --clean <run-id>`.
 
 Execution:
@@ -326,7 +326,7 @@ Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts co
 
 Inputs:
 1. `resource-server=simple-api-server`.
-2. `--resource-server-auth-type basic`.
+2. `--managed-server-auth-type basic`.
 3. Basic auth username/password configured in component state.
 
 Execution:
@@ -340,7 +340,7 @@ Expected outputs:
 3. Step 3 succeeds with HTTP `200`.
 
 Failure expectation:
-1. Selecting `--resource-server-auth-type` unsupported by the selected resource-server component fails run selection before startup.
+1. Selecting `--managed-server-auth-type` unsupported by the selected resource-server component fails run selection before startup.
 
 ### Example 15: Secret Detect Metadata Autofix
 Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.
@@ -428,3 +428,23 @@ Expected outputs:
 Failure expectation:
 1. Step 3 fails with `ValidationError` before mutation because auto-commit commands require a clean git worktree.
 2. Step 4 fails with `ValidationError` because commit-message flags are mutually exclusive.
+
+### Example 19: Managed-Server Proxy Context Injection
+Goal: ensure E2E proxy selection writes a complete `resource-server.http.proxy` block in generated contexts.
+
+Inputs:
+1. `run-e2e.sh --managed-server-proxy true`.
+2. At least one proxy URL env var (`DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`).
+3. Optional proxy auth vars (`DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME` and `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`).
+
+Execution:
+1. Start the runner with `--managed-server-proxy true` and proxy env vars set.
+2. Let context assembly complete and inspect `test/e2e/.runs/<run-id>/contexts.yaml`.
+3. Repeat with `--managed-server-proxy true` and no proxy URL env vars.
+
+Expected outputs:
+1. Step 2 context contains `resource-server.http.proxy` with configured `http-url`/`https-url`, optional `no-proxy`, and optional `auth` fields.
+2. Resource-server auth and other context blocks remain unchanged.
+
+Failure expectation:
+1. Step 3 fails argument validation before runtime startup with actionable guidance about missing proxy URL env vars.

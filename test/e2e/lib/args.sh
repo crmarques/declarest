@@ -6,6 +6,12 @@ E2E_RESOURCE_SERVER='simple-api-server'
 E2E_RESOURCE_SERVER_CONNECTION='local'
 E2E_RESOURCE_SERVER_AUTH_TYPE=''
 E2E_RESOURCE_SERVER_MTLS='false'
+E2E_MANAGED_SERVER_PROXY='false'
+E2E_MANAGED_SERVER_PROXY_HTTP_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL:-}"
+E2E_MANAGED_SERVER_PROXY_HTTPS_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL:-}"
+E2E_MANAGED_SERVER_PROXY_NO_PROXY="${DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}"
+E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}"
+E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}"
 E2E_METADATA='bundle'
 E2E_REPO_TYPE='filesystem'
 E2E_GIT_PROVIDER=''
@@ -135,7 +141,7 @@ e2e_parse_resource_server_auth_type_value() {
       printf 'custom-header\n'
       ;;
     *)
-      e2e_die "invalid --resource-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header)"
+      e2e_die "invalid --managed-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header)"
       return 1
       ;;
   esac
@@ -197,21 +203,24 @@ Platform selection:
     kubernetes : Start local containerized components in a run-scoped kind cluster.
 
 Component selection (choose values for each flag; see notes below):
-  --resource-server <simple-api-server|keycloak|rundeck|vault>         default: simple-api-server
+  --managed-server <simple-api-server|keycloak|rundeck|vault>          default: simple-api-server
     simple-api-server : Lightweight JSON API with selectable auth modes (none/basic/oauth2) and optional mTLS.
     keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
     rundeck           : Rundeck HTTP API surface for job-centric operations.
     vault             : HashiCorp Vault HTTP API acting as the managed server.
     A resource-server selection is mandatory for e2e runs; `none` is not supported.
-  --resource-server-connection <local|remote>           default: local
+  --managed-server-connection <local|remote>            default: local
     local  : Start the chosen managed server via the provided fixtures and scripts.
     remote : Assume the server already exists and reach it via the configured connection details.
-  --resource-server-auth-type <none|basic|oauth2|custom-header>
+  --managed-server-auth-type <none|basic|oauth2|custom-header>
     Select the resource-server auth mode. When omitted, the selected component elects a default auth type
     (preference order: oauth2, custom-header, basic, none) subject to its capability contract.
-  --resource-server-mtls [<true|false>]               default: false
+  --managed-server-mtls [<true|false>]                  default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
+  --managed-server-proxy [<true|false>]                default: false
+    true  : Inject resource-server.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
+    false : Keep managed-server proxy unset in generated contexts.
   --metadata <bundle|local-dir>                     default: bundle
     bundle    : Use metadata.bundle shorthand from the selected resource-server contract and ignore component openapi.yaml.
     local-dir : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
@@ -252,16 +261,22 @@ Global flags:
 Environment overrides:
   DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker>       default: podman
   DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=<url>    optional managed-server proxy http-url
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL=<url>   optional managed-server proxy https-url
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY=<list>   optional managed-server proxy no-proxy list
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME=<v> optional managed-server proxy auth username
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD=<v> optional managed-server proxy auth password
 
 Examples:
-  ./run-e2e.sh --platform kubernetes --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
-  ./run-e2e.sh --platform compose --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile basic --repo-type filesystem --resource-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile basic --resource-server simple-api-server --metadata local-dir
-  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --resource-server simple-api-server
-  ./run-e2e.sh --profile full --repo-type git --git-provider gitea --resource-server simple-api-server
-  ./run-e2e.sh --resource-server keycloak --resource-server-auth-type oauth2
-  ./run-e2e.sh --resource-server simple-api-server --resource-server-auth-type basic --resource-server-mtls true
+  ./run-e2e.sh --platform kubernetes --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --platform compose --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --profile basic --managed-server simple-api-server --metadata local-dir
+  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --managed-server simple-api-server
+  ./run-e2e.sh --profile full --repo-type git --git-provider gitea --managed-server simple-api-server
+  ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
+  ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true
   ./run-e2e.sh --profile manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
@@ -310,12 +325,12 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--resource-server|--resource-server-connection|--resource-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
         ;;
-      --resource-server-mtls)
+      --managed-server-mtls|--managed-server-proxy)
         has_workload_flag=1
         shift
         if [[ $# -gt 0 && "${1}" != -* ]]; then
@@ -380,34 +395,34 @@ e2e_parse_args() {
         e2e_mark_explicit 'platform'
         shift 2
         ;;
-      --resource-server)
+      --managed-server)
         [[ $# -ge 2 ]] || {
-          e2e_die '--resource-server requires a value'
+          e2e_die '--managed-server requires a value'
           return 1
         }
         E2E_RESOURCE_SERVER=$2
         e2e_mark_explicit 'resource-server'
         shift 2
         ;;
-      --resource-server-connection)
+      --managed-server-connection)
         [[ $# -ge 2 ]] || {
-          e2e_die '--resource-server-connection requires a value'
+          e2e_die '--managed-server-connection requires a value'
           return 1
         }
         E2E_RESOURCE_SERVER_CONNECTION=$2
         e2e_mark_explicit 'resource-server-connection'
         shift 2
         ;;
-      --resource-server-auth-type)
+      --managed-server-auth-type)
         [[ $# -ge 2 ]] || {
-          e2e_die '--resource-server-auth-type requires a value'
+          e2e_die '--managed-server-auth-type requires a value'
           return 1
         }
         E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_parse_resource_server_auth_type_value "$2") || return 1
         e2e_mark_explicit 'resource-server-auth-type'
         shift 2
         ;;
-      --resource-server-mtls)
+      --managed-server-mtls)
         local mtls_value='true'
         if [[ $# -ge 2 && "${2}" != -* ]]; then
           mtls_value=$2
@@ -415,8 +430,19 @@ e2e_parse_args() {
         else
           shift
         fi
-        E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${mtls_value}") || return 1
+        E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${mtls_value}") || return 1
         e2e_mark_explicit 'resource-server-mtls'
+        ;;
+      --managed-server-proxy)
+        local proxy_value='true'
+        if [[ $# -ge 2 && "${2}" != -* ]]; then
+          proxy_value=$2
+          shift 2
+        else
+          shift
+        fi
+        E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${proxy_value}") || return 1
+        e2e_mark_explicit 'managed-server-proxy'
         ;;
       --metadata)
         [[ $# -ge 2 ]] || {
@@ -511,15 +537,15 @@ e2e_parse_args() {
   E2E_PLATFORM=$(e2e_parse_platform_value "${E2E_PLATFORM}") || return 1
 
   if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
-    e2e_die '--resource-server none is not supported; select a resource-server component'
+    e2e_die '--managed-server none is not supported; select a resource-server component'
     return 1
   fi
-  e2e_validate_component_arg '--resource-server' "${E2E_RESOURCE_SERVER}" || return 1
+  e2e_validate_component_arg '--managed-server' "${E2E_RESOURCE_SERVER}" || return 1
 
   case "${E2E_RESOURCE_SERVER_CONNECTION}" in
     local|remote) ;;
     *)
-      e2e_die "invalid resource-server connection: ${E2E_RESOURCE_SERVER_CONNECTION}"
+      e2e_die "invalid managed-server connection: ${E2E_RESOURCE_SERVER_CONNECTION}"
       return 1
       ;;
   esac
@@ -527,7 +553,20 @@ e2e_parse_args() {
   if [[ -n "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ]]; then
     E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_parse_resource_server_auth_type_value "${E2E_RESOURCE_SERVER_AUTH_TYPE}") || return 1
   fi
-  E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--resource-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
+  E2E_RESOURCE_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${E2E_RESOURCE_SERVER_MTLS}") || return 1
+  E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${E2E_MANAGED_SERVER_PROXY}") || return 1
+  if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
+    if [[ -z "${E2E_MANAGED_SERVER_PROXY_HTTP_URL}" && -z "${E2E_MANAGED_SERVER_PROXY_HTTPS_URL}" ]]; then
+      e2e_die "--managed-server-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
+      return 1
+    fi
+    if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -n "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
+      if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
+        e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+        return 1
+      fi
+    fi
+  fi
   E2E_METADATA=$(e2e_parse_metadata_mode_value "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1

@@ -186,6 +186,43 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 			},
 		},
 		{
+			name: "resource_server_proxy_missing_urls",
+			cfg: config.Context{
+				Name:       "dev",
+				Repository: validFilesystemRepository(),
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						Auth: &config.HTTPAuth{
+							BearerToken: &config.BearerTokenAuth{Token: "token"},
+						},
+						Proxy: &config.HTTPProxy{},
+					},
+				},
+			},
+		},
+		{
+			name: "resource_server_proxy_auth_incomplete",
+			cfg: config.Context{
+				Name:       "dev",
+				Repository: validFilesystemRepository(),
+				ResourceServer: &config.ResourceServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						Auth: &config.HTTPAuth{
+							BearerToken: &config.BearerTokenAuth{Token: "token"},
+						},
+						Proxy: &config.HTTPProxy{
+							HTTPURL: "http://proxy.example.com:3128",
+							Auth: &config.ProxyAuth{
+								Username: "user",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "secret_store_multiple_backends",
 			cfg: config.Context{
 				Name:           "dev",
@@ -767,6 +804,52 @@ func TestResolveContextOverrideSupportsResourceServerWhenConfigured(t *testing.T
 	}
 	if resolved.ResourceServer.HTTP.BaseURL != "https://override.example.com" {
 		t.Fatalf("expected resource-server base-url override, got %q", resolved.ResourceServer.HTTP.BaseURL)
+	}
+}
+
+func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+		Name: "fs",
+		Overrides: map[string]string{
+			"resource-server.http.proxy.http-url":      "http://proxy.example.com:3128",
+			"resource-server.http.proxy.https-url":     "https://proxy.example.com:3128",
+			"resource-server.http.proxy.no-proxy":      "localhost,127.0.0.1",
+			"resource-server.http.proxy.auth.username": "proxy-user",
+			"resource-server.http.proxy.auth.password": "proxy-pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected resource-server proxy overrides to succeed, got %v", err)
+	}
+
+	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil || resolved.ResourceServer.HTTP.Proxy == nil {
+		t.Fatalf("expected resource-server proxy configuration, got %#v", resolved.ResourceServer)
+	}
+	if resolved.ResourceServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
+		t.Fatalf("expected proxy http-url override, got %q", resolved.ResourceServer.HTTP.Proxy.HTTPURL)
+	}
+	if resolved.ResourceServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
+		t.Fatalf("expected proxy https-url override, got %q", resolved.ResourceServer.HTTP.Proxy.HTTPSURL)
+	}
+	if resolved.ResourceServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
+		t.Fatalf("expected proxy no-proxy override, got %q", resolved.ResourceServer.HTTP.Proxy.NoProxy)
+	}
+	if resolved.ResourceServer.HTTP.Proxy.Auth == nil {
+		t.Fatal("expected proxy auth configuration")
+	}
+	if resolved.ResourceServer.HTTP.Proxy.Auth.Username != "proxy-user" {
+		t.Fatalf("expected proxy auth username override, got %q", resolved.ResourceServer.HTTP.Proxy.Auth.Username)
+	}
+	if resolved.ResourceServer.HTTP.Proxy.Auth.Password != "proxy-pass" {
+		t.Fatalf("expected proxy auth password override, got %q", resolved.ResourceServer.HTTP.Proxy.Auth.Password)
 	}
 }
 

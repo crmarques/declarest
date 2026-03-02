@@ -328,6 +328,18 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 		server.DefaultHeaders = headers
 	}
 
+	includeProxy, err := prompter.Confirm(command, "Configure resource-server proxy?", false)
+	if err != nil {
+		return nil, err
+	}
+	if includeProxy {
+		proxy, proxyErr := promptHTTPProxy(command, prompter)
+		if proxyErr != nil {
+			return nil, proxyErr
+		}
+		server.Proxy = proxy
+	}
+
 	auth, err := promptHTTPAuth(command, prompter)
 	if err != nil {
 		return nil, err
@@ -347,6 +359,54 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 	}
 
 	return &configdomain.ResourceServer{HTTP: server}, nil
+}
+
+func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPProxy, error) {
+	httpURL, err := promptOptionalInput(command, prompter, "Proxy http-url (optional): ")
+	if err != nil {
+		return nil, err
+	}
+
+	httpsURL, err := promptOptionalInput(command, prompter, "Proxy https-url (optional): ")
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
+		return nil, shared.ValidationError("resource-server proxy requires at least one of http-url or https-url", nil)
+	}
+
+	noProxy, err := promptOptionalInput(command, prompter, "Proxy no-proxy list (optional): ")
+	if err != nil {
+		return nil, err
+	}
+
+	proxy := &configdomain.HTTPProxy{
+		HTTPURL:  httpURL,
+		HTTPSURL: httpsURL,
+		NoProxy:  noProxy,
+	}
+
+	includeAuth, err := prompter.Confirm(command, "Configure proxy auth?", false)
+	if err != nil {
+		return nil, err
+	}
+	if includeAuth {
+		username, inputErr := promptRequiredInput(command, prompter, "Proxy auth username: ", "proxy auth username")
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		password, inputErr := promptRequiredInput(command, prompter, "Proxy auth password: ", "proxy auth password")
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		proxy.Auth = &configdomain.ProxyAuth{
+			Username: username,
+			Password: password,
+		}
+	}
+
+	return proxy, nil
 }
 
 func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPAuth, error) {

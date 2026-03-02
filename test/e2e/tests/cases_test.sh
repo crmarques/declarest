@@ -44,6 +44,22 @@ test_requirement_requested_explicitly_tracks_resource_server_auth_type_selector(
   fi
 }
 
+test_requirement_requested_explicitly_tracks_managed_server_proxy_capability() {
+  load_case_libs
+
+  E2E_EXPLICIT=()
+  E2E_MANAGED_SERVER_PROXY='true'
+
+  if case_requirement_requested_explicitly 'has-managed-server-proxy'; then
+    fail "expected implicit managed-server proxy selection not to be marked explicit"
+  fi
+
+  e2e_mark_explicit 'managed-server-proxy'
+  if ! case_requirement_requested_explicitly 'has-managed-server-proxy'; then
+    fail "expected explicit managed-server proxy selection to be marked explicit"
+  fi
+}
+
 test_collect_case_files_is_deterministic_global_then_component() {
   load_case_libs
   local tmp
@@ -85,4 +101,5 @@ EOF
 
 test_requirement_requested_explicitly_tracks_capability_selection
 test_requirement_requested_explicitly_tracks_resource_server_auth_type_selector
+test_requirement_requested_explicitly_tracks_managed_server_proxy_capability
 test_collect_case_files_is_deterministic_global_then_component

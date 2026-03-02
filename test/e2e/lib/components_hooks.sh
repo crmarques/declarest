@@ -170,6 +170,7 @@ e2e_component_start_k8s_port_forwards() {
   local remote_port
   local -a pids=()
   local safe_component_key
+  local pf_script
 
   component_label=$(e2e_component_k8s_label_key "${component_key}")
   service_rows=$(
@@ -198,10 +199,21 @@ e2e_component_start_k8s_port_forwards() {
       fi
 
       local pf_log="${E2E_LOG_DIR}/port-forward-${safe_component_key}-${service_name}-${local_port}-${remote_port}.log"
-      kubectl \
-        --kubeconfig "${E2E_KUBECONFIG}" \
-        -n "${E2E_K8S_NAMESPACE}" \
-        port-forward "service/${service_name}" "${local_port}:${remote_port}" >"${pf_log}" 2>&1 &
+      pf_script="${E2E_LOG_DIR}/port-forward-${safe_component_key}-${service_name}-${local_port}-${remote_port}.sh"
+      cat <<EOF >"${pf_script}"
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'exit 0' TERM INT
+while true; do
+  kubectl \
+    --kubeconfig "${E2E_KUBECONFIG}" \
+    -n "${E2E_K8S_NAMESPACE}" \
+    port-forward "service/${service_name}" "${local_port}:${remote_port}"
+  sleep 1
+done
+EOF
+      chmod +x "${pf_script}"
+      "${pf_script}" >"${pf_log}" 2>&1 &
       local pf_pid=$!
       sleep 1
       if ! kill -0 "${pf_pid}" >/dev/null 2>&1; then

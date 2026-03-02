@@ -25,6 +25,7 @@ case_selected_value_for_key() {
     resource-server-connection) printf '%s\n' "${E2E_RESOURCE_SERVER_CONNECTION}" ;;
     resource-server-auth-type) printf '%s\n' "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ;;
     resource-server-mtls) printf '%s\n' "${E2E_RESOURCE_SERVER_MTLS}" ;;
+    managed-server-proxy) printf '%s\n' "${E2E_MANAGED_SERVER_PROXY}" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
     git-provider) printf '%s\n' "${E2E_GIT_PROVIDER}" ;;
     git-provider-connection) printf '%s\n' "${E2E_GIT_PROVIDER_CONNECTION}" ;;
@@ -76,6 +77,10 @@ case_requirement_requested_explicitly() {
       ;;
     has-resource-server-mtls)
       e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]
+      return
+      ;;
+    has-managed-server-proxy)
+      e2e_is_explicit 'managed-server-proxy' && [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]
       return
       ;;
     remote-selection)
@@ -191,7 +196,7 @@ e2e_run_single_case() {
   {
     printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}"
     printf '[%s] CASE requires=%s\n' "$(e2e_now_utc)" "${case_requires:-<none>}"
-    printf '[%s] CASE stack profile=%s platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] CASE stack profile=%s platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s proxy:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_PROFILE}" \
       "${E2E_PLATFORM}" \
@@ -200,6 +205,7 @@ e2e_run_single_case() {
       "${E2E_RESOURCE_SERVER_CONNECTION}" \
       "${E2E_RESOURCE_SERVER_AUTH_TYPE:-auto}" \
       "${E2E_RESOURCE_SERVER_MTLS:-false}" \
+      "${E2E_MANAGED_SERVER_PROXY:-false}" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION}" \
       "${E2E_SECRET_PROVIDER}" \

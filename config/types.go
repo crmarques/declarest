@@ -80,7 +80,20 @@ type HTTPServer struct {
 	OpenAPI        string            `yaml:"openapi,omitempty"`
 	DefaultHeaders map[string]string `yaml:"default-headers,omitempty"`
 	Auth           *HTTPAuth         `yaml:"auth,omitempty"`
+	Proxy          *HTTPProxy        `yaml:"proxy,omitempty"`
 	TLS            *TLS              `yaml:"tls,omitempty"`
+}
+
+type HTTPProxy struct {
+	HTTPURL  string     `yaml:"http-url,omitempty"`
+	HTTPSURL string     `yaml:"https-url,omitempty"`
+	NoProxy  string     `yaml:"no-proxy,omitempty"`
+	Auth     *ProxyAuth `yaml:"auth,omitempty"`
+}
+
+type ProxyAuth struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type HTTPAuth struct {

@@ -78,7 +78,7 @@ Field rules:
 - `DESCRIPTION`: short operator-facing description.
 - `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
 - `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because resource-server auth selection is one-of.
-- Runner selection uses `--resource-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--resource-server-mtls` independently for mTLS.
+- Runner selection uses `--managed-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-server-mtls` independently for mTLS.
 - Resource-server fixture metadata files (`*/_/metadata.json`) MUST include non-empty `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`.
 
 ## Hook Contract
