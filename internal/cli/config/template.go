@@ -53,7 +53,7 @@ contexts:
     managed-server:
       http:
         base-url: https://example.com/api
-        # openapi: /path/to/openapi.yaml
+        # openapi: /path/to/openapi-or-swagger.yaml
         # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
 
         # Optional default request headers.

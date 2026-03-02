@@ -147,6 +147,7 @@ func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[
 	if !ok {
 		return nil, faults.NewValidationError("OpenAPI document root must be an object", nil)
 	}
+	document = normalizeOpenAPIDocument(document)
 	return document, nil
 }
 

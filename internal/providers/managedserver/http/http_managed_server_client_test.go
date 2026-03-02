@@ -656,6 +656,92 @@ paths:
 			t.Fatalf("expected schema required-property validation error, got %v", err)
 		}
 	})
+
+	t.Run("schema_ref_request_body_supports_swagger2", func(t *testing.T) {
+		t.Parallel()
+
+		openAPI := `
+swagger: "2.0"
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /admin/realms/{realm}/clients:
+    post:
+      parameters:
+        - name: realm
+          in: path
+          required: true
+          type: string
+        - name: payload
+          in: body
+          required: true
+          schema:
+            type: object
+            required:
+              - realm
+              - clientId
+            properties:
+              realm:
+                type: string
+              clientId:
+                type: string
+      responses:
+        "201":
+          description: created
+          schema:
+            type: object
+            properties:
+              clientId:
+                type: string
+`
+		tempDir := t.TempDir()
+		specPath := filepath.Join(tempDir, "swagger.yaml")
+		if err := os.WriteFile(specPath, []byte(openAPI), 0o600); err != nil {
+			t.Fatalf("failed to write swagger fixture: %v", err)
+		}
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+			},
+			OpenAPI: specPath,
+		})
+
+		md := metadata.ResourceMetadata{
+			CollectionPath: "/admin/realms/{{.realm}}/clients",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationCreate): {
+					Path: "/admin/realms/{{.realm}}/clients",
+					Validate: &metadata.OperationValidationSpec{
+						SchemaRef: "openapi:request-body",
+					},
+				},
+			},
+		}
+		_, err := client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+			CollectionPath: "/admin/realms/platform/clients",
+			Payload: map[string]any{
+				"clientId": "declarest-cli",
+			},
+		}, md, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		_, err = client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath:    "/admin/realms/platform/clients/declarest-cli",
+			CollectionPath: "/admin/realms/platform/clients",
+			Payload:        map[string]any{},
+		}, md, metadata.OperationCreate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "missing required property") {
+			t.Fatalf("expected schema required-property validation error, got %v", err)
+		}
+	})
 }
 
 func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
@@ -839,6 +925,65 @@ paths:
 			LogicalPath: "/customers/acme",
 		}, md, metadata.OperationDelete)
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("fills_missing_fields_from_swagger2", func(t *testing.T) {
+		t.Parallel()
+
+		swagger := `
+swagger: "2.0"
+consumes:
+  - application/xml
+produces:
+  - application/hal+json
+paths:
+  /customers:
+    post:
+      parameters:
+        - name: payload
+          in: body
+          schema:
+            type: object
+      responses:
+        "201":
+          description: created
+          schema:
+            type: object
+`
+		tempDir := t.TempDir()
+		specPath := filepath.Join(tempDir, "swagger.yaml")
+		if err := os.WriteFile(specPath, []byte(swagger), 0o600); err != nil {
+			t.Fatalf("failed to write swagger fixture: %v", err)
+		}
+
+		swaggerClient := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+			},
+			OpenAPI: specPath,
+		})
+
+		md := metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationCreate): {
+					Path: "/customers",
+				},
+			},
+		}
+		spec, err := swaggerClient.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/acme",
+		}, md, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.ContentType != "application/xml" {
+			t.Fatalf("expected content type from swagger2 consumes, got %q", spec.ContentType)
+		}
+		if spec.Accept != "application/hal+json" {
+			t.Fatalf("expected accept from swagger2 produces, got %q", spec.Accept)
+		}
 	})
 }
 

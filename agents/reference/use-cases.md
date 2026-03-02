@@ -259,6 +259,27 @@ Expected outputs:
 Failure expectation:
 1. Invalid client credentials at `/token` fail with OAuth2 `invalid_client` and HTTP `401`.
 
+### Example 20: Managed-Server Swagger 2 Compatibility (Corner)
+Goal: keep managed-server OpenAPI-assisted behavior equivalent when `managed-server.http.openapi` points to Swagger 2.0.
+
+Inputs:
+1. Context `managed-server.http.openapi` path pointing to a `swagger: "2.0"` document.
+2. Swagger operation with `consumes`, `produces`, and `parameters[in=body].schema`.
+3. Metadata operation using `validate.schemaRef: openapi:request-body`.
+
+Execution:
+1. Startup loads and normalizes the Swagger 2.0 document through `managedserver.ManagedServerClient`.
+2. Request construction resolves missing `Accept`/`ContentType` from normalized operation media definitions.
+3. Payload validation resolves `openapi:request-body` against the normalized Swagger body schema.
+
+Expected outputs:
+1. Request defaults match Swagger `consumes`/`produces` media types.
+2. `openapi:request-body` validation accepts payloads that satisfy the Swagger body schema (including path-derived required fields).
+3. Runtime method-support checks behave the same as OpenAPI 3 paths.
+
+Failure expectation:
+1. If Swagger operation has no body schema (`parameters[in=body].schema` missing), `openapi:request-body` validation fails with `ValidationError`.
+
 ### Example 13: Compose Platform Runtime
 Goal: run containerized components with compose artifacts explicitly.
 

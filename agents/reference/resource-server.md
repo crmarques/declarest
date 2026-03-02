@@ -30,6 +30,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload.
 14. Payload validation context MUST include path-derived template fields (for example `realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
 15. OpenAPI document URLs MAY be cross-origin relative to `managed-server.http.base-url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+16. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
 
 ## Data Contracts
 Request spec fields:
@@ -45,6 +46,10 @@ Request spec fields:
 Server interface operations:
 1. `Get/Create/Update/Delete/List/Exists`.
 2. `GetOpenAPISpec`.
+
+OpenAPI document compatibility:
+1. `openapi: 3.x` documents use `requestBody.content` and response `content` directly.
+2. `swagger: 2.0` documents use `parameters[in=body].schema`, `consumes`, `produces`, and response `schema`; runtime normalization MUST expose equivalent `requestBody.content` and response `content` semantics.
 
 Auth modes:
 1. OAuth2.
@@ -63,6 +68,7 @@ Auth modes:
 3. Server returns non-JSON payload for configured JSON operation.
 4. OpenAPI path exists but method unsupported for operation type.
 5. Validation schema reference is configured but OpenAPI request-body/schema pointer cannot be resolved.
+6. Swagger 2.0 operation omits `parameters[in=body].schema`; `validate.schemaRef=openapi:request-body` fails with `ValidationError`.
 
 ## Examples
 1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/<repository.resource-format>` (for example `application/yaml` in YAML repositories).
@@ -70,3 +76,4 @@ Auth modes:
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).
 5. `Create` operation validation can require `realm` while resolving `realm` implicitly from `/admin/realms/<realm>/...` logical paths.
+6. Swagger 2.0 `consumes/produces` plus body `parameters` support `Create` fallback defaults (`ContentType`/`Accept`) and `openapi:request-body` validation without requiring OpenAPI 3 syntax.

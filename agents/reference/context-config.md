@@ -34,6 +34,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 18. When `managed-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
 19. When `managed-server.http.proxy` is configured, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
+20. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -124,7 +125,7 @@ contexts:
     managed-server:
       http:
         base-url: https://example.com/api
-        # openapi: /path/to/openapi.yaml
+        # openapi: /path/to/openapi-or-swagger.yaml
         # default-headers:
         #   X-Example: value
         # proxy:

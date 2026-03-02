@@ -306,7 +306,7 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 	if err != nil {
 		return nil, err
 	}
-	openAPI, err := promptOptionalInput(command, prompter, "Managed-server OpenAPI path/url (optional): ")
+	openAPI, err := promptOptionalInput(command, prompter, "Managed-server OpenAPI/Swagger path/url (optional): ")
 	if err != nil {
 		return nil, err
 	}

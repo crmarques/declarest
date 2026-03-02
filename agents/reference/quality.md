@@ -46,6 +46,7 @@ Acceptance contracts:
 8. Context config: strict decode, one-of validation, overrides precedence, and missing-catalog behavior.
 9. Metadata bundles: manifest validation (`bundle.yaml` required fields), shorthand name/version contract checks, secure tar.gz extraction safeguards, and deterministic cache reuse behavior.
 10. Bundle OpenAPI wiring: `managed-server.http.openapi` precedence over bundle hints, fallback to `bundle.yaml declarest.openapi`, bundle-root/metadata-root OpenAPI files (`openapi.yaml|openapi.yml|openapi.json`), recursive bundle OpenAPI file discovery, and cross-origin OpenAPI fetches without leaked auth headers.
+10. Managed-server OpenAPI version compatibility: `openapi: 3.x` and `swagger: 2.0` specs provide equivalent method-support checks, media fallback defaults, and `validate.schemaRef=openapi:request-body` behavior for body-bearing operations.
 10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repo status` output contract, and verbose worktree-detail coverage for `repo status --verbose`.
 11. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
