@@ -12,7 +12,7 @@ This page summarizes the current `test/e2e` component system used by the reposit
 
 Components live under `test/e2e/components/` and are grouped by concern:
 
-- `resource-server/`
+- `managed-server/`
 - `repo-type/`
 - `git-provider/`
 - `secret-provider/`

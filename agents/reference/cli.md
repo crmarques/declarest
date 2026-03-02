@@ -36,7 +36,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 
 ## Data Contracts
 Command groups:
-1. Basic Commands: `config`, `metadata`, `repo`, `resource`, `resource-server`, `secret`.
+1. Basic Commands: `config`, `metadata`, `repo`, `resource`, `managed-server`, `secret`.
 2. Other Commands: `completion`, `version`.
 Global flags:
 1. `--context`, `-c`.
@@ -106,10 +106,10 @@ Selected command names:
 17. `secret detect`.
 18. `completion`.
 19. `version`.
-20. `resource-server get base-url`.
-19. `resource-server get token-url`.
-20. `resource-server get access-token`.
-21. `resource-server check`.
+20. `managed-server get base-url`.
+19. `managed-server get token-url`.
+20. `managed-server get access-token`.
+21. `managed-server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
@@ -234,11 +234,11 @@ Interactive config commands:
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repo status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
-90. `resource-server get base-url` MUST print the active context `managed-server.http.base-url` and fail with `ValidationError` when `managed-server.http` is not configured.
-91. `resource-server get token-url` MUST print the active context `managed-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
-92. `resource-server get access-token` MUST fetch and print the OAuth2 access token from `managed-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
-93. `resource-server check` MUST probe resource-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
-94. Commands with plain-text-only output (`secret get`, `repo tree`, `resource-server get *`, `resource-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
+90. `managed-server get base-url` MUST print the active context `managed-server.http.base-url` and fail with `ValidationError` when `managed-server.http` is not configured.
+91. `managed-server get token-url` MUST print the active context `managed-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
+92. `managed-server get access-token` MUST fetch and print the OAuth2 access token from `managed-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
+93. `managed-server check` MUST probe managed-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
+94. Commands with plain-text-only output (`secret get`, `repo tree`, `managed-server get *`, `managed-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
 95. `config show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
 96. `repo status --verbose` MAY include structured `worktree` entries when `--output json|yaml` is selected.
 97. `repo commit` MUST support `--output text|json|yaml`; `json|yaml` output MUST expose a stable `committed` success indicator, and text-mode success SHOULD use the standard CLI execution-status footer.
@@ -267,11 +267,11 @@ Interactive config commands:
 17. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
-20. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `resource-server`, and `secret-store` labels.
+20. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
 21. `repo status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 22. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.
-23. `resource-server get base-url|token-url|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
-24. `resource-server check` text output MUST print a concise probe result line and MAY include one additional line with the probe error detail when connectivity is confirmed through a warning-category response.
+23. `managed-server get base-url|token-url|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
+24. `managed-server check` text output MUST print a concise probe result line and MAY include one additional line with the probe error detail when connectivity is confirmed through a warning-category response.
 25. The CLI MUST support `--no-color` to disable ANSI color output for status labels, and `NO_COLOR` environment variable MUST also disable ANSI color output.
 26. CLI process exit codes SHOULD map typed error categories deterministically (for example validation, not-found, auth, conflict, transport) instead of collapsing all errors to one exit code.
 
@@ -304,7 +304,7 @@ Interactive config commands:
 27. Context-catalog mutation input omits required `managed-server`.
 28. `secret get --key <key>` is invoked without `--path`.
 29. `secret get <path>:` uses an empty key segment.
-30. `resource-server get token-url` or `resource-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
+30. `managed-server get token-url` or `managed-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
 31. `resource save|delete` receives both `--message` and `--message-override`.
 32. `resource save|delete` auto-commit is attempted while the git worktree already has unrelated uncommitted changes.
 
@@ -336,8 +336,8 @@ Interactive config commands:
 24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
-26. `resource-server get token-url` or `resource-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
-27. `resource-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
+26. `managed-server get token-url` or `managed-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
+27. `managed-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
 28. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
 
 ## Examples
@@ -393,10 +393,10 @@ Interactive config commands:
 39. `declarest version -o json` prints machine-readable version information.
 40. `declarest config use` opens interactive context selection when run in a terminal.
 41. `declarest config show --context dev` prints the selected context configuration as YAML.
-42. `declarest resource request get /health` executes a direct resource-server GET request.
-43. `declarest resource request post /customers --payload payload.json` executes a direct resource-server POST request with JSON body.
-44. `declarest resource request post /customers --payload '{"id":"acme"}'` executes a direct resource-server POST request with inline JSON payload.
-45. `echo '{"id":"acme"}' | declarest resource request put /customers/acme` executes a direct resource-server PUT request from stdin.
+42. `declarest resource request get /health` executes a direct managed-server GET request.
+43. `declarest resource request post /customers --payload payload.json` executes a direct managed-server POST request with JSON body.
+44. `declarest resource request post /customers --payload '{"id":"acme"}'` executes a direct managed-server POST request with inline JSON payload.
+45. `echo '{"id":"acme"}' | declarest resource request put /customers/acme` executes a direct managed-server PUT request from stdin.
 46. `declarest resource request delete /customers/a --path /customers/b` fails with `ValidationError` due to path mismatch.
 47. `declarest config add` opens interactive prompts to build one context configuration when `--file`/stdin input is not provided.
 48. `declarest config add --file contexts.yaml --format yaml` imports all contexts defined in a catalog file.
@@ -409,7 +409,7 @@ Interactive config commands:
 55. `declarest` shell tab completion at root suggests `help` and does not suggest internal helper names.
 56. `declarest resource` prints resource command help even when no current context is configured.
 57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--confirm-delete` is required.
-58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct resource-server DELETE request.
+58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct managed-server DELETE request.
 59. `declarest resource request delete /customers --confirm-delete --recursive` issues delete requests for all repository resources under `/customers`.
 60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idFromAttribute` matches the provided path segment when no literal repository resource exists.
 61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source remote-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
@@ -446,7 +446,7 @@ Interactive config commands:
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.
-87. `declarest resource-server get base-url` prints the active context managed-server HTTP base URL.
-88. `declarest resource-server get token-url` prints the active context managed-server OAuth2 token URL.
-89. `declarest resource-server get access-token` prints only the OAuth2 access token for the active context managed server.
-90. `declarest resource-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.
+87. `declarest managed-server get base-url` prints the active context managed-server HTTP base URL.
+88. `declarest managed-server get token-url` prints the active context managed-server OAuth2 token URL.
+89. `declarest managed-server get access-token` prints only the OAuth2 access token for the active context managed server.
+90. `declarest managed-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.

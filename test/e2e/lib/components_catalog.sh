@@ -10,8 +10,8 @@ e2e_discover_components() {
   E2E_COMPONENT_RUNTIME_KIND=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_DESCRIPTION=()
-  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
 
   local component_file
   while IFS= read -r component_file; do
@@ -150,8 +150,8 @@ e2e_discover_components() {
     E2E_COMPONENT_RUNTIME_KIND["${component_key}"]="${runtime_kind}"
     E2E_COMPONENT_DEPENDS_ON["${component_key}"]="${depends_on}"
     E2E_COMPONENT_DESCRIPTION["${component_key}"]="${description}"
-    E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
-    E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
+    E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
+    E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
     E2E_COMPONENT_KEYS+=("${component_key}")
   done < <(find "${E2E_DIR}/components" -type f -name 'component.env' | sort)
 
@@ -172,9 +172,9 @@ e2e_list_components() {
     component_type=$(e2e_component_type "${component_key}")
     component_name=$(e2e_component_name "${component_key}")
 
-    if [[ "${component_type}" == 'resource-server' ]]; then
-      local supported_features=${E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES[${component_key}]:-}
-      local required_features=${E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
+    if [[ "${component_type}" == 'managed-server' ]]; then
+      local supported_features=${E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES[${component_key}]:-}
+      local required_features=${E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
 
       security=${supported_features:-none}
       if [[ -n "${required_features}" ]]; then

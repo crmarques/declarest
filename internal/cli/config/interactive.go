@@ -94,11 +94,11 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 	}
 	contextCfg.Metadata.BaseDir = metadataBaseDir
 
-	resourceServer, err := promptResourceServer(command, prompter)
+	resourceServer, err := promptManagedServer(command, prompter)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
-	contextCfg.ResourceServer = resourceServer
+	contextCfg.ManagedServer = resourceServer
 
 	includeSecretStore, err := prompter.Confirm(command, "Configure secret-store?", false)
 	if err != nil {
@@ -301,7 +301,7 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 	return auth, nil
 }
 
-func promptResourceServer(command *cobra.Command, prompter configPrompter) (*configdomain.ResourceServer, error) {
+func promptManagedServer(command *cobra.Command, prompter configPrompter) (*configdomain.ManagedServer, error) {
 	baseURL, err := promptRequiredInput(command, prompter, "Managed-server base-url: ", "managed-server base-url")
 	if err != nil {
 		return nil, err
@@ -358,7 +358,7 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 		server.TLS = tls
 	}
 
-	return &configdomain.ResourceServer{HTTP: server}, nil
+	return &configdomain.ManagedServer{HTTP: server}, nil
 }
 
 func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPProxy, error) {

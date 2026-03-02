@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: managed-server-simple-api-server
+  labels:
+    app.kubernetes.io/name: managed-server-simple-api-server
+    declarest.e2e/component-key: managed-server-simple-api-server
+  annotations:
+    declarest.e2e/port-forward: "${SIMPLE_API_SERVER_HOST_PORT}:8080"
+spec:
+  selector:
+    app.kubernetes.io/name: managed-server-simple-api-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

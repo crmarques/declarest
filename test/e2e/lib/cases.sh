@@ -21,10 +21,10 @@ case_selected_value_for_key() {
   case "${key}" in
     profile) printf '%s\n' "${E2E_PROFILE}" ;;
     platform) printf '%s\n' "${E2E_PLATFORM}" ;;
-    resource-server) printf '%s\n' "${E2E_RESOURCE_SERVER}" ;;
-    resource-server-connection) printf '%s\n' "${E2E_RESOURCE_SERVER_CONNECTION}" ;;
-    resource-server-auth-type) printf '%s\n' "${E2E_RESOURCE_SERVER_AUTH_TYPE}" ;;
-    resource-server-mtls) printf '%s\n' "${E2E_RESOURCE_SERVER_MTLS}" ;;
+    managed-server) printf '%s\n' "${E2E_MANAGED_SERVER}" ;;
+    managed-server-connection) printf '%s\n' "${E2E_MANAGED_SERVER_CONNECTION}" ;;
+    managed-server-auth-type) printf '%s\n' "${E2E_MANAGED_SERVER_AUTH_TYPE}" ;;
+    managed-server-mtls) printf '%s\n' "${E2E_MANAGED_SERVER_MTLS}" ;;
     managed-server-proxy) printf '%s\n' "${E2E_MANAGED_SERVER_PROXY}" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
     git-provider) printf '%s\n' "${E2E_GIT_PROVIDER}" ;;
@@ -71,12 +71,12 @@ case_requirement_requested_explicitly() {
       e2e_is_explicit 'secret-provider' && [[ "${E2E_SECRET_PROVIDER}" != 'none' ]]
       return
       ;;
-    has-resource-server)
-      e2e_is_explicit 'resource-server' && [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]
+    has-managed-server)
+      e2e_is_explicit 'managed-server' && [[ "${E2E_MANAGED_SERVER}" != 'none' ]]
       return
       ;;
-    has-resource-server-mtls)
-      e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]
+    has-managed-server-mtls)
+      e2e_is_explicit 'managed-server-mtls' && [[ "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]
       return
       ;;
     has-managed-server-proxy)
@@ -84,7 +84,7 @@ case_requirement_requested_explicitly() {
       return
       ;;
     remote-selection)
-      if e2e_is_explicit 'resource-server-connection' && [[ "${E2E_RESOURCE_SERVER_CONNECTION}" == 'remote' ]]; then
+      if e2e_is_explicit 'managed-server-connection' && [[ "${E2E_MANAGED_SERVER_CONNECTION}" == 'remote' ]]; then
         return 0
       fi
       if e2e_is_explicit 'git-provider-connection' && [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' ]]; then
@@ -196,15 +196,15 @@ e2e_run_single_case() {
   {
     printf '[%s] CASE START id=%s file=%s\n' "$(e2e_now_utc)" "${case_id}" "${case_file}"
     printf '[%s] CASE requires=%s\n' "$(e2e_now_utc)" "${case_requires:-<none>}"
-    printf '[%s] CASE stack profile=%s platform=%s repo-type=%s resource-server=%s(%s) resource-server-security=auth-type:%s mtls:%s proxy:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
+    printf '[%s] CASE stack profile=%s platform=%s repo-type=%s managed-server=%s(%s) managed-server-security=auth-type:%s mtls:%s proxy:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
       "$(e2e_now_utc)" \
       "${E2E_PROFILE}" \
       "${E2E_PLATFORM}" \
       "${E2E_REPO_TYPE}" \
-      "${E2E_RESOURCE_SERVER}" \
-      "${E2E_RESOURCE_SERVER_CONNECTION}" \
-      "${E2E_RESOURCE_SERVER_AUTH_TYPE:-auto}" \
-      "${E2E_RESOURCE_SERVER_MTLS:-false}" \
+      "${E2E_MANAGED_SERVER}" \
+      "${E2E_MANAGED_SERVER_CONNECTION}" \
+      "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" \
+      "${E2E_MANAGED_SERVER_MTLS:-false}" \
       "${E2E_MANAGED_SERVER_PROXY:-false}" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION}" \

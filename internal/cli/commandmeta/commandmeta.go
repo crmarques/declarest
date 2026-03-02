@@ -36,7 +36,7 @@ func RequiresContextBootstrapPath(commandPath string) bool {
 		return true
 	case strings.HasPrefix(normalized, "declarest secret "):
 		return true
-	case strings.HasPrefix(normalized, "declarest resource-server "):
+	case strings.HasPrefix(normalized, "declarest managed-server "):
 		return true
 	}
 
@@ -66,10 +66,10 @@ func OutputPolicyForPath(path string) OutputPolicy {
 	case "declarest config print-template",
 		"declarest secret get",
 		"declarest repo tree",
-		"declarest resource-server check",
-		"declarest resource-server get base-url",
-		"declarest resource-server get token-url",
-		"declarest resource-server get access-token",
+		"declarest managed-server check",
+		"declarest managed-server get base-url",
+		"declarest managed-server get token-url",
+		"declarest managed-server get access-token",
 		"declarest completion bash",
 		"declarest completion zsh",
 		"declarest completion fish",

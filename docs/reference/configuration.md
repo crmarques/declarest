@@ -193,9 +193,9 @@ Define any of the `managed-server.http.proxy`, `repository.git.remote.proxy`, `s
 
 ### Health check (`managed-server.http.health-check`)
 
-Optional probe target used by `declarest resource-server check`.
+Optional probe target used by `declarest managed-server check`.
 
-- when omitted, `resource-server check` probes `/` relative to `managed-server.http.base-url`
+- when omitted, `managed-server check` probes `/` relative to `managed-server.http.base-url`
 - relative values (for example `/health`) are resolved against `managed-server.http.base-url`
 - absolute values (for example `https://api.example.com/health`) are allowed when scheme/host match the base URL
 - query parameters are not supported in this field

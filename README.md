@@ -20,7 +20,7 @@ DeclaREST turns REST API resources into versioned desired-state files you can re
 
 ![DeclaREST architecture](docs/assets/architecture.png)
 
-1. A **context** defines repository, resource-server, auth, and optional metadata/secret providers.
+1. A **context** defines repository, managed-server, auth, and optional metadata/secret providers.
 2. **Metadata** maps logical paths to real API paths/methods/transforms.
 3. The **CLI** runs deterministic workflows for read, diff, and mutation.
 

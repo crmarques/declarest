@@ -14,14 +14,14 @@ This repository uses a componentized Bash e2e harness.
 - `full`: runs all `main` and `corner` cases that match the selected stack.
 - `manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
-  - default stack includes `resource-server=simple-api-server`
+  - default stack includes `managed-server=simple-api-server`
   - remote component selections are rejected in Step 1
-  - when a resource-server is selected, its `repo-template` tree is copied into the context repository directory
+  - when a managed-server is selected, its `repo-template` tree is copied into the context repository directory
   - when `repo-type=git`, the runner initializes the local git repository before handoff so `config check`/`repo status` are immediately usable
   - component manual access details are printed after Step 5 (Configuring Access) when available
   - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `test/e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
-  - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/resource-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
+  - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 
@@ -56,12 +56,12 @@ This repository uses a componentized Bash e2e harness.
 - `--clean-all`
 
 Use `--list-components` to see currently available component names and metadata.
-Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and resource-server fixture metadata rules) and exit without running test cases.
-When `--managed-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
-Selections are validated against each resource-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
+Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and managed-server fixture metadata rules) and exit without running test cases.
+When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
+Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 When `--managed-server-proxy true`, generated contexts include `managed-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
-`--metadata bundle` uses shorthand `metadata.bundle` mappings for supported resource-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `resource-server.http.openapi` stays unset.
-`--metadata local-dir` uses the selected resource-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
+`--metadata bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset.
+`--metadata local-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:
 
@@ -143,7 +143,7 @@ Component authoring is contract-driven. Use `test/e2e/components/STANDARD.md` as
 Each component directory under `test/e2e/components/<type>/<name>/` must include:
 
 - `component.env` with `COMPONENT_CONTRACT_VERSION=1`, explicit `COMPONENT_RUNTIME_KIND`, and explicit `COMPONENT_DEPENDS_ON`
-- `resource-server` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
+- `managed-server` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
@@ -175,7 +175,7 @@ Resource-server components must also provide a fixture tree used by sync-oriente
 
 - `repo-template/**`
 
-For the `keycloak` resource-server, the runner connects directly to Keycloak Admin REST (`/admin/*`) and does not use an auxiliary adapter API.
+For the `keycloak` managed-server, the runner connects directly to Keycloak Admin REST (`/admin/*`) and does not use an auxiliary adapter API.
 
 Fixture tree rules:
 
@@ -197,18 +197,18 @@ Keycloak repo-template currently covers:
 
 ### Managed Server (`simple-api-server`, remote)
 
-- `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
 - optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
   - defaults come from runner selection flags: `--managed-server-auth-type`, `--managed-server-mtls`
 - when basic-auth is enabled: `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_USERNAME`, `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_PASSWORD`
 - when oauth2 is enabled: `DECLAREST_E2E_SIMPLE_API_CLIENT_ID`, `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
 - optional oauth2: `DECLAREST_E2E_SIMPLE_API_TOKEN_URL`, `DECLAREST_E2E_SIMPLE_API_SCOPE`, `DECLAREST_E2E_SIMPLE_API_AUDIENCE`
 - when mTLS is enabled: `DECLAREST_E2E_SIMPLE_API_TLS_CA_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_KEY_FILE`
-  - local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `test/e2e/.runs/<run-id>/certs/resource-server-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
+  - local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
 
 ### Managed Server (`keycloak`, remote)
 
-- `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
 - `DECLAREST_E2E_KEYCLOAK_TOKEN_URL`
 - `DECLAREST_E2E_KEYCLOAK_CLIENT_ID`
 - `DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET`
@@ -216,16 +216,16 @@ Keycloak repo-template currently covers:
 
 ### Managed Server (`vault`, remote)
 
-- `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
-- `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
-- optional: `DECLAREST_E2E_RESOURCE_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_RESOURCE_SERVER_VAULT_KV_VERSION`
+- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVER_TOKEN`
+- optional: `DECLAREST_E2E_MANAGED_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_MANAGED_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_MANAGED_SERVER_VAULT_KV_VERSION`
 - remote vault currently supports `--managed-server-auth-type custom-header` only (`X-Vault-Token`)
 
 ### Managed Server (`rundeck`, remote)
 
-- `DECLAREST_E2E_RESOURCE_SERVER_BASE_URL`
-- `DECLAREST_E2E_RESOURCE_SERVER_TOKEN`
-- optional: `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_API_VERSION`, `DECLAREST_E2E_RESOURCE_SERVER_RUNDECK_AUTH_HEADER`
+- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVER_TOKEN`
+- optional: `DECLAREST_E2E_MANAGED_SERVER_RUNDECK_API_VERSION`, `DECLAREST_E2E_MANAGED_SERVER_RUNDECK_AUTH_HEADER`
 - local `rundeck` with `--managed-server-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
 - remote rundeck currently supports `--managed-server-auth-type custom-header` only
 

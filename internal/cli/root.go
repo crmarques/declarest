@@ -10,10 +10,10 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
+	managedservercmd "github.com/crmarques/declarest/internal/cli/managedserver"
 	metadatacmd "github.com/crmarques/declarest/internal/cli/metadata"
 	"github.com/crmarques/declarest/internal/cli/repo"
 	resourcecmd "github.com/crmarques/declarest/internal/cli/resource"
-	resourceservercmd "github.com/crmarques/declarest/internal/cli/resourceserver"
 	"github.com/crmarques/declarest/internal/cli/secret"
 	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/internal/cli/version"
@@ -129,7 +129,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		metadatacmd.NewCommand(commandDeps, &globalFlags),
 		repo.NewCommand(commandDeps, &globalFlags),
 		resourcecmd.NewCommand(commandDeps, &globalFlags),
-		resourceservercmd.NewCommand(commandDeps),
+		managedservercmd.NewCommand(commandDeps),
 		secret.NewCommand(commandDeps, &globalFlags),
 	}
 	for _, command := range basicCommands {

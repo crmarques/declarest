@@ -124,9 +124,9 @@ func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 
 	contextCatalog := config.ContextCatalog{
 		Contexts: []config.Context{{
-			Name:           "dev",
-			Repository:     validFilesystemRepository(),
-			ResourceServer: validResourceServer(),
+			Name:          "dev",
+			Repository:    validFilesystemRepository(),
+			ManagedServer: validManagedServer(),
 		}},
 		CurrentCtx: "prod",
 	}
@@ -142,8 +142,8 @@ func TestValidateCatalogDuplicateContextNames(t *testing.T) {
 
 	contextCatalog := config.ContextCatalog{
 		Contexts: []config.Context{
-			{Name: "dev", Repository: validFilesystemRepository(), ResourceServer: validResourceServer()},
-			{Name: "dev", Repository: validFilesystemRepository(), ResourceServer: validResourceServer()},
+			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
+			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
 		},
 		CurrentCtx: "dev",
 	}
@@ -164,8 +164,8 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 		{
 			name: "repository_multiple_backends",
 			cfg: config.Context{
-				Name:           "dev",
-				ResourceServer: validResourceServer(),
+				Name:          "dev",
+				ManagedServer: validManagedServer(),
 				Repository: config.Repository{
 					Git:        &config.GitRepository{Local: config.GitLocal{BaseDir: "/tmp/repo"}},
 					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
@@ -173,28 +173,28 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 			},
 		},
 		{
-			name: "resource_server_no_auth",
+			name: "managed_server_no_auth",
 			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{BaseURL: "https://example.com"},
 				},
 			},
 		},
 		{
-			name: "resource_server_missing",
+			name: "managed_server_missing",
 			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
 			},
 		},
 		{
-			name: "resource_server_proxy_auth_incomplete",
+			name: "managed_server_proxy_auth_incomplete",
 			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -211,11 +211,11 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 			},
 		},
 		{
-			name: "resource_server_health_check_query_not_supported",
+			name: "managed_server_health_check_query_not_supported",
 			cfg: config.Context{
 				Name:       "dev",
 				Repository: validFilesystemRepository(),
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL:     "https://example.com",
 						HealthCheck: "https://example.com/health?probe=true",
@@ -229,9 +229,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 		{
 			name: "secret_store_multiple_backends",
 			cfg: config.Context{
-				Name:           "dev",
-				Repository:     validFilesystemRepository(),
-				ResourceServer: validResourceServer(),
+				Name:          "dev",
+				Repository:    validFilesystemRepository(),
+				ManagedServer: validManagedServer(),
 				SecretStore: &config.SecretStore{
 					File:  &config.FileSecretStore{Path: "/tmp/secrets.json", Passphrase: "secret"},
 					Vault: &config.VaultSecretStore{Address: "https://vault.example.com", Auth: &config.VaultAuth{Token: "x"}},
@@ -241,9 +241,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 		{
 			name: "metadata_multiple_sources",
 			cfg: config.Context{
-				Name:           "dev",
-				Repository:     validFilesystemRepository(),
-				ResourceServer: validResourceServer(),
+				Name:          "dev",
+				Repository:    validFilesystemRepository(),
+				ManagedServer: validManagedServer(),
 				Metadata: config.Metadata{
 					BaseDir: "/tmp/metadata",
 					Bundle:  "keycloak-bundle:0.0.1",
@@ -266,25 +266,25 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 func TestValidateConfigAllowsExplicitProxyDisable(t *testing.T) {
 	t.Parallel()
 
-	server := validResourceServer()
+	server := validManagedServer()
 	server.HTTP.Proxy = &config.HTTPProxy{}
 
 	err := validateConfig(config.Context{
-		Name:           "proxy-disable",
-		Repository:     validFilesystemRepository(),
-		ResourceServer: server,
+		Name:          "proxy-disable",
+		Repository:    validFilesystemRepository(),
+		ManagedServer: server,
 	})
 	if err != nil {
 		t.Fatalf("expected explicit proxy disable to be valid, got %v", err)
 	}
 }
 
-func TestValidateConfigAllowsMissingRepositoryWhenResourceServerIsConfigured(t *testing.T) {
+func TestValidateConfigAllowsMissingRepositoryWhenManagedServerIsConfigured(t *testing.T) {
 	t.Parallel()
 
 	err := validateConfig(config.Context{
-		Name:           "remote-only",
-		ResourceServer: validResourceServer(),
+		Name:          "remote-only",
+		ManagedServer: validManagedServer(),
 	})
 	if err != nil {
 		t.Fatalf("expected repository to be optional, got error: %v", err)
@@ -418,9 +418,9 @@ func TestFileContextServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) 
 	contextService := NewFileContextService(path)
 
 	err := contextService.Create(context.Background(), config.Context{
-		Name:           "dev",
-		Repository:     validFilesystemRepository(),
-		ResourceServer: validResourceServer(),
+		Name:          "dev",
+		Repository:    validFilesystemRepository(),
+		ManagedServer: validManagedServer(),
 	})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -501,8 +501,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	dev := config.Context{
-		Name:           "dev",
-		ResourceServer: validResourceServer(),
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/dev"},
 		},
@@ -512,8 +512,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	}
 
 	prod := config.Context{
-		Name:           "prod",
-		ResourceServer: validResourceServer(),
+		Name:          "prod",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			ResourceFormat: config.ResourceFormatYAML,
 			Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/prod"},
@@ -556,8 +556,8 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	}
 
 	if err := contextService.Update(context.Background(), config.Context{
-		Name:           "stage",
-		ResourceServer: validResourceServer(),
+		Name:          "stage",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/stage"},
 		},
@@ -612,8 +612,8 @@ func TestSetCurrentPreservesContextOrder(t *testing.T) {
 
 	for _, name := range []string{"a", "b", "c"} {
 		if err := contextService.Create(context.Background(), config.Context{
-			Name:           name,
-			ResourceServer: validResourceServer(),
+			Name:          name,
+			ManagedServer: validManagedServer(),
 			Repository: config.Repository{
 				Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/" + name},
 			},
@@ -645,8 +645,8 @@ func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
-		Name:           "dev",
-		ResourceServer: validResourceServer(),
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 		},
@@ -673,8 +673,8 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 	contextService := NewFileContextService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
-		Name:           "dev",
-		ResourceServer: validResourceServer(),
+		Name:          "dev",
+		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
 			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 		},
@@ -805,7 +805,7 @@ func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 	}
 }
 
-func TestResolveContextOverrideSupportsResourceServerWhenConfigured(t *testing.T) {
+func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -821,15 +821,15 @@ func TestResolveContextOverrideSupportsResourceServerWhenConfigured(t *testing.T
 	if err != nil {
 		t.Fatalf("expected managed-server override to succeed, got %v", err)
 	}
-	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil {
-		t.Fatalf("expected managed-server configuration, got %#v", resolved.ResourceServer)
+	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed-server configuration, got %#v", resolved.ManagedServer)
 	}
-	if resolved.ResourceServer.HTTP.BaseURL != "https://override.example.com" {
-		t.Fatalf("expected managed-server base-url override, got %q", resolved.ResourceServer.HTTP.BaseURL)
+	if resolved.ManagedServer.HTTP.BaseURL != "https://override.example.com" {
+		t.Fatalf("expected managed-server base-url override, got %q", resolved.ManagedServer.HTTP.BaseURL)
 	}
 }
 
-func TestResolveContextOverrideSupportsResourceServerHealthCheckWhenConfigured(t *testing.T) {
+func TestResolveContextOverrideSupportsManagedServerHealthCheckWhenConfigured(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -845,15 +845,15 @@ func TestResolveContextOverrideSupportsResourceServerHealthCheckWhenConfigured(t
 	if err != nil {
 		t.Fatalf("expected managed-server health-check override to succeed, got %v", err)
 	}
-	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil {
-		t.Fatalf("expected managed-server configuration, got %#v", resolved.ResourceServer)
+	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil {
+		t.Fatalf("expected managed-server configuration, got %#v", resolved.ManagedServer)
 	}
-	if resolved.ResourceServer.HTTP.HealthCheck != "https://override.example.com/healthz" {
-		t.Fatalf("expected managed-server health-check override, got %q", resolved.ResourceServer.HTTP.HealthCheck)
+	if resolved.ManagedServer.HTTP.HealthCheck != "https://override.example.com/healthz" {
+		t.Fatalf("expected managed-server health-check override, got %q", resolved.ManagedServer.HTTP.HealthCheck)
 	}
 }
 
-func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *testing.T) {
+func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -876,26 +876,26 @@ func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *test
 		t.Fatalf("expected managed-server proxy overrides to succeed, got %v", err)
 	}
 
-	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil || resolved.ResourceServer.HTTP.Proxy == nil {
-		t.Fatalf("expected managed-server proxy configuration, got %#v", resolved.ResourceServer)
+	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil || resolved.ManagedServer.HTTP.Proxy == nil {
+		t.Fatalf("expected managed-server proxy configuration, got %#v", resolved.ManagedServer)
 	}
-	if resolved.ResourceServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy http-url override, got %q", resolved.ResourceServer.HTTP.Proxy.HTTPURL)
+	if resolved.ManagedServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
+		t.Fatalf("expected proxy http-url override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
 	}
-	if resolved.ResourceServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
-		t.Fatalf("expected proxy https-url override, got %q", resolved.ResourceServer.HTTP.Proxy.HTTPSURL)
+	if resolved.ManagedServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
+		t.Fatalf("expected proxy https-url override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
 	}
-	if resolved.ResourceServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
-		t.Fatalf("expected proxy no-proxy override, got %q", resolved.ResourceServer.HTTP.Proxy.NoProxy)
+	if resolved.ManagedServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
+		t.Fatalf("expected proxy no-proxy override, got %q", resolved.ManagedServer.HTTP.Proxy.NoProxy)
 	}
-	if resolved.ResourceServer.HTTP.Proxy.Auth == nil {
+	if resolved.ManagedServer.HTTP.Proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
 	}
-	if resolved.ResourceServer.HTTP.Proxy.Auth.Username != "proxy-user" {
-		t.Fatalf("expected proxy auth username override, got %q", resolved.ResourceServer.HTTP.Proxy.Auth.Username)
+	if resolved.ManagedServer.HTTP.Proxy.Auth.Username != "proxy-user" {
+		t.Fatalf("expected proxy auth username override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Username)
 	}
-	if resolved.ResourceServer.HTTP.Proxy.Auth.Password != "proxy-pass" {
-		t.Fatalf("expected proxy auth password override, got %q", resolved.ResourceServer.HTTP.Proxy.Auth.Password)
+	if resolved.ManagedServer.HTTP.Proxy.Auth.Password != "proxy-pass" {
+		t.Fatalf("expected proxy auth password override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Password)
 	}
 }
 
@@ -913,7 +913,7 @@ func TestResolveContextProxyInheritance(t *testing.T) {
 		t.Fatalf("expected proxy inheritance to succeed, got %v", err)
 	}
 
-	assertProxyConfig(t, "managed-server", resolved.ResourceServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "managed-server", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "metadata", resolved.Metadata.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
@@ -933,7 +933,7 @@ func TestResolveContextProxyExplicitDisable(t *testing.T) {
 		t.Fatalf("expected proxy disable scenario to succeed, got %v", err)
 	}
 
-	assertProxyConfig(t, "managed-server", resolved.ResourceServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "managed-server", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 
@@ -984,8 +984,8 @@ func TestUpdatePreservesProxyOmissionsFromStoredContext(t *testing.T) {
 		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
 	}
 	persisted := contextCatalog.Contexts[0]
-	if persisted.ResourceServer == nil || persisted.ResourceServer.HTTP == nil || persisted.ResourceServer.HTTP.Proxy == nil {
-		t.Fatalf("expected managed-server proxy to remain persisted, got %#v", persisted.ResourceServer)
+	if persisted.ManagedServer == nil || persisted.ManagedServer.HTTP == nil || persisted.ManagedServer.HTTP.Proxy == nil {
+		t.Fatalf("expected managed-server proxy to remain persisted, got %#v", persisted.ManagedServer)
 	}
 	if persisted.Repository.Git == nil || persisted.Repository.Git.Remote == nil {
 		t.Fatalf("expected git repository to remain persisted, got %#v", persisted.Repository.Git)
@@ -1067,8 +1067,8 @@ func TestMutationOnMissingCatalogReturnsNotFound(t *testing.T) {
 			name: "update",
 			run: func() error {
 				return contextService.Update(context.Background(), config.Context{
-					Name:           "missing",
-					ResourceServer: validResourceServer(),
+					Name:          "missing",
+					ManagedServer: validManagedServer(),
 					Repository: config.Repository{
 						Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 					},
@@ -1120,8 +1120,8 @@ func validFilesystemRepository() config.Repository {
 	}
 }
 
-func validResourceServer() *config.ResourceServer {
-	return &config.ResourceServer{
+func validManagedServer() *config.ManagedServer {
+	return &config.ManagedServer{
 		HTTP: &config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{

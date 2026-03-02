@@ -147,7 +147,7 @@ Execution:
 1. Runner validates selected stack is local-instantiable.
 2. Runner starts components and emits temporary context catalog.
 3. Runner executes optional component `manual-info` hooks and prints access details.
-4. Runner copies selected resource-server `repo-template` into the context repository directory.
+4. Runner copies selected managed-server `repo-template` into the context repository directory.
 5. Runner generates setup/reset shell scripts and prints follow-up `declarest-e2e` commands, exits, and keeps runtime resources.
 
 Expected outputs:
@@ -162,7 +162,7 @@ Expected outputs:
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.
 
 Inputs:
-1. Selected resource-server fixture tree under `repo-template/`.
+1. Selected managed-server fixture tree under `repo-template/`.
 2. Metadata using `idFromAttribute`/`aliasFromAttribute` and intermediary placeholder paths (for example `/x/_/y/_/_`).
 
 Execution:
@@ -221,12 +221,12 @@ Failure expectation:
 Goal: run component hooks in parallel when possible without violating dependency constraints.
 
 Inputs:
-1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `resource-server=simple-api-server`, `secret-provider=file`.
+1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `managed-server=simple-api-server`, `secret-provider=file`.
 2. Component metadata where `repo-type:git` declares `COMPONENT_DEPENDS_ON="git-provider:*"`.
 
 Execution:
 1. `run-e2e.sh` executes `init` hooks using dependency-aware batching.
-2. `git-provider:gitlab` and `resource-server:simple-api-server` initialize in parallel.
+2. `git-provider:gitlab` and `managed-server:simple-api-server` initialize in parallel.
 3. `repo-type:git` initializes only after `git-provider:*` completion.
 4. Runner executes `configure-auth` and `context` hooks through the same dependency graph.
 
@@ -243,7 +243,7 @@ Failure expectation:
 Goal: ensure `simple-api-server` denies resource operations without a valid bearer token.
 
 Inputs:
-1. Local stack with `resource-server=simple-api-server`.
+1. Local stack with `managed-server=simple-api-server`.
 2. Client credentials configured in component state.
 
 Execution:
@@ -322,7 +322,7 @@ Failure expectation:
 Goal: ensure `simple-api-server` accepts only configured client certificates during TLS handshake when mTLS is enabled.
 
 Inputs:
-1. `resource-server=simple-api-server`.
+1. `managed-server=simple-api-server`.
 2. `ENABLE_MTLS=true`.
 3. One or more allowed client public certificates mounted into the configured cert directory.
 
@@ -346,7 +346,7 @@ Failure expectation:
 Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts configured basic-auth credentials when basic-auth mode is selected.
 
 Inputs:
-1. `resource-server=simple-api-server`.
+1. `managed-server=simple-api-server`.
 2. `--managed-server-auth-type basic`.
 3. Basic auth username/password configured in component state.
 
@@ -361,7 +361,7 @@ Expected outputs:
 3. Step 3 succeeds with HTTP `200`.
 
 Failure expectation:
-1. Selecting `--managed-server-auth-type` unsupported by the selected resource-server component fails run selection before startup.
+1. Selecting `--managed-server-auth-type` unsupported by the selected managed-server component fails run selection before startup.
 
 ### Example 15: Secret Detect Metadata Autofix
 Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.

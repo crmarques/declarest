@@ -2,7 +2,7 @@
 
 CASE_ID='alias-fallback-ambiguity'
 CASE_SCOPE='corner'
-CASE_REQUIRES='resource-server=keycloak'
+CASE_REQUIRES='managed-server=keycloak'
 
 case_run() {
   local metadata_file="${E2E_CASE_TMP_DIR}/metadata.json"

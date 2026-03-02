@@ -9,8 +9,8 @@ declare -Ag E2E_COMPONENT_RUNTIME_KIND=()
 declare -Ag E2E_COMPONENT_DEPENDS_ON=()
 declare -Ag E2E_COMPONENT_DESCRIPTION=()
 declare -Ag E2E_COMPONENT_PROJECT=()
-declare -Ag E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
-declare -Ag E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
+declare -Ag E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
+declare -Ag E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
 declare -Ag E2E_COMPONENT_OPENAPI_SPEC=()
 declare -Ag E2E_CAPABILITY_SET=()
 
@@ -18,7 +18,7 @@ declare -ag E2E_COMPONENT_KEYS=()
 declare -ag E2E_SELECTED_COMPONENT_KEYS=()
 declare -ag E2E_STARTED_COMPONENT_KEYS=()
 
-e2e_resource_server_security_feature_is_auth() {
+e2e_managed_server_security_feature_is_auth() {
   local feature=$1
 
   case "${feature}" in
@@ -31,7 +31,7 @@ e2e_resource_server_security_feature_is_auth() {
   esac
 }
 
-e2e_resource_server_auth_feature_for_type() {
+e2e_managed_server_auth_feature_for_type() {
   local auth_type=$1
 
   case "${auth_type}" in
@@ -53,7 +53,7 @@ e2e_resource_server_auth_feature_for_type() {
   esac
 }
 
-e2e_resource_server_auth_type_for_feature() {
+e2e_managed_server_auth_type_for_feature() {
   local feature=$1
 
   case "${feature}" in
@@ -75,20 +75,20 @@ e2e_resource_server_auth_type_for_feature() {
   esac
 }
 
-e2e_resource_server_feature_enabled() {
+e2e_managed_server_feature_enabled() {
   local feature=$1
 
   case "${feature}" in
     none|basic-auth|oauth2|custom-header)
       local selected_auth_type
       local selected_auth_feature
-      selected_auth_type=${E2E_RESOURCE_SERVER_AUTH_TYPE:-}
+      selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-}
       [[ -n "${selected_auth_type}" ]] || return 1
-      selected_auth_feature=$(e2e_resource_server_auth_feature_for_type "${selected_auth_type}") || return 1
+      selected_auth_feature=$(e2e_managed_server_auth_feature_for_type "${selected_auth_type}") || return 1
       [[ "${selected_auth_feature}" == "${feature}" ]]
       ;;
     mtls)
-      [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]
+      [[ "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]
       ;;
     *)
       return 1
@@ -96,7 +96,7 @@ e2e_resource_server_feature_enabled() {
   esac
 }
 
-e2e_resource_server_feature_spec_supports() {
+e2e_managed_server_feature_spec_supports() {
   local feature_spec=$1
   local feature=$2
   local supported=" ${feature_spec} "
@@ -123,8 +123,8 @@ e2e_component_connection_for_key() {
 
   component_type=$(e2e_component_type "${component_key}")
   case "${component_type}" in
-    resource-server)
-      printf '%s\n' "${E2E_RESOURCE_SERVER_CONNECTION}"
+    managed-server)
+      printf '%s\n' "${E2E_MANAGED_SERVER_CONNECTION}"
       ;;
     git-provider)
       printf '%s\n' "${E2E_GIT_PROVIDER_CONNECTION}"
@@ -176,10 +176,10 @@ e2e_component_k8s_label_key() {
   printf '%s-%s\n' "${component_type}" "${component_name}"
 }
 
-e2e_default_metadata_bundle_for_resource_server() {
-  local resource_server=$1
+e2e_default_metadata_bundle_for_managed_server() {
+  local managed_server=$1
 
-  case "${resource_server}" in
+  case "${managed_server}" in
     keycloak)
       # Use shorthand so the resolver fetches from the default release remote.
       printf 'keycloak-bundle:0.0.1\n'
@@ -194,12 +194,12 @@ e2e_prepare_metadata_workspace() {
   unset E2E_METADATA_DIR
   unset E2E_METADATA_BUNDLE
 
-  if [[ "${E2E_RESOURCE_SERVER:-}" == 'none' ]]; then
+  if [[ "${E2E_MANAGED_SERVER:-}" == 'none' ]]; then
     return 0
   fi
 
   local resource_component_key
-  resource_component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+  resource_component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
   local component_dir="${E2E_COMPONENT_PATH[${resource_component_key}]:-}"
   if [[ -z "${component_dir}" ]]; then
     return 0
@@ -208,13 +208,13 @@ e2e_prepare_metadata_workspace() {
   case "${E2E_METADATA:-bundle}" in
     bundle)
       local metadata_bundle
-      if ! metadata_bundle=$(e2e_default_metadata_bundle_for_resource_server "${E2E_RESOURCE_SERVER}"); then
-        e2e_info "metadata mode bundle has no shorthand mapping for resource-server=${E2E_RESOURCE_SERVER}; continuing without metadata.bundle"
+      if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
+        e2e_info "metadata mode bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
         return 0
       fi
       E2E_METADATA_BUNDLE="${metadata_bundle}"
       export E2E_METADATA_BUNDLE
-      e2e_info "resource-server metadata bundle selected bundle=${metadata_bundle}"
+      e2e_info "managed-server metadata bundle selected bundle=${metadata_bundle}"
       return 0
       ;;
     local-dir)
@@ -225,7 +225,7 @@ e2e_prepare_metadata_workspace() {
 
       E2E_METADATA_DIR="${metadata_source}"
       export E2E_METADATA_DIR
-      e2e_info "resource-server metadata directory selected dir=${metadata_source}"
+      e2e_info "managed-server metadata directory selected dir=${metadata_source}"
       return 0
       ;;
     *)
@@ -283,14 +283,14 @@ e2e_component_install_openapi_spec() {
   fi
 
   E2E_COMPONENT_OPENAPI_SPEC["${component_key}"]="${dest}"
-  e2e_info "resource-server openapi spec key=${component_key} file=${dest}"
+  e2e_info "managed-server openapi spec key=${component_key} file=${dest}"
   return 0
 }
 
 e2e_prepare_component_openapi_specs() {
   if [[ "${E2E_METADATA:-bundle}" == 'bundle' ]]; then
     E2E_COMPONENT_OPENAPI_SPEC=()
-    e2e_info 'resource-server openapi spec copy skipped: metadata mode bundle'
+    e2e_info 'managed-server openapi spec copy skipped: metadata mode bundle'
     return 0
   fi
 

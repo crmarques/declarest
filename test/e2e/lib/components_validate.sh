@@ -80,13 +80,13 @@ e2e_component_validate_security_feature_spec() {
   return 0
 }
 
-e2e_resource_server_auth_capability_count() {
+e2e_managed_server_auth_capability_count() {
   local feature_spec=$1
   local feature
   local count=0
 
   for feature in ${feature_spec}; do
-    if e2e_resource_server_security_feature_is_auth "${feature}"; then
+    if e2e_managed_server_security_feature_is_auth "${feature}"; then
       ((count += 1))
     fi
   done
@@ -94,13 +94,13 @@ e2e_resource_server_auth_capability_count() {
   printf '%s\n' "${count}"
 }
 
-e2e_resource_server_first_required_auth_type() {
+e2e_managed_server_first_required_auth_type() {
   local required_features=$1
   local feature
 
   for feature in ${required_features}; do
-    if e2e_resource_server_security_feature_is_auth "${feature}"; then
-      e2e_resource_server_auth_type_for_feature "${feature}" || return 1
+    if e2e_managed_server_security_feature_is_auth "${feature}"; then
+      e2e_managed_server_auth_type_for_feature "${feature}" || return 1
       return 0
     fi
   done
@@ -108,31 +108,31 @@ e2e_resource_server_first_required_auth_type() {
   return 1
 }
 
-e2e_resource_server_default_auth_type() {
+e2e_managed_server_default_auth_type() {
   local component_name=$1
   local supported_features=$2
   local required_features=$3
   local auth_type
   local feature
 
-  if auth_type=$(e2e_resource_server_first_required_auth_type "${required_features}" 2>/dev/null); then
+  if auth_type=$(e2e_managed_server_first_required_auth_type "${required_features}" 2>/dev/null); then
     printf '%s\n' "${auth_type}"
     return 0
   fi
 
   for auth_type in oauth2 custom-header basic none; do
-    feature=$(e2e_resource_server_auth_feature_for_type "${auth_type}") || return 1
-    if e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
+    feature=$(e2e_managed_server_auth_feature_for_type "${auth_type}") || return 1
+    if e2e_managed_server_feature_spec_supports "${supported_features}" "${feature}"; then
       printf '%s\n' "${auth_type}"
       return 0
     fi
   done
 
-  e2e_die "resource-server ${component_name} does not declare any auth-type capability in SUPPORTED_SECURITY_FEATURES (expected one of none, basic-auth, oauth2, custom-header)"
+  e2e_die "managed-server ${component_name} does not declare any auth-type capability in SUPPORTED_SECURITY_FEATURES (expected one of none, basic-auth, oauth2, custom-header)"
   return 1
 }
 
-e2e_component_validate_resource_server_security_contract() {
+e2e_component_validate_managed_server_security_contract() {
   local component_key=$1
   local supported_features=$2
   local required_features=$3
@@ -140,16 +140,16 @@ e2e_component_validate_resource_server_security_contract() {
   local has_required_features=$5
 
   if [[ "${has_supported_features}" != '1' ]]; then
-    e2e_die "resource-server component ${component_key} must declare SUPPORTED_SECURITY_FEATURES in component.env"
+    e2e_die "managed-server component ${component_key} must declare SUPPORTED_SECURITY_FEATURES in component.env"
     return 1
   fi
 
   e2e_component_validate_security_feature_spec "${component_key}" 'SUPPORTED_SECURITY_FEATURES' "${supported_features}" || return 1
 
   local supported_auth_count
-  supported_auth_count=$(e2e_resource_server_auth_capability_count "${supported_features}") || return 1
+  supported_auth_count=$(e2e_managed_server_auth_capability_count "${supported_features}") || return 1
   if ((supported_auth_count == 0)); then
-    e2e_die "resource-server component ${component_key} must declare at least one auth-type capability in SUPPORTED_SECURITY_FEATURES (none, basic-auth, oauth2, custom-header)"
+    e2e_die "managed-server component ${component_key} must declare at least one auth-type capability in SUPPORTED_SECURITY_FEATURES (none, basic-auth, oauth2, custom-header)"
     return 1
   fi
 
@@ -158,16 +158,16 @@ e2e_component_validate_resource_server_security_contract() {
 
     local feature
     for feature in ${required_features}; do
-      if ! e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
+      if ! e2e_managed_server_feature_spec_supports "${supported_features}" "${feature}"; then
         e2e_die "component ${component_key} has REQUIRED_SECURITY_FEATURES entry not listed in SUPPORTED_SECURITY_FEATURES: ${feature}"
         return 1
       fi
     done
 
     local required_auth_count
-    required_auth_count=$(e2e_resource_server_auth_capability_count "${required_features}") || return 1
+    required_auth_count=$(e2e_managed_server_auth_capability_count "${required_features}") || return 1
     if ((required_auth_count > 1)); then
-      e2e_die "component ${component_key} has multiple auth-type entries in REQUIRED_SECURITY_FEATURES (resource-server auth is one-of)"
+      e2e_die "component ${component_key} has multiple auth-type entries in REQUIRED_SECURITY_FEATURES (managed-server auth is one-of)"
       return 1
     fi
   fi
@@ -250,8 +250,8 @@ e2e_component_validate_contract() {
   e2e_component_validate_connections "${component_key}" "${SUPPORTED_CONNECTIONS:-}" "${DEFAULT_CONNECTION:-}" || return 1
   e2e_component_validate_dependency_spec "${component_key}" "${COMPONENT_DEPENDS_ON:-}" || return 1
 
-  if [[ "${COMPONENT_TYPE}" == 'resource-server' ]]; then
-    e2e_component_validate_resource_server_security_contract \
+  if [[ "${COMPONENT_TYPE}" == 'managed-server' ]]; then
+    e2e_component_validate_managed_server_security_contract \
       "${component_key}" \
       "${supported_security_features}" \
       "${required_security_features}" \
@@ -342,20 +342,20 @@ e2e_validate_component_dependency_catalog() {
 }
 
 
-e2e_validate_resource_server_fixture_tree() {
+e2e_validate_managed_server_fixture_tree() {
   local component_name=$1
   local component_key
-  component_key=$(e2e_component_key 'resource-server' "${component_name}")
+  component_key=$(e2e_component_key 'managed-server' "${component_name}")
 
   local component_dir="${E2E_COMPONENT_PATH[${component_key}]:-}"
   if [[ -z "${component_dir}" ]]; then
-    e2e_die "resource-server component path not found: ${component_name}"
+    e2e_die "managed-server component path not found: ${component_name}"
     return 1
   fi
 
   local template_dir="${component_dir}/repo-template"
   if [[ ! -d "${template_dir}" ]]; then
-    e2e_die "resource-server ${component_name} missing repo-template fixture tree: ${template_dir}"
+    e2e_die "managed-server ${component_name} missing repo-template fixture tree: ${template_dir}"
     return 1
   fi
 
@@ -375,7 +375,7 @@ e2e_validate_resource_server_fixture_tree() {
   done < <(find "${metadata_dir}" -type f -path '*/_/metadata.json' | sort)
 
   if ((${#metadata_files[@]} == 0)); then
-    e2e_die "resource-server ${component_name} has no collection metadata fixtures under ${metadata_dir}"
+    e2e_die "managed-server ${component_name} has no collection metadata fixtures under ${metadata_dir}"
     return 1
   fi
 
@@ -387,7 +387,7 @@ e2e_validate_resource_server_fixture_tree() {
   done < <(find "${template_dir}" -type f -name '*.json' ! -path '*/_/metadata.json' | sort)
 
   if ((${#payload_files[@]} == 0)); then
-    e2e_die "resource-server ${component_name} repo-template has no resource payload files under ${template_dir}"
+    e2e_die "managed-server ${component_name} repo-template has no resource payload files under ${template_dir}"
     return 1
   fi
 
@@ -395,7 +395,7 @@ e2e_validate_resource_server_fixture_tree() {
     local payload_rel
     payload_rel=${payload_file#${template_dir}/}
     if [[ "$(basename -- "${payload_rel}")" != 'resource.json' ]]; then
-      e2e_die "resource-server ${component_name} has invalid resource payload fixture path: ${payload_rel} (expected */resource.json)"
+      e2e_die "managed-server ${component_name} has invalid resource payload fixture path: ${payload_rel} (expected */resource.json)"
       return 1
     fi
   done
@@ -404,18 +404,18 @@ e2e_validate_resource_server_fixture_tree() {
     local rel
     rel=${metadata_file#${metadata_dir}/}
     if [[ "${rel}" != *_/metadata.json ]]; then
-      e2e_die "resource-server ${component_name} has invalid metadata fixture path: ${rel} (expected */_/metadata.json)"
+      e2e_die "managed-server ${component_name} has invalid metadata fixture path: ${rel} (expected */_/metadata.json)"
       return 1
     fi
 
     if ! command -v jq >/dev/null 2>&1; then
-      e2e_die 'jq is required to validate resource-server fixture metadata'
+      e2e_die 'jq is required to validate managed-server fixture metadata'
       return 1
     fi
 
     if ! jq -e '((.resourceInfo.idFromAttribute // "") | (type == "string" and length > 0)) and ((.resourceInfo.aliasFromAttribute // "") | (type == "string" and length > 0))' \
       "${metadata_file}" >/dev/null 2>&1; then
-      e2e_die "resource-server ${component_name} metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute: ${rel}"
+      e2e_die "managed-server ${component_name} metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute: ${rel}"
       return 1
     fi
   done
@@ -468,7 +468,7 @@ e2e_validate_all_discovered_component_contracts() {
   local component_type
   local component_name
   local validated_components=0
-  local validated_resource_servers=0
+  local validated_managed_servers=0
 
   for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
     component_type=$(e2e_component_type "${component_key}")
@@ -479,57 +479,57 @@ e2e_validate_all_discovered_component_contracts() {
       "${E2E_COMPONENT_PATH[${component_key}]}" \
       "${E2E_COMPONENT_RUNTIME_KIND[${component_key}]}" || return 1
 
-    if [[ "${component_type}" == 'resource-server' ]]; then
-      e2e_validate_resource_server_fixture_tree "${component_name}" || return 1
-      ((validated_resource_servers += 1))
+    if [[ "${component_type}" == 'managed-server' ]]; then
+      e2e_validate_managed_server_fixture_tree "${component_name}" || return 1
+      ((validated_managed_servers += 1))
     fi
 
     ((validated_components += 1))
   done
 
-  e2e_info "component validation OK components=${validated_components} resource-servers=${validated_resource_servers}"
+  e2e_info "component validation OK components=${validated_components} managed-servers=${validated_managed_servers}"
   return 0
 }
 
-e2e_validate_resource_server_security_selection() {
-  if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
-    if e2e_is_explicit 'resource-server-auth-type'; then
-      e2e_die '--managed-server-auth-type requires a selected resource-server component'
+e2e_validate_managed_server_security_selection() {
+  if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
+    if e2e_is_explicit 'managed-server-auth-type'; then
+      e2e_die '--managed-server-auth-type requires a selected managed-server component'
       return 1
     fi
-    if e2e_is_explicit 'resource-server-mtls' && [[ "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
-      e2e_die '--managed-server-mtls requires a selected resource-server component'
+    if e2e_is_explicit 'managed-server-mtls' && [[ "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
+      e2e_die '--managed-server-mtls requires a selected managed-server component'
       return 1
     fi
     return 0
   fi
 
   local component_key
-  component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+  component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
 
-  local supported_features=${E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES[${component_key}]:-}
-  local required_features=${E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
+  local supported_features=${E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES[${component_key}]:-}
+  local required_features=${E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
   local feature
   local selected
   local selected_auth_feature
 
-  if [[ -z "${E2E_RESOURCE_SERVER_AUTH_TYPE:-}" ]]; then
-    E2E_RESOURCE_SERVER_AUTH_TYPE=$(e2e_resource_server_default_auth_type "${E2E_RESOURCE_SERVER}" "${supported_features}" "${required_features}") || return 1
-    e2e_info "resource-server auth-type defaulted component=${E2E_RESOURCE_SERVER} auth-type=${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+  if [[ -z "${E2E_MANAGED_SERVER_AUTH_TYPE:-}" ]]; then
+    E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_managed_server_default_auth_type "${E2E_MANAGED_SERVER}" "${supported_features}" "${required_features}") || return 1
+    e2e_info "managed-server auth-type defaulted component=${E2E_MANAGED_SERVER} auth-type=${E2E_MANAGED_SERVER_AUTH_TYPE}"
   fi
 
-  selected_auth_feature=$(e2e_resource_server_auth_feature_for_type "${E2E_RESOURCE_SERVER_AUTH_TYPE}") || {
-    e2e_die "invalid selected resource-server auth-type: ${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+  selected_auth_feature=$(e2e_managed_server_auth_feature_for_type "${E2E_MANAGED_SERVER_AUTH_TYPE}") || {
+    e2e_die "invalid selected managed-server auth-type: ${E2E_MANAGED_SERVER_AUTH_TYPE}"
     return 1
   }
 
   for feature in "${selected_auth_feature}" mtls; do
-    if e2e_resource_server_feature_enabled "${feature}"; then
-      if ! e2e_resource_server_feature_spec_supports "${supported_features}" "${feature}"; then
-        if e2e_resource_server_security_feature_is_auth "${feature}"; then
-          e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected auth-type: ${E2E_RESOURCE_SERVER_AUTH_TYPE}"
+    if e2e_managed_server_feature_enabled "${feature}"; then
+      if ! e2e_managed_server_feature_spec_supports "${supported_features}" "${feature}"; then
+        if e2e_managed_server_security_feature_is_auth "${feature}"; then
+          e2e_die "managed-server ${E2E_MANAGED_SERVER} does not support selected auth-type: ${E2E_MANAGED_SERVER_AUTH_TYPE}"
         else
-          e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support selected security feature: ${feature}"
+          e2e_die "managed-server ${E2E_MANAGED_SERVER} does not support selected security feature: ${feature}"
         fi
         return 1
       fi
@@ -538,16 +538,16 @@ e2e_validate_resource_server_security_selection() {
 
   for feature in ${required_features}; do
     selected='false'
-    if e2e_resource_server_feature_enabled "${feature}"; then
+    if e2e_managed_server_feature_enabled "${feature}"; then
       selected='true'
     fi
     if [[ "${selected}" != 'true' ]]; then
-      if e2e_resource_server_security_feature_is_auth "${feature}"; then
+      if e2e_managed_server_security_feature_is_auth "${feature}"; then
         local required_auth_type
-        required_auth_type=$(e2e_resource_server_auth_type_for_feature "${feature}") || return 1
-        e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires auth-type ${required_auth_type}"
+        required_auth_type=$(e2e_managed_server_auth_type_for_feature "${feature}") || return 1
+        e2e_die "managed-server ${E2E_MANAGED_SERVER} requires auth-type ${required_auth_type}"
       else
-        e2e_die "resource-server ${E2E_RESOURCE_SERVER} requires security feature ${feature}=true"
+        e2e_die "managed-server ${E2E_MANAGED_SERVER} requires security feature ${feature}=true"
       fi
       return 1
     fi
@@ -557,8 +557,8 @@ e2e_validate_resource_server_security_selection() {
 }
 
 e2e_validate_selection() {
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]] && ! e2e_component_exists 'resource-server' "${E2E_RESOURCE_SERVER}"; then
-    e2e_die "unknown resource-server component: ${E2E_RESOURCE_SERVER}"
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' ]] && ! e2e_component_exists 'managed-server' "${E2E_MANAGED_SERVER}"; then
+    e2e_die "unknown managed-server component: ${E2E_MANAGED_SERVER}"
     return 1
   fi
 
@@ -577,15 +577,15 @@ e2e_validate_selection() {
     return 1
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]] && ! e2e_component_supports_connection 'resource-server' "${E2E_RESOURCE_SERVER}" "${E2E_RESOURCE_SERVER_CONNECTION}"; then
-    e2e_die "resource-server ${E2E_RESOURCE_SERVER} does not support connection ${E2E_RESOURCE_SERVER_CONNECTION}"
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' ]] && ! e2e_component_supports_connection 'managed-server' "${E2E_MANAGED_SERVER}" "${E2E_MANAGED_SERVER_CONNECTION}"; then
+    e2e_die "managed-server ${E2E_MANAGED_SERVER} does not support connection ${E2E_MANAGED_SERVER_CONNECTION}"
     return 1
   fi
 
-  e2e_validate_resource_server_security_selection || return 1
+  e2e_validate_managed_server_security_selection || return 1
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
-    e2e_validate_resource_server_fixture_tree "${E2E_RESOURCE_SERVER}" || return 1
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+    e2e_validate_managed_server_fixture_tree "${E2E_MANAGED_SERVER}" || return 1
   fi
 
   if [[ -n "${E2E_GIT_PROVIDER}" ]] && ! e2e_component_supports_connection 'git-provider' "${E2E_GIT_PROVIDER}" "${E2E_GIT_PROVIDER_CONNECTION}"; then
@@ -608,8 +608,8 @@ e2e_build_selected_components() {
     E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}")")
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
-    E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")")
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+    E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")")
   fi
 
   if [[ "${E2E_SECRET_PROVIDER}" != 'none' ]]; then
@@ -640,10 +640,10 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["profile=${E2E_PROFILE}"]=1
   E2E_CAPABILITY_SET["platform=${E2E_PLATFORM}"]=1
   E2E_CAPABILITY_SET["repo-type=${E2E_REPO_TYPE}"]=1
-  E2E_CAPABILITY_SET["resource-server=${E2E_RESOURCE_SERVER}"]=1
-  E2E_CAPABILITY_SET["resource-server-connection=${E2E_RESOURCE_SERVER_CONNECTION}"]=1
-  E2E_CAPABILITY_SET["resource-server-auth-type=${E2E_RESOURCE_SERVER_AUTH_TYPE}"]=1
-  E2E_CAPABILITY_SET["resource-server-mtls=${E2E_RESOURCE_SERVER_MTLS}"]=1
+  E2E_CAPABILITY_SET["managed-server=${E2E_MANAGED_SERVER}"]=1
+  E2E_CAPABILITY_SET["managed-server-connection=${E2E_MANAGED_SERVER_CONNECTION}"]=1
+  E2E_CAPABILITY_SET["managed-server-auth-type=${E2E_MANAGED_SERVER_AUTH_TYPE}"]=1
+  E2E_CAPABILITY_SET["managed-server-mtls=${E2E_MANAGED_SERVER_MTLS}"]=1
   E2E_CAPABILITY_SET["managed-server-proxy=${E2E_MANAGED_SERVER_PROXY}"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
   E2E_CAPABILITY_SET["secret-provider-connection=${E2E_SECRET_PROVIDER_CONNECTION}"]=1
@@ -657,19 +657,19 @@ e2e_build_capabilities() {
     E2E_CAPABILITY_SET['has-secret-provider']=1
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
-    E2E_CAPABILITY_SET['has-resource-server']=1
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+    E2E_CAPABILITY_SET['has-managed-server']=1
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" != 'none' && "${E2E_RESOURCE_SERVER_MTLS}" == 'true' ]]; then
-    E2E_CAPABILITY_SET['has-resource-server-mtls']=1
+  if [[ "${E2E_MANAGED_SERVER}" != 'none' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
+    E2E_CAPABILITY_SET['has-managed-server-mtls']=1
   fi
 
   if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
     E2E_CAPABILITY_SET['has-managed-server-proxy']=1
   fi
 
-  if [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' || "${E2E_RESOURCE_SERVER_CONNECTION}" == 'remote' || "${E2E_SECRET_PROVIDER_CONNECTION}" == 'remote' ]]; then
+  if [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' || "${E2E_MANAGED_SERVER_CONNECTION}" == 'remote' || "${E2E_SECRET_PROVIDER_CONNECTION}" == 'remote' ]]; then
     E2E_CAPABILITY_SET['remote-selection']=1
   fi
 }

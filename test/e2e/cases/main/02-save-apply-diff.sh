@@ -2,7 +2,7 @@
 
 CASE_ID='save-apply-diff'
 CASE_SCOPE='main'
-CASE_REQUIRES='has-resource-server'
+CASE_REQUIRES='has-managed-server'
 
 case_run() {
   local target_path

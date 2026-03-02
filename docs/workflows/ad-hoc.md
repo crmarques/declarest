@@ -65,15 +65,15 @@ Useful for checking:
 ## 6. Check managed server auth/connectivity directly
 
 ```bash
-declarest resource-server check
-declarest resource-server get base-url
-declarest resource-server get token-url
+declarest managed-server check
+declarest managed-server get base-url
+declarest managed-server get token-url
 ```
 
 If OAuth2 is configured:
 
 ```bash
-declarest resource-server get access-token
+declarest managed-server get access-token
 ```
 
 ## 7. Add debug output when needed

@@ -6,7 +6,7 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 reload_args_lib() {
   unset E2E_EXPLICIT \
-    E2E_RESOURCE_SERVER E2E_RESOURCE_SERVER_CONNECTION E2E_RESOURCE_SERVER_AUTH_TYPE E2E_RESOURCE_SERVER_MTLS \
+    E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
     E2E_MANAGED_SERVER_PROXY E2E_MANAGED_SERVER_PROXY_HTTP_URL E2E_MANAGED_SERVER_PROXY_HTTPS_URL E2E_MANAGED_SERVER_PROXY_NO_PROXY \
     E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
@@ -60,7 +60,7 @@ test_rejects_invalid_platform_flag() {
 test_parses_managed_server_auth_type_flag() {
   reload_args_lib
   e2e_parse_args --managed-server-auth-type custom-header
-  assert_eq "${E2E_RESOURCE_SERVER_AUTH_TYPE}" "custom-header" "expected auth-type to be parsed"
+  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "custom-header" "expected auth-type to be parsed"
 }
 
 test_parses_managed_server_proxy_flag() {
@@ -93,16 +93,16 @@ test_rejects_invalid_metadata_mode_flag() {
   assert_contains "${output}" "invalid --metadata value"
 }
 
-test_rejects_legacy_resource_server_auth_flags() {
+test_rejects_legacy_managed_server_auth_flags() {
   reload_args_lib
   local output status
   set +e
-  output=$(e2e_parse_args --resource-server-oauth2 false 2>&1)
+  output=$(e2e_parse_args --managed-server-oauth2 false 2>&1)
   status=$?
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "unknown argument: --resource-server-oauth2"
+  assert_contains "${output}" "unknown argument: --managed-server-oauth2"
 }
 
 test_rejects_managed_server_none() {
@@ -186,7 +186,7 @@ test_cleanup_parser_treats_platform_flag_as_workload_flag() {
   assert_contains "${output}" "cannot be combined with workload flags"
 }
 
-test_usage_mentions_validate_flag_and_no_none_resource_server() {
+test_usage_mentions_validate_flag_and_no_none_managed_server() {
   reload_args_lib
   local output
   output=$(e2e_usage)
@@ -197,8 +197,8 @@ test_usage_mentions_validate_flag_and_no_none_resource_server() {
   assert_contains "${output}" "--managed-server-proxy [<true|false>]"
   assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
   assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
-  assert_not_contains "${output}" "--resource-server-basic-auth"
-  assert_not_contains "${output}" "--resource-server-oauth2"
+  assert_not_contains "${output}" "--managed-server-basic-auth"
+  assert_not_contains "${output}" "--managed-server-oauth2"
   assert_not_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault|none>"
 }
 
@@ -211,11 +211,11 @@ test_parses_managed_server_auth_type_flag
 test_parses_managed_server_proxy_flag
 test_parses_metadata_mode_flag
 test_rejects_invalid_metadata_mode_flag
-test_rejects_legacy_resource_server_auth_flags
+test_rejects_legacy_managed_server_auth_flags
 test_rejects_managed_server_none
 test_rejects_managed_server_proxy_without_urls
 test_cleanup_parser_treats_validate_mode_as_workload_flag
 test_cleanup_parser_treats_metadata_flag_as_workload_flag
 test_cleanup_parser_treats_managed_server_proxy_flag_as_workload_flag
 test_cleanup_parser_treats_platform_flag_as_workload_flag
-test_usage_mentions_validate_flag_and_no_none_resource_server
+test_usage_mentions_validate_flag_and_no_none_managed_server

@@ -61,7 +61,7 @@ step_initialize() {
   e2e_build_capabilities || return 1
   e2e_preflight_requirements || return 1
 
-  e2e_info "profile=${E2E_PROFILE} platform=${E2E_PLATFORM} repo-type=${E2E_REPO_TYPE} resource-server=${E2E_RESOURCE_SERVER} managed-server-proxy=${E2E_MANAGED_SERVER_PROXY} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
+  e2e_info "profile=${E2E_PROFILE} platform=${E2E_PLATFORM} repo-type=${E2E_REPO_TYPE} managed-server=${E2E_MANAGED_SERVER} managed-server-proxy=${E2E_MANAGED_SERVER_PROXY} secret-provider=${E2E_SECRET_PROVIDER} container-engine=${E2E_CONTAINER_ENGINE}"
   return 0
 }
 
@@ -157,8 +157,8 @@ e2e_manual_seed_repo_from_template() {
     return 0
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER}" == 'none' ]]; then
-    e2e_info 'manual profile repo-template sync skipped: resource-server=none'
+  if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
+    e2e_info 'manual profile repo-template sync skipped: managed-server=none'
     return 0
   fi
 
@@ -170,7 +170,7 @@ e2e_manual_seed_repo_from_template() {
   local file_count
 
   repo_component_key=$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")
-  resource_component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+  resource_component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
   repo_state_file=$(e2e_component_state_file "${repo_component_key}")
 
   repo_base_dir=$(e2e_state_get "${repo_state_file}" 'REPO_BASE_DIR' || true)

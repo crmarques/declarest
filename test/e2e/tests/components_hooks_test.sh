@@ -20,10 +20,10 @@ prepare_runtime_globals() {
   E2E_METADATA_DIR=''
   E2E_METADATA_BUNDLE=''
   E2E_METADATA='bundle'
-  E2E_RESOURCE_SERVER='demo'
-  E2E_RESOURCE_SERVER_CONNECTION='local'
-  E2E_RESOURCE_SERVER_AUTH_TYPE='oauth2'
-  E2E_RESOURCE_SERVER_MTLS='false'
+  E2E_MANAGED_SERVER='demo'
+  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
+  E2E_MANAGED_SERVER_MTLS='false'
   E2E_REPO_TYPE='filesystem'
   E2E_GIT_PROVIDER=''
   E2E_GIT_PROVIDER_CONNECTION='local'
@@ -58,26 +58,26 @@ test_dependency_ordering_respects_dependencies() {
 
   local order_file="${tmp}/order.log"
   local path_a path_b
-  path_a=$(create_hook_component "${tmp}/components" "resource-server:alpha" "printf '%s\\n' \"\${E2E_COMPONENT_KEY}\" >> ${order_file@Q}")
+  path_a=$(create_hook_component "${tmp}/components" "managed-server:alpha" "printf '%s\\n' \"\${E2E_COMPONENT_KEY}\" >> ${order_file@Q}")
   path_b=$(create_hook_component "${tmp}/components" "repo-type:filesystem" "printf '%s\\n' \"\${E2E_COMPONENT_KEY}\" >> ${order_file@Q}")
 
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:alpha" "repo-type:filesystem")
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:alpha" "repo-type:filesystem")
 
-  E2E_COMPONENT_PATH["resource-server:alpha"]="${path_a}"
+  E2E_COMPONENT_PATH["managed-server:alpha"]="${path_a}"
   E2E_COMPONENT_PATH["repo-type:filesystem"]="${path_b}"
-  E2E_COMPONENT_DEPENDS_ON["resource-server:alpha"]=""
-  E2E_COMPONENT_DEPENDS_ON["repo-type:filesystem"]="resource-server:alpha"
-  E2E_COMPONENT_RUNTIME_KIND["resource-server:alpha"]='native'
+  E2E_COMPONENT_DEPENDS_ON["managed-server:alpha"]=""
+  E2E_COMPONENT_DEPENDS_ON["repo-type:filesystem"]="managed-server:alpha"
+  E2E_COMPONENT_RUNTIME_KIND["managed-server:alpha"]='native'
   E2E_COMPONENT_RUNTIME_KIND["repo-type:filesystem"]='native'
 
   e2e_components_run_hook_for_keys init false "${E2E_SELECTED_COMPONENT_KEYS[@]}"
 
   local actual
   actual=$(tr '\n' ' ' <"${order_file}" | sed 's/[[:space:]]\+$//')
-  assert_eq "${actual}" "resource-server:alpha repo-type:filesystem" "expected dependency-ordered hook execution"
+  assert_eq "${actual}" "managed-server:alpha repo-type:filesystem" "expected dependency-ordered hook execution"
 }
 
 test_cycle_detection_fails_with_actionable_message() {
@@ -88,19 +88,19 @@ test_cycle_detection_fails_with_actionable_message() {
   prepare_runtime_globals "${tmp}"
 
   local path_a path_b
-  path_a=$(create_hook_component "${tmp}/components" "resource-server:alpha" "exit 0")
+  path_a=$(create_hook_component "${tmp}/components" "managed-server:alpha" "exit 0")
   path_b=$(create_hook_component "${tmp}/components" "repo-type:filesystem" "exit 0")
 
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:alpha" "repo-type:filesystem")
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:alpha" "repo-type:filesystem")
 
-  E2E_COMPONENT_PATH["resource-server:alpha"]="${path_a}"
+  E2E_COMPONENT_PATH["managed-server:alpha"]="${path_a}"
   E2E_COMPONENT_PATH["repo-type:filesystem"]="${path_b}"
-  E2E_COMPONENT_DEPENDS_ON["resource-server:alpha"]="repo-type:filesystem"
-  E2E_COMPONENT_DEPENDS_ON["repo-type:filesystem"]="resource-server:alpha"
-  E2E_COMPONENT_RUNTIME_KIND["resource-server:alpha"]='native'
+  E2E_COMPONENT_DEPENDS_ON["managed-server:alpha"]="repo-type:filesystem"
+  E2E_COMPONENT_DEPENDS_ON["repo-type:filesystem"]="managed-server:alpha"
+  E2E_COMPONENT_RUNTIME_KIND["managed-server:alpha"]='native'
   E2E_COMPONENT_RUNTIME_KIND["repo-type:filesystem"]='native'
 
   local output status
@@ -121,19 +121,19 @@ test_parallel_hook_failures_retain_component_logs_in_run_artifacts() {
   prepare_runtime_globals "${tmp}"
 
   local path_a path_b
-  path_a=$(create_hook_component "${tmp}/components" "resource-server:alpha" "printf 'alpha hook ran\\n'; exit 0")
+  path_a=$(create_hook_component "${tmp}/components" "managed-server:alpha" "printf 'alpha hook ran\\n'; exit 0")
   path_b=$(create_hook_component "${tmp}/components" "repo-type:filesystem" "printf 'beta hook failed\\n' >&2; exit 23")
 
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:alpha" "repo-type:filesystem")
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:alpha" "repo-type:filesystem")
 
-  E2E_COMPONENT_PATH["resource-server:alpha"]="${path_a}"
+  E2E_COMPONENT_PATH["managed-server:alpha"]="${path_a}"
   E2E_COMPONENT_PATH["repo-type:filesystem"]="${path_b}"
-  E2E_COMPONENT_DEPENDS_ON["resource-server:alpha"]=""
+  E2E_COMPONENT_DEPENDS_ON["managed-server:alpha"]=""
   E2E_COMPONENT_DEPENDS_ON["repo-type:filesystem"]=""
-  E2E_COMPONENT_RUNTIME_KIND["resource-server:alpha"]='native'
+  E2E_COMPONENT_RUNTIME_KIND["managed-server:alpha"]='native'
   E2E_COMPONENT_RUNTIME_KIND["repo-type:filesystem"]='native'
 
   local output status
@@ -167,13 +167,13 @@ test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
-  E2E_RESOURCE_SERVER='keycloak'
+  E2E_MANAGED_SERVER='keycloak'
   E2E_METADATA='local-dir'
   E2E_COMPONENT_PATH=()
-  local component_dir="${tmp}/components/resource-server/keycloak"
+  local component_dir="${tmp}/components/managed-server/keycloak"
   local component_metadata="${component_dir}/metadata"
   mkdir -p "${component_metadata}"
-  E2E_COMPONENT_PATH['resource-server:keycloak']="${component_dir}"
+  E2E_COMPONENT_PATH['managed-server:keycloak']="${component_dir}"
 
   e2e_prepare_metadata_workspace
 
@@ -188,10 +188,10 @@ test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
-  E2E_RESOURCE_SERVER='keycloak'
+  E2E_MANAGED_SERVER='keycloak'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:keycloak']="${tmp}/components/resource-server/keycloak"
+  E2E_COMPONENT_PATH['managed-server:keycloak']="${tmp}/components/managed-server/keycloak"
 
   e2e_prepare_metadata_workspace
 
@@ -206,10 +206,10 @@ test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_runtime_globals "${tmp}"
 
-  E2E_RESOURCE_SERVER='simple-api-server'
+  E2E_MANAGED_SERVER='simple-api-server'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:simple-api-server']="${tmp}/components/resource-server/simple-api-server"
+  E2E_COMPONENT_PATH['managed-server:simple-api-server']="${tmp}/components/managed-server/simple-api-server"
 
   e2e_prepare_metadata_workspace
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
@@ -292,17 +292,17 @@ test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode() {
   prepare_runtime_globals "${tmp}"
 
   local component_dir
-  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+  component_dir=$(create_openapi_component "${tmp}/components" "managed-server:demo")
 
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_OPENAPI_SPEC=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
-  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo")
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
 
   e2e_prepare_component_openapi_specs
 
-  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}" ]]; then
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['managed-server:demo']:-}" ]]; then
     fail "expected bundle mode to skip local openapi spec wiring"
   fi
 }
@@ -315,17 +315,17 @@ test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode() {
   prepare_runtime_globals "${tmp}"
 
   local component_dir
-  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+  component_dir=$(create_openapi_component "${tmp}/components" "managed-server:demo")
 
   E2E_METADATA='local-dir'
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_OPENAPI_SPEC=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
-  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo")
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
 
   e2e_prepare_component_openapi_specs
 
-  local copied_spec="${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}"
+  local copied_spec="${E2E_COMPONENT_OPENAPI_SPEC['managed-server:demo']:-}"
   [[ -n "${copied_spec}" ]] || fail "expected local-dir mode to wire local openapi spec"
   assert_path_exists "${copied_spec}"
 }
@@ -338,17 +338,17 @@ test_prepare_component_openapi_specs_defaults_to_bundle_mode() {
   prepare_runtime_globals "${tmp}"
 
   local component_dir
-  component_dir=$(create_openapi_component "${tmp}/components" "resource-server:demo")
+  component_dir=$(create_openapi_component "${tmp}/components" "managed-server:demo")
 
   unset E2E_METADATA
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_OPENAPI_SPEC=()
-  E2E_SELECTED_COMPONENT_KEYS=("resource-server:demo")
-  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo")
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
 
   e2e_prepare_component_openapi_specs
 
-  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['resource-server:demo']:-}" ]]; then
+  if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['managed-server:demo']:-}" ]]; then
     fail "expected default metadata mode to skip local openapi spec wiring"
   fi
 }
@@ -360,11 +360,11 @@ test_component_compose_file_resolves_compose_subdir() {
   trap 'rm -rf "${tmp}"' RETURN
 
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:demo']="${tmp}/components/resource-server/demo"
+  E2E_COMPONENT_PATH['managed-server:demo']="${tmp}/components/managed-server/demo"
 
   local compose_file
-  compose_file=$(e2e_component_compose_file 'resource-server:demo')
-  assert_eq "${compose_file}" "${tmp}/components/resource-server/demo/compose/compose.yaml" "expected compose artifact path to use compose/compose.yaml"
+  compose_file=$(e2e_component_compose_file 'managed-server:demo')
+  assert_eq "${compose_file}" "${tmp}/components/managed-server/demo/compose/compose.yaml" "expected compose artifact path to use compose/compose.yaml"
 }
 
 test_k8s_port_forward_pid_tracking_and_stop() {
@@ -405,15 +405,15 @@ EOF
   chmod +x "${fake_bin}/kubectl"
 
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:demo']="${tmp}/components/resource-server/demo"
+  E2E_COMPONENT_PATH['managed-server:demo']="${tmp}/components/managed-server/demo"
   E2E_KUBECONFIG="${tmp}/kubeconfig"
   E2E_K8S_NAMESPACE='declarest-tests'
   : >"${E2E_KUBECONFIG}"
 
   local state_file
-  state_file=$(e2e_component_state_file 'resource-server:demo')
+  state_file=$(e2e_component_state_file 'managed-server:demo')
   : >"${state_file}"
 
   local old_path="${PATH}"
@@ -421,7 +421,7 @@ EOF
   export PATH
   export FAKE_KUBECTL_LOG="${fake_log}"
 
-  e2e_component_start_k8s_port_forwards 'resource-server:demo' "${state_file}"
+  e2e_component_start_k8s_port_forwards 'managed-server:demo' "${state_file}"
 
   local pids
   pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS')
@@ -438,7 +438,7 @@ EOF
     kill -0 "${pid}" >/dev/null 2>&1 || fail "expected port-forward pid to be alive: ${pid}"
   done
 
-  e2e_component_builtin_stop_kubernetes 'resource-server:demo'
+  e2e_component_builtin_stop_kubernetes 'managed-server:demo'
 
   for pid in "${pid_array[@]}"; do
     for _ in $(seq 1 20); do
@@ -505,15 +505,15 @@ EOF
   chmod +x "${fake_bin}/kubectl"
 
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:demo']="${tmp}/components/resource-server/demo"
+  E2E_COMPONENT_PATH['managed-server:demo']="${tmp}/components/managed-server/demo"
   E2E_KUBECONFIG="${tmp}/kubeconfig"
   E2E_K8S_NAMESPACE='declarest-tests'
   : >"${E2E_KUBECONFIG}"
 
   local state_file
-  state_file=$(e2e_component_state_file 'resource-server:demo')
+  state_file=$(e2e_component_state_file 'managed-server:demo')
   : >"${state_file}"
 
   local old_path="${PATH}"
@@ -522,7 +522,7 @@ EOF
   export FAKE_KUBECTL_LOG="${fake_log}"
   export FAKE_KUBECTL_COUNTER="${counter_file}"
 
-  e2e_component_start_k8s_port_forwards 'resource-server:demo' "${state_file}"
+  e2e_component_start_k8s_port_forwards 'managed-server:demo' "${state_file}"
 
   local pids
   pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS')
@@ -549,7 +549,7 @@ EOF
 
   kill -0 "${pid_array[0]}" >/dev/null 2>&1 || fail "expected restarted port-forward pid to stay alive"
 
-  e2e_component_builtin_stop_kubernetes 'resource-server:demo'
+  e2e_component_builtin_stop_kubernetes 'managed-server:demo'
   for _ in $(seq 1 20); do
     if ! kill -0 "${pid_array[0]}" >/dev/null 2>&1; then
       break
@@ -600,26 +600,26 @@ exit 1
 EOF
   chmod +x "${fake_bin}/kubectl"
 
-  local component_dir="${tmp}/components/resource-server/demo"
+  local component_dir="${tmp}/components/managed-server/demo"
   mkdir -p "${component_dir}/k8s"
   cat >"${component_dir}/k8s/deployment.yaml" <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: resource-server-demo
+  name: managed-server-demo
 EOF
 
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
   E2E_KUBECONFIG="${tmp}/kubeconfig"
   E2E_K8S_NAMESPACE='declarest-tests'
   E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS='601'
   : >"${E2E_KUBECONFIG}"
 
   local state_file
-  state_file=$(e2e_component_state_file 'resource-server:demo')
+  state_file=$(e2e_component_state_file 'managed-server:demo')
   : >"${state_file}"
 
   local old_path="${PATH}"
@@ -627,7 +627,7 @@ EOF
   export PATH
   export FAKE_KUBECTL_LOG="${fake_log}"
 
-  e2e_component_builtin_start_kubernetes 'resource-server:demo'
+  e2e_component_builtin_start_kubernetes 'managed-server:demo'
 
   assert_file_contains "${fake_log}" "--timeout=601s"
 }
@@ -666,26 +666,26 @@ exit 1
 EOF
   chmod +x "${fake_bin}/kubectl"
 
-  local component_dir="${tmp}/components/resource-server/demo"
+  local component_dir="${tmp}/components/managed-server/demo"
   mkdir -p "${component_dir}/k8s"
   cat >"${component_dir}/k8s/deployment.yaml" <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: resource-server-demo
+  name: managed-server-demo
 EOF
 
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_COMPONENT_RUNTIME_KIND['resource-server:demo']='compose'
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['resource-server:demo']="${component_dir}"
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
   E2E_KUBECONFIG="${tmp}/kubeconfig"
   E2E_K8S_NAMESPACE='declarest-tests'
   E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS='invalid'
   : >"${E2E_KUBECONFIG}"
 
   local state_file
-  state_file=$(e2e_component_state_file 'resource-server:demo')
+  state_file=$(e2e_component_state_file 'managed-server:demo')
   : >"${state_file}"
 
   local old_path="${PATH}"
@@ -694,7 +694,7 @@ EOF
 
   local output status
   set +e
-  output=$(e2e_component_builtin_start_kubernetes 'resource-server:demo' 2>&1)
+  output=$(e2e_component_builtin_start_kubernetes 'managed-server:demo' 2>&1)
   status=$?
   set -e
 

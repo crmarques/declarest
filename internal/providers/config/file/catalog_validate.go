@@ -59,7 +59,7 @@ func validateConfig(cfg config.Context) error {
 		return err
 	}
 
-	if err := validateResourceServer(cfg.ResourceServer); err != nil {
+	if err := validateManagedServer(cfg.ManagedServer); err != nil {
 		return err
 	}
 
@@ -80,9 +80,9 @@ func normalizeConfig(cfg config.Context) config.Context {
 	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
 		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
 	}
-	if cfg.ResourceServer != nil && cfg.ResourceServer.HTTP != nil {
-		cfg.ResourceServer.HTTP.HealthCheck = strings.TrimSpace(cfg.ResourceServer.HTTP.HealthCheck)
-		cfg.ResourceServer.HTTP.Proxy = normalizeProxy(cfg.ResourceServer.HTTP.Proxy)
+	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
+		cfg.ManagedServer.HTTP.HealthCheck = strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+		cfg.ManagedServer.HTTP.Proxy = normalizeProxy(cfg.ManagedServer.HTTP.Proxy)
 	}
 	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
 		cfg.SecretStore.Vault.Proxy = normalizeProxy(cfg.SecretStore.Vault.Proxy)
@@ -176,10 +176,10 @@ type proxyTarget struct {
 
 func buildProxyTargets(cfg *config.Context) []proxyTarget {
 	targets := make([]proxyTarget, 0, 4)
-	if cfg.ResourceServer != nil && cfg.ResourceServer.HTTP != nil {
+	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
 		targets = append(targets, proxyTarget{
 			name:  "managed-server.http.proxy",
-			proxy: &cfg.ResourceServer.HTTP.Proxy,
+			proxy: &cfg.ManagedServer.HTTP.Proxy,
 		})
 	}
 	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
@@ -301,7 +301,7 @@ func validateRepository(repository config.Repository) error {
 	return nil
 }
 
-func validateResourceServer(resourceServer *config.ResourceServer) error {
+func validateManagedServer(resourceServer *config.ManagedServer) error {
 	if resourceServer == nil {
 		return faults.NewValidationError("managed-server is required", nil)
 	}
@@ -346,21 +346,21 @@ func validateResourceServer(resourceServer *config.ResourceServer) error {
 		}
 	}
 
-	if err := validateResourceServerProxy(resourceServer.HTTP.Proxy); err != nil {
+	if err := validateManagedServerProxy(resourceServer.HTTP.Proxy); err != nil {
 		return err
 	}
-	if err := validateResourceServerHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
+	if err := validateManagedServerHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func validateResourceServerProxy(proxy *config.HTTPProxy) error {
+func validateManagedServerProxy(proxy *config.HTTPProxy) error {
 	return validateProxy("managed-server.http.proxy", proxy)
 }
 
-func validateResourceServerHealthCheck(value string) error {
+func validateManagedServerHealthCheck(value string) error {
 	healthCheck := strings.TrimSpace(value)
 	if healthCheck == "" {
 		return nil
@@ -486,61 +486,61 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			}
 			cfg.Repository.Filesystem.BaseDir = value
 		case "managed-server.http.base-url":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.base-url requires managed-server.http to be configured", nil)
 			}
-			cfg.ResourceServer.HTTP.BaseURL = value
+			cfg.ManagedServer.HTTP.BaseURL = value
 		case "managed-server.http.health-check":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.health-check requires managed-server.http to be configured", nil)
 			}
-			cfg.ResourceServer.HTTP.HealthCheck = value
+			cfg.ManagedServer.HTTP.HealthCheck = value
 		case "managed-server.http.proxy.http-url":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.http-url requires managed-server.http to be configured", nil)
 			}
-			if cfg.ResourceServer.HTTP.Proxy == nil {
-				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedServer.HTTP.Proxy == nil {
+				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ResourceServer.HTTP.Proxy.HTTPURL = value
+			cfg.ManagedServer.HTTP.Proxy.HTTPURL = value
 		case "managed-server.http.proxy.https-url":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.https-url requires managed-server.http to be configured", nil)
 			}
-			if cfg.ResourceServer.HTTP.Proxy == nil {
-				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedServer.HTTP.Proxy == nil {
+				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ResourceServer.HTTP.Proxy.HTTPSURL = value
+			cfg.ManagedServer.HTTP.Proxy.HTTPSURL = value
 		case "managed-server.http.proxy.no-proxy":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.no-proxy requires managed-server.http to be configured", nil)
 			}
-			if cfg.ResourceServer.HTTP.Proxy == nil {
-				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedServer.HTTP.Proxy == nil {
+				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ResourceServer.HTTP.Proxy.NoProxy = value
+			cfg.ManagedServer.HTTP.Proxy.NoProxy = value
 		case "managed-server.http.proxy.auth.username":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.username requires managed-server.http to be configured", nil)
 			}
-			if cfg.ResourceServer.HTTP.Proxy == nil {
-				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedServer.HTTP.Proxy == nil {
+				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			if cfg.ResourceServer.HTTP.Proxy.Auth == nil {
-				cfg.ResourceServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
+			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
+				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
-			cfg.ResourceServer.HTTP.Proxy.Auth.Username = value
+			cfg.ManagedServer.HTTP.Proxy.Auth.Username = value
 		case "managed-server.http.proxy.auth.password":
-			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
+			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
 				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.password requires managed-server.http to be configured", nil)
 			}
-			if cfg.ResourceServer.HTTP.Proxy == nil {
-				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedServer.HTTP.Proxy == nil {
+				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			if cfg.ResourceServer.HTTP.Proxy.Auth == nil {
-				cfg.ResourceServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
+			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
+				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
-			cfg.ResourceServer.HTTP.Proxy.Auth.Password = value
+			cfg.ManagedServer.HTTP.Proxy.Auth.Password = value
 		case "metadata.base-dir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {

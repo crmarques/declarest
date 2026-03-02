@@ -18,19 +18,19 @@ e2e_context_build() {
   done < <(find "${E2E_CONTEXT_DIR}" -type f -name '*.yaml' | sort)
 
   printf 'current-ctx: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
-  e2e_context_insert_resource_server_openapi "${context_file}"
-  e2e_context_insert_resource_server_proxy "${context_file}"
+  e2e_context_insert_managed_server_openapi "${context_file}"
+  e2e_context_insert_managed_server_proxy "${context_file}"
 }
 
-e2e_context_insert_resource_server_openapi() {
+e2e_context_insert_managed_server_openapi() {
   local context_file=$1
 
-  if [[ "${E2E_RESOURCE_SERVER:-none}" == 'none' ]]; then
+  if [[ "${E2E_MANAGED_SERVER:-none}" == 'none' ]]; then
     return 0
   fi
 
   local component_key
-  component_key=$(e2e_component_key 'resource-server' "${E2E_RESOURCE_SERVER}")
+  component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
   local openapi_spec="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   if [[ -z "${openapi_spec}" || ! -f "${openapi_spec}" ]]; then
     return 0
@@ -107,14 +107,14 @@ PY
   return 0
 }
 
-e2e_context_insert_resource_server_proxy() {
+e2e_context_insert_managed_server_proxy() {
   local context_file=$1
 
   if [[ "${E2E_MANAGED_SERVER_PROXY:-false}" != 'true' ]]; then
     return 0
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER:-none}" == 'none' ]]; then
+  if [[ "${E2E_MANAGED_SERVER:-none}" == 'none' ]]; then
     return 0
   fi
 

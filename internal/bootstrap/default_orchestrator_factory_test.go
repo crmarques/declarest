@@ -91,7 +91,7 @@ paths: {}
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -162,7 +162,7 @@ distribution:
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -231,7 +231,7 @@ distribution:
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						OpenAPI: contextOpenAPIPath,
@@ -278,7 +278,7 @@ distribution:
 						Local: config.GitLocal{BaseDir: "/tmp/repo"},
 					},
 				},
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -431,16 +431,16 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid_resource_server_provider_configuration", func(t *testing.T) {
+	t.Run("invalid_managed_server_provider_configuration", func(t *testing.T) {
 		t.Parallel()
 
 		contextService := &fakeContextService{
 			resolvedContext: config.Context{
-				Name: "invalid-resource-server",
+				Name: "invalid-managed-server",
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 				},
-				ResourceServer: &config.ResourceServer{
+				ManagedServer: &config.ManagedServer{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com/api",
 						Auth: &config.HTTPAuth{
@@ -456,7 +456,7 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-resource-server"})
+		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

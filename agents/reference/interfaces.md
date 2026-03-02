@@ -78,13 +78,13 @@ Represents persisted context configuration.
 Required fields:
 1. `Name`.
 2. `Repository` typed configuration object.
-3. `ResourceServer` typed server configuration object.
+3. `ManagedServer` typed server configuration object.
 
 Optional fields:
 1. `SecretStore` typed secret store configuration object.
 2. `Preferences` settings map.
 3. `Metadata` typed metadata configuration object.
-4. `managed-server.http.health-check` optional probe target used by `resource-server check`.
+4. `managed-server.http.health-check` optional probe target used by `managed-server check`.
 
 YAML key contract:
 1. keys MUST use kebab-case.

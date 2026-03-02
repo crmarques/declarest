@@ -67,12 +67,12 @@ func buildDefaultOrchestrator(
 	}
 
 	var srv managedserver.ManagedServerClient
-	if resolvedContext.ResourceServer != nil {
-		if resolvedContext.ResourceServer.HTTP == nil {
+	if resolvedContext.ManagedServer != nil {
+		if resolvedContext.ManagedServer.HTTP == nil {
 			return nil, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
 		}
 
-		serverConfig := *resolvedContext.ResourceServer.HTTP
+		serverConfig := *resolvedContext.ManagedServer.HTTP
 		serverConfig.OpenAPI = effectiveOpenAPISource(serverConfig.OpenAPI, metadataSource.OpenAPI)
 
 		serverFormat := resolvedContext.Repository.ResourceFormat

@@ -22,7 +22,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | `agents/reference/domain.md` | Vocabulary and invariants | Modeling behavior and data |
 | `agents/reference/context-config.md` | Context and config semantics | Context loading, overrides, validation |
 | `agents/reference/resource-repo.md` | Resource repository and Git/FS semantics | Storage, sync, path handling |
-| `agents/reference/resource-server.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
+| `agents/reference/managed-server.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
 | `agents/reference/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
 | `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
 | `agents/reference/orchestrator.md` | Orchestration flows | Apply/refresh/diff/list workflows |
@@ -34,9 +34,9 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 ## Request-to-File Load Matrix
 | Request Type | Required Files |
 |---|---|
-| New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/resource-server.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
+| New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/managed-server.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
 | CLI command or output change | `agents/reference/interfaces.md`, `agents/reference/cli.md`, `agents/reference/orchestrator.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
-| Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/resource-server.md`, `agents/reference/quality.md` |
+| Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-server.md`, `agents/reference/quality.md` |
 | Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/orchestrator.md`, `agents/reference/quality.md` |
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
 | E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
@@ -56,7 +56,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 ## Commit guidance (agents)
 - Agents MUST NOT create, amend, or push commits themselves; the user runs `git commit` after the agent finishes preparing the change.
 - Agents MAY stage touched files to clarify the final diff, but they must leave the final commit execution to the user and should never stage unrelated modifications.
-- Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `resource-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
+- Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `managed-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
 - Each logical change needs a focused justification so that a Conventional Commit can still be composed if the user consents to committing; agents should reserve the actual phrasing until the user explicitly asks or approves the commit.
 - Before handing off, agents MUST:
   - run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked),

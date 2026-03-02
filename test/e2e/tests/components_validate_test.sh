@@ -48,12 +48,12 @@ create_repo_type_component() {
   } >"${component_dir}/component.env"
 }
 
-create_resource_server_component() {
+create_managed_server_component() {
   local root=$1
   local include_identity_fields=${2:-true}
   local include_compose_artifacts=${3:-true}
   local include_k8s_artifacts=${4:-true}
-  local component_dir="${root}/components/resource-server/demo"
+  local component_dir="${root}/components/managed-server/demo"
   create_component_common "${component_dir}"
   write_hook_script "${component_dir}/scripts/health.sh"
   if [[ "${include_compose_artifacts}" == 'true' ]]; then
@@ -86,7 +86,7 @@ EOF
 EOF
   fi
   {
-    printf 'COMPONENT_TYPE=resource-server\n'
+    printf 'COMPONENT_TYPE=managed-server\n'
     printf 'COMPONENT_NAME=demo\n'
     printf 'COMPONENT_CONTRACT_VERSION=1\n'
     printf 'SUPPORTED_CONNECTIONS="local"\n'
@@ -150,7 +150,7 @@ test_validate_all_discovered_components_accepts_valid_fixture_identity() {
 
 _test_validate_all_discovered_components_accepts_valid_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_resource_server_component "${E2E_DIR}" true
+  create_managed_server_component "${E2E_DIR}" true
   e2e_discover_components
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
@@ -162,7 +162,7 @@ test_validate_all_discovered_components_rejects_missing_fixture_identity() {
 
 _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_resource_server_component "${E2E_DIR}" false
+  create_managed_server_component "${E2E_DIR}" false
   e2e_discover_components
 
   local output status
@@ -175,39 +175,39 @@ _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl()
   assert_contains "${output}" "metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute"
 }
 
-test_resource_server_auth_type_defaults_prefer_oauth2() {
+test_managed_server_auth_type_defaults_prefer_oauth2() {
   load_components_libs
 
   E2E_EXPLICIT=()
-  E2E_RESOURCE_SERVER='demo'
-  E2E_RESOURCE_SERVER_AUTH_TYPE=''
-  E2E_RESOURCE_SERVER_MTLS='false'
-  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
-  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES['resource-server:demo']='none basic-auth oauth2 mtls'
-  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES['resource-server:demo']=''
+  E2E_MANAGED_SERVER='demo'
+  E2E_MANAGED_SERVER_AUTH_TYPE=''
+  E2E_MANAGED_SERVER_MTLS='false'
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='none basic-auth oauth2 mtls'
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
 
-  e2e_validate_resource_server_security_selection >/dev/null
+  e2e_validate_managed_server_security_selection >/dev/null
 
-  assert_eq "${E2E_RESOURCE_SERVER_AUTH_TYPE}" "oauth2" "expected default auth-type election to prefer oauth2"
+  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "oauth2" "expected default auth-type election to prefer oauth2"
 }
 
-test_resource_server_auth_type_rejects_unsupported_selection() {
+test_managed_server_auth_type_rejects_unsupported_selection() {
   load_components_libs
 
   E2E_EXPLICIT=()
-  E2E_RESOURCE_SERVER='demo'
-  E2E_RESOURCE_SERVER_AUTH_TYPE='custom-header'
-  E2E_RESOURCE_SERVER_MTLS='false'
-  e2e_mark_explicit 'resource-server-auth-type'
-  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES=()
-  E2E_COMPONENT_RESOURCE_SERVER_SECURITY_FEATURES['resource-server:demo']='none oauth2'
-  E2E_COMPONENT_RESOURCE_SERVER_REQUIRED_SECURITY_FEATURES['resource-server:demo']=''
+  E2E_MANAGED_SERVER='demo'
+  E2E_MANAGED_SERVER_AUTH_TYPE='custom-header'
+  E2E_MANAGED_SERVER_MTLS='false'
+  e2e_mark_explicit 'managed-server-auth-type'
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='none oauth2'
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
 
   local output status
   set +e
-  output=$(e2e_validate_resource_server_security_selection 2>&1)
+  output=$(e2e_validate_managed_server_security_selection 2>&1)
   status=$?
   set -e
 
@@ -222,7 +222,7 @@ test_validate_all_discovered_components_rejects_missing_compose_artifacts() {
 
 _test_validate_all_discovered_components_rejects_missing_compose_artifacts_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_resource_server_component "${E2E_DIR}" true false true
+  create_managed_server_component "${E2E_DIR}" true false true
 
   local output status
   set +e
@@ -241,7 +241,7 @@ test_validate_all_discovered_components_rejects_missing_k8s_artifacts() {
 
 _test_validate_all_discovered_components_rejects_missing_k8s_artifacts_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_resource_server_component "${E2E_DIR}" true true false
+  create_managed_server_component "${E2E_DIR}" true true false
 
   local output status
   set +e
@@ -268,8 +268,8 @@ _test_validate_all_discovered_components_accepts_native_without_runtime_artifact
 test_discover_rejects_missing_contract_version
 test_validate_all_discovered_components_accepts_valid_fixture_identity
 test_validate_all_discovered_components_rejects_missing_fixture_identity
-test_resource_server_auth_type_defaults_prefer_oauth2
-test_resource_server_auth_type_rejects_unsupported_selection
+test_managed_server_auth_type_defaults_prefer_oauth2
+test_managed_server_auth_type_rejects_unsupported_selection
 test_validate_all_discovered_components_rejects_missing_compose_artifacts
 test_validate_all_discovered_components_rejects_missing_k8s_artifacts
 test_validate_all_discovered_components_accepts_native_without_runtime_artifacts

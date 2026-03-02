@@ -37,12 +37,12 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"resource delete",
 		"resource edit",
 		"resource copy",
-		"resource-server",
-		"resource-server get",
-		"resource-server get base-url",
-		"resource-server get token-url",
-		"resource-server get access-token",
-		"resource-server check",
+		"managed-server",
+		"managed-server get",
+		"managed-server get base-url",
+		"managed-server get token-url",
+		"managed-server get access-token",
+		"managed-server check",
 		"metadata",
 		"metadata resolve",
 		"metadata render",
@@ -142,13 +142,13 @@ func TestMissingPositionalParameterValidationPrintsUsage(t *testing.T) {
 	})
 }
 
-func TestResourceServerGet(t *testing.T) {
+func TestManagedServerGet(t *testing.T) {
 	t.Parallel()
 
 	t.Run("prints_base_url", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource-server", "get", "base-url")
+		output, err := executeForTest(testDeps(), "", "managed-server", "get", "base-url")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -160,7 +160,7 @@ func TestResourceServerGet(t *testing.T) {
 	t.Run("prints_token_url", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource-server", "get", "token-url")
+		output, err := executeForTest(testDeps(), "", "managed-server", "get", "token-url")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -172,7 +172,7 @@ func TestResourceServerGet(t *testing.T) {
 	t.Run("token_url_fails_when_oauth2_not_configured", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "--context", "bearer", "resource-server", "get", "token-url")
+		_, err := executeForTest(testDeps(), "", "--context", "bearer", "managed-server", "get", "token-url")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "oauth2") {
 			t.Fatalf("expected oauth2 validation error, got %v", err)
@@ -185,7 +185,7 @@ func TestResourceServerGet(t *testing.T) {
 		deps := testDeps()
 		deps.ManagedServerClient = &testManagedServerClient{accessToken: "oauth-access-token"}
 
-		output, err := executeForTest(deps, "", "resource-server", "get", "access-token")
+		output, err := executeForTest(deps, "", "managed-server", "get", "access-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestResourceServerGet(t *testing.T) {
 			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil),
 		}
 
-		_, err := executeForTest(deps, "", "resource-server", "get", "access-token")
+		_, err := executeForTest(deps, "", "managed-server", "get", "access-token")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "oauth2") {
 			t.Fatalf("expected oauth2 validation error, got %v", err)
@@ -210,7 +210,7 @@ func TestResourceServerGet(t *testing.T) {
 	})
 }
 
-func TestResourceServerCheck(t *testing.T) {
+func TestManagedServerCheck(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success_probe", func(t *testing.T) {
@@ -219,11 +219,11 @@ func TestResourceServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "resource-server", "check")
+		output, err := executeForTest(deps, "", "managed-server", "check")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "resource-server check: OK") {
+		if !strings.Contains(output, "managed-server check: OK") {
 			t.Fatalf("expected success output, got %q", output)
 		}
 		if len(managedServerClient.requests) != 1 {
@@ -240,7 +240,7 @@ func TestResourceServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "resource-server", "check")
+		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "managed-server", "check")
 		if err != nil {
 			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
@@ -261,7 +261,7 @@ func TestResourceServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
 
-		_, err := executeForTest(deps, "", "--context", "health-check-relative", "resource-server", "check")
+		_, err := executeForTest(deps, "", "--context", "health-check-relative", "managed-server", "check")
 		if err != nil {
 			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
@@ -279,7 +279,7 @@ func TestResourceServerCheck(t *testing.T) {
 		deps := testDeps()
 		deps.ManagedServerClient.(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
 
-		_, err := executeForTest(deps, "", "resource-server", "check")
+		_, err := executeForTest(deps, "", "managed-server", "check")
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 }
@@ -287,9 +287,9 @@ func TestResourceServerCheck(t *testing.T) {
 func TestOutputPolicyValidation(t *testing.T) {
 	t.Parallel()
 
-	t.Run("resource_server_plain_text_commands_reject_structured_output", func(t *testing.T) {
+	t.Run("managed_server_plain_text_commands_reject_structured_output", func(t *testing.T) {
 		t.Parallel()
-		_, err := executeForTest(testDeps(), "", "--output", "json", "resource-server", "get", "base-url")
+		_, err := executeForTest(testDeps(), "", "--output", "json", "managed-server", "get", "base-url")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 

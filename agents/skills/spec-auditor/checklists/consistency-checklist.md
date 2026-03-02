@@ -13,7 +13,7 @@
 ## Behavior Integrity
 1. `metadata.md` precedence rules are deterministic and testable.
 2. `resource-repo.md` path safety rules reject traversal.
-3. `resource-server.md` OpenAPI fallback rules preserve explicit metadata overrides.
+3. `managed-server.md` OpenAPI fallback rules preserve explicit metadata overrides.
 4. `secrets.md` non-disclosure rules are strict and enforceable.
 5. `orchestrator.md` defines idempotent apply behavior and bounded fallbacks.
 

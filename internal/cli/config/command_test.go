@@ -676,7 +676,7 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		"[OK] context",
 		"[OK] repository",
 		"[OK] metadata",
-		"[SKIP] resource-server",
+		"[SKIP] managed-server",
 		"[SKIP] secret-store",
 		"Result: PASS",
 	}
@@ -725,7 +725,7 @@ func TestCheckReportsMetadataBundleAsAccessible(t *testing.T) {
 	}
 }
 
-func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
+func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
@@ -741,7 +741,7 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ResourceServer: &configdomain.ResourceServer{
+			ManagedServer: &configdomain.ManagedServer{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -765,7 +765,7 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check returned error: %v", err)
 	}
-	if !strings.Contains(output, "[WARN] resource-server") {
+	if !strings.Contains(output, "[WARN] managed-server") {
 		t.Fatalf("expected warn status for managed server probe, got %q", output)
 	}
 	if !strings.Contains(output, "Result: PASS") {
@@ -789,7 +789,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ResourceServer: &configdomain.ResourceServer{
+			ManagedServer: &configdomain.ManagedServer{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -816,8 +816,8 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	assertTypedCategory(t, err, faults.ValidationError)
 
-	if !strings.Contains(output, "[FAIL] resource-server") {
-		t.Fatalf("expected resource-server failure in output, got %q", output)
+	if !strings.Contains(output, "[FAIL] managed-server") {
+		t.Fatalf("expected managed-server failure in output, got %q", output)
 	}
 	if !strings.Contains(output, "[FAIL] secret-store") {
 		t.Fatalf("expected secret-store failure in output, got %q", output)
@@ -983,8 +983,8 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.Metadata.BaseDir != "/tmp/meta" {
 		t.Fatalf("expected metadata base-dir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
 	}
-	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
-		t.Fatal("expected resource-server configuration")
+	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
+		t.Fatal("expected managed-server configuration")
 	}
 	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select resource format (optional; remote-default keeps remote resource format)" {
 		t.Fatalf("expected optional resource format prompt, got %#v", prompter.selectPrompts)
@@ -1028,7 +1028,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	}
 }
 
-func TestCreateInteractivePromptFlowSupportsResourceServerProxy(t *testing.T) {
+func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{}
@@ -1055,11 +1055,11 @@ func TestCreateInteractivePromptFlowSupportsResourceServerProxy(t *testing.T) {
 			"custom-headers",
 		},
 		confirms: []bool{
-			false, // resource-server default headers
-			true,  // configure resource-server proxy
+			false, // managed-server default headers
+			true,  // configure managed-server proxy
 			true,  // configure proxy auth
 			false, // add another custom auth header
-			false, // configure resource-server tls
+			false, // configure managed-server tls
 			false, // configure secret-store
 			false, // configure preferences
 		},
@@ -1077,14 +1077,14 @@ func TestCreateInteractivePromptFlowSupportsResourceServerProxy(t *testing.T) {
 		t.Fatalf("create returned error: %v", err)
 	}
 
-	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
-		t.Fatal("expected resource-server configuration")
+	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
+		t.Fatal("expected managed-server configuration")
 	}
-	if service.createdContext.ResourceServer.HTTP.Proxy == nil {
-		t.Fatal("expected resource-server proxy configuration")
+	if service.createdContext.ManagedServer.HTTP.Proxy == nil {
+		t.Fatal("expected managed-server proxy configuration")
 	}
 
-	proxy := service.createdContext.ResourceServer.HTTP.Proxy
+	proxy := service.createdContext.ManagedServer.HTTP.Proxy
 	if proxy.HTTPURL != "http://proxy.example.com:3128" {
 		t.Fatalf("expected proxy http-url, got %q", proxy.HTTPURL)
 	}
@@ -1233,10 +1233,10 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 		confirms: []bool{
 			false, // git local auto-init
 			false, // configure git remote
-			false, // resource-server default headers
-			false, // configure resource-server proxy
+			false, // managed-server default headers
+			false, // configure managed-server proxy
 			false, // add another custom auth header
-			false, // resource-server tls
+			false, // managed-server tls
 			false, // configure secret-store
 			false, // configure preferences
 		},
@@ -1305,8 +1305,8 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 		},
 		confirms: []bool{
 			true,  // configure default headers
-			false, // configure resource-server proxy
-			false, // configure resource-server tls
+			false, // configure managed-server proxy
+			false, // configure managed-server tls
 			true,  // configure secret-store
 			true,  // configure file kdf
 			true,  // configure preferences
@@ -1336,26 +1336,26 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatJSON {
 		t.Fatalf("expected repository format json, got %q", service.createdContext.Repository.ResourceFormat)
 	}
-	if service.createdContext.ResourceServer == nil || service.createdContext.ResourceServer.HTTP == nil {
-		t.Fatal("expected resource-server http configuration")
+	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
+		t.Fatal("expected managed-server http configuration")
 	}
-	if service.createdContext.ResourceServer.HTTP.Auth == nil {
-		t.Fatal("expected resource-server auth configuration")
+	if service.createdContext.ManagedServer.HTTP.Auth == nil {
+		t.Fatal("expected managed-server auth configuration")
 	}
-	if service.createdContext.ResourceServer.HTTP.Auth.OAuth2 == nil {
-		t.Fatal("expected resource-server oauth2 configuration")
+	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
+		t.Fatal("expected managed-server oauth2 configuration")
 	}
-	if service.createdContext.ResourceServer.HTTP.Auth.BasicAuth != nil {
+	if service.createdContext.ManagedServer.HTTP.Auth.BasicAuth != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
-	if len(service.createdContext.ResourceServer.HTTP.Auth.CustomHeaders) != 0 {
+	if len(service.createdContext.ManagedServer.HTTP.Auth.CustomHeaders) != 0 {
 		t.Fatal("custom-headers auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ResourceServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
+	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
 		t.Fatalf(
 			"expected oauth2 grant-type default %q, got %q",
 			configdomain.OAuthClientCreds,
-			service.createdContext.ResourceServer.HTTP.Auth.OAuth2.GrantType,
+			service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType,
 		)
 	}
 

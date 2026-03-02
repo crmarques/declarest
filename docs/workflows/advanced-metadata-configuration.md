@@ -2,7 +2,7 @@
 
 This page is the deep-dive example workflow for modeling non-trivial APIs.
 
-It uses Keycloak metadata fixtures from `test/e2e/components/resource-server/keycloak/metadata/...` to demonstrate:
+It uses Keycloak metadata fixtures from `test/e2e/components/managed-server/keycloak/metadata/...` to demonstrate:
 
 - custom logical paths backed by different API endpoints
 - list filtering for mixed-type endpoints
@@ -24,7 +24,7 @@ Keycloak example:
 
 Inspired by:
 
-- `test/e2e/components/resource-server/keycloak/metadata/admin/realms/_/user-registry/_/metadata.json`
+- `test/e2e/components/managed-server/keycloak/metadata/admin/realms/_/user-registry/_/metadata.json`
 
 ### Metadata
 

@@ -12,7 +12,7 @@ reload_context_libs() {
     E2E_MANAGED_SERVER_PROXY_NO_PROXY \
     E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME \
     E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
-    E2E_RESOURCE_SERVER || true
+    E2E_MANAGED_SERVER || true
 
   source_e2e_lib "common"
   source_e2e_lib "context"
@@ -42,7 +42,7 @@ test_inserts_proxy_block_when_managed_server_proxy_enabled() {
   local context_file="${tmp}/contexts.yaml"
   write_context_fixture "${context_file}"
 
-  E2E_RESOURCE_SERVER='simple-api-server'
+  E2E_MANAGED_SERVER='simple-api-server'
   E2E_MANAGED_SERVER_PROXY='true'
   E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
   E2E_MANAGED_SERVER_PROXY_HTTPS_URL='https://proxy.example.com:3128'
@@ -50,7 +50,7 @@ test_inserts_proxy_block_when_managed_server_proxy_enabled() {
   E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME='proxy-user'
   E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD='proxy-pass'
 
-  e2e_context_insert_resource_server_proxy "${context_file}"
+  e2e_context_insert_managed_server_proxy "${context_file}"
 
   assert_file_contains "${context_file}" "proxy:"
   assert_file_contains "${context_file}" "http-url: 'http://proxy.example.com:3128'"
@@ -67,11 +67,11 @@ test_skips_proxy_block_when_managed_server_proxy_disabled() {
   local context_file="${tmp}/contexts.yaml"
   write_context_fixture "${context_file}"
 
-  E2E_RESOURCE_SERVER='simple-api-server'
+  E2E_MANAGED_SERVER='simple-api-server'
   E2E_MANAGED_SERVER_PROXY='false'
   E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
 
-  e2e_context_insert_resource_server_proxy "${context_file}"
+  e2e_context_insert_managed_server_proxy "${context_file}"
 
   assert_not_contains "$(cat "${context_file}")" "proxy:"
 }
@@ -83,12 +83,12 @@ test_rejects_proxy_enable_without_proxy_urls() {
   local context_file="${tmp}/contexts.yaml"
   write_context_fixture "${context_file}"
 
-  E2E_RESOURCE_SERVER='simple-api-server'
+  E2E_MANAGED_SERVER='simple-api-server'
   E2E_MANAGED_SERVER_PROXY='true'
 
   local output status
   set +e
-  output=$(e2e_context_insert_resource_server_proxy "${context_file}" 2>&1)
+  output=$(e2e_context_insert_managed_server_proxy "${context_file}" 2>&1)
   status=$?
   set -e
 

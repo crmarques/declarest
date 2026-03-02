@@ -153,15 +153,15 @@ case_repo_commit_setup_changes_if_git() {
 }
 
 case_repo_template_root() {
-  local component_name=${1:-${E2E_RESOURCE_SERVER:-}}
+  local component_name=${1:-${E2E_MANAGED_SERVER:-}}
   if [[ -z "${component_name}" || "${component_name}" == 'none' ]]; then
-    printf 'repo-template requested but no resource-server component is selected\n' >&2
+    printf 'repo-template requested but no managed-server component is selected\n' >&2
     return 1
   fi
 
-  local template_root="${E2E_DIR}/components/resource-server/${component_name}/repo-template"
+  local template_root="${E2E_DIR}/components/managed-server/${component_name}/repo-template"
   if [[ ! -d "${template_root}" ]]; then
-    printf 'resource-server repo-template not found: %s\n' "${template_root}" >&2
+    printf 'managed-server repo-template not found: %s\n' "${template_root}" >&2
     return 1
   fi
 
@@ -169,13 +169,13 @@ case_repo_template_root() {
 }
 
 case_component_metadata_root() {
-  local component_name=${1:-${E2E_RESOURCE_SERVER:-}}
+  local component_name=${1:-${E2E_MANAGED_SERVER:-}}
   if [[ -z "${component_name}" || "${component_name}" == 'none' ]]; then
-    printf 'metadata requested but no resource-server component is selected\n' >&2
+    printf 'metadata requested but no managed-server component is selected\n' >&2
     return 1
   fi
 
-  local metadata_root="${E2E_DIR}/components/resource-server/${component_name}/metadata"
+  local metadata_root="${E2E_DIR}/components/managed-server/${component_name}/metadata"
   if [[ -d "${metadata_root}" ]]; then
     printf '%s\n' "${metadata_root}"
     return 0

@@ -6,14 +6,14 @@ This page shows practical save/diff/apply flows, from one resource to larger col
 
 - `declarest` installed
 - an active context (`declarest config current`)
-- a reachable managed server (`declarest resource-server check`)
+- a reachable managed server (`declarest managed-server check`)
 
 ## 1. Confirm context and connectivity
 
 ```bash
 declarest config current
 declarest config check
-declarest resource-server check
+declarest managed-server check
 ```
 
 ## 2. Save one remote resource into the repository

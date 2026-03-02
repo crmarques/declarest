@@ -715,7 +715,7 @@ func runConfigCheck(command *cobra.Command, deps shared.CommandDependencies, cfg
 		},
 		checkRepository(command, deps, cfg),
 		checkMetadata(command, deps, cfg),
-		checkResourceServer(command, deps, cfg),
+		checkManagedServer(command, deps, cfg),
 		checkSecretStore(command, deps, cfg),
 	}
 
@@ -833,12 +833,12 @@ func checkMetadata(command *cobra.Command, deps shared.CommandDependencies, cfg 
 	return result
 }
 
-func checkResourceServer(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkManagedServer(command *cobra.Command, deps shared.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
-		Component: "resource-server",
+		Component: "managed-server",
 	}
 
-	if cfg.ResourceServer == nil {
+	if cfg.ManagedServer == nil {
 		result.Status = configCheckSkip
 		result.Details = "not configured"
 		return result

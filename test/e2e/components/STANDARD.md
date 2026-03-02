@@ -6,7 +6,7 @@ This document defines the component contract used by `test/e2e/run-e2e.sh`.
 
 Use this standard for all component groups:
 
-- `resource-server`
+- `managed-server`
 - `git-provider`
 - `secret-provider`
 - `repo-type`
@@ -45,7 +45,7 @@ Additional runtime files:
 All fields are required unless marked optional.
 
 ```bash
-COMPONENT_TYPE=resource-server
+COMPONENT_TYPE=managed-server
 COMPONENT_NAME=keycloak
 COMPONENT_CONTRACT_VERSION=1
 SUPPORTED_CONNECTIONS="local remote"
@@ -54,15 +54,15 @@ REQUIRES_DOCKER=true
 COMPONENT_RUNTIME_KIND=compose
 COMPONENT_DEPENDS_ON=""
 DESCRIPTION="Human-readable summary"
-# Required only for COMPONENT_TYPE=resource-server:
+# Required only for COMPONENT_TYPE=managed-server:
 SUPPORTED_SECURITY_FEATURES="oauth2 mtls"
-# Optional only for COMPONENT_TYPE=resource-server:
+# Optional only for COMPONENT_TYPE=managed-server:
 REQUIRED_SECURITY_FEATURES="oauth2"
 ```
 
 Field rules:
 
-- `COMPONENT_TYPE`: group key (`resource-server`, `git-provider`, `secret-provider`, `repo-type`).
+- `COMPONENT_TYPE`: group key (`managed-server`, `git-provider`, `secret-provider`, `repo-type`).
 - `COMPONENT_NAME`: stable selector name used by CLI flags.
 - `SUPPORTED_CONNECTIONS`: whitespace-separated values from `local remote`.
 - `DEFAULT_CONNECTION`: one value from `SUPPORTED_CONNECTIONS`.
@@ -76,8 +76,8 @@ Field rules:
   - wildcard by type: `<type>:*` (for example `git-provider:*`)
   - use empty string when no dependencies (`COMPONENT_DEPENDS_ON=""`).
 - `DESCRIPTION`: short operator-facing description.
-- `SUPPORTED_SECURITY_FEATURES` (`resource-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
-- `REQUIRED_SECURITY_FEATURES` (`resource-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because resource-server auth selection is one-of.
+- `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
+- `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because managed-server auth selection is one-of.
 - Runner selection uses `--managed-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-server-mtls` independently for mTLS.
 - Resource-server fixture metadata files (`*/_/metadata.json`) MUST include non-empty `resourceInfo.idFromAttribute` and `resourceInfo.aliasFromAttribute`.
 
@@ -115,7 +115,7 @@ Common exported variables:
 - `E2E_COMPONENT_DIR`, `E2E_COMPONENT_HOOK`
 - `E2E_COMPONENT_CONNECTION`
 - `E2E_COMPONENT_RUNTIME_KIND`, `E2E_COMPONENT_DEPENDS_ON`
-- `E2E_RESOURCE_SERVER_AUTH_TYPE`, `E2E_RESOURCE_SERVER_MTLS`
+- `E2E_MANAGED_SERVER_AUTH_TYPE`, `E2E_MANAGED_SERVER_MTLS`
 - `E2E_COMPONENT_STATE_FILE`
 - `E2E_COMPONENT_PROJECT_NAME` (compose project when applicable)
 - `E2E_COMPONENT_COMPOSE_FILE`, `E2E_COMPONENT_K8S_DIR`, `E2E_COMPONENT_K8S_LABEL_KEY`

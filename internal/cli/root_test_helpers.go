@@ -203,7 +203,7 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 	return config.Context{
 		Name:       name,
 		Repository: repositoryConfig,
-		ResourceServer: &config.ResourceServer{
+		ManagedServer: &config.ManagedServer{
 			HTTP: &config.HTTPServer{
 				BaseURL:     "https://api.example.invalid",
 				HealthCheck: resolveManagedServerHealthCheckForTestContext(name),

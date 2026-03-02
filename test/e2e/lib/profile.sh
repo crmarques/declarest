@@ -11,8 +11,8 @@ e2e_validate_profile_rules() {
     return 0
   fi
 
-  if [[ "${E2E_RESOURCE_SERVER_CONNECTION}" != 'local' && "${E2E_RESOURCE_SERVER}" != 'none' ]]; then
-    e2e_die 'manual profile is local-instantiable only; resource-server connection must be local'
+  if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+    e2e_die 'manual profile is local-instantiable only; managed-server connection must be local'
     return 1
   fi
 

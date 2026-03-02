@@ -18,7 +18,7 @@ declarest <group> <command> --help
 - `metadata` - inspect, infer, render, set, unset, and resolve metadata
 - `repo` - manage local repository state
 - `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, plus raw requests and template rendering
-- `resource-server` - inspect managed server connectivity and auth-derived values
+- `managed-server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
 ### Utility commands
@@ -180,13 +180,13 @@ declarest secret get /corporations/acme apiToken
 
 Use `secret detect --fix` plus `resource save --handle-secrets` for the safest onboarding flow.
 
-## `resource-server` command family
+## `managed-server` command family
 
 ```bash
-declarest resource-server check
-declarest resource-server get base-url
-declarest resource-server get token-url
-declarest resource-server get access-token
+declarest managed-server check
+declarest managed-server get base-url
+declarest managed-server get token-url
+declarest managed-server get access-token
 ```
 
 These commands are useful when debugging auth or connectivity independently from resource reconciliation.
@@ -195,7 +195,7 @@ These commands are useful when debugging auth or connectivity independently from
 
 - Prefer `-o json` or `-o yaml` for automation.
 - `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
-- `repo tree`, `secret get`, `resource-server get`, `resource-server check`, and completion/config-template commands are text-only outputs.
+- `repo tree`, `secret get`, `managed-server get`, `managed-server check`, and completion/config-template commands are text-only outputs.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.

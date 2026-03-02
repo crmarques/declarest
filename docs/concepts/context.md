@@ -1,6 +1,6 @@
 # Contexts
 
-A context is the combination of repository backend, resource server, secrets, and metadata overrides that the CLI resolves before running any workflow. Context catalogs keep those definitions in one place so the same GitOps stack can target multiple APIs without changing source files or environment variables.
+A context is the combination of repository backend, managed server, secrets, and metadata overrides that the CLI resolves before running any workflow. Context catalogs keep those definitions in one place so the same GitOps stack can target multiple APIs without changing source files or environment variables.
 
 ## Catalog layout and invariants
 
@@ -9,7 +9,7 @@ A context is the combination of repository backend, resource server, secrets, an
 - Context names MUST be unique, non-empty, and appear exactly once in the `contexts` list. Duplicate names fail validation before any CLI operation mutates remote state.
 - Each context object MUST include `repository` plus `managed-server`. Optional blocks are `secret-store`, `metadata`, and `preferences`.
 - The repository block MUST set exactly one of `git` or `filesystem` and may optionally declare `resource-format` (`json` or `yaml`).
-- The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`). `managed-server.http.health-check` is optional and defines the probe target used by `resource-server check`.
+- The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`). `managed-server.http.health-check` is optional and defines the probe target used by `managed-server check`.
 - `managed-server.http.proxy` MAY be configured. If present, it MUST define at least one of `http-url` or `https-url`. When proxy auth is set, both `username` and `password` are REQUIRED.
 - The optional `secret-store` block MUST define exactly one of `file` or `vault`. File-based stores require one of `key`, `key-file`, `passphrase`, or `passphrase-file`.
 - The optional `metadata` block MAY point to `base-dir` or `bundle`; at most one source is allowed. When both are unset, merge logic defaults to the repository base dir and `metadata.base-dir` SHOULD be omitted in persisted YAML when it matches that default.
