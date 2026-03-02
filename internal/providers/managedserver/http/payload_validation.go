@@ -317,7 +317,7 @@ func (g *HTTPManagedServerClient) resolveOpenAPISchemaForValidation(
 ) (any, map[string]any, error) {
 	if strings.TrimSpace(g.openAPISource) == "" {
 		return nil, nil, faults.NewValidationError(
-			"validate.schemaRef requires resource-server.http.openapi to be configured",
+			"validate.schemaRef requires managed-server.http.openapi to be configured",
 			nil,
 		)
 	}

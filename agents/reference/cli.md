@@ -121,7 +121,7 @@ Interactive config commands:
 4. `config show` SHOULD support context selection when `--context` is omitted.
 5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
 6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
-7. Interactive `config add` SHOULD treat `resource-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
+7. Interactive `config add` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
 8. For interactive `config add`, repository `resource-format` SHOULD be optional with an explicit remote-default selection.
 9. `config edit` SHOULD open the context catalog in an editor, validate the edited YAML on save/exit, and persist only validated changes.
 10. `config edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
@@ -212,14 +212,14 @@ Interactive config commands:
 73. `resource save` with wildcard path segments and payload input (`--payload <path|->` or stdin) MUST fail with `ValidationError`.
 74. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 75. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
-76. Interactive `config add` MUST support full context-schema authoring: prompt required fields for repository and resource-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth) by collecting only the selected option's fields.
+76. Interactive `config add` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth vs custom-headers) by collecting only the selected option's fields.
 77. `config print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
 78. `repo push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
 79. `repo clean` MUST discard uncommitted tracked and untracked changes for git repositories and MUST succeed as a no-op for filesystem repositories.
 80. `repo commit` MUST accept `--message`, `-m`, fail with `ValidationError` when the active repository type is `filesystem`, and create at most one local git commit from current worktree changes.
 81. `repo commit` on a clean git worktree MUST succeed as a no-op and report that no commit was created.
 82. `repo status --verbose` (global `--verbose`) MUST include deterministic local worktree change details for git repositories.
-79. Context-catalog mutations (`config add|edit|update|validate`) MUST fail validation when `resource-server` is omitted.
+79. Context-catalog mutations (`config add|edit|update|validate`) MUST fail validation when `managed-server` is omitted.
 80. Interactive `config add` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
 81. `repo history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repo tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
@@ -231,9 +231,9 @@ Interactive config commands:
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repo status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
-90. `resource-server get base-url` MUST print the active context `resource-server.http.base-url` and fail with `ValidationError` when `resource-server.http` is not configured.
-91. `resource-server get token-url` MUST print the active context `resource-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
-92. `resource-server get access-token` MUST fetch and print the OAuth2 access token from `resource-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
+90. `resource-server get base-url` MUST print the active context `managed-server.http.base-url` and fail with `ValidationError` when `managed-server.http` is not configured.
+91. `resource-server get token-url` MUST print the active context `managed-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
+92. `resource-server get access-token` MUST fetch and print the OAuth2 access token from `managed-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
 93. `resource-server check` MUST probe resource-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
 94. Commands with plain-text-only output (`secret get`, `repo tree`, `resource-server get *`, `resource-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
 95. `config show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
@@ -298,10 +298,10 @@ Interactive config commands:
 24. `config add` receives both positional context name and `--context` with different values.
 25. `config print-template` receives positional arguments.
 26. `repo push` is invoked for a `filesystem` repository context.
-27. Context-catalog mutation input omits required `resource-server`.
+27. Context-catalog mutation input omits required `managed-server`.
 28. `secret get --key <key>` is invoked without `--path`.
 29. `secret get <path>:` uses an empty key segment.
-30. `resource-server get token-url` or `resource-server get access-token` is invoked when the active context resource-server auth mode is not OAuth2.
+30. `resource-server get token-url` or `resource-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
 31. `resource save|delete` receives both `--message` and `--message-override`.
 32. `resource save|delete` auto-commit is attempted while the git worktree already has unrelated uncommitted changes.
 
@@ -326,14 +326,14 @@ Interactive config commands:
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/rea`) returns canonical concrete collection candidates (for example `/admin/realms/`) when local/remote/OpenAPI context provides them and suppresses template placeholder segments (`{...}`) from completion output.
 19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 20. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
-21. `config add` with resource-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth`, `bearer-token`, or `custom-header` fields.
+21. `config add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
 22. `config print-template` works without a configured current context and still renders the full template.
 23. `repo status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
 24. `repo clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
 24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
-26. `resource-server get token-url` or `resource-server get access-token` is invoked for a context configured with `basic-auth`, `bearer-token`, or `custom-header` and fails with `ValidationError`.
+26. `resource-server get token-url` or `resource-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
 27. `resource-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
 28. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
 
@@ -423,11 +423,11 @@ Interactive config commands:
 74. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
 75. `declarest config add dev` skips context-name prompt and starts interactive prompts at repository settings.
 76. `declarest config add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
-77. `declarest config add full` can populate resource-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
+77. `declarest config add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
 78. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
 79. `declarest repo push` fails with `ValidationError` when the active context repository type is `filesystem`.
 80. `declarest repo status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
-81. `declarest config add` interactive flow always prompts `resource-server` fields and allows `resource-format` to remain unset via remote-default selection.
+81. `declarest config add` interactive flow always prompts `managed-server` fields and allows `resource-format` to remain unset via remote-default selection.
 82. `declarest config edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
 83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
 84. `declarest resource copy /customers/acme /customers/acme-copy --overrides name=acme-copy,spec.tier=gold` copies one repository resource and applies dotted overrides before saving.
@@ -441,7 +441,7 @@ Interactive config commands:
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.
-87. `declarest resource-server get base-url` prints the active context resource-server HTTP base URL.
-88. `declarest resource-server get token-url` prints the active context resource-server OAuth2 token URL.
+87. `declarest resource-server get base-url` prints the active context managed-server HTTP base URL.
+88. `declarest resource-server get token-url` prints the active context managed-server OAuth2 token URL.
 89. `declarest resource-server get access-token` prints only the OAuth2 access token for the active context managed server.
 90. `declarest resource-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.

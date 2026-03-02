@@ -95,7 +95,7 @@ paths: {}
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 					},
 				},
@@ -166,7 +166,7 @@ distribution:
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 						TLS: &config.TLS{InsecureSkipVerify: true},
 					},
@@ -236,7 +236,7 @@ distribution:
 						BaseURL: "https://example.com",
 						OpenAPI: contextOpenAPIPath,
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 					},
 				},
@@ -282,7 +282,7 @@ distribution:
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 					},
 				},

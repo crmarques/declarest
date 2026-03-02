@@ -11,7 +11,7 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 }
 
 {
-  printf 'resource-server:\n'
+  printf 'managed-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${KEYCLOAK_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then

@@ -10,7 +10,7 @@ Use `declarest config print-template` to generate the full commented template, a
 - Override catalog path with `DECLAREST_CONTEXTS_FILE`
 - YAML keys use `kebab-case`
 - Unknown keys fail validation (strict decode)
-- `resource-server` (managed server settings) is required in every context
+- `managed-server` (managed server settings) is required in every context
 
 ## Top-level catalog shape
 
@@ -20,12 +20,14 @@ contexts:
     repository:
       filesystem:
         base-dir: /srv/declarest/prod
-    resource-server:
+    managed-server:
       http:
         base-url: https://api.example.com
         auth:
-          bearer-token:
-            token: ${API_TOKEN}
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: ${API_TOKEN}
 current-ctx: prod
 ```
 
@@ -40,7 +42,7 @@ Each context may include:
 
 - `name` (required)
 - `repository` (required)
-- `resource-server` (required managed server settings)
+- `managed-server` (required managed server settings)
 - `secret-store` (optional)
 - `metadata` (optional)
 - `preferences` (optional free-form map)
@@ -145,12 +147,12 @@ tls:
   insecure-skip-verify: false
 ```
 
-## Managed server configuration (`resource-server`)
+## Managed server configuration (`managed-server`)
 
-`resource-server.http` is required.
+`managed-server.http` is required.
 
 ```yaml
-resource-server:
+managed-server:
   http:
     base-url: https://api.example.com
     openapi: /path/to/openapi.yaml
@@ -169,14 +171,13 @@ resource-server:
       insecure-skip-verify: false
 ```
 
-### `resource-server.http.auth` (required one-of)
+### `managed-server.http.auth` (required one-of)
 
 Exactly one auth method must be configured:
 
 - `oauth2`
 - `basic-auth`
-- `bearer-token`
-- `custom-header`
+- `custom-headers`
 
 #### OAuth2 example
 
@@ -203,27 +204,21 @@ auth:
     password: ${API_PASSWORD}
 ```
 
-#### Bearer token example
+#### Custom headers auth example
 
 ```yaml
 auth:
-  bearer-token:
-    token: ${API_TOKEN}
+  custom-headers:
+    - header: Authorization
+      prefix: Bearer
+      value: ${API_TOKEN}
+    - header: X-Tenant
+      value: acme
 ```
 
-#### Custom header auth example
+Each entry requires `header` and `value`; `prefix` is optional. When set, DeclaREST sends `<prefix> <value>` in the configured header.
 
-```yaml
-auth:
-  custom-header:
-    header: Authorization
-    prefix: Bearer
-    value: ${API_TOKEN}
-```
-
-`prefix` is optional. When set, DeclaREST sends `<prefix> <value>` in the configured header.
-
-### OpenAPI (`resource-server.http.openapi`)
+### OpenAPI (`managed-server.http.openapi`)
 
 Optional but recommended.
 
@@ -240,7 +235,7 @@ When omitted, and `metadata.bundle` is configured, DeclaREST attempts OpenAPI fa
 - `bundle.yaml` `declarest.openapi` (URL or relative path inside the bundle)
 - bundled `openapi.yaml` at bundle root (peer of `bundle.yaml`)
 
-Precedence is deterministic: context `resource-server.http.openapi` overrides bundle-provided OpenAPI sources.
+Precedence is deterministic: context `managed-server.http.openapi` overrides bundle-provided OpenAPI sources.
 
 ## Secret store configuration (`secret-store`, optional)
 
@@ -318,7 +313,7 @@ When both metadata sources are omitted, `metadata.base-dir` defaults to the sele
 Use `metadata.base-dir` when you want metadata files stored separately from resource payload files.
 Use `metadata.bundle` when you want metadata definitions to be consumed from a bundle archive and cached under `~/.declarest/metadata-bundles/`.
 
-Bundle OpenAPI hints (when present) can also supply `resource-server.http.openapi` automatically if context OpenAPI is not set.
+Bundle OpenAPI hints (when present) can also supply `managed-server.http.openapi` automatically if context OpenAPI is not set.
 
 ## Preferences (optional)
 
@@ -353,7 +348,7 @@ contexts:
               user: git
               private-key-file: /home/declarest/.ssh/id_ed25519
               known-hosts-file: /home/declarest/.ssh/known_hosts
-    resource-server:
+    managed-server:
       http:
         base-url: https://sso.example.com/admin
         openapi: /srv/declarest/openapi/keycloak-admin.json
@@ -417,7 +412,7 @@ The canonical override keys are:
 - `repository.resource-format`
 - `repository.git.local.base-dir`
 - `repository.filesystem.base-dir`
-- `resource-server.http.base-url`
+- `managed-server.http.base-url`
 - `metadata.base-dir`
 - `metadata.bundle`
 
@@ -425,7 +420,7 @@ Example:
 
 ```bash
 declarest config resolve \
-  --set resource-server.http.base-url=https://staging-api.example.com \
+  --set managed-server.http.base-url=https://staging-api.example.com \
   --set metadata.bundle=keycloak-bundle:0.0.1
 ```
 
@@ -445,8 +440,8 @@ declarest config list
 ## Failure modes to expect (and validate early)
 
 - both `repository.git` and `repository.filesystem` set
-- missing `resource-server`
-- missing/ambiguous `resource-server.http.auth` method
+- missing `managed-server`
+- missing/ambiguous `managed-server.http.auth` method
 - unknown YAML key (strict decoding)
 - `current-ctx` points to a non-existent context name
 - invalid secret-store one-of configuration

@@ -198,7 +198,7 @@ func TestResourceServerGet(t *testing.T) {
 
 		deps := testDeps()
 		deps.ManagedServerClient = &testManagedServerClient{
-			tokenErr: faults.NewTypedError(faults.ValidationError, "resource-server.http.auth.oauth2 is not configured", nil),
+			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil),
 		}
 
 		_, err := executeForTest(deps, "", "resource-server", "get", "access-token")
@@ -294,7 +294,7 @@ func TestOutputPolicyValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "resource-server:") {
+		if !strings.Contains(output, "managed-server:") {
 			t.Fatalf("expected yaml context output, got %q", output)
 		}
 	})

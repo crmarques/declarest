@@ -38,12 +38,14 @@ contexts:
       git:
         local:
           base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 current-ctx: git
 `))
 	if err != nil {
@@ -73,12 +75,14 @@ contexts:
         local:
           base-dir: /tmp/repo
           auto-init: false
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 current-ctx: git
 `))
 	if err != nil {
@@ -194,7 +198,7 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 						Proxy: &config.HTTPProxy{},
 					},
@@ -210,7 +214,7 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
-							BearerToken: &config.BearerTokenAuth{Token: "token"},
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 						},
 						Proxy: &config.HTTPProxy{
 							HTTPURL: "http://proxy.example.com:3128",
@@ -731,12 +735,14 @@ contexts:
     repository:
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
     metadata:
       bundle: keycloak-bundle:0.0.1
 current-ctx: dev
@@ -794,16 +800,16 @@ func TestResolveContextOverrideSupportsResourceServerWhenConfigured(t *testing.T
 	contextService := NewFileContextService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
-		Overrides: map[string]string{"resource-server.http.base-url": "https://override.example.com"},
+		Overrides: map[string]string{"managed-server.http.base-url": "https://override.example.com"},
 	})
 	if err != nil {
-		t.Fatalf("expected resource-server override to succeed, got %v", err)
+		t.Fatalf("expected managed-server override to succeed, got %v", err)
 	}
 	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil {
-		t.Fatalf("expected resource-server configuration, got %#v", resolved.ResourceServer)
+		t.Fatalf("expected managed-server configuration, got %#v", resolved.ResourceServer)
 	}
 	if resolved.ResourceServer.HTTP.BaseURL != "https://override.example.com" {
-		t.Fatalf("expected resource-server base-url override, got %q", resolved.ResourceServer.HTTP.BaseURL)
+		t.Fatalf("expected managed-server base-url override, got %q", resolved.ResourceServer.HTTP.BaseURL)
 	}
 }
 
@@ -819,19 +825,19 @@ func TestResolveContextOverrideSupportsResourceServerProxyWhenConfigured(t *test
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"resource-server.http.proxy.http-url":      "http://proxy.example.com:3128",
-			"resource-server.http.proxy.https-url":     "https://proxy.example.com:3128",
-			"resource-server.http.proxy.no-proxy":      "localhost,127.0.0.1",
-			"resource-server.http.proxy.auth.username": "proxy-user",
-			"resource-server.http.proxy.auth.password": "proxy-pass",
+			"managed-server.http.proxy.http-url":      "http://proxy.example.com:3128",
+			"managed-server.http.proxy.https-url":     "https://proxy.example.com:3128",
+			"managed-server.http.proxy.no-proxy":      "localhost,127.0.0.1",
+			"managed-server.http.proxy.auth.username": "proxy-user",
+			"managed-server.http.proxy.auth.password": "proxy-pass",
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected resource-server proxy overrides to succeed, got %v", err)
+		t.Fatalf("expected managed-server proxy overrides to succeed, got %v", err)
 	}
 
 	if resolved.ResourceServer == nil || resolved.ResourceServer.HTTP == nil || resolved.ResourceServer.HTTP.Proxy == nil {
-		t.Fatalf("expected resource-server proxy configuration, got %#v", resolved.ResourceServer)
+		t.Fatalf("expected managed-server proxy configuration, got %#v", resolved.ResourceServer)
 	}
 	if resolved.ResourceServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
 		t.Fatalf("expected proxy http-url override, got %q", resolved.ResourceServer.HTTP.Proxy.HTTPURL)
@@ -949,7 +955,7 @@ func validResourceServer() *config.ResourceServer {
 		HTTP: &config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "secret-token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "secret-token"}},
 			},
 		},
 	}
@@ -962,12 +968,14 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
     secret-store:
       file:
         path: /tmp/secrets.json
@@ -984,12 +992,14 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 
   - name: git
     repository:
@@ -997,36 +1007,42 @@ contexts:
       git:
         local:
           base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 
   - name: http
     repository:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 
   - name: file-secret
     repository:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
     secret-store:
       file:
         path: /tmp/secrets.json
@@ -1037,12 +1053,14 @@ contexts:
       resource-format: json
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
     secret-store:
       vault:
         address: https://vault.example.com
@@ -1058,11 +1076,13 @@ contexts:
     repository:
       filesystem:
         base-dir: /tmp/repo
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: secret-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
 current-ctx: dev
 `

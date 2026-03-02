@@ -378,11 +378,11 @@ Inputs:
 
 Execution:
 1. The runner copies each selected component's `openapi.yaml` to the run directory before context hooks execute.
-2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed servers, `resource-server.http.openapi`) pointing at the run-scoped spec file.
+2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed servers, `managed-server.http.openapi`) pointing at the run-scoped spec file.
 3. `e2e_context_build` aggregates fragments, producing a context YAML that references the copied spec.
 
 Expected outputs:
-1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `resource-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
+1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
 2. `declarest config show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `metadata infer --openapi`.
 
 Failure expectation:
@@ -430,7 +430,7 @@ Failure expectation:
 2. Step 4 fails with `ValidationError` because commit-message flags are mutually exclusive.
 
 ### Example 19: Managed-Server Proxy Context Injection
-Goal: ensure E2E proxy selection writes a complete `resource-server.http.proxy` block in generated contexts.
+Goal: ensure E2E proxy selection writes a complete `managed-server.http.proxy` block in generated contexts.
 
 Inputs:
 1. `run-e2e.sh --managed-server-proxy true`.
@@ -443,7 +443,7 @@ Execution:
 3. Repeat with `--managed-server-proxy true` and no proxy URL env vars.
 
 Expected outputs:
-1. Step 2 context contains `resource-server.http.proxy` with configured `http-url`/`https-url`, optional `no-proxy`, and optional `auth` fields.
+1. Step 2 context contains `managed-server.http.proxy` with configured `http-url`/`https-url`, optional `no-proxy`, and optional `auth` fields.
 2. Resource-server auth and other context blocks remain unchanged.
 
 Failure expectation:

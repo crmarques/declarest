@@ -139,7 +139,7 @@ declarest config check
 Useful for environment-specific testing without editing stored config:
 
 ```bash
-declarest config resolve --set resource-server.http.base-url=https://staging-api.example.com
+declarest config resolve --set managed-server.http.base-url=https://staging-api.example.com
 ```
 
 ## `repo` command family (git/filesystem backends)

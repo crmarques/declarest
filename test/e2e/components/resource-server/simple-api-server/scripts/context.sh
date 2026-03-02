@@ -40,17 +40,17 @@ case "${selected_auth_type}" in
     fi
     ;;
   custom-header)
-    printf 'simple-api-server does not support resource-server auth-type custom-header\n' >&2
+    printf 'simple-api-server does not support managed-server auth-type custom-header\n' >&2
     exit 1
     ;;
   *)
-    printf 'invalid resource-server auth-type for simple-api-server: %s\n' "${selected_auth_type}" >&2
+    printf 'invalid managed-server auth-type for simple-api-server: %s\n' "${selected_auth_type}" >&2
     exit 1
     ;;
 esac
 
 {
-  printf 'resource-server:\n'
+  printf 'managed-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
@@ -88,7 +88,9 @@ esac
     printf '        username: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME}"
     printf '        password: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD}"
   else
-    printf '      bearer-token:\n'
-    printf '        token: simple-api-oauth2-disabled\n'
+    printf '      custom-headers:\n'
+    printf '        - header: Authorization\n'
+    printf '          prefix: Bearer\n'
+    printf '          value: simple-api-oauth2-disabled\n'
   fi
 } >"${fragment_file}"

@@ -141,7 +141,7 @@ func (g *HTTPManagedServerClient) newRequest(ctx context.Context, spec metadata.
 
 func (g *HTTPManagedServerClient) resolveRequestURL(requestPath string, query map[string]string) (string, error) {
 	if parsed, err := url.Parse(requestPath); err == nil && parsed.Scheme != "" {
-		return "", faults.NewValidationError("operation path must be relative to resource-server.http.base-url", nil)
+		return "", faults.NewValidationError("operation path must be relative to managed-server.http.base-url", nil)
 	}
 
 	target := *g.baseURL

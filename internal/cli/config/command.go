@@ -514,7 +514,7 @@ func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 		Example: strings.Join([]string{
 			"  declarest config resolve",
 			"  declarest config resolve --context prod",
-			"  declarest config resolve --set resource-server.http.base-url=https://api.example.com",
+			"  declarest config resolve --set managed-server.http.base-url=https://api.example.com",
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {

@@ -196,7 +196,7 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 	}
 	if name == "bearer" {
 		resourceServerAuth = &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "bearer-token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "bearer-token"}},
 		}
 	}
 
@@ -730,7 +730,7 @@ func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error
 		return "", s.tokenErr
 	}
 	if s.accessToken == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "resource-server.http.auth.oauth2 is not configured", nil)
+		return "", faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil)
 	}
 	return s.accessToken, nil
 }

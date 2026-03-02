@@ -18,7 +18,7 @@ Use `config resolve --set` to preview runtime overrides.
 
 ```bash
 declarest config resolve \
-  --set resource-server.http.base-url=https://staging-api.example.com \
+  --set managed-server.http.base-url=https://staging-api.example.com \
   --set repository.resource-format=yaml
 ```
 

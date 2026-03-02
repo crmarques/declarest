@@ -59,7 +59,7 @@ func newGetBaseURLCommand(deps shared.CommandDependencies) *cobra.Command {
 
 			baseURL := strings.TrimSpace(httpConfig.BaseURL)
 			if baseURL == "" {
-				return shared.ValidationError("resource-server.http.base-url is not configured", nil)
+				return shared.ValidationError("managed-server.http.base-url is not configured", nil)
 			}
 			_, err = io.WriteString(command.OutOrStdout(), baseURL+"\n")
 			return err
@@ -79,11 +79,11 @@ func newGetTokenURLCommand(deps shared.CommandDependencies) *cobra.Command {
 			}
 
 			if httpConfig.Auth == nil || httpConfig.Auth.OAuth2 == nil {
-				return shared.ValidationError("resource-server.http.auth.oauth2 is not configured", nil)
+				return shared.ValidationError("managed-server.http.auth.oauth2 is not configured", nil)
 			}
 			tokenURL := strings.TrimSpace(httpConfig.Auth.OAuth2.TokenURL)
 			if tokenURL == "" {
-				return shared.ValidationError("resource-server.http.auth.oauth2.token-url is not configured", nil)
+				return shared.ValidationError("managed-server.http.auth.oauth2.token-url is not configured", nil)
 			}
 			_, err = io.WriteString(command.OutOrStdout(), tokenURL+"\n")
 			return err
@@ -105,7 +105,7 @@ func newGetAccessTokenCommand(deps shared.CommandDependencies) *cobra.Command {
 			provider, ok := managedServerClient.(managedserverdomain.AccessTokenProvider)
 			if !ok {
 				return shared.ValidationError(
-					"resource-server get access-token requires resource-server.http.auth.oauth2 configuration",
+					"resource-server get access-token requires managed-server.http.auth.oauth2 configuration",
 					nil,
 				)
 			}
@@ -134,7 +134,7 @@ func resolveHTTPServerConfig(ctx context.Context, deps shared.CommandDependencie
 		return configdomain.HTTPServer{}, err
 	}
 	if resolvedContext.ResourceServer == nil || resolvedContext.ResourceServer.HTTP == nil {
-		return configdomain.HTTPServer{}, shared.ValidationError("resource-server.http is not configured", nil)
+		return configdomain.HTTPServer{}, shared.ValidationError("managed-server.http is not configured", nil)
 	}
 
 	return *resolvedContext.ResourceServer.HTTP, nil

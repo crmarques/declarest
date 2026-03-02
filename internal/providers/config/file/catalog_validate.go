@@ -167,49 +167,46 @@ func validateRepository(repository config.Repository) error {
 
 func validateResourceServer(resourceServer *config.ResourceServer) error {
 	if resourceServer == nil {
-		return faults.NewValidationError("resource-server is required", nil)
+		return faults.NewValidationError("managed-server is required", nil)
 	}
 	if resourceServer.HTTP == nil {
-		return faults.NewValidationError("resource-server must define http", nil)
+		return faults.NewValidationError("managed-server must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("resource-server.http.base-url is required", nil)
+		return faults.NewValidationError("managed-server.http.base-url is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
-		return faults.NewValidationError("resource-server.http.auth is required", nil)
+		return faults.NewValidationError("managed-server.http.auth is required", nil)
 	}
 
 	if countSet(
 		resourceServer.HTTP.Auth.OAuth2 != nil,
 		resourceServer.HTTP.Auth.BasicAuth != nil,
-		resourceServer.HTTP.Auth.BearerToken != nil,
-		resourceServer.HTTP.Auth.CustomHeader != nil,
+		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
 	) != 1 {
-		return faults.NewValidationError("resource-server.http.auth must define exactly one of oauth2, basic-auth, bearer-token, custom-header", nil)
+		return faults.NewValidationError("managed-server.http.auth must define exactly one of oauth2, basic-auth, custom-headers", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return faults.NewValidationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return faults.NewValidationError("managed-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 	}
 
 	if resourceServer.HTTP.Auth.BasicAuth != nil {
 		basic := resourceServer.HTTP.Auth.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return faults.NewValidationError("resource-server.http.auth.basic-auth requires username and password", nil)
+			return faults.NewValidationError("managed-server.http.auth.basic-auth requires username and password", nil)
 		}
 	}
 
-	if resourceServer.HTTP.Auth.BearerToken != nil && resourceServer.HTTP.Auth.BearerToken.Token == "" {
-		return faults.NewValidationError("resource-server.http.auth.bearer-token.token is required", nil)
-	}
-
-	if resourceServer.HTTP.Auth.CustomHeader != nil {
-		head := resourceServer.HTTP.Auth.CustomHeader
+	for idx, head := range resourceServer.HTTP.Auth.CustomHeaders {
 		if head.Header == "" || head.Value == "" {
-			return faults.NewValidationError("resource-server.http.auth.custom-header requires header and value", nil)
+			return faults.NewValidationError(
+				fmt.Sprintf("managed-server.http.auth.custom-headers[%d] requires header and value", idx),
+				nil,
+			)
 		}
 	}
 
@@ -229,24 +226,24 @@ func validateResourceServerProxy(proxy *config.HTTPProxy) error {
 	httpsURL := strings.TrimSpace(proxy.HTTPSURL)
 
 	if httpURL == "" && httpsURL == "" {
-		return faults.NewValidationError("resource-server.http.proxy must define at least one of http-url or https-url", nil)
+		return faults.NewValidationError("managed-server.http.proxy must define at least one of http-url or https-url", nil)
 	}
 
 	if httpURL != "" {
-		if err := validateResourceServerProxyURL("resource-server.http.proxy.http-url", httpURL); err != nil {
+		if err := validateResourceServerProxyURL("managed-server.http.proxy.http-url", httpURL); err != nil {
 			return err
 		}
 	}
 
 	if httpsURL != "" {
-		if err := validateResourceServerProxyURL("resource-server.http.proxy.https-url", httpsURL); err != nil {
+		if err := validateResourceServerProxyURL("managed-server.http.proxy.https-url", httpsURL); err != nil {
 			return err
 		}
 	}
 
 	if proxy.Auth != nil {
 		if strings.TrimSpace(proxy.Auth.Username) == "" || strings.TrimSpace(proxy.Auth.Password) == "" {
-			return faults.NewValidationError("resource-server.http.proxy.auth requires username and password", nil)
+			return faults.NewValidationError("managed-server.http.proxy.auth requires username and password", nil)
 		}
 	}
 
@@ -336,38 +333,38 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override repository.filesystem.base-dir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "resource-server.http.base-url":
+		case "managed-server.http.base-url":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.base-url requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.base-url requires managed-server.http to be configured", nil)
 			}
 			cfg.ResourceServer.HTTP.BaseURL = value
-		case "resource-server.http.proxy.http-url":
+		case "managed-server.http.proxy.http-url":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.http-url requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.http-url requires managed-server.http to be configured", nil)
 			}
 			if cfg.ResourceServer.HTTP.Proxy == nil {
 				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ResourceServer.HTTP.Proxy.HTTPURL = value
-		case "resource-server.http.proxy.https-url":
+		case "managed-server.http.proxy.https-url":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.https-url requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.https-url requires managed-server.http to be configured", nil)
 			}
 			if cfg.ResourceServer.HTTP.Proxy == nil {
 				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ResourceServer.HTTP.Proxy.HTTPSURL = value
-		case "resource-server.http.proxy.no-proxy":
+		case "managed-server.http.proxy.no-proxy":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.no-proxy requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.no-proxy requires managed-server.http to be configured", nil)
 			}
 			if cfg.ResourceServer.HTTP.Proxy == nil {
 				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ResourceServer.HTTP.Proxy.NoProxy = value
-		case "resource-server.http.proxy.auth.username":
+		case "managed-server.http.proxy.auth.username":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.auth.username requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.username requires managed-server.http to be configured", nil)
 			}
 			if cfg.ResourceServer.HTTP.Proxy == nil {
 				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -376,9 +373,9 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.ResourceServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
 			cfg.ResourceServer.HTTP.Proxy.Auth.Username = value
-		case "resource-server.http.proxy.auth.password":
+		case "managed-server.http.proxy.auth.password":
 			if cfg.ResourceServer == nil || cfg.ResourceServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override resource-server.http.proxy.auth.password requires resource-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.password requires managed-server.http to be configured", nil)
 			}
 			if cfg.ResourceServer.HTTP.Proxy == nil {
 				cfg.ResourceServer.HTTP.Proxy = &config.HTTPProxy{}

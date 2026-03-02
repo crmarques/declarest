@@ -85,22 +85,26 @@ contexts:
     repository:
       filesystem:
         base-dir: ` + devRepo + `
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: dev-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: dev-token
   - name: prod
     repository:
       filesystem:
         base-dir: ` + prodRepo + `
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: prod-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: prod-token
 current-ctx: dev
 `)
 	if err := os.WriteFile(path, contextCatalog, 0o600); err != nil {
@@ -141,12 +145,14 @@ func TestNewSessionAllowsRemoteOnlyContextWithoutRepository(t *testing.T) {
 	contextCatalog := []byte(`
 contexts:
   - name: remote-only
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: dev-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: dev-token
     metadata:
       base-dir: ` + metadataDir + `
 current-ctx: remote-only
@@ -208,12 +214,14 @@ contexts:
     repository:
       filesystem:
         base-dir: ` + filepath.Join(tempDir, "repo") + `
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         auth:
-          bearer-token:
-            token: dev-token
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: dev-token
     metadata:
       bundle: ` + bundlePath + `
 current-ctx: bundled
@@ -233,7 +241,7 @@ current-ctx: bundled
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
 	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server when resource-server is configured")
+		t.Fatal("expected managed server when managed-server is configured")
 	}
 	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {

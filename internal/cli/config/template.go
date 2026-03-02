@@ -49,8 +49,8 @@ contexts:
       # filesystem:
       #   base-dir: /path/to/repository
 
-    # Required resource-server.
-    resource-server:
+    # Required managed-server.
+    managed-server:
       http:
         base-url: https://example.com/api
         # openapi: /path/to/openapi.yaml
@@ -74,8 +74,10 @@ contexts:
 
         # Mutually exclusive: choose exactly one auth method.
         auth:
-          bearer-token:
-            token: change-me
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: change-me
           # oauth2:
           #   token-url: https://example.com/oauth/token
           #   grant-type: client_credentials
@@ -88,10 +90,9 @@ contexts:
           # basic-auth:
           #   username: change-me
           #   password: change-me
-          # custom-header:
-          #   header: Authorization
-          #   prefix: Bearer
-          #   value: change-me
+          # custom-headers:
+          #   - header: X-API-Key
+          #     value: change-me
 
         # Optional TLS.
         # tls:

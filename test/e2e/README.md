@@ -59,7 +59,7 @@ Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and resource-server fixture metadata rules) and exit without running test cases.
 When `--managed-server-auth-type` is omitted, the selected resource-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each resource-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
-When `--managed-server-proxy true`, generated contexts include `resource-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
+When `--managed-server-proxy true`, generated contexts include `managed-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
 `--metadata bundle` uses shorthand `metadata.bundle` mappings for supported resource-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `resource-server.http.openapi` stays unset.
 `--metadata local-dir` uses the selected resource-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
@@ -74,9 +74,9 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `resource-server.http.proxy.http-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `resource-server.http.proxy.https-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `resource-server.http.proxy.no-proxy` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `managed-server.http.proxy.http-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `managed-server.http.proxy.https-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `managed-server.http.proxy.no-proxy` value used when `--managed-server-proxy true`
 - `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME`: optional proxy auth username used when `--managed-server-proxy true`
 - `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`: optional proxy auth password used when `--managed-server-proxy true`
 

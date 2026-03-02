@@ -29,11 +29,11 @@ Define the canonical context catalog schema, file location, validation rules, an
 12. `metadata` MUST define at most one source: `base-dir` or `bundle`.
 13. `metadata.base-dir` MUST default to the selected repository base-dir when both metadata sources are unset.
 14. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
-15. Every context MUST define `resource-server.http` with one configured auth mode.
+15. Every context MUST define `managed-server.http` with one configured auth mode.
 16. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
-18. When `resource-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-19. When `resource-server.http.proxy` is configured, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
+18. When `managed-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
+19. When `managed-server.http.proxy` is configured, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -44,7 +44,7 @@ Top-level catalog fields:
 Per-context fields:
 1. `name`.
 2. `repository`.
-3. required `resource-server`.
+3. required `managed-server`.
 4. optional `secret-store`.
 5. optional `metadata` (omit when equivalent to default repository base-dir behavior).
 6. optional `preferences`.
@@ -54,13 +54,14 @@ Repository one-of contract:
 2. `repository.resource-format` allowed values: `json` or `yaml`.
 
 Resource server auth one-of contract:
-1. Exactly one of `oauth2`, `basic-auth`, `bearer-token`, `custom-header` MUST be set under `resource-server.http.auth`.
-2. `resource-server.http.auth.custom-header` MUST define `header` and `value`; it MAY define `prefix`, which is prepended as `<prefix> <value>`.
+1. Exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be set under `managed-server.http.auth`.
+2. `managed-server.http.auth.custom-headers` MUST contain at least one entry.
+3. Each `managed-server.http.auth.custom-headers[*]` entry MUST define `header` and `value`; it MAY define `prefix`, which is prepended as `<prefix> <value>`.
 
 Resource server proxy contract:
-1. `resource-server.http.proxy` MAY define `http-url` and/or `https-url`.
-2. `resource-server.http.proxy.no-proxy` MAY define comma-separated bypass rules.
-3. `resource-server.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
+1. `managed-server.http.proxy` MAY define `http-url` and/or `https-url`.
+2. `managed-server.http.proxy.no-proxy` MAY define comma-separated bypass rules.
+3. `managed-server.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
 
 Secret store one-of contracts:
 1. Exactly one of `secret-store.file` or `secret-store.vault` MUST be set.
@@ -76,12 +77,12 @@ Runtime override keys:
 1. `repository.resource-format`.
 2. `repository.git.local.base-dir`.
 3. `repository.filesystem.base-dir`.
-4. `resource-server.http.base-url`.
-5. `resource-server.http.proxy.http-url`.
-6. `resource-server.http.proxy.https-url`.
-7. `resource-server.http.proxy.no-proxy`.
-8. `resource-server.http.proxy.auth.username`.
-9. `resource-server.http.proxy.auth.password`.
+4. `managed-server.http.base-url`.
+5. `managed-server.http.proxy.http-url`.
+6. `managed-server.http.proxy.https-url`.
+7. `managed-server.http.proxy.no-proxy`.
+8. `managed-server.http.proxy.auth.username`.
+9. `managed-server.http.proxy.auth.password`.
 10. `metadata.base-dir`.
 11. `metadata.bundle`.
 
@@ -120,7 +121,7 @@ contexts:
       # filesystem:
       #   base-dir: /path/to/repo
 
-    resource-server:
+    managed-server:
       http:
         base-url: https://example.com/api
         # openapi: /path/to/openapi.yaml
@@ -134,7 +135,7 @@ contexts:
         #     username: proxy-user
         #     password: proxy-pass
         auth:
-          # Choose exactly one auth method: oauth2, basic-auth, bearer-token, custom-header.
+          # Choose exactly one auth method: oauth2, basic-auth, custom-headers.
           oauth2:
             token-url: https://example.com/oauth/token
             grant-type: client_credentials
@@ -147,12 +148,10 @@ contexts:
           # basic-auth:
           #   username: change-me
           #   password: change-me
-          # bearer-token:
-          #   token: change-me
-          # custom-header:
-          #   header: Authorization
-          #   prefix: Bearer
-          #   value: change-me
+          # custom-headers:
+          #   - header: Authorization
+          #     prefix: Bearer
+          #     value: change-me
         # tls:
         #   insecure-skip-verify: false
 
@@ -211,7 +210,7 @@ current-ctx: xxx
 2. Duplicate context names.
 3. Unknown YAML key due to strict decode.
 4. Repository backend one-of violation.
-5. Missing required `resource-server`.
+5. Missing required `managed-server`.
 6. Resource server auth one-of violation.
 7. Secret store one-of violation.
 8. Secret file key source one-of violation.
@@ -219,19 +218,19 @@ current-ctx: xxx
 10. Config path resolution failure for home expansion or file access.
 11. Runtime override key not in the supported override-key list.
 12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
-13. `resource-server.http.proxy` is configured without at least one proxy URL, or with incomplete auth credentials.
+13. `managed-server.http.proxy` is configured without at least one proxy URL, or with incomplete auth credentials.
 
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
 2. Context with optional `secret-store` omitted.
-3. Context with required `resource-server` omitted fails validation.
+3. Context with required `managed-server` omitted fails validation.
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.
 7. `metadata.bundle` configured; resolve keeps `metadata.base-dir` empty and startup resolves metadata from the bundle cache.
-8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `resource-server.http.openapi` is unset.
+8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `managed-server.http.openapi` is unset.
 9. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
-10. `resource-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
+10. `managed-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
@@ -242,6 +241,6 @@ current-ctx: xxx
 5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
 6. `bootstrap.NewSession(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
 7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
-8. Corner case: `resource-server.http.auth.custom-header` with `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
-9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `resource-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
-10. Corner case: `ResolveContext({Name: "dev", Overrides: {"resource-server.http.proxy.http-url":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.
+8. Corner case: `managed-server.http.auth.custom-headers` with one entry that defines `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
+9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `managed-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
+10. Corner case: `ResolveContext({Name: "dev", Overrides: {"managed-server.http.proxy.http-url":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.

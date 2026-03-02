@@ -90,7 +90,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"repository:",
 		"git:",
 		"filesystem:",
-		"resource-server:",
+		"managed-server:",
 		"auth:",
 		"proxy:",
 		"http-url:",
@@ -98,8 +98,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"no-proxy:",
 		"oauth2:",
 		"basic-auth:",
-		"bearer-token:",
-		"custom-header:",
+		"custom-headers:",
 		"prefix: Bearer",
 		"value: change-me",
 		"secret-store:",
@@ -698,7 +697,7 @@ func TestCheckWarnsForReachableResourceServerProbeErrors(t *testing.T) {
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
-						BearerToken: &configdomain.BearerTokenAuth{Token: "x"},
+						CustomHeaders: []configdomain.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "x"}},
 					},
 				},
 			},
@@ -746,7 +745,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
-						BearerToken: &configdomain.BearerTokenAuth{Token: "x"},
+						CustomHeaders: []configdomain.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "x"}},
 					},
 				},
 			},
@@ -786,9 +785,9 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false, false},
+		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		confirms:    []bool{false, false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -831,9 +830,9 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false, false},
+		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		confirms:    []bool{false, false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -879,17 +878,20 @@ func TestCreateInteractivePromptFlowSupportsResourceServerProxy(t *testing.T) {
 			"localhost,127.0.0.1",
 			"proxy-user",
 			"proxy-pass",
+			"Authorization",
+			"Bearer",
 			"token-dev",
 		},
 		selects: []string{
 			configdomain.ResourceFormatYAML,
 			"filesystem",
-			"bearer-token",
+			"custom-headers",
 		},
 		confirms: []bool{
 			false, // resource-server default headers
 			true,  // configure resource-server proxy
 			true,  // configure proxy auth
+			false, // add another custom auth header
 			false, // configure resource-server tls
 			false, // configure secret-store
 			false, // configure preferences
@@ -939,9 +941,9 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false, false},
+		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		confirms:    []bool{false, false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -977,9 +979,9 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false, false},
+		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		confirms:    []bool{false, false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -1032,9 +1034,9 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "token-dev"},
-		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "bearer-token"},
-		confirms:    []bool{false, false, false, false, false},
+		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "custom-headers"},
+		confirms:    []bool{false, false, false, false, false, false},
 	}
 
 	_, err := executeConfigCommandWithPrompter(
@@ -1059,13 +1061,14 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
-		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "git", "bearer-token"},
+		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
+		selects:     []string{configdomain.ResourceFormatYAML, "git", "custom-headers"},
 		confirms: []bool{
 			false, // git local auto-init
 			false, // configure git remote
 			false, // resource-server default headers
 			false, // configure resource-server proxy
+			false, // add another custom auth header
 			false, // resource-server tls
 			false, // configure secret-store
 			false, // configure preferences
@@ -1178,11 +1181,8 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if service.createdContext.ResourceServer.HTTP.Auth.BasicAuth != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ResourceServer.HTTP.Auth.BearerToken != nil {
-		t.Fatal("bearer-token auth should not be configured when oauth2 is selected")
-	}
-	if service.createdContext.ResourceServer.HTTP.Auth.CustomHeader != nil {
-		t.Fatal("custom-header auth should not be configured when oauth2 is selected")
+	if len(service.createdContext.ResourceServer.HTTP.Auth.CustomHeaders) != 0 {
+		t.Fatal("custom-headers auth should not be configured when oauth2 is selected")
 	}
 	if service.createdContext.ResourceServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
 		t.Fatalf(

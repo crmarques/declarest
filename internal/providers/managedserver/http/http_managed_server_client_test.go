@@ -33,7 +33,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -62,7 +62,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			TLS: &config.TLS{
 				ClientCertFile: "/tmp/only-cert.pem",
@@ -77,7 +77,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			OpenAPI: "http://example.com/openapi.json",
 		})
@@ -90,7 +90,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			Proxy: &config.HTTPProxy{},
 		})
@@ -103,7 +103,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 		_, err := NewHTTPManagedServerClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			Proxy: &config.HTTPProxy{
 				HTTPURL: "http://user:pass@proxy.example.com:3128",
@@ -126,7 +126,7 @@ func TestGetAccessToken(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token-123"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token-123"}},
 			},
 		})
 
@@ -186,7 +186,7 @@ func TestBuildRequestFromMetadataDefaultsAndHeaders(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		DefaultHeaders: map[string]string{
 			"X-Default":  "base",
@@ -243,7 +243,7 @@ func TestBuildRequestFromMetadataDefaultsUseConfiguredResourceFormat(t *testing.
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 	client.SetResourceFormat("yaml")
@@ -275,7 +275,7 @@ func TestBuildRequestFromMetadataHTTPMethodOverrideFromContext(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -307,7 +307,7 @@ func TestBuildRequestFromMetadataRendersTemplates(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -347,7 +347,7 @@ func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testi
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -383,7 +383,7 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsForCreateUpdate(t *test
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -441,7 +441,7 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsInMetadataPayloadFieldO
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -477,7 +477,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -510,7 +510,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -542,7 +542,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -608,7 +608,7 @@ paths:
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com/api",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			OpenAPI: specPath,
 		})
@@ -674,7 +674,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: server.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -732,7 +732,7 @@ func TestGetAppliesPayloadTransformsAfterResponseDecode(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: server.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 	})
 
@@ -795,7 +795,7 @@ paths:
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: "https://example.com/api",
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		OpenAPI: specPath,
 	})
@@ -861,7 +861,7 @@ func TestGetOpenAPISpecFromHTTPSCachesDocument(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: server.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		TLS: &config.TLS{
 			InsecureSkipVerify: true,
@@ -908,7 +908,7 @@ func TestGetOpenAPISpecFromHTTPSAllowsCrossOriginOpenAPIURLWithoutAuthHeader(t *
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: baseServer.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		TLS: &config.TLS{
 			InsecureSkipVerify: true,
@@ -949,7 +949,7 @@ func TestGetOpenAPISpecFromHTTPSSameOriginAppliesAuthHeader(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: server.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		TLS: &config.TLS{
 			InsecureSkipVerify: true,
@@ -991,7 +991,7 @@ func TestGetOpenAPISpecFromHTTPSDoesNotCacheError(t *testing.T) {
 	client := mustManagedServerClient(t, config.HTTPServer{
 		BaseURL: server.URL,
 		Auth: &config.HTTPAuth{
-			BearerToken: &config.BearerTokenAuth{Token: "token"},
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 		},
 		TLS: &config.TLS{
 			InsecureSkipVerify: true,
@@ -1063,7 +1063,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token-123"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token-123"}},
 			},
 		})
 
@@ -1094,7 +1094,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				CustomHeader: &config.HeaderTokenAuth{Header: "X-Auth-Token", Value: "custom-token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "X-Auth-Token", Value: "custom-token"}},
 			},
 		})
 
@@ -1125,11 +1125,11 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				CustomHeader: &config.HeaderTokenAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
 					Header: "Authorization",
 					Prefix: "Bearer",
 					Value:  "custom-token",
-				},
+				}},
 			},
 		})
 
@@ -1275,7 +1275,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 			TLS: &config.TLS{
 				CACertFile:         caCertFile,
@@ -1333,7 +1333,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1490,7 +1490,7 @@ func TestRequestOperations(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1532,7 +1532,7 @@ func TestRequestOperations(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1557,7 +1557,7 @@ func TestRequestOperations(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1576,7 +1576,7 @@ func TestRequestOperations(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1639,7 +1639,7 @@ func TestStatusMappingAndExists(t *testing.T) {
 			client := mustManagedServerClient(t, config.HTTPServer{
 				BaseURL: server.URL,
 				Auth: &config.HTTPAuth{
-					BearerToken: &config.BearerTokenAuth{Token: "token"},
+					CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 				},
 			})
 
@@ -1669,7 +1669,7 @@ func TestStatusMappingAndExists(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1704,7 +1704,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1742,7 +1742,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1784,7 +1784,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1821,7 +1821,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1882,7 +1882,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1934,7 +1934,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1961,7 +1961,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -1989,7 +1989,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -2019,7 +2019,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -2048,7 +2048,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -2072,7 +2072,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 
@@ -2093,7 +2093,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BearerToken: &config.BearerTokenAuth{Token: "token"},
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
 		})
 

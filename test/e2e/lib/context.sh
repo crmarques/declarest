@@ -42,7 +42,7 @@ e2e_context_insert_resource_server_openapi() {
   elif command -v python >/dev/null 2>&1; then
     python_cmd='python'
   else
-    e2e_info 'skipping resource-server openapi patch: python interpreter unavailable'
+    e2e_info 'skipping managed-server openapi patch: python interpreter unavailable'
     return 0
   fi
 
@@ -70,7 +70,7 @@ has_openapi = False
 for idx, line in enumerate(lines):
     stripped = line.lstrip()
     if resource_indent is None:
-        if stripped.startswith('resource-server:'):
+        if stripped.startswith('managed-server:'):
             resource_indent = len(line) - len(stripped)
             in_resource_block = True
         continue
@@ -101,7 +101,7 @@ PY
   )
 
   if [[ "${patch_output}" == 'PATCHED' ]]; then
-    e2e_info "resource-server http.openapi injected into ${context_file}"
+    e2e_info "managed-server http.openapi injected into ${context_file}"
   fi
 
   return 0
@@ -185,7 +185,7 @@ for idx, line in enumerate(lines):
     indent = len(line) - len(stripped)
 
     if resource_indent is None:
-        if stripped.startswith("resource-server:"):
+        if stripped.startswith("managed-server:"):
             resource_indent = indent
             in_resource = True
         continue
@@ -237,7 +237,7 @@ PY
   )
 
   if [[ "${patch_output}" == 'PATCHED' ]]; then
-    e2e_info "resource-server http.proxy injected into ${context_file}"
+    e2e_info "managed-server http.proxy injected into ${context_file}"
   fi
 
   return 0

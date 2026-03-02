@@ -23,12 +23,14 @@ write_context_fixture() {
   cat >"${path}" <<'EOF'
 contexts:
   - name: e2e-basic
-    resource-server:
+    managed-server:
       http:
         base-url: http://127.0.0.1:8080
         auth:
-          bearer-token:
-            token: token-dev
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: token-dev
 current-ctx: e2e-basic
 EOF
 }

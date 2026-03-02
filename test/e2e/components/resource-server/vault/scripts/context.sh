@@ -17,14 +17,14 @@ if [[ "${selected_auth_type}" != 'custom-header' ]]; then
 fi
 
 {
-  printf 'resource-server:\n'
+  printf 'managed-server:\n'
   printf '  http:\n'
   printf '    base-url: %s\n' "${VAULT_ADDRESS}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
   printf '    auth:\n'
-  printf '      custom-header:\n'
-  printf '        header: X-Vault-Token\n'
-  printf '        value: %s\n' "${VAULT_TOKEN}"
+  printf '      custom-headers:\n'
+  printf '        - header: X-Vault-Token\n'
+  printf '          value: %s\n' "${VAULT_TOKEN}"
 } >"${fragment_file}"

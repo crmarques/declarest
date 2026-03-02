@@ -302,11 +302,11 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 }
 
 func promptResourceServer(command *cobra.Command, prompter configPrompter) (*configdomain.ResourceServer, error) {
-	baseURL, err := promptRequiredInput(command, prompter, "Resource-server base-url: ", "resource-server base-url")
+	baseURL, err := promptRequiredInput(command, prompter, "Managed-server base-url: ", "managed-server base-url")
 	if err != nil {
 		return nil, err
 	}
-	openAPI, err := promptOptionalInput(command, prompter, "Resource-server OpenAPI path/url (optional): ")
+	openAPI, err := promptOptionalInput(command, prompter, "Managed-server OpenAPI path/url (optional): ")
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +316,7 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 		OpenAPI: openAPI,
 	}
 
-	includeHeaders, err := prompter.Confirm(command, "Configure resource-server default headers?", false)
+	includeHeaders, err := prompter.Confirm(command, "Configure managed-server default headers?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 		server.DefaultHeaders = headers
 	}
 
-	includeProxy, err := prompter.Confirm(command, "Configure resource-server proxy?", false)
+	includeProxy, err := prompter.Confirm(command, "Configure managed-server proxy?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func promptResourceServer(command *cobra.Command, prompter configPrompter) (*con
 	}
 	server.Auth = auth
 
-	includeTLS, err := prompter.Confirm(command, "Configure resource-server TLS?", false)
+	includeTLS, err := prompter.Confirm(command, "Configure managed-server TLS?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 	}
 
 	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
-		return nil, shared.ValidationError("resource-server proxy requires at least one of http-url or https-url", nil)
+		return nil, shared.ValidationError("managed-server proxy requires at least one of http-url or https-url", nil)
 	}
 
 	noProxy, err := promptOptionalInput(command, prompter, "Proxy no-proxy list (optional): ")
@@ -412,8 +412,8 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPAuth, error) {
 	method, err := prompter.Select(
 		command,
-		"Select resource-server auth method",
-		[]string{"oauth2", "basic-auth", "bearer-token", "custom-header"},
+		"Select managed-server auth method",
+		[]string{"oauth2", "basic-auth", "custom-headers"},
 	)
 	if err != nil {
 		return nil, err
@@ -489,13 +489,22 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Username: username,
 			Password: password,
 		}
-	case "bearer-token":
-		token, inputErr := promptRequiredInput(command, prompter, "Bearer token: ", "bearer token")
+	case "custom-headers":
+		customHeaders, inputErr := promptCustomHeaders(command, prompter)
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		auth.BearerToken = &configdomain.BearerTokenAuth{Token: token}
-	case "custom-header":
+		auth.CustomHeaders = customHeaders
+	default:
+		return nil, shared.ValidationError("invalid managed-server auth method selected", nil)
+	}
+
+	return auth, nil
+}
+
+func promptCustomHeaders(command *cobra.Command, prompter configPrompter) ([]configdomain.HeaderTokenAuth, error) {
+	customHeaders := make([]configdomain.HeaderTokenAuth, 0, 1)
+	for {
 		header, inputErr := promptRequiredInput(command, prompter, "Custom auth header name: ", "custom auth header name")
 		if inputErr != nil {
 			return nil, inputErr
@@ -508,16 +517,22 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		auth.CustomHeader = &configdomain.HeaderTokenAuth{
+		customHeaders = append(customHeaders, configdomain.HeaderTokenAuth{
 			Header: header,
 			Prefix: prefix,
 			Value:  value,
+		})
+
+		addMore, confirmErr := prompter.Confirm(command, "Add another custom auth header?", false)
+		if confirmErr != nil {
+			return nil, confirmErr
 		}
-	default:
-		return nil, shared.ValidationError("invalid resource-server auth method selected", nil)
+		if !addMore {
+			break
+		}
 	}
 
-	return auth, nil
+	return customHeaders, nil
 }
 
 func promptSecretStore(command *cobra.Command, prompter configPrompter) (*configdomain.SecretStore, error) {

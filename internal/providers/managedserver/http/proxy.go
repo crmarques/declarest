@@ -15,17 +15,17 @@ func buildProxyFunc(proxyConfig *config.HTTPProxy) (func(*http.Request) (*url.UR
 		return nil, nil
 	}
 
-	httpURL, err := parseProxyURL("resource-server.http.proxy.http-url", proxyConfig.HTTPURL)
+	httpURL, err := parseProxyURL("managed-server.http.proxy.http-url", proxyConfig.HTTPURL)
 	if err != nil {
 		return nil, err
 	}
-	httpsURL, err := parseProxyURL("resource-server.http.proxy.https-url", proxyConfig.HTTPSURL)
+	httpsURL, err := parseProxyURL("managed-server.http.proxy.https-url", proxyConfig.HTTPSURL)
 	if err != nil {
 		return nil, err
 	}
 
 	if httpURL == nil && httpsURL == nil {
-		return nil, faults.NewValidationError("resource-server.http.proxy must define at least one of http-url or https-url", nil)
+		return nil, faults.NewValidationError("managed-server.http.proxy must define at least one of http-url or https-url", nil)
 	}
 
 	auth := proxyConfig.Auth
@@ -33,7 +33,7 @@ func buildProxyFunc(proxyConfig *config.HTTPProxy) (func(*http.Request) (*url.UR
 		username := strings.TrimSpace(auth.Username)
 		password := strings.TrimSpace(auth.Password)
 		if username == "" || password == "" {
-			return nil, faults.NewValidationError("resource-server.http.proxy.auth requires username and password", nil)
+			return nil, faults.NewValidationError("managed-server.http.proxy.auth requires username and password", nil)
 		}
 
 		var authErr error
@@ -97,7 +97,7 @@ func applyProxyAuth(proxyURL *url.URL, username string, password string) (*url.U
 
 	if proxyURL.User != nil {
 		return nil, faults.NewValidationError(
-			"resource-server.http.proxy.auth cannot be combined with credentials embedded in proxy URL",
+			"managed-server.http.proxy.auth cannot be combined with credentials embedded in proxy URL",
 			nil,
 		)
 	}

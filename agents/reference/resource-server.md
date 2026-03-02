@@ -29,7 +29,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to `application/<repository.resource-format>` (`json` when omitted); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
 13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload.
 14. Payload validation context MUST include path-derived template fields (for example `realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
-15. OpenAPI document URLs MAY be cross-origin relative to `resource-server.http.base-url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+15. OpenAPI document URLs MAY be cross-origin relative to `managed-server.http.base-url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
 
 ## Data Contracts
 Request spec fields:
@@ -48,9 +48,8 @@ Server interface operations:
 
 Auth modes:
 1. OAuth2.
-2. Custom header token.
-3. Bearer token.
-4. Basic auth.
+2. Custom headers list (`custom-headers`).
+3. Basic auth.
 
 ## Failure Modes
 1. Auth failure due to missing or invalid credentials.

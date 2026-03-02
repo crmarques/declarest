@@ -23,7 +23,7 @@ type ContextCatalog struct {
 type Context struct {
 	Name           string            `yaml:"name"`
 	Repository     Repository        `yaml:"repository"`
-	ResourceServer *ResourceServer   `yaml:"resource-server,omitempty"`
+	ResourceServer *ResourceServer   `yaml:"managed-server,omitempty"`
 	SecretStore    *SecretStore      `yaml:"secret-store,omitempty"`
 	Metadata       Metadata          `yaml:"metadata,omitempty"`
 	Preferences    map[string]string `yaml:"preferences,omitempty"`
@@ -97,10 +97,9 @@ type ProxyAuth struct {
 }
 
 type HTTPAuth struct {
-	OAuth2       *OAuth2          `yaml:"oauth2,omitempty"`
-	BasicAuth    *BasicAuth       `yaml:"basic-auth,omitempty"`
-	BearerToken  *BearerTokenAuth `yaml:"bearer-token,omitempty"`
-	CustomHeader *HeaderTokenAuth `yaml:"custom-header,omitempty"`
+	OAuth2        *OAuth2           `yaml:"oauth2,omitempty"`
+	BasicAuth     *BasicAuth        `yaml:"basic-auth,omitempty"`
+	CustomHeaders []HeaderTokenAuth `yaml:"custom-headers,omitempty"`
 }
 
 type OAuth2 struct {
@@ -117,10 +116,6 @@ type OAuth2 struct {
 type BasicAuth struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
-}
-
-type BearerTokenAuth struct {
-	Token string `yaml:"token"`
 }
 
 type HeaderTokenAuth struct {

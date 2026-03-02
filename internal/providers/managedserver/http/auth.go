@@ -20,21 +20,19 @@ const (
 	authModeUnknown authMode = iota
 	authModeOAuth2
 	authModeBasic
-	authModeBearer
-	authModeCustomHeader
+	authModeCustomHeaders
 )
 
 type authConfig struct {
-	mode         authMode
-	oauth2       config.OAuth2
-	basicAuth    config.BasicAuth
-	bearerToken  config.BearerTokenAuth
-	customHeader config.HeaderTokenAuth
+	mode          authMode
+	oauth2        config.OAuth2
+	basicAuth     config.BasicAuth
+	customHeaders []config.HeaderTokenAuth
 }
 
 func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 	if cfg == nil {
-		return authConfig{}, faults.NewValidationError("resource-server.http.auth is required", nil)
+		return authConfig{}, faults.NewValidationError("managed-server.http.auth is required", nil)
 	}
 
 	setCount := 0
@@ -44,14 +42,11 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 	if cfg.BasicAuth != nil {
 		setCount++
 	}
-	if cfg.BearerToken != nil {
-		setCount++
-	}
-	if cfg.CustomHeader != nil {
+	if len(cfg.CustomHeaders) > 0 {
 		setCount++
 	}
 	if setCount != 1 {
-		return authConfig{}, faults.NewValidationError("resource-server.http.auth must define exactly one auth mode", nil)
+		return authConfig{}, faults.NewValidationError("managed-server.http.auth must define exactly one auth mode", nil)
 	}
 
 	switch {
@@ -61,40 +56,40 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 			strings.TrimSpace(oauth.GrantType) == "" ||
 			strings.TrimSpace(oauth.ClientID) == "" ||
 			strings.TrimSpace(oauth.ClientSecret) == "" {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return authConfig{}, faults.NewValidationError("managed-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
 		}
 		if strings.TrimSpace(oauth.GrantType) != config.OAuthClientCreds {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.oauth2.grant-type supports only client_credentials", nil)
+			return authConfig{}, faults.NewValidationError("managed-server.http.auth.oauth2.grant-type supports only client_credentials", nil)
 		}
 		tokenURL, err := url.Parse(oauth.TokenURL)
 		if err != nil || tokenURL.Scheme == "" || tokenURL.Host == "" {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.oauth2.token-url is invalid", err)
+			return authConfig{}, faults.NewValidationError("managed-server.http.auth.oauth2.token-url is invalid", err)
 		}
 
 		return authConfig{mode: authModeOAuth2, oauth2: oauth}, nil
 	case cfg.BasicAuth != nil:
 		basic := *cfg.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.basic-auth requires username and password", nil)
+			return authConfig{}, faults.NewValidationError("managed-server.http.auth.basic-auth requires username and password", nil)
 		}
 		return authConfig{mode: authModeBasic, basicAuth: basic}, nil
-	case cfg.BearerToken != nil:
-		bearer := *cfg.BearerToken
-		if bearer.Token == "" {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.bearer-token.token is required", nil)
+	case len(cfg.CustomHeaders) > 0:
+		customHeaders := make([]config.HeaderTokenAuth, 0, len(cfg.CustomHeaders))
+		for idx, custom := range cfg.CustomHeaders {
+			custom.Header = strings.TrimSpace(custom.Header)
+			custom.Prefix = strings.TrimSpace(custom.Prefix)
+			custom.Value = strings.TrimSpace(custom.Value)
+			if custom.Header == "" || custom.Value == "" {
+				return authConfig{}, faults.NewValidationError(
+					fmt.Sprintf("managed-server.http.auth.custom-headers[%d] requires header and value", idx),
+					nil,
+				)
+			}
+			customHeaders = append(customHeaders, custom)
 		}
-		return authConfig{mode: authModeBearer, bearerToken: bearer}, nil
-	case cfg.CustomHeader != nil:
-		custom := *cfg.CustomHeader
-		custom.Header = strings.TrimSpace(custom.Header)
-		custom.Prefix = strings.TrimSpace(custom.Prefix)
-		custom.Value = strings.TrimSpace(custom.Value)
-		if custom.Header == "" || custom.Value == "" {
-			return authConfig{}, faults.NewValidationError("resource-server.http.auth.custom-header requires header and value", nil)
-		}
-		return authConfig{mode: authModeCustomHeader, customHeader: custom}, nil
+		return authConfig{mode: authModeCustomHeaders, customHeaders: customHeaders}, nil
 	default:
-		return authConfig{}, faults.NewValidationError("resource-server.http.auth is invalid", nil)
+		return authConfig{}, faults.NewValidationError("managed-server.http.auth is invalid", nil)
 	}
 }
 
@@ -108,16 +103,16 @@ func (g *HTTPManagedServerClient) applyAuth(ctx context.Context, request *http.R
 		request.Header.Set("Authorization", "Bearer "+token)
 	case authModeBasic:
 		request.SetBasicAuth(g.auth.basicAuth.Username, g.auth.basicAuth.Password)
-	case authModeBearer:
-		request.Header.Set("Authorization", "Bearer "+g.auth.bearerToken.Token)
-	case authModeCustomHeader:
-		value := g.auth.customHeader.Value
-		if g.auth.customHeader.Prefix != "" {
-			value = g.auth.customHeader.Prefix + " " + value
+	case authModeCustomHeaders:
+		for _, customHeader := range g.auth.customHeaders {
+			value := customHeader.Value
+			if customHeader.Prefix != "" {
+				value = customHeader.Prefix + " " + value
+			}
+			request.Header.Set(customHeader.Header, value)
 		}
-		request.Header.Set(g.auth.customHeader.Header, value)
 	default:
-		return faults.NewValidationError("resource-server.http.auth mode is not configured", nil)
+		return faults.NewValidationError("managed-server.http.auth mode is not configured", nil)
 	}
 	return nil
 }

@@ -219,7 +219,7 @@ Component selection (choose values for each flag; see notes below):
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
   --managed-server-proxy [<true|false>]                default: false
-    true  : Inject resource-server.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
+    true  : Inject managed-server.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
     false : Keep managed-server proxy unset in generated contexts.
   --metadata <bundle|local-dir>                     default: bundle
     bundle    : Use metadata.bundle shorthand from the selected resource-server contract and ignore component openapi.yaml.

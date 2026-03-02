@@ -216,7 +216,7 @@ func (g *HTTPManagedServerClient) GetAccessToken(ctx context.Context) (string, e
 		return "", faults.NewValidationError("managed server is not configured", nil)
 	}
 	if g.auth.mode != authModeOAuth2 {
-		return "", faults.NewValidationError("resource-server.http.auth.oauth2 is not configured", nil)
+		return "", faults.NewValidationError("managed-server.http.auth.oauth2 is not configured", nil)
 	}
 	return g.oauthToken(ctx)
 }
@@ -224,18 +224,18 @@ func (g *HTTPManagedServerClient) GetAccessToken(ctx context.Context) (string, e
 func parseBaseURL(raw string) (*url.URL, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return nil, faults.NewValidationError("resource-server.http.base-url is required", nil)
+		return nil, faults.NewValidationError("managed-server.http.base-url is required", nil)
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return nil, faults.NewValidationError("resource-server.http.base-url is invalid", err)
+		return nil, faults.NewValidationError("managed-server.http.base-url is invalid", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, faults.NewValidationError("resource-server.http.base-url must use http or https", nil)
+		return nil, faults.NewValidationError("managed-server.http.base-url must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return nil, faults.NewValidationError("resource-server.http.base-url host is required", nil)
+		return nil, faults.NewValidationError("managed-server.http.base-url host is required", nil)
 	}
 
 	if parsed.Path == "" {
@@ -246,7 +246,7 @@ func parseBaseURL(raw string) (*url.URL, error) {
 }
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
-	return tlsconfig.BuildTLSConfig(tlsSettings, "resource-server.http")
+	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-server.http")
 }
 
 func cloneStringMap(values map[string]string) map[string]string {
