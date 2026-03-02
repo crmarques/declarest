@@ -27,6 +27,7 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"config print-template",
 		"config add",
 		"config edit",
+		"config init",
 		"config use",
 		"config current",
 		"config check",
@@ -4472,6 +4473,47 @@ func TestResourceListTextOutputUsesAliasAndID(t *testing.T) {
 	}
 	if !strings.Contains(output, "beta (84)") {
 		t.Fatalf("expected resource identity output, got %q", output)
+	}
+}
+
+func TestResourceListTextOutputAlignsAliasColumn(t *testing.T) {
+	t.Parallel()
+
+	orchestrator := &testOrchestrator{
+		metadataService: newTestMetadata(),
+		remoteList: []resource.Resource{
+			{
+				LogicalPath: "/customers/a",
+				LocalAlias:  "a",
+				RemoteID:    "1",
+				Payload:     map[string]any{"id": "1"},
+			},
+			{
+				LogicalPath: "/customers/long-alias",
+				LocalAlias:  "long-alias",
+				RemoteID:    "2",
+				Payload:     map[string]any{"id": "2"},
+			},
+		},
+	}
+
+	output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "-o", "text", "resource", "list", "/customers")
+	if err != nil {
+		t.Fatalf("unexpected list error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected exactly 2 list lines, got %d in %q", len(lines), output)
+	}
+
+	firstColumn := strings.Index(lines[0], " (")
+	secondColumn := strings.Index(lines[1], " (")
+	if firstColumn < 0 || secondColumn < 0 {
+		t.Fatalf("expected list lines to include alias/id formatting, got %q", output)
+	}
+	if firstColumn != secondColumn {
+		t.Fatalf("expected aligned alias column, got lines %q and %q", lines[0], lines[1])
 	}
 }
 

@@ -52,17 +52,41 @@ func dependenciesFromSession(s bootstrap.Session) cli.Dependencies {
 }
 
 func contextNameFromArgs(args []string) string {
+	if contextName, provided := contextNameFromExplicitContextFlag(args); provided {
+		return contextName
+	}
+
+	return contextNameFromPositionalContextArg(args)
+}
+
+func contextNameFromExplicitContextFlag(args []string) (string, bool) {
 	for idx := 0; idx < len(args); idx++ {
 		current := args[idx]
 
 		if current == "--context" || current == "-c" {
 			if idx+1 < len(args) {
-				return args[idx+1]
+				return args[idx+1], true
 			}
-			return ""
+			return "", true
 		}
 		if strings.HasPrefix(current, "--context=") {
-			return strings.TrimPrefix(current, "--context=")
+			return strings.TrimPrefix(current, "--context="), true
+		}
+	}
+
+	return "", false
+}
+
+func contextNameFromPositionalContextArg(args []string) string {
+	resolvedCommand, ok := resolveRunnableCommand(args)
+	if !ok {
+		return ""
+	}
+
+	switch resolvedCommand.commandPath {
+	case "declarest config check", "declarest config init":
+		if len(resolvedCommand.positionalArgs) > 0 {
+			return strings.TrimSpace(resolvedCommand.positionalArgs[0])
 		}
 	}
 
@@ -169,26 +193,43 @@ func isHelpFallbackInvocation(args []string) bool {
 }
 
 func resolveRunnableCommandPath(args []string) (string, bool) {
+	resolvedCommand, ok := resolveRunnableCommand(args)
+	if !ok {
+		return "", false
+	}
+	return resolvedCommand.commandPath, true
+}
+
+type runnableCommand struct {
+	commandPath    string
+	positionalArgs []string
+}
+
+func resolveRunnableCommand(args []string) (runnableCommand, bool) {
 	probe := cli.NewRootCommand(cli.Dependencies{})
 	command, remainingArgs, err := probe.Find(args)
 	if err != nil {
-		return "", false
+		return runnableCommand{}, false
 	}
 	if command == nil {
-		return "", false
+		return runnableCommand{}, false
 	}
 	if !command.Runnable() {
-		return "", false
+		return runnableCommand{}, false
 	}
 
 	if err := command.ParseFlags(remainingArgs); err != nil {
-		return "", false
+		return runnableCommand{}, false
 	}
-	if err := command.ValidateArgs(command.Flags().Args()); err != nil {
-		return "", false
+	positionalArgs := command.Flags().Args()
+	if err := command.ValidateArgs(positionalArgs); err != nil {
+		return runnableCommand{}, false
 	}
 
-	return strings.TrimSpace(command.CommandPath()), true
+	return runnableCommand{
+		commandPath:    strings.TrimSpace(command.CommandPath()),
+		positionalArgs: positionalArgs,
+	}, true
 }
 
 func requiresContextBootstrap(commandPath string) bool {

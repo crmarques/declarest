@@ -702,6 +702,24 @@ func TestContextFlagCompletionShowsContextNames(t *testing.T) {
 	}
 }
 
+func TestConfigContextArgCompletionShowsContextNames(t *testing.T) {
+	t.Parallel()
+
+	subcommands := []string{"show", "resolve", "check", "init"}
+	for _, subcommand := range subcommands {
+		subcommand := subcommand
+		t.Run(subcommand, func(t *testing.T) {
+			output, err := executeForTest(testDeps(), "", "__complete", "config", subcommand, "")
+			if err != nil {
+				t.Fatalf("unexpected completion error: %v", err)
+			}
+			if !strings.Contains(output, "dev") || !strings.Contains(output, "prod") {
+				t.Fatalf("expected context names in completion output, got %q", output)
+			}
+		})
+	}
+}
+
 func TestOutputFlagCompletionShowsSupportedValues(t *testing.T) {
 	t.Parallel()
 

@@ -26,6 +26,8 @@ func RequiresContextBootstrapPath(commandPath string) bool {
 	switch {
 	case normalized == "declarest config check":
 		return true
+	case normalized == "declarest config init":
+		return true
 	case strings.HasPrefix(normalized, "declarest resource "):
 		return true
 	case strings.HasPrefix(normalized, "declarest metadata "):

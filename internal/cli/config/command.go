@@ -31,6 +31,7 @@ func newCommandWithPrompter(
 
 	command.AddCommand(
 		newPrintTemplateCommand(),
+		newInitCommand(deps, globalFlags),
 		newAddCommand(deps, globalFlags, prompter),
 		newEditCommand(deps, globalFlags),
 		newUpdateCommand(deps),
@@ -58,6 +59,51 @@ func newPrintTemplateCommand() *cobra.Command {
 			return err
 		},
 	}
+}
+
+func newInitCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "init [name]",
+		Short: "Initialize repository and metadata dependencies",
+		Example: strings.Join([]string{
+			"  declarest config init",
+			"  declarest config init prod",
+			"  declarest config init --context prod",
+		}, "\n"),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			contextName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
+			if err != nil {
+				return err
+			}
+
+			contexts, err := shared.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+			if _, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{Name: contextName}); err != nil {
+				return err
+			}
+
+			repositoryService, err := shared.RequireRepositorySync(deps)
+			if err != nil {
+				return err
+			}
+			if err := repositoryService.Init(command.Context()); err != nil {
+				return err
+			}
+
+			metadataService, err := shared.RequireMetadataService(deps)
+			if err != nil {
+				return err
+			}
+			_, err = metadataService.ResolveForPath(command.Context(), "/")
+			return err
+		},
+	}
+
+	registerSingleContextArgCompletion(command, deps)
+	return command
 }
 
 type addContextSelection struct {
@@ -452,19 +498,19 @@ func newShowCommand(
 	globalFlags *shared.GlobalFlags,
 	prompter configPrompter,
 ) *cobra.Command {
-	return &cobra.Command{
-		Use:   "show",
+	command := &cobra.Command{
+		Use:   "show [name]",
 		Short: "Show a context from --context or interactive selection",
-		Args:  cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := shared.RequireContexts(deps)
 			if err != nil {
 				return err
 			}
 
-			name := ""
-			if globalFlags != nil {
-				name = strings.TrimSpace(globalFlags.Context)
+			name, err := resolveCreateContextName(args, selectedContextName(globalFlags))
+			if err != nil {
+				return err
 			}
 			if name == "" {
 				name, err = selectContextForAction(command, contexts, prompter, "show --context")
@@ -481,6 +527,9 @@ func newShowCommand(
 			return shared.WriteOutput(command, shared.OutputYAML, shown, nil)
 		},
 	}
+
+	registerSingleContextArgCompletion(command, deps)
+	return command
 }
 
 func newCurrentCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
@@ -509,16 +558,21 @@ func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 	var overrides []string
 
 	command := &cobra.Command{
-		Use:   "resolve",
+		Use:   "resolve [name]",
 		Short: "Resolve active context with overrides",
 		Example: strings.Join([]string{
 			"  declarest config resolve",
+			"  declarest config resolve prod",
 			"  declarest config resolve --context prod",
 			"  declarest config resolve --set managed-server.http.base-url=https://api.example.com",
 		}, "\n"),
-		Args: cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := shared.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+			contextName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
 			if err != nil {
 				return err
 			}
@@ -529,7 +583,7 @@ func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 			}
 
 			resolved, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{
-				Name:      globalFlags.Context,
+				Name:      contextName,
 				Overrides: overridesMap,
 			})
 			if err != nil {
@@ -544,6 +598,7 @@ func newResolveCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 	}
 
 	command.Flags().StringArrayVarP(&overrides, "set", "e", nil, "override key=value (repeatable)")
+	registerSingleContextArgCompletion(command, deps)
 	return command
 }
 
@@ -576,22 +631,27 @@ func newValidateCommand(deps shared.CommandDependencies) *cobra.Command {
 }
 
 func newCheckCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "check",
+	command := &cobra.Command{
+		Use:   "check [name]",
 		Short: "Check configured component availability and connectivity",
 		Example: strings.Join([]string{
 			"  declarest config check",
+			"  declarest config check prod",
 			"  declarest --context prod config check --output json",
 		}, "\n"),
-		Args: cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
 			contexts, err := shared.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+			contextName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
 			if err != nil {
 				return err
 			}
 
 			resolvedContext, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{
-				Name: selectedContextName(globalFlags),
+				Name: contextName,
 			})
 			if err != nil {
 				return err
@@ -611,6 +671,9 @@ func newCheckCommand(deps shared.CommandDependencies, globalFlags *shared.Global
 			return nil
 		},
 	}
+
+	registerSingleContextArgCompletion(command, deps)
+	return command
 }
 
 type configCheckStatus string

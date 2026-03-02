@@ -87,10 +87,11 @@ Selected command names:
 1. `config edit`.
 2. `config print-template`.
 3. `config add`.
-4. `config use`.
-5. `config show`.
-6. `config current`.
-7. `config resolve`.
+4. `config init`.
+5. `config use`.
+6. `config show`.
+7. `config current`.
+8. `config resolve`.
 8. `metadata resolve`.
 9. `metadata render`.
 10. `repo status`.
@@ -185,14 +186,16 @@ Interactive config commands:
 51. `secret get` with path+key input (`<path> <key>`, `--path`+`--key`, or `<path>:<key>`) MUST resolve the canonical secret key as `<path>:<key>`.
 52. `secret get --key` MUST require `--path`.
 49. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
-50. `config show` MUST use `--context` when provided and otherwise require interactive context selection.
+50. `config show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
 51. `config add` MUST default `--format` to `yaml` while continuing to accept explicit `json`.
 52. `config add` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
 53. `config add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
-54. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
-55. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
-56. `resource request post` and `resource request put` MUST also support optional inline `--payload` input, decoded according to `--format`, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
-56. `config add` MUST accept input from `--file <path|->` or stdin.
+54. `config resolve`, `config check`, and `config init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
+55. `config init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
+56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
+57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
+58. `resource request post` and `resource request put` MUST also support optional inline `--payload` input, decoded according to `--format`, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
+59. `config add` MUST accept input from `--file <path|->` or stdin.
 57. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
 58. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
 59. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
@@ -250,7 +253,7 @@ Interactive config commands:
 7. `repo status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
 8. `repo commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
 9. `repo tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
-9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present.
+9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
 7. `config show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
@@ -384,7 +387,9 @@ Interactive config commands:
 39. `declarest repo commit -m "manual changes"` commits manual local repository changes in git contexts and reports whether a commit was created.
 40. `declarest repo clean` discards uncommitted tracked and untracked changes in a git repository worktree.
 41. `declarest repo tree` prints a tree-style directory view of the local repository and preserves spaces in directory names (for example `AD PRD`) while omitting files.
-38. `declarest completion bash` generates Bash completion output.
+42. `declarest config init prod` initializes repository state and preloads metadata dependencies (including bundle-backed metadata cache) for context `prod`.
+43. Corner case: `declarest config check prod --context dev` fails with `ValidationError` because positional and flag context selections conflict.
+44. `declarest completion bash` generates Bash completion output.
 39. `declarest version -o json` prints machine-readable version information.
 40. `declarest config use` opens interactive context selection when run in a terminal.
 41. `declarest config show --context dev` prints the selected context configuration as YAML.

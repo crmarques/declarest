@@ -40,6 +40,16 @@ func TestContextNameFromArgs(t *testing.T) {
 			args: []string{"resource", "list"},
 			want: "",
 		},
+		{
+			name: "config check positional context",
+			args: []string{"config", "check", "prod"},
+			want: "prod",
+		},
+		{
+			name: "config init positional context",
+			args: []string{"config", "init", "prod"},
+			want: "prod",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -244,6 +254,11 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			args: []string{"config", "check"},
 			want: false,
 		},
+		{
+			name: "config init command requires context bootstrap",
+			args: []string{"config", "init"},
+			want: false,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -288,6 +303,11 @@ func TestRequiresContextBootstrap(t *testing.T) {
 		{
 			name:        "config check requires context",
 			commandPath: "declarest config check",
+			want:        true,
+		},
+		{
+			name:        "config init requires context",
+			commandPath: "declarest config init",
 			want:        true,
 		},
 		{

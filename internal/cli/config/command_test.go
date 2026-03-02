@@ -537,6 +537,53 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 	})
 }
 
+func TestResolveUsesPositionalContextNameWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "prod",
+			Repository: configdomain.Repository{
+				ResourceFormat: configdomain.ResourceFormatYAML,
+				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+			},
+		},
+	}
+
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&shared.GlobalFlags{Output: shared.OutputText},
+		"",
+		"resolve",
+		"prod",
+	)
+	if err != nil {
+		t.Fatalf("resolve returned error: %v", err)
+	}
+	if service.resolveSelection.Name != "prod" {
+		t.Fatalf("expected resolve to use positional context prod, got %q", service.resolveSelection.Name)
+	}
+}
+
+func TestResolveRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	_, err := executeConfigCommand(
+		t,
+		service,
+		&shared.GlobalFlags{Context: "dev"},
+		"",
+		"resolve",
+		"prod",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if service.resolveCalled {
+		t.Fatal("expected resolve service call to be skipped on context name conflict")
+	}
+}
+
 func TestConfigOutputAcrossFormats(t *testing.T) {
 	t.Parallel()
 
@@ -776,6 +823,125 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	}
 	if !strings.Contains(output, "Result: FAIL") {
 		t.Fatalf("expected fail result in output, got %q", output)
+	}
+}
+
+func TestCheckUsesPositionalContextNameWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "prod",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+			},
+			Metadata: configdomain.Metadata{Bundle: "keycloak-bundle:0.0.1"},
+		},
+	}
+
+	deps := shared.CommandDependencies{
+		Contexts:       contextService,
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
+	}
+
+	_, err := executeConfigCommandWithDeps(t, deps, &shared.GlobalFlags{Output: shared.OutputText}, "", "check", "prod")
+	if err != nil {
+		t.Fatalf("check returned error: %v", err)
+	}
+	if contextService.resolveSelection.Name != "prod" {
+		t.Fatalf("expected check to resolve positional context prod, got %q", contextService.resolveSelection.Name)
+	}
+}
+
+func TestCheckRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{}
+	_, err := executeConfigCommandWithDeps(
+		t,
+		shared.CommandDependencies{Contexts: contextService},
+		&shared.GlobalFlags{Context: "dev"},
+		"",
+		"check",
+		"prod",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if contextService.resolveCalled {
+		t.Fatal("expected resolve service call to be skipped on context name conflict")
+	}
+}
+
+func TestInitInitializesRepositoryAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "prod",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+			},
+			Metadata: configdomain.Metadata{Bundle: "keycloak-bundle:0.0.1"},
+		},
+	}
+	repositoryService := &testRepositoryService{}
+	metadataService := &testMetadataService{}
+
+	deps := shared.CommandDependencies{
+		Contexts:       contextService,
+		RepositorySync: repositoryService,
+		Metadata:       metadataService,
+	}
+
+	_, err := executeConfigCommandWithDeps(
+		t,
+		deps,
+		&shared.GlobalFlags{Output: shared.OutputText},
+		"",
+		"init",
+		"prod",
+	)
+	if err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+	if contextService.resolveSelection.Name != "prod" {
+		t.Fatalf("expected init to resolve positional context prod, got %q", contextService.resolveSelection.Name)
+	}
+	if !repositoryService.initCalled {
+		t.Fatal("expected repository init to be called")
+	}
+	if len(metadataService.resolvePaths) != 1 || metadataService.resolvePaths[0] != "/" {
+		t.Fatalf("expected metadata resolve on root path, got %#v", metadataService.resolvePaths)
+	}
+}
+
+func TestInitRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{}
+	repositoryService := &testRepositoryService{}
+	metadataService := &testMetadataService{}
+
+	deps := shared.CommandDependencies{
+		Contexts:       contextService,
+		RepositorySync: repositoryService,
+		Metadata:       metadataService,
+	}
+
+	_, err := executeConfigCommandWithDeps(
+		t,
+		deps,
+		&shared.GlobalFlags{Context: "dev"},
+		"",
+		"init",
+		"prod",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if contextService.resolveCalled {
+		t.Fatal("expected resolve service call to be skipped on context name conflict")
+	}
+	if repositoryService.initCalled {
+		t.Fatal("expected repository init to be skipped on context name conflict")
 	}
 }
 
@@ -1274,6 +1440,61 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	}
 }
 
+func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "prod",
+			Repository: configdomain.Repository{
+				ResourceFormat: configdomain.ResourceFormatYAML,
+				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+			},
+		},
+	}
+	prompter := &mockPrompter{interactive: false}
+
+	output, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&shared.GlobalFlags{Output: shared.OutputText},
+		prompter,
+		"",
+		"show",
+		"prod",
+	)
+	if err != nil {
+		t.Fatalf("show returned error: %v", err)
+	}
+	if service.resolveSelection.Name != "prod" {
+		t.Fatalf("expected show to resolve positional context prod, got %q", service.resolveSelection.Name)
+	}
+	if !strings.Contains(output, "name: prod") {
+		t.Fatalf("expected YAML output with context name prod, got %q", output)
+	}
+}
+
+func TestShowRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{}
+	prompter := &mockPrompter{interactive: true}
+
+	_, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&shared.GlobalFlags{Context: "dev", Output: shared.OutputText},
+		prompter,
+		"",
+		"show",
+		"prod",
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if service.resolveCalled {
+		t.Fatal("expected show resolve call to be skipped on context name conflict")
+	}
+}
+
 func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	t.Parallel()
 
@@ -1589,6 +1810,8 @@ func (s *testContextService) Validate(context.Context, configdomain.Context) err
 }
 
 type testRepositoryService struct {
+	initCalled    bool
+	initErr       error
 	checkErr      error
 	syncStatusErr error
 	syncStatus    repository.SyncReport
@@ -1606,9 +1829,12 @@ func (s *testRepositoryService) List(context.Context, string, repository.ListPol
 }
 func (s *testRepositoryService) Exists(context.Context, string) (bool, error) { return false, nil }
 func (s *testRepositoryService) Move(context.Context, string, string) error   { return nil }
-func (s *testRepositoryService) Init(context.Context) error                   { return nil }
-func (s *testRepositoryService) Refresh(context.Context) error                { return nil }
-func (s *testRepositoryService) Clean(context.Context) error                  { return nil }
+func (s *testRepositoryService) Init(context.Context) error {
+	s.initCalled = true
+	return s.initErr
+}
+func (s *testRepositoryService) Refresh(context.Context) error { return nil }
+func (s *testRepositoryService) Clean(context.Context) error   { return nil }
 func (s *testRepositoryService) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }
@@ -1624,7 +1850,8 @@ func (s *testRepositoryService) SyncStatus(context.Context) (repository.SyncRepo
 }
 
 type testMetadataService struct {
-	resolveErr error
+	resolveErr   error
+	resolvePaths []string
 }
 
 func (s *testMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
@@ -1634,7 +1861,8 @@ func (s *testMetadataService) Set(context.Context, string, metadatadomain.Resour
 	return nil
 }
 func (s *testMetadataService) Unset(context.Context, string) error { return nil }
-func (s *testMetadataService) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+func (s *testMetadataService) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	s.resolvePaths = append(s.resolvePaths, logicalPath)
 	if s.resolveErr != nil {
 		return metadatadomain.ResourceMetadata{}, s.resolveErr
 	}

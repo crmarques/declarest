@@ -94,6 +94,13 @@ func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 }
 
 func renderListText(w io.Writer, items []resource.Resource) error {
+	type listEntry struct {
+		alias    string
+		remoteID string
+	}
+
+	entries := make([]listEntry, 0, len(items))
+	maxAliasWidth := 0
 	for _, item := range items {
 		alias := strings.TrimSpace(item.LocalAlias)
 		remoteID := strings.TrimSpace(item.RemoteID)
@@ -103,7 +110,14 @@ func renderListText(w io.Writer, items []resource.Resource) error {
 		if remoteID == "" {
 			remoteID = alias
 		}
-		if _, err := fmt.Fprintf(w, "%s (%s)\n", alias, remoteID); err != nil {
+		entries = append(entries, listEntry{alias: alias, remoteID: remoteID})
+		if len(alias) > maxAliasWidth {
+			maxAliasWidth = len(alias)
+		}
+	}
+
+	for _, entry := range entries {
+		if _, err := fmt.Fprintf(w, "%-*s (%s)\n", maxAliasWidth, entry.alias, entry.remoteID); err != nil {
 			return err
 		}
 	}
