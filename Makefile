@@ -6,12 +6,13 @@ GO ?= go
 GOFLAGS ?= -mod=readonly
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/declarest
+OPERATOR_BINARY := $(BIN_DIR)/declarest-operator-manager
 TEST_FLAGS ?= -race
 E2E_FLAGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test e2e e2e-contract e2e-validate-components check build run install clean tidy
+.PHONY: help fmt vet lint test e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -50,8 +51,21 @@ build: ## Compile the declarest binary into $(BIN_DIR)/
 	@mkdir -p $(BIN_DIR)
 	$(GO) build $(GOFLAGS) -o $(BINARY) ./cmd/declarest
 
+operator-build: ## Compile the declarest operator manager binary into $(BIN_DIR)/
+	@mkdir -p $(BIN_DIR)
+	$(GO) build $(GOFLAGS) -o $(OPERATOR_BINARY) ./cmd/declarest-operator-manager
+
 run: ## Build and run the CLI via go run
 	$(GO) run ./cmd/declarest
+
+operator-run: ## Run the operator manager via go run
+	$(GO) run ./cmd/declarest-operator-manager
+
+operator-test: ## Run operator-focused unit tests
+	$(GO) test $(TEST_FLAGS) ./api/v1alpha1 ./internal/operator/...
+
+operator-image: ## Build the operator manager container image
+	podman build -f Dockerfile.operator -t declarest-operator:latest .
 
 install: ## Install the CLI into $(GOBIN) or GOPATH/bin
 	$(GO) install ./cmd/declarest

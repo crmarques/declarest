@@ -255,3 +255,43 @@ current-ctx: bundled
 		t.Fatalf("expected bundled OpenAPI version 3.0.0, got %v", specMap["openapi"])
 	}
 }
+
+func TestNewSessionFromResolvedContext(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	repoDir := filepath.Join(tempDir, "repo")
+	session, err := NewSessionFromResolvedContext(config.Context{
+		Name: "operator",
+		Repository: config.Repository{
+			ResourceFormat: config.ResourceFormatJSON,
+			Filesystem: &config.FilesystemRepository{
+				BaseDir: repoDir,
+			},
+		},
+		ManagedServer: &config.ManagedServer{
+			HTTP: &config.HTTPServer{
+				BaseURL: "https://example.com/api",
+				Auth: &config.HTTPAuth{
+					CustomHeaders: []config.HeaderTokenAuth{{
+						Header: "Authorization",
+						Prefix: "Bearer",
+						Value:  "operator-token",
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewSessionFromResolvedContext returned error: %v", err)
+	}
+	if session.Orchestrator == nil {
+		t.Fatal("expected non-nil orchestrator")
+	}
+	if session.Services == nil {
+		t.Fatal("expected non-nil services accessor")
+	}
+	if session.Contexts != nil {
+		t.Fatalf("expected nil context service for resolved-context session, got %T", session.Contexts)
+	}
+}

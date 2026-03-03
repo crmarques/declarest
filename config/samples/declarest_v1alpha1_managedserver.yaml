@@ -1,0 +1,21 @@
+apiVersion: declarest.io/v1alpha1
+kind: ManagedServer
+metadata:
+  name: example-managed-server
+spec:
+  http:
+    baseURL: https://managed-server.example.com/api
+    auth:
+      oauth2:
+        tokenURL: https://managed-server.example.com/oauth/token
+        grantType: client_credentials
+        clientIDRef:
+          name: managed-server-oauth2
+          key: client-id
+        clientSecretRef:
+          name: managed-server-oauth2
+          key: client-secret
+  openapi:
+    url: https://managed-server.example.com/openapi.yaml
+  metadata:
+    url: https://managed-server.example.com/metadata-bundle.tar.gz

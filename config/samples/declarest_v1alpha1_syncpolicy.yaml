@@ -1,0 +1,17 @@
+apiVersion: declarest.io/v1alpha1
+kind: SyncPolicy
+metadata:
+  name: example-sync-policy
+spec:
+  resourceRepositoryRef:
+    name: example-repository
+  managedServerRef:
+    name: example-managed-server
+  secretStoreRef:
+    name: example-secret-store
+  source:
+    path: /customers
+    recursive: true
+  sync:
+    prune: false
+  suspend: false

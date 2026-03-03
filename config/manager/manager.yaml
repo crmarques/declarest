@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: declarest-operator
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: declarest-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: declarest-operator
+    spec:
+      serviceAccountName: declarest-operator
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: ghcr.io/crmarques/declarest-operator:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /manager
+          args:
+            - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8080
+            - --leader-elect
+          ports:
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: probes
+            - containerPort: 9443
+              name: webhook-server
+          env:
+            - name: DECLAREST_OPERATOR_REPO_BASE_DIR
+              value: /var/lib/declarest/repos
+            - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
+              value: /var/lib/declarest/cache
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/declarest
+            - name: webhook-certs
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: declarest-operator-state
+        - name: webhook-certs
+          secret:
+            secretName: declarest-operator-webhook-server-cert
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: declarest-operator-metrics
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  selector:
+    app.kubernetes.io/name: declarest-operator
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: declarest-operator-state
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

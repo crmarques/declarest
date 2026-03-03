@@ -24,3 +24,15 @@ func NewSession(opts BootstrapConfig, selection config.ContextSelection) (Sessio
 		Services:     defaultOrchestrator,
 	}, nil
 }
+
+func NewSessionFromResolvedContext(resolvedContext config.Context) (Session, error) {
+	defaultOrchestrator, err := buildDefaultOrchestratorFromResolvedContext(context.Background(), resolvedContext)
+	if err != nil {
+		return Session{}, err
+	}
+	return Session{
+		Contexts:     nil,
+		Orchestrator: defaultOrchestrator,
+		Services:     defaultOrchestrator,
+	}, nil
+}

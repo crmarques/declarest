@@ -37,6 +37,13 @@ func buildDefaultOrchestrator(
 		return nil, err
 	}
 
+	return buildDefaultOrchestratorFromResolvedContext(ctx, resolvedContext)
+}
+
+func buildDefaultOrchestratorFromResolvedContext(
+	ctx context.Context,
+	resolvedContext config.Context,
+) (*internalorchestrator.DefaultOrchestrator, error) {
 	emitSecurityWarnings(os.Stderr, resolvedContext)
 
 	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)

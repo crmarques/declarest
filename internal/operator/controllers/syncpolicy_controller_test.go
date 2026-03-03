@@ -1,0 +1,104 @@
+package controllers
+
+import (
+	"context"
+	"testing"
+
+	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+)
+
+func TestSyncPolicyValidateNoOverlap(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := declarestv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add scheme: %v", err)
+	}
+
+	existing := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/customers"},
+		},
+	}
+	candidate := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/customers/acme"},
+		},
+	}
+
+	reconciler := &SyncPolicyReconciler{
+		Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build(),
+		Scheme: scheme,
+	}
+
+	if err := reconciler.validateNoOverlap(context.Background(), candidate); err == nil {
+		t.Fatal("expected overlap error, got nil")
+	}
+}
+
+func TestSyncPolicyMapperByResourceRepositoryUsesIndex(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := declarestv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add scheme: %v", err)
+	}
+
+	policyA := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-a"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/"},
+		},
+	}
+	policyB := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-b"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/"},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(policyA, policyB).
+		WithIndex(&declarestv1alpha1.SyncPolicy{}, syncPolicyIndexResourceRepositoryRef, func(obj ctrlclient.Object) []string {
+			item, ok := obj.(*declarestv1alpha1.SyncPolicy)
+			if !ok {
+				return nil
+			}
+			return []string{item.Spec.ResourceRepositoryRef.Name}
+		}).
+		Build()
+
+	reconciler := &SyncPolicyReconciler{Client: fakeClient, Scheme: scheme}
+	requests := reconciler.syncPoliciesForResourceRepository(
+		context.Background(),
+		&declarestv1alpha1.ResourceRepository{
+			ObjectMeta: metav1.ObjectMeta{Name: "repo-a", Namespace: "default"},
+		},
+	)
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(requests))
+	}
+	if requests[0].NamespacedName != (types.NamespacedName{Namespace: "default", Name: "policy-a"}) {
+		t.Fatalf("unexpected request: %#v", requests[0].NamespacedName)
+	}
+}

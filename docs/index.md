@@ -41,6 +41,7 @@ declarest resource apply /corporations/acme
 - Metadata workflows: infer/render/set/resolve overrides for custom API shapes
 - Secret workflows: detect/store/mask/resolve with save-time safeguards
 - Repository workflows: status/tree/history/commit/refresh/push/reset/clean
+- Kubernetes operator workflows: multi-CRD reconciliation (`ResourceRepository`, `ManagedServer`, `SecretStore`, `SyncPolicy`)
 
 ## Start here
 
@@ -48,6 +49,7 @@ declarest resource apply /corporations/acme
 - [Quickstart](getting-started/quickstart.md)
 - [Concepts overview](concepts/overview.md)
 - [CLI reference](reference/cli.md)
+- [Kubernetes Operator workflow](workflows/operator.md)
 
 ## For advanced API modeling
 

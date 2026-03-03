@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: declarest-operator-selfsigned-issuer
+  namespace: declarest-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: declarest-operator-webhook-server-cert
+  namespace: declarest-system
+spec:
+  secretName: declarest-operator-webhook-server-cert
+  issuerRef:
+    kind: Issuer
+    name: declarest-operator-selfsigned-issuer
+  dnsNames:
+    - declarest-operator-webhook-service.declarest-system.svc
+    - declarest-operator-webhook-service.declarest-system.svc.cluster.local

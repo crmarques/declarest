@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - bases/declarest.io_resourcerepositories.yaml
+  - bases/declarest.io_managedservers.yaml
+  - bases/declarest.io_secretstores.yaml
+  - bases/declarest.io_syncpolicies.yaml

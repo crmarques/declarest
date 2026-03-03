@@ -34,6 +34,7 @@ nav:
     - Secrets: concepts/secrets.md
   - Workflows:
     - Sync Resources: workflows/sync.md
+    - Kubernetes Operator: workflows/operator.md
     - Inspect and Debug Mappings: workflows/ad-hoc.md
     - Editing Metadata and Contexts: workflows/editing.md
     - Repository Operations: workflows/repository.md

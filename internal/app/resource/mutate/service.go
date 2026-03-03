@@ -40,8 +40,9 @@ type Request struct {
 }
 
 type Result struct {
-	ResolvedPath string
-	Items        []resource.Resource
+	ResolvedPath  string
+	TargetedCount int
+	Items         []resource.Resource
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
@@ -72,13 +73,14 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 			}
 		}
 
-		return Result{ResolvedPath: req.LogicalPath, Items: items}, nil
+		return Result{ResolvedPath: req.LogicalPath, TargetedCount: 1, Items: items}, nil
 	}
 
 	targets, err := ListLocalTargets(ctx, orchestratorService, req.LogicalPath, req.Recursive)
 	if err != nil {
 		return Result{}, err
 	}
+	targetedCount := len(targets)
 
 	items, err := executeMutationForTargets(ctx, targets, func(runCtx context.Context, logicalPath string) (resource.Resource, error) {
 		switch req.Operation {
@@ -113,7 +115,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		}
 	}
 
-	return Result{ResolvedPath: req.LogicalPath, Items: items}, nil
+	return Result{ResolvedPath: req.LogicalPath, TargetedCount: targetedCount, Items: items}, nil
 }
 
 func runExplicitMutation(

@@ -44,6 +44,7 @@ declarest resource apply /corporations/acme
 - Secret safety workflows: detect/fix metadata, store/mask/resolve placeholders, safe-save guards
 - Repository workflows: `status|tree|history|commit|refresh|push|reset|clean|check`
 - Context workflows: template/validate/add/update/resolve with runtime override support
+- Kubernetes operator workflows: multi-CRD repo-to-managed-server sync (`ResourceRepository`, `ManagedServer`, `SecretStore`, `SyncPolicy`)
 
 ## Install
 
@@ -53,6 +54,20 @@ Use a release binary or build locally:
 go build -o bin/declarest ./cmd/declarest
 ./bin/declarest version
 ```
+
+## Kubernetes Operator (MVP)
+
+Build and run the operator manager locally:
+
+```bash
+make operator-build
+make operator-run
+```
+
+Cluster manifests and samples are under:
+
+- `config/default`
+- `config/samples`
 
 ## Quickstart
 

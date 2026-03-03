@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - declarest_v1alpha1_resourcerepository.yaml
+  - declarest_v1alpha1_managedserver.yaml
+  - declarest_v1alpha1_secretstore.yaml
+  - declarest_v1alpha1_syncpolicy.yaml
