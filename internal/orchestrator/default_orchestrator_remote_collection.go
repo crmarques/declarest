@@ -237,13 +237,13 @@ func openAPIExactPathLooksLikeResource(openAPISpec any, logicalPath string) bool
 		return false
 	}
 
-	targetSegments := splitLogicalPathSegments(logicalPath)
+	targetSegments := resource.SplitRawPathSegments(logicalPath)
 	if len(targetSegments) == 0 {
 		return false
 	}
 
 	for rawPath, pathItemValue := range paths {
-		candidateSegments := splitLogicalPathSegments(rawPath)
+		candidateSegments := resource.SplitRawPathSegments(rawPath)
 		if len(candidateSegments) != len(targetSegments) {
 			continue
 		}

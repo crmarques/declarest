@@ -5,14 +5,14 @@ import (
 	"io"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
 	var fromRepository bool
@@ -25,7 +25,7 @@ func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 		Short: "List resources",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -36,18 +36,18 @@ func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return shared.ValidationError("flag --http-method requires remote-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
 			}
 
-			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
-			if globalFlags != nil && globalFlags.Output == shared.OutputAuto {
-				outputFormat = shared.OutputAuto
+			if globalFlags != nil && globalFlags.Output == cliutil.OutputAuto {
+				outputFormat = cliutil.OutputAuto
 			}
 
-			orchestratorService, err := shared.RequireOrchestrator(deps)
+			orchestratorService, err := cliutil.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -78,15 +78,15 @@ func newListCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 				payloads = append(payloads, item.Payload)
 			}
 
-			return shared.WriteOutput(command, outputFormat, payloads, func(w io.Writer, _ []resource.Value) error {
+			return cliutil.WriteOutput(command, outputFormat, payloads, func(w io.Writer, _ []resource.Value) error {
 				return renderListText(w, items)
 			})
 		},
 	}
 
-	shared.BindPathFlag(command, &pathFlag)
-	shared.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer)
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
 	bindHTTPMethodFlag(command, &httpMethod)

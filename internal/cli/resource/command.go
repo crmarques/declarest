@@ -3,7 +3,7 @@ package resource
 import (
 	"strings"
 
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ func normalizeReadSourceSelection(sourceFlag string, fromRepository bool, fromRe
 		return "", err
 	}
 	if normalized == sourceBoth {
-		return "", shared.ValidationError("flag --source must be one of: remote-server, repository", nil)
+		return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository", nil)
 	}
 	return normalized, nil
 }
@@ -43,7 +43,7 @@ func normalizeSourceSelection(
 	sourceValue := strings.TrimSpace(sourceFlag)
 	if sourceValue != "" {
 		if fromRepository || fromRemoteServer || fromBoth {
-			return "", shared.ValidationError(
+			return "", cliutil.ValidationError(
 				"flag --source cannot be combined with legacy source flags (--repository, --remote-server, --both)",
 				nil,
 			)
@@ -57,13 +57,13 @@ func normalizeSourceSelection(
 			}
 		}
 		if allowBoth {
-			return "", shared.ValidationError("flag --source must be one of: remote-server, repository, both", nil)
+			return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository, both", nil)
 		}
-		return "", shared.ValidationError("flag --source must be one of: remote-server, repository", nil)
+		return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository", nil)
 	}
 
 	if fromRepository && fromRemoteServer {
-		return "", shared.ValidationError("flags --repository and --remote-server cannot be used together", nil)
+		return "", cliutil.ValidationError("flags --repository and --remote-server cannot be used together", nil)
 	}
 	if allowBoth {
 		explicitSources := 0
@@ -77,7 +77,7 @@ func normalizeSourceSelection(
 			explicitSources++
 		}
 		if explicitSources > 1 {
-			return "", shared.ValidationError("flags --repository, --remote-server, and --both are mutually exclusive", nil)
+			return "", cliutil.ValidationError("flags --repository, --remote-server, and --both are mutually exclusive", nil)
 		}
 		if fromBoth {
 			return sourceBoth, nil
@@ -92,7 +92,7 @@ func normalizeSourceSelection(
 
 func bindReadSourceFlags(command *cobra.Command, sourceFlag *string, fromRepository *bool, fromRemoteServer *bool) {
 	command.Flags().StringVar(sourceFlag, "source", "", "read/list source: remote-server or repository (default: remote-server)")
-	shared.RegisterFlagValueCompletions(command, "source", readSourceCompletionValues)
+	cliutil.RegisterFlagValueCompletions(command, "source", readSourceCompletionValues)
 
 	command.Flags().BoolVar(fromRepository, "repository", false, "read/list from repository (legacy alias for --source repository)")
 	command.Flags().BoolVar(fromRemoteServer, "remote-server", false, "read/list from remote server (legacy alias for --source remote-server)")
@@ -102,7 +102,7 @@ func bindReadSourceFlags(command *cobra.Command, sourceFlag *string, fromReposit
 
 func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string, fromRepository *bool, fromRemoteServer *bool, fromBoth *bool) {
 	command.Flags().StringVar(sourceFlag, "source", "", "delete source: remote-server, repository, or both (default: remote-server)")
-	shared.RegisterFlagValueCompletions(command, "source", deleteSourceCompletionValues)
+	cliutil.RegisterFlagValueCompletions(command, "source", deleteSourceCompletionValues)
 
 	command.Flags().BoolVar(fromRepository, "repository", false, "delete from repository (legacy alias for --source repository)")
 	command.Flags().BoolVar(fromRemoteServer, "remote-server", false, "delete from remote server (legacy alias for --source remote-server)")
@@ -112,7 +112,7 @@ func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string, fromRepos
 	_ = command.Flags().MarkHidden("both")
 }
 
-func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "resource",
 		Short: "Manage resources",

@@ -7,7 +7,11 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
-func NormalizeLogicalPath(value string) (string, error) {
+// CleanRawPath normalizes an absolute path by replacing backslashes, rejecting
+// traversal segments, and cleaning redundant separators. Unlike
+// NormalizeLogicalPath it does NOT reject reserved segments like "_", so it is
+// suitable for paths that may contain wildcards or metadata placeholders.
+func CleanRawPath(value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", faults.NewTypedError(faults.ValidationError, "logical path must not be empty", nil)
 	}
@@ -17,13 +21,9 @@ func NormalizeLogicalPath(value string) (string, error) {
 		return "", faults.NewTypedError(faults.ValidationError, "logical path must be absolute", nil)
 	}
 
-	segments := strings.Split(normalizedInput, "/")
-	for _, segment := range segments {
+	for _, segment := range strings.Split(normalizedInput, "/") {
 		if segment == ".." {
 			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain traversal segments", nil)
-		}
-		if segment == "_" {
-			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain reserved metadata segment \"_\"", nil)
 		}
 	}
 
@@ -34,6 +34,21 @@ func NormalizeLogicalPath(value string) (string, error) {
 
 	if cleaned != "/" {
 		cleaned = strings.TrimSuffix(cleaned, "/")
+	}
+
+	return cleaned, nil
+}
+
+func NormalizeLogicalPath(value string) (string, error) {
+	cleaned, err := CleanRawPath(value)
+	if err != nil {
+		return "", err
+	}
+
+	for _, segment := range SplitRawPathSegments(cleaned) {
+		if segment == "_" {
+			return "", faults.NewTypedError(faults.ValidationError, "logical path must not contain reserved metadata segment \"_\"", nil)
+		}
 	}
 
 	return cleaned, nil
@@ -51,6 +66,17 @@ func JoinLogicalPath(collectionPath string, segment string) (string, error) {
 	}
 
 	return NormalizeLogicalPath(joined)
+}
+
+// SplitRawPathSegments splits a path string into its segments without
+// validation. Use SplitLogicalPathSegments when the path should be validated
+// first (rejects reserved segments like "_").
+func SplitRawPathSegments(value string) []string {
+	trimmed := strings.Trim(strings.TrimSpace(value), "/")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "/")
 }
 
 func SplitLogicalPathSegments(value string) []string {

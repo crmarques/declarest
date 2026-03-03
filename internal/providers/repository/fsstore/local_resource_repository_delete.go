@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
+	"github.com/crmarques/declarest/internal/providers/fsutil"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )

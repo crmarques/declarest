@@ -9,12 +9,12 @@ import (
 	"time"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
 )
 
-func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:     "repository",
 		Aliases: []string{"repo"},
@@ -38,7 +38,7 @@ func NewCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags
 	return command
 }
 
-func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newHistoryCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var maxCount int
 	var author string
 	var grep string
@@ -64,10 +64,10 @@ func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.WriteText(command, shared.OutputText, "repository history is not supported for filesystem repositories")
+				return cliutil.WriteText(command, cliutil.OutputText, "repository history is not supported for filesystem repositories")
 			}
 			if repositoryContext.Kind != repositoryContextGit {
-				return shared.ValidationError("repository history is only available for git repositories", nil)
+				return cliutil.ValidationError("repository history is only available for git repositories", nil)
 			}
 
 			historyReader, err := requireRepositoryHistoryReader(deps)
@@ -98,7 +98,7 @@ func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 			}
 
 			format := resolveRepoStatusOutputFormat(globalFlags)
-			return shared.WriteOutput(command, format, entries, func(w io.Writer, value []repository.HistoryEntry) error {
+			return cliutil.WriteOutput(command, format, entries, func(w io.Writer, value []repository.HistoryEntry) error {
 				return renderRepoHistoryText(w, value, oneline)
 			})
 		},
@@ -116,13 +116,13 @@ func newHistoryCommand(deps shared.CommandDependencies, globalFlags *shared.Glob
 	return command
 }
 
-func newInitCommand(deps shared.CommandDependencies) *cobra.Command {
+func newInitCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Initialize repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -131,13 +131,13 @@ func newInitCommand(deps shared.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newRefreshCommand(deps shared.CommandDependencies) *cobra.Command {
+func newRefreshCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "refresh",
 		Short: "Refresh repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -146,13 +146,13 @@ func newRefreshCommand(deps shared.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newCleanCommand(deps shared.CommandDependencies) *cobra.Command {
+func newCleanCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clean",
 		Short: "Remove uncommitted repository changes",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -161,7 +161,7 @@ func newCleanCommand(deps shared.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newResetCommand(deps shared.CommandDependencies) *cobra.Command {
+func newResetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var hard bool
 
 	command := &cobra.Command{
@@ -169,7 +169,7 @@ func newResetCommand(deps shared.CommandDependencies) *cobra.Command {
 		Short: "Reset repository",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -181,13 +181,13 @@ func newResetCommand(deps shared.CommandDependencies) *cobra.Command {
 	return command
 }
 
-func newCheckCommand(deps shared.CommandDependencies) *cobra.Command {
+func newCheckCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check",
 		Short: "Check repository health",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -196,7 +196,7 @@ func newCheckCommand(deps shared.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newPushCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var forcePush bool
 
 	command := &cobra.Command{
@@ -208,7 +208,7 @@ func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -217,10 +217,10 @@ func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.ValidationError("repository push is not available for filesystem repositories", nil)
+				return cliutil.ValidationError("repository push is not available for filesystem repositories", nil)
 			}
 			if repositoryContext.Kind == repositoryContextGit && !repositoryContext.HasRemote {
-				return shared.ValidationError("repository push requires repository.git.remote configuration", nil)
+				return cliutil.ValidationError("repository push requires repository.git.remote configuration", nil)
 			}
 			return repositoryService.Push(command.Context(), repository.PushPolicy{Force: forcePush})
 		},
@@ -232,7 +232,7 @@ func newPushCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 	return command
 }
 
-func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newCommitCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var message string
 
 	command := &cobra.Command{
@@ -249,15 +249,15 @@ func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 				return err
 			}
 			if repositoryContext.Kind == repositoryContextFilesystem {
-				return shared.ValidationError("repository commit is not available for filesystem repositories", nil)
+				return cliutil.ValidationError("repository commit is not available for filesystem repositories", nil)
 			}
 			if repositoryContext.Kind != repositoryContextGit {
-				return shared.ValidationError("repository commit is only available for git repositories", nil)
+				return cliutil.ValidationError("repository commit is only available for git repositories", nil)
 			}
 
 			trimmedMessage := strings.TrimSpace(message)
 			if trimmedMessage == "" {
-				return shared.ValidationError("flag --message is required", nil)
+				return cliutil.ValidationError("flag --message is required", nil)
 			}
 
 			committer, err := requireRepositoryCommitter(deps)
@@ -270,10 +270,10 @@ func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 			}
 
 			format := resolveRepoStatusOutputFormat(globalFlags)
-			if format == shared.OutputText {
+			if format == cliutil.OutputText {
 				return nil
 			}
-			return shared.WriteOutput(command, format, repoCommitOutput{Committed: committed}, renderRepoCommitText)
+			return cliutil.WriteOutput(command, format, repoCommitOutput{Committed: committed}, renderRepoCommitText)
 		},
 	}
 
@@ -281,7 +281,7 @@ func newCommitCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 	return command
 }
 
-func newStatusCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newStatusCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show repository sync status",
@@ -292,7 +292,7 @@ func newStatusCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 		}, "\n"),
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			repositoryService, err := shared.RequireRepositorySync(deps)
+			repositoryService, err := cliutil.RequireRepositorySync(deps)
 			if err != nil {
 				return err
 			}
@@ -312,7 +312,7 @@ func newStatusCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 				Behind:         status.Behind,
 				HasUncommitted: status.HasUncommitted,
 			}
-			if shared.IsVerbose(globalFlags) && repositoryContext.Kind == repositoryContextGit {
+			if cliutil.IsVerbose(globalFlags) && repositoryContext.Kind == repositoryContextGit {
 				detailsReader, err := requireRepositoryStatusDetailsReader(deps)
 				if err != nil {
 					return err
@@ -328,14 +328,14 @@ func newStatusCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 			}
 
 			format := resolveRepoStatusOutputFormat(globalFlags)
-			return shared.WriteOutput(command, format, output, func(w io.Writer, value repoStatusOutput) error {
+			return cliutil.WriteOutput(command, format, output, func(w io.Writer, value repoStatusOutput) error {
 				return renderRepoStatusText(w, value, repositoryContext)
 			})
 		},
 	}
 }
 
-func newTreeCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newTreeCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tree",
 		Short: "Show local repository directory tree (directories only)",
@@ -345,7 +345,7 @@ func newTreeCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 			if err != nil {
 				return err
 			}
-			return shared.WriteText(command, resolveRepoStatusOutputFormat(globalFlags), renderRepoTreeText(paths))
+			return cliutil.WriteText(command, resolveRepoStatusOutputFormat(globalFlags), renderRepoTreeText(paths))
 		},
 	}
 }
@@ -362,37 +362,37 @@ type repoCommitOutput struct {
 	Committed bool `json:"committed" yaml:"committed"`
 }
 
-func requireRepositoryHistoryReader(deps shared.CommandDependencies) (repository.RepositoryHistoryReader, error) {
+func requireRepositoryHistoryReader(deps cliutil.CommandDependencies) (repository.RepositoryHistoryReader, error) {
 	if candidate, ok := deps.RepositorySync.(repository.RepositoryHistoryReader); ok {
 		return candidate, nil
 	}
 	if candidate, ok := deps.ResourceStore.(repository.RepositoryHistoryReader); ok {
 		return candidate, nil
 	}
-	return nil, shared.ValidationError("repository history is not supported by the active repository provider", nil)
+	return nil, cliutil.ValidationError("repository history is not supported by the active repository provider", nil)
 }
 
-func requireRepositoryStatusDetailsReader(deps shared.CommandDependencies) (repository.RepositoryStatusDetailsReader, error) {
+func requireRepositoryStatusDetailsReader(deps cliutil.CommandDependencies) (repository.RepositoryStatusDetailsReader, error) {
 	if candidate, ok := deps.RepositorySync.(repository.RepositoryStatusDetailsReader); ok {
 		return candidate, nil
 	}
 	if candidate, ok := deps.ResourceStore.(repository.RepositoryStatusDetailsReader); ok {
 		return candidate, nil
 	}
-	return nil, shared.ValidationError("verbose repository status is not supported by the active repository provider", nil)
+	return nil, cliutil.ValidationError("verbose repository status is not supported by the active repository provider", nil)
 }
 
-func requireRepositoryCommitter(deps shared.CommandDependencies) (repository.RepositoryCommitter, error) {
+func requireRepositoryCommitter(deps cliutil.CommandDependencies) (repository.RepositoryCommitter, error) {
 	if candidate, ok := deps.RepositorySync.(repository.RepositoryCommitter); ok {
 		return candidate, nil
 	}
 	if candidate, ok := deps.ResourceStore.(repository.RepositoryCommitter); ok {
 		return candidate, nil
 	}
-	return nil, shared.ValidationError("git repository commit capability is not available", nil)
+	return nil, cliutil.ValidationError("git repository commit capability is not available", nil)
 }
 
-func requireRepositoryTreeReader(deps shared.CommandDependencies) (repository.RepositoryTreeReader, bool) {
+func requireRepositoryTreeReader(deps cliutil.CommandDependencies) (repository.RepositoryTreeReader, bool) {
 	if candidate, ok := deps.RepositorySync.(repository.RepositoryTreeReader); ok {
 		return candidate, true
 	}
@@ -404,23 +404,23 @@ func requireRepositoryTreeReader(deps shared.CommandDependencies) (repository.Re
 
 func resolveRepoTreePaths(
 	ctx context.Context,
-	deps shared.CommandDependencies,
-	_ *shared.GlobalFlags,
+	deps cliutil.CommandDependencies,
+	_ *cliutil.GlobalFlags,
 ) ([]string, error) {
 	if treeReader, ok := requireRepositoryTreeReader(deps); ok {
 		return treeReader.Tree(ctx)
 	}
 
-	return nil, shared.ValidationError("repository tree is not supported by the active repository provider", nil)
+	return nil, cliutil.ValidationError("repository tree is not supported by the active repository provider", nil)
 }
 
-func resolveRepoStatusOutputFormat(globalFlags *shared.GlobalFlags) string {
+func resolveRepoStatusOutputFormat(globalFlags *cliutil.GlobalFlags) string {
 	if globalFlags == nil {
-		return shared.OutputText
+		return cliutil.OutputText
 	}
 	switch globalFlags.Output {
-	case "", shared.OutputAuto:
-		return shared.OutputText
+	case "", cliutil.OutputAuto:
+		return cliutil.OutputText
 	default:
 		return globalFlags.Output
 	}
@@ -442,10 +442,10 @@ type repositoryContextInfo struct {
 
 func resolveRepositoryContext(
 	ctx context.Context,
-	deps shared.CommandDependencies,
-	globalFlags *shared.GlobalFlags,
+	deps cliutil.CommandDependencies,
+	globalFlags *cliutil.GlobalFlags,
 ) (repositoryContextInfo, error) {
-	contexts, err := shared.RequireContexts(deps)
+	contexts, err := cliutil.RequireContexts(deps)
 	if err != nil {
 		return repositoryContextInfo{}, err
 	}
@@ -479,11 +479,11 @@ func resolveRepositoryContext(
 	}
 }
 
-func selectedContextName(globalFlags *shared.GlobalFlags, ctx context.Context) string {
+func selectedContextName(globalFlags *cliutil.GlobalFlags, ctx context.Context) string {
 	if globalFlags != nil && strings.TrimSpace(globalFlags.Context) != "" {
 		return strings.TrimSpace(globalFlags.Context)
 	}
-	return strings.TrimSpace(shared.ContextName(ctx))
+	return strings.TrimSpace(cliutil.ContextName(ctx))
 }
 
 func renderRepoStatusText(w io.Writer, value repoStatusOutput, repositoryContext repositoryContextInfo) error {
@@ -699,7 +699,7 @@ func parseHistoryTimeFlag(flagName string, raw string) (*time.Time, error) {
 		}
 	}
 
-	return nil, shared.ValidationError(
+	return nil, cliutil.ValidationError(
 		fmt.Sprintf("invalid --%s value: use YYYY-MM-DD or RFC3339", flagName),
 		nil,
 	)

@@ -11,7 +11,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/providers/shared/tlsconfig"
+	"github.com/crmarques/declarest/internal/providers/tlsconfig"
 	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"

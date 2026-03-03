@@ -4,15 +4,15 @@ import (
 	"strings"
 
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/spf13/cobra"
 )
 
-func newCreateCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newCreateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
-	var input shared.InputFlags
+	var input cliutil.InputFlags
 	var recursive bool
 	var httpMethod string
 	var refreshRepository bool
@@ -35,7 +35,7 @@ func newCreateCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -81,11 +81,11 @@ func newCreateCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 				return err
 			}
 
-			if !shared.IsVerbose(globalFlags) {
+			if !cliutil.IsVerbose(globalFlags) {
 				return nil
 			}
 
-			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -93,10 +93,10 @@ func newCreateCommand(deps shared.CommandDependencies, globalFlags *shared.Globa
 		},
 	}
 
-	shared.BindPathFlag(command, &pathFlag)
-	shared.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
-	shared.BindInputFlags(command, &input)
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	cliutil.BindInputFlags(command, &input)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
 		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
 	}

@@ -283,12 +283,12 @@ func shouldResolveRequestGetAsList(resourceInfo resource.Resource, md metadata.R
 		}
 	}
 
-	templateDepth := len(splitLogicalPathSegments(md.CollectionPath))
+	templateDepth := len(resource.SplitRawPathSegments(md.CollectionPath))
 	if templateDepth == 0 {
 		return false
 	}
 
-	logicalDepth := len(splitLogicalPathSegments(resourceInfo.LogicalPath))
+	logicalDepth := len(resource.SplitRawPathSegments(resourceInfo.LogicalPath))
 	if logicalDepth == 0 {
 		return false
 	}

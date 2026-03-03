@@ -19,7 +19,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
+	"github.com/crmarques/declarest/internal/providers/fsutil"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
 

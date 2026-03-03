@@ -35,7 +35,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 
 ## Allowed Dependency Directions
 1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.
-2. `internal/cli/*` -> `internal/cli/shared`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
+2. `internal/cli/*` -> `internal/cli/cliutil`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
 3. `internal/app/*` -> domain contracts (`orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`).
 4. `orchestrator` -> `repository`, `metadata`, `managedserver`, `secrets`, `resource`.
 5. `internal/bootstrap` -> provider implementations in `internal/providers/*`.

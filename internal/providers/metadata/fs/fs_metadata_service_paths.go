@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/internal/providers/shared/fsutil"
+	"github.com/crmarques/declarest/internal/providers/fsutil"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 

@@ -8,6 +8,7 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
 	managedservercmd "github.com/crmarques/declarest/internal/cli/managedserver"
@@ -15,7 +16,6 @@ import (
 	"github.com/crmarques/declarest/internal/cli/repo"
 	resourcecmd "github.com/crmarques/declarest/internal/cli/resource"
 	"github.com/crmarques/declarest/internal/cli/secret"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/internal/cli/version"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +54,7 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 
 func NewRootCommand(deps Dependencies) *cobra.Command {
 	commandDeps := deps
-	var globalFlags shared.GlobalFlags
+	var globalFlags cliutil.GlobalFlags
 
 	root := &cobra.Command{
 		Use:   "declarest",
@@ -64,15 +64,15 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		},
 		Args: cobra.NoArgs,
 		PersistentPreRunE: func(command *cobra.Command, _ []string) error {
-			if err := shared.ValidateOutputFormat(globalFlags.Output); err != nil {
+			if err := cliutil.ValidateOutputFormat(globalFlags.Output); err != nil {
 				return err
 			}
-			if err := shared.ValidateOutputFormatForCommandPath(command.CommandPath(), globalFlags.Output); err != nil {
+			if err := cliutil.ValidateOutputFormatForCommandPath(command.CommandPath(), globalFlags.Output); err != nil {
 				return err
 			}
 
 			commandContext := context.Background()
-			commandContext = shared.WithContextName(commandContext, globalFlags.Context)
+			commandContext = cliutil.WithContextName(commandContext, globalFlags.Context)
 			commandContext = debugctx.WithEnabled(commandContext, globalFlags.Debug)
 			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
 			command.SetContext(commandContext)
@@ -115,8 +115,8 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		_, _ = fmt.Fprintln(originalOut, rendered)
 	})
 
-	shared.BindGlobalFlags(root, &globalFlags)
-	shared.RegisterContextFlagCompletion(root, commandDeps)
+	cliutil.BindGlobalFlags(root, &globalFlags)
+	cliutil.RegisterContextFlagCompletion(root, commandDeps)
 	root.PersistentFlags().BoolP("help", "h", false, "help for command")
 
 	root.AddGroup(

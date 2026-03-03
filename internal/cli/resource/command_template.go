@@ -4,26 +4,26 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	resourceinputapp "github.com/crmarques/declarest/internal/cli/resource/input"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newTemplateCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newTemplateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
-	var input shared.InputFlags
+	var input cliutil.InputFlags
 
 	command := &cobra.Command{
 		Use:   "template [path]",
 		Short: "Render payload templates",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
-			outputFormat, err := shared.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
@@ -33,7 +33,7 @@ func newTemplateCommand(deps shared.CommandDependencies, globalFlags *shared.Glo
 				return err
 			}
 
-			orchestratorService, err := shared.RequireOrchestrator(deps)
+			orchestratorService, err := cliutil.RequireOrchestrator(deps)
 			if err != nil {
 				return err
 			}
@@ -42,16 +42,16 @@ func newTemplateCommand(deps shared.CommandDependencies, globalFlags *shared.Glo
 				return err
 			}
 
-			return shared.WriteOutput(command, outputFormat, templated, func(w io.Writer, item resource.Value) error {
+			return cliutil.WriteOutput(command, outputFormat, templated, func(w io.Writer, item resource.Value) error {
 				_, writeErr := fmt.Fprintln(w, item)
 				return writeErr
 			})
 		},
 	}
 
-	shared.BindPathFlag(command, &pathFlag)
-	shared.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
-	shared.BindInputFlags(command, &input)
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	cliutil.BindInputFlags(command, &input)
 	return command
 }

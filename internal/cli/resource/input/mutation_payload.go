@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -14,41 +14,41 @@ import (
 // JSON/YAML, and dotted assignment shorthand like "a=b,c=d,e.f=g".
 func DecodeOptionalMutationPayloadInput(
 	command *cobra.Command,
-	flags shared.InputFlags,
+	flags cliutil.InputFlags,
 ) (resource.Value, bool, error) {
 	payloadArg := strings.TrimSpace(flags.Payload)
 	if payloadArg == "" || payloadArg == "-" {
 		return DecodeOptionalPayloadInput(command, flags)
 	}
 
-	stdinData, err := shared.ReadOptionalInput(command, shared.InputFlags{})
+	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{})
 	if err != nil {
 		return nil, false, err
 	}
 	if len(stdinData) > 0 {
-		return nil, false, shared.ValidationError("flag --payload cannot be combined with stdin input", nil)
+		return nil, false, cliutil.ValidationError("flag --payload cannot be combined with stdin input", nil)
 	}
 
 	if payloadArgLooksLikeExistingFile(payloadArg) {
 		return DecodeOptionalPayloadInput(command, flags)
 	}
 
-	if value, err := shared.DecodeInputData[resource.Value]([]byte(payloadArg), flags.Format); err == nil {
+	if value, err := cliutil.DecodeInputData[resource.Value]([]byte(payloadArg), flags.Format); err == nil {
 		return value, true, nil
 	}
 
-	if objectValue, err := shared.ParseDottedAssignmentsObject(payloadArg); err == nil {
+	if objectValue, err := cliutil.ParseDottedAssignmentsObject(payloadArg); err == nil {
 		return objectValue, true, nil
 	}
 
 	// Preserve the existing missing-file behavior when the input looks like a
 	// path but does not exist and also does not parse as supported inline input.
-	_, readErr := shared.ReadInput(command, flags)
+	_, readErr := cliutil.ReadInput(command, flags)
 	if readErr != nil {
 		return nil, false, readErr
 	}
 
-	return nil, false, shared.ValidationError("invalid payload input", nil)
+	return nil, false, cliutil.ValidationError("invalid payload input", nil)
 }
 
 func payloadArgLooksLikeExistingFile(value string) bool {

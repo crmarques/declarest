@@ -1,4 +1,4 @@
-package shared
+package cliutil
 
 import "context"
 

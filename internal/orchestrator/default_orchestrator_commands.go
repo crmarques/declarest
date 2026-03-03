@@ -240,7 +240,7 @@ func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string
 
 	direct := make([]resource.Resource, 0, len(items))
 	for _, item := range items {
-		if isDirectChildPath(normalizedPath, item.LogicalPath) {
+		if _, isChild := resource.ChildSegment(normalizedPath, item.LogicalPath); isChild {
 			direct = append(direct, item)
 		}
 	}

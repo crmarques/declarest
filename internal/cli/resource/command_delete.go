@@ -6,14 +6,14 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
 )
 
-func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
+func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
 	var confirmDelete bool
@@ -37,9 +37,9 @@ func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			if !confirmDelete {
-				return shared.ValidationError("flag --confirm-delete is required: confirm deletion", nil)
+				return cliutil.ValidationError("flag --confirm-delete is required: confirm deletion", nil)
 			}
-			resolvedPath, err := shared.ResolvePathInput(pathFlag, args, true)
+			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
@@ -54,7 +54,7 @@ func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && !deleteFromRemote {
-				return shared.ValidationError("flag --http-method requires remote-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
 			}
 
 			var cfg configdomain.Context
@@ -79,7 +79,7 @@ func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 			}
 
 			if deleteFromRemote {
-				orchestratorService, err := shared.RequireOrchestrator(deps)
+				orchestratorService, err := cliutil.RequireOrchestrator(deps)
 				if err != nil {
 					return err
 				}
@@ -112,7 +112,7 @@ func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 				return nil
 			}
 
-			repositoryService, err := shared.RequireResourceStore(deps)
+			repositoryService, err := cliutil.RequireResourceStore(deps)
 			if err != nil {
 				return err
 			}
@@ -123,9 +123,9 @@ func newDeleteCommand(deps shared.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	shared.BindPathFlag(command, &pathFlag)
-	shared.RegisterPathFlagCompletion(command, deps)
-	command.ValidArgsFunction = shared.SinglePathArgCompletionFunc(deps)
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
 	command.Flags().BoolVar(&confirmDelete, "force", false, "legacy alias for --confirm-delete")
 	_ = command.Flags().MarkHidden("force")

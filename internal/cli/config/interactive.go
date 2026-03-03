@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ const resourceFormatRemoteDefaultOption = "remote-default"
 
 func resolveCreateContextInput(
 	command *cobra.Command,
-	input shared.InputFlags,
+	input cliutil.InputFlags,
 	prompter configPrompter,
 	contextName string,
 ) (configdomain.Context, error) {
@@ -34,11 +34,11 @@ func resolveCreateContextInput(
 	return cfg, nil
 }
 
-func shouldUseInteractiveCreate(command *cobra.Command, input shared.InputFlags, prompter configPrompter) bool {
+func shouldUseInteractiveCreate(command *cobra.Command, input cliutil.InputFlags, prompter configPrompter) bool {
 	if input.Payload != "" {
 		return false
 	}
-	if shared.HasPipedInput(command) {
+	if cliutil.HasPipedInput(command) {
 		return false
 	}
 	return prompter.IsInteractive(command)
@@ -177,7 +177,7 @@ func promptRepositoryConfig(
 		contextCfg.Repository.Git = repo
 		return baseDir, nil
 	default:
-		return "", shared.ValidationError("invalid repository type selected", nil)
+		return "", cliutil.ValidationError("invalid repository type selected", nil)
 	}
 }
 
@@ -295,7 +295,7 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 		}
 		auth.AccessKey = &configdomain.AccessKeyAuth{Token: token}
 	default:
-		return nil, shared.ValidationError("invalid git auth method selected", nil)
+		return nil, cliutil.ValidationError("invalid git auth method selected", nil)
 	}
 
 	return auth, nil
@@ -373,7 +373,7 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 	}
 
 	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
-		return nil, shared.ValidationError("managed-server proxy requires at least one of http-url or https-url", nil)
+		return nil, cliutil.ValidationError("managed-server proxy requires at least one of http-url or https-url", nil)
 	}
 
 	noProxy, err := promptOptionalInput(command, prompter, "Proxy no-proxy list (optional): ")
@@ -496,7 +496,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		}
 		auth.CustomHeaders = customHeaders
 	default:
-		return nil, shared.ValidationError("invalid managed-server auth method selected", nil)
+		return nil, cliutil.ValidationError("invalid managed-server auth method selected", nil)
 	}
 
 	return auth, nil
@@ -556,7 +556,7 @@ func promptSecretStore(command *cobra.Command, prompter configPrompter) (*config
 		}
 		store.Vault = vaultStore
 	default:
-		return nil, shared.ValidationError("invalid secret-store provider selected", nil)
+		return nil, cliutil.ValidationError("invalid secret-store provider selected", nil)
 	}
 
 	return store, nil
@@ -602,7 +602,7 @@ func promptFileSecretStore(command *cobra.Command, prompter configPrompter) (*co
 			"secret-store file passphrase-file",
 		)
 	default:
-		return nil, shared.ValidationError("invalid secret-store file key source selected", nil)
+		return nil, cliutil.ValidationError("invalid secret-store file key source selected", nil)
 	}
 	if err != nil {
 		return nil, err
@@ -753,7 +753,7 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 			Mount:    mount,
 		}
 	default:
-		return nil, shared.ValidationError("invalid vault auth method selected", nil)
+		return nil, cliutil.ValidationError("invalid vault auth method selected", nil)
 	}
 
 	return auth, nil
@@ -838,7 +838,7 @@ func promptRequiredInput(
 	}
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", shared.ValidationError(fmt.Sprintf("%s is required", field), nil)
+		return "", cliutil.ValidationError(fmt.Sprintf("%s is required", field), nil)
 	}
 	return trimmed, nil
 }
@@ -867,7 +867,7 @@ func promptOptionalInt(
 
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, false, shared.ValidationError(fmt.Sprintf("invalid integer value for %s", field), err)
+		return 0, false, cliutil.ValidationError(fmt.Sprintf("invalid integer value for %s", field), err)
 	}
 	return parsed, true, nil
 }
@@ -883,10 +883,10 @@ func selectContextForAction(
 		return "", err
 	}
 	if len(items) == 0 {
-		return "", shared.ValidationError("no contexts available", nil)
+		return "", cliutil.ValidationError("no contexts available", nil)
 	}
 	if !prompter.IsInteractive(command) {
-		return "", shared.ValidationError(fmt.Sprintf("context name is required: declarest config %s <name>", actionLabel), nil)
+		return "", cliutil.ValidationError(fmt.Sprintf("context name is required: declarest config %s <name>", actionLabel), nil)
 	}
 
 	options := make([]string, 0, len(items))

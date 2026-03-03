@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"context"
 	"path"
-	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
@@ -61,31 +60,4 @@ func collectionPathFor(normalizedPath string) string {
 	}
 
 	return collectionPath
-}
-
-func isDirectChildPath(parentPath string, logicalPath string) bool {
-	if parentPath == "/" {
-		return len(splitLogicalPathSegments(logicalPath)) == 1
-	}
-
-	parentSegments := splitLogicalPathSegments(parentPath)
-	childSegments := splitLogicalPathSegments(logicalPath)
-	if len(childSegments) != len(parentSegments)+1 {
-		return false
-	}
-
-	for idx := range parentSegments {
-		if parentSegments[idx] != childSegments[idx] {
-			return false
-		}
-	}
-	return true
-}
-
-func splitLogicalPathSegments(value string) []string {
-	trimmed := strings.Trim(strings.TrimSpace(value), "/")
-	if trimmed == "" {
-		return nil
-	}
-	return strings.Split(trimmed, "/")
 }

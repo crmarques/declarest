@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
-func newCopyCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalFlags) *cobra.Command {
+func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var targetPathFlag string
 	var overrideAttributes string
@@ -85,7 +85,7 @@ func newCopyCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 			if command.Flags().Changed("message") {
 				appendValue := strings.TrimSpace(commitMessageAppend)
 				if appendValue == "" {
-					return shared.ValidationError("flag --message cannot be empty", nil)
+					return cliutil.ValidationError("flag --message cannot be empty", nil)
 				}
 				commitMessage = commitMessage + " - " + appendValue
 			}
@@ -99,15 +99,15 @@ func newCopyCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 		},
 	}
 
-	shared.BindPathFlag(command, &pathFlag)
-	shared.RegisterPathFlagCompletion(command, deps)
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.Flags().StringVar(&targetPathFlag, "target-path", "", "destination resource path")
 	_ = command.RegisterFlagCompletionFunc("target-path", func(
 		cmd *cobra.Command,
 		_ []string,
 		toComplete string,
 	) ([]string, cobra.ShellCompDirective) {
-		return shared.CompleteLogicalPaths(cmd, deps, toComplete)
+		return cliutil.CompleteLogicalPaths(cmd, deps, toComplete)
 	})
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "allow replacing the target resource when it already exists")
 	command.Flags().BoolVar(&overwrite, "override", false, "legacy alias for --overwrite")
@@ -120,7 +120,7 @@ func newCopyCommand(deps shared.CommandDependencies, globalFlags *shared.GlobalF
 		if len(args) >= 2 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return shared.CompleteLogicalPaths(cmd, deps, toComplete)
+		return cliutil.CompleteLogicalPaths(cmd, deps, toComplete)
 	}
 
 	return command
@@ -131,7 +131,7 @@ func resolveCopyPathInputs(pathFlag string, targetPathFlag string, args []string
 	if len(args) > 0 {
 		originArgs = args[:1]
 	}
-	originPath, err := shared.ResolvePathInput(pathFlag, originArgs, true)
+	originPath, err := cliutil.ResolvePathInput(pathFlag, originArgs, true)
 	if err != nil {
 		return "", "", err
 	}
@@ -141,7 +141,7 @@ func resolveCopyPathInputs(pathFlag string, targetPathFlag string, args []string
 		positionalTarget = args[1]
 	}
 	if strings.TrimSpace(targetPathFlag) != "" && positionalTarget != "" && strings.TrimSpace(targetPathFlag) != strings.TrimSpace(positionalTarget) {
-		return "", "", shared.ValidationError("path mismatch between positional argument and --target-path", nil)
+		return "", "", cliutil.ValidationError("path mismatch between positional argument and --target-path", nil)
 	}
 
 	targetPath := strings.TrimSpace(targetPathFlag)
@@ -149,7 +149,7 @@ func resolveCopyPathInputs(pathFlag string, targetPathFlag string, args []string
 		targetPath = strings.TrimSpace(positionalTarget)
 	}
 	if targetPath == "" {
-		return "", "", shared.ValidationError("target path is required", nil)
+		return "", "", cliutil.ValidationError("target path is required", nil)
 	}
 
 	return originPath, targetPath, nil
@@ -157,7 +157,7 @@ func resolveCopyPathInputs(pathFlag string, targetPathFlag string, args []string
 
 func resolveCopySourceValue(
 	ctx context.Context,
-	deps shared.CommandDependencies,
+	deps cliutil.CommandDependencies,
 	originPath string,
 ) (resourcedomain.Value, error) {
 	normalizedPath, err := resourcedomain.NormalizeLogicalPath(originPath)
@@ -167,7 +167,7 @@ func resolveCopySourceValue(
 
 	orchestratorService := deps.Orchestrator
 	if orchestratorService == nil {
-		repositoryService, err := shared.RequireResourceStore(deps)
+		repositoryService, err := cliutil.RequireResourceStore(deps)
 		if err != nil {
 			return nil, err
 		}
@@ -187,9 +187,9 @@ func applyCopyOverrideAttributes(value resourcedomain.Value, overrideAttributes 
 	}
 	payloadMap, ok := normalized.(map[string]any)
 	if !ok {
-		return nil, shared.ValidationError("--override-attributes requires an object payload", nil)
+		return nil, cliutil.ValidationError("--override-attributes requires an object payload", nil)
 	}
-	if err := shared.ApplyDottedAssignmentsObject(payloadMap, overrideAttributes); err != nil {
+	if err := cliutil.ApplyDottedAssignmentsObject(payloadMap, overrideAttributes); err != nil {
 		return nil, err
 	}
 	return resourcedomain.Normalize(payloadMap)

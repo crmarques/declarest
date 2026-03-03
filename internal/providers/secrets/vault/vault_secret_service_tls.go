@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 
 	"github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/internal/providers/shared/tlsconfig"
+	"github.com/crmarques/declarest/internal/providers/tlsconfig"
 )
 
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {

@@ -3,7 +3,6 @@ package save
 import (
 	"context"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 
@@ -22,27 +21,13 @@ func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {
 	}
 	explicitCollectionTarget := trimmedPath != "/" && strings.HasSuffix(trimmedPath, "/")
 
-	normalizedInput := strings.ReplaceAll(trimmedPath, "\\", "/")
-	if !strings.HasPrefix(normalizedInput, "/") {
-		return "", false, false, faults.NewValidationError("logical path must be absolute", nil)
-	}
-
-	for _, segment := range strings.Split(normalizedInput, "/") {
-		if segment == ".." {
-			return "", false, false, faults.NewValidationError("logical path must not contain traversal segments", nil)
-		}
-	}
-
-	normalizedPath := path.Clean(normalizedInput)
-	if !strings.HasPrefix(normalizedPath, "/") {
-		return "", false, false, faults.NewValidationError("logical path must be absolute", nil)
-	}
-	if normalizedPath != "/" {
-		normalizedPath = strings.TrimSuffix(normalizedPath, "/")
+	normalizedPath, err := resource.CleanRawPath(trimmedPath)
+	if err != nil {
+		return "", false, false, err
 	}
 
 	hasWildcard := false
-	for _, segment := range splitSavePathSegments(normalizedPath) {
+	for _, segment := range resource.SplitRawPathSegments(normalizedPath) {
 		if segment == "_" {
 			hasWildcard = true
 			break
@@ -110,20 +95,12 @@ func isCollectionListShapeError(err error) bool {
 	return managedserverdomain.IsListPayloadShapeError(err)
 }
 
-func splitSavePathSegments(logicalPath string) []string {
-	trimmed := strings.Trim(strings.TrimSpace(logicalPath), "/")
-	if trimmed == "" {
-		return nil
-	}
-	return strings.Split(trimmed, "/")
-}
-
 func expandSaveWildcardPaths(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
 	wildcardPath string,
 ) ([]string, error) {
-	segments := splitSavePathSegments(wildcardPath)
+	segments := resource.SplitRawPathSegments(wildcardPath)
 	if len(segments) == 0 {
 		return nil, faults.NewValidationError("wildcard save path must target a collection or resource", nil)
 	}
@@ -140,7 +117,7 @@ func expandSaveWildcardPaths(
 				}
 
 				for _, item := range items {
-					childSegment, ok := directChildSegment(parentPath, item.LogicalPath)
+					childSegment, ok := resource.ChildSegment(parentPath, item.LogicalPath)
 					if !ok {
 						continue
 					}
@@ -181,10 +158,6 @@ func appendSavePathSegment(parentPath string, segment string) (string, error) {
 		return "", faults.NewValidationError("wildcard path contains an empty segment", nil)
 	}
 	return resource.JoinLogicalPath(parentPath, trimmedSegment)
-}
-
-func directChildSegment(parentPath string, candidatePath string) (string, bool) {
-	return resource.ChildSegment(parentPath, candidatePath)
 }
 
 func sortedPathKeys(values map[string]struct{}) []string {

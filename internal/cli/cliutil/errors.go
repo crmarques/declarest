@@ -1,4 +1,4 @@
-package shared
+package cliutil
 
 import (
 	"github.com/crmarques/declarest/faults"

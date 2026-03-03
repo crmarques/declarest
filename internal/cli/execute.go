@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
-	"github.com/crmarques/declarest/internal/cli/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-type Dependencies = shared.CommandDependencies
+type Dependencies = cliutil.CommandDependencies
 
 func Execute(deps Dependencies) error {
 	root := NewRootCommand(deps)

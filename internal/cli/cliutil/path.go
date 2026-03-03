@@ -1,4 +1,4 @@
-package shared
+package cliutil
 
 func ResolvePathInput(pathFlag string, args []string, required bool) (string, error) {
 	var pathArg string

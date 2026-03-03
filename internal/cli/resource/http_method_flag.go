@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/cli/shared"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +28,7 @@ func bindHTTPMethodFlag(command *cobra.Command, httpMethod *string) {
 		_ []string,
 		toComplete string,
 	) ([]string, cobra.ShellCompDirective) {
-		return shared.CompleteValues(httpMethodCompletionValues, strings.ToUpper(toComplete))
+		return cliutil.CompleteValues(httpMethodCompletionValues, strings.ToUpper(toComplete))
 	})
 }
 
@@ -38,7 +38,7 @@ func validateHTTPMethodOverride(raw string) (string, bool, error) {
 		return "", false, nil
 	}
 	if strings.ContainsAny(value, " \t\r\n") {
-		return "", false, shared.ValidationError("flag --http-method must be a single HTTP method token", nil)
+		return "", false, cliutil.ValidationError("flag --http-method must be a single HTTP method token", nil)
 	}
 	return value, true, nil
 }

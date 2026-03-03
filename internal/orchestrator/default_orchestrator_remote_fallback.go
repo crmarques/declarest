@@ -68,7 +68,7 @@ func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
 	serverManager managedserver.ManagedServerClient,
 	logicalPath string,
 ) ([]string, error) {
-	segments := splitLogicalPathSegments(logicalPath)
+	segments := resource.SplitRawPathSegments(logicalPath)
 	if len(segments) == 0 {
 		return nil, nil
 	}
@@ -247,12 +247,12 @@ func singletonFallbackWithinSelectorDepth(logicalPath string, md metadata.Resour
 		return true
 	}
 
-	templateDepth := len(splitLogicalPathSegments(trimmedTemplate))
+	templateDepth := len(resource.SplitRawPathSegments(trimmedTemplate))
 	if templateDepth == 0 {
 		return true
 	}
 
-	logicalDepth := len(splitLogicalPathSegments(logicalPath))
+	logicalDepth := len(resource.SplitRawPathSegments(logicalPath))
 	if logicalDepth == 0 {
 		return true
 	}
