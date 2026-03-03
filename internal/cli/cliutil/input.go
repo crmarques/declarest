@@ -61,7 +61,9 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 		if err != nil {
 			return nil, err
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 
 		data, err := readAllWithLimit(file, maxInputBytes)
 		if err != nil {

@@ -13,7 +13,13 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-var listJQCodeCache sync.Map
+const maxJQCacheEntries = 128
+
+var (
+	jqCacheMu    sync.Mutex
+	jqCacheMap   = make(map[string]*gojq.Code)
+	jqCacheOrder []string
+)
 
 func (g *HTTPManagedServerClient) applyListJQ(ctx context.Context, payload any, expression string) (any, error) {
 	trimmedExpression := strings.TrimSpace(expression)
@@ -65,11 +71,12 @@ func (g *HTTPManagedServerClient) compileListJQCode(ctx context.Context, express
 }
 
 func cachedListJQCode(expression string) (*gojq.Code, error) {
-	if cached, ok := listJQCodeCache.Load(expression); ok {
-		if typed, ok := cached.(*gojq.Code); ok && typed != nil {
-			return typed, nil
-		}
+	jqCacheMu.Lock()
+	if cached, ok := jqCacheMap[expression]; ok {
+		jqCacheMu.Unlock()
+		return cached, nil
 	}
+	jqCacheMu.Unlock()
 
 	query, err := gojq.Parse(expression)
 	if err != nil {
@@ -80,12 +87,21 @@ func cachedListJQCode(expression string) (*gojq.Code, error) {
 		return nil, err
 	}
 
-	actual, _ := listJQCodeCache.LoadOrStore(expression, code)
-	typed, _ := actual.(*gojq.Code)
-	if typed == nil {
-		return code, nil
+	jqCacheMu.Lock()
+	if cached, ok := jqCacheMap[expression]; ok {
+		jqCacheMu.Unlock()
+		return cached, nil
 	}
-	return typed, nil
+	if len(jqCacheOrder) >= maxJQCacheEntries {
+		evict := jqCacheOrder[0]
+		jqCacheOrder = jqCacheOrder[1:]
+		delete(jqCacheMap, evict)
+	}
+	jqCacheMap[expression] = code
+	jqCacheOrder = append(jqCacheOrder, expression)
+	jqCacheMu.Unlock()
+
+	return code, nil
 }
 
 func (g *HTTPManagedServerClient) listJQResourceFunction(ctx context.Context) func(any, []any) any {

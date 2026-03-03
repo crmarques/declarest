@@ -69,8 +69,7 @@ func TestResolveListJQResourceCachesByPath(t *testing.T) {
 func TestResolveListJQResourceDetectsCycles(t *testing.T) {
 	t.Parallel()
 
-	var resolver ListJQResourceResolver
-	resolver = func(ctx context.Context, logicalPath string) (resource.Value, error) {
+	resolver := func(ctx context.Context, logicalPath string) (resource.Value, error) {
 		switch logicalPath {
 		case "/one":
 			_, _, err := ResolveListJQResource(ctx, "/two")

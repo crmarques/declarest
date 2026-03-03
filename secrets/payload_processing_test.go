@@ -451,3 +451,48 @@ func TestHelpersRejectNilCallbacks(t *testing.T) {
 	_, err = NormalizePlaceholders(context.Background())
 	assertTypedCategory(t, err, faults.ValidationError)
 }
+
+func TestPayloadDepthLimit(t *testing.T) {
+	t.Parallel()
+
+	// Build a 300-deep nested map.
+	deepMap := buildDeeplyNestedMap(300)
+
+	t.Run("normalize_placeholders_rejects_deep_nesting", func(t *testing.T) {
+		t.Parallel()
+		_, err := NormalizePlaceholders(deepMap)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("mask_payload_rejects_deep_nesting", func(t *testing.T) {
+		t.Parallel()
+		_, err := MaskPayload(deepMap, func(string, string) error { return nil })
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("resolve_payload_rejects_deep_nesting", func(t *testing.T) {
+		t.Parallel()
+		_, err := ResolvePayload(deepMap, func(string) (string, error) { return "", nil })
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("detect_candidates_rejects_deep_nesting", func(t *testing.T) {
+		t.Parallel()
+		_, err := DetectSecretCandidates(deepMap)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("resolve_directives_rejects_deep_nesting", func(t *testing.T) {
+		t.Parallel()
+		_, err := ResolvePayloadDirectivesForResource(deepMap, "/path", "json", nil)
+		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func buildDeeplyNestedMap(depth int) map[string]any {
+	current := map[string]any{"leaf": "value"}
+	for i := 0; i < depth; i++ {
+		current = map[string]any{"level": current}
+	}
+	return current
+}

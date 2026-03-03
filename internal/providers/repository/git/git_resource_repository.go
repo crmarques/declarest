@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/crmarques/declarest/config"
@@ -28,6 +29,8 @@ import (
 
 var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
+
+var proxyEnvMu sync.Mutex
 var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
 var _ repository.RepositoryHistoryReader = (*GitResourceRepository)(nil)
 var _ repository.RepositoryTreeReader = (*GitResourceRepository)(nil)
@@ -790,6 +793,9 @@ func (r *GitResourceRepository) withProxyEnv(fn func() error) error {
 	if len(envVars) == 0 {
 		return fn()
 	}
+
+	proxyEnvMu.Lock()
+	defer proxyEnvMu.Unlock()
 
 	saved := make(map[string]*string, len(envVars))
 	for key, value := range envVars {

@@ -685,6 +685,105 @@ func TestResolveBundleLocalSourceUsesVersionCacheKeyForVersionedArtifacts(t *tes
 	}
 }
 
+func TestExtractTarGzRejectsExcessiveEntryCount(t *testing.T) {
+	t.Parallel()
+
+	buffer := bytes.NewBuffer(nil)
+	gzipWriter := gzip.NewWriter(buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	for i := 0; i <= maxArchiveEntries; i++ {
+		name := fmt.Sprintf("file-%d.txt", i)
+		data := []byte("x")
+		header := &tar.Header{
+			Name: name,
+			Mode: 0o644,
+			Size: int64(len(data)),
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("failed to write tar header: %v", err)
+		}
+		if _, err := tarWriter.Write(data); err != nil {
+			t.Fatalf("failed to write tar data: %v", err)
+		}
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("failed to close tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("failed to close gzip writer: %v", err)
+	}
+
+	dest := t.TempDir()
+	err := extractTarGz(bytes.NewReader(buffer.Bytes()), dest)
+	if err == nil {
+		t.Fatal("expected error for excessive entry count")
+	}
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected ValidationError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "too many entries") {
+		t.Fatalf("expected 'too many entries' error, got %v", err)
+	}
+}
+
+func TestExtractTarGzRejectsExcessiveTotalSize(t *testing.T) {
+	t.Parallel()
+
+	buffer := bytes.NewBuffer(nil)
+	gzipWriter := gzip.NewWriter(buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	// Create files that individually fit under per-file limit but exceed total.
+	fileSize := int64(maxArchiveFileSizeByte) // 64 MiB each
+	numFiles := (maxTotalArchiveBytes / fileSize) + 1
+
+	for i := int64(0); i < numFiles; i++ {
+		name := fmt.Sprintf("large-%d.bin", i)
+		header := &tar.Header{
+			Name: name,
+			Mode: 0o644,
+			Size: fileSize,
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("failed to write tar header: %v", err)
+		}
+		// Write zero-filled data in chunks to avoid large allocations.
+		chunk := make([]byte, 32*1024)
+		remaining := fileSize
+		for remaining > 0 {
+			n := int64(len(chunk))
+			if n > remaining {
+				n = remaining
+			}
+			if _, err := tarWriter.Write(chunk[:n]); err != nil {
+				t.Fatalf("failed to write tar data: %v", err)
+			}
+			remaining -= n
+		}
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("failed to close tar writer: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("failed to close gzip writer: %v", err)
+	}
+
+	dest := t.TempDir()
+	err := extractTarGz(bytes.NewReader(buffer.Bytes()), dest)
+	if err == nil {
+		t.Fatal("expected error for excessive total size")
+	}
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected ValidationError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "maximum total size") {
+		t.Fatalf("expected 'maximum total size' error, got %v", err)
+	}
+}
+
 func Example_expectedArtifactTemplate() {
 	fmt.Println(expectedArtifactTemplate("keycloak-bundle"))
 	// Output: keycloak-bundle-{version}.tar.gz

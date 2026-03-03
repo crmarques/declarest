@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/itchyny/gojq"
+
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
@@ -2310,6 +2312,36 @@ func mustManagedServerClient(t *testing.T, cfg config.HTTPServer) *HTTPManagedSe
 		t.Fatalf("NewHTTPManagedServerClient returned error: %v", err)
 	}
 	return client
+}
+
+func TestJQCacheBounding(t *testing.T) {
+	t.Parallel()
+
+	// Reset cache state for this test.
+	jqCacheMu.Lock()
+	jqCacheMap = make(map[string]*gojq.Code)
+	jqCacheOrder = nil
+	jqCacheMu.Unlock()
+
+	for i := 0; i < maxJQCacheEntries+50; i++ {
+		expr := fmt.Sprintf(".field%d", i)
+		_, err := cachedListJQCode(expr)
+		if err != nil {
+			t.Fatalf("cachedListJQCode(%q) returned error: %v", expr, err)
+		}
+	}
+
+	jqCacheMu.Lock()
+	size := len(jqCacheMap)
+	orderLen := len(jqCacheOrder)
+	jqCacheMu.Unlock()
+
+	if size > maxJQCacheEntries {
+		t.Fatalf("JQ cache exceeded max entries: got %d, max %d", size, maxJQCacheEntries)
+	}
+	if orderLen > maxJQCacheEntries {
+		t.Fatalf("JQ cache order exceeded max entries: got %d, max %d", orderLen, maxJQCacheEntries)
+	}
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

@@ -119,12 +119,11 @@ func (g *HTTPManagedServerClient) applyAuth(ctx context.Context, request *http.R
 
 func (g *HTTPManagedServerClient) oauthToken(ctx context.Context) (string, error) {
 	g.oauthMu.Lock()
+	defer g.oauthMu.Unlock()
+
 	if g.oauthAccessToken != "" && time.Now().Before(g.oauthExpiresAt.Add(-30*time.Second)) {
-		token := g.oauthAccessToken
-		g.oauthMu.Unlock()
-		return token, nil
+		return g.oauthAccessToken, nil
 	}
-	g.oauthMu.Unlock()
 
 	formValues := url.Values{}
 	formValues.Set("grant_type", g.auth.oauth2.GrantType)
@@ -153,7 +152,9 @@ func (g *HTTPManagedServerClient) oauthToken(ctx context.Context) (string, error
 	if err != nil {
 		return "", transportError("oauth2 token request failed", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
@@ -183,10 +184,8 @@ func (g *HTTPManagedServerClient) oauthToken(ctx context.Context) (string, error
 		expiresAt = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
 	}
 
-	g.oauthMu.Lock()
 	g.oauthAccessToken = tokenResponse.AccessToken
 	g.oauthExpiresAt = expiresAt
-	g.oauthMu.Unlock()
 
-	return tokenResponse.AccessToken, nil
+	return g.oauthAccessToken, nil
 }

@@ -313,7 +313,7 @@ func (f *fakeVaultServer) handleList(writer http.ResponseWriter, request *http.R
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if request.Method != "LIST" && !(request.Method == http.MethodGet && request.URL.Query().Get("list") == "true") {
+	if request.Method != "LIST" && (request.Method != http.MethodGet || request.URL.Query().Get("list") != "true") {
 		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
 			"errors": []string{"method not allowed"},
 		})

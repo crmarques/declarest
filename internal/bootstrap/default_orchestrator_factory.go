@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -35,6 +36,8 @@ func buildDefaultOrchestrator(
 	if err != nil {
 		return nil, err
 	}
+
+	emitSecurityWarnings(os.Stderr, resolvedContext)
 
 	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)
 	if err != nil {
@@ -135,6 +138,37 @@ type metadataSourceResolution struct {
 	BaseDir           string
 	OpenAPI           string
 	DeprecatedWarning string
+}
+
+func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
+	if resolvedContext.ManagedServer != nil && resolvedContext.ManagedServer.HTTP != nil {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.BaseURL)), "http://") {
+			_, _ = fmt.Fprintf(w, "warning: managed-server.http.base-url uses plain HTTP, credentials will be transmitted in cleartext\n")
+		}
+		if resolvedContext.ManagedServer.HTTP.TLS != nil && resolvedContext.ManagedServer.HTTP.TLS.InsecureSkipVerify {
+			_, _ = fmt.Fprintf(w, "warning: managed-server.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+		}
+	}
+
+	if resolvedContext.SecretStore != nil && resolvedContext.SecretStore.Vault != nil {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.SecretStore.Vault.Address)), "http://") {
+			_, _ = fmt.Fprintf(w, "warning: secret-store.vault.address uses plain HTTP, credentials will be transmitted in cleartext\n")
+		}
+		if resolvedContext.SecretStore.Vault.TLS != nil && resolvedContext.SecretStore.Vault.TLS.InsecureSkipVerify {
+			_, _ = fmt.Fprintf(w, "warning: secret-store.vault.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+		}
+	}
+
+	if resolvedContext.Repository.Git != nil && resolvedContext.Repository.Git.Remote != nil {
+		if resolvedContext.Repository.Git.Remote.TLS != nil && resolvedContext.Repository.Git.Remote.TLS.InsecureSkipVerify {
+			_, _ = fmt.Fprintf(w, "warning: repository.git.remote.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+		}
+		if resolvedContext.Repository.Git.Remote.Auth != nil &&
+			resolvedContext.Repository.Git.Remote.Auth.SSH != nil &&
+			resolvedContext.Repository.Git.Remote.Auth.SSH.InsecureIgnoreHostKey {
+			_, _ = fmt.Fprintf(w, "warning: repository.git.remote.auth.ssh.insecure-ignore-host-key is enabled, SSH host key verification is disabled\n")
+		}
+	}
 }
 
 func resolveMetadataSource(ctx context.Context, context config.Context) (metadataSourceResolution, error) {

@@ -11,13 +11,15 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+const maxPayloadDepth = 256
+
 func NormalizePlaceholders(value resource.Value) (resource.Value, error) {
 	normalized, err := resource.Normalize(value)
 	if err != nil {
 		return nil, err
 	}
 
-	output, err := normalizePlaceholdersValue(normalized, "")
+	output, err := normalizePlaceholdersValue(normalized, "", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +38,7 @@ func MaskPayload(value resource.Value, storeFn func(key string, value string) er
 
 	candidates := make(map[string]string)
 	scopeByKey := make(map[string]string)
-	if err := collectMaskCandidates(normalized, "", candidates, scopeByKey); err != nil {
+	if err := collectMaskCandidates(normalized, "", candidates, scopeByKey, 0); err != nil {
 		return nil, err
 	}
 
@@ -52,7 +54,7 @@ func MaskPayload(value resource.Value, storeFn func(key string, value string) er
 		}
 	}
 
-	output, err := applyMask(normalized, "", candidates)
+	output, err := applyMask(normalized, "", candidates, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func ResolvePayloadDirectivesForResource(
 		return nil, faults.NewValidationError("invalid repository resource format", err)
 	}
 
-	withFormat, err := resolveResourceFormatDirectivesValue(normalized, resolvedFormat)
+	withFormat, err := resolveResourceFormatDirectivesValue(normalized, resolvedFormat, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +102,7 @@ func ResolvePayloadDirectivesForResource(
 	}
 
 	cache := make(map[string]string)
-	output, err := resolvePayloadValue(withFormat, "", strings.TrimSpace(logicalPath), cache, getFn)
+	output, err := resolvePayloadValue(withFormat, "", strings.TrimSpace(logicalPath), cache, getFn, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -122,19 +124,22 @@ func resolvePayloadWithResourceScope(
 	}
 
 	cache := make(map[string]string)
-	output, err := resolvePayloadValue(normalized, "", strings.TrimSpace(logicalPath), cache, getFn)
+	output, err := resolvePayloadValue(normalized, "", strings.TrimSpace(logicalPath), cache, getFn, 0)
 	if err != nil {
 		return nil, err
 	}
 	return output, nil
 }
 
-func resolveResourceFormatDirectivesValue(value any, resourceFormat string) (any, error) {
+func resolveResourceFormatDirectivesValue(value any, resourceFormat string, depth int) (any, error) {
+	if depth > maxPayloadDepth {
+		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
-			child, err := resolveResourceFormatDirectivesValue(typed[key], resourceFormat)
+			child, err := resolveResourceFormatDirectivesValue(typed[key], resourceFormat, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -144,7 +149,7 @@ func resolveResourceFormatDirectivesValue(value any, resourceFormat string) (any
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := resolveResourceFormatDirectivesValue(typed[idx], resourceFormat)
+			child, err := resolveResourceFormatDirectivesValue(typed[idx], resourceFormat, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -172,7 +177,7 @@ func DetectSecretCandidates(value resource.Value) ([]string, error) {
 	}
 
 	candidates := make(map[string]struct{})
-	if err := collectDetectedCandidates(normalized, candidates); err != nil {
+	if err := collectDetectedCandidates(normalized, candidates, 0); err != nil {
 		return nil, err
 	}
 
@@ -185,13 +190,16 @@ func DetectSecretCandidates(value resource.Value) ([]string, error) {
 	return keys, nil
 }
 
-func normalizePlaceholdersValue(value any, currentPath string) (any, error) {
+func normalizePlaceholdersValue(value any, currentPath string, depth int) (any, error) {
+	if depth > maxPayloadDepth {
+		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
 			attributePath := joinAttributePath(currentPath, key)
-			child, err := normalizePlaceholdersValue(typed[key], attributePath)
+			child, err := normalizePlaceholdersValue(typed[key], attributePath, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -201,7 +209,7 @@ func normalizePlaceholdersValue(value any, currentPath string) (any, error) {
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := normalizePlaceholdersValue(typed[idx], "")
+			child, err := normalizePlaceholdersValue(typed[idx], "", depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +242,11 @@ func collectMaskCandidates(
 	currentPath string,
 	candidates map[string]string,
 	scopeByKey map[string]string,
+	depth int,
 ) error {
+	if depth > maxPayloadDepth {
+		return faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		for _, key := range sortedKeys(typed) {
@@ -265,13 +277,13 @@ func collectMaskCandidates(
 				}
 			}
 
-			if err := collectMaskCandidates(field, attributePath, candidates, scopeByKey); err != nil {
+			if err := collectMaskCandidates(field, attributePath, candidates, scopeByKey, depth+1); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for idx := range typed {
-			if err := collectMaskCandidates(typed[idx], currentPath, candidates, scopeByKey); err != nil {
+			if err := collectMaskCandidates(typed[idx], currentPath, candidates, scopeByKey, depth+1); err != nil {
 				return err
 			}
 		}
@@ -280,7 +292,10 @@ func collectMaskCandidates(
 	return nil
 }
 
-func applyMask(value any, currentPath string, candidates map[string]string) (any, error) {
+func applyMask(value any, currentPath string, candidates map[string]string, depth int) (any, error) {
+	if depth > maxPayloadDepth {
+		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
@@ -301,7 +316,7 @@ func applyMask(value any, currentPath string, candidates map[string]string) (any
 				}
 			}
 
-			child, err := applyMask(field, attributePath, candidates)
+			child, err := applyMask(field, attributePath, candidates, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -311,7 +326,7 @@ func applyMask(value any, currentPath string, candidates map[string]string) (any
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := applyMask(typed[idx], currentPath, candidates)
+			child, err := applyMask(typed[idx], currentPath, candidates, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -329,13 +344,17 @@ func resolvePayloadValue(
 	resourcePath string,
 	cache map[string]string,
 	getFn func(key string) (string, error),
+	depth int,
 ) (any, error) {
+	if depth > maxPayloadDepth {
+		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
 			attributePath := joinAttributePath(currentPath, key)
-			child, err := resolvePayloadValue(typed[key], attributePath, resourcePath, cache, getFn)
+			child, err := resolvePayloadValue(typed[key], attributePath, resourcePath, cache, getFn, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -345,7 +364,7 @@ func resolvePayloadValue(
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := resolvePayloadValue(typed[idx], "", resourcePath, cache, getFn)
+			child, err := resolvePayloadValue(typed[idx], "", resourcePath, cache, getFn, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -382,7 +401,10 @@ func resolvePayloadValue(
 	}
 }
 
-func collectDetectedCandidates(value any, candidates map[string]struct{}) error {
+func collectDetectedCandidates(value any, candidates map[string]struct{}, depth int) error {
+	if depth > maxPayloadDepth {
+		return faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
+	}
 	switch typed := value.(type) {
 	case map[string]any:
 		for _, key := range sortedKeys(typed) {
@@ -400,13 +422,13 @@ func collectDetectedCandidates(value any, candidates map[string]struct{}) error 
 				}
 			}
 
-			if err := collectDetectedCandidates(field, candidates); err != nil {
+			if err := collectDetectedCandidates(field, candidates, depth+1); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for idx := range typed {
-			if err := collectDetectedCandidates(typed[idx], candidates); err != nil {
+			if err := collectDetectedCandidates(typed[idx], candidates, depth+1); err != nil {
 				return err
 			}
 		}

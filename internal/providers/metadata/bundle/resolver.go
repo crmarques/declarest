@@ -27,7 +27,9 @@ const (
 	defaultBundleOwner     = "crmarques"
 	defaultBundleCacheDir  = ".declarest/metadata-bundles"
 	bundleReadyMarkerFile  = ".declarest-bundle-ready"
-	maxArchiveFileSizeByte = 64 << 20
+	maxArchiveFileSizeByte  = 64 << 20
+	maxTotalArchiveBytes    = 256 << 20
+	maxArchiveEntries       = 10_000
 )
 
 const (
@@ -532,7 +534,9 @@ func extractBundleArchive(ctx context.Context, source bundleSource, destination 
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	return extractTarGz(stream, destination)
 }
@@ -613,9 +617,13 @@ func extractTarGz(stream io.Reader, destination string) error {
 	if err != nil {
 		return faults.NewValidationError("metadata bundle archive is not a valid gzip stream", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		_ = gzipReader.Close()
+	}()
 
 	tarReader := tar.NewReader(gzipReader)
+	var totalBytes int64
+	var entryCount int
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -623,6 +631,11 @@ func extractTarGz(stream io.Reader, destination string) error {
 		}
 		if err != nil {
 			return faults.NewValidationError("metadata bundle archive is not a valid tar stream", err)
+		}
+
+		entryCount++
+		if entryCount > maxArchiveEntries {
+			return faults.NewValidationError("metadata bundle archive contains too many entries", nil)
 		}
 
 		entryName := strings.TrimSpace(header.Name)
@@ -647,9 +660,13 @@ func extractTarGz(stream io.Reader, destination string) error {
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
 				return internalError("failed to create bundle extraction directory", err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if header.Size < 0 || header.Size > maxArchiveFileSizeByte {
 				return faults.NewValidationError("metadata bundle archive contains oversized file entry", nil)
+			}
+			totalBytes += header.Size
+			if totalBytes > maxTotalArchiveBytes {
+				return faults.NewValidationError("metadata bundle archive exceeds maximum total size", nil)
 			}
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 				return internalError("failed to create bundle extraction parent directory", err)

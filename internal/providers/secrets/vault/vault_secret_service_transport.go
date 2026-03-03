@@ -44,7 +44,9 @@ func (s *VaultSecretService) request(
 	if err != nil {
 		return vaultResponse{}, 0, transportError("vault request failed", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	data, err := readVaultResponseBody(resp.Body)
 	if err != nil {

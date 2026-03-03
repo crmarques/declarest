@@ -29,7 +29,7 @@ const (
 	nonceLengthBytes      = 12
 	saltLengthBytes       = 16
 
-	defaultKDFTime    = 1
+	defaultKDFTime    = 3
 	defaultKDFMemory  = 64 * 1024
 	defaultKDFThreads = 4
 )
@@ -42,8 +42,9 @@ type FileSecretService struct {
 	passphrase []byte
 	kdf        kdfSettings
 
-	mu          sync.Mutex
-	initialized bool
+	mu              sync.Mutex
+	initialized     bool
+	cachedSnapshot  *secretSnapshot
 }
 
 type kdfSettings struct {
@@ -57,10 +58,21 @@ type encryptedStore struct {
 	Salt       string `json:"salt,omitempty"`
 	Nonce      string `json:"nonce"`
 	Ciphertext string `json:"ciphertext"`
+	KDFTime    uint32 `json:"kdf_time,omitempty"`
+	KDFMemory  uint32 `json:"kdf_memory,omitempty"`
+	KDFThreads uint8  `json:"kdf_threads,omitempty"`
 }
 
 type secretSnapshot struct {
 	Secrets map[string]string `json:"secrets"`
+}
+
+func cloneSnapshot(src secretSnapshot) secretSnapshot {
+	clone := secretSnapshot{Secrets: make(map[string]string, len(src.Secrets))}
+	for k, v := range src.Secrets {
+		clone.Secrets[k] = v
+	}
+	return clone
 }
 
 func NewFileSecretService(cfg config.FileSecretStore) (*FileSecretService, error) {
@@ -281,6 +293,10 @@ func (s *FileSecretService) initLocked() error {
 }
 
 func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
+	if s.cachedSnapshot != nil {
+		return cloneSnapshot(*s.cachedSnapshot), nil
+	}
+
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return secretSnapshot{}, internalError("failed to read encrypted secret store", err)
@@ -313,7 +329,19 @@ func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
 		}
 	}
 
-	key, err := s.deriveKey(salt)
+	readKDF := s.kdf
+	if len(salt) > 0 && envelope.KDFTime > 0 && envelope.KDFMemory > 0 && envelope.KDFThreads > 0 {
+		readKDF = kdfSettings{
+			Time:    envelope.KDFTime,
+			Memory:  envelope.KDFMemory,
+			Threads: envelope.KDFThreads,
+		}
+	} else if len(salt) > 0 && envelope.KDFTime == 0 && envelope.KDFMemory == 0 && envelope.KDFThreads == 0 {
+		// Legacy store written before KDF params were embedded in the envelope.
+		readKDF = kdfSettings{Time: 1, Memory: 64 * 1024, Threads: 4}
+	}
+
+	key, err := s.deriveKeyWithSettings(salt, readKDF)
 	if err != nil {
 		return secretSnapshot{}, err
 	}
@@ -341,7 +369,8 @@ func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
 		snapshot.Secrets = make(map[string]string)
 	}
 
-	return snapshot, nil
+	s.cachedSnapshot = &snapshot
+	return cloneSnapshot(snapshot), nil
 }
 
 func (s *FileSecretService) writeSnapshotLocked(snapshot secretSnapshot) error {
@@ -391,6 +420,9 @@ func (s *FileSecretService) writeSnapshotLocked(snapshot secretSnapshot) error {
 	}
 	if len(salt) > 0 {
 		envelope.Salt = base64.StdEncoding.EncodeToString(salt)
+		envelope.KDFTime = s.kdf.Time
+		envelope.KDFMemory = s.kdf.Memory
+		envelope.KDFThreads = s.kdf.Threads
 	}
 
 	encoded, err := json.Marshal(envelope)
@@ -398,10 +430,18 @@ func (s *FileSecretService) writeSnapshotLocked(snapshot secretSnapshot) error {
 		return internalError("failed to encode encrypted secret store", err)
 	}
 
-	return writeAtomicFile(s.path, encoded, 0o600)
+	if err := writeAtomicFile(s.path, encoded, 0o600); err != nil {
+		return err
+	}
+	s.cachedSnapshot = &snapshot
+	return nil
 }
 
 func (s *FileSecretService) deriveKey(salt []byte) ([]byte, error) {
+	return s.deriveKeyWithSettings(salt, s.kdf)
+}
+
+func (s *FileSecretService) deriveKeyWithSettings(salt []byte, kdf kdfSettings) ([]byte, error) {
 	if len(s.key) > 0 {
 		return s.key, nil
 	}
@@ -414,7 +454,7 @@ func (s *FileSecretService) deriveKey(salt []byte) ([]byte, error) {
 		return nil, faults.NewValidationError("secret store salt is missing", nil)
 	}
 
-	key := argon2.IDKey(s.passphrase, salt, s.kdf.Time, s.kdf.Memory, s.kdf.Threads, keyLengthBytes)
+	key := argon2.IDKey(s.passphrase, salt, kdf.Time, kdf.Memory, kdf.Threads, keyLengthBytes)
 	return key, nil
 }
 

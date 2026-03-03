@@ -53,29 +53,20 @@ func (g *HTTPManagedServerClient) openAPIDocument(ctx context.Context) (map[stri
 	}
 
 	g.openapiMu.Lock()
+	defer g.openapiMu.Unlock()
+
 	if g.openapiLoaded {
-		doc := g.openapiDoc
-		err := g.openapiErr
-		g.openapiMu.Unlock()
-		return doc, err
+		return g.openapiDoc, g.openapiErr
 	}
-	g.openapiMu.Unlock()
 
 	document, err := g.loadOpenAPIDocument(ctx)
-
-	g.openapiMu.Lock()
-	if err == nil && !g.openapiLoaded {
-		g.openapiDoc = document
-		g.openapiErr = err
-		g.openapiLoaded = true
-	}
-	doc := g.openapiDoc
-	loadErr := g.openapiErr
-	g.openapiMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return doc, loadErr
+
+	g.openapiDoc = document
+	g.openapiLoaded = true
+	return g.openapiDoc, nil
 }
 
 func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[string]any, error) {
@@ -107,7 +98,9 @@ func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[
 		if err != nil {
 			return nil, transportError("failed to fetch OpenAPI document", err)
 		}
-		defer response.Body.Close()
+		defer func() {
+			_ = response.Body.Close()
+		}()
 
 		content, err = io.ReadAll(io.LimitReader(response.Body, 4<<20))
 		if err != nil {

@@ -341,23 +341,14 @@ func CompleteLogicalPaths(
 	addResourceSuggestions(primarySourceSuggestions, primaryItems)
 
 	openAPISpec, err := orchestratorService.GetOpenAPISpec(ctx)
+	var openAPIEntries []openAPIPathEntry
+	var openAPIAllowedMethods map[string]struct{}
+	shouldExpandOpenAPI := false
 	if err == nil {
-		entries := parseOpenAPIPathEntries(openAPISpec)
-		allowedMethods := completionAllowedOpenAPIMethods(command)
-		addOpenAPISuggestions(suggestions, entries, normalizedPrefix, allowedMethods)
-		if shouldRunSmartOpenAPISuggestions(suggestions, toComplete) {
-			addSmartOpenAPISuggestions(
-				ctx,
-				orchestratorService,
-				suggestions,
-				localItems,
-				remoteItems,
-				entries,
-				toComplete,
-				strategy,
-				allowedMethods,
-			)
-		}
+		openAPIEntries = parseOpenAPIPathEntries(openAPISpec)
+		openAPIAllowedMethods = completionAllowedOpenAPIMethods(command)
+		addOpenAPISuggestions(suggestions, openAPIEntries, normalizedPrefix, openAPIAllowedMethods)
+		shouldExpandOpenAPI = len(openAPIEntries) > 0 && shouldRunSmartOpenAPISuggestions(suggestions, toComplete)
 	}
 	if metadataService, metadataErr := RequireMetadataService(deps); metadataErr == nil {
 		addMetadataCollectionSuggestions(ctx, metadataService, suggestions, queryPath)
@@ -433,6 +424,20 @@ func CompleteLogicalPaths(
 				addResourceSuggestions(suggestions, secondaryRootItems)
 			}
 		}
+	}
+
+	if shouldExpandOpenAPI {
+		addSmartOpenAPISuggestions(
+			ctx,
+			orchestratorService,
+			suggestions,
+			localItems,
+			remoteItems,
+			openAPIEntries,
+			toComplete,
+			strategy,
+			openAPIAllowedMethods,
+		)
 	}
 
 	return filterPathSuggestions(suggestions, toComplete), pathCompletionDirective

@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -156,6 +157,211 @@ func TestFileSecretServiceValidation(t *testing.T) {
 
 		_, err = service.MaskPayload(context.Background(), input)
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestFileSecretServiceKDFEnvelopeParams(t *testing.T) {
+	t.Parallel()
+
+	t.Run("new_store_embeds_kdf_params", func(t *testing.T) {
+		t.Parallel()
+
+		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
+		service, err := NewFileSecretService(config.FileSecretStore{
+			Path:       secretFilePath,
+			Passphrase: "change-me",
+		})
+		if err != nil {
+			t.Fatalf("NewFileSecretService returned error: %v", err)
+		}
+
+		if err := service.Store(context.Background(), "key1", "val1"); err != nil {
+			t.Fatalf("Store returned error: %v", err)
+		}
+
+		data, err := os.ReadFile(secretFilePath)
+		if err != nil {
+			t.Fatalf("failed to read secret file: %v", err)
+		}
+
+		var envelope encryptedStore
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			t.Fatalf("failed to unmarshal envelope: %v", err)
+		}
+
+		if envelope.KDFTime != defaultKDFTime {
+			t.Fatalf("expected KDFTime %d, got %d", defaultKDFTime, envelope.KDFTime)
+		}
+		if envelope.KDFMemory != defaultKDFMemory {
+			t.Fatalf("expected KDFMemory %d, got %d", defaultKDFMemory, envelope.KDFMemory)
+		}
+		if envelope.KDFThreads != defaultKDFThreads {
+			t.Fatalf("expected KDFThreads %d, got %d", defaultKDFThreads, envelope.KDFThreads)
+		}
+	})
+
+	t.Run("legacy_store_without_kdf_fields_still_decrypts", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a store with legacy KDF settings (Time=1) by directly constructing a service.
+		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
+		legacyService := &FileSecretService{
+			path:       secretFilePath,
+			passphrase: []byte("change-me"),
+			kdf:        kdfSettings{Time: 1, Memory: 64 * 1024, Threads: 4},
+		}
+
+		if err := legacyService.Store(context.Background(), "legacyKey", "legacyValue"); err != nil {
+			t.Fatalf("legacy Store returned error: %v", err)
+		}
+
+		// Manually strip KDF fields to simulate a pre-migration envelope.
+		data, err := os.ReadFile(secretFilePath)
+		if err != nil {
+			t.Fatalf("failed to read secret file: %v", err)
+		}
+		var envelope encryptedStore
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			t.Fatalf("failed to unmarshal envelope: %v", err)
+		}
+		envelope.KDFTime = 0
+		envelope.KDFMemory = 0
+		envelope.KDFThreads = 0
+		strippedData, err := json.Marshal(envelope)
+		if err != nil {
+			t.Fatalf("failed to marshal stripped envelope: %v", err)
+		}
+		if err := os.WriteFile(secretFilePath, strippedData, 0o600); err != nil {
+			t.Fatalf("failed to write stripped envelope: %v", err)
+		}
+
+		// Now read with a new service using current defaults (Time=3).
+		newService, err := NewFileSecretService(config.FileSecretStore{
+			Path:       secretFilePath,
+			Passphrase: "change-me",
+		})
+		if err != nil {
+			t.Fatalf("NewFileSecretService returned error: %v", err)
+		}
+
+		val, err := newService.Get(context.Background(), "legacyKey")
+		if err != nil {
+			t.Fatalf("Get returned error (legacy compat failed): %v", err)
+		}
+		if val != "legacyValue" {
+			t.Fatalf("expected legacyValue, got %q", val)
+		}
+	})
+
+	t.Run("migration_on_rewrite_embeds_new_kdf_params", func(t *testing.T) {
+		t.Parallel()
+
+		// Create a legacy store (Time=1, no KDF fields).
+		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
+		legacyService := &FileSecretService{
+			path:       secretFilePath,
+			passphrase: []byte("change-me"),
+			kdf:        kdfSettings{Time: 1, Memory: 64 * 1024, Threads: 4},
+		}
+
+		if err := legacyService.Store(context.Background(), "key1", "val1"); err != nil {
+			t.Fatalf("legacy Store returned error: %v", err)
+		}
+
+		// Strip KDF fields to simulate legacy format.
+		data, err := os.ReadFile(secretFilePath)
+		if err != nil {
+			t.Fatalf("failed to read: %v", err)
+		}
+		var envelope encryptedStore
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		envelope.KDFTime = 0
+		envelope.KDFMemory = 0
+		envelope.KDFThreads = 0
+		strippedData, err := json.Marshal(envelope)
+		if err != nil {
+			t.Fatalf("failed to marshal: %v", err)
+		}
+		if err := os.WriteFile(secretFilePath, strippedData, 0o600); err != nil {
+			t.Fatalf("failed to write: %v", err)
+		}
+
+		// Open with new service and write a new key — triggers re-encryption with new KDF.
+		newService, err := NewFileSecretService(config.FileSecretStore{
+			Path:       secretFilePath,
+			Passphrase: "change-me",
+		})
+		if err != nil {
+			t.Fatalf("NewFileSecretService returned error: %v", err)
+		}
+
+		if err := newService.Store(context.Background(), "key2", "val2"); err != nil {
+			t.Fatalf("Store returned error: %v", err)
+		}
+
+		// Verify the envelope now has the new KDF params.
+		data, err = os.ReadFile(secretFilePath)
+		if err != nil {
+			t.Fatalf("failed to read migrated file: %v", err)
+		}
+		var migratedEnvelope encryptedStore
+		if err := json.Unmarshal(data, &migratedEnvelope); err != nil {
+			t.Fatalf("failed to unmarshal migrated envelope: %v", err)
+		}
+		if migratedEnvelope.KDFTime != defaultKDFTime {
+			t.Fatalf("expected migrated KDFTime %d, got %d", defaultKDFTime, migratedEnvelope.KDFTime)
+		}
+		if migratedEnvelope.KDFMemory != defaultKDFMemory {
+			t.Fatalf("expected migrated KDFMemory %d, got %d", defaultKDFMemory, migratedEnvelope.KDFMemory)
+		}
+
+		// Verify both keys are accessible.
+		val1, err := newService.Get(context.Background(), "key1")
+		if err != nil {
+			t.Fatalf("Get key1 returned error: %v", err)
+		}
+		if val1 != "val1" {
+			t.Fatalf("expected val1, got %q", val1)
+		}
+		val2, err := newService.Get(context.Background(), "key2")
+		if err != nil {
+			t.Fatalf("Get key2 returned error: %v", err)
+		}
+		if val2 != "val2" {
+			t.Fatalf("expected val2, got %q", val2)
+		}
+	})
+
+	t.Run("key_based_store_has_no_kdf_fields", func(t *testing.T) {
+		t.Parallel()
+
+		secretFilePath := filepath.Join(t.TempDir(), "secrets.enc")
+		service, err := NewFileSecretService(config.FileSecretStore{
+			Path: secretFilePath,
+			Key:  "0123456789abcdef0123456789abcdef",
+		})
+		if err != nil {
+			t.Fatalf("NewFileSecretService returned error: %v", err)
+		}
+
+		if err := service.Store(context.Background(), "key1", "val1"); err != nil {
+			t.Fatalf("Store returned error: %v", err)
+		}
+
+		data, err := os.ReadFile(secretFilePath)
+		if err != nil {
+			t.Fatalf("failed to read: %v", err)
+		}
+		var envelope encryptedStore
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if envelope.KDFTime != 0 || envelope.KDFMemory != 0 || envelope.KDFThreads != 0 {
+			t.Fatalf("key-based store should not have KDF fields, got time=%d memory=%d threads=%d",
+				envelope.KDFTime, envelope.KDFMemory, envelope.KDFThreads)
+		}
 	})
 }
 

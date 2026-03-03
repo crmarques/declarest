@@ -98,8 +98,8 @@ func summarizeBody(body []byte) string {
 	if trimmed == "" {
 		return "<empty>"
 	}
-	if len(trimmed) > 512 {
-		return trimmed[:512] + "..."
+	if len(trimmed) > 256 {
+		return trimmed[:256] + "..."
 	}
 	return trimmed
 }

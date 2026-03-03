@@ -386,6 +386,190 @@ func TestEffectiveOpenAPISource(t *testing.T) {
 	}
 }
 
+func TestEmitSecurityWarnings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no_warnings_for_secure_context", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{
+					BaseURL: "https://example.com",
+				},
+			},
+			SecretStore: &config.SecretStore{
+				Vault: &config.VaultSecretStore{
+					Address: "https://vault.example.com",
+				},
+			},
+		})
+		if buf.Len() != 0 {
+			t.Fatalf("expected no warnings, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_plain_http_managed_server_base_url", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{
+					BaseURL: "http://example.com/api",
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.base-url uses plain HTTP")) {
+			t.Fatalf("expected HTTP warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_managed_server_insecure_skip_verify", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{
+					BaseURL: "https://example.com",
+					TLS:     &config.TLS{InsecureSkipVerify: true},
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.tls.insecure-skip-verify")) {
+			t.Fatalf("expected TLS skip-verify warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_plain_http_vault_address", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			SecretStore: &config.SecretStore{
+				Vault: &config.VaultSecretStore{
+					Address: "http://vault.local:8200",
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("secret-store.vault.address uses plain HTTP")) {
+			t.Fatalf("expected Vault HTTP warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_vault_insecure_skip_verify", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			SecretStore: &config.SecretStore{
+				Vault: &config.VaultSecretStore{
+					Address: "https://vault.example.com",
+					TLS:     &config.TLS{InsecureSkipVerify: true},
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("secret-store.vault.tls.insecure-skip-verify")) {
+			t.Fatalf("expected Vault TLS skip-verify warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_git_remote_insecure_skip_verify", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			Repository: config.Repository{
+				Git: &config.GitRepository{
+					Remote: &config.GitRemote{
+						TLS: &config.TLS{InsecureSkipVerify: true},
+					},
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("repository.git.remote.tls.insecure-skip-verify")) {
+			t.Fatalf("expected Git TLS skip-verify warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("warns_on_ssh_insecure_ignore_host_key", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			Repository: config.Repository{
+				Git: &config.GitRepository{
+					Remote: &config.GitRemote{
+						Auth: &config.GitAuth{
+							SSH: &config.SSHAuth{InsecureIgnoreHostKey: true},
+						},
+					},
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("repository.git.remote.auth.ssh.insecure-ignore-host-key")) {
+			t.Fatalf("expected SSH host-key warning, got %q", buf.String())
+		}
+	})
+
+	t.Run("emits_all_warnings_combined", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{
+					BaseURL: "http://example.com",
+					TLS:     &config.TLS{InsecureSkipVerify: true},
+				},
+			},
+			SecretStore: &config.SecretStore{
+				Vault: &config.VaultSecretStore{
+					Address: "http://vault.local:8200",
+					TLS:     &config.TLS{InsecureSkipVerify: true},
+				},
+			},
+			Repository: config.Repository{
+				Git: &config.GitRepository{
+					Remote: &config.GitRemote{
+						TLS: &config.TLS{InsecureSkipVerify: true},
+						Auth: &config.GitAuth{
+							SSH: &config.SSHAuth{InsecureIgnoreHostKey: true},
+						},
+					},
+				},
+			},
+		})
+
+		output := buf.String()
+		expectedSubstrings := []string{
+			"managed-server.http.base-url uses plain HTTP",
+			"managed-server.http.tls.insecure-skip-verify",
+			"secret-store.vault.address uses plain HTTP",
+			"secret-store.vault.tls.insecure-skip-verify",
+			"repository.git.remote.tls.insecure-skip-verify",
+			"repository.git.remote.auth.ssh.insecure-ignore-host-key",
+		}
+		for _, substr := range expectedSubstrings {
+			if !bytes.Contains([]byte(output), []byte(substr)) {
+				t.Errorf("expected warning containing %q in output:\n%s", substr, output)
+			}
+		}
+	})
+
+	t.Run("no_warnings_for_empty_context", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{})
+		if buf.Len() != 0 {
+			t.Fatalf("expected no warnings for empty context, got %q", buf.String())
+		}
+	})
+}
+
 func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 	t.Parallel()
 

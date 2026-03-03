@@ -79,7 +79,9 @@ func (g *HTTPManagedServerClient) execute(ctx context.Context, spec metadata.Ope
 	if err != nil {
 		return nil, nil, transportError("remote request failed", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {

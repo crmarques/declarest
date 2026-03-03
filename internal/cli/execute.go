@@ -118,7 +118,9 @@ func commandPathSupportsExecutionStatus(path string) bool {
 
 func shouldSuppressStatusMessage(args []string) bool {
 	flags := pflag.NewFlagSet("status", pflag.ContinueOnError)
-	flags.ParseErrorsWhitelist.UnknownFlags = true
+	flags.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{
+		UnknownFlags: true,
+	}
 	flags.SetOutput(io.Discard)
 
 	var noStatus bool

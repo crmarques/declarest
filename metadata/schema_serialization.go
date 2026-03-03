@@ -602,10 +602,7 @@ func operationValidationToWire(value *OperationValidationSpec) *operationValidat
 	if value.Assertions != nil {
 		items := make([]validationAssertionWire, len(value.Assertions))
 		for idx, assertion := range value.Assertions {
-			items[idx] = validationAssertionWire{
-				Message: assertion.Message,
-				JQ:      assertion.JQ,
-			}
+			items[idx] = validationAssertionToWire(assertion)
 		}
 		wire.Assertions = &items
 	}
@@ -626,10 +623,7 @@ func operationValidationFromWire(value *operationValidationWire) *OperationValid
 	if value.Assertions != nil {
 		items := make([]ValidationAssertion, len(*value.Assertions))
 		for idx, assertion := range *value.Assertions {
-			items[idx] = ValidationAssertion{
-				Message: assertion.Message,
-				JQ:      assertion.JQ,
-			}
+			items[idx] = validationAssertionFromWire(assertion)
 		}
 		decoded.Assertions = items
 	}
@@ -641,6 +635,14 @@ func operationValidationFromWire(value *operationValidationWire) *OperationValid
 	}
 
 	return decoded
+}
+
+func validationAssertionToWire(assertion ValidationAssertion) validationAssertionWire {
+	return validationAssertionWire(assertion)
+}
+
+func validationAssertionFromWire(assertion validationAssertionWire) ValidationAssertion {
+	return ValidationAssertion(assertion)
 }
 
 func payloadTransformOrderFromJSON(data []byte) []string {
