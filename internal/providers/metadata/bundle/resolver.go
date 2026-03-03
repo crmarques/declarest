@@ -27,9 +27,9 @@ const (
 	defaultBundleOwner     = "crmarques"
 	defaultBundleCacheDir  = ".declarest/metadata-bundles"
 	bundleReadyMarkerFile  = ".declarest-bundle-ready"
-	maxArchiveFileSizeByte  = 64 << 20
-	maxTotalArchiveBytes    = 256 << 20
-	maxArchiveEntries       = 10_000
+	maxArchiveFileSizeByte = 64 << 20
+	maxTotalArchiveBytes   = 256 << 20
+	maxArchiveEntries      = 10_000
 )
 
 const (

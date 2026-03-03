@@ -42,9 +42,9 @@ type FileSecretService struct {
 	passphrase []byte
 	kdf        kdfSettings
 
-	mu              sync.Mutex
-	initialized     bool
-	cachedSnapshot  *secretSnapshot
+	mu             sync.Mutex
+	initialized    bool
+	cachedSnapshot *secretSnapshot
 }
 
 type kdfSettings struct {
