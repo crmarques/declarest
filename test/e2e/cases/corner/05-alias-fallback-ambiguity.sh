@@ -39,7 +39,7 @@ case_run() {
 
   case_run_declarest resource get "/admin/realms/master/clients/${client_two}" --remote-server -o json
   case_expect_success
-  remote_id_two=$(jq -r '.id // empty' <<<"${CASE_LAST_OUTPUT}")
+  remote_id_two=$(jq -r '.id // empty' <<<"${CASE_LAST_STDOUT}")
   if [[ -z "${remote_id_two}" || "${remote_id_two}" == 'null' ]]; then
     printf 'could not resolve remote id for %s\n' "${client_two}" >&2
     return 1

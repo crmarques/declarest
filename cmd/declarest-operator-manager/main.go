@@ -21,10 +21,12 @@ func main() {
 		metricsAddr          string
 		probeAddr            string
 		enableLeaderElection bool
+		enableWebhooks       bool
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable admission webhooks for DeclaREST CRDs.")
 	zapOptions := zap.Options{Development: false}
 	zapOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -93,21 +95,23 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
 		os.Exit(1)
 	}
-	if err := (&declarestv1alpha1.ResourceRepository{}).SetupWebhookWithManager(manager); err != nil {
-		ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository webhook")
-		os.Exit(1)
-	}
-	if err := (&declarestv1alpha1.ManagedServer{}).SetupWebhookWithManager(manager); err != nil {
-		ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer webhook")
-		os.Exit(1)
-	}
-	if err := (&declarestv1alpha1.SecretStore{}).SetupWebhookWithManager(manager); err != nil {
-		ctrl.Log.WithName("setup").Error(err, "unable to create SecretStore webhook")
-		os.Exit(1)
-	}
-	if err := (&declarestv1alpha1.SyncPolicy{}).SetupWebhookWithManager(manager); err != nil {
-		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy webhook")
-		os.Exit(1)
+	if enableWebhooks {
+		if err := (&declarestv1alpha1.ResourceRepository{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.ManagedServer{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.SecretStore{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create SecretStore webhook")
+			os.Exit(1)
+		}
+		if err := (&declarestv1alpha1.SyncPolicy{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy webhook")
+			os.Exit(1)
+		}
 	}
 
 	if err := manager.AddHealthzCheck("healthz", healthz.Ping); err != nil {

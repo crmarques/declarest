@@ -469,3 +469,41 @@ Expected outputs:
 
 Failure expectation:
 1. Step 3 fails argument validation before runtime startup with actionable guidance about missing proxy URL env vars.
+
+### Example 30: Operator Profile Manual Reconciliation
+Goal: run operator profile end-to-end and manually verify repository-to-managed-server reconciliation.
+
+Inputs:
+1. `run-e2e.sh --profile operator --managed-server simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
+2. Local toolchain supports `kind`, `kubectl`, and selected container engine.
+
+Execution:
+1. Runner initializes selected local components and config context.
+2. Runner seeds fixture repository content, initializes git, commits/pushes seed content to the selected git provider, installs CRDs, starts `declarest-operator-manager`, and applies generated operator CRs.
+3. User sources the generated setup script and runs the printed commands to save one new resource, commit/push it, and read the same logical path from the managed server.
+
+Expected outputs:
+1. Operator resources (`resourcerepository`, `managedserver`, `secretstore`, `syncpolicy`) become `Ready`.
+2. Manual verification command returns the created resource from the managed server at the same logical path.
+3. Runtime artifacts and shell reset script remain available until explicit cleanup.
+
+Failure expectation:
+1. Operator-manager startup failures surface actionable logs and abort before CR application.
+
+### Example 31: Operator Profile Invalid Selection (Corner)
+Goal: reject unsupported operator profile selections before runtime startup.
+
+Inputs:
+1. `run-e2e.sh --profile operator --repo-type filesystem`.
+2. `run-e2e.sh --profile operator --repo-type git --git-provider git`.
+3. `run-e2e.sh --profile operator --secret-provider none`.
+
+Execution:
+1. Runner parses args and applies profile defaults.
+2. Runner validates profile rules in `Initializing`.
+
+Expected outputs:
+1. Each command fails fast with `ValidationError` and actionable guidance indicating the required operator constraints.
+
+Failure expectation:
+1. Any command reaching component startup after violating operator profile constraints is a contract breach.

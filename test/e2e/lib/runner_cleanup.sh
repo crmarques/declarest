@@ -510,6 +510,34 @@ e2e_cleanup_run_runtime() {
   return 0
 }
 
+e2e_cleanup_run_operator_manager() {
+  local run_id=$1
+  local pid
+
+  pid=$(e2e_runtime_state_get_for_run_id "${run_id}" 'OPERATOR_MANAGER_PID' || true)
+  if [[ -z "${pid}" || ! "${pid}" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+
+  if ! e2e_is_live_pid "${pid}"; then
+    return 0
+  fi
+
+  e2e_info "cleanup operator manager pid=${pid} run-id=${run_id}"
+  kill -TERM "${pid}" >/dev/null 2>&1 || true
+  if e2e_wait_pid_gone "${pid}" 80; then
+    return 0
+  fi
+
+  kill -KILL "${pid}" >/dev/null 2>&1 || true
+  if ! e2e_wait_pid_gone "${pid}" 20; then
+    e2e_warn "failed to stop operator manager pid=${pid} for run-id=${run_id}"
+    return 1
+  fi
+
+  return 0
+}
+
 e2e_remove_path_entry() {
   local target=$1
   if [[ -z "${target}" ]]; then
@@ -567,6 +595,7 @@ e2e_cleanup_run_id() {
   e2e_validate_cleanup_run_id "${run_id}" || return 1
   e2e_remove_run_bin_from_path "${run_id}"
   e2e_kill_runner_for_run_id "${run_id}" || return 1
+  e2e_cleanup_run_operator_manager "${run_id}" || return 1
   e2e_cleanup_run_runtime "${run_id}" || return 1
 
   if [[ -d "${run_dir}" ]]; then

@@ -1,17 +1,40 @@
 #!/usr/bin/env bash
 
 CASE_LAST_OUTPUT=''
+CASE_LAST_STDOUT=''
+CASE_LAST_STDERR=''
 CASE_LAST_STATUS=0
 
 case_run_declarest() {
-  local output
+  local stdout_file stderr_file stdout stderr
+
+  stdout_file=$(mktemp "${TMPDIR:-/tmp}/declarest-e2e-stdout.XXXXXX") || {
+    printf 'failed to allocate stdout temp file\n' >&2
+    return 1
+  }
+  stderr_file=$(mktemp "${TMPDIR:-/tmp}/declarest-e2e-stderr.XXXXXX") || {
+    rm -f "${stdout_file}"
+    printf 'failed to allocate stderr temp file\n' >&2
+    return 1
+  }
 
   set +e
-  output=$(DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" "$@" 2>&1)
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" "$@" >"${stdout_file}" 2>"${stderr_file}"
   CASE_LAST_STATUS=$?
   set -e
 
-  CASE_LAST_OUTPUT="${output}"
+  stdout=$(cat "${stdout_file}" 2>/dev/null || true)
+  stderr=$(cat "${stderr_file}" 2>/dev/null || true)
+  rm -f "${stdout_file}" "${stderr_file}"
+
+  CASE_LAST_STDOUT="${stdout}"
+  CASE_LAST_STDERR="${stderr}"
+
+  CASE_LAST_OUTPUT="${stdout}"
+  if [[ -n "${stderr}" ]]; then
+    CASE_LAST_OUTPUT+=$'\n'"${stderr}"
+  fi
+
   return 0
 }
 
@@ -120,7 +143,7 @@ case_write_json() {
 
 case_jq_value() {
   local jq_expr=$1
-  jq -r "${jq_expr}" <<<"${CASE_LAST_OUTPUT}"
+  jq -r "${jq_expr}" <<<"${CASE_LAST_STDOUT}"
 }
 
 case_context_repo_base_dir() {
@@ -496,7 +519,7 @@ case_repo_template_sync_tree() {
 
     case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
-    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1
@@ -532,7 +555,7 @@ case_repo_template_sync_tree() {
       fi
       case_expect_success
     fi
-    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
       printf '%s expected deterministic sorted remote list after delete for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1

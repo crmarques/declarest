@@ -24,6 +24,11 @@ This repository uses a componentized Bash e2e harness.
   - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
+- `operator`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
+  - defaults to `repo-type=git` and `git-provider=gitea` when those flags are omitted
+  - requires local component connections, `--repo-type git`, `--git-provider <gitea|gitlab>`, and `--secret-provider <file|vault>`
+  - copies the selected managed-server `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs
+  - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed server manually
 
 ## Platform
 
@@ -35,7 +40,7 @@ This repository uses a componentized Bash e2e harness.
 
 ## Main Flags
 
-- `--profile <basic|full|manual>`
+- `--profile <basic|full|manual|operator>`
 - `--platform <compose|kubernetes>`
 - `--managed-server <name>` (mandatory; `none` is not supported)
 - `--managed-server-connection <local|remote>`
@@ -101,6 +106,16 @@ The runner reports progress in grouped steps:
 3. `Preparing Components`
 4. `Starting Components`
 5. `Configuring Access`
+
+- `operator`: 7 steps
+
+1. `Initializing`
+2. `Preparing Runtime`
+3. `Preparing Components`
+4. `Starting Components`
+5. `Configuring Access`
+6. `Installing Operator`
+7. `Finalizing`
 
 TTY mode renders dynamic spinner/status updates. Non-TTY mode emits structured plain step lines.
 The runner prints a live log pointer at startup so progress can be followed with `tail -f`.

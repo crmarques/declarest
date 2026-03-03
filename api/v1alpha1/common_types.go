@@ -111,8 +111,10 @@ func validateGitURL(raw string, fieldPath string) error {
 	if err != nil {
 		return fmt.Errorf("%s must be a valid git URL: %w", fieldPath, err)
 	}
-	if parsed.Scheme != "https" {
-		return fmt.Errorf("%s must use https or ssh", fieldPath)
+	switch parsed.Scheme {
+	case "https", "http":
+	default:
+		return fmt.Errorf("%s must use http, https, or ssh", fieldPath)
 	}
 	if strings.TrimSpace(parsed.Host) == "" {
 		return fmt.Errorf("%s host is required", fieldPath)

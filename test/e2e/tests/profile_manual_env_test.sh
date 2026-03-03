@@ -171,6 +171,45 @@ EOF
   [[ -z "${output}" ]] || true
 }
 
+test_manual_handoff_prints_kubectl_and_repo_provider_access() {
+  load_profile_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_PLATFORM='kubernetes'
+  export E2E_KUBECONFIG="${tmp}/manual-kubeconfig"
+  export E2E_KIND_CLUSTER_NAME='declarest-e2e-manual'
+  export E2E_K8S_NAMESPACE='declarest-manual'
+  export E2E_REPO_TYPE='git'
+  export E2E_GIT_PROVIDER='gitea'
+  export E2E_GIT_PROVIDER_CONNECTION='local'
+  : >"${E2E_KUBECONFIG}"
+
+  local SETUP_SCRIPT RESET_SCRIPT
+  prepare_manual_env_scripts "${tmp}"
+
+  local provider_state="${E2E_STATE_DIR}/git-provider-gitea.env"
+  : >"${provider_state}"
+  e2e_write_state_value "${provider_state}" 'GIT_REMOTE_URL' 'http://127.0.0.1:3000/declarest-e2e/declarest-e2e.git'
+  e2e_write_state_value "${provider_state}" 'GITEA_BASE_URL' 'http://127.0.0.1:3000'
+  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_USERNAME' 'gitea-admin'
+  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_PASSWORD' 'gitea-pass'
+
+  local output
+  output=$(e2e_manual_handoff_print 'e2e-manual')
+
+  assert_contains "${output}" "How to connect kubectl to this kind cluster:"
+  assert_contains "${output}" "export KUBECONFIG=\"${E2E_KUBECONFIG}\""
+  assert_contains "${output}" "Repository provider access:"
+  assert_contains "${output}" "provider: gitea (local)"
+  assert_contains "${output}" "web login: http://127.0.0.1:3000/user/login"
+  assert_contains "${output}" "username: gitea-admin"
+  assert_contains "${output}" "password: gitea-pass"
+}
+
 test_manual_env_scripts_install_and_restore_prompt_hook
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig
+test_manual_handoff_prints_kubectl_and_repo_provider_access

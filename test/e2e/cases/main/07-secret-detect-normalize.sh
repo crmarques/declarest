@@ -23,7 +23,7 @@ case_run() {
 
   case_run_declarest secret detect -f "${detect_payload_file}" -i json -o json
   case_expect_success
-  if ! jq -e '. == ["apiToken", "password"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '. == ["apiToken", "password"]' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected deterministic detected secret keys\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
@@ -38,7 +38,7 @@ case_run() {
 
   case_run_declarest secret normalize -f "${normalize_payload_file}" -i json -o json
   case_expect_success
-  if ! jq -e '.apiToken == "{{secret .}}" and .nested.clientSecret == "{{secret .}}"' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '.apiToken == "{{secret .}}" and .nested.clientSecret == "{{secret .}}"' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected normalized placeholders with resolved keys\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
@@ -46,7 +46,7 @@ case_run() {
 
   case_run_declarest secret detect --path "${metadata_target_path}" --fix --secret-attribute password -f "${detect_payload_file}" -i json -o json
   case_expect_success
-  if ! jq -e '. == ["password"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '. == ["password"]' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected --secret-attribute to filter detect output when using --fix\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
@@ -55,7 +55,7 @@ case_run() {
 
   case_run_declarest metadata get "${metadata_target_path}" -o json
   case_expect_success
-  if ! jq -e '.resourceInfo.secretInAttributes == ["password"]' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '.resourceInfo.secretInAttributes == ["password"]' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected --fix to write resourceInfo.secretInAttributes metadata\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
@@ -80,7 +80,7 @@ case_run() {
   if ! jq -e --arg scope "${repo_detect_scope}" '
     any(.[]; .LogicalPath == ($scope + "/acme") and .Attributes == ["password"]) and
     any(.[]; .LogicalPath == ($scope + "/beta") and .Attributes == ["apiToken"])
-  ' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  ' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected repo-wide detect to include saved secret candidates\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
@@ -90,7 +90,7 @@ case_run() {
   case_expect_success
   if ! jq -e --arg scope "${repo_detect_scope}" '
     length >= 2 and all(.[]; (.LogicalPath | startswith($scope + "/")))
-  ' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  ' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected scoped detect to include only resources under requested path\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1

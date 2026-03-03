@@ -49,7 +49,7 @@ Acceptance contracts:
 10. Managed-server OpenAPI version compatibility: `openapi: 3.x` and `swagger: 2.0` specs provide equivalent method-support checks, media fallback defaults, and `validate.schemaRef=openapi:request-body` behavior for body-bearing operations.
 10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repository status` output contract, and verbose worktree-detail coverage for `repository status --verbose`.
-11. E2E profiles: `basic|full|manual` workload behavior, requirement filtering, and deterministic step statuses.
+11. E2E profiles: `basic|full|manual|operator` workload behavior, requirement filtering, deterministic step statuses, and operator-profile installation/handoff validation.
 12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.
 13. Resource-server fixtures: metadata `resourceInfo` identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
 14. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
@@ -137,3 +137,4 @@ Acceptance contracts:
 7. CLI test verifies explicit payload collection-target inference (`resource create /admin/realms --payload realm=test`) resolves the concrete child path from metadata alias/id hints while the equivalent explicit resource path (`/admin/realms/test`) continues to pass identity validation.
 8. Bundle metadata tests verify OpenAPI fallback discovery order when `managed-server.http.openapi` is empty: `declarest.openapi` hint, bundle-root/metadata-root OpenAPI files, then deterministic recursive bundle-file fallback.
 9. E2E harness tests verify both platform paths (`--platform compose` and `--platform kubernetes`), including a corner case where `--platform kubernetes` with remote/native-only selections skips kind cluster creation.
+10. E2E harness tests verify operator profile defaulting/validation (`repo-type=git`, `git-provider=gitea`) and cleanup behavior for recorded operator manager processes.

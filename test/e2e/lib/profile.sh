@@ -1,30 +1,95 @@
 #!/usr/bin/env bash
 
 e2e_apply_profile_defaults() {
-  # Profiles share the same component defaults from args parsing.
-  # Manual mode only changes workload behavior (handoff vs automated cases).
+  if [[ "${E2E_PROFILE}" != 'operator' ]]; then
+    # Non-operator profiles share the same component defaults from args parsing.
+    return 0
+  fi
+
+  if ! e2e_is_explicit 'platform'; then
+    E2E_PLATFORM='kubernetes'
+  fi
+
+  if ! e2e_is_explicit 'repo-type'; then
+    E2E_REPO_TYPE='git'
+    E2E_SELECTED_BY_PROFILE_DEFAULT=1
+  fi
+
+  if [[ "${E2E_REPO_TYPE}" == 'git' ]] && ! e2e_is_explicit 'git-provider'; then
+    if [[ -z "${E2E_GIT_PROVIDER}" || "${E2E_GIT_PROVIDER}" == 'git' ]]; then
+      E2E_GIT_PROVIDER='gitea'
+      E2E_SELECTED_BY_PROFILE_DEFAULT=1
+    fi
+  fi
+
   return 0
 }
 
 e2e_validate_profile_rules() {
-  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+  if [[ "${E2E_PROFILE}" == 'manual' ]]; then
+    if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+      e2e_die 'manual profile is local-instantiable only; managed-server connection must be local'
+      return 1
+    fi
+
+    if [[ "${E2E_GIT_PROVIDER_CONNECTION}" != 'local' && -n "${E2E_GIT_PROVIDER}" ]]; then
+      e2e_die 'manual profile is local-instantiable only; git-provider connection must be local'
+      return 1
+    fi
+
+    if [[ "${E2E_SECRET_PROVIDER_CONNECTION}" != 'local' && "${E2E_SECRET_PROVIDER}" != 'none' ]]; then
+      e2e_die 'manual profile is local-instantiable only; secret-provider connection must be local'
+      return 1
+    fi
+
     return 0
   fi
 
-  if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
-    e2e_die 'manual profile is local-instantiable only; managed-server connection must be local'
+  if [[ "${E2E_PROFILE}" != 'operator' ]]; then
+    return 0
+  fi
+
+  if [[ "${E2E_PLATFORM}" != 'kubernetes' ]]; then
+    e2e_die 'operator profile requires --platform kubernetes'
     return 1
   fi
 
-  if [[ "${E2E_GIT_PROVIDER_CONNECTION}" != 'local' && -n "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die 'manual profile is local-instantiable only; git-provider connection must be local'
+  if [[ "${E2E_REPO_TYPE}" != 'git' ]]; then
+    e2e_die 'operator profile requires --repo-type git'
     return 1
   fi
 
-  if [[ "${E2E_SECRET_PROVIDER_CONNECTION}" != 'local' && "${E2E_SECRET_PROVIDER}" != 'none' ]]; then
-    e2e_die 'manual profile is local-instantiable only; secret-provider connection must be local'
+  if [[ -z "${E2E_GIT_PROVIDER}" ]]; then
+    e2e_die 'operator profile requires --git-provider'
     return 1
   fi
+
+  if [[ "${E2E_GIT_PROVIDER}" == 'git' ]]; then
+    e2e_die 'operator profile does not support --git-provider git; choose gitea or gitlab'
+    return 1
+  fi
+
+  if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' ]]; then
+    e2e_die 'operator profile is local-instantiable only; managed-server connection must be local'
+    return 1
+  fi
+
+  if [[ "${E2E_GIT_PROVIDER_CONNECTION}" != 'local' ]]; then
+    e2e_die 'operator profile is local-instantiable only; git-provider connection must be local'
+    return 1
+  fi
+
+  if [[ "${E2E_SECRET_PROVIDER}" == 'none' ]]; then
+    e2e_die 'operator profile requires a secret provider (file or vault)'
+    return 1
+  fi
+
+  if [[ "${E2E_SECRET_PROVIDER_CONNECTION}" != 'local' ]]; then
+    e2e_die 'operator profile is local-instantiable only; secret-provider connection must be local'
+    return 1
+  fi
+
+  return 0
 }
 
 e2e_profile_scopes() {
@@ -36,6 +101,8 @@ e2e_profile_scopes() {
       printf 'main\ncorner\n'
       ;;
     manual)
+      ;;
+    operator)
       ;;
   esac
 }
@@ -282,6 +349,161 @@ e2e_manual_write_env_scripts() {
   chmod +x "${setup_script}" "${reset_script}" || return 1
 }
 
+e2e_profile_repo_provider_state_file() {
+  [[ -n "${E2E_STATE_DIR:-}" ]] || return 1
+  [[ -n "${E2E_GIT_PROVIDER:-}" ]] || return 1
+
+  printf '%s/git-provider-%s.env\n' "${E2E_STATE_DIR}" "${E2E_GIT_PROVIDER}"
+}
+
+e2e_profile_repo_provider_state_get() {
+  local key=$1
+  local state_file
+
+  state_file=$(e2e_profile_repo_provider_state_file) || return 1
+  e2e_state_get "${state_file}" "${key}"
+}
+
+e2e_profile_repo_provider_web_url_from_remote() {
+  local remote_url=$1
+  local host
+  local path
+
+  case "${remote_url}" in
+    http://*|https://*)
+      if [[ "${remote_url}" =~ ^([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@]+@)(.+)$ ]]; then
+        remote_url="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+      fi
+      printf '%s\n' "${remote_url%.git}"
+      return 0
+      ;;
+    git@*:* )
+      host=${remote_url#git@}
+      host=${host%%:*}
+      path=${remote_url#*:}
+      printf 'https://%s/%s\n' "${host}" "${path%.git}"
+      return 0
+      ;;
+    ssh://git@* )
+      remote_url=${remote_url#ssh://}
+      remote_url=${remote_url#*@}
+      host=${remote_url%%/*}
+      path=${remote_url#*/}
+      printf 'https://%s/%s\n' "${host}" "${path%.git}"
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+e2e_profile_print_kubernetes_connection_help() {
+  [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]] || return 0
+  [[ -n "${E2E_KIND_CLUSTER_NAME:-}" ]] || return 0
+
+  cat <<EOFK8S
+How to connect kubectl to this kind cluster:
+  export KUBECONFIG="${E2E_KUBECONFIG:-}"
+  kubectl config current-context
+  kubectl cluster-info
+  kubectl -n "${E2E_K8S_NAMESPACE:-default}" get pods,svc
+
+Kubernetes access:
+  cluster: ${E2E_KIND_CLUSTER_NAME}
+  namespace: ${E2E_K8S_NAMESPACE:-default}
+  kubeconfig: ${E2E_KUBECONFIG:-n/a}
+EOFK8S
+}
+
+e2e_profile_print_repo_provider_access_help() {
+  local provider=${E2E_GIT_PROVIDER:-}
+  local connection=${E2E_GIT_PROVIDER_CONNECTION:-local}
+  local remote_url=''
+  local web_url=''
+  local login_url=''
+  local username=''
+  local password=''
+
+  [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
+  [[ -n "${provider}" ]] || return 0
+
+  remote_url=$(e2e_profile_repo_provider_state_get 'GIT_REMOTE_URL' || true)
+
+  case "${provider}" in
+    gitea)
+      web_url=$(e2e_profile_repo_provider_state_get 'GITEA_BASE_URL' || true)
+      if [[ -z "${web_url}" && -n "${remote_url}" ]]; then
+        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
+      fi
+      if [[ -n "${web_url}" ]]; then
+        login_url="${web_url%/}/user/login"
+      fi
+      username=$(e2e_profile_repo_provider_state_get 'GITEA_ADMIN_USERNAME' || true)
+      password=$(e2e_profile_repo_provider_state_get 'GITEA_ADMIN_PASSWORD' || true)
+      ;;
+    gitlab)
+      web_url=$(e2e_profile_repo_provider_state_get 'GITLAB_BASE_URL' || true)
+      if [[ -z "${web_url}" && -n "${remote_url}" ]]; then
+        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
+      fi
+      if [[ -n "${web_url}" ]]; then
+        login_url="${web_url%/}/users/sign_in"
+      fi
+      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
+      password=$(e2e_profile_repo_provider_state_get 'GITLAB_ROOT_PASSWORD' || true)
+      ;;
+    github)
+      if [[ -n "${remote_url}" ]]; then
+        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
+      fi
+      if [[ -n "${web_url}" ]]; then
+        login_url='https://github.com/login'
+      fi
+      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
+      ;;
+    git)
+      ;;
+    *)
+      if [[ -n "${remote_url}" ]]; then
+        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
+      fi
+      login_url="${web_url}"
+      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
+      ;;
+  esac
+
+  cat <<EOFREPO
+Repository provider access:
+  provider: ${provider} (${connection})
+  git remote: ${remote_url:-n/a}
+EOFREPO
+
+  if [[ -n "${login_url}" ]]; then
+    cat <<EOFREPOLOGIN
+  web login: ${login_url}
+  open in browser:
+    xdg-open "${login_url}"
+    open "${login_url}"  # macOS
+EOFREPOLOGIN
+  fi
+
+  if [[ -n "${username}" ]]; then
+    printf '  username: %s\n' "${username}"
+  fi
+  if [[ -n "${password}" ]]; then
+    printf '  password: %s\n' "${password}"
+  fi
+
+  case "${provider}" in
+    github)
+      printf '  auth note: use your configured GitHub token for git operations if prompted.\n'
+      ;;
+    git)
+      printf '  auth note: built-in git provider uses local file:// repository URLs (no web login).\n'
+      ;;
+  esac
+}
+
 e2e_manual_handoff_print() {
   local context_name=$1
   local setup_script
@@ -320,17 +542,13 @@ To use it in your current shell:
 EOFH
 
   if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
-    cat <<EOFK8S
+    printf '\n'
+    e2e_profile_print_kubernetes_connection_help
+  fi
 
-Kubernetes access:
-  cluster: ${E2E_KIND_CLUSTER_NAME}
-  namespace: ${E2E_K8S_NAMESPACE:-default}
-  kubeconfig: ${E2E_KUBECONFIG:-n/a}
-
-Try:
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-}" get nodes
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-}" -n "${E2E_K8S_NAMESPACE:-default}" get pods,svc
-EOFK8S
+  if [[ "${E2E_REPO_TYPE:-}" == 'git' && -n "${E2E_GIT_PROVIDER:-}" ]]; then
+    printf '\n'
+    e2e_profile_print_repo_provider_access_help
   fi
 
   cat <<EOFH

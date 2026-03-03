@@ -29,7 +29,7 @@ case_run() {
 
   case_run_declarest resource get "${heuristic_path}" --repository -o json
   case_expect_success
-  if ! jq -e '.password == "plain-secret" and .name == "acme"' <<<"${CASE_LAST_OUTPUT}" >/dev/null; then
+  if ! jq -e '.password == "plain-secret" and .name == "acme"' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected --ignore save to persist plaintext payload\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1

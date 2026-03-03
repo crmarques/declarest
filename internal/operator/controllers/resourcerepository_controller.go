@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -297,7 +298,14 @@ func (r *ResourceRepositoryReconciler) gitAuthMethod(
 		if err != nil {
 			return nil, cleanup, err
 		}
-		return &httpauth.BasicAuth{Username: "token", Password: token}, cleanup, nil
+		username := "token"
+		parsedURL, parseErr := url.Parse(strings.TrimSpace(resourceRepository.Spec.Git.URL))
+		if parseErr == nil && parsedURL.User != nil {
+			if candidate := strings.TrimSpace(parsedURL.User.Username()); candidate != "" {
+				username = candidate
+			}
+		}
+		return &httpauth.BasicAuth{Username: username, Password: token}, cleanup, nil
 	}
 
 	sshAuth := resourceRepository.Spec.Git.Auth.SSHSecretRef

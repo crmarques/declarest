@@ -45,6 +45,12 @@ test_parses_platform_flag() {
   assert_eq "${E2E_PLATFORM}" "kubernetes" "expected --platform kubernetes to be parsed"
 }
 
+test_parses_operator_profile() {
+  reload_args_lib
+  e2e_parse_args --profile operator
+  assert_eq "${E2E_PROFILE}" "operator" "expected --profile operator to be parsed"
+}
+
 test_rejects_invalid_platform_flag() {
   reload_args_lib
   local output status
@@ -190,6 +196,7 @@ test_usage_mentions_validate_flag_and_no_none_managed_server() {
   reload_args_lib
   local output
   output=$(e2e_usage)
+  assert_contains "${output}" "--profile <basic|full|manual|operator>"
   assert_contains "${output}" "--validate-components"
   assert_contains "${output}" "--platform <compose|kubernetes>"
   assert_contains "${output}" "--metadata <bundle|local-dir>"
@@ -206,6 +213,7 @@ test_parses_validate_components_flag
 test_defaults_metadata_mode_to_bundle
 test_defaults_platform_to_kubernetes
 test_parses_platform_flag
+test_parses_operator_profile
 test_rejects_invalid_platform_flag
 test_parses_managed_server_auth_type_flag
 test_parses_managed_server_proxy_flag

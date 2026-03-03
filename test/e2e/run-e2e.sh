@@ -9,6 +9,8 @@ source "${SCRIPT_DIR}/lib/args.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/profile.sh"
 # shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/operator.sh"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/components.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/context.sh"
@@ -94,6 +96,12 @@ step_prepare_runtime() {
   fi
 
   e2e_run_cmd go build -o "${E2E_BIN}" ./cmd/declarest || return 1
+  if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+    E2E_OPERATOR_BIN="${E2E_RUN_DIR}/bin/declarest-operator-manager"
+    export E2E_OPERATOR_BIN
+    e2e_run_cmd go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1
+    e2e_info "runtime operator binary path=${E2E_OPERATOR_BIN}"
+  fi
 
   e2e_collect_case_files || return 1
   e2e_info "runtime case files collected count=${#E2E_CASE_FILES[@]}"
@@ -130,6 +138,13 @@ step_run_workload() {
   e2e_run_cases || return 1
 }
 
+step_operator_install() {
+  e2e_profile_seed_repo_from_template || return 1
+  e2e_profile_init_repo_if_needed || return 1
+  e2e_operator_seed_remote_repo_if_git || return 1
+  e2e_operator_install_stack || return 1
+}
+
 e2e_manual_print_component_access_info() {
   local component_key
   local section_printed=0
@@ -152,13 +167,13 @@ e2e_manual_print_component_access_info() {
   done
 }
 
-e2e_manual_seed_repo_from_template() {
-  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+e2e_profile_seed_repo_from_template() {
+  if [[ "${E2E_PROFILE}" != 'manual' && "${E2E_PROFILE}" != 'operator' ]]; then
     return 0
   fi
 
   if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
-    e2e_info 'manual profile repo-template sync skipped: managed-server=none'
+    e2e_info "${E2E_PROFILE} profile repo-template sync skipped: managed-server=none"
     return 0
   fi
 
@@ -175,34 +190,34 @@ e2e_manual_seed_repo_from_template() {
 
   repo_base_dir=$(e2e_state_get "${repo_state_file}" 'REPO_BASE_DIR' || true)
   if [[ -z "${repo_base_dir}" ]]; then
-    e2e_die "manual profile repo-template sync failed: missing REPO_BASE_DIR in ${repo_state_file}"
+    e2e_die "${E2E_PROFILE} profile repo-template sync failed: missing REPO_BASE_DIR in ${repo_state_file}"
     return 1
   fi
 
   template_dir="${E2E_COMPONENT_PATH[${resource_component_key}]:-}/repo-template"
   if [[ ! -d "${template_dir}" ]]; then
-    e2e_die "manual profile repo-template sync failed: template dir not found: ${template_dir}"
+    e2e_die "${E2E_PROFILE} profile repo-template sync failed: template dir not found: ${template_dir}"
     return 1
   fi
 
   mkdir -p "${repo_base_dir}" || {
-    e2e_die "manual profile repo-template sync failed: cannot create repo dir: ${repo_base_dir}"
+    e2e_die "${E2E_PROFILE} profile repo-template sync failed: cannot create repo dir: ${repo_base_dir}"
     return 1
   }
 
-  e2e_info "manual profile repo-template sync source=${template_dir} target=${repo_base_dir}"
+  e2e_info "${E2E_PROFILE} profile repo-template sync source=${template_dir} target=${repo_base_dir}"
   cp -a "${template_dir}/." "${repo_base_dir}/" || {
-    e2e_die "manual profile repo-template sync failed while copying from ${template_dir} to ${repo_base_dir}"
+    e2e_die "${E2E_PROFILE} profile repo-template sync failed while copying from ${template_dir} to ${repo_base_dir}"
     return 1
   }
 
   file_count=$(find "${template_dir}" -type f | wc -l | tr -d ' ')
-  e2e_info "manual profile repo-template sync copied-files=${file_count}"
+  e2e_info "${E2E_PROFILE} profile repo-template sync copied-files=${file_count}"
   return 0
 }
 
-e2e_manual_init_repo_if_needed() {
-  if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+e2e_profile_init_repo_if_needed() {
+  if [[ "${E2E_PROFILE}" != 'manual' && "${E2E_PROFILE}" != 'operator' ]]; then
     return 0
   fi
 
@@ -210,13 +225,33 @@ e2e_manual_init_repo_if_needed() {
     return 0
   fi
 
-  e2e_info 'manual profile initializing git repository'
+  e2e_info "${E2E_PROFILE} profile initializing git repository"
   DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repository init >/dev/null || {
-    e2e_die 'manual profile git repository initialization failed'
+    e2e_die "${E2E_PROFILE} profile git repository initialization failed"
     return 1
   }
 
-  e2e_info 'manual profile git repository initialized'
+  e2e_info "${E2E_PROFILE} profile git repository initialized"
+  return 0
+}
+
+e2e_operator_seed_remote_repo_if_git() {
+  if [[ "${E2E_PROFILE}" != 'operator' || "${E2E_REPO_TYPE}" != 'git' ]]; then
+    return 0
+  fi
+
+  e2e_info 'operator profile committing seeded repository content'
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repository commit -m 'operator e2e seed content' >/dev/null || {
+    e2e_die 'operator profile failed to commit seeded repository content'
+    return 1
+  }
+
+  e2e_info 'operator profile pushing seeded repository content to remote'
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" repository push --force-push >/dev/null || {
+    e2e_die 'operator profile failed to push seeded repository content'
+    return 1
+  }
+
   return 0
 }
 
@@ -234,10 +269,13 @@ step_finalize() {
   if ((E2E_KEEP_RUNTIME == 1)); then
     if [[ "${E2E_PROFILE:-}" == 'manual' ]]; then
       e2e_info 'keeping runtime resources for manual profile'
+    elif [[ "${E2E_PROFILE:-}" == 'operator' ]]; then
+      e2e_info 'keeping runtime resources for operator profile'
     else
       e2e_info 'keeping runtime resources because --keep-runtime was set'
     fi
   else
+    e2e_operator_stop_manager || true
     e2e_components_stop_started || true
   fi
 
@@ -253,7 +291,7 @@ step_finalize() {
 main() {
   E2E_CLI_ARGS=("$@")
   local cleanup_parse_rc=0
-  local manual_handoff_needed=0
+  local profile_handoff_needed=0
 
   if e2e_has_help_flag "${E2E_CLI_ARGS[@]}"; then
     e2e_usage
@@ -301,6 +339,8 @@ main() {
   requested_profile=$(e2e_profile_from_cli_args "${E2E_CLI_ARGS[@]}")
   if [[ "${requested_profile}" == 'manual' ]]; then
     E2E_STEPS_TOTAL=5
+  elif [[ "${requested_profile}" == 'operator' ]]; then
+    E2E_STEPS_TOTAL=7
   else
     E2E_STEPS_TOTAL=7
   fi
@@ -316,7 +356,9 @@ main() {
       ui_run_step 3 "${E2E_STEPS_TOTAL}" 'Preparing Components' step_skip_not_requested || true
       ui_run_step 4 "${E2E_STEPS_TOTAL}" 'Starting Components' step_skip_not_requested || true
       ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_skip_not_requested || true
-      if [[ "${E2E_PROFILE}" != 'manual' ]]; then
+      if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Installing Operator' step_skip_not_requested || true
+      elif [[ "${E2E_PROFILE}" != 'manual' ]]; then
         ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_skip_not_requested || true
       fi
     else
@@ -330,7 +372,9 @@ main() {
       if ((E2E_OVERALL_FAILED == 0)); then
         ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_configure_access || E2E_OVERALL_FAILED=1
       fi
-      if ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" != 'manual' ]]; then
+      if ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" == 'operator' ]]; then
+        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Installing Operator' step_operator_install || E2E_OVERALL_FAILED=1
+      elif ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" != 'manual' ]]; then
         ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_run_workload || E2E_OVERALL_FAILED=1
       fi
     fi
@@ -339,25 +383,34 @@ main() {
   if [[ "${E2E_PROFILE}" == 'manual' ]]; then
     if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
       e2e_manual_print_component_access_info || true
-      e2e_manual_seed_repo_from_template || E2E_OVERALL_FAILED=1
+      e2e_profile_seed_repo_from_template || E2E_OVERALL_FAILED=1
       if ((E2E_OVERALL_FAILED == 0)); then
-        e2e_manual_init_repo_if_needed || E2E_OVERALL_FAILED=1
+        e2e_profile_init_repo_if_needed || E2E_OVERALL_FAILED=1
       fi
       if ((E2E_OVERALL_FAILED == 0)); then
         E2E_KEEP_RUNTIME=1
-        manual_handoff_needed=1
+        profile_handoff_needed=1
       fi
     fi
     step_finalize || true
   else
+    if [[ "${E2E_PROFILE}" == 'operator' ]] && ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
+      e2e_manual_print_component_access_info || true
+      E2E_KEEP_RUNTIME=1
+      profile_handoff_needed=1
+    fi
     ui_run_step 7 "${E2E_STEPS_TOTAL}" 'Finalizing' step_finalize || true
   fi
 
   ui_print_summary
 
-  if ((manual_handoff_needed == 1)); then
+  if ((profile_handoff_needed == 1)); then
     printf '\n'
-    e2e_profile_manual_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1
+    if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+      e2e_profile_operator_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1
+    else
+      e2e_profile_manual_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1
+    fi
   fi
 
   if ((E2E_OVERALL_FAILED == 1 || E2E_CASE_FAILED > 0)); then

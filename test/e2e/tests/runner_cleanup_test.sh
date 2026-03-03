@@ -144,8 +144,31 @@ EOF
   assert_file_contains "${kind_log}" "provider=podman cmd=delete cluster --name declarest-e2e-test"
 }
 
+test_cleanup_run_operator_manager_terminates_recorded_pid() {
+  load_cleanup_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  E2E_RUNS_DIR="${tmp}/runs"
+  mkdir -p "${E2E_RUNS_DIR}"
+
+  local run_id='operator-run'
+  sleep 300 &
+  local manager_pid=$!
+  write_runtime_state "${run_id}" "OPERATOR_MANAGER_PID=${manager_pid}"
+
+  e2e_cleanup_run_operator_manager "${run_id}"
+
+  if kill -0 "${manager_pid}" >/dev/null 2>&1; then
+    kill -KILL "${manager_pid}" >/dev/null 2>&1 || true
+    fail "expected operator manager pid ${manager_pid} to be stopped"
+  fi
+}
+
 test_cleanup_run_id_validation
 test_runner_cmdline_and_env_parsers_support_fake_proc_root
 test_remove_run_bin_entry_from_path
 test_cleanup_run_runtime_dispatches_by_recorded_platform
 test_cleanup_kubernetes_runtime_runs_kind_delete_with_podman_provider
+test_cleanup_run_operator_manager_terminates_recorded_pid

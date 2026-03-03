@@ -191,11 +191,13 @@ Objective:
   metadata, secret, and security behavior across deterministic steps.
 
 Profiles (required, defaults to basic when omitted):
-  --profile <basic|full|manual>                   default: basic
+  --profile <basic|full|manual|operator>          default: basic
     basic   : Run "main" cases against the default stack in an automated CI-style job.
     full    : Execute "main" plus "corner" cases to cover less-common paths and components.
     manual  : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
               Declarest commands interactively. Requires every selected connection to stay local.
+    operator: Provision a kubernetes-only local stack, start the DeclaREST operator manager, install CRDs, and apply
+              generated ResourceRepository/ManagedServer/SecretStore/SyncPolicy resources for manual reconciliation checks.
 
 Platform selection:
   --platform <compose|kubernetes>                 default: kubernetes
@@ -276,6 +278,7 @@ Examples:
   ./run-e2e.sh --profile basic --managed-server simple-api-server --metadata local-dir
   ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --managed-server simple-api-server
   ./run-e2e.sh --profile full --repo-type git --git-provider gitea --managed-server simple-api-server
+  ./run-e2e.sh --profile operator --managed-server simple-api-server --git-provider gitea --secret-provider file
   ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
   ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true
@@ -529,9 +532,9 @@ e2e_parse_args() {
   done
 
   case "${E2E_PROFILE}" in
-    basic|full|manual) ;;
+    basic|full|manual|operator) ;;
     *)
-      e2e_die "invalid profile: ${E2E_PROFILE} (allowed: basic, full, manual)"
+      e2e_die "invalid profile: ${E2E_PROFILE} (allowed: basic, full, manual, operator)"
       return 1
       ;;
   esac
