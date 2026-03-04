@@ -413,6 +413,8 @@ spec:
                 type: object
               metadata:
                 properties:
+                  bundle:
+                    type: string
                   url:
                     type: string
                 type: object

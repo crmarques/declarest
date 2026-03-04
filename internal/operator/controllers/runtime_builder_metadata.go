@@ -9,6 +9,16 @@ import (
 )
 
 func populateMetadataConfig(metadataPath string, resolvedContext *config.Context) error {
+	return populateMetadataConfigWithBundle(metadataPath, "", resolvedContext)
+}
+
+func populateMetadataConfigWithBundle(metadataPath string, metadataBundle string, resolvedContext *config.Context) error {
+	metadataBundle = strings.TrimSpace(metadataBundle)
+	if metadataBundle != "" {
+		resolvedContext.Metadata.Bundle = metadataBundle
+		return nil
+	}
+
 	metadataPath = strings.TrimSpace(metadataPath)
 	if metadataPath == "" {
 		return nil

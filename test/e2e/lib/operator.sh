@@ -272,45 +272,6 @@ e2e_operator_rewrite_repo_url_for_cluster() {
   esac
 }
 
-e2e_operator_metadata_bundle_default_url() {
-  local bundle_ref=$1
-  local name
-  local version
-  local repo_base
-
-  if [[ "${bundle_ref}" != *:* ]]; then
-    return 1
-  fi
-
-  name=${bundle_ref%%:*}
-  version=${bundle_ref#*:}
-  name=${name//[[:space:]]/}
-  version=${version//[[:space:]]/}
-
-  if [[ -z "${name}" || -z "${version}" ]]; then
-    return 1
-  fi
-  if [[ ! "${name}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-    return 1
-  fi
-
-  version=${version#v}
-  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$ ]]; then
-    return 1
-  fi
-
-  repo_base=${name%-bundle}
-  if [[ -z "${repo_base}" ]]; then
-    repo_base=${name}
-  fi
-
-  printf 'https://github.com/crmarques/declarest-bundle-%s/releases/download/v%s/%s-%s.tar.gz\n' \
-    "${repo_base}" \
-    "${version}" \
-    "${name}" \
-    "${version}"
-}
-
 e2e_operator_generate_webhook_secret() {
   local random_block
   random_block=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
@@ -1036,13 +997,6 @@ EOF_REPO_CR_FOOTER
   local tls_client_cert_file=''
   local tls_client_key_file=''
   local metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
-  local metadata_bundle_url=''
-  if [[ -n "${metadata_bundle_ref}" ]]; then
-    metadata_bundle_url=$(e2e_operator_metadata_bundle_default_url "${metadata_bundle_ref}") || {
-      e2e_die "operator profile metadata bundle shorthand is invalid: ${metadata_bundle_ref}"
-      return 1
-    }
-  fi
   if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     managed_server_tls_enabled='true'
     if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
@@ -1157,9 +1111,9 @@ EOF_REPO_CR_FOOTER
         printf '      insecureSkipVerify: true\n'
       fi
     fi
-    if [[ -n "${metadata_bundle_url}" ]]; then
+    if [[ -n "${metadata_bundle_ref}" ]]; then
       printf '  metadata:\n'
-      printf '    url: %s\n' "$(e2e_operator_yaml_quote "${metadata_bundle_url}")"
+      printf '    bundle: %s\n' "$(e2e_operator_yaml_quote "${metadata_bundle_ref}")"
     fi
   } >"${manifest_dir}/managed-server.yaml"
 

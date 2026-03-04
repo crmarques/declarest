@@ -61,7 +61,7 @@ type ManagedServerHTTP struct {
 type ManagedServerSpec struct {
 	HTTP         ManagedServerHTTP         `json:"http"`
 	OpenAPI      DeclaRESTExternalArtifact `json:"openapi,omitempty"`
-	Metadata     DeclaRESTExternalArtifact `json:"metadata,omitempty"`
+	Metadata     DeclaRESTMetadataArtifact `json:"metadata,omitempty"`
 	PollInterval *metav1.Duration          `json:"pollInterval,omitempty"`
 }
 
@@ -163,8 +163,13 @@ func (m *ManagedServer) ValidateSpec() error {
 			return err
 		}
 	}
-	if strings.TrimSpace(m.Spec.Metadata.URL) != "" {
-		if err := validateHTTPURL(m.Spec.Metadata.URL, "spec.metadata.url"); err != nil {
+	metadataURL := strings.TrimSpace(m.Spec.Metadata.URL)
+	metadataBundle := strings.TrimSpace(m.Spec.Metadata.Bundle)
+	if metadataURL != "" && metadataBundle != "" {
+		return fmt.Errorf("spec.metadata must define at most one of url or bundle")
+	}
+	if metadataURL != "" {
+		if err := validateHTTPURL(metadataURL, "spec.metadata.url"); err != nil {
 			return err
 		}
 	}

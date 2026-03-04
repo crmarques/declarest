@@ -23,4 +23,4 @@ spec:
   openapi:
     url: https://managed-server.example.com/openapi.yaml
   metadata:
-    url: https://managed-server.example.com/metadata-bundle.tar.gz
+    bundle: managed-server-bundle:0.0.1

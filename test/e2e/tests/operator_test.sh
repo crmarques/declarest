@@ -219,7 +219,7 @@ test_operator_ready_timeout_validation_and_cap() {
   assert_contains "${output}" "invalid operator readiness timeout"
 }
 
-test_operator_write_manifests_sets_keycloak_metadata_bundle_url() {
+test_operator_write_manifests_sets_keycloak_metadata_bundle_ref() {
   source_e2e_libs common profile operator components
 
   local tmp
@@ -276,7 +276,7 @@ EOF
   local managed_server_manifest
   managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
   assert_file_contains "${managed_server_manifest}" "metadata:"
-  assert_file_contains "${managed_server_manifest}" "url: 'https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.0.1/keycloak-bundle-0.0.1.tar.gz'"
+  assert_file_contains "${managed_server_manifest}" "bundle: 'keycloak-bundle:0.0.1'"
 }
 
 test_operator_example_resource_mapping
@@ -286,4 +286,4 @@ test_operator_prepare_repository_webhook_builds_scoped_url
 test_operator_prepare_repository_webhook_derives_namespace_when_unset
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
-test_operator_write_manifests_sets_keycloak_metadata_bundle_url
+test_operator_write_manifests_sets_keycloak_metadata_bundle_ref

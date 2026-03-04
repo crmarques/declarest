@@ -18,6 +18,11 @@ type DeclaRESTExternalArtifact struct {
 	URL string `json:"url,omitempty"`
 }
 
+type DeclaRESTMetadataArtifact struct {
+	URL    string `json:"url,omitempty"`
+	Bundle string `json:"bundle,omitempty"`
+}
+
 type HTTPProxySpec struct {
 	HTTPURL  string         `json:"httpURL,omitempty"`
 	HTTPSURL string         `json:"httpsURL,omitempty"`

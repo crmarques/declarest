@@ -52,7 +52,8 @@ func buildRuntimeContext(
 	}
 
 	metadataPath := strings.TrimSpace(managedServer.Status.MetadataCachePath)
-	if metadataPath == "" && strings.TrimSpace(managedServer.Spec.Metadata.URL) != "" {
+	metadataBundle := strings.TrimSpace(managedServer.Spec.Metadata.Bundle)
+	if metadataBundle == "" && metadataPath == "" && strings.TrimSpace(managedServer.Spec.Metadata.URL) != "" {
 		downloaded, err := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"))
 		if err != nil {
 			return runtimeContextBuildResult{}, err
@@ -79,16 +80,21 @@ func buildRuntimeContext(
 		cleanup.run()
 		return runtimeContextBuildResult{}, err
 	}
-	if err := populateMetadataConfig(metadataPath, &resolvedContext); err != nil {
+	if err := populateMetadataConfigWithBundle(metadataPath, metadataBundle, &resolvedContext); err != nil {
 		cleanup.run()
 		return runtimeContextBuildResult{}, err
+	}
+
+	metadataSource := metadataBundle
+	if metadataSource == "" {
+		metadataSource = metadataPath
 	}
 
 	return runtimeContextBuildResult{
 		ResolvedContext:       resolvedContext,
 		RepositoryLocalPath:   repositoryPath,
 		ManagedServerOpenAPI:  openAPIPath,
-		ManagedServerMetadata: metadataPath,
+		ManagedServerMetadata: metadataSource,
 		Cleanup:               cleanup.run,
 	}, nil
 }
