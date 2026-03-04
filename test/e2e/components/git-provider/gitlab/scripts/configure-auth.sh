@@ -89,6 +89,17 @@ gitlab_api_post() {
   curl -fsS -X POST -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
 }
 
+gitlab_api_put() {
+  local url=$1
+  shift
+  if [[ "${api_auth_mode}" == 'bearer' ]]; then
+    curl -fsS -X PUT -H "Authorization: Bearer ${oauth_token}" "${url}" "$@"
+    return 0
+  fi
+
+  curl -fsS -X PUT -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
+}
+
 branch_name=${GIT_REMOTE_BRANCH:-main}
 
 project_response=$(gitlab_api_get "${GITLAB_BASE_URL}/api/v4/projects?search=${GITLAB_PROJECT_NAME}")
@@ -108,4 +119,35 @@ project_id=$(jq -r ".[] | select(.path_with_namespace == \"${GITLAB_PROJECT_PATH
 if [[ -z "${project_id}" ]]; then
   printf 'failed to provision gitlab project %s\n' "${GITLAB_PROJECT_PATH}" >&2
   exit 1
+fi
+
+webhook_url=${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL:-}
+webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+webhook_provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}
+if [[ -n "${webhook_url}" || -n "${webhook_secret}" || -n "${webhook_provider}" ]]; then
+  if [[ "${webhook_provider}" != 'gitlab' ]]; then
+    exit 0
+  fi
+  if [[ -z "${webhook_url}" || -z "${webhook_secret}" ]]; then
+    printf 'operator repository webhook config for gitlab requires URL and secret\n' >&2
+    exit 1
+  fi
+
+  hooks_url="${GITLAB_BASE_URL}/api/v4/projects/${project_id}/hooks"
+  hooks_response=$(gitlab_api_get "${hooks_url}")
+  hook_id=$(jq -r --arg url "${webhook_url}" '.[] | select((.url // "") == $url) | .id' <<<"${hooks_response}" | head -n 1 || true)
+
+  if [[ -n "${hook_id}" && "${hook_id}" != 'null' ]]; then
+    gitlab_api_put "${hooks_url}/${hook_id}" \
+      --data-urlencode "url=${webhook_url}" \
+      --data "push_events=true" \
+      --data-urlencode "token=${webhook_secret}" \
+      --data "enable_ssl_verification=false" >/dev/null
+  else
+    gitlab_api_post "${hooks_url}" \
+      --data-urlencode "url=${webhook_url}" \
+      --data "push_events=true" \
+      --data-urlencode "token=${webhook_secret}" \
+      --data "enable_ssl_verification=false" >/dev/null
+  fi
 fi

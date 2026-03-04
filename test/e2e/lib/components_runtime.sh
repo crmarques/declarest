@@ -94,6 +94,173 @@ nodes:
 EOF
 }
 
+e2e_kind_create_retry_attempts() {
+  local attempts=${DECLAREST_E2E_KIND_CREATE_RETRY_ATTEMPTS:-2}
+
+  if ! [[ "${attempts}" =~ ^[0-9]+$ ]] || ((attempts <= 0)); then
+    e2e_warn "invalid kind create retry attempts: ${attempts} (using default 2)"
+    attempts=2
+  fi
+
+  printf '%s\n' "${attempts}"
+}
+
+e2e_kind_create_retryable_failure() {
+  local kind_log_file=$1
+  [[ -f "${kind_log_file}" ]] || return 1
+
+  grep -Fq 'failed to create cluster: could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"' "${kind_log_file}"
+}
+
+e2e_kind_reuse_existing_on_create_failure_enabled() {
+  local raw=${DECLAREST_E2E_KIND_REUSE_EXISTING_ON_CREATE_FAILURE:-true}
+  case "${raw,,}" in
+    true|1|yes|on)
+      return 0
+      ;;
+    false|0|no|off)
+      return 1
+      ;;
+    *)
+      e2e_warn "invalid DECLAREST_E2E_KIND_REUSE_EXISTING_ON_CREATE_FAILURE=${raw}; using true"
+      return 0
+      ;;
+  esac
+}
+
+e2e_kind_list_clusters() {
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters
+    return $?
+  fi
+  kind get clusters
+}
+
+e2e_kind_pick_existing_cluster_for_reuse() {
+  local failed_cluster_name=$1
+  local clusters_output
+
+  set +e
+  clusters_output=$(e2e_kind_list_clusters 2>/dev/null)
+  local rc=$?
+  set -e
+  if ((rc != 0)); then
+    return 1
+  fi
+
+  local cluster_name
+  while IFS= read -r cluster_name; do
+    [[ -n "${cluster_name}" ]] || continue
+    [[ "${cluster_name}" == "${failed_cluster_name}" ]] && continue
+    printf '%s\n' "${cluster_name}"
+    return 0
+  done <<<"${clusters_output}"
+
+  return 1
+}
+
+e2e_kind_export_kubeconfig_for_cluster() {
+  local cluster_name=$1
+  local kubeconfig=$2
+
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+    e2e_run_cmd env KIND_EXPERIMENTAL_PROVIDER=podman kind export kubeconfig --name "${cluster_name}" --kubeconfig "${kubeconfig}" || return 1
+    return 0
+  fi
+
+  e2e_run_cmd kind export kubeconfig --name "${cluster_name}" --kubeconfig "${kubeconfig}" || return 1
+}
+
+e2e_kind_delete_cluster_quiet() {
+  local cluster_name=$1
+  [[ -n "${cluster_name}" ]] || return 0
+
+  local rc=0
+  set +e
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    rc=$?
+  else
+    kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    rc=$?
+  fi
+  set -e
+
+  if ((rc == 0)); then
+    e2e_info "deleted failed kind cluster attempt name=${cluster_name}"
+  fi
+  return 0
+}
+
+e2e_kind_create_cluster_with_retry() {
+  local cluster_name=$1
+  local kubeconfig=$2
+  local kind_config=$3
+  local wait_timeout=$4
+  E2E_KIND_EFFECTIVE_CLUSTER_NAME=''
+  local attempts
+  attempts=$(e2e_kind_create_retry_attempts)
+
+  local kind_log_file
+  kind_log_file=$(mktemp /tmp/declarest-e2e-kind-create.XXXXXX) || return 1
+
+  local attempt
+  local last_rc=1
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    local -a cmd=(
+      kind create cluster
+      --name "${cluster_name}"
+      --kubeconfig "${kubeconfig}"
+      --config "${kind_config}"
+      --wait "${wait_timeout}"
+    )
+    if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
+      cmd=(env KIND_EXPERIMENTAL_PROVIDER=podman "${cmd[@]}")
+    fi
+
+    e2e_info "cmd: $(e2e_quote_cmd "${cmd[@]}")"
+
+    local rc=0
+    set +e
+    "${cmd[@]}" 2>&1 | tee "${kind_log_file}"
+    rc=${PIPESTATUS[0]}
+    set -e
+
+    if ((rc == 0)); then
+      rm -f "${kind_log_file}" || true
+      E2E_KIND_EFFECTIVE_CLUSTER_NAME="${cluster_name}"
+      return 0
+    fi
+    last_rc=${rc}
+
+    e2e_error "cmd failed rc=${rc}: $(e2e_quote_cmd "${cmd[@]}")"
+
+    if ((attempt < attempts)) && [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]] && e2e_kind_create_retryable_failure "${kind_log_file}"; then
+      e2e_warn "retryable kind podman bootstrap failure detected; retrying create attempt $((attempt + 1))/${attempts}"
+      e2e_kind_delete_cluster_quiet "${cluster_name}" || true
+      sleep 2
+      continue
+    fi
+
+    break
+  done
+
+  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]] && e2e_kind_create_retryable_failure "${kind_log_file}" && e2e_kind_reuse_existing_on_create_failure_enabled; then
+    local reuse_cluster_name
+    if reuse_cluster_name=$(e2e_kind_pick_existing_cluster_for_reuse "${cluster_name}"); then
+      e2e_warn "reusing existing kind cluster name=${reuse_cluster_name} after create failure for ${cluster_name}"
+      if e2e_kind_export_kubeconfig_for_cluster "${reuse_cluster_name}" "${kubeconfig}"; then
+        rm -f "${kind_log_file}" || true
+        E2E_KIND_EFFECTIVE_CLUSTER_NAME="${reuse_cluster_name}"
+        return 0
+      fi
+    fi
+  fi
+
+  rm -f "${kind_log_file}" || true
+  return "${last_rc}"
+}
+
 e2e_kubernetes_runtime_ensure() {
   if [[ "${E2E_PLATFORM}" != 'kubernetes' ]]; then
     return 0
@@ -110,12 +277,21 @@ e2e_kubernetes_runtime_ensure() {
   E2E_KIND_CLUSTER_NAME=$(e2e_kind_cluster_name_for_run "${E2E_RUN_ID}")
   E2E_K8S_NAMESPACE=$(e2e_k8s_namespace_for_run "${E2E_RUN_ID}")
   E2E_KUBECONFIG=$(e2e_kubeconfig_path_for_run)
+  E2E_KIND_CLUSTER_REUSED=0
   local kind_config
   kind_config=$(e2e_kind_config_path_for_run)
 
   e2e_write_kind_config "${kind_config}" || return 1
   e2e_info "creating kind cluster name=${E2E_KIND_CLUSTER_NAME} namespace=${E2E_K8S_NAMESPACE} kubeconfig=${E2E_KUBECONFIG}"
-  e2e_kind_cmd create cluster --name "${E2E_KIND_CLUSTER_NAME}" --kubeconfig "${E2E_KUBECONFIG}" --config "${kind_config}" --wait 120s || return 1
+  local effective_cluster_name="${E2E_KIND_CLUSTER_NAME}"
+  e2e_kind_create_cluster_with_retry "${E2E_KIND_CLUSTER_NAME}" "${E2E_KUBECONFIG}" "${kind_config}" '120s' || return 1
+  if [[ -n "${E2E_KIND_EFFECTIVE_CLUSTER_NAME:-}" ]]; then
+    effective_cluster_name="${E2E_KIND_EFFECTIVE_CLUSTER_NAME}"
+  fi
+  if [[ "${effective_cluster_name}" != "${E2E_KIND_CLUSTER_NAME}" ]]; then
+    E2E_KIND_CLUSTER_NAME="${effective_cluster_name}"
+    E2E_KIND_CLUSTER_REUSED=1
+  fi
 
   if ! kubectl --kubeconfig "${E2E_KUBECONFIG}" get namespace "${E2E_K8S_NAMESPACE}" >/dev/null 2>&1; then
     e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" create namespace "${E2E_K8S_NAMESPACE}" || return 1
@@ -126,11 +302,13 @@ e2e_kubernetes_runtime_ensure() {
   e2e_runtime_state_set 'KUBECONFIG_PATH' "${E2E_KUBECONFIG}" || return 1
   e2e_runtime_state_set 'KIND_CONFIG_PATH' "${kind_config}" || return 1
   e2e_runtime_state_set 'KIND_NODE_ROOT' "${E2E_KIND_NODE_ROOT}" || return 1
+  e2e_runtime_state_set 'KIND_CLUSTER_REUSED' "${E2E_KIND_CLUSTER_REUSED}" || return 1
   return 0
 }
 
 e2e_kubernetes_runtime_teardown() {
   local cluster_name=${E2E_KIND_CLUSTER_NAME:-}
+  local cluster_reused=${E2E_KIND_CLUSTER_REUSED:-}
 
   if [[ "${E2E_PLATFORM}" != 'kubernetes' && -z "${cluster_name}" ]]; then
     return 0
@@ -140,11 +318,21 @@ e2e_kubernetes_runtime_teardown() {
     local runtime_state
     runtime_state=$(e2e_runtime_state_file)
     cluster_name=$(e2e_state_get "${runtime_state}" 'KIND_CLUSTER_NAME' || true)
+    if [[ -z "${cluster_reused}" ]]; then
+      cluster_reused=$(e2e_state_get "${runtime_state}" 'KIND_CLUSTER_REUSED' || true)
+    fi
   fi
 
   if [[ -z "${cluster_name}" ]]; then
     return 0
   fi
+
+  case "${cluster_reused,,}" in
+    1|true|yes|on)
+      e2e_info "skipping kind cluster deletion for reused cluster name=${cluster_name}"
+      return 0
+      ;;
+  esac
 
   if ! command -v kind >/dev/null 2>&1; then
     e2e_warn "kind binary not found; skipping cluster teardown for ${cluster_name}"
@@ -168,6 +356,138 @@ e2e_kubernetes_runtime_teardown() {
   fi
 
   e2e_info "deleted kind cluster name=${cluster_name}"
+  return 0
+}
+
+e2e_k8s_manifest_images() {
+  local manifest_path=$1
+  [[ -f "${manifest_path}" ]] || return 0
+
+  awk '
+    /^[[:space:]]*image:[[:space:]]*/ {
+      line=$0
+      sub(/^[[:space:]]*image:[[:space:]]*/, "", line)
+      sub(/[[:space:]]+#.*/, "", line)
+      gsub(/^["'"'"']|["'"'"']$/, "", line)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      if (line != "") print line
+    }
+  ' "${manifest_path}"
+}
+
+e2e_component_collect_k8s_images() {
+  local component_key=$1
+  local state_file
+  local source_manifest
+  local rendered_manifest
+  local rendered_dir
+
+  state_file=$(e2e_component_state_file "${component_key}")
+  rendered_dir="${E2E_STATE_DIR}/k8s-image-render/${component_key//[:\/]/-}"
+  mkdir -p "${rendered_dir}" || return 1
+
+  while IFS= read -r source_manifest; do
+    [[ -n "${source_manifest}" ]] || continue
+    rendered_manifest="${rendered_dir}/$(basename -- "${source_manifest}")"
+    e2e_component_render_k8s_manifest "${component_key}" "${source_manifest}" "${state_file}" "${rendered_manifest}" || return 1
+    e2e_k8s_manifest_images "${rendered_manifest}" || return 1
+  done < <(e2e_component_k8s_manifest_files "${component_key}")
+}
+
+e2e_container_image_exists_local() {
+  local image=$1
+
+  case "${E2E_CONTAINER_ENGINE}" in
+    podman)
+      "${E2E_CONTAINER_ENGINE}" image exists "${image}" >/dev/null 2>&1
+      ;;
+    docker)
+      "${E2E_CONTAINER_ENGINE}" image inspect "${image}" >/dev/null 2>&1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+e2e_k8s_pull_image_with_retry() {
+  local image=$1
+  local attempts=3
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if e2e_run_cmd "${E2E_CONTAINER_ENGINE}" pull "${image}"; then
+      return 0
+    fi
+    if ((attempt < attempts)); then
+      e2e_warn "k8s image preload pull failed image=${image} attempt=${attempt}/${attempts}; retrying"
+      sleep 2
+    fi
+  done
+
+  e2e_die "k8s image preload pull failed image=${image} attempts=${attempts}"
+  return 1
+}
+
+e2e_k8s_preload_image_to_kind() {
+  local image=$1
+  local cache_dir="${E2E_RUN_DIR}/k8s/image-cache"
+  local safe_image
+  local archive
+
+  mkdir -p "${cache_dir}" || return 1
+  safe_image=${image//[^a-zA-Z0-9._-]/_}
+  archive="${cache_dir}/${safe_image}.tar"
+
+  if ! e2e_container_image_exists_local "${image}"; then
+    e2e_info "k8s image preload pulling image=${image}"
+    e2e_k8s_pull_image_with_retry "${image}" || return 1
+  else
+    e2e_info "k8s image preload using local image cache image=${image}"
+  fi
+
+  e2e_info "k8s image preload exporting image=${image} archive=${archive}"
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${archive}" "${image}" || return 1
+
+  e2e_info "k8s image preload loading image into kind cluster=${E2E_KIND_CLUSTER_NAME} image=${image}"
+  e2e_kind_cmd load image-archive "${archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
+}
+
+e2e_kubernetes_preload_selected_images() {
+  [[ "${E2E_PLATFORM}" == 'kubernetes' ]] || return 0
+  [[ -n "${E2E_KIND_CLUSTER_NAME:-}" ]] || return 0
+
+  local component_key
+  local connection
+  local image
+  local -A images=()
+
+  for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
+    connection=$(e2e_component_connection_for_key "${component_key}")
+    if [[ "${connection}" != 'local' ]]; then
+      continue
+    fi
+    if ! e2e_component_runtime_is_compose "${component_key}"; then
+      continue
+    fi
+
+    while IFS= read -r image; do
+      [[ -n "${image}" ]] || continue
+      images["${image}"]=1
+    done < <(e2e_component_collect_k8s_images "${component_key}")
+  done
+
+  if ((${#images[@]} == 0)); then
+    return 0
+  fi
+
+  local sorted_images=()
+  mapfile -t sorted_images < <(printf '%s\n' "${!images[@]}" | sort)
+  for image in "${sorted_images[@]}"; do
+    e2e_k8s_preload_image_to_kind "${image}" || return 1
+  done
+
+  e2e_info "k8s image preload complete images=${#sorted_images[@]}"
   return 0
 }
 
@@ -207,6 +527,7 @@ e2e_components_start_local() {
 
   if [[ "${E2E_PLATFORM}" == 'kubernetes' ]]; then
     e2e_kubernetes_runtime_ensure || return 1
+    e2e_kubernetes_preload_selected_images || return 1
   fi
 
   e2e_components_run_hook_for_keys 'start' 'true' "${start_candidates[@]}" || return 1

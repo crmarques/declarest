@@ -90,6 +90,7 @@ step_prepare_runtime() {
   e2e_runtime_state_record_platform || return 1
 
   e2e_prepare_metadata_workspace || return 1
+  e2e_operator_prepare_repository_webhook || return 1
 
   printf '%s\n' "${E2E_SELECTED_COMPONENT_KEYS[@]}" >"${E2E_STATE_DIR}/selected-components.txt"
 

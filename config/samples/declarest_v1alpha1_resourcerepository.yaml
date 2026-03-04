@@ -13,6 +13,11 @@ spec:
       tokenSecretRef:
         name: repository-credentials
         key: token
+    webhook:
+      provider: gitea
+      secretRef:
+        name: repository-credentials
+        key: webhook-secret
   storage:
     existingPVC:
       name: repository-pvc

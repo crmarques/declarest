@@ -144,6 +144,45 @@ EOF
   assert_file_contains "${kind_log}" "provider=podman cmd=delete cluster --name declarest-e2e-test"
 }
 
+test_cleanup_kubernetes_runtime_skips_reused_cluster_deletion() {
+  load_cleanup_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  E2E_RUNS_DIR="${tmp}/runs"
+  mkdir -p "${E2E_RUNS_DIR}"
+  write_runtime_state "k8s-run" \
+    "RUNTIME_PLATFORM=kubernetes" \
+    "RUNTIME_CONTAINER_ENGINE=podman" \
+    "KIND_CLUSTER_NAME=declarest-e2e-shared" \
+    "KIND_CLUSTER_REUSED=1"
+
+  local fake_bin="${tmp}/bin"
+  local kind_log="${tmp}/kind.log"
+  mkdir -p "${fake_bin}"
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'provider=%s cmd=%s\n' "${KIND_EXPERIMENTAL_PROVIDER:-}" "$*" >>"${FAKE_KIND_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  local original_path="${PATH}"
+  PATH="${fake_bin}:${original_path}"
+  export PATH
+  export FAKE_KIND_LOG="${kind_log}"
+
+  e2e_cleanup_run_kubernetes_runtime "k8s-run"
+
+  if [[ -f "${kind_log}" ]]; then
+    local calls
+    calls=$(wc -l <"${kind_log}" | tr -d '[:space:]')
+    assert_eq "${calls}" "0" "expected no kind delete call for reused cluster"
+  fi
+}
+
 test_cleanup_run_operator_manager_terminates_recorded_pid() {
   load_cleanup_libs
 
@@ -171,4 +210,5 @@ test_runner_cmdline_and_env_parsers_support_fake_proc_root
 test_remove_run_bin_entry_from_path
 test_cleanup_run_runtime_dispatches_by_recorded_platform
 test_cleanup_kubernetes_runtime_runs_kind_delete_with_podman_provider
+test_cleanup_kubernetes_runtime_skips_reused_cluster_deletion
 test_cleanup_run_operator_manager_terminates_recorded_pid

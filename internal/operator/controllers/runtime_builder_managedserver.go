@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -24,6 +25,16 @@ func populateManagedServerConfig(
 	cfg.HealthCheck = strings.TrimSpace(managedServer.Spec.HTTP.HealthCheck)
 	cfg.DefaultHeaders = managedServer.Spec.HTTP.DefaultHeaders
 	cfg.OpenAPI = strings.TrimSpace(openAPIPath)
+	if managedServer.Spec.HTTP.RequestThrottling != nil {
+		throttling := managedServer.Spec.HTTP.RequestThrottling
+		cfg.RequestThrottling = &config.HTTPRequestThrottling{
+			MaxConcurrentRequests: int(throttling.MaxConcurrentRequests),
+			QueueSize:             int(throttling.QueueSize),
+			RequestsPerSecond:     float64(throttling.RequestsPerSecond),
+			Burst:                 int(throttling.Burst),
+			ScopeKey:              fmt.Sprintf("%s/%s", managedServer.Namespace, managedServer.Name),
+		}
+	}
 
 	if managedServer.Spec.HTTP.TLS != nil {
 		tlsConfig := &config.TLS{InsecureSkipVerify: managedServer.Spec.HTTP.TLS.InsecureSkipVerify}

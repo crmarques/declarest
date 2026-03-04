@@ -100,3 +100,50 @@ if ! curl -fsS -u "${GITEA_ADMIN_USERNAME}:${GITEA_ADMIN_PASSWORD}" "${repo_url}
   printf 'failed to provision gitea repository %s\n' "${GITEA_REPO_PATH}" >&2
   exit 1
 fi
+
+webhook_url=${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL:-}
+webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+webhook_provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}
+if [[ -n "${webhook_url}" || -n "${webhook_secret}" || -n "${webhook_provider}" ]]; then
+  if [[ "${webhook_provider}" != 'gitea' ]]; then
+    exit 0
+  fi
+  if [[ -z "${webhook_url}" || -z "${webhook_secret}" ]]; then
+    printf 'operator repository webhook config for gitea requires URL and secret\n' >&2
+    exit 1
+  fi
+
+  hooks_url="${repo_url}/hooks"
+  hooks_response=$(curl -fsS -u "${GITEA_ADMIN_USERNAME}:${GITEA_ADMIN_PASSWORD}" "${hooks_url}")
+  hook_id=$(jq -r --arg url "${webhook_url}" '.[] | select((.config.url // "") == $url) | .id' <<<"${hooks_response}" | head -n 1 || true)
+  hook_payload=$(
+    jq -cn \
+      --arg url "${webhook_url}" \
+      --arg secret "${webhook_secret}" \
+      '{
+        type: "gitea",
+        config: {
+          url: $url,
+          content_type: "json",
+          secret: $secret,
+          insecure_ssl: "0"
+        },
+        events: ["push"],
+        active: true
+      }'
+  )
+
+  if [[ -n "${hook_id}" && "${hook_id}" != 'null' ]]; then
+    curl -fsS \
+      -X PATCH "${hooks_url}/${hook_id}" \
+      -H 'Content-Type: application/json' \
+      -u "${GITEA_ADMIN_USERNAME}:${GITEA_ADMIN_PASSWORD}" \
+      -d "${hook_payload}" >/dev/null
+  else
+    curl -fsS \
+      -X POST "${hooks_url}" \
+      -H 'Content-Type: application/json' \
+      -u "${GITEA_ADMIN_USERNAME}:${GITEA_ADMIN_PASSWORD}" \
+      -d "${hook_payload}" >/dev/null
+  fi
+fi

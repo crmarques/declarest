@@ -26,6 +26,7 @@ Define local repository semantics for resource persistence, metadata storage, pa
 9. Git-backed repositories MAY expose optional local commit/history capabilities; filesystem repositories MUST report history as unsupported.
 10. Git-backed repository operations that require a local VCS repository state (for example status, history, commit, sync operations) MUST initialize the local git repository automatically when it is missing before continuing operation-specific logic.
 11. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
+12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile.
 
 ## Data Contracts
 Layout contract:
@@ -34,6 +35,7 @@ Layout contract:
 3. Collection metadata at `<collection-path>/_/metadata.<ext>`.
 4. Resource metadata at `<logical-path>/metadata.<ext>`.
 5. Optional repository control artifacts under repo-specific hidden directory.
+6. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
 
 Manager method families:
 1. Resource IO: save/get/delete/list/move/exists.
@@ -54,6 +56,7 @@ Policy contracts:
 4. Missing remote configuration for sync operation.
 5. History requested from a repository backend that does not support local VCS history.
 6. Push requested on a freshly auto-initialized git repo without a local HEAD/commit.
+7. Webhook payload rejected due to invalid provider signature/token.
 
 ## Edge Cases
 1. Rename required after alias change while keeping payload unchanged.
@@ -64,6 +67,7 @@ Policy contracts:
 6. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
 7. Clean requested on a git repo with both tracked edits and untracked files/directories.
 8. Clean requested on a filesystem repository context.
+9. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
 
 ## Examples
 1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
@@ -76,3 +80,4 @@ Policy contracts:
 8. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
 9. `repository clean` on a filesystem repository succeeds without mutating repository files.
 10. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
+11. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.

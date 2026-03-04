@@ -349,6 +349,9 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 	if err := validateManagedServerProxy(resourceServer.HTTP.Proxy); err != nil {
 		return err
 	}
+	if err := validateManagedServerRequestThrottling(resourceServer.HTTP.RequestThrottling); err != nil {
+		return err
+	}
 	if err := validateManagedServerHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
 		return err
 	}
@@ -358,6 +361,34 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 
 func validateManagedServerProxy(proxy *config.HTTPProxy) error {
 	return validateProxy("managed-server.http.proxy", proxy)
+}
+
+func validateManagedServerRequestThrottling(throttling *config.HTTPRequestThrottling) error {
+	if throttling == nil {
+		return nil
+	}
+	if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling must define at least one of max-concurrent-requests or requests-per-second", nil)
+	}
+	if throttling.MaxConcurrentRequests < 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.max-concurrent-requests must be greater than zero when set", nil)
+	}
+	if throttling.QueueSize < 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.queue-size must be greater than or equal to zero", nil)
+	}
+	if throttling.QueueSize > 0 && throttling.MaxConcurrentRequests <= 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.queue-size requires max-concurrent-requests", nil)
+	}
+	if throttling.RequestsPerSecond < 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.requests-per-second must be greater than zero when set", nil)
+	}
+	if throttling.Burst < 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.burst must be greater than zero when set", nil)
+	}
+	if throttling.Burst > 0 && throttling.RequestsPerSecond <= 0 {
+		return faults.NewValidationError("managed-server.http.request-throttling.burst requires requests-per-second", nil)
+	}
+	return nil
 }
 
 func validateManagedServerHealthCheck(value string) error {

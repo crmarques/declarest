@@ -29,12 +29,15 @@ spec:
           args:
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=:8080
+            - --repository-webhook-bind-address=:8082
             - --leader-elect
           ports:
             - containerPort: 8080
               name: metrics
             - containerPort: 8081
               name: probes
+            - containerPort: 8082
+              name: repo-webhook
             - containerPort: 9443
               name: webhook-server
           env:
@@ -94,6 +97,21 @@ spec:
     - name: metrics
       port: 8080
       targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: declarest-operator-repository-webhook
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  selector:
+    app.kubernetes.io/name: declarest-operator
+  ports:
+    - name: repo-webhook
+      port: 8082
+      targetPort: repo-webhook
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

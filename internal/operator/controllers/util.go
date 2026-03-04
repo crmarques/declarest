@@ -270,6 +270,9 @@ func collectSecretNames(
 			addRef(repo.Spec.Git.Auth.SSHSecretRef.KnownHostsRef)
 			addRef(repo.Spec.Git.Auth.SSHSecretRef.PassphraseRef)
 		}
+		if repo.Spec.Git.Webhook != nil {
+			addRef(repo.Spec.Git.Webhook.SecretRef)
+		}
 	}
 	// ManagedServer secret refs
 	if managedServer.Spec.HTTP.Auth.OAuth2 != nil {

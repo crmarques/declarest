@@ -259,6 +259,45 @@ Expected outputs:
 Failure expectation:
 1. Invalid client credentials at `/token` fail with OAuth2 `invalid_client` and HTTP `401`.
 
+### Example 13: Shared SyncPolicy References With Path Isolation
+Goal: allow multiple SyncPolicies to share dependency references while preventing path/subpath scope collisions.
+
+Inputs:
+1. `SyncPolicy A` references repository `repo-main`, managed server `server-main`, secret store `secrets-main`, source path `/admin/realms/A`.
+2. `SyncPolicy B` references the same dependency objects with source path `/admin/realms/B`.
+3. `SyncPolicy C` references any dependency combination with source path `/admin/realms/A/clients`.
+
+Execution:
+1. Validate `SyncPolicy A` creation.
+2. Validate `SyncPolicy B` creation.
+3. Validate `SyncPolicy C` creation.
+
+Expected outputs:
+1. Steps 1-2 succeed because shared references are allowed for disjoint source paths.
+
+Failure expectation:
+1. Step 3 fails with `ConflictError`/overlap validation because `/admin/realms/A/clients` overlaps `SyncPolicy A` scope.
+
+### Example 14: Authenticated Git Webhook Triggers Repository Reconcile
+Goal: trigger immediate repository refresh from provider webhook without waiting for poll interval.
+
+Inputs:
+1. `ResourceRepository.spec.git.webhook` configured with provider `gitea` or `gitlab` and `secretRef`.
+2. Operator webhook request path `/webhooks/repository/<namespace>/<repository>`.
+3. Push-event payload with branch ref matching repository branch.
+
+Execution:
+1. Provider sends signed/tokenized push webhook payload to operator endpoint.
+2. Operator validates auth headers (`X-Gitea-Signature` or `X-Gitlab-Token`) and event type.
+3. Operator patches repository webhook receipt annotations to enqueue reconcile.
+
+Expected outputs:
+1. Repository reconcile starts before next poll interval deadline.
+2. `declarest.io/webhook-last-received-at` annotation updates deterministically.
+
+Failure expectation:
+1. Invalid signature/token returns authentication failure and no repository annotation mutation.
+
 ### Example 20: Managed-Server Swagger 2 Compatibility (Corner)
 Goal: keep managed-server OpenAPI-assisted behavior equivalent when `managed-server.http.openapi` points to Swagger 2.0.
 

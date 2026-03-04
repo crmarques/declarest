@@ -450,16 +450,25 @@ e2e_cleanup_run_compose_runtime() {
 e2e_cleanup_run_kubernetes_runtime() {
   local run_id=$1
   local cluster_name
+  local cluster_reused
   local engine
   local rc
 
   cluster_name=$(e2e_runtime_state_get_for_run_id "${run_id}" 'KIND_CLUSTER_NAME' || true)
+  cluster_reused=$(e2e_runtime_state_get_for_run_id "${run_id}" 'KIND_CLUSTER_REUSED' || true)
   engine=$(e2e_cleanup_run_container_engine "${run_id}")
   e2e_cleanup_k8s_port_forwards "${run_id}"
 
   if [[ -z "${cluster_name}" ]]; then
     return 0
   fi
+
+  case "${cluster_reused,,}" in
+    1|true|yes|on)
+      e2e_info "cleanup skipping reused kind cluster name=${cluster_name}"
+      return 0
+      ;;
+  esac
 
   if ! command -v kind >/dev/null 2>&1; then
     e2e_warn "kind binary not found; skipping cluster cleanup: ${cluster_name}"

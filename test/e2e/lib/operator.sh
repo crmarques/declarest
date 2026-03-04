@@ -209,6 +209,69 @@ e2e_operator_rewrite_repo_url_for_cluster() {
   esac
 }
 
+e2e_operator_generate_webhook_secret() {
+  local random_block
+  random_block=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
+  if [[ ${#random_block} -lt 32 ]]; then
+    random_block="$(date +%s%N)"
+  fi
+  printf 'declarest-webhook-%s\n' "${random_block}"
+}
+
+e2e_operator_repository_webhook_service_name() {
+  e2e_operator_scoped_name 'declarest-operator-repo-webhook'
+}
+
+e2e_operator_prepare_repository_webhook() {
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_URL=''
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME=''
+  E2E_OPERATOR_REPOSITORY_NAME=''
+
+  e2e_operator_profile_enabled || return 0
+  [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
+
+  case "${E2E_GIT_PROVIDER:-}" in
+    gitea|gitlab) ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  local namespace="${E2E_K8S_NAMESPACE:-default}"
+  local repository_name
+  local service_name
+  local webhook_secret
+
+  repository_name=$(e2e_operator_scoped_name 'declarest-e2e-repository')
+  service_name=$(e2e_operator_repository_webhook_service_name)
+  webhook_secret=${DECLAREST_E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+  if [[ -z "${webhook_secret}" ]]; then
+    webhook_secret=$(e2e_operator_generate_webhook_secret)
+  fi
+
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER="${E2E_GIT_PROVIDER}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET="${webhook_secret}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME="${service_name}"
+  E2E_OPERATOR_REPOSITORY_NAME="${repository_name}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_URL="http://${service_name}.${namespace}.svc.cluster.local:18082/webhooks/repository/${namespace}/${repository_name}"
+
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL
+  export E2E_OPERATOR_REPOSITORY_NAME
+
+  if [[ -n "${E2E_STATE_DIR:-}" ]] && command -v e2e_runtime_state_set >/dev/null 2>&1; then
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_NAME' "${repository_name}" || return 1
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_PROVIDER' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER}" || return 1
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_URL' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" || return 1
+    e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME' "${E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME}" || return 1
+  fi
+  return 0
+}
+
 e2e_operator_manager_manifest_path() {
   printf '%s/operator-manager.yaml\n' "$(e2e_operator_manifest_dir)"
 }
@@ -314,6 +377,8 @@ e2e_operator_start_manager() {
   local namespace="${E2E_K8S_NAMESPACE:-default}"
   local deployment_name
   deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
+  local webhook_service_name
+  webhook_service_name=$(e2e_operator_repository_webhook_service_name)
   local role_name
   role_name=$(e2e_operator_scoped_name 'declarest-operator-role')
   local role_binding_name
@@ -412,6 +477,7 @@ spec:
             - --watch-namespace=${namespace}
             - --health-probe-bind-address=:18081
             - --metrics-bind-address=:18080
+            - --repository-webhook-bind-address=:18082
           env:
             - name: DECLAREST_OPERATOR_REPO_BASE_DIR
               value: ${repo_root}
@@ -422,6 +488,8 @@ spec:
               name: metrics
             - containerPort: 18081
               name: probes
+            - containerPort: 18082
+              name: repo-webhook
           readinessProbe:
             httpGet:
               path: /readyz
@@ -445,6 +513,23 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${webhook_service_name}
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    declarest.e2e/run-id: ${run_label}
+spec:
+  selector:
+    app.kubernetes.io/name: declarest-operator
+    declarest.e2e/run-id: ${run_label}
+  ports:
+    - name: repo-webhook
+      port: 18082
+      targetPort: repo-webhook
 EOF_MANAGER
 
   local image_archive="${E2E_RUN_DIR}/operator/manager-image.tar"
@@ -484,6 +569,7 @@ EOF_MANAGER
   e2e_runtime_state_set 'OPERATOR_IMAGE' "${E2E_OPERATOR_IMAGE}" || return 1
   e2e_runtime_state_set 'OPERATOR_IMAGE_ARCHIVE' "${image_archive}" || return 1
   e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
+  e2e_runtime_state_set 'OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME' "${webhook_service_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_MANAGER_DEPLOYMENT' "${deployment_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_MANAGER_LOG_FILE' "${E2E_OPERATOR_MANAGER_LOG_FILE}" || return 1
   if [[ -n "${E2E_OPERATOR_MANAGER_POD}" ]]; then
@@ -719,7 +805,7 @@ e2e_operator_write_manifests() {
   source "${repo_state_file}"
 
   local repository_name
-  repository_name=$(e2e_operator_scoped_name 'declarest-e2e-repository')
+  repository_name=${E2E_OPERATOR_REPOSITORY_NAME:-$(e2e_operator_scoped_name 'declarest-e2e-repository')}
   local managed_server_name
   managed_server_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server')
   local secret_store_name
@@ -764,6 +850,14 @@ e2e_operator_write_manifests() {
     e2e_die 'operator profile repository token/password is empty'
     return 1
   }
+  local repo_webhook_provider
+  local repo_webhook_secret
+  repo_webhook_provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}
+  repo_webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+  if [[ -n "${repo_webhook_provider}" && -z "${repo_webhook_secret}" ]]; then
+    e2e_die 'operator profile repository webhook provider is set but webhook secret is empty'
+    return 1
+  fi
 
   cat >"${manifest_dir}/secret-repository-auth.yaml" <<EOF_REPO_SECRET
 apiVersion: v1
@@ -775,6 +869,12 @@ type: Opaque
 data:
   token: $(e2e_operator_b64 "${repo_token}")
 EOF_REPO_SECRET
+
+  if [[ -n "${repo_webhook_provider}" ]]; then
+    cat >>"${manifest_dir}/secret-repository-auth.yaml" <<EOF_REPO_WEBHOOK_SECRET
+  webhook-secret: $(e2e_operator_b64 "${repo_webhook_secret}")
+EOF_REPO_WEBHOOK_SECRET
+  fi
 
   cat >"${manifest_dir}/resource-repository.yaml" <<EOF_REPO_CR
 apiVersion: declarest.io/v1alpha1
@@ -793,13 +893,26 @@ spec:
       tokenSecretRef:
         name: ${repo_secret_name}
         key: token
+EOF_REPO_CR
+
+  if [[ -n "${repo_webhook_provider}" ]]; then
+    cat >>"${manifest_dir}/resource-repository.yaml" <<EOF_REPO_WEBHOOK
+    webhook:
+      provider: ${repo_webhook_provider}
+      secretRef:
+        name: ${repo_secret_name}
+        key: webhook-secret
+EOF_REPO_WEBHOOK
+  fi
+
+  cat >>"${manifest_dir}/resource-repository.yaml" <<EOF_REPO_CR_FOOTER
   storage:
     pvc:
       accessModes:
         - ReadWriteOnce
       requests:
         storage: 1Gi
-EOF_REPO_CR
+EOF_REPO_CR_FOOTER
 
   e2e_operator_collect_managed_server_config "${managed_server_state_file}" || return 1
 
@@ -1242,12 +1355,14 @@ e2e_profile_operator_handoff() {
   local resource_payload
   local manager_deployment
   local sync_policy_name
+  local repository_name
   local commit_message='operator demo resource'
 
   resource_path=$(e2e_operator_example_resource_path)
   resource_payload=$(e2e_operator_example_resource_payload)
   manager_deployment=${E2E_OPERATOR_MANAGER_DEPLOYMENT:-$(e2e_operator_scoped_name 'declarest-operator')}
   sync_policy_name=${E2E_OPERATOR_SYNC_POLICY_NAME:-$(e2e_operator_scoped_name 'declarest-e2e-sync-policy')}
+  repository_name=${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME:-${E2E_OPERATOR_REPOSITORY_NAME:-$(e2e_operator_scoped_name 'declarest-e2e-repository')}}
 
   e2e_manual_write_env_scripts "${context_name}" || return 1
   setup_script=$(e2e_manual_env_setup_script_path)
@@ -1272,6 +1387,7 @@ Operator runtime:
   manager-logs: ${E2E_OPERATOR_MANAGER_LOG_FILE:-n/a}
   namespace: ${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-n/a}}
   sync-policy: ${E2E_OPERATOR_SYNC_POLICY_NAME:-${sync_policy_name}}
+  repository-webhook-url: ${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL:-n/a}
 
 Shell scripts:
   setup: ${setup_script}
@@ -1288,6 +1404,7 @@ To use it in your current shell:
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository commit -m ${commit_message@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository push
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource get ${resource_path@Q} --source remote-server
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository "${repository_name}" -o jsonpath='{.metadata.annotations.declarest\\.io/webhook-last-received-at}'
 EOF_HANDOFF
 
   if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then

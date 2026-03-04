@@ -49,6 +49,80 @@ func TestSyncPolicyValidateNoOverlap(t *testing.T) {
 	}
 }
 
+func TestSyncPolicyValidateNoOverlapRejectsOverlapAcrossDifferentReferences(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := declarestv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add scheme: %v", err)
+	}
+
+	existing := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-a"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server-a"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets-a"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/acme"},
+		},
+	}
+	candidate := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-b"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server-b"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets-b"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/acme/clients"},
+		},
+	}
+
+	reconciler := &SyncPolicyReconciler{
+		Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build(),
+		Scheme: scheme,
+	}
+
+	if err := reconciler.validateNoOverlap(context.Background(), candidate); err == nil {
+		t.Fatal("expected overlap error, got nil")
+	}
+}
+
+func TestSyncPolicyValidateNoOverlapAllowsDistinctPathsWithSharedReferences(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := declarestv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add scheme: %v", err)
+	}
+
+	existing := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/a"},
+		},
+	}
+	candidate := &declarestv1alpha1.SyncPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
+			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/b"},
+		},
+	}
+
+	reconciler := &SyncPolicyReconciler{
+		Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build(),
+		Scheme: scheme,
+	}
+
+	if err := reconciler.validateNoOverlap(context.Background(), candidate); err != nil {
+		t.Fatalf("expected no overlap error, got %v", err)
+	}
+}
+
 func TestSyncPolicyMapperByResourceRepositoryUsesIndex(t *testing.T) {
 	t.Parallel()
 

@@ -561,6 +561,328 @@ EOF
   fi
 }
 
+test_k8s_component_start_preloads_unique_images_before_apply() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local podman_log="${tmp}/podman.log"
+  local kind_log="${tmp}/kind.log"
+  local kubectl_log="${tmp}/kubectl.log"
+
+  cat >"${fake_bin}/podman" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == image\ exists* ]]; then
+  exit 1
+fi
+
+if [[ "${1:-}" == 'pull' ]]; then
+  printf 'pull %s\n' "${2:-}" >>"${FAKE_PODMAN_LOG}"
+  exit 0
+fi
+
+if [[ "${1:-}" == 'save' ]]; then
+  out=''
+  image=''
+  shift
+  while (($# > 0)); do
+    case "$1" in
+      -o)
+        out=$2
+        shift 2
+        ;;
+      *)
+        image=$1
+        shift
+        ;;
+    esac
+  done
+  [[ -n "${out}" ]] || exit 1
+  : >"${out}"
+  printf 'save %s %s\n' "${image}" "${out}" >>"${FAKE_PODMAN_LOG}"
+  exit 0
+fi
+
+printf 'unexpected podman invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/podman"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_KIND_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_KUBECTL_LOG}"
+
+if [[ "$*" == *" get svc "* ]]; then
+  cat <<'JSON'
+{"items":[]}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *" apply "* || "$*" == *" wait "* ]]; then
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  local component_dir_one="${tmp}/components/managed-server/demo-a"
+  local component_dir_two="${tmp}/components/secret-provider/demo-b"
+  mkdir -p "${component_dir_one}/k8s" "${component_dir_two}/k8s"
+
+  cat >"${component_dir_one}/k8s/deployment.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: managed-server-demo-a
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: docker.io/gitea/gitea:1.25.4
+EOF
+
+  cat >"${component_dir_two}/k8s/deployment.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secret-provider-demo-b
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: docker.io/gitea/gitea:1.25.4
+EOF
+
+  E2E_PLATFORM='kubernetes'
+  E2E_CONTAINER_ENGINE='podman'
+  E2E_KIND_CLUSTER_NAME='declarest-e2e-hooks'
+  E2E_K8S_NAMESPACE='declarest-tests'
+  E2E_KUBECONFIG="${tmp}/kubeconfig"
+  : >"${E2E_KUBECONFIG}"
+
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_DEPENDS_ON=()
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo-a" "secret-provider:demo-b")
+
+  E2E_COMPONENT_PATH['managed-server:demo-a']="${component_dir_one}"
+  E2E_COMPONENT_PATH['secret-provider:demo-b']="${component_dir_two}"
+  E2E_COMPONENT_DEPENDS_ON['managed-server:demo-a']=''
+  E2E_COMPONENT_DEPENDS_ON['secret-provider:demo-b']=''
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo-a']='compose'
+  E2E_COMPONENT_RUNTIME_KIND['secret-provider:demo-b']='compose'
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_PODMAN_LOG="${podman_log}"
+  export FAKE_KIND_LOG="${kind_log}"
+  export FAKE_KUBECTL_LOG="${kubectl_log}"
+
+  e2e_components_start_local
+
+  local pull_count save_count load_count
+  pull_count=$(grep -c '^pull docker.io/gitea/gitea:1.25.4$' "${podman_log}" || true)
+  save_count=$(grep -c '^save docker.io/gitea/gitea:1.25.4 ' "${podman_log}" || true)
+  load_count=$(grep -c '^load image-archive .*/docker.io_gitea_gitea_1.25.4.tar --name declarest-e2e-hooks$' "${kind_log}" || true)
+
+  assert_eq "${pull_count}" "1" "expected one image pull for duplicated image references"
+  assert_eq "${save_count}" "1" "expected one image export for duplicated image references"
+  assert_eq "${load_count}" "1" "expected one kind image load for duplicated image references"
+  assert_file_contains "${kubectl_log}" "apply -f ${E2E_STATE_DIR}/k8s-rendered/managed-server-demo-a/deployment.yaml"
+  assert_file_contains "${kubectl_log}" "apply -f ${E2E_STATE_DIR}/k8s-rendered/secret-provider-demo-b/deployment.yaml"
+}
+
+test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local kind_log="${tmp}/kind.log"
+  local kind_counter="${tmp}/kind.create.count"
+  printf '0\n' >"${kind_counter}"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'provider=%s cmd=%s\n' "${KIND_EXPERIMENTAL_PROVIDER:-}" "$*" >>"${FAKE_KIND_LOG}"
+
+if [[ "${1:-}" == 'create' && "${2:-}" == 'cluster' ]]; then
+  count=$(cat "${FAKE_KIND_COUNTER}")
+  count=$((count + 1))
+  printf '%s\n' "${count}" >"${FAKE_KIND_COUNTER}"
+  if ((count == 1)); then
+    printf '%s\n' 'ERROR: failed to create cluster: could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"' >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == 'delete' && "${2:-}" == 'cluster' ]]; then
+  exit 0
+fi
+
+printf 'unexpected kind invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == *" get namespace "* ]]; then
+  exit 1
+fi
+
+if [[ "$*" == *" create namespace "* ]]; then
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  E2E_PLATFORM='kubernetes'
+  E2E_CONTAINER_ENGINE='podman'
+  E2E_RUN_ID='kind-retry'
+  E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KIND_LOG="${kind_log}"
+  export FAKE_KIND_COUNTER="${kind_counter}"
+
+  e2e_kubernetes_runtime_ensure
+
+  local create_count delete_count
+  create_count=$(grep -c 'cmd=create cluster ' "${kind_log}" || true)
+  delete_count=$(grep -c 'cmd=delete cluster ' "${kind_log}" || true)
+
+  assert_eq "${create_count}" "2" "expected kind create cluster to retry once"
+  assert_eq "${delete_count}" "1" "expected failed cluster attempt cleanup before retry"
+  assert_file_contains "${kind_log}" "provider=podman cmd=create cluster"
+}
+
+test_kubernetes_runtime_reuses_existing_cluster_after_retryable_failures() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local kind_log="${tmp}/kind.log"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'provider=%s cmd=%s\n' "${KIND_EXPERIMENTAL_PROVIDER:-}" "$*" >>"${FAKE_KIND_LOG}"
+
+if [[ "${1:-}" == 'create' && "${2:-}" == 'cluster' ]]; then
+  printf '%s\n' 'ERROR: failed to create cluster: could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"' >&2
+  exit 1
+fi
+
+if [[ "${1:-}" == 'delete' && "${2:-}" == 'cluster' ]]; then
+  exit 0
+fi
+
+if [[ "${1:-}" == 'get' && "${2:-}" == 'clusters' ]]; then
+  printf '%s\n' 'declarest-e2e-existing'
+  exit 0
+fi
+
+if [[ "${1:-}" == 'export' && "${2:-}" == 'kubeconfig' ]]; then
+  kubeconfig=''
+  shift 2
+  while (($# > 0)); do
+    case "$1" in
+      --kubeconfig)
+        kubeconfig=$2
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  [[ -n "${kubeconfig}" ]] || exit 1
+  : >"${kubeconfig}"
+  exit 0
+fi
+
+printf 'unexpected kind invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == *" get namespace "* ]]; then
+  exit 1
+fi
+
+if [[ "$*" == *" create namespace "* ]]; then
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  E2E_PLATFORM='kubernetes'
+  E2E_CONTAINER_ENGINE='podman'
+  E2E_RUN_ID='kind-reuse'
+  E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KIND_LOG="${kind_log}"
+  export DECLAREST_E2E_KIND_REUSE_EXISTING_ON_CREATE_FAILURE='true'
+
+  e2e_kubernetes_runtime_ensure
+
+  assert_eq "${E2E_KIND_CLUSTER_NAME}" "declarest-e2e-existing" "expected fallback to existing kind cluster"
+  assert_eq "${E2E_KIND_CLUSTER_REUSED}" "1" "expected reused cluster marker to be set"
+  assert_file_contains "${kind_log}" "provider=podman cmd=export kubeconfig --name declarest-e2e-existing --kubeconfig ${E2E_KUBECONFIG}"
+}
+
 test_k8s_component_start_uses_configurable_ready_timeout() {
   load_hook_libs
   local tmp
@@ -715,5 +1037,8 @@ test_prepare_component_openapi_specs_defaults_to_bundle_mode
 test_component_compose_file_resolves_compose_subdir
 test_k8s_port_forward_pid_tracking_and_stop
 test_k8s_port_forward_retries_after_runtime_disconnect
+test_k8s_component_start_preloads_unique_images_before_apply
+test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure
+test_kubernetes_runtime_reuses_existing_cluster_after_retryable_failures
 test_k8s_component_start_uses_configurable_ready_timeout
 test_k8s_component_start_rejects_invalid_ready_timeout

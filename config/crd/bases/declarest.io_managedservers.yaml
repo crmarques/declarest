@@ -251,6 +251,25 @@ spec:
                     type: object
                   healthCheck:
                     type: string
+                  requestThrottling:
+                    properties:
+                      burst:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      maxConcurrentRequests:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      queueSize:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      requestsPerSecond:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                    type: object
                   proxy:
                     properties:
                       auth:

@@ -357,19 +357,12 @@ func (r *SyncPolicyReconciler) validateNoOverlap(ctx context.Context, syncPolicy
 		if item.DeletionTimestamp != nil {
 			continue
 		}
-		if strings.TrimSpace(item.Spec.ResourceRepositoryRef.Name) != strings.TrimSpace(syncPolicy.Spec.ResourceRepositoryRef.Name) {
-			continue
-		}
-		if strings.TrimSpace(item.Spec.ManagedServerRef.Name) != strings.TrimSpace(syncPolicy.Spec.ManagedServerRef.Name) {
-			continue
-		}
 		if hasPathOverlap(item.Spec.Source.Path, syncPolicy.Spec.Source.Path) {
 			return fmt.Errorf(
-				"sync policy scope overlaps with %s/%s for repository %q and managed server %q",
+				"sync policy scope overlaps with %s/%s (%q)",
 				item.Namespace,
 				item.Name,
-				item.Spec.ResourceRepositoryRef.Name,
-				item.Spec.ManagedServerRef.Name,
+				normalizeOverlapPath(item.Spec.Source.Path),
 			)
 		}
 	}

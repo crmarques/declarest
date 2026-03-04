@@ -37,13 +37,25 @@ type ManagedServerHeaderAuth struct {
 	ValueRef *corev1.SecretKeySelector `json:"valueRef,omitempty"`
 }
 
+type ManagedServerRequestThrottling struct {
+	// +kubebuilder:validation:Minimum=0
+	MaxConcurrentRequests int32 `json:"maxConcurrentRequests,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	QueueSize int32 `json:"queueSize,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	RequestsPerSecond int32 `json:"requestsPerSecond,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	Burst int32 `json:"burst,omitempty"`
+}
+
 type ManagedServerHTTP struct {
-	BaseURL        string            `json:"baseURL"`
-	HealthCheck    string            `json:"healthCheck,omitempty"`
-	DefaultHeaders map[string]string `json:"defaultHeaders,omitempty"`
-	Auth           ManagedServerAuth `json:"auth"`
-	TLS            *TLSSpec          `json:"tls,omitempty"`
-	Proxy          *HTTPProxySpec    `json:"proxy,omitempty"`
+	BaseURL           string                          `json:"baseURL"`
+	HealthCheck       string                          `json:"healthCheck,omitempty"`
+	DefaultHeaders    map[string]string               `json:"defaultHeaders,omitempty"`
+	Auth              ManagedServerAuth               `json:"auth"`
+	TLS               *TLSSpec                        `json:"tls,omitempty"`
+	Proxy             *HTTPProxySpec                  `json:"proxy,omitempty"`
+	RequestThrottling *ManagedServerRequestThrottling `json:"requestThrottling,omitempty"`
 }
 
 type ManagedServerSpec struct {
@@ -169,6 +181,30 @@ func (m *ManagedServer) ValidateSpec() error {
 			if err := validateSecretRef(m.Spec.HTTP.Proxy.Auth.PasswordRef, "spec.http.proxy.auth.passwordRef"); err != nil {
 				return err
 			}
+		}
+	}
+	if m.Spec.HTTP.RequestThrottling != nil {
+		throttling := m.Spec.HTTP.RequestThrottling
+		if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
+			return fmt.Errorf("spec.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond")
+		}
+		if throttling.MaxConcurrentRequests < 0 {
+			return fmt.Errorf("spec.http.requestThrottling.maxConcurrentRequests must be greater than zero when set")
+		}
+		if throttling.QueueSize < 0 {
+			return fmt.Errorf("spec.http.requestThrottling.queueSize must be greater than or equal to zero")
+		}
+		if throttling.QueueSize > 0 && throttling.MaxConcurrentRequests <= 0 {
+			return fmt.Errorf("spec.http.requestThrottling.queueSize requires maxConcurrentRequests to be greater than zero")
+		}
+		if throttling.RequestsPerSecond < 0 {
+			return fmt.Errorf("spec.http.requestThrottling.requestsPerSecond must be greater than zero when set")
+		}
+		if throttling.Burst < 0 {
+			return fmt.Errorf("spec.http.requestThrottling.burst must be greater than zero when set")
+		}
+		if throttling.Burst > 0 && throttling.RequestsPerSecond <= 0 {
+			return fmt.Errorf("spec.http.requestThrottling.burst requires requestsPerSecond to be greater than zero")
 		}
 	}
 	return nil

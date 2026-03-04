@@ -20,14 +20,16 @@ import (
 
 func main() {
 	var (
-		metricsAddr          string
-		probeAddr            string
-		enableLeaderElection bool
-		enableWebhooks       bool
-		watchNamespace       string
+		metricsAddr           string
+		probeAddr             string
+		repositoryWebhookAddr string
+		enableLeaderElection  bool
+		enableWebhooks        bool
+		watchNamespace        string
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&repositoryWebhookAddr, "repository-webhook-bind-address", ":8082", "The address the repository webhook endpoint binds to (set empty to disable).")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable admission webhooks for DeclaREST CRDs.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "", "Namespace to watch (empty means all namespaces).")
@@ -106,6 +108,15 @@ func main() {
 		Recorder: manager.GetEventRecorderFor("syncpolicy-controller"),
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
+		os.Exit(1)
+	}
+	if err := manager.Add(&controllers.RepositoryWebhookServer{
+		Client:         manager.GetClient(),
+		Recorder:       manager.GetEventRecorderFor("repository-webhook"),
+		BindAddress:    repositoryWebhookAddr,
+		WatchNamespace: watchNamespace,
+	}); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to start repository webhook server")
 		os.Exit(1)
 	}
 	if enableWebhooks {

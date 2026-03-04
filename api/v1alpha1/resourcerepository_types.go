@@ -29,9 +29,23 @@ type GitSSHSecretRef struct {
 }
 
 type GitRepositorySpec struct {
-	URL    string                 `json:"url"`
-	Branch string                 `json:"branch,omitempty"`
-	Auth   ResourceRepositoryAuth `json:"auth"`
+	URL     string                    `json:"url"`
+	Branch  string                    `json:"branch,omitempty"`
+	Auth    ResourceRepositoryAuth    `json:"auth"`
+	Webhook *GitRepositoryWebhookSpec `json:"webhook,omitempty"`
+}
+
+type GitWebhookProvider string
+
+const (
+	GitWebhookProviderGitea  GitWebhookProvider = "gitea"
+	GitWebhookProviderGitLab GitWebhookProvider = "gitlab"
+)
+
+type GitRepositoryWebhookSpec struct {
+	// +kubebuilder:validation:Enum=gitea;gitlab
+	Provider  GitWebhookProvider        `json:"provider"`
+	SecretRef *corev1.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
 type ResourceRepositorySpec struct {
@@ -133,6 +147,14 @@ func (r *ResourceRepository) ValidateSpec() error {
 			if err := validateSecretRef(r.Spec.Git.Auth.SSHSecretRef.PassphraseRef, "spec.git.auth.sshSecretRef.passphraseRef"); err != nil {
 				return err
 			}
+		}
+	}
+	if r.Spec.Git.Webhook != nil {
+		if r.Spec.Git.Webhook.Provider != GitWebhookProviderGitea && r.Spec.Git.Webhook.Provider != GitWebhookProviderGitLab {
+			return fmt.Errorf("spec.git.webhook.provider must be one of: gitea, gitlab")
+		}
+		if err := validateSecretRef(r.Spec.Git.Webhook.SecretRef, "spec.git.webhook.secretRef"); err != nil {
+			return err
 		}
 	}
 	if err := r.Spec.Storage.validate("spec.storage"); err != nil {

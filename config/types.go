@@ -77,13 +77,22 @@ type ManagedServer struct {
 }
 
 type HTTPServer struct {
-	BaseURL        string            `yaml:"base-url"`
-	HealthCheck    string            `yaml:"health-check,omitempty"`
-	OpenAPI        string            `yaml:"openapi,omitempty"`
-	DefaultHeaders map[string]string `yaml:"default-headers,omitempty"`
-	Auth           *HTTPAuth         `yaml:"auth,omitempty"`
-	Proxy          *HTTPProxy        `yaml:"proxy,omitempty"`
-	TLS            *TLS              `yaml:"tls,omitempty"`
+	BaseURL           string                 `yaml:"base-url"`
+	HealthCheck       string                 `yaml:"health-check,omitempty"`
+	OpenAPI           string                 `yaml:"openapi,omitempty"`
+	DefaultHeaders    map[string]string      `yaml:"default-headers,omitempty"`
+	Auth              *HTTPAuth              `yaml:"auth,omitempty"`
+	Proxy             *HTTPProxy             `yaml:"proxy,omitempty"`
+	TLS               *TLS                   `yaml:"tls,omitempty"`
+	RequestThrottling *HTTPRequestThrottling `yaml:"request-throttling,omitempty"`
+}
+
+type HTTPRequestThrottling struct {
+	MaxConcurrentRequests int     `yaml:"max-concurrent-requests,omitempty"`
+	QueueSize             int     `yaml:"queue-size,omitempty"`
+	RequestsPerSecond     float64 `yaml:"requests-per-second,omitempty"`
+	Burst                 int     `yaml:"burst,omitempty"`
+	ScopeKey              string  `yaml:"-"`
 }
 
 type HTTPProxy struct {

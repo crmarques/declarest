@@ -98,6 +98,9 @@ One-of invariants:
 5. `metadata` MUST define at most one of `base-dir` or `bundle`.
 6. `managed-server.http.proxy` MUST define at least one of `http-url` or `https-url` when configured.
 7. `managed-server.http.proxy.auth` MUST define both `username` and `password` when configured.
+ 8. `managed-server.http.request-throttling` MUST define at least one of `max-concurrent-requests` or `requests-per-second` when configured.
+ 9. `managed-server.http.request-throttling.queue-size` MUST NOT be set unless `max-concurrent-requests` is set.
+ 10. `managed-server.http.request-throttling.burst` MUST NOT be set unless `requests-per-second` is set.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.

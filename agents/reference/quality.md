@@ -115,6 +115,10 @@ Acceptance contracts:
 67. E2E kind provider compatibility contract: podman engine selection enforces `KIND_EXPERIMENTAL_PROVIDER=podman` for kind operations, preflight validates provider readiness, and cleanup deletes recorded run clusters for `--clean`/`--clean-all`.
 68. E2E managed-server flag contract: runner selection flags use the `--managed-server*` namespace (`--managed-server`, `--managed-server-connection`, `--managed-server-auth-type`, `--managed-server-mtls`) and reject legacy `--managed-server*` variants.
 69. E2E managed-server proxy contract: `--managed-server-proxy` toggles context proxy injection (`managed-server.http.proxy`) and fails validation when enabled without at least one configured proxy URL (`DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`).
+70. Managed-server request throttling contract: configured `max-concurrent-requests` and `queue-size` enforce bounded request admission, overflow returns typed `ConflictError`, and shared throttling scopes apply across concurrent clients for one managed-server identity.
+71. SyncPolicy overlap contract: multiple SyncPolicies MAY share repository/managed-server/secret-store references, but overlapping source path/subpath scopes MUST fail deterministically even when references differ.
+72. Repository webhook security contract: git webhook receiver rejects invalid signatures/tokens and unsupported events, enforces payload size bounds, and only authenticated push events patch repository webhook-receipt annotations.
+73. Operator webhook integration contract: operator profiles configure provider webhooks (`gitea|gitlab`) and webhook-backed pushes trigger reconcile/update behavior before the repository poll interval in operator-main coverage.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.
@@ -139,3 +143,4 @@ Acceptance contracts:
 8. Bundle metadata tests verify OpenAPI fallback discovery order when `managed-server.http.openapi` is empty: `declarest.openapi` hint, bundle-root/metadata-root OpenAPI files, then deterministic recursive bundle-file fallback.
 9. E2E harness tests verify both platform paths (`--platform compose` and `--platform kubernetes`), including a corner case where `--platform kubernetes` with remote/native-only selections skips kind cluster creation.
 10. E2E harness tests verify operator profile defaulting/validation (`repo-type=git`, `git-provider=gitea`) and in-cluster operator deployment lifecycle behavior (runtime details, handoff commands, automated reconcile cases, and cleanup/teardown).
+11. Unit + integration tests verify managed-server request-throttling validation, shared-gate queue overflow behavior, and repository webhook authentication/annotation patch behavior for valid vs invalid payloads.

@@ -31,6 +31,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 14. Payload validation context MUST include path-derived template fields (for example `realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
 15. OpenAPI document URLs MAY be cross-origin relative to `managed-server.http.base-url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
 16. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
+17. When `managed-server.http.request-throttling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
 
 ## Data Contracts
 Request spec fields:
@@ -56,11 +57,18 @@ Auth modes:
 2. Custom headers list (`custom-headers`).
 3. Basic auth.
 
+Request throttling fields:
+1. `max-concurrent-requests`.
+2. `queue-size`.
+3. `requests-per-second`.
+4. `burst`.
+
 ## Failure Modes
 1. Auth failure due to missing or invalid credentials.
 2. Timeout or transport interruption.
 3. OpenAPI document unavailable or invalid.
 4. Metadata path template resolves to invalid URI.
+5. Request queue is full and additional requests are rejected with `ConflictError`.
 
 ## Edge Cases
 1. 404 on direct path with viable alias/list fallback strategy.
@@ -69,6 +77,7 @@ Auth modes:
 4. OpenAPI path exists but method unsupported for operation type.
 5. Validation schema reference is configured but OpenAPI request-body/schema pointer cannot be resolved.
 6. Swagger 2.0 operation omits `parameters[in=body].schema`; `validate.schemaRef=openapi:request-body` fails with `ValidationError`.
+7. Two concurrent sync workflows targeting the same managed server share one throttle scope and one queue budget.
 
 ## Examples
 1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/<repository.resource-format>` (for example `application/yaml` in YAML repositories).
@@ -77,3 +86,4 @@ Auth modes:
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).
 5. `Create` operation validation can require `realm` while resolving `realm` implicitly from `/admin/realms/<realm>/...` logical paths.
 6. Swagger 2.0 `consumes/produces` plus body `parameters` support `Create` fallback defaults (`ContentType`/`Accept`) and `openapi:request-body` validation without requiring OpenAPI 3 syntax.
+7. With `request-throttling.max-concurrent-requests=1` and `queue-size=1`, a third concurrent request fails fast with `ConflictError` while two earlier requests are in-flight/queued.

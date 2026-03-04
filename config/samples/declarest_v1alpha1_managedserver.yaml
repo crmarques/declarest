@@ -5,6 +5,11 @@ metadata:
 spec:
   http:
     baseURL: https://managed-server.example.com/api
+    requestThrottling:
+      maxConcurrentRequests: 4
+      queueSize: 16
+      requestsPerSecond: 20
+      burst: 40
     auth:
       oauth2:
         tokenURL: https://managed-server.example.com/oauth/token

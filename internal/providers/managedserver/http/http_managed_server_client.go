@@ -30,6 +30,7 @@ type HTTPManagedServerClient struct {
 	defaultHeaders   map[string]string
 	auth             authConfig
 	client           *http.Client
+	throttle         *requestThrottleGate
 	resourceFormat   string
 	tlsDebug         tlsDebugInfo
 	openAPISource    string
@@ -105,6 +106,11 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 		tlsDebug:       newTLSDebugInfo(cfg.TLS),
 		openAPISource:  strings.TrimSpace(cfg.OpenAPI),
 	}
+	throttle, err := buildRequestThrottle(cfg.RequestThrottling)
+	if err != nil {
+		return nil, err
+	}
+	client.throttle = throttle
 	for _, opt := range opts {
 		if opt == nil {
 			continue

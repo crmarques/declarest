@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
+	"github.com/crmarques/declarest/faults"
 )
 
 type tlsDebugInfo struct {
@@ -51,7 +53,10 @@ func (g *HTTPManagedServerClient) doRequest(ctx context.Context, purpose string,
 		g.tlsDebug.clientKeyFile,
 	)
 
-	response, err := g.client.Do(request)
+	invoke := func() (*http.Response, error) {
+		return g.client.Do(request)
+	}
+	response, err := g.executeWithThrottle(ctx, purpose, request, invoke)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -73,6 +78,32 @@ func (g *HTTPManagedServerClient) doRequest(ctx context.Context, purpose string,
 		response.StatusCode,
 	)
 	return response, nil
+}
+
+func (g *HTTPManagedServerClient) executeWithThrottle(
+	ctx context.Context,
+	purpose string,
+	request *http.Request,
+	invoke func() (*http.Response, error),
+) (*http.Response, error) {
+	if g == nil || g.throttle == nil {
+		return invoke()
+	}
+	response, err := g.throttle.execute(ctx, invoke)
+	if err == nil {
+		return response, nil
+	}
+	if faults.IsCategory(err, faults.ConflictError) || faults.IsCategory(err, faults.TransportError) {
+		return nil, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, faults.NewTypedError(
+			faults.TransportError,
+			fmt.Sprintf("managed-server request canceled while waiting for throttling (%s %s %s)", purpose, request.Method, request.URL.Path),
+			ctxErr,
+		)
+	}
+	return nil, err
 }
 
 func redactURLForDebug(value *url.URL) string {

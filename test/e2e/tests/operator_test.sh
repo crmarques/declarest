@@ -27,6 +27,8 @@ prepare_operator_handoff_env() {
   export E2E_OPERATOR_MANAGER_POD='declarest-operator-77b8f6fcb9-l9j6k'
   export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:operator-handoff-test'
   export E2E_OPERATOR_SYNC_POLICY_NAME='declarest-e2e-sync-policy'
+  export E2E_OPERATOR_RESOURCE_REPOSITORY_NAME='declarest-e2e-repository'
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL='http://declarest-operator-repo-webhook.declarest-operator.svc.cluster.local:18082/webhooks/repository/declarest-operator/declarest-e2e-repository'
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
   export E2E_GIT_PROVIDER_CONNECTION='local'
@@ -105,6 +107,7 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   assert_contains "${output}" "resource save '/api/projects/operator-demo' --payload"
   assert_contains "${output}" "resource get '/api/projects/operator-demo' --source remote-server"
   assert_contains "${output}" "manager-deployment: declarest-operator"
+  assert_contains "${output}" "repository-webhook-url: ${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}"
   assert_contains "${output}" "kubectl --kubeconfig \"${E2E_KUBECONFIG}\" -n \"${E2E_OPERATOR_NAMESPACE}\" logs deployment/\"${E2E_OPERATOR_MANAGER_DEPLOYMENT}\" --tail=80"
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
   assert_contains "${output}" "Manual Component Access:"
@@ -126,6 +129,32 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   reset_script=$(e2e_manual_env_reset_script_path)
   assert_path_exists "${setup_script}"
   assert_path_exists "${reset_script}"
+}
+
+test_operator_prepare_repository_webhook_builds_scoped_url() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_PROFILE='operator-manual'
+  export E2E_RUN_ID='operator-webhook-test'
+  export E2E_STATE_DIR="${tmp}/state"
+  export E2E_K8S_NAMESPACE='declarest-operator'
+  export E2E_REPO_TYPE='git'
+  export E2E_GIT_PROVIDER='gitea'
+  mkdir -p "${E2E_STATE_DIR}"
+
+  e2e_operator_prepare_repository_webhook
+
+  assert_eq "${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER}" "gitea"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/webhooks/repository/declarest-operator/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "declarest-e2e-repository-operator-webhook-test"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "$(e2e_operator_repository_webhook_service_name)"
+  if [[ -z "${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}" ]]; then
+    fail "expected operator repository webhook secret to be generated"
+  fi
 }
 
 test_operator_rewrites_local_urls_for_cluster_services() {
@@ -170,5 +199,6 @@ test_operator_ready_timeout_validation_and_cap() {
 test_operator_example_resource_mapping
 test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
+test_operator_prepare_repository_webhook_builds_scoped_url
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap

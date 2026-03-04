@@ -68,6 +68,8 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 49. `operator-manual` handoff output MUST include run-scoped setup/reset shell scripts, operator runtime details, and concrete repository-to-managed-server verification commands using managed-server-specific logical path/payload examples.
 50. `operator-basic` MUST execute `operator-main` scope automated cases after operator installation; `operator-full` MUST execute `operator-main` plus `corner` scope automated cases.
 51. Operator readiness waits (`DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS`) MUST default to `120`, reject non-positive values, and cap at `600`.
+52. Operator profiles with git providers `gitea|gitlab` MUST precompute run-scoped repository webhook URL/secret values, configure provider webhooks during access setup, and emit `spec.git.webhook` configuration in generated `ResourceRepository` CRs.
+53. Operator profile manager manifests MUST expose a dedicated in-cluster repository-webhook service endpoint and pass `--repository-webhook-bind-address` to the manager container.
 
 ## Data Contracts
 Runner flags:
@@ -119,6 +121,7 @@ Operator handoff:
 3. Print concrete `declarest-e2e` commands to save a repository resource, commit/push it, and read the same logical path from the managed server.
 4. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
 5. When selected components emit manual-info details, print those details in `Manual Component Access` before `Repository provider access`.
+6. Include repository-webhook runtime details (`repository-webhook-url`) and one concrete `kubectl` command to inspect webhook receipt annotations on the generated `ResourceRepository`.
 
 ## Failure Modes
 1. `cli-manual` profile accepts unsupported remote selections.
@@ -128,6 +131,7 @@ Operator handoff:
 5. Summary output omits actionable failing-step log pointers.
 6. Component dependency selectors reference non-discovered components and fail late.
 7. Hook dependency cycles deadlock startup sequencing.
+8. Operator profile leaves repository webhook URL/secret unset, so git provider hooks are not registered and reconcile falls back to poll interval.
 
 ## Edge Cases
 1. `--list-components` short-circuits runtime startup but still yields deterministic summary.
@@ -150,6 +154,7 @@ Operator handoff:
 18. `--profile operator-manual --secret-provider none` fails initialization because operator profiles require an instantiated secret provider.
 19. Operator profiles in kubernetes mode rewrite localhost component URLs to in-cluster endpoints (preferring component pod IP, then service ClusterIP/DNS) so the in-cluster manager can reach local providers.
 20. Manual profiles with no component manual-info output omit the `Manual Component Access` section and still render handoff access sections deterministically.
+21. Operator profile with `git-provider=git` does not configure provider webhooks and still fails fast from operator-profile provider validation.
 
 ## Examples
 1. `./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
@@ -171,3 +176,4 @@ Operator handoff:
 17. `./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file` extends `operator-basic` with corner-case validations.
 18. `./run-e2e.sh --profile operator-manual --managed-server keycloak --repo-type git --git-provider gitea --secret-provider vault` prints `Manual Component Access` from component `manual-info` hooks in handoff output before `Repository provider access`.
 19. `./run-e2e.sh --profile operator-manual --managed-server rundeck --repo-type git --git-provider gitea --secret-provider vault` (with no selected-component `manual-info` output) omits `Manual Component Access` while preserving deterministic handoff section ordering.
+20. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file` registers a gitea push webhook to the run-scoped operator service URL and handoff output prints that URL plus a `kubectl ... jsonpath` command for `declarest.io/webhook-last-received-at`.
