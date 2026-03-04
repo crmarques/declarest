@@ -21,6 +21,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var ignore bool
 	var handleSecrets string
 	var overwrite bool
+	var push bool
 	var commitMessageAppend string
 	var commitMessageOverride string
 
@@ -34,6 +35,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			"  declarest resource save /customers/ --as-items < customers.json",
 			"  declarest resource save /customers/acme --handle-secrets",
 			"  declarest resource save /customers/acme --overwrite",
+			"  declarest --context git resource save /customers/acme --payload payload.json --overwrite --push",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -54,6 +56,9 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 
 			cfg, err := resolveActiveResourceContext(command.Context(), deps, nil)
 			if err != nil {
+				return err
+			}
+			if err := validateRepositoryPushFlag(cfg, push); err != nil {
 				return err
 			}
 			if err := ensureCleanGitWorktreeForAutoCommit(command.Context(), deps, cfg, "resource save"); err != nil {
@@ -101,7 +106,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			return commitRepositoryIfGit(command.Context(), deps, cfg, commitMessage)
+			return commitAndMaybePushRepository(command.Context(), deps, cfg, commitMessage, push)
 		},
 	}
 
@@ -119,6 +124,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")
 	command.Flags().BoolVar(&overwrite, "override", false, "legacy alias for --overwrite")
 	_ = command.Flags().MarkHidden("override")
+	command.Flags().BoolVar(&push, "push", false, "push git repository changes after save (git repositories with remote only)")
 	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
 	handleSecretsFlag := command.Flags().Lookup("handle-secrets")
 	handleSecretsFlag.NoOptDefVal = handleSecretsAllSentinel

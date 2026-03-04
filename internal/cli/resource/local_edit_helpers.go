@@ -104,6 +104,52 @@ func commitAndMaybeAutoSyncRepository(
 	return syncService.Push(ctx, repository.PushPolicy{})
 }
 
+func validateRepositoryPushFlag(cfg configdomain.Context, push bool) error {
+	if !push {
+		return nil
+	}
+	if cfg.Repository.Git == nil {
+		return cliutil.ValidationError("flag --push is only available for git repositories", nil)
+	}
+	if cfg.Repository.Git.Remote == nil {
+		return cliutil.ValidationError("flag --push requires repository.git.remote configuration", nil)
+	}
+	return nil
+}
+
+func commitAndMaybePushRepository(
+	ctx context.Context,
+	deps cliutil.CommandDependencies,
+	cfg configdomain.Context,
+	message string,
+	push bool,
+) error {
+	if err := validateRepositoryPushFlag(cfg, push); err != nil {
+		return err
+	}
+	if cfg.Repository.Git == nil {
+		return nil
+	}
+
+	committer, err := resolveRepositoryCommitter(deps)
+	if err != nil {
+		return err
+	}
+	committed, err := committer.Commit(ctx, message)
+	if err != nil {
+		return err
+	}
+	if !push || !committed {
+		return nil
+	}
+
+	syncService, err := cliutil.RequireRepositorySync(deps)
+	if err != nil {
+		return err
+	}
+	return syncService.Push(ctx, repository.PushPolicy{})
+}
+
 func commitRepositoryIfGit(
 	ctx context.Context,
 	deps cliutil.CommandDependencies,
