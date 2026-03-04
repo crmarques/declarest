@@ -104,6 +104,21 @@ test_operator_profile_uses_supported_repository_poll_interval() {
   assert_file_contains "${script}" 'pollInterval: 30s'
 }
 
+test_operator_profile_sets_home_to_writable_state_dir() {
+  local script="${REPO_ROOT}/test/e2e/lib/operator.sh"
+
+  assert_file_contains "${script}" '- name: HOME'
+  assert_file_contains "${script}" 'value: ${runtime_root}'
+}
+
+test_operator_profile_sets_api_server_env_for_manager() {
+  local script="${REPO_ROOT}/test/e2e/lib/operator.sh"
+
+  assert_file_contains "${script}" 'e2e_operator_api_server_endpoint()'
+  assert_file_contains "${script}" '- name: KUBERNETES_SERVICE_HOST'
+  assert_file_contains "${script}" '- name: KUBERNETES_SERVICE_PORT'
+}
+
 test_operator_profile_defaults_and_validation_pass
 test_operator_profile_rejects_compose_platform
 test_operator_profile_rejects_git_builtin_provider
@@ -111,3 +126,5 @@ test_operator_profile_rejects_secret_provider_none
 test_operator_profile_automated_scopes
 test_operator_profile_builds_linux_static_manager_binary
 test_operator_profile_uses_supported_repository_poll_interval
+test_operator_profile_sets_home_to_writable_state_dir
+test_operator_profile_sets_api_server_env_for_manager

@@ -42,6 +42,29 @@ e2e_operator_name_suffix() {
   printf '%s\n' "${suffix}"
 }
 
+e2e_operator_effective_namespace() {
+  local namespace=${E2E_K8S_NAMESPACE:-}
+  if [[ -n "${namespace}" ]]; then
+    printf '%s\n' "${namespace}"
+    return 0
+  fi
+
+  if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && -n "${E2E_RUN_ID:-}" ]]; then
+    if declare -F e2e_k8s_namespace_for_run >/dev/null 2>&1; then
+      namespace=$(e2e_k8s_namespace_for_run "${E2E_RUN_ID}")
+    else
+      namespace=$(e2e_operator_sanitize_name "declarest-${E2E_RUN_ID}")
+      namespace=$(printf '%.63s' "${namespace}")
+    fi
+    if [[ -n "${namespace}" ]]; then
+      printf '%s\n' "${namespace}"
+      return 0
+    fi
+  fi
+
+  printf 'default\n'
+}
+
 e2e_operator_scoped_name() {
   local base=$1
   local max_len=${2:-63}
@@ -117,13 +140,15 @@ e2e_operator_repo_url_with_username() {
 
 e2e_operator_service_host() {
   local service_name=$1
-  local namespace=${E2E_K8S_NAMESPACE:-default}
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
   printf '%s.%s.svc.cluster.local\n' "${service_name}" "${namespace}"
 }
 
 e2e_operator_service_network_host() {
   local service_name=$1
-  local namespace=${E2E_K8S_NAMESPACE:-default}
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
 
   if [[ -n "${E2E_KUBECONFIG:-}" ]]; then
     local pod_ip
@@ -150,6 +175,44 @@ e2e_operator_service_network_host() {
   fi
 
   e2e_operator_service_host "${service_name}"
+}
+
+e2e_operator_api_server_endpoint() {
+  if [[ -z "${E2E_KUBECONFIG:-}" ]]; then
+    e2e_die 'operator profile kubeconfig is unavailable for API endpoint discovery'
+    return 1
+  fi
+
+  local api_host
+  api_host=$(
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n default \
+      get service/kubernetes \
+      -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true
+  )
+  local api_port
+  api_port=$(
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n default \
+      get endpoints/kubernetes \
+      -o jsonpath='{.subsets[0].ports[0].port}' 2>/dev/null || true
+  )
+
+  if [[ -z "${api_host}" || "${api_host}" == 'None' || -z "${api_port}" ]]; then
+    e2e_die 'operator profile could not resolve kubernetes API endpoint from default/kubernetes'
+    return 1
+  fi
+
+  # kind+podman clusters can expose broken service VIP routing from pods; prefer endpoint address.
+  local endpoint_host
+  endpoint_host=$(
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n default \
+      get endpoints/kubernetes \
+      -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true
+  )
+  if [[ -n "${endpoint_host}" ]]; then
+    api_host="${endpoint_host}"
+  fi
+
+  printf '%s %s\n' "${api_host}" "${api_port}"
 }
 
 e2e_operator_rewrite_local_url_to_service() {
@@ -209,6 +272,45 @@ e2e_operator_rewrite_repo_url_for_cluster() {
   esac
 }
 
+e2e_operator_metadata_bundle_default_url() {
+  local bundle_ref=$1
+  local name
+  local version
+  local repo_base
+
+  if [[ "${bundle_ref}" != *:* ]]; then
+    return 1
+  fi
+
+  name=${bundle_ref%%:*}
+  version=${bundle_ref#*:}
+  name=${name//[[:space:]]/}
+  version=${version//[[:space:]]/}
+
+  if [[ -z "${name}" || -z "${version}" ]]; then
+    return 1
+  fi
+  if [[ ! "${name}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    return 1
+  fi
+
+  version=${version#v}
+  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$ ]]; then
+    return 1
+  fi
+
+  repo_base=${name%-bundle}
+  if [[ -z "${repo_base}" ]]; then
+    repo_base=${name}
+  fi
+
+  printf 'https://github.com/crmarques/declarest-bundle-%s/releases/download/v%s/%s-%s.tar.gz\n' \
+    "${repo_base}" \
+    "${version}" \
+    "${name}" \
+    "${version}"
+}
+
 e2e_operator_generate_webhook_secret() {
   local random_block
   random_block=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true)
@@ -239,7 +341,8 @@ e2e_operator_prepare_repository_webhook() {
       ;;
   esac
 
-  local namespace="${E2E_K8S_NAMESPACE:-default}"
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
   local repository_name
   local service_name
   local webhook_secret
@@ -374,7 +477,8 @@ e2e_operator_start_manager() {
     return 1
   fi
 
-  local namespace="${E2E_K8S_NAMESPACE:-default}"
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
   local deployment_name
   deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
   local webhook_service_name
@@ -390,6 +494,9 @@ e2e_operator_start_manager() {
   local runtime_root='/var/lib/declarest'
   local repo_root="${runtime_root}/repos"
   local cache_root="${runtime_root}/cache"
+  local api_service_host=''
+  local api_service_port=''
+  read -r api_service_host api_service_port < <(e2e_operator_api_server_endpoint) || return 1
   local manifest_dir
   manifest_dir=$(e2e_operator_manifest_dir)
   mkdir -p "${manifest_dir}" || return 1
@@ -483,6 +590,12 @@ spec:
               value: ${repo_root}
             - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
               value: ${cache_root}
+            - name: HOME
+              value: ${runtime_root}
+            - name: KUBERNETES_SERVICE_HOST
+              value: ${api_service_host}
+            - name: KUBERNETES_SERVICE_PORT
+              value: "${api_service_port}"
           ports:
             - containerPort: 18080
               name: metrics
@@ -771,7 +884,8 @@ e2e_operator_write_manifests() {
   manifest_dir=$(e2e_operator_manifest_dir)
   mkdir -p "${manifest_dir}" || return 1
 
-  local namespace="${E2E_K8S_NAMESPACE:-default}"
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
 
   local repo_key
   repo_key=$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")
@@ -921,6 +1035,14 @@ EOF_REPO_CR_FOOTER
   local tls_ca_file=''
   local tls_client_cert_file=''
   local tls_client_key_file=''
+  local metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
+  local metadata_bundle_url=''
+  if [[ -n "${metadata_bundle_ref}" ]]; then
+    metadata_bundle_url=$(e2e_operator_metadata_bundle_default_url "${metadata_bundle_ref}") || {
+      e2e_die "operator profile metadata bundle shorthand is invalid: ${metadata_bundle_ref}"
+      return 1
+    }
+  fi
   if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     managed_server_tls_enabled='true'
     if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
@@ -1034,6 +1156,10 @@ EOF_REPO_CR_FOOTER
       if [[ "${managed_server_tls_insecure_skip_verify}" == 'true' ]]; then
         printf '      insecureSkipVerify: true\n'
       fi
+    fi
+    if [[ -n "${metadata_bundle_url}" ]]; then
+      printf '  metadata:\n'
+      printf '    url: %s\n' "$(e2e_operator_yaml_quote "${metadata_bundle_url}")"
     fi
   } >"${manifest_dir}/managed-server.yaml"
 

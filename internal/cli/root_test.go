@@ -2524,6 +2524,96 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		}
 	})
 
+	t.Run("push_forces_remote_push_even_when_auto_sync_is_disabled", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme","name":"Acme"}`,
+			"--overwrite",
+			"--push",
+		)
+		if err != nil {
+			t.Fatalf("unexpected save error with --push: %v", err)
+		}
+		if len(repoService.commitCalls) != 1 {
+			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
+		}
+		if repoService.pushCalls != 1 {
+			t.Fatalf("expected one push call with --push, got %d", repoService.pushCalls)
+		}
+	})
+
+	t.Run("push_requires_git_repository_context", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+		orchestratorService := deps.Orchestrator.(*testOrchestrator)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme"}`,
+			"--overwrite",
+			"--push",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--push") {
+			t.Fatalf("expected --push validation error, got %v", err)
+		}
+		if len(orchestratorService.saveCalls) != 0 {
+			t.Fatalf("expected save to fail before mutation, got %d save calls", len(orchestratorService.saveCalls))
+		}
+		if len(repoService.commitCalls) != 0 {
+			t.Fatalf("expected no commit calls on validation failure, got %d", len(repoService.commitCalls))
+		}
+		if repoService.pushCalls != 0 {
+			t.Fatalf("expected no push calls on validation failure, got %d", repoService.pushCalls)
+		}
+	})
+
+	t.Run("push_requires_git_remote_configuration", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		repoService := deps.ResourceStore.(*testRepository)
+		orchestratorService := deps.Orchestrator.(*testOrchestrator)
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"--context", "git-no-remote",
+			"resource", "save",
+			"/customers/acme",
+			"--payload", `{"id":"acme"}`,
+			"--overwrite",
+			"--push",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "repository.git.remote") {
+			t.Fatalf("expected git remote validation error, got %v", err)
+		}
+		if len(orchestratorService.saveCalls) != 0 {
+			t.Fatalf("expected save to fail before mutation, got %d save calls", len(orchestratorService.saveCalls))
+		}
+		if len(repoService.commitCalls) != 0 {
+			t.Fatalf("expected no commit calls on validation failure, got %d", len(repoService.commitCalls))
+		}
+		if repoService.pushCalls != 0 {
+			t.Fatalf("expected no push calls on validation failure, got %d", repoService.pushCalls)
+		}
+	})
+
 	t.Run("message_appends_to_default_commit_message", func(t *testing.T) {
 		t.Parallel()
 
@@ -5482,6 +5572,9 @@ func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
 	}
 	if !strings.Contains(output, "--overwrite") {
 		t.Fatalf("expected --overwrite in resource save help output, got %q", output)
+	}
+	if !strings.Contains(output, "--push") {
+		t.Fatalf("expected --push in resource save help output, got %q", output)
 	}
 	if strings.Contains(output, "--force ") {
 		t.Fatalf("expected legacy --force alias to be hidden from resource save help output, got %q", output)

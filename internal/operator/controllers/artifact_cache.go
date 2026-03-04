@@ -43,7 +43,7 @@ func downloadArtifact(ctx context.Context, artifactURL string, destDir string) (
 	fileName := hex.EncodeToString(hash[:])
 	parsed, err := url.Parse(trimmedURL)
 	if err == nil {
-		ext := filepath.Ext(parsed.Path)
+		ext := artifactPathExtension(parsed.Path)
 		if ext != "" {
 			fileName = fileName + ext
 		}
@@ -102,4 +102,18 @@ func downloadArtifact(ctx context.Context, artifactURL string, destDir string) (
 		return "", fmt.Errorf("promote artifact cache file: %w", err)
 	}
 	return targetPath, nil
+}
+
+func artifactPathExtension(path string) string {
+	lowerPath := strings.ToLower(strings.TrimSpace(path))
+	if lowerPath == "" {
+		return ""
+	}
+	if strings.HasSuffix(lowerPath, ".tar.gz") {
+		return ".tar.gz"
+	}
+	if strings.HasSuffix(lowerPath, ".tgz") {
+		return ".tgz"
+	}
+	return filepath.Ext(lowerPath)
 }

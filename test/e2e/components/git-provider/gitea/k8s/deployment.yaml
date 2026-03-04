@@ -46,6 +46,8 @@ spec:
               value: "true"
             - name: GITEA__repository__DEFAULT_BRANCH
               value: main
+            - name: GITEA__webhook__ALLOWED_HOST_LIST
+              value: "external,loopback,private"
           ports:
             - name: http
               containerPort: 3000

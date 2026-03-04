@@ -56,6 +56,7 @@ Input flags:
 6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation (legacy hidden alias `--override` MAY remain during migrations).
 7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation (legacy hidden alias `--force` MAY remain during migrations).
 8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent (legacy hidden alias `--force` MAY remain during migrations).
+9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.auto-sync` is disabled.
 
 Path flags:
 1. Path-aware commands MUST accept `--path`, `-p`.
@@ -227,7 +228,7 @@ Interactive config commands:
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
-83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive.
+83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.auto-sync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
 84. `resource delete` when repository deletion is selected (`--source repository|both` or legacy `--repository|--both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
@@ -307,6 +308,7 @@ Interactive config commands:
 30. `managed-server get token-url` or `managed-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
 31. `resource save|delete` receives both `--message` and `--message-override`.
 32. `resource save|delete` auto-commit is attempted while the git worktree already has unrelated uncommitted changes.
+33. `resource save --push` is invoked when the active repository is filesystem or when git remote configuration is missing.
 
 ## Edge Cases
 1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--handle-secrets`) but no secret manager is configured.
@@ -324,6 +326,7 @@ Interactive config commands:
 13. `resource apply`, `resource create`, or `resource update` is invoked on a collection that has only nested descendants and omits `--recursive`.
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
 15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
+16. `resource save --push` is used with `repository.git.remote.auto-sync: false` and still pushes the new save commit to the configured remote.
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/rea`) returns canonical concrete collection candidates (for example `/admin/realms/`) when local/remote/OpenAPI context provides them and suppresses template placeholder segments (`{...}`) from completion output.
@@ -371,6 +374,7 @@ Interactive config commands:
 26. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [credentials.authValue]` stores and masks `credentials.authValue` automatically before repository persistence.
 27. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
 28. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
+29. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.auto-sync` is disabled.
 29. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
 30. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
 27. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.

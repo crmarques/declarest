@@ -45,6 +45,8 @@ spec:
               value: /var/lib/declarest/repos
             - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
               value: /var/lib/declarest/cache
+            - name: HOME
+              value: /var/lib/declarest
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

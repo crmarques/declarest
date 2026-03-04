@@ -157,6 +157,29 @@ test_operator_prepare_repository_webhook_builds_scoped_url() {
   fi
 }
 
+test_operator_prepare_repository_webhook_derives_namespace_when_unset() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_PROFILE='operator-manual'
+  export E2E_PLATFORM='kubernetes'
+  export E2E_RUN_ID='operator-webhook-autons'
+  export E2E_STATE_DIR="${tmp}/state"
+  unset E2E_K8S_NAMESPACE
+  export E2E_REPO_TYPE='git'
+  export E2E_GIT_PROVIDER='gitea'
+  mkdir -p "${E2E_STATE_DIR}"
+
+  e2e_operator_prepare_repository_webhook
+
+  local expected_namespace='declarest-operator-webhook-autons'
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" ".${expected_namespace}.svc.cluster.local:18082/"
+  assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/webhooks/repository/${expected_namespace}/"
+}
+
 test_operator_rewrites_local_urls_for_cluster_services() {
   load_operator_libs
 
@@ -196,9 +219,71 @@ test_operator_ready_timeout_validation_and_cap() {
   assert_contains "${output}" "invalid operator readiness timeout"
 }
 
+test_operator_write_manifests_sets_keycloak_metadata_bundle_url() {
+  source_e2e_libs common profile operator components
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_ID='operator-keycloak-bundle-test'
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_STATE_DIR="${E2E_RUN_DIR}/state"
+  export E2E_PLATFORM='compose'
+  export E2E_REPO_TYPE='git'
+  export E2E_GIT_PROVIDER='gitea'
+  export E2E_GIT_PROVIDER_CONNECTION='remote'
+  export E2E_SECRET_PROVIDER='file'
+  export E2E_SECRET_PROVIDER_CONNECTION='local'
+  export E2E_MANAGED_SERVER='keycloak'
+  export E2E_MANAGED_SERVER_CONNECTION='remote'
+  export E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
+  export E2E_MANAGED_SERVER_MTLS='false'
+  export E2E_METADATA_BUNDLE='keycloak-bundle:0.0.1'
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
+  export E2E_OPERATOR_REPOSITORY_NAME='declarest-e2e-repository'
+
+  mkdir -p "${E2E_STATE_DIR}"
+
+  local repo_state managed_state secret_state
+  repo_state=$(e2e_component_state_file "$(e2e_component_key 'repo-type' 'git')")
+  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-server' 'keycloak')")
+  secret_state=$(e2e_component_state_file "$(e2e_component_key 'secret-provider' 'file')")
+
+  cat >"${repo_state}" <<'EOF'
+GIT_REMOTE_URL=https://example.com/acme/declarest-e2e.git
+GIT_REMOTE_BRANCH=main
+REPO_RESOURCE_FORMAT=json
+GIT_AUTH_MODE=access-key
+GIT_AUTH_TOKEN=test-token
+EOF
+
+  cat >"${managed_state}" <<'EOF'
+KEYCLOAK_BASE_URL=https://keycloak.example.com
+KEYCLOAK_TOKEN_URL=https://keycloak.example.com/realms/master/protocol/openid-connect/token
+KEYCLOAK_CLIENT_ID=declarest-e2e-client
+KEYCLOAK_CLIENT_SECRET=declarest-e2e-secret
+EOF
+
+  cat >"${secret_state}" <<'EOF'
+SECRET_FILE_PATH=/tmp/declarest-e2e-secrets.enc.json
+SECRET_FILE_PASSPHRASE=test-passphrase
+EOF
+
+  e2e_operator_write_manifests
+
+  local managed_server_manifest
+  managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
+  assert_file_contains "${managed_server_manifest}" "metadata:"
+  assert_file_contains "${managed_server_manifest}" "url: 'https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.0.1/keycloak-bundle-0.0.1.tar.gz'"
+}
+
 test_operator_example_resource_mapping
 test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
 test_operator_prepare_repository_webhook_builds_scoped_url
+test_operator_prepare_repository_webhook_derives_namespace_when_unset
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
+test_operator_write_manifests_sets_keycloak_metadata_bundle_url
