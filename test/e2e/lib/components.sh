@@ -209,7 +209,7 @@ e2e_prepare_metadata_workspace() {
     bundle)
       local metadata_bundle
       if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
-        e2e_info "metadata mode bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
+        e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
         return 0
       fi
       E2E_METADATA_BUNDLE="${metadata_bundle}"
@@ -217,7 +217,7 @@ e2e_prepare_metadata_workspace() {
       e2e_info "managed-server metadata bundle selected bundle=${metadata_bundle}"
       return 0
       ;;
-    local-dir)
+    base-dir)
       local metadata_source="${component_dir}/metadata"
       if [[ ! -d "${metadata_source}" ]]; then
         return 0
@@ -229,7 +229,7 @@ e2e_prepare_metadata_workspace() {
       return 0
       ;;
     *)
-      e2e_die "invalid metadata mode: ${E2E_METADATA:-}"
+      e2e_die "invalid metadata type: ${E2E_METADATA:-}"
       return 1
       ;;
   esac
@@ -290,7 +290,7 @@ e2e_component_install_openapi_spec() {
 e2e_prepare_component_openapi_specs() {
   if [[ "${E2E_METADATA:-bundle}" == 'bundle' ]]; then
     E2E_COMPONENT_OPENAPI_SPEC=()
-    e2e_info 'managed-server openapi spec copy skipped: metadata mode bundle'
+    e2e_info 'managed-server openapi spec copy skipped: metadata type bundle'
     return 0
   fi
 

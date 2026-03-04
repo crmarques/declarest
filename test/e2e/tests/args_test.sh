@@ -23,10 +23,10 @@ test_parses_validate_components_flag() {
   assert_eq "${E2E_VALIDATE_COMPONENTS}" "1" "expected --validate-components to be parsed"
 }
 
-test_defaults_metadata_mode_to_bundle() {
+test_defaults_metadata_type_to_bundle() {
   reload_args_lib
   e2e_parse_args
-  assert_eq "${E2E_METADATA}" "bundle" "expected metadata mode default to bundle"
+  assert_eq "${E2E_METADATA}" "bundle" "expected metadata type default to bundle"
 }
 
 test_defaults_platform_to_kubernetes() {
@@ -47,8 +47,14 @@ test_parses_platform_flag() {
 
 test_parses_operator_profile() {
   reload_args_lib
-  e2e_parse_args --profile operator
-  assert_eq "${E2E_PROFILE}" "operator" "expected --profile operator to be parsed"
+  e2e_parse_args --profile operator-manual
+  assert_eq "${E2E_PROFILE}" "operator-manual" "expected --profile operator-manual to be parsed"
+}
+
+test_parses_operator_automated_profile() {
+  reload_args_lib
+  e2e_parse_args --profile operator-basic
+  assert_eq "${E2E_PROFILE}" "operator-basic" "expected --profile operator-basic to be parsed"
 }
 
 test_rejects_invalid_platform_flag() {
@@ -81,22 +87,34 @@ test_parses_managed_server_proxy_flag() {
   assert_eq "${E2E_MANAGED_SERVER_PROXY}" "false" "expected managed-server proxy flag to parse explicit false"
 }
 
-test_parses_metadata_mode_flag() {
+test_parses_metadata_type_flag() {
   reload_args_lib
-  e2e_parse_args --metadata bundle
-  assert_eq "${E2E_METADATA}" "bundle" "expected metadata mode to be parsed"
+  e2e_parse_args --metadata-type bundle
+  assert_eq "${E2E_METADATA}" "bundle" "expected metadata type to be parsed"
 }
 
-test_rejects_invalid_metadata_mode_flag() {
+test_rejects_invalid_metadata_type_flag() {
   reload_args_lib
   local output status
   set +e
-  output=$(e2e_parse_args --metadata nope 2>&1)
+  output=$(e2e_parse_args --metadata-type nope 2>&1)
   status=$?
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "invalid --metadata value"
+  assert_contains "${output}" "invalid --metadata-type value"
+}
+
+test_rejects_legacy_metadata_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_args --metadata bundle 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "unknown argument: --metadata"
 }
 
 test_rejects_legacy_managed_server_auth_flags() {
@@ -148,11 +166,11 @@ test_cleanup_parser_treats_validate_mode_as_workload_flag() {
   assert_contains "${output}" "cannot be combined with workload flags"
 }
 
-test_cleanup_parser_treats_metadata_flag_as_workload_flag() {
+test_cleanup_parser_treats_metadata_type_flag_as_workload_flag() {
   reload_args_lib
   local output status
   set +e
-  output=$(e2e_parse_cleanup_args --clean-all --metadata bundle 2>&1)
+  output=$(e2e_parse_cleanup_args --clean-all --metadata-type bundle 2>&1)
   status=$?
   set -e
 
@@ -196,34 +214,38 @@ test_usage_mentions_validate_flag_and_no_none_managed_server() {
   reload_args_lib
   local output
   output=$(e2e_usage)
-  assert_contains "${output}" "--profile <basic|full|manual|operator>"
+  assert_contains "${output}" "--profile <cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full>"
   assert_contains "${output}" "--validate-components"
   assert_contains "${output}" "--platform <compose|kubernetes>"
-  assert_contains "${output}" "--metadata <bundle|local-dir>"
+  assert_contains "${output}" "--metadata-type <base-dir|bundle>"
   assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header>"
   assert_contains "${output}" "--managed-server-proxy [<true|false>]"
   assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
   assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
+  assert_contains "${output}" "DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>"
   assert_not_contains "${output}" "--managed-server-basic-auth"
   assert_not_contains "${output}" "--managed-server-oauth2"
+  assert_not_contains "${output}" "--metadata <bundle|local-dir>"
   assert_not_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault|none>"
 }
 
 test_parses_validate_components_flag
-test_defaults_metadata_mode_to_bundle
+test_defaults_metadata_type_to_bundle
 test_defaults_platform_to_kubernetes
 test_parses_platform_flag
 test_parses_operator_profile
+test_parses_operator_automated_profile
 test_rejects_invalid_platform_flag
 test_parses_managed_server_auth_type_flag
 test_parses_managed_server_proxy_flag
-test_parses_metadata_mode_flag
-test_rejects_invalid_metadata_mode_flag
+test_parses_metadata_type_flag
+test_rejects_invalid_metadata_type_flag
+test_rejects_legacy_metadata_flag
 test_rejects_legacy_managed_server_auth_flags
 test_rejects_managed_server_none
 test_rejects_managed_server_proxy_without_urls
 test_cleanup_parser_treats_validate_mode_as_workload_flag
-test_cleanup_parser_treats_metadata_flag_as_workload_flag
+test_cleanup_parser_treats_metadata_type_flag_as_workload_flag
 test_cleanup_parser_treats_managed_server_proxy_flag_as_workload_flag
 test_cleanup_parser_treats_platform_flag_as_workload_flag
 test_usage_mentions_validate_flag_and_no_none_managed_server

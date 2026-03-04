@@ -16,13 +16,10 @@ case_run() {
   local remote_id_two
 
   case_write_json "${metadata_file}" '{
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "clientId",
-    "operations": {
-      "create": {"method": "POST", "path": "/admin/realms/master/clients"}
-    },
-    "filter": [],
-    "suppress": []
+    "resourceInfo": {
+      "idFromAttribute": "id",
+      "aliasFromAttribute": "clientId"
+    }
   }'
 
   case_write_json "${item_one}" "{\"clientId\": \"${client_one}\", \"name\": \"One\", \"enabled\": true, \"publicClient\": true, \"protocol\": \"openid-connect\"}"

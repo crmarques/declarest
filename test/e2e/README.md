@@ -5,30 +5,32 @@ This repository uses a componentized Bash e2e harness.
 ## Entrypoint
 
 ```bash
-./run-e2e.sh --profile basic
+./run-e2e.sh --profile cli-basic
 ```
 
 ## Profiles
 
-- `basic` (default): runs all `main` cases that match the selected stack.
-- `full`: runs all `main` and `corner` cases that match the selected stack.
-- `manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
+- `cli-basic` (default): runs all `main` cases that match the selected stack.
+- `cli-full`: runs all `main` and `corner` cases that match the selected stack.
+- `cli-manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
   - default stack includes `managed-server=simple-api-server`
   - remote component selections are rejected in Step 1
   - when a managed-server is selected, its `repo-template` tree is copied into the context repository directory
   - when `repo-type=git`, the runner initializes the local git repository before handoff so `config check`/`repository status` are immediately usable
-  - component manual access details are printed after Step 5 (Configuring Access) when available
+  - component manual access details are printed in manual handoff output before `Repository provider access` when available
   - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `test/e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
   - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
-- `operator`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
+- `operator-manual`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
   - defaults to `repo-type=git` and `git-provider=gitea` when those flags are omitted
   - requires local component connections, `--repo-type git`, `--git-provider <gitea|gitlab>`, and `--secret-provider <file|vault>`
   - copies the selected managed-server `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs
   - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed server manually
+- `operator-basic`: same operator environment as `operator-manual`, then runs operator-focused automated `main` cases.
+- `operator-full`: same operator environment as `operator-basic`, plus `corner` validations.
 
 ## Platform
 
@@ -40,14 +42,14 @@ This repository uses a componentized Bash e2e harness.
 
 ## Main Flags
 
-- `--profile <basic|full|manual|operator>`
+- `--profile <cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full>`
 - `--platform <compose|kubernetes>`
 - `--managed-server <name>` (mandatory; `none` is not supported)
 - `--managed-server-connection <local|remote>`
 - `--managed-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
 - `--managed-server-mtls [<true|false>]` (default: `false`)
 - `--managed-server-proxy [<true|false>]` (default: `false`)
-- `--metadata <bundle|local-dir>` (default: `bundle`)
+- `--metadata-type <base-dir|bundle>` (default: `bundle`)
 - `--repo-type <name>`
 - `--git-provider <name>`
 - `--git-provider-connection <local|remote>`
@@ -65,8 +67,8 @@ Use `--validate-components` to run plugin/component contract validation (manifes
 When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 When `--managed-server-proxy true`, generated contexts include `managed-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
-`--metadata bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset.
-`--metadata local-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
+`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset.
+`--metadata-type base-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:
 
@@ -89,7 +91,7 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 The runner reports progress in grouped steps:
 
-- `basic`/`full`: 7 steps
+- `cli-basic`/`cli-full`: 7 steps
 
 1. `Initializing`
 2. `Preparing Runtime`
@@ -99,7 +101,7 @@ The runner reports progress in grouped steps:
 6. `Running Test Cases`
 7. `Finalizing`
 
-- `manual`: 5 steps
+- `cli-manual`: 5 steps
 
 1. `Initializing`
 2. `Preparing Runtime`
@@ -107,7 +109,7 @@ The runner reports progress in grouped steps:
 4. `Starting Components`
 5. `Configuring Access`
 
-- `operator`: 7 steps
+- `operator-manual`: 7 steps
 
 1. `Initializing`
 2. `Preparing Runtime`
@@ -116,6 +118,17 @@ The runner reports progress in grouped steps:
 5. `Configuring Access`
 6. `Installing Operator`
 7. `Finalizing`
+
+- `operator-basic`/`operator-full`: 8 steps
+
+1. `Initializing`
+2. `Preparing Runtime`
+3. `Preparing Components`
+4. `Starting Components`
+5. `Configuring Access`
+6. `Installing Operator`
+7. `Running Test Cases`
+8. `Finalizing`
 
 TTY mode renders dynamic spinner/status updates. Non-TTY mode emits structured plain step lines.
 The runner prints a live log pointer at startup so progress can be followed with `tail -f`.
@@ -126,6 +139,7 @@ Cases live under:
 
 -- `test/e2e/cases/main/*.sh`
 -- `test/e2e/cases/corner/*.sh`
+-- `test/e2e/cases/operator-main/*.sh`
 -- `test/e2e/components/<type>/<name>/cases/main/*.sh` (component-scoped main cases)
 -- `test/e2e/components/<type>/<name>/cases/corner/*.sh` (component-scoped corner cases)
 
@@ -172,7 +186,7 @@ Compose-runtime components must also include:
 
 Optional hooks:
 
-- `scripts/manual-info.sh`: printed after `Configuring Access` in `manual` profile
+- `scripts/manual-info.sh`: printed in manual handoff output before `Repository provider access` in `cli-manual` and `operator-manual` profiles
 - `scripts/start.sh` and `scripts/stop.sh`: override built-in start/stop adapters (compose or kubernetes) when needed
 
 Hook orchestration:

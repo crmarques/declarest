@@ -196,17 +196,28 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   e2e_write_state_value "${provider_state}" 'GITEA_BASE_URL' 'http://127.0.0.1:3000'
   e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_USERNAME' 'gitea-admin'
   e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_PASSWORD' 'gitea-pass'
+  export E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-server:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
 
   local output
   output=$(e2e_manual_handoff_print 'e2e-manual')
 
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
   assert_contains "${output}" "export KUBECONFIG=\"${E2E_KUBECONFIG}\""
+  assert_contains "${output}" "Manual Component Access:"
+  assert_contains "${output}" "managed-server:simple-api-server"
+  assert_contains "${output}" "Base URL: http://127.0.0.1:20890/api"
   assert_contains "${output}" "Repository provider access:"
   assert_contains "${output}" "provider: gitea (local)"
   assert_contains "${output}" "web login: http://127.0.0.1:3000/user/login"
   assert_contains "${output}" "username: gitea-admin"
   assert_contains "${output}" "password: gitea-pass"
+
+  local manual_line repo_line
+  manual_line=$(printf '%s\n' "${output}" | grep -n 'Manual Component Access:' | head -n 1 | cut -d: -f1 || true)
+  repo_line=$(printf '%s\n' "${output}" | grep -n 'Repository provider access:' | head -n 1 | cut -d: -f1 || true)
+  if [[ -z "${manual_line}" || -z "${repo_line}" ]] || ((manual_line >= repo_line)); then
+    fail 'expected Manual Component Access section before Repository provider access'
+  fi
 }
 
 test_manual_env_scripts_install_and_restore_prompt_hook

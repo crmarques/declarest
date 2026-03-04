@@ -238,8 +238,8 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   simple_api_audience=$(e2e_env_optional 'DECLAREST_E2E_SIMPLE_API_AUDIENCE' 'E2E_SIMPLE_API_AUDIENCE' || true)
   : "${simple_api_client_id:=declarest-e2e-client}"
   : "${simple_api_client_secret:=simple-api-${RANDOM}${RANDOM}${RANDOM}}"
-  : "${simple_api_basic_auth_username:=declarest-e2e-basic-user}"
-  : "${simple_api_basic_auth_password:=simple-api-basic-${RANDOM}${RANDOM}${RANDOM}}"
+  : "${simple_api_basic_auth_username:=admin}"
+  : "${simple_api_basic_auth_password:=admin}"
 
   mkdir -p "${simple_api_certs_host_dir}"
 

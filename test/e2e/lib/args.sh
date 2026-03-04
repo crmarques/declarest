@@ -18,7 +18,7 @@ E2E_GIT_PROVIDER=''
 E2E_GIT_PROVIDER_CONNECTION='local'
 E2E_SECRET_PROVIDER='file'
 E2E_SECRET_PROVIDER_CONNECTION='local'
-E2E_PROFILE='basic'
+E2E_PROFILE='cli-basic'
 E2E_PLATFORM='kubernetes'
 E2E_LIST_COMPONENTS=0
 E2E_VALIDATE_COMPONENTS=0
@@ -53,7 +53,7 @@ e2e_has_help_flag() {
 }
 
 e2e_profile_from_cli_args() {
-  local profile='basic'
+  local profile='cli-basic'
 
   while (($# > 0)); do
     case "$1" in
@@ -147,18 +147,18 @@ e2e_parse_managed_server_auth_type_value() {
   esac
 }
 
-e2e_parse_metadata_mode_value() {
+e2e_parse_metadata_type_value() {
   local raw_value=$1
 
   case "${raw_value,,}" in
     bundle)
       printf 'bundle\n'
       ;;
-    local-dir)
-      printf 'local-dir\n'
+    base-dir)
+      printf 'base-dir\n'
       ;;
     *)
-      e2e_die "invalid --metadata value: ${raw_value} (allowed: bundle, local-dir)"
+      e2e_die "invalid --metadata-type value: ${raw_value} (allowed: base-dir, bundle)"
       return 1
       ;;
   esac
@@ -190,14 +190,16 @@ Objective:
   matching the chosen profile requirements, and exercising CLI cases that verify repository,
   metadata, secret, and security behavior across deterministic steps.
 
-Profiles (required, defaults to basic when omitted):
-  --profile <basic|full|manual|operator>          default: basic
-    basic   : Run "main" cases against the default stack in an automated CI-style job.
-    full    : Execute "main" plus "corner" cases to cover less-common paths and components.
-    manual  : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
-              Declarest commands interactively. Requires every selected connection to stay local.
-    operator: Provision a kubernetes-only local stack, deploy the DeclaREST operator manager in-cluster, install CRDs, and apply
-              generated ResourceRepository/ManagedServer/SecretStore/SyncPolicy resources for manual reconciliation checks.
+Profiles (required, defaults to cli-basic when omitted):
+  --profile <cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full>   default: cli-basic
+    cli-basic      : Run "main" cases against the default stack in an automated CLI workflow.
+    cli-full       : Execute "main" plus "corner" CLI cases to cover less-common paths and components.
+    cli-manual     : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
+                     Declarest commands interactively. Requires every selected connection to stay local.
+    operator-manual: Provision a kubernetes-only local stack, deploy the operator manager in-cluster, apply generated
+                     ResourceRepository/ManagedServer/SecretStore/SyncPolicy resources, then keep runtime for manual checks.
+    operator-basic : Same operator environment as operator-manual, then run operator-focused "main" automated cases.
+    operator-full  : Same operator environment as operator-basic, plus corner validations.
 
 Platform selection:
   --platform <compose|kubernetes>                 default: kubernetes
@@ -223,9 +225,9 @@ Component selection (choose values for each flag; see notes below):
   --managed-server-proxy [<true|false>]                default: false
     true  : Inject managed-server.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
     false : Keep managed-server proxy unset in generated contexts.
-  --metadata <bundle|local-dir>                     default: bundle
+  --metadata-type <base-dir|bundle>                 default: bundle
     bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
-    local-dir : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
+    base-dir  : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
   --repo-type <filesystem|git>                        default: filesystem
     filesystem : Use the local filesystem repository backend.
     git        : Use the git repository backend (requires a git provider selection).
@@ -264,6 +266,8 @@ Environment overrides:
   DECLAREST_E2E_CONTAINER_ENGINE=<podman|docker>       default: podman
   DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>
                                                        default: 600 (kubernetes pod readiness wait per component)
+  DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>
+                                                       default: 120 (operator CR readiness wait; must be <= 600)
   DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=<url>    optional managed-server proxy http-url
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL=<url>   optional managed-server proxy https-url
@@ -272,17 +276,19 @@ Environment overrides:
   DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD=<v> optional managed-server proxy auth password
 
 Examples:
-  ./run-e2e.sh --platform kubernetes --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --platform compose --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile basic --managed-server simple-api-server --metadata local-dir
-  ./run-e2e.sh --profile full --repo-type git --git-provider gitlab --managed-server simple-api-server
-  ./run-e2e.sh --profile full --repo-type git --git-provider gitea --managed-server simple-api-server
-  ./run-e2e.sh --profile operator --managed-server simple-api-server --git-provider gitea --secret-provider file
+  ./run-e2e.sh --platform kubernetes --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --platform compose --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
+  ./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-type base-dir
+  ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitlab --managed-server simple-api-server
+  ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitea --managed-server simple-api-server
+  ./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file
+  ./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file
+  ./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file
   ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
   ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true
-  ./run-e2e.sh --profile manual --keep-runtime
+  ./run-e2e.sh --profile cli-manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
 USAGE
@@ -330,7 +336,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -449,12 +455,12 @@ e2e_parse_args() {
         E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${proxy_value}") || return 1
         e2e_mark_explicit 'managed-server-proxy'
         ;;
-      --metadata)
+      --metadata-type)
         [[ $# -ge 2 ]] || {
-          e2e_die '--metadata requires a value'
+          e2e_die '--metadata-type requires a value'
           return 1
         }
-        E2E_METADATA=$(e2e_parse_metadata_mode_value "$2") || return 1
+        E2E_METADATA=$(e2e_parse_metadata_type_value "$2") || return 1
         e2e_mark_explicit 'metadata'
         shift 2
         ;;
@@ -532,9 +538,9 @@ e2e_parse_args() {
   done
 
   case "${E2E_PROFILE}" in
-    basic|full|manual|operator) ;;
+    cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full) ;;
     *)
-      e2e_die "invalid profile: ${E2E_PROFILE} (allowed: basic, full, manual, operator)"
+      e2e_die "invalid profile: ${E2E_PROFILE} (allowed: cli-basic, cli-full, cli-manual, operator-manual, operator-basic, operator-full)"
       return 1
       ;;
   esac
@@ -572,7 +578,7 @@ e2e_parse_args() {
       fi
     fi
   fi
-  E2E_METADATA=$(e2e_parse_metadata_mode_value "${E2E_METADATA}") || return 1
+  E2E_METADATA=$(e2e_parse_metadata_type_value "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
 

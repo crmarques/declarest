@@ -1,7 +1,78 @@
 #!/usr/bin/env bash
 
+e2e_profile_is_cli_basic() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'cli-basic' ]]
+}
+
+e2e_profile_is_cli_full() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'cli-full' ]]
+}
+
+e2e_profile_is_cli_manual() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'cli-manual' ]]
+}
+
+e2e_profile_is_operator_manual() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'operator-manual' ]]
+}
+
+e2e_profile_is_operator_basic() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'operator-basic' ]]
+}
+
+e2e_profile_is_operator_full() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  [[ "${profile}" == 'operator-full' ]]
+}
+
+e2e_profile_is_operator() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  e2e_profile_is_operator_manual "${profile}" || e2e_profile_is_operator_basic "${profile}" || e2e_profile_is_operator_full "${profile}"
+}
+
+e2e_profile_is_cli_workload() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  e2e_profile_is_cli_basic "${profile}" || e2e_profile_is_cli_full "${profile}"
+}
+
+e2e_profile_is_operator_workload() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  e2e_profile_is_operator_basic "${profile}" || e2e_profile_is_operator_full "${profile}"
+}
+
+e2e_profile_is_workload() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  e2e_profile_is_cli_workload "${profile}" || e2e_profile_is_operator_workload "${profile}"
+}
+
+e2e_profile_is_manual_handoff() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  e2e_profile_is_cli_manual "${profile}" || e2e_profile_is_operator_manual "${profile}"
+}
+
+e2e_profile_total_steps() {
+  local profile=${1:-${E2E_PROFILE:-}}
+
+  if e2e_profile_is_cli_manual "${profile}"; then
+    printf '5\n'
+    return 0
+  fi
+
+  if e2e_profile_is_operator_workload "${profile}"; then
+    printf '8\n'
+    return 0
+  fi
+
+  printf '7\n'
+}
+
 e2e_apply_profile_defaults() {
-  if [[ "${E2E_PROFILE}" != 'operator' ]]; then
+  if ! e2e_profile_is_operator; then
     # Non-operator profiles share the same component defaults from args parsing.
     return 0
   fi
@@ -26,66 +97,66 @@ e2e_apply_profile_defaults() {
 }
 
 e2e_validate_profile_rules() {
-  if [[ "${E2E_PROFILE}" == 'manual' ]]; then
+  if e2e_profile_is_cli_manual; then
     if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
-      e2e_die 'manual profile is local-instantiable only; managed-server connection must be local'
+      e2e_die 'cli-manual profile is local-instantiable only; managed-server connection must be local'
       return 1
     fi
 
     if [[ "${E2E_GIT_PROVIDER_CONNECTION}" != 'local' && -n "${E2E_GIT_PROVIDER}" ]]; then
-      e2e_die 'manual profile is local-instantiable only; git-provider connection must be local'
+      e2e_die 'cli-manual profile is local-instantiable only; git-provider connection must be local'
       return 1
     fi
 
     if [[ "${E2E_SECRET_PROVIDER_CONNECTION}" != 'local' && "${E2E_SECRET_PROVIDER}" != 'none' ]]; then
-      e2e_die 'manual profile is local-instantiable only; secret-provider connection must be local'
+      e2e_die 'cli-manual profile is local-instantiable only; secret-provider connection must be local'
       return 1
     fi
 
     return 0
   fi
 
-  if [[ "${E2E_PROFILE}" != 'operator' ]]; then
+  if ! e2e_profile_is_operator; then
     return 0
   fi
 
   if [[ "${E2E_PLATFORM}" != 'kubernetes' ]]; then
-    e2e_die 'operator profile requires --platform kubernetes'
+    e2e_die 'operator-* profiles require --platform kubernetes'
     return 1
   fi
 
   if [[ "${E2E_REPO_TYPE}" != 'git' ]]; then
-    e2e_die 'operator profile requires --repo-type git'
+    e2e_die 'operator-* profiles require --repo-type git'
     return 1
   fi
 
   if [[ -z "${E2E_GIT_PROVIDER}" ]]; then
-    e2e_die 'operator profile requires --git-provider'
+    e2e_die 'operator-* profiles require --git-provider'
     return 1
   fi
 
   if [[ "${E2E_GIT_PROVIDER}" == 'git' ]]; then
-    e2e_die 'operator profile does not support --git-provider git; choose gitea or gitlab'
+    e2e_die 'operator-* profiles do not support --git-provider git; choose gitea or gitlab'
     return 1
   fi
 
   if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' ]]; then
-    e2e_die 'operator profile is local-instantiable only; managed-server connection must be local'
+    e2e_die 'operator-* profiles are local-instantiable only; managed-server connection must be local'
     return 1
   fi
 
   if [[ "${E2E_GIT_PROVIDER_CONNECTION}" != 'local' ]]; then
-    e2e_die 'operator profile is local-instantiable only; git-provider connection must be local'
+    e2e_die 'operator-* profiles are local-instantiable only; git-provider connection must be local'
     return 1
   fi
 
   if [[ "${E2E_SECRET_PROVIDER}" == 'none' ]]; then
-    e2e_die 'operator profile requires a secret provider (file or vault)'
+    e2e_die 'operator-* profiles require a secret provider (file or vault)'
     return 1
   fi
 
   if [[ "${E2E_SECRET_PROVIDER_CONNECTION}" != 'local' ]]; then
-    e2e_die 'operator profile is local-instantiable only; secret-provider connection must be local'
+    e2e_die 'operator-* profiles are local-instantiable only; secret-provider connection must be local'
     return 1
   fi
 
@@ -94,15 +165,21 @@ e2e_validate_profile_rules() {
 
 e2e_profile_scopes() {
   case "${E2E_PROFILE}" in
-    basic)
+    cli-basic)
       printf 'main\n'
       ;;
-    full)
+    cli-full)
       printf 'main\ncorner\n'
       ;;
-    manual)
+    cli-manual)
       ;;
-    operator)
+    operator-manual)
+      ;;
+    operator-basic)
+      printf 'operator-main\n'
+      ;;
+    operator-full)
+      printf 'operator-main\ncorner\n'
       ;;
   esac
 }
@@ -415,6 +492,14 @@ Kubernetes access:
 EOFK8S
 }
 
+e2e_profile_print_manual_component_access_help() {
+  local access_output=${E2E_MANUAL_COMPONENT_ACCESS_OUTPUT:-}
+  [[ -n "${access_output//[$'\t\r\n ']}" ]] || return 0
+
+  printf 'Manual Component Access:\n'
+  printf '%s\n' "${access_output}" | sed 's/^/  /'
+}
+
 e2e_profile_print_repo_provider_access_help() {
   local provider=${E2E_GIT_PROVIDER:-}
   local connection=${E2E_GIT_PROVIDER_CONNECTION:-local}
@@ -544,6 +629,11 @@ EOFH
   if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
     printf '\n'
     e2e_profile_print_kubernetes_connection_help
+  fi
+
+  if [[ -n "${E2E_MANUAL_COMPONENT_ACCESS_OUTPUT:-}" ]]; then
+    printf '\n'
+    e2e_profile_print_manual_component_access_help
   fi
 
   if [[ "${E2E_REPO_TYPE:-}" == 'git' && -n "${E2E_GIT_PROVIDER:-}" ]]; then

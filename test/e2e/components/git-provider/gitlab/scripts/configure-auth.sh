@@ -8,7 +8,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" != 'local' ]]; then
   exit 0
 fi
 
-wait_attempts=${DECLAREST_E2E_GITLAB_HEALTH_ATTEMPTS:-${E2E_GITLAB_HEALTH_ATTEMPTS:-180}}
+wait_attempts=${DECLAREST_E2E_GITLAB_HEALTH_ATTEMPTS:-${E2E_GITLAB_HEALTH_ATTEMPTS:-120}}
 wait_interval_seconds=${DECLAREST_E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-${E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-5}}
 
 if ! [[ "${wait_attempts}" =~ ^[0-9]+$ ]] || ((wait_attempts <= 0)); then

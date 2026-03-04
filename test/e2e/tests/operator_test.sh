@@ -11,7 +11,7 @@ load_operator_libs() {
 prepare_operator_handoff_env() {
   local tmp=$1
 
-  export E2E_PROFILE='operator'
+  export E2E_PROFILE='operator-manual'
   export E2E_RUN_ID='operator-handoff-test'
   export E2E_RUNS_DIR="${tmp}/runs"
   export E2E_RUN_DIR="${E2E_RUNS_DIR}/${E2E_RUN_ID}"
@@ -60,6 +60,34 @@ test_operator_example_resource_mapping() {
   assert_contains "$(e2e_operator_example_resource_payload)" "\"realm\":\"operator-demo\""
 }
 
+test_operator_scoped_names_are_run_specific() {
+  load_operator_libs
+
+  E2E_RUN_ID='operator-run-alpha'
+  local alpha_name
+  alpha_name=$(e2e_operator_scoped_name 'declarest-e2e-sync-policy')
+  assert_contains "${alpha_name}" 'operator-run-alpha'
+
+  E2E_RUN_ID='operator-run-beta'
+  local beta_name
+  beta_name=$(e2e_operator_scoped_name 'declarest-e2e-sync-policy')
+  assert_contains "${beta_name}" 'operator-run-beta'
+
+  if [[ "${alpha_name}" == "${beta_name}" ]]; then
+    fail "expected run-scoped names to differ, got ${alpha_name}"
+  fi
+  if ((${#alpha_name} > 63 || ${#beta_name} > 63)); then
+    fail "expected run-scoped names to stay within DNS-1123 limits: ${alpha_name}, ${beta_name}"
+  fi
+
+  E2E_RUN_ID='operator-run-with-very-very-very-very-very-very-long-identifier'
+  local long_name
+  long_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server-auth')
+  if ((${#long_name} > 63)); then
+    fail "expected truncated run-scoped name <= 63 chars, got ${#long_name}: ${long_name}"
+  fi
+}
+
 test_operator_handoff_prints_managed_server_specific_commands() {
   load_operator_libs
 
@@ -69,6 +97,7 @@ test_operator_handoff_prints_managed_server_specific_commands() {
 
   prepare_operator_handoff_env "${tmp}"
   E2E_MANAGED_SERVER='simple-api-server'
+  E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-server:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
 
   local output
   output=$(e2e_profile_operator_handoff 'e2e-operator')
@@ -78,9 +107,19 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   assert_contains "${output}" "manager-deployment: declarest-operator"
   assert_contains "${output}" "kubectl --kubeconfig \"${E2E_KUBECONFIG}\" -n \"${E2E_OPERATOR_NAMESPACE}\" logs deployment/\"${E2E_OPERATOR_MANAGER_DEPLOYMENT}\" --tail=80"
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
+  assert_contains "${output}" "Manual Component Access:"
+  assert_contains "${output}" "managed-server:simple-api-server"
+  assert_contains "${output}" "Base URL: http://127.0.0.1:20890/api"
   assert_contains "${output}" "Repository provider access:"
   assert_contains "${output}" "web login: http://127.0.0.1:3000/user/login"
   assert_not_contains "${output}" "/customers/demo"
+
+  local manual_line repo_line
+  manual_line=$(printf '%s\n' "${output}" | grep -n 'Manual Component Access:' | head -n 1 | cut -d: -f1 || true)
+  repo_line=$(printf '%s\n' "${output}" | grep -n 'Repository provider access:' | head -n 1 | cut -d: -f1 || true)
+  if [[ -z "${manual_line}" || -z "${repo_line}" ]] || ((manual_line >= repo_line)); then
+    fail 'expected Manual Component Access section before Repository provider access'
+  fi
 
   local setup_script reset_script
   setup_script=$(e2e_manual_env_setup_script_path)
@@ -108,6 +147,28 @@ test_operator_rewrites_local_urls_for_cluster_services() {
   assert_eq "${rewritten}" "https://example.com/api"
 }
 
+test_operator_ready_timeout_validation_and_cap() {
+  load_operator_libs
+
+  E2E_OPERATOR_READY_TIMEOUT_SECONDS=120
+  assert_eq "$(e2e_operator_ready_timeout_seconds)" "120"
+
+  E2E_OPERATOR_READY_TIMEOUT_SECONDS=999
+  assert_eq "$(e2e_operator_ready_timeout_seconds)" "600"
+
+  local output status
+  E2E_OPERATOR_READY_TIMEOUT_SECONDS='0'
+  set +e
+  output=$(e2e_operator_ready_timeout_seconds 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid operator readiness timeout"
+}
+
 test_operator_example_resource_mapping
+test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
 test_operator_rewrites_local_urls_for_cluster_services
+test_operator_ready_timeout_validation_and_cap

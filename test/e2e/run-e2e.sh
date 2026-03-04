@@ -28,6 +28,7 @@ E2E_PID_FILE=''
 E2E_RUNNER_PID=$$
 E2E_SIGNAL_HANDLED=0
 E2E_MATCHED_RUNNER_PIDS=()
+E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=''
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/runner_cleanup.sh"
@@ -77,12 +78,13 @@ step_prepare_runtime() {
   E2E_CONTEXT_DIR="${E2E_RUN_DIR}/context"
   E2E_CONTEXT_FILE="${E2E_RUN_DIR}/contexts.yaml"
   E2E_BIN="${E2E_RUN_DIR}/bin/declarest"
+  E2E_OPERATOR_BIN="${E2E_ROOT_DIR}/.e2e-build/declarest-operator-manager-${E2E_RUN_ID}"
 
   if [[ -z "${E2E_EXECUTION_LOG}" ]]; then
     E2E_EXECUTION_LOG="${E2E_RUN_DIR}/execution.log"
   fi
 
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "$(dirname -- "${E2E_BIN}")" || return 1
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "$(dirname -- "${E2E_BIN}")" "$(dirname -- "${E2E_OPERATOR_BIN}")" || return 1
   e2e_info "runtime paths run-dir=${E2E_RUN_DIR} state-dir=${E2E_STATE_DIR} log-dir=${E2E_LOG_DIR} context-file=${E2E_CONTEXT_FILE}"
   e2e_info "runtime binary path=${E2E_BIN}"
   e2e_runtime_state_record_platform || return 1
@@ -96,10 +98,17 @@ step_prepare_runtime() {
   fi
 
   e2e_run_cmd go build -o "${E2E_BIN}" ./cmd/declarest || return 1
-  if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+  if e2e_profile_is_operator; then
+    e2e_run_cmd env CGO_ENABLED=0 GOOS=linux go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1
+    e2e_register_temp_file "${E2E_OPERATOR_BIN}"
     E2E_OPERATOR_IMAGE="localhost/declarest/e2e-operator-manager:${E2E_RUN_ID}"
     export E2E_OPERATOR_IMAGE
-    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
+    local operator_binary_rel="${E2E_OPERATOR_BIN#${E2E_ROOT_DIR}/}"
+    if [[ "${operator_binary_rel}" == "${E2E_OPERATOR_BIN}" ]]; then
+      e2e_die "operator binary path is outside repository root: ${E2E_OPERATOR_BIN}"
+      return 1
+    fi
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" --build-arg "MANAGER_BINARY=${operator_binary_rel}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
     e2e_info "runtime operator image=${E2E_OPERATOR_IMAGE}"
   fi
 
@@ -127,10 +136,14 @@ step_configure_access() {
   e2e_context_build || return 1
 
   DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" config show >/dev/null || return 1
+
+  if e2e_profile_is_manual_handoff; then
+    e2e_manual_collect_component_access_info || return 1
+  fi
 }
 
 step_run_workload() {
-  if [[ "${E2E_PROFILE}" == 'manual' ]]; then
+  if e2e_profile_is_manual_handoff; then
     e2e_profile_manual_handoff "${E2E_CONTEXT_NAME}" || return 1
     return 0
   fi
@@ -145,10 +158,10 @@ step_operator_install() {
   e2e_operator_install_stack || return 1
 }
 
-e2e_manual_print_component_access_info() {
+e2e_manual_collect_component_access_info() {
   local component_key
-  local section_printed=0
   local details
+  local output=''
 
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
     details=$(e2e_component_collect_manual_info "${component_key}" || true)
@@ -156,21 +169,21 @@ e2e_manual_print_component_access_info() {
       continue
     fi
 
-    if ((section_printed == 0)); then
-      printf '\nManual Component Access\n'
-      printf '%s\n' '-----------------------'
-      section_printed=1
+    if [[ -n "${output}" ]]; then
+      output+=$'\n'
     fi
 
-    printf '%s\n' "${component_key}"
-    printf '%s\n' "${details}" | sed 's/^/  /'
+    output+="${component_key}"$'\n'
+    output+="$(printf '%s\n' "${details}" | sed 's/^/  /')"
   done
+
+  E2E_MANUAL_COMPONENT_ACCESS_OUTPUT="${output}"
 }
 
 e2e_profile_adjust_seeded_repo() {
   local repo_base_dir=$1
 
-  if [[ "${E2E_PROFILE}" != 'operator' || "${E2E_MANAGED_SERVER}" != 'keycloak' ]]; then
+  if ! e2e_profile_is_operator || [[ "${E2E_MANAGED_SERVER}" != 'keycloak' ]]; then
     return 0
   fi
 
@@ -194,7 +207,7 @@ e2e_profile_adjust_seeded_repo() {
 }
 
 e2e_profile_seed_repo_from_template() {
-  if [[ "${E2E_PROFILE}" != 'manual' && "${E2E_PROFILE}" != 'operator' ]]; then
+  if ! e2e_profile_is_manual_handoff && ! e2e_profile_is_operator; then
     return 0
   fi
 
@@ -245,7 +258,7 @@ e2e_profile_seed_repo_from_template() {
 }
 
 e2e_profile_init_repo_if_needed() {
-  if [[ "${E2E_PROFILE}" != 'manual' && "${E2E_PROFILE}" != 'operator' ]]; then
+  if ! e2e_profile_is_manual_handoff && ! e2e_profile_is_operator; then
     return 0
   fi
 
@@ -264,7 +277,7 @@ e2e_profile_init_repo_if_needed() {
 }
 
 e2e_operator_seed_remote_repo_if_git() {
-  if [[ "${E2E_PROFILE}" != 'operator' || "${E2E_REPO_TYPE}" != 'git' ]]; then
+  if ! e2e_profile_is_operator || [[ "${E2E_REPO_TYPE}" != 'git' ]]; then
     return 0
   fi
 
@@ -295,10 +308,10 @@ step_finalize() {
   E2E_FINALIZED=1
 
   if ((E2E_KEEP_RUNTIME == 1)); then
-    if [[ "${E2E_PROFILE:-}" == 'manual' ]]; then
-      e2e_info 'keeping runtime resources for manual profile'
-    elif [[ "${E2E_PROFILE:-}" == 'operator' ]]; then
-      e2e_info 'keeping runtime resources for operator profile'
+    if e2e_profile_is_cli_manual "${E2E_PROFILE:-}"; then
+      e2e_info 'keeping runtime resources for cli-manual profile'
+    elif e2e_profile_is_operator_manual "${E2E_PROFILE:-}"; then
+      e2e_info 'keeping runtime resources for operator-manual profile'
     else
       e2e_info 'keeping runtime resources because --keep-runtime was set'
     fi
@@ -363,14 +376,12 @@ main() {
   E2E_LOG_DIR="${E2E_BOOTSTRAP_LOG_DIR}"
 
   ui_init
-  local requested_profile='basic'
+  local requested_profile='cli-basic'
+  local workload_step=6
   requested_profile=$(e2e_profile_from_cli_args "${E2E_CLI_ARGS[@]}")
-  if [[ "${requested_profile}" == 'manual' ]]; then
-    E2E_STEPS_TOTAL=5
-  elif [[ "${requested_profile}" == 'operator' ]]; then
-    E2E_STEPS_TOTAL=7
-  else
-    E2E_STEPS_TOTAL=7
+  E2E_STEPS_TOTAL=$(e2e_profile_total_steps "${requested_profile}")
+  if e2e_profile_is_operator_workload "${requested_profile}"; then
+    workload_step=7
   fi
 
   if ! ui_run_step 1 "${E2E_STEPS_TOTAL}" 'Initializing' step_initialize; then
@@ -384,10 +395,11 @@ main() {
       ui_run_step 3 "${E2E_STEPS_TOTAL}" 'Preparing Components' step_skip_not_requested || true
       ui_run_step 4 "${E2E_STEPS_TOTAL}" 'Starting Components' step_skip_not_requested || true
       ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_skip_not_requested || true
-      if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+      if e2e_profile_is_operator; then
         ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Installing Operator' step_skip_not_requested || true
-      elif [[ "${E2E_PROFILE}" != 'manual' ]]; then
-        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_skip_not_requested || true
+      fi
+      if e2e_profile_is_workload; then
+        ui_run_step "${workload_step}" "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_skip_not_requested || true
       fi
     else
       ui_run_step 2 "${E2E_STEPS_TOTAL}" 'Preparing Runtime' step_prepare_runtime || E2E_OVERALL_FAILED=1
@@ -400,17 +412,17 @@ main() {
       if ((E2E_OVERALL_FAILED == 0)); then
         ui_run_step 5 "${E2E_STEPS_TOTAL}" 'Configuring Access' step_configure_access || E2E_OVERALL_FAILED=1
       fi
-      if ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" == 'operator' ]]; then
+      if ((E2E_OVERALL_FAILED == 0)) && e2e_profile_is_operator; then
         ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Installing Operator' step_operator_install || E2E_OVERALL_FAILED=1
-      elif ((E2E_OVERALL_FAILED == 0)) && [[ "${E2E_PROFILE}" != 'manual' ]]; then
-        ui_run_step 6 "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_run_workload || E2E_OVERALL_FAILED=1
+      fi
+      if ((E2E_OVERALL_FAILED == 0)) && e2e_profile_is_workload; then
+        ui_run_step "${workload_step}" "${E2E_STEPS_TOTAL}" 'Running Test Cases' step_run_workload || E2E_OVERALL_FAILED=1
       fi
     fi
   fi
 
-  if [[ "${E2E_PROFILE}" == 'manual' ]]; then
+  if e2e_profile_is_cli_manual; then
     if ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
-      e2e_manual_print_component_access_info || true
       e2e_profile_seed_repo_from_template || E2E_OVERALL_FAILED=1
       if ((E2E_OVERALL_FAILED == 0)); then
         e2e_profile_init_repo_if_needed || E2E_OVERALL_FAILED=1
@@ -422,19 +434,18 @@ main() {
     fi
     step_finalize || true
   else
-    if [[ "${E2E_PROFILE}" == 'operator' ]] && ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
-      e2e_manual_print_component_access_info || true
+    if e2e_profile_is_operator_manual && ((E2E_OVERALL_FAILED == 0 && E2E_SHORT_CIRCUIT == 0)); then
       E2E_KEEP_RUNTIME=1
       profile_handoff_needed=1
     fi
-    ui_run_step 7 "${E2E_STEPS_TOTAL}" 'Finalizing' step_finalize || true
+    ui_run_step "${E2E_STEPS_TOTAL}" "${E2E_STEPS_TOTAL}" 'Finalizing' step_finalize || true
   fi
 
   ui_print_summary
 
   if ((profile_handoff_needed == 1)); then
     printf '\n'
-    if [[ "${E2E_PROFILE}" == 'operator' ]]; then
+    if e2e_profile_is_operator_manual; then
       e2e_profile_operator_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1
     else
       e2e_profile_manual_handoff "${E2E_CONTEXT_NAME}" || E2E_OVERALL_FAILED=1

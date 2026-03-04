@@ -430,7 +430,7 @@ ui_run_step() {
 
   if ((rc != 0)); then
     printf '  log: %s\n' "${step_log}"
-    tail -n 30 "${step_log}" | sed 's/^/  | /'
+    awk '!/selected-components:|log-path=|STEP [0-9]+\/[0-9]+ (START|END)/' "${step_log}" | tail -n 20 | sed 's/^/  | /'
     return "${rc}"
   fi
 

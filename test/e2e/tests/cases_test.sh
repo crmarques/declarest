@@ -86,7 +86,7 @@ CASE_SCOPE='main'
 case_run(){ :; }
 EOF
 
-  E2E_PROFILE='basic'
+  E2E_PROFILE='cli-basic'
   E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_PATH['managed-server:demo']="${E2E_DIR}/components/managed-server/demo"

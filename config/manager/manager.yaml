@@ -65,6 +65,8 @@ spec:
           volumeMounts:
             - name: state
               mountPath: /var/lib/declarest
+            - name: tmp
+              mountPath: /tmp
             - name: webhook-certs
               mountPath: /tmp/k8s-webhook-server/serving-certs
               readOnly: true
@@ -72,6 +74,8 @@ spec:
         - name: state
           persistentVolumeClaim:
             claimName: declarest-operator-state
+        - name: tmp
+          emptyDir: {}
         - name: webhook-certs
           secret:
             secretName: declarest-operator-webhook-server-cert

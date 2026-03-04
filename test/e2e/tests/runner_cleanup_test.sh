@@ -42,7 +42,7 @@ test_runner_cmdline_and_env_parsers_support_fake_proc_root() {
   trap 'rm -rf "${tmp}"' RETURN
 
   mkdir -p "${tmp}/1234"
-  printf 'bash\0./test/e2e/run-e2e.sh\0--profile\0basic\0' >"${tmp}/1234/cmdline"
+  printf 'bash\0./test/e2e/run-e2e.sh\0--profile\0cli-basic\0' >"${tmp}/1234/cmdline"
   printf 'USER=test\0E2E_RUNNER_PID=1234\0E2E_RUN_ID=test-run\0' >"${tmp}/1234/environ"
 
   E2E_PROC_ROOT="${tmp}"

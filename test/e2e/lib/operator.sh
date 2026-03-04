@@ -4,7 +4,7 @@
 # and applying generated CR instances based on selected component state.
 
 e2e_operator_profile_enabled() {
-  [[ "${E2E_PROFILE}" == 'operator' ]]
+  e2e_profile_is_operator
 }
 
 e2e_operator_manifest_dir() {
@@ -19,6 +19,75 @@ e2e_operator_yaml_quote() {
 
 e2e_operator_b64() {
   printf '%s' "$1" | base64 | tr -d '\n'
+}
+
+e2e_operator_sanitize_name() {
+  local value=$1
+  value=${value//[^a-zA-Z0-9]/-}
+  value=${value,,}
+  while [[ "${value}" == *--* ]]; do
+    value=${value//--/-}
+  done
+  value=${value#-}
+  value=${value%-}
+  if [[ -z "${value}" ]]; then
+    value='e2e'
+  fi
+  printf '%s\n' "${value}"
+}
+
+e2e_operator_name_suffix() {
+  local suffix
+  suffix=$(e2e_operator_sanitize_name "${E2E_RUN_ID:-run}")
+  printf '%s\n' "${suffix}"
+}
+
+e2e_operator_scoped_name() {
+  local base=$1
+  local max_len=${2:-63}
+  local safe_base
+  local suffix
+  local keep_base
+
+  safe_base=$(e2e_operator_sanitize_name "${base}")
+  suffix=$(e2e_operator_name_suffix)
+  if [[ -z "${suffix}" ]]; then
+    suffix='run'
+  fi
+
+  if ((max_len < 3)); then
+    printf 'e2e\n'
+    return 0
+  fi
+
+  if (( ${#safe_base} + 1 + ${#suffix} <= max_len )); then
+    printf '%s-%s\n' "${safe_base}" "${suffix}"
+    return 0
+  fi
+
+  keep_base=$((max_len - 1 - ${#suffix}))
+  if ((keep_base < 1)); then
+    suffix=${suffix:0:$((max_len - 2))}
+    suffix=${suffix%-}
+    if [[ -z "${suffix}" ]]; then
+      suffix='run'
+    fi
+    printf 'e-%s\n' "${suffix}"
+    return 0
+  fi
+
+  safe_base=${safe_base:0:${keep_base}}
+  safe_base=${safe_base%-}
+  if [[ -z "${safe_base}" ]]; then
+    safe_base='e2e'
+  fi
+  printf '%s-%s\n' "${safe_base}" "${suffix}"
+}
+
+e2e_operator_run_label_value() {
+  local run_label
+  run_label=$(e2e_operator_sanitize_name "${E2E_RUN_ID:-run}")
+  printf '%.63s\n' "${run_label}"
 }
 
 e2e_operator_repo_url_with_username() {
@@ -144,6 +213,22 @@ e2e_operator_manager_manifest_path() {
   printf '%s/operator-manager.yaml\n' "$(e2e_operator_manifest_dir)"
 }
 
+e2e_operator_ready_timeout_seconds() {
+  local timeout_seconds=${E2E_OPERATOR_READY_TIMEOUT_SECONDS:-120}
+
+  if ! [[ "${timeout_seconds}" =~ ^[0-9]+$ ]] || ((timeout_seconds <= 0)); then
+    e2e_die "invalid operator readiness timeout: ${timeout_seconds} (set DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS to a positive integer up to 600)"
+    return 1
+  fi
+
+  if ((timeout_seconds > 600)); then
+    e2e_warn "operator readiness timeout capped from ${timeout_seconds}s to 600s"
+    timeout_seconds=600
+  fi
+
+  printf '%s\n' "${timeout_seconds}"
+}
+
 e2e_operator_wait_pid_exit() {
   local pid=$1
   local loops=${2:-60}
@@ -198,14 +283,16 @@ e2e_operator_stop_manager() {
 
 e2e_operator_install_crds() {
   local crd_dir="${E2E_ROOT_DIR}/config/crd/bases"
+  local ready_timeout_seconds
   if [[ ! -d "${crd_dir}" ]]; then
     e2e_die "operator profile missing CRD manifests: ${crd_dir}"
     return 1
   fi
 
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
   e2e_info "operator profile installing CRDs from ${crd_dir}"
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${crd_dir}" || return 1
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" wait --for=condition=Established --timeout=120s \
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" wait --for=condition=Established --timeout="${ready_timeout_seconds}s" \
     crd/resourcerepositories.declarest.io \
     crd/managedservers.declarest.io \
     crd/secretstores.declarest.io \
@@ -225,10 +312,16 @@ e2e_operator_start_manager() {
   fi
 
   local namespace="${E2E_K8S_NAMESPACE:-default}"
-  local deployment_name='declarest-operator'
-  local role_name='declarest-operator'
-  local role_binding_name='declarest-operator'
-  local service_account_name='declarest-operator'
+  local deployment_name
+  deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
+  local role_name
+  role_name=$(e2e_operator_scoped_name 'declarest-operator-role')
+  local role_binding_name
+  role_binding_name=$(e2e_operator_scoped_name 'declarest-operator-role-binding')
+  local service_account_name
+  service_account_name=$(e2e_operator_scoped_name 'declarest-operator-service-account')
+  local run_label
+  run_label=$(e2e_operator_run_label_value)
   local runtime_root='/var/lib/declarest'
   local repo_root="${runtime_root}/repos"
   local cache_root="${runtime_root}/cache"
@@ -291,19 +384,20 @@ metadata:
   namespace: ${namespace}
   labels:
     app.kubernetes.io/name: declarest-operator
+    declarest.e2e/run-id: ${run_label}
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: declarest-operator
+      declarest.e2e/run-id: ${run_label}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: declarest-operator
+        declarest.e2e/run-id: ${run_label}
     spec:
       serviceAccountName: ${service_account_name}
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -323,10 +417,6 @@ spec:
               value: ${repo_root}
             - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
               value: ${cache_root}
-            - name: KUBERNETES_SERVICE_HOST
-              value: "127.0.0.1"
-            - name: KUBERNETES_SERVICE_PORT
-              value: "6443"
           ports:
             - containerPort: 18080
               name: metrics
@@ -348,8 +438,12 @@ spec:
           volumeMounts:
             - name: state
               mountPath: ${runtime_root}
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: state
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
 EOF_MANAGER
 
@@ -361,9 +455,11 @@ EOF_MANAGER
   e2e_info "operator profile loading manager image archive into kind cluster name=${E2E_KIND_CLUSTER_NAME} archive=${image_archive}"
   e2e_kind_cmd load image-archive "${image_archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
 
+  local ready_timeout_seconds
+  ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
   e2e_info "operator profile installing manager deployment namespace=${namespace}"
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manager_manifest}" || return 1
-  if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" rollout status "deployment/${deployment_name}" --timeout=180s; then
+  if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" rollout status "deployment/${deployment_name}" --timeout="${ready_timeout_seconds}s"; then
     e2e_error "operator manager deployment failed rollout deployment=${deployment_name} namespace=${namespace}"
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "deployment/${deployment_name}" || true
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" logs "deployment/${deployment_name}" --tail=80 || true
@@ -373,7 +469,7 @@ EOF_MANAGER
   E2E_OPERATOR_MANAGER_DEPLOYMENT="${deployment_name}"
   E2E_OPERATOR_MANAGER_POD=$(
     kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
-      get pod -l 'app.kubernetes.io/name=declarest-operator' \
+      get pod -l "app.kubernetes.io/name=declarest-operator,declarest.e2e/run-id=${run_label}" \
       -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
   )
   E2E_OPERATOR_MANAGER_PID=''
@@ -622,14 +718,21 @@ e2e_operator_write_manifests() {
   # shellcheck disable=SC1090
   source "${repo_state_file}"
 
-  local repository_name='declarest-e2e-repository'
-  local managed_server_name='declarest-e2e-managed-server'
-  local secret_store_name='declarest-e2e-secret-store'
-  local sync_policy_name='declarest-e2e-sync-policy'
+  local repository_name
+  repository_name=$(e2e_operator_scoped_name 'declarest-e2e-repository')
+  local managed_server_name
+  managed_server_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server')
+  local secret_store_name
+  secret_store_name=$(e2e_operator_scoped_name 'declarest-e2e-secret-store')
+  local sync_policy_name
+  sync_policy_name=$(e2e_operator_scoped_name 'declarest-e2e-sync-policy')
 
-  local repo_secret_name='declarest-e2e-repo-auth'
-  local managed_server_secret_name='declarest-e2e-managed-server-auth'
-  local secret_store_secret_name='declarest-e2e-secret-store-auth'
+  local repo_secret_name
+  repo_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-repo-auth')
+  local managed_server_secret_name
+  managed_server_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server-auth')
+  local secret_store_secret_name
+  secret_store_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-secret-store-auth')
 
   local repo_url=${GIT_REMOTE_URL:-}
   local repo_branch=${GIT_REMOTE_BRANCH:-main}
@@ -1010,7 +1113,13 @@ EOF_SYNC_POLICY
 e2e_operator_wait_resource_ready() {
   local resource_type=$1
   local resource_name=$2
-  local timeout=${3:-300s}
+  local timeout=${3:-}
+
+  if [[ -z "${timeout}" ]]; then
+    local ready_timeout_seconds
+    ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1
+    timeout="${ready_timeout_seconds}s"
+  fi
 
   e2e_info "operator profile waiting ready resource=${resource_type}/${resource_name} timeout=${timeout}"
   if ! kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${E2E_OPERATOR_NAMESPACE}" \
@@ -1020,6 +1129,38 @@ e2e_operator_wait_resource_ready() {
     return 1
   fi
   return 0
+}
+
+e2e_operator_wait_resources_ready_parallel() {
+  local -a resource_specs=("$@")
+  local -a pids=()
+  local spec
+  local resource_type
+  local resource_name
+
+  for spec in "${resource_specs[@]}"; do
+    resource_type=${spec%%:*}
+    resource_name=${spec#*:}
+    (
+      e2e_operator_wait_resource_ready "${resource_type}" "${resource_name}"
+    ) &
+    pids+=("$!")
+  done
+
+  local failed=0
+  local pid
+  local rc
+  for pid in "${pids[@]}"; do
+    set +e
+    wait "${pid}"
+    rc=$?
+    set -e
+    if ((rc != 0)); then
+      failed=1
+    fi
+  done
+
+  ((failed == 0))
 }
 
 e2e_operator_apply_manifests() {
@@ -1034,12 +1175,13 @@ e2e_operator_apply_manifests() {
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/managed-server.yaml" || return 1
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-store.yaml" || return 1
 
-  e2e_operator_wait_resource_ready 'resourcerepository.declarest.io' "${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME}" || return 1
-  e2e_operator_wait_resource_ready 'managedserver.declarest.io' "${E2E_OPERATOR_MANAGED_SERVER_NAME}" || return 1
-  e2e_operator_wait_resource_ready 'secretstore.declarest.io' "${E2E_OPERATOR_SECRET_STORE_NAME}" || return 1
+  e2e_operator_wait_resources_ready_parallel \
+    "resourcerepository.declarest.io:${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME}" \
+    "managedserver.declarest.io:${E2E_OPERATOR_MANAGED_SERVER_NAME}" \
+    "secretstore.declarest.io:${E2E_OPERATOR_SECRET_STORE_NAME}" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/sync-policy.yaml" || return 1
-  e2e_operator_wait_resource_ready 'syncpolicy.declarest.io' "${E2E_OPERATOR_SYNC_POLICY_NAME}" '360s' || return 1
+  e2e_operator_wait_resource_ready 'syncpolicy.declarest.io' "${E2E_OPERATOR_SYNC_POLICY_NAME}" || return 1
   return 0
 }
 
@@ -1098,10 +1240,14 @@ e2e_profile_operator_handoff() {
   local reset_script
   local resource_path
   local resource_payload
+  local manager_deployment
+  local sync_policy_name
   local commit_message='operator demo resource'
 
   resource_path=$(e2e_operator_example_resource_path)
   resource_payload=$(e2e_operator_example_resource_payload)
+  manager_deployment=${E2E_OPERATOR_MANAGER_DEPLOYMENT:-$(e2e_operator_scoped_name 'declarest-operator')}
+  sync_policy_name=${E2E_OPERATOR_SYNC_POLICY_NAME:-$(e2e_operator_scoped_name 'declarest-e2e-sync-policy')}
 
   e2e_manual_write_env_scripts "${context_name}" || return 1
   setup_script=$(e2e_manual_env_setup_script_path)
@@ -1120,12 +1266,12 @@ Context file:
   ${E2E_CONTEXT_FILE}
 
 Operator runtime:
-  manager-deployment: ${E2E_OPERATOR_MANAGER_DEPLOYMENT:-n/a}
+  manager-deployment: ${E2E_OPERATOR_MANAGER_DEPLOYMENT:-${manager_deployment}}
   manager-pod: ${E2E_OPERATOR_MANAGER_POD:-n/a}
   manager-image: ${E2E_OPERATOR_IMAGE:-n/a}
   manager-logs: ${E2E_OPERATOR_MANAGER_LOG_FILE:-n/a}
   namespace: ${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-n/a}}
-  sync-policy: ${E2E_OPERATOR_SYNC_POLICY_NAME:-n/a}
+  sync-policy: ${E2E_OPERATOR_SYNC_POLICY_NAME:-${sync_policy_name}}
 
 Shell scripts:
   setup: ${setup_script}
@@ -1133,10 +1279,10 @@ Shell scripts:
 
 To use it in your current shell:
   source ${setup_script@Q}
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get deploy "${E2E_OPERATOR_MANAGER_DEPLOYMENT:-declarest-operator}"
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" logs deployment/"${E2E_OPERATOR_MANAGER_DEPLOYMENT:-declarest-operator}" --tail=80
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get deploy "${E2E_OPERATOR_MANAGER_DEPLOYMENT:-${manager_deployment}}"
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" logs deployment/"${E2E_OPERATOR_MANAGER_DEPLOYMENT:-${manager_deployment}}" --tail=80
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository,managedserver,secretstore,syncpolicy
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get syncpolicy "${E2E_OPERATOR_SYNC_POLICY_NAME:-declarest-e2e-sync-policy}" -o yaml
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get syncpolicy "${E2E_OPERATOR_SYNC_POLICY_NAME:-${sync_policy_name}}" -o yaml
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository status
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource save ${resource_path@Q} --payload ${resource_payload@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository commit -m ${commit_message@Q}
@@ -1147,6 +1293,11 @@ EOF_HANDOFF
   if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
     printf '\n'
     e2e_profile_print_kubernetes_connection_help
+  fi
+
+  if [[ -n "${E2E_MANUAL_COMPONENT_ACCESS_OUTPUT:-}" ]]; then
+    printf '\n'
+    e2e_profile_print_manual_component_access_help
   fi
 
   if [[ "${E2E_REPO_TYPE:-}" == 'git' && -n "${E2E_GIT_PROVIDER:-}" ]]; then

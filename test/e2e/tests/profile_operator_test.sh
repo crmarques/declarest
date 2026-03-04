@@ -19,7 +19,7 @@ reload_profile_libs() {
 test_operator_profile_defaults_and_validation_pass() {
   reload_profile_libs
 
-  e2e_parse_args --profile operator
+  e2e_parse_args --profile operator-manual
   e2e_apply_profile_defaults
 
   assert_eq "${E2E_PLATFORM}" "kubernetes"
@@ -32,7 +32,7 @@ test_operator_profile_defaults_and_validation_pass() {
 test_operator_profile_rejects_compose_platform() {
   reload_profile_libs
 
-  e2e_parse_args --profile operator --platform compose --repo-type git --git-provider gitea
+  e2e_parse_args --profile operator-manual --platform compose --repo-type git --git-provider gitea
   e2e_apply_profile_defaults
 
   local output status
@@ -42,13 +42,13 @@ test_operator_profile_rejects_compose_platform() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "operator profile requires --platform kubernetes"
+  assert_contains "${output}" "operator-* profiles require --platform kubernetes"
 }
 
 test_operator_profile_rejects_git_builtin_provider() {
   reload_profile_libs
 
-  e2e_parse_args --profile operator --repo-type git --git-provider git
+  e2e_parse_args --profile operator-manual --repo-type git --git-provider git
   e2e_apply_profile_defaults
 
   local output status
@@ -58,13 +58,13 @@ test_operator_profile_rejects_git_builtin_provider() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "operator profile does not support --git-provider git; choose gitea or gitlab"
+  assert_contains "${output}" "operator-* profiles do not support --git-provider git; choose gitea or gitlab"
 }
 
 test_operator_profile_rejects_secret_provider_none() {
   reload_profile_libs
 
-  e2e_parse_args --profile operator --repo-type git --git-provider gitea --secret-provider none
+  e2e_parse_args --profile operator-manual --repo-type git --git-provider gitea --secret-provider none
   e2e_apply_profile_defaults
 
   local output status
@@ -74,10 +74,40 @@ test_operator_profile_rejects_secret_provider_none() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "operator profile requires a secret provider (file or vault)"
+  assert_contains "${output}" "operator-* profiles require a secret provider (file or vault)"
+}
+
+test_operator_profile_automated_scopes() {
+  reload_profile_libs
+
+  e2e_parse_args --profile operator-basic
+  e2e_apply_profile_defaults
+  mapfile -t scopes < <(e2e_profile_scopes)
+  assert_eq "${scopes[*]}" "operator-main"
+
+  reload_profile_libs
+  e2e_parse_args --profile operator-full
+  e2e_apply_profile_defaults
+  mapfile -t scopes < <(e2e_profile_scopes)
+  assert_eq "${scopes[*]}" "operator-main corner"
+}
+
+test_operator_profile_builds_linux_static_manager_binary() {
+  local script="${REPO_ROOT}/test/e2e/run-e2e.sh"
+
+  assert_file_contains "${script}" 'e2e_run_cmd env CGO_ENABLED=0 GOOS=linux go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1'
+}
+
+test_operator_profile_uses_supported_repository_poll_interval() {
+  local script="${REPO_ROOT}/test/e2e/lib/operator.sh"
+
+  assert_file_contains "${script}" 'pollInterval: 30s'
 }
 
 test_operator_profile_defaults_and_validation_pass
 test_operator_profile_rejects_compose_platform
 test_operator_profile_rejects_git_builtin_provider
 test_operator_profile_rejects_secret_provider_none
+test_operator_profile_automated_scopes
+test_operator_profile_builds_linux_static_manager_binary
+test_operator_profile_uses_supported_repository_poll_interval

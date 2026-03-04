@@ -160,7 +160,7 @@ test_parallel_hook_failures_retain_component_logs_in_run_artifacts() {
   assert_file_contains "${beta_log}" "beta hook failed"
 }
 
-test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode() {
+test_prepare_metadata_workspace_uses_component_metadata_for_base_dir_mode() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -168,7 +168,7 @@ test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode() {
   prepare_runtime_globals "${tmp}"
 
   E2E_MANAGED_SERVER='keycloak'
-  E2E_METADATA='local-dir'
+  E2E_METADATA='base-dir'
   E2E_COMPONENT_PATH=()
   local component_dir="${tmp}/components/managed-server/keycloak"
   local component_metadata="${component_dir}/metadata"
@@ -177,7 +177,7 @@ test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode() {
 
   e2e_prepare_metadata_workspace
 
-  assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected metadata bundle to stay unset for local-dir mode"
+  assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected metadata bundle to stay unset for base-dir mode"
   assert_eq "${E2E_METADATA_DIR}" "${component_metadata}" "expected metadata dir to reference component metadata path"
 }
 
@@ -307,7 +307,7 @@ test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode() {
   fi
 }
 
-test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode() {
+test_prepare_component_openapi_specs_keeps_local_openapi_for_base_dir_mode() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -317,7 +317,7 @@ test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode() {
   local component_dir
   component_dir=$(create_openapi_component "${tmp}/components" "managed-server:demo")
 
-  E2E_METADATA='local-dir'
+  E2E_METADATA='base-dir'
   E2E_COMPONENT_PATH=()
   E2E_COMPONENT_OPENAPI_SPEC=()
   E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo")
@@ -326,7 +326,7 @@ test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode() {
   e2e_prepare_component_openapi_specs
 
   local copied_spec="${E2E_COMPONENT_OPENAPI_SPEC['managed-server:demo']:-}"
-  [[ -n "${copied_spec}" ]] || fail "expected local-dir mode to wire local openapi spec"
+  [[ -n "${copied_spec}" ]] || fail "expected base-dir mode to wire local openapi spec"
   assert_path_exists "${copied_spec}"
 }
 
@@ -349,7 +349,7 @@ test_prepare_component_openapi_specs_defaults_to_bundle_mode() {
   e2e_prepare_component_openapi_specs
 
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC['managed-server:demo']:-}" ]]; then
-    fail "expected default metadata mode to skip local openapi spec wiring"
+    fail "expected default metadata type to skip local openapi spec wiring"
   fi
 }
 
@@ -705,12 +705,12 @@ EOF
 test_dependency_ordering_respects_dependencies
 test_cycle_detection_fails_with_actionable_message
 test_parallel_hook_failures_retain_component_logs_in_run_artifacts
-test_prepare_metadata_workspace_uses_component_metadata_for_local_dir_mode
+test_prepare_metadata_workspace_uses_component_metadata_for_base_dir_mode
 test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
 test_repo_context_scripts_emit_metadata_bundle_when_set
 test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode
-test_prepare_component_openapi_specs_keeps_local_openapi_for_local_dir_mode
+test_prepare_component_openapi_specs_keeps_local_openapi_for_base_dir_mode
 test_prepare_component_openapi_specs_defaults_to_bundle_mode
 test_component_compose_file_resolves_compose_subdir
 test_k8s_port_forward_pid_tracking_and_stop
