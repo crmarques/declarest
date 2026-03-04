@@ -14,6 +14,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 	var pathFlag string
 	var input cliutil.InputFlags
 	var recursive bool
+	var force bool
 	var httpMethod string
 	var refreshRepository bool
 
@@ -23,7 +24,8 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 		Long: strings.Join([]string{
 			"Apply desired state from the resource repository by default.",
 			"When --payload <path|-> or stdin is provided, the explicit payload overrides repository input for a single target path.",
-			"Apply uses upsert behavior for remote writes: create when the resource does not exist, update when it already exists.",
+			"Apply uses upsert behavior for remote writes: create when the resource does not exist, update when it differs.",
+			"When remote and desired state are equal after metadata compare transforms, apply skips updates unless --force is set.",
 			"This explicit-input mode is useful for direct remote operations when no repository is configured.",
 			"Use --refresh-repository to fetch the remote state after each mutation and persist it back into the repository.",
 		}, " "),
@@ -32,6 +34,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			"  declarest resource apply /customers/ --recursive",
 			"  declarest resource apply /customers/acme --payload payload.json",
 			"  cat payload.json | declarest resource apply /customers/acme --payload -",
+			"  declarest resource apply /customers/acme --force",
 			"  declarest resource apply /customers/acme --refresh-repository",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
@@ -79,6 +82,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 				Operation:        mutateapp.OperationApply,
 				LogicalPath:      mutationPath,
 				Recursive:        recursive,
+				Force:            force,
 				Value:            value,
 				HasExplicitInput: hasExplicitInput,
 				RefreshLocal:     refreshRepository,
@@ -108,6 +112,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
 	}
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
+	command.Flags().BoolVar(&force, "force", false, "force update even when compare output has no drift")
 	command.Flags().BoolVar(&refreshRepository, "refresh-repository", false, "re-fetch remote mutation results into the repository")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command

@@ -52,7 +52,8 @@ type RepositoryWriter interface {
 }
 
 type ResourceMutator interface {
-	Apply(ctx context.Context, logicalPath string) (resource.Resource, error)
+	Apply(ctx context.Context, logicalPath string, policy ApplyPolicy) (resource.Resource, error)
+	ApplyWithValue(ctx context.Context, logicalPath string, value resource.Value, policy ApplyPolicy) (resource.Resource, error)
 	Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error)
 	Update(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error)
 	Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error

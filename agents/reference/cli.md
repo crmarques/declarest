@@ -153,14 +153,14 @@ Interactive config commands:
 23. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
 24. `resource apply` MUST treat collection paths as batch targets resolved from local repository resources and default to non-recursive direct-child execution when payload input is absent.
 25. `resource apply --recursive` MUST include descendant resources under the target path when payload input is absent.
-26. `resource apply` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single target path and use explicit input instead of loading repository payloads; explicit-input apply MUST perform update when the remote resource exists and create when it does not.
+26. `resource apply` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single target path and use explicit input instead of loading repository payloads; apply MUST read remote state first, create only on `NotFound`, compare desired vs remote with metadata compare directives, and update only when drift exists unless `--force` is set.
 27. `resource apply` MUST reject `--recursive` when explicit payload input is provided.
 28. `resource create` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute create for each resolved target.
 29. `resource update` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute remote updates for each matching resource.
 30. `resource update` without `--recursive` MUST mutate only direct-child resources for collection paths when payload input is absent.
 31. `resource update --recursive` MUST include descendant resources under the target path when payload input is absent.
 32. `resource apply|create|update` explicit-input mode MUST accept a collection target path when metadata exposes a wildcard child under that path and the payload contains metadata-derived alias/id values; the CLI MUST infer one concrete child logical path from the payload identity before remote mutation, and explicit resource-path inputs MUST preserve identity-match validation behavior.
-32. `resource apply` explicit-input mode (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) MUST use upsert semantics for the target path: create when remote resource lookup returns `NotFound`, otherwise update.
+32. `resource apply --force` MUST execute update after remote read even when metadata compare output indicates no drift.
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or dotted assignments.
 32. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
@@ -347,13 +347,14 @@ Interactive config commands:
 4. `declarest resource apply /customers --recursive` applies direct and nested resources under `/customers`.
 5. `declarest resource apply /customers/acme --payload payload.json` applies explicit payload and overrides repository-sourced input for that target path.
 6. `cat payload.json | declarest resource apply /customers/acme --payload -` applies explicit payload from stdin and overrides repository-sourced input for that target path.
-7. `declarest resource create /customers` creates all direct-child resources in `/customers` using repository payloads.
-8. `declarest resource create /customers/acme --payload payload.json` creates one remote resource from explicit payload input (overrides repository-sourced input for that target path).
-9. `cat payload.json | declarest resource create /customers/acme --payload -` creates one remote resource from stdin payload input (overrides repository-sourced input for that target path).
-10. `declarest resource update /customers` updates only direct-child resources in `/customers` using repository payloads and skips nested descendants.
-11. `declarest resource update /customers --recursive` updates direct and nested resources under `/customers` using repository payloads.
-12. `declarest resource update /customers/acme --payload payload.json` updates one remote resource from explicit payload input (overrides repository-sourced input for that target path).
-13. `cat payload.json | declarest resource update /customers/acme --payload -` updates one remote resource from stdin payload input (overrides repository-sourced input for that target path).
+7. `declarest resource apply /customers/acme --force` applies a forced remote update even when compare output indicates no drift.
+8. `declarest resource create /customers` creates all direct-child resources in `/customers` using repository payloads.
+9. `declarest resource create /customers/acme --payload payload.json` creates one remote resource from explicit payload input (overrides repository-sourced input for that target path).
+10. `cat payload.json | declarest resource create /customers/acme --payload -` creates one remote resource from stdin payload input (overrides repository-sourced input for that target path).
+11. `declarest resource update /customers` updates only direct-child resources in `/customers` using repository payloads and skips nested descendants.
+12. `declarest resource update /customers --recursive` updates direct and nested resources under `/customers` using repository payloads.
+13. `declarest resource update /customers/acme --payload payload.json` updates one remote resource from explicit payload input (overrides repository-sourced input for that target path).
+14. `cat payload.json | declarest resource update /customers/acme --payload -` updates one remote resource from stdin payload input (overrides repository-sourced input for that target path).
 14. `declarest resource get /customers/acme` reads remote state by default.
 15. `declarest resource get /customers/acme --source repository` reads local repository state.
 16. `declarest resource get /customers --source repository` lists repository resources under `/customers`, mirroring `declarest resource list /customers --source repository`.

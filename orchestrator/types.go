@@ -7,3 +7,7 @@ type DeletePolicy struct {
 type ListPolicy struct {
 	Recursive bool
 }
+
+type ApplyPolicy struct {
+	Force bool
+}

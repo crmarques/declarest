@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Operator profile helpers for running the manager against the e2e kind cluster
+# Operator profile helpers for installing the manager as an in-cluster Deployment
 # and applying generated CR instances based on selected component state.
 
 e2e_operator_profile_enabled() {
@@ -46,6 +46,104 @@ e2e_operator_repo_url_with_username() {
   esac
 }
 
+e2e_operator_service_host() {
+  local service_name=$1
+  local namespace=${E2E_K8S_NAMESPACE:-default}
+  printf '%s.%s.svc.cluster.local\n' "${service_name}" "${namespace}"
+}
+
+e2e_operator_service_network_host() {
+  local service_name=$1
+  local namespace=${E2E_K8S_NAMESPACE:-default}
+
+  if [[ -n "${E2E_KUBECONFIG:-}" ]]; then
+    local pod_ip
+    pod_ip=$(
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+        get pods -l "app.kubernetes.io/name=${service_name}" \
+        -o jsonpath='{.items[0].status.podIP}' 2>/dev/null || true
+    )
+    if [[ -n "${pod_ip}" ]]; then
+      printf '%s\n' "${pod_ip}"
+      return 0
+    fi
+
+    local cluster_ip
+    cluster_ip=$(
+      kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+        get "service/${service_name}" \
+        -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true
+    )
+    if [[ -n "${cluster_ip}" && "${cluster_ip}" != 'None' ]]; then
+      printf '%s\n' "${cluster_ip}"
+      return 0
+    fi
+  fi
+
+  e2e_operator_service_host "${service_name}"
+}
+
+e2e_operator_rewrite_local_url_to_service() {
+  local raw_url=$1
+  local service_name=$2
+  local service_port=$3
+
+  if [[ "${E2E_PLATFORM:-}" != 'kubernetes' ]]; then
+    printf '%s\n' "${raw_url}"
+    return 0
+  fi
+
+  if [[ ! "${raw_url}" =~ ^([a-zA-Z][a-zA-Z0-9+.-]*)://([^/@]+@)?([^/:?#]+)(:([0-9]+))?([/?#].*)?$ ]]; then
+    printf '%s\n' "${raw_url}"
+    return 0
+  fi
+
+  local scheme=${BASH_REMATCH[1]}
+  local userinfo=${BASH_REMATCH[2]:-}
+  local host=${BASH_REMATCH[3]}
+  local suffix=${BASH_REMATCH[6]:-}
+
+  case "${host}" in
+    127.0.0.1|localhost) ;;
+    *)
+      printf '%s\n' "${raw_url}"
+      return 0
+      ;;
+  esac
+
+  printf '%s://%s%s:%s%s\n' \
+    "${scheme}" \
+    "${userinfo}" \
+    "$(e2e_operator_service_network_host "${service_name}")" \
+    "${service_port}" \
+    "${suffix}"
+}
+
+e2e_operator_rewrite_repo_url_for_cluster() {
+  local repo_url=$1
+
+  if [[ "${E2E_PLATFORM:-}" != 'kubernetes' || "${E2E_GIT_PROVIDER_CONNECTION:-}" != 'local' ]]; then
+    printf '%s\n' "${repo_url}"
+    return 0
+  fi
+
+  case "${E2E_GIT_PROVIDER:-}" in
+    gitea)
+      e2e_operator_rewrite_local_url_to_service "${repo_url}" 'git-provider-gitea' '3000'
+      ;;
+    gitlab)
+      e2e_operator_rewrite_local_url_to_service "${repo_url}" 'git-provider-gitlab' '80'
+      ;;
+    *)
+      printf '%s\n' "${repo_url}"
+      ;;
+  esac
+}
+
+e2e_operator_manager_manifest_path() {
+  printf '%s/operator-manager.yaml\n' "$(e2e_operator_manifest_dir)"
+}
+
 e2e_operator_wait_pid_exit() {
   local pid=$1
   local loops=${2:-60}
@@ -62,6 +160,13 @@ e2e_operator_wait_pid_exit() {
 }
 
 e2e_operator_stop_manager() {
+  local manager_manifest
+  manager_manifest=$(e2e_operator_manager_manifest_path)
+  if [[ -n "${E2E_KUBECONFIG:-}" && -f "${manager_manifest}" ]]; then
+    e2e_info "stopping operator manager deployment manifest=${manager_manifest}"
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" delete -f "${manager_manifest}" --ignore-not-found >/dev/null 2>&1 || true
+  fi
+
   local pid=${E2E_OPERATOR_MANAGER_PID:-}
 
   if [[ -z "${pid}" ]]; then
@@ -109,49 +214,185 @@ e2e_operator_install_crds() {
 }
 
 e2e_operator_start_manager() {
-  if [[ -z "${E2E_OPERATOR_BIN:-}" || ! -x "${E2E_OPERATOR_BIN}" ]]; then
-    e2e_die "operator manager binary is unavailable: ${E2E_OPERATOR_BIN:-<unset>}"
+  if [[ -z "${E2E_OPERATOR_IMAGE:-}" ]]; then
+    e2e_die "operator manager image is unavailable: ${E2E_OPERATOR_IMAGE:-<unset>}"
     return 1
   fi
 
-  local metrics_port
-  local probe_port
-  metrics_port=$(e2e_pick_free_port) || return 1
-  probe_port=$(e2e_pick_free_port) || return 1
+  if [[ -z "${E2E_KIND_CLUSTER_NAME:-}" ]]; then
+    e2e_die 'operator profile kind cluster metadata is missing'
+    return 1
+  fi
 
-  local runtime_dir="${E2E_RUN_DIR}/operator"
-  local repo_root="${runtime_dir}/repos"
-  local cache_root="${runtime_dir}/cache"
-  local log_file="${E2E_LOG_DIR}/operator-manager.log"
+  local namespace="${E2E_K8S_NAMESPACE:-default}"
+  local deployment_name='declarest-operator'
+  local role_name='declarest-operator'
+  local role_binding_name='declarest-operator'
+  local service_account_name='declarest-operator'
+  local runtime_root='/var/lib/declarest'
+  local repo_root="${runtime_root}/repos"
+  local cache_root="${runtime_root}/cache"
+  local manifest_dir
+  manifest_dir=$(e2e_operator_manifest_dir)
+  mkdir -p "${manifest_dir}" || return 1
 
-  mkdir -p "${runtime_dir}" "${repo_root}" "${cache_root}" || return 1
+  local manager_manifest
+  manager_manifest=$(e2e_operator_manager_manifest_path)
+  cat >"${manager_manifest}" <<EOF_MANAGER
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${service_account_name}
+  namespace: ${namespace}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${role_name}
+  namespace: ${namespace}
+rules:
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers"]
+    verbs: ["update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${role_binding_name}
+  namespace: ${namespace}
+subjects:
+  - kind: ServiceAccount
+    name: ${service_account_name}
+    namespace: ${namespace}
+roleRef:
+  kind: Role
+  name: ${role_name}
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${deployment_name}
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: declarest-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: declarest-operator
+    spec:
+      serviceAccountName: ${service_account_name}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: ${E2E_OPERATOR_IMAGE}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --leader-elect=false
+            - --enable-webhooks=false
+            - --watch-namespace=${namespace}
+            - --health-probe-bind-address=:18081
+            - --metrics-bind-address=:18080
+          env:
+            - name: DECLAREST_OPERATOR_REPO_BASE_DIR
+              value: ${repo_root}
+            - name: DECLAREST_OPERATOR_CACHE_BASE_DIR
+              value: ${cache_root}
+            - name: KUBERNETES_SERVICE_HOST
+              value: "127.0.0.1"
+            - name: KUBERNETES_SERVICE_PORT
+              value: "6443"
+          ports:
+            - containerPort: 18080
+              name: metrics
+            - containerPort: 18081
+              name: probes
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: state
+              mountPath: ${runtime_root}
+      volumes:
+        - name: state
+          emptyDir: {}
+EOF_MANAGER
 
-  e2e_info "operator profile starting manager kubeconfig=${E2E_KUBECONFIG}"
-  nohup env \
-    KUBECONFIG="${E2E_KUBECONFIG}" \
-    DECLAREST_OPERATOR_REPO_BASE_DIR="${repo_root}" \
-    DECLAREST_OPERATOR_CACHE_BASE_DIR="${cache_root}" \
-    "${E2E_OPERATOR_BIN}" \
-    --leader-elect=false \
-    --enable-webhooks=false \
-    --metrics-bind-address="127.0.0.1:${metrics_port}" \
-    --health-probe-bind-address="127.0.0.1:${probe_port}" \
-    >"${log_file}" 2>&1 < /dev/null &
+  local image_archive="${E2E_RUN_DIR}/operator/manager-image.tar"
+  mkdir -p -- "$(dirname -- "${image_archive}")" || return 1
+  e2e_info "operator profile exporting manager image archive image=${E2E_OPERATOR_IMAGE} archive=${image_archive}"
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${image_archive}" "${E2E_OPERATOR_IMAGE}" || return 1
 
-  E2E_OPERATOR_MANAGER_PID=$!
-  E2E_OPERATOR_MANAGER_LOG_FILE="${log_file}"
+  e2e_info "operator profile loading manager image archive into kind cluster name=${E2E_KIND_CLUSTER_NAME} archive=${image_archive}"
+  e2e_kind_cmd load image-archive "${image_archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
+
+  e2e_info "operator profile installing manager deployment namespace=${namespace}"
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manager_manifest}" || return 1
+  if ! e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" rollout status "deployment/${deployment_name}" --timeout=180s; then
+    e2e_error "operator manager deployment failed rollout deployment=${deployment_name} namespace=${namespace}"
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" describe "deployment/${deployment_name}" || true
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" logs "deployment/${deployment_name}" --tail=80 || true
+    return 1
+  fi
+
+  E2E_OPERATOR_MANAGER_DEPLOYMENT="${deployment_name}"
+  E2E_OPERATOR_MANAGER_POD=$(
+    kubectl --kubeconfig "${E2E_KUBECONFIG}" -n "${namespace}" \
+      get pod -l 'app.kubernetes.io/name=declarest-operator' \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+  )
+  E2E_OPERATOR_MANAGER_PID=''
+  E2E_OPERATOR_MANAGER_LOG_FILE="kubectl --kubeconfig ${E2E_KUBECONFIG} -n ${namespace} logs deployment/${deployment_name}"
+  E2E_OPERATOR_NAMESPACE="${namespace}"
+  export E2E_OPERATOR_MANAGER_DEPLOYMENT
+  export E2E_OPERATOR_MANAGER_POD
   export E2E_OPERATOR_MANAGER_PID
   export E2E_OPERATOR_MANAGER_LOG_FILE
+  export E2E_OPERATOR_NAMESPACE
 
-  sleep 2
-  if ! kill -0 "${E2E_OPERATOR_MANAGER_PID}" >/dev/null 2>&1; then
-    e2e_error "operator manager failed to start; log=${log_file}"
-    tail -n 40 "${log_file}" 2>/dev/null | sed 's/^/  | /' || true
-    return 1
+  e2e_runtime_state_set 'OPERATOR_IMAGE' "${E2E_OPERATOR_IMAGE}" || return 1
+  e2e_runtime_state_set 'OPERATOR_IMAGE_ARCHIVE' "${image_archive}" || return 1
+  e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
+  e2e_runtime_state_set 'OPERATOR_MANAGER_DEPLOYMENT' "${deployment_name}" || return 1
+  e2e_runtime_state_set 'OPERATOR_MANAGER_LOG_FILE' "${E2E_OPERATOR_MANAGER_LOG_FILE}" || return 1
+  if [[ -n "${E2E_OPERATOR_MANAGER_POD}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_MANAGER_POD' "${E2E_OPERATOR_MANAGER_POD}" || return 1
   fi
-
-  e2e_runtime_state_set 'OPERATOR_MANAGER_PID' "${E2E_OPERATOR_MANAGER_PID}" || return 1
-  e2e_runtime_state_set 'OPERATOR_MANAGER_LOG_FILE' "${log_file}" || return 1
   e2e_runtime_state_set 'OPERATOR_REPO_BASE_DIR' "${repo_root}" || return 1
   e2e_runtime_state_set 'OPERATOR_CACHE_BASE_DIR' "${cache_root}" || return 1
   return 0
@@ -252,6 +493,47 @@ e2e_operator_collect_managed_server_config() {
       return 1
       ;;
   esac
+
+  if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${E2E_MANAGED_SERVER_CONNECTION:-}" == 'local' ]]; then
+    local service_name=''
+    local service_port=''
+
+    case "${E2E_MANAGED_SERVER}" in
+      simple-api-server)
+        service_name='managed-server-simple-api-server'
+        service_port='8080'
+        ;;
+      keycloak)
+        service_name='managed-server-keycloak'
+        service_port='8080'
+        ;;
+      rundeck)
+        service_name='managed-server-rundeck'
+        service_port='4440'
+        ;;
+      vault)
+        service_name='managed-server-vault'
+        service_port='8200'
+        ;;
+    esac
+
+    if [[ -n "${service_name}" && -n "${service_port}" ]]; then
+      E2E_OPERATOR_MANAGED_SERVER_BASE_URL=$(
+        e2e_operator_rewrite_local_url_to_service \
+          "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" \
+          "${service_name}" \
+          "${service_port}"
+      )
+      if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" ]]; then
+        E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=$(
+          e2e_operator_rewrite_local_url_to_service \
+            "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" \
+            "${service_name}" \
+            "${service_port}"
+        )
+      fi
+    fi
+  fi
 
   if [[ -z "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" ]]; then
     e2e_die 'operator profile managed-server base URL is empty after component setup'
@@ -356,6 +638,7 @@ e2e_operator_write_manifests() {
     e2e_die 'operator profile repository URL is empty'
     return 1
   }
+  repo_url=$(e2e_operator_rewrite_repo_url_for_cluster "${repo_url}") || return 1
 
   local repo_token=''
   case "${GIT_AUTH_MODE:-}" in
@@ -418,11 +701,16 @@ EOF_REPO_CR
   e2e_operator_collect_managed_server_config "${managed_server_state_file}" || return 1
 
   local managed_server_tls_enabled='false'
+  local managed_server_tls_insecure_skip_verify='false'
   local tls_ca_file=''
   local tls_client_cert_file=''
   local tls_client_key_file=''
   if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     managed_server_tls_enabled='true'
+    if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
+      # simple-api-server test certs are issued for localhost; operator traffic uses cluster service DNS.
+      managed_server_tls_insecure_skip_verify='true'
+    fi
     tls_ca_file=${SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST:-}
     tls_client_cert_file=${SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST:-}
     tls_client_key_file=${SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST:-}
@@ -527,6 +815,9 @@ EOF_REPO_CR
       printf '      clientKeyRef:\n'
       printf '        name: %s\n' "${managed_server_secret_name}"
       printf '        key: client-key\n'
+      if [[ "${managed_server_tls_insecure_skip_verify}" == 'true' ]]; then
+        printf '      insecureSkipVerify: true\n'
+      fi
     fi
   } >"${manifest_dir}/managed-server.yaml"
 
@@ -535,7 +826,12 @@ EOF_REPO_CR
 
   case "${E2E_SECRET_PROVIDER}" in
     file)
-      [[ -n "${SECRET_FILE_PATH:-}" ]] || {
+      local secret_file_path=${SECRET_FILE_PATH:-}
+      if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
+        secret_file_path='/var/lib/declarest/secrets/declarest-e2e-secrets.enc.json'
+      fi
+
+      [[ -n "${secret_file_path}" ]] || {
         e2e_die 'operator profile file secret-store path is empty'
         return 1
       }
@@ -563,7 +859,7 @@ metadata:
 spec:
   provider: file
   file:
-    path: $(e2e_operator_yaml_quote "${SECRET_FILE_PATH}")
+    path: $(e2e_operator_yaml_quote "${secret_file_path}")
     storage:
       pvc:
         accessModes:
@@ -577,10 +873,14 @@ spec:
 EOF_FILE_STORE
       ;;
     vault)
-      [[ -n "${VAULT_ADDRESS:-}" ]] || {
+      local vault_address=${VAULT_ADDRESS:-}
+      [[ -n "${vault_address}" ]] || {
         e2e_die 'operator profile vault secret-store address is empty'
         return 1
       }
+      if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${E2E_SECRET_PROVIDER_CONNECTION:-}" == 'local' ]]; then
+        vault_address=$(e2e_operator_rewrite_local_url_to_service "${vault_address}" 'secret-provider-vault' '8200')
+      fi
       {
         printf 'apiVersion: v1\n'
         printf 'kind: Secret\n'
@@ -629,7 +929,7 @@ EOF_FILE_STORE
         printf 'spec:\n'
         printf '  provider: vault\n'
         printf '  vault:\n'
-        printf '    address: %s\n' "$(e2e_operator_yaml_quote "${VAULT_ADDRESS}")"
+        printf '    address: %s\n' "$(e2e_operator_yaml_quote "${vault_address}")"
         printf '    mount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_MOUNT:-secret}")"
         printf '    pathPrefix: %s\n' "$(e2e_operator_yaml_quote "${VAULT_PATH_PREFIX:-declarest-e2e}")"
         printf '    kvVersion: %s\n' "${VAULT_KV_VERSION:-2}"
@@ -820,8 +1120,10 @@ Context file:
   ${E2E_CONTEXT_FILE}
 
 Operator runtime:
-  manager-pid: ${E2E_OPERATOR_MANAGER_PID:-n/a}
-  manager-log: ${E2E_OPERATOR_MANAGER_LOG_FILE:-n/a}
+  manager-deployment: ${E2E_OPERATOR_MANAGER_DEPLOYMENT:-n/a}
+  manager-pod: ${E2E_OPERATOR_MANAGER_POD:-n/a}
+  manager-image: ${E2E_OPERATOR_IMAGE:-n/a}
+  manager-logs: ${E2E_OPERATOR_MANAGER_LOG_FILE:-n/a}
   namespace: ${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-n/a}}
   sync-policy: ${E2E_OPERATOR_SYNC_POLICY_NAME:-n/a}
 
@@ -831,6 +1133,8 @@ Shell scripts:
 
 To use it in your current shell:
   source ${setup_script@Q}
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get deploy "${E2E_OPERATOR_MANAGER_DEPLOYMENT:-declarest-operator}"
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" logs deployment/"${E2E_OPERATOR_MANAGER_DEPLOYMENT:-declarest-operator}" --tail=80
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository,managedserver,secretstore,syncpolicy
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get syncpolicy "${E2E_OPERATOR_SYNC_POLICY_NAME:-declarest-e2e-sync-policy}" -o yaml
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository status

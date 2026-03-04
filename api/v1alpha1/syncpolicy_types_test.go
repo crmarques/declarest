@@ -23,4 +23,7 @@ func TestSyncPolicyValidateSpecNormalizesPathAndDefaultsRecursive(t *testing.T) 
 	if policy.Spec.Source.Recursive == nil || !*policy.Spec.Source.Recursive {
 		t.Fatalf("expected recursive default true, got %v", policy.Spec.Source.Recursive)
 	}
+	if policy.Spec.Sync.Force {
+		t.Fatalf("expected sync.force default false, got true")
+	}
 }

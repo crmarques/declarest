@@ -24,6 +24,7 @@ Define implementation patterns that keep behavior predictable, testable, and mai
 7. Context YAML parsing MUST be strict (unknown keys rejected; one-of invariants enforced).
 8. Provider packages MUST implement owner contracts and MUST NOT instantiate sibling providers.
 9. Go sources MUST be `gofmt`-formatted and follow idiomatic package/export conventions.
+10. Inline or explanatory comments that only restate the behavior already expressed by the code MUST NOT be introduced; contributors MUST improve naming, structure, or tests to capture intent, and when editing code they SHOULD prune existing non-functional comments, leaving comments only for exported-API documentation or compile-time directives that cannot be expressed otherwise.
 
 ## Data Contracts
 Implementation structure:

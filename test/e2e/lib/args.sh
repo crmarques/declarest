@@ -196,7 +196,7 @@ Profiles (required, defaults to basic when omitted):
     full    : Execute "main" plus "corner" cases to cover less-common paths and components.
     manual  : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
               Declarest commands interactively. Requires every selected connection to stay local.
-    operator: Provision a kubernetes-only local stack, start the DeclaREST operator manager, install CRDs, and apply
+    operator: Provision a kubernetes-only local stack, deploy the DeclaREST operator manager in-cluster, install CRDs, and apply
               generated ResourceRepository/ManagedServer/SecretStore/SyncPolicy resources for manual reconciliation checks.
 
 Platform selection:

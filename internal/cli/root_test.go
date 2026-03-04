@@ -1371,12 +1371,12 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 		if output != "" {
 			t.Fatalf("expected apply output to be empty without --verbose, got %q", output)
 		}
-		if len(orchestrator.updateCalls) != 1 {
-			t.Fatalf("expected explicit apply to perform update in test double, got %d update calls", len(orchestrator.updateCalls))
+		if len(orchestrator.applyValueCalls) != 1 {
+			t.Fatalf("expected explicit apply to delegate to apply-with-value in test double, got %d calls", len(orchestrator.applyValueCalls))
 		}
-		body, ok := orchestrator.updateCalls[0].value.(map[string]any)
+		body, ok := orchestrator.applyValueCalls[0].value.(map[string]any)
 		if !ok {
-			t.Fatalf("expected object payload, got %#v", orchestrator.updateCalls[0].value)
+			t.Fatalf("expected object payload, got %#v", orchestrator.applyValueCalls[0].value)
 		}
 		spec, ok := body["spec"].(map[string]any)
 		if !ok || spec["tier"] != "gold" {
@@ -1454,11 +1454,8 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 						t.Fatalf("expected create target %q, got %#v", wantPath, orchestrator.createCalls)
 					}
 				case "apply":
-					if len(orchestrator.getRemoteCalls) != 1 || orchestrator.getRemoteCalls[0] != wantPath {
-						t.Fatalf("expected apply existence check on %q, got %#v", wantPath, orchestrator.getRemoteCalls)
-					}
-					if len(orchestrator.updateCalls) != 1 || orchestrator.updateCalls[0].logicalPath != wantPath {
-						t.Fatalf("expected apply explicit payload update target %q, got %#v", wantPath, orchestrator.updateCalls)
+					if len(orchestrator.applyValueCalls) != 1 || orchestrator.applyValueCalls[0].logicalPath != wantPath {
+						t.Fatalf("expected apply explicit payload target %q, got %#v", wantPath, orchestrator.applyValueCalls)
 					}
 				case "update":
 					if len(orchestrator.updateCalls) != 1 || orchestrator.updateCalls[0].logicalPath != wantPath {
@@ -4691,12 +4688,27 @@ func TestResourceApplyCollectionPath(t *testing.T) {
 	if !strings.Contains(verboseOutput, "\"LogicalPath\": \"/customers/nested/gamma\"") {
 		t.Fatalf("expected recursive apply output to include nested resource with --verbose, got %q", verboseOutput)
 	}
+
+	orchestrator.applyCalls = nil
+	orchestrator.applyPolicies = nil
+	_, err = executeForTest(deps, "", "resource", "apply", "/customers", "--force")
+	if err != nil {
+		t.Fatalf("unexpected force apply error: %v", err)
+	}
+	if len(orchestrator.applyPolicies) != 2 {
+		t.Fatalf("expected force apply policy for two direct targets, got %#v", orchestrator.applyPolicies)
+	}
+	for _, policy := range orchestrator.applyPolicies {
+		if !policy.Force {
+			t.Fatalf("expected force apply policy true for all targets, got %#v", orchestrator.applyPolicies)
+		}
+	}
 }
 
 func TestResourceApplyUsesExplicitInputOverride(t *testing.T) {
 	t.Parallel()
 
-	t.Run("apply_with_payload_updates_existing_remote_resource", func(t *testing.T) {
+	t.Run("apply_with_payload_delegates_to_apply_with_value", func(t *testing.T) {
 		t.Parallel()
 
 		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
@@ -4706,14 +4718,14 @@ func TestResourceApplyUsesExplicitInputOverride(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected apply error: %v", err)
 		}
-		if len(orchestrator.getRemoteCalls) != 1 || orchestrator.getRemoteCalls[0] != "/customers/acme" {
-			t.Fatalf("expected apply explicit input to check remote existence, got %#v", orchestrator.getRemoteCalls)
+		if len(orchestrator.applyValueCalls) != 1 {
+			t.Fatalf("expected one apply-with-value call, got %d", len(orchestrator.applyValueCalls))
 		}
-		if len(orchestrator.updateCalls) != 1 {
-			t.Fatalf("expected one update call, got %d", len(orchestrator.updateCalls))
+		if got := orchestrator.applyValueCalls[0].logicalPath; got != "/customers/acme" {
+			t.Fatalf("expected apply-with-value target /customers/acme, got %q", got)
 		}
-		if len(orchestrator.createCalls) != 0 {
-			t.Fatalf("expected no create calls for existing resource, got %d", len(orchestrator.createCalls))
+		if len(orchestrator.applyValuePolicy) != 1 || orchestrator.applyValuePolicy[0].Force {
+			t.Fatalf("expected explicit apply to default force=false, got %#v", orchestrator.applyValuePolicy)
 		}
 		if len(orchestrator.applyCalls) != 0 {
 			t.Fatalf("expected repository-driven apply path to be skipped, got %#v", orchestrator.applyCalls)
@@ -4723,24 +4735,18 @@ func TestResourceApplyUsesExplicitInputOverride(t *testing.T) {
 		}
 	})
 
-	t.Run("apply_with_payload_creates_when_remote_resource_not_found", func(t *testing.T) {
+	t.Run("apply_with_payload_passes_force_flag", func(t *testing.T) {
 		t.Parallel()
 
-		orchestrator := &testOrchestrator{
-			metadataService: newTestMetadata(),
-			getRemoteValues: map[string]resource.Value{},
-		}
+		orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		_, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "apply", "/customers/acme")
+		_, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "apply", "/customers/acme", "--force")
 		if err != nil {
 			t.Fatalf("unexpected apply error: %v", err)
 		}
-		if len(orchestrator.createCalls) != 1 {
-			t.Fatalf("expected one create call after remote not found, got %d", len(orchestrator.createCalls))
-		}
-		if len(orchestrator.updateCalls) != 0 {
-			t.Fatalf("expected no update calls after remote not found, got %d", len(orchestrator.updateCalls))
+		if len(orchestrator.applyValuePolicy) != 1 || !orchestrator.applyValuePolicy[0].Force {
+			t.Fatalf("expected explicit apply --force to pass force=true, got %#v", orchestrator.applyValuePolicy)
 		}
 	})
 
@@ -5490,12 +5496,14 @@ func TestResourceMutationHelpShowsRepositoryFirstExamplesAndExplicitOverrideFlag
 		args            []string
 		repositoryFirst string
 		explicitExample string
+		forceSnippet    string
 	}{
 		{
 			name:            "apply",
 			args:            []string{"resource", "apply", "--help"},
 			repositoryFirst: "declarest resource apply /customers/acme",
 			explicitExample: "declarest resource apply /customers/acme --payload payload.json",
+			forceSnippet:    "--force",
 		},
 		{
 			name:            "create",
@@ -5534,6 +5542,9 @@ func TestResourceMutationHelpShowsRepositoryFirstExamplesAndExplicitOverrideFlag
 			}
 			if !strings.Contains(strings.ToLower(output), "overrides repository input") {
 				t.Fatalf("expected help text to mention explicit input override behavior, got %q", output)
+			}
+			if testCase.forceSnippet != "" && !strings.Contains(output, testCase.forceSnippet) {
+				t.Fatalf("expected %q in help output, got %q", testCase.forceSnippet, output)
 			}
 		})
 	}

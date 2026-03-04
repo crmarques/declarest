@@ -97,10 +97,10 @@ step_prepare_runtime() {
 
   e2e_run_cmd go build -o "${E2E_BIN}" ./cmd/declarest || return 1
   if [[ "${E2E_PROFILE}" == 'operator' ]]; then
-    E2E_OPERATOR_BIN="${E2E_RUN_DIR}/bin/declarest-operator-manager"
-    export E2E_OPERATOR_BIN
-    e2e_run_cmd go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1
-    e2e_info "runtime operator binary path=${E2E_OPERATOR_BIN}"
+    E2E_OPERATOR_IMAGE="localhost/declarest/e2e-operator-manager:${E2E_RUN_ID}"
+    export E2E_OPERATOR_IMAGE
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
+    e2e_info "runtime operator image=${E2E_OPERATOR_IMAGE}"
   fi
 
   e2e_collect_case_files || return 1
@@ -167,6 +167,32 @@ e2e_manual_print_component_access_info() {
   done
 }
 
+e2e_profile_adjust_seeded_repo() {
+  local repo_base_dir=$1
+
+  if [[ "${E2E_PROFILE}" != 'operator' || "${E2E_MANAGED_SERVER}" != 'keycloak' ]]; then
+    return 0
+  fi
+
+  local realm_root="${repo_base_dir}/admin/realms/acme"
+  if [[ ! -d "${realm_root}" ]]; then
+    return 0
+  fi
+
+  local pruned=0
+  local child
+  for child in authentication clients organizations user-registry; do
+    if [[ -e "${realm_root}/${child}" ]]; then
+      rm -rf "${realm_root:?}/${child}"
+      ((pruned += 1))
+    fi
+  done
+
+  if ((pruned > 0)); then
+    e2e_info "operator profile keycloak seed adjusted removed-non-idempotent-paths=${pruned} root=${realm_root}"
+  fi
+}
+
 e2e_profile_seed_repo_from_template() {
   if [[ "${E2E_PROFILE}" != 'manual' && "${E2E_PROFILE}" != 'operator' ]]; then
     return 0
@@ -211,7 +237,9 @@ e2e_profile_seed_repo_from_template() {
     return 1
   }
 
-  file_count=$(find "${template_dir}" -type f | wc -l | tr -d ' ')
+  e2e_profile_adjust_seeded_repo "${repo_base_dir}" || return 1
+
+  file_count=$(find "${repo_base_dir}" -type f | wc -l | tr -d ' ')
   e2e_info "${E2E_PROFILE} profile repo-template sync copied-files=${file_count}"
   return 0
 }

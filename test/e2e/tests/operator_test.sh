@@ -23,6 +23,9 @@ prepare_operator_handoff_env() {
   export E2E_KIND_CLUSTER_NAME='declarest-e2e-operator'
   export E2E_K8S_NAMESPACE='declarest-operator'
   export E2E_OPERATOR_NAMESPACE='declarest-operator'
+  export E2E_OPERATOR_MANAGER_DEPLOYMENT='declarest-operator'
+  export E2E_OPERATOR_MANAGER_POD='declarest-operator-77b8f6fcb9-l9j6k'
+  export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:operator-handoff-test'
   export E2E_OPERATOR_SYNC_POLICY_NAME='declarest-e2e-sync-policy'
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
@@ -72,6 +75,8 @@ test_operator_handoff_prints_managed_server_specific_commands() {
 
   assert_contains "${output}" "resource save '/api/projects/operator-demo' --payload"
   assert_contains "${output}" "resource get '/api/projects/operator-demo' --source remote-server"
+  assert_contains "${output}" "manager-deployment: declarest-operator"
+  assert_contains "${output}" "kubectl --kubeconfig \"${E2E_KUBECONFIG}\" -n \"${E2E_OPERATOR_NAMESPACE}\" logs deployment/\"${E2E_OPERATOR_MANAGER_DEPLOYMENT}\" --tail=80"
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
   assert_contains "${output}" "Repository provider access:"
   assert_contains "${output}" "web login: http://127.0.0.1:3000/user/login"
@@ -84,5 +89,25 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   assert_path_exists "${reset_script}"
 }
 
+test_operator_rewrites_local_urls_for_cluster_services() {
+  load_operator_libs
+
+  E2E_PLATFORM='kubernetes'
+  E2E_K8S_NAMESPACE='declarest-test'
+  E2E_GIT_PROVIDER_CONNECTION='local'
+  E2E_GIT_PROVIDER='gitea'
+
+  local rewritten
+  rewritten=$(e2e_operator_rewrite_local_url_to_service 'http://127.0.0.1:3000/root/repo.git' 'git-provider-gitea' '3000')
+  assert_eq "${rewritten}" "http://git-provider-gitea.declarest-test.svc.cluster.local:3000/root/repo.git"
+
+  rewritten=$(e2e_operator_rewrite_repo_url_for_cluster 'http://localhost:3000/root/repo.git')
+  assert_eq "${rewritten}" "http://git-provider-gitea.declarest-test.svc.cluster.local:3000/root/repo.git"
+
+  rewritten=$(e2e_operator_rewrite_local_url_to_service 'https://example.com/api' 'managed-server-keycloak' '8080')
+  assert_eq "${rewritten}" "https://example.com/api"
+}
+
 test_operator_example_resource_mapping
 test_operator_handoff_prints_managed_server_specific_commands
+test_operator_rewrites_local_urls_for_cluster_services

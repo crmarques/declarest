@@ -1055,13 +1055,13 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 			"custom-headers",
 		},
 		confirms: []bool{
-			false, // managed-server default headers
-			true,  // configure managed-server proxy
-			true,  // configure proxy auth
-			false, // add another custom auth header
-			false, // configure managed-server tls
-			false, // configure secret-store
-			false, // configure preferences
+			false,
+			true,
+			true,
+			false,
+			false,
+			false,
+			false,
 		},
 	}
 
@@ -1231,14 +1231,14 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
 		selects:     []string{configdomain.ResourceFormatYAML, "git", "custom-headers"},
 		confirms: []bool{
-			false, // git local auto-init
-			false, // configure git remote
-			false, // managed-server default headers
-			false, // configure managed-server proxy
-			false, // add another custom auth header
-			false, // managed-server tls
-			false, // configure secret-store
-			false, // configure preferences
+			false,
+			false,
+			false,
+			false,
+			false,
+			false,
+			false,
+			false,
 		},
 	}
 
@@ -1304,12 +1304,12 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"key-file",
 		},
 		confirms: []bool{
-			true,  // configure default headers
-			false, // configure managed-server proxy
-			false, // configure managed-server tls
-			true,  // configure secret-store
-			true,  // configure file kdf
-			true,  // configure preferences
+			true,
+			false,
+			false,
+			true,
+			true,
+			true,
 		},
 	}
 
@@ -1907,7 +1907,10 @@ func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Valu
 func (s *testOrchestratorService) Save(context.Context, string, resource.Value) error {
 	return nil
 }
-func (s *testOrchestratorService) Apply(context.Context, string) (resource.Resource, error) {
+func (s *testOrchestratorService) Apply(context.Context, string, orchestratordomain.ApplyPolicy) (resource.Resource, error) {
+	return resource.Resource{}, nil
+}
+func (s *testOrchestratorService) ApplyWithValue(context.Context, string, resource.Value, orchestratordomain.ApplyPolicy) (resource.Resource, error) {
 	return resource.Resource{}, nil
 }
 func (s *testOrchestratorService) Create(context.Context, string, resource.Value) (resource.Resource, error) {

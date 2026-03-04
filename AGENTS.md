@@ -83,6 +83,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 12. When dependencies/imports change, align `go.mod`/`go.sum` and run `go mod tidy`.
 13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
 14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
+15. Inline or explanatory comments that only restate what the code already expresses MUST NOT be added; updates SHOULD remove such non-functional comments and rely on clear naming, structure, and tests instead, while only keeping compile-time directives or exported-API documentation that cannot be conveyed otherwise.
 
 ## Delivery Protocol
 1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (code modifications always include `go test -race ./...` at completion, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).

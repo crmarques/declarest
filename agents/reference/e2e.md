@@ -64,7 +64,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 45. Kubernetes component startup MUST apply rendered `k8s/*.yaml` manifests in the run namespace and manage service port-forwards from `declarest.e2e/port-forward` service annotations, persisting forward PIDs in component state for stop/cleanup.
 46. For `DECLAREST_E2E_CONTAINER_ENGINE=podman`, kind operations MUST use provider mode `KIND_EXPERIMENTAL_PROVIDER=podman` and preflight MUST fail fast with actionable guidance when provider checks fail.
 47. `operator` MUST enforce kubernetes-only local-instantiable selections (`--platform kubernetes`, `--repo-type git`, `--git-provider <gitea|gitlab>`, `--secret-provider <file|vault>`, and local connections for selected components) and MUST fail initialization with actionable validation output when unsupported combinations are selected.
-48. `operator` MUST seed selected managed-server fixture content into the repository, initialize git, commit/push seeded content to the selected git provider, install operator CRDs, start `declarest-operator-manager`, generate/apply `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs, then keep runtime resources for manual reconciliation checks.
+48. `operator` MUST seed selected managed-server fixture content into the repository, initialize git, commit/push seeded content to the selected git provider, install operator CRDs, build/load a run-scoped operator image, deploy `declarest-operator-manager` in the run namespace, generate/apply `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs, then keep runtime resources for manual reconciliation checks.
 49. `operator` handoff output MUST include run-scoped setup/reset shell scripts, operator runtime details, and concrete repository-to-managed-server verification commands using managed-server-specific logical path/payload examples.
 
 ## Data Contracts
@@ -112,7 +112,7 @@ Manual handoff:
 
 Operator handoff:
 1. Emit temporary context catalog path and run-scoped setup/reset shell scripts.
-2. Print operator runtime details (`manager-pid`, `manager-log`, namespace, sync-policy name).
+2. Print operator runtime details (`manager-deployment`, `manager-pod`, `manager-logs`, namespace, sync-policy name).
 3. Print concrete `declarest-e2e` commands to save a repository resource, commit/push it, and read the same logical path from the managed server.
 4. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
 
@@ -144,6 +144,7 @@ Operator handoff:
 16. `--managed-server-proxy true` without `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL` fails argument validation before runtime startup.
 17. `--profile operator --git-provider git` fails initialization because operator profile supports only `gitea` and `gitlab`.
 18. `--profile operator --secret-provider none` fails initialization because operator profile requires an instantiated secret provider.
+19. `operator` profile in kubernetes mode rewrites localhost component URLs to in-cluster endpoints (preferring component pod IP, then service ClusterIP/DNS) so the in-cluster manager can reach local providers.
 
 ## Examples
 1. `./run-e2e.sh --profile basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
@@ -160,5 +161,6 @@ Operator handoff:
 12. `./run-e2e.sh --profile basic --platform compose --repo-type git --git-provider gitea --managed-server simple-api-server --secret-provider file` runs local containerized components via compose artifacts under each selected component `compose/compose.yaml`.
 13. `./run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --managed-server keycloak --secret-provider file` starts a run-scoped kind cluster, prints kubeconfig/namespace details for manual interaction, and `./run-e2e.sh --clean <run-id>` deletes the run cluster.
 14. `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://proxy.example:3128 ./run-e2e.sh --profile basic --managed-server-proxy true` injects `managed-server.http.proxy.http-url` into the generated context.
-15. `./run-e2e.sh --profile operator --managed-server simple-api-server --git-provider gitea --secret-provider file` starts a run-scoped kind cluster, installs operator CRDs, starts the operator manager, applies generated CRs, and prints manual repository-to-managed-server verification commands.
+15. `./run-e2e.sh --profile operator --managed-server simple-api-server --git-provider gitea --secret-provider file` starts a run-scoped kind cluster, installs operator CRDs, deploys the operator manager in-cluster, applies generated CRs, and prints manual repository-to-managed-server verification commands.
 16. `./run-e2e.sh --profile operator --repo-type filesystem` fails initialization with actionable output because operator profile requires `--repo-type git`.
+17. `DECLAREST_E2E_CONTAINER_ENGINE=podman ./run-e2e.sh --profile operator --managed-server simple-api-server --git-provider gitea --secret-provider file` builds a run-scoped operator image, loads it into kind with `image-archive`, deploys the manager in-cluster, and keeps runtime resources for manual verification.

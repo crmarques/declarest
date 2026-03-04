@@ -1022,7 +1022,7 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		},
 	}
 
-	item, err := orchestrator.Apply(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c")
+	item, err := orchestrator.Apply(context.Background(), "/admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c", orch.ApplyPolicy{})
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
@@ -1480,7 +1480,9 @@ type fakeServer struct {
 	getValues    map[string]resource.Value
 	getErr       error
 	createValue  resource.Value
+	createErr    error
 	updateValue  resource.Value
+	updateErr    error
 	listValue    []resource.Resource
 	listValues   map[string][]resource.Resource
 	listErr      error
@@ -1531,12 +1533,18 @@ func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource, _ me
 func (f *fakeServer) Create(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Value, error) {
 	f.createCalled = true
 	f.lastResource = resourceInfo
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
 	return f.createValue, nil
 }
 
 func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Value, error) {
 	f.updateCalled = true
 	f.lastResource = resourceInfo
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
 	return f.updateValue, nil
 }
 
@@ -1704,7 +1712,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 		secrets:    secretProvider,
 	}
 
-	item, err := orchestrator.Apply(context.Background(), "/customers/acme")
+	item, err := orchestrator.Apply(context.Background(), "/customers/acme", orch.ApplyPolicy{})
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
@@ -1727,6 +1735,152 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 
 	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
 		t.Fatalf("expected returned payload to match remote mutation payload, got %#v", item.Payload)
+	}
+}
+
+func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"id":        "42",
+			"alias":     "acme",
+			"updatedAt": "2026-03-01T10:00:00Z",
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "alias",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
+			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
+		},
+	}
+	metadataService := &fakeMetadata{resolveValue: md}
+
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"id":        "42",
+			"alias":     "acme",
+			"updatedAt": "2026-03-02T18:15:00Z",
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+	}
+
+	item, err := orchestrator.Apply(context.Background(), "/customers/acme", orch.ApplyPolicy{})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if serverManager.createCalled || serverManager.updateCalled {
+		t.Fatalf("expected apply no-op for compare-equal payloads, got create=%t update=%t", serverManager.createCalled, serverManager.updateCalled)
+	}
+	if !reflect.DeepEqual(item.Payload, serverManager.getValue) {
+		t.Fatalf("expected no-op apply to return remote payload, got %#v", item.Payload)
+	}
+}
+
+func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"id":        "42",
+			"alias":     "acme",
+			"updatedAt": "2026-03-01T10:00:00Z",
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "alias",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
+			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
+		},
+	}
+	metadataService := &fakeMetadata{resolveValue: md}
+
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"id":        "42",
+			"alias":     "acme",
+			"updatedAt": "2026-03-02T18:15:00Z",
+		},
+		updateValue: map[string]any{
+			"id":        "42",
+			"alias":     "acme",
+			"updatedAt": "2026-03-01T10:00:00Z",
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+	}
+
+	item, err := orchestrator.Apply(context.Background(), "/customers/acme", orch.ApplyPolicy{Force: true})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if !serverManager.updateCalled {
+		t.Fatal("expected force apply to execute update even when compare output has no drift")
+	}
+	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
+		t.Fatalf("expected payload from force-update response, got %#v", item.Payload)
+	}
+}
+
+func TestDefaultOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"realm": "test2",
+		},
+	}
+
+	serverManager := &fakeServer{
+		getErr:    faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		createErr: faults.NewConflictError("remote request failed with status 409: realm already exists", nil),
+		updateValue: map[string]any{
+			"realm": "test2",
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				IDFromAttribute:    "realm",
+				AliasFromAttribute: "realm",
+			},
+		},
+		server: serverManager,
+	}
+
+	item, err := orchestrator.Apply(context.Background(), "/admin/realms/test2", orch.ApplyPolicy{})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	if !serverManager.createCalled {
+		t.Fatal("expected apply to attempt create when exists check is false")
+	}
+	if !serverManager.updateCalled {
+		t.Fatal("expected apply to retry update after create conflict")
+	}
+	if got := item.LogicalPath; got != "/admin/realms/test2" {
+		t.Fatalf("expected logical path /admin/realms/test2, got %q", got)
+	}
+	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
+		t.Fatalf("expected payload from update fallback, got %#v", item.Payload)
 	}
 }
 

@@ -34,6 +34,7 @@ type Request struct {
 	Operation        Operation
 	LogicalPath      string
 	Recursive        bool
+	Force            bool
 	Value            resource.Value
 	HasExplicitInput bool
 	RefreshLocal     bool
@@ -62,7 +63,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 			)
 		}
 
-		item, err := runExplicitMutation(ctx, orchestratorService, req.Operation, req.LogicalPath, req.Value)
+		item, err := runExplicitMutation(ctx, orchestratorService, req.Operation, req.LogicalPath, req.Value, req.Force)
 		if err != nil {
 			return Result{}, err
 		}
@@ -85,7 +86,9 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	items, err := executeMutationForTargets(ctx, targets, func(runCtx context.Context, logicalPath string) (resource.Resource, error) {
 		switch req.Operation {
 		case OperationApply:
-			return orchestratorService.Apply(runCtx, logicalPath)
+			return orchestratorService.Apply(runCtx, logicalPath, orchestratordomain.ApplyPolicy{
+				Force: req.Force,
+			})
 		case OperationCreate:
 			localValue, getErr := orchestratorService.GetLocal(runCtx, logicalPath)
 			if getErr != nil {
@@ -124,17 +127,13 @@ func runExplicitMutation(
 	operation Operation,
 	logicalPath string,
 	value resource.Value,
+	force bool,
 ) (resource.Resource, error) {
 	switch operation {
 	case OperationApply:
-		_, getRemoteErr := orchestratorService.GetRemote(ctx, logicalPath)
-		if getRemoteErr == nil {
-			return orchestratorService.Update(ctx, logicalPath, value)
-		}
-		if faults.IsCategory(getRemoteErr, faults.NotFoundError) {
-			return orchestratorService.Create(ctx, logicalPath, value)
-		}
-		return resource.Resource{}, getRemoteErr
+		return orchestratorService.ApplyWithValue(ctx, logicalPath, value, orchestratordomain.ApplyPolicy{
+			Force: force,
+		})
 	case OperationCreate:
 		return orchestratorService.Create(ctx, logicalPath, value)
 	case OperationUpdate:

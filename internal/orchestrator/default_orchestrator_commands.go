@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"reflect"
 	"sort"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
@@ -74,13 +75,31 @@ func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, valu
 	return manager.Save(ctx, logicalPath, value)
 }
 
-func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string) (resource.Resource, error) {
+func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
 	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, localResource.LogicalPath, localResource.Payload)
+	return r.applyDesiredState(ctx, localResource.LogicalPath, localResource.Payload, policy)
+}
+
+func (r *DefaultOrchestrator) ApplyWithValue(
+	ctx context.Context,
+	logicalPath string,
+	value resource.Value,
+	policy orchestrator.ApplyPolicy,
+) (resource.Resource, error) {
+	return r.applyDesiredState(ctx, logicalPath, value, policy)
+}
+
+func (r *DefaultOrchestrator) applyDesiredState(
+	ctx context.Context,
+	logicalPath string,
+	value resource.Value,
+	policy orchestrator.ApplyPolicy,
+) (resource.Resource, error) {
+	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, value)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -91,22 +110,37 @@ func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string) (re
 	}
 	resourceInfo.Payload = resolvedPayload
 
-	serverManager, err := r.requireServer()
+	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+	if err != nil {
+		if !faults.IsCategory(err, faults.NotFoundError) {
+			return resource.Resource{}, err
+		}
+
+		item, mutationErr := r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationCreate)
+		if mutationErr == nil {
+			return item, nil
+		}
+		if faults.IsCategory(mutationErr, faults.ConflictError) {
+			return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
+		}
+		return resource.Resource{}, mutationErr
+	}
+
+	localForCompare, remoteForCompare, err := r.resolveComparedPayloads(ctx, resourceInfo, resourceMd, resourceInfo.Payload, remoteValue)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	exists, err := serverManager.Exists(ctx, resourceInfo, resourceMd)
-	if err != nil {
-		return resource.Resource{}, err
+	if reflect.DeepEqual(localForCompare, remoteForCompare) && !policy.Force {
+		normalizedRemote, normalizeErr := resource.Normalize(remoteValue)
+		if normalizeErr != nil {
+			return resource.Resource{}, normalizeErr
+		}
+		resourceInfo.Payload = normalizedRemote
+		return resourceInfo, nil
 	}
 
-	operation := metadata.OperationCreate
-	if exists {
-		operation = metadata.OperationUpdate
-	}
-
-	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, operation)
+	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
 }
 
 func (r *DefaultOrchestrator) Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
@@ -193,7 +227,6 @@ func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string,
 		return nil, err
 	}
 
-	// Keep local list output parity with remote list by including each resource payload.
 	for idx := range items {
 		if items[idx].Payload != nil {
 			continue
@@ -270,8 +303,6 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 
 	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
 	if err != nil {
-		// A missing remote resource represents full drift from desired local state.
-		// Keep diff deterministic by comparing against a nil remote payload.
 		if faults.IsCategory(err, faults.NotFoundError) {
 			remoteValue = nil
 		} else {
@@ -279,16 +310,7 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 		}
 	}
 
-	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localForCompare)
-	if err != nil {
-		return nil, err
-	}
-
-	localTransformed, err := applyCompareTransforms(localForCompare, compareSpec)
-	if err != nil {
-		return nil, err
-	}
-	remoteTransformed, err := applyCompareTransforms(remoteValue, compareSpec)
+	localTransformed, remoteTransformed, err := r.resolveComparedPayloads(ctx, resourceInfo, resourceMd, localForCompare, remoteValue)
 	if err != nil {
 		return nil, err
 	}
@@ -304,6 +326,30 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 		return items[i].ResourcePath < items[j].ResourcePath
 	})
 	return items, nil
+}
+
+func (r *DefaultOrchestrator) resolveComparedPayloads(
+	ctx context.Context,
+	resourceInfo resource.Resource,
+	resourceMd metadata.ResourceMetadata,
+	localValue resource.Value,
+	remoteValue resource.Value,
+) (resource.Value, resource.Value, error) {
+	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localValue)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	localTransformed, err := applyCompareTransforms(localValue, compareSpec)
+	if err != nil {
+		return nil, nil, err
+	}
+	remoteTransformed, err := applyCompareTransforms(remoteValue, compareSpec)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return localTransformed, remoteTransformed, nil
 }
 
 func (r *DefaultOrchestrator) Template(ctx context.Context, logicalPath string, value resource.Value) (resource.Value, error) {

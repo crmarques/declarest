@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 	"github.com/crmarques/declarest/internal/operator/controllers"
@@ -11,6 +12,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -22,11 +24,13 @@ func main() {
 		probeAddr            string
 		enableLeaderElection bool
 		enableWebhooks       bool
+		watchNamespace       string
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable admission webhooks for DeclaREST CRDs.")
+	flag.StringVar(&watchNamespace, "watch-namespace", "", "Namespace to watch (empty means all namespaces).")
 	zapOptions := zap.Options{Development: false}
 	zapOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -49,7 +53,7 @@ func main() {
 		}
 	}()
 
-	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	managerOptions := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
@@ -57,7 +61,16 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "declarest-operator.declarest.io",
-	})
+	}
+	if namespace := strings.TrimSpace(watchNamespace); namespace != "" {
+		managerOptions.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				namespace: {},
+			},
+		}
+	}
+
+	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
 	if err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to start manager")
 		os.Exit(1)

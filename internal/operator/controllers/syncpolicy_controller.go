@@ -247,6 +247,7 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		Operation:        mutateapp.OperationApply,
 		LogicalPath:      syncPolicy.Spec.Source.Path,
 		Recursive:        recursive,
+		Force:            syncPolicy.Spec.Sync.Force,
 		HasExplicitInput: false,
 		RefreshLocal:     false,
 	})

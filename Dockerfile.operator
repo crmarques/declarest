@@ -15,5 +15,5 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /workspace/b
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/bin/manager /manager
-USER nonroot:nonroot
+USER 65532:65532
 ENTRYPOINT ["/manager"]

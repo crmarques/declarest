@@ -13,5 +13,6 @@ spec:
     path: /customers
     recursive: true
   sync:
+    force: false
     prune: false
   suspend: false

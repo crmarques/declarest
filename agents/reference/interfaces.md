@@ -293,6 +293,12 @@ Represents local/remote list behavior options.
 Fields:
 1. `Recursive`.
 
+### Type: `orchestrator.ApplyPolicy`
+Represents apply behavior options.
+
+Fields:
+1. `Force`.
+
 ### Type: `resource.Resource`
 Canonical descriptor for resource state and routing.
 
@@ -556,7 +562,7 @@ Responsibilities:
 4. Compute explain/diff/list outputs.
 
 Method families:
-1. `GetLocal/GetRemote/Request/GetOpenAPISpec/Save/Apply/Create/Update/Delete`.
+1. `GetLocal/GetRemote/Request/GetOpenAPISpec/Save/Apply(policy)/ApplyWithValue(policy)/Create/Update/Delete`.
 2. `ListLocal(policy)/ListRemote(policy)`.
 3. `Explain/Diff/Template`.
 
@@ -620,6 +626,6 @@ Propagation rules:
 4. Partial context configuration with optional managers absent.
 
 ## Examples
-1. A `orchestrator.Orchestrator.Apply` call resolves metadata, builds request intent, and executes a remote create/update mutation derived from repository desired state.
+1. A `orchestrator.Orchestrator.Apply` call resolves metadata, reads remote state, compares using metadata compare rules, and then creates/updates remote state only when needed unless `ApplyPolicy.Force=true`.
 2. A `secrets.SecretProvider.MaskPayload` call stores extracted values and replaces them with placeholders before `repository.ResourceStore.Save`.
 3. A `config.ContextService.ResolveContext` call merges persisted context and environment overrides, then validates and returns one resolved `config.Context`.

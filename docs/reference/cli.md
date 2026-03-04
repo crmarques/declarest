@@ -76,6 +76,7 @@ declarest resource save /customers/ --as-one-resource
 
 ```bash
 declarest resource apply /corporations/acme
+declarest resource apply /corporations/acme --force
 declarest resource create /corporations/acme
 declarest resource update /corporations/acme
 declarest resource delete /corporations/acme --confirm-delete
@@ -97,6 +98,7 @@ Useful flags for mutation and payload-driven workflows:
 - `--payload <path|->` for file/stdin payloads and inline JSON/YAML or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
 - `--format <json|yaml>` for payload decoding
 - `--recursive` for collection recursion on supported commands
+- `--force` on `resource apply` to execute update even when compare output has no drift
 - `--refresh-repository` (apply/create/update)
 - `--http-method <METHOD>` override for remote calls
 - `--message <text>` / `--message-override <text>` for git commit messages on `resource save` and repository-backed `resource delete`

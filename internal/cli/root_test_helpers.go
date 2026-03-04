@@ -244,6 +244,9 @@ type testOrchestrator struct {
 	listRemoteDetail []listCall
 	listRemoteErr    error
 	applyCalls       []string
+	applyPolicies    []orchestrator.ApplyPolicy
+	applyValueCalls  []savedResource
+	applyValuePolicy []orchestrator.ApplyPolicy
 	createCalls      []savedResource
 	updateCalls      []savedResource
 	explainCalls     []string
@@ -335,8 +338,17 @@ func (r *testOrchestrator) Save(_ context.Context, logicalPath string, value res
 	})
 	return r.saveErr
 }
-func (r *testOrchestrator) Apply(_ context.Context, logicalPath string) (resource.Resource, error) {
+func (r *testOrchestrator) Apply(_ context.Context, logicalPath string, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
 	r.applyCalls = append(r.applyCalls, logicalPath)
+	r.applyPolicies = append(r.applyPolicies, policy)
+	return resource.Resource{LogicalPath: logicalPath}, nil
+}
+func (r *testOrchestrator) ApplyWithValue(_ context.Context, logicalPath string, value resource.Value, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
+	r.applyValueCalls = append(r.applyValueCalls, savedResource{
+		logicalPath: logicalPath,
+		value:       value,
+	})
+	r.applyValuePolicy = append(r.applyValuePolicy, policy)
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
 func (r *testOrchestrator) Create(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {

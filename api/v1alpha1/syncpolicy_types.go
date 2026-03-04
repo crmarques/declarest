@@ -15,6 +15,7 @@ type SyncPolicySource struct {
 
 type SyncPolicySyncOptions struct {
 	Prune bool `json:"prune,omitempty"`
+	Force bool `json:"force,omitempty"`
 }
 
 type SyncPolicySpec struct {

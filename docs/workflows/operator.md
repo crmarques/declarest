@@ -13,6 +13,7 @@ DeclaREST includes an Operator SDK based controller manager (`cmd/declarest-oper
 - `ManagedServer` defines endpoint/auth plus optional OpenAPI and metadata artifact URLs.
 - `SecretStore` defines the secret backend (`vault` or `file`).
 - `SyncPolicy` references the other three resources and performs repo-to-managed apply (and optional prune).
+- `SyncPolicy.spec.sync.force` forces update calls even when compare output indicates no drift.
 - `SyncPolicy` requeues on `spec.syncInterval` (defaults to 5m), and reconciles when referenced dependency CRDs or referenced Kubernetes Secrets change.
 
 ## Build and run
