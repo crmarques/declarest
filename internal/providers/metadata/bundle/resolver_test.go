@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
@@ -682,6 +683,103 @@ func TestResolveBundleLocalSourceUsesVersionCacheKeyForVersionedArtifacts(t *tes
 	}
 	if sourceA.cacheDirName != sourceB.cacheDirName {
 		t.Fatalf("expected version cache dir reuse, got %q and %q", sourceA.cacheDirName, sourceB.cacheDirName)
+	}
+}
+
+func TestResolveBundleConcurrentVersionedLocalSourceInstallIsStable(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	archive := buildTestBundleArchive(t, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 1.2.3
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
+`,
+		"openapi.yaml": `
+openapi: 3.0.0
+paths: {}
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+
+	baseName := "keycloak-bundle-1.2.3.tar.gz"
+	archivePathA := filepath.Join(t.TempDir(), baseName)
+	archivePathB := filepath.Join(t.TempDir(), baseName)
+	if err := os.WriteFile(archivePathA, archive, 0o600); err != nil {
+		t.Fatalf("failed to write archive A: %v", err)
+	}
+	if err := os.WriteFile(archivePathB, archive, 0o600); err != nil {
+		t.Fatalf("failed to write archive B: %v", err)
+	}
+
+	source, err := parseBundleSource(archivePathA)
+	if err != nil {
+		t.Fatalf("parseBundleSource returned error: %v", err)
+	}
+	cacheRoot, err := defaultCacheRoot()
+	if err != nil {
+		t.Fatalf("defaultCacheRoot returned error: %v", err)
+	}
+	cacheDir := filepath.Join(cacheRoot, source.cacheDirName)
+
+	const (
+		rounds  = 20
+		workers = 8
+	)
+
+	for round := 0; round < rounds; round++ {
+		if err := os.RemoveAll(cacheDir); err != nil {
+			t.Fatalf("failed to reset cache dir: %v", err)
+		}
+
+		start := make(chan struct{})
+		errs := make(chan error, workers)
+		var wg sync.WaitGroup
+		for worker := 0; worker < workers; worker++ {
+			wg.Add(1)
+			go func(worker int) {
+				defer wg.Done()
+				<-start
+
+				ref := archivePathA
+				if worker%2 == 1 {
+					ref = archivePathB
+				}
+
+				resolved, resolveErr := ResolveBundle(context.Background(), ref)
+				if resolveErr != nil {
+					errs <- fmt.Errorf("worker %d resolve error: %w", worker, resolveErr)
+					return
+				}
+				if strings.TrimSpace(resolved.OpenAPI) == "" {
+					errs <- fmt.Errorf("worker %d expected resolved OpenAPI source", worker)
+					return
+				}
+				if _, statErr := os.Stat(resolved.OpenAPI); statErr != nil {
+					errs <- fmt.Errorf("worker %d expected OpenAPI file: %w", worker, statErr)
+					return
+				}
+				if _, statErr := os.Stat(filepath.Join(resolved.MetadataDir, "admin", "realms", "_", "metadata.json")); statErr != nil {
+					errs <- fmt.Errorf("worker %d expected metadata tree: %w", worker, statErr)
+					return
+				}
+			}(worker)
+		}
+
+		close(start)
+		wg.Wait()
+		close(errs)
+		for resolveErr := range errs {
+			t.Fatalf("round %d: %v", round, resolveErr)
+		}
 	}
 }
 

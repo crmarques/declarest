@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/crmarques/declarest/config"
@@ -43,6 +44,15 @@ var versionedArtifactStemPattern = regexp.MustCompile(
 	`^([a-z0-9][a-z0-9-]*)-(v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$`,
 )
 var shorthandReleaseBaseURL = "https://github.com"
+var (
+	bundleCacheLockMu sync.Mutex
+	bundleCacheLocks  = map[string]*bundleCacheLockEntry{}
+)
+
+type bundleCacheLockEntry struct {
+	mu       sync.Mutex
+	refCount int
+}
 
 type BundleResolution struct {
 	MetadataDir       string
@@ -91,6 +101,9 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 	}
 
 	cacheDir := filepath.Join(cacheRoot, source.cacheDirName)
+	releaseCacheLock := acquireBundleCacheLock(cacheDir)
+	defer releaseCacheLock()
+
 	if cached, ok, cachedErr := loadCachedBundle(cacheDir, source); cachedErr == nil && ok {
 		return cached, nil
 	} else if cachedErr != nil {
@@ -98,6 +111,30 @@ func ResolveBundle(ctx context.Context, ref string, opts ...BundleResolverOption
 	}
 
 	return installBundle(ctx, cacheRoot, cacheDir, source, options)
+}
+
+func acquireBundleCacheLock(cacheDir string) func() {
+	bundleCacheLockMu.Lock()
+	lockEntry, ok := bundleCacheLocks[cacheDir]
+	if !ok {
+		lockEntry = &bundleCacheLockEntry{}
+		bundleCacheLocks[cacheDir] = lockEntry
+	}
+	lockEntry.refCount++
+	bundleCacheLockMu.Unlock()
+
+	lockEntry.mu.Lock()
+
+	return func() {
+		lockEntry.mu.Unlock()
+
+		bundleCacheLockMu.Lock()
+		lockEntry.refCount--
+		if lockEntry.refCount == 0 {
+			delete(bundleCacheLocks, cacheDir)
+		}
+		bundleCacheLockMu.Unlock()
+	}
 }
 
 func parseBundleSource(ref string) (bundleSource, error) {

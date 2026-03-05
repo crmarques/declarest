@@ -50,6 +50,10 @@ func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) 
 	return localResource.Payload, nil
 }
 
+func (r *DefaultOrchestrator) ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error) {
+	return r.resolveLocalResourceForRead(ctx, logicalPath)
+}
+
 func (r *DefaultOrchestrator) GetRemote(ctx context.Context, logicalPath string) (resource.Value, error) {
 	resourceInfo, resourceMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
 	if infoErr != nil {

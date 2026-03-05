@@ -1,0 +1,31 @@
+{
+	"resourceInfo": {
+		"idFromAttribute": "name",
+		"aliasFromAttribute": "name"
+	},
+	"operationInfo": {
+		"createResource": {
+			"validate": {
+				"requiredAttributes": [
+					"name"
+				]
+			}
+		},
+		"getResource": {
+			"path": "/project/{{.id}}"
+		},
+		"updateResource": {
+			"httpMethod": "PUT",
+			"path": "/project/{{.id}}/config",
+			"payload": {
+				"jqExpression": ".config // ."
+			}
+		},
+		"deleteResource": {
+			"path": "/project/{{.id}}"
+		},
+		"compareResources": {
+			"path": "/project/{{.id}}"
+		}
+	}
+}

@@ -67,7 +67,7 @@ Use `--validate-components` to run plugin/component contract validation (manifes
 When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 When `--managed-server-proxy true`, generated contexts include `managed-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
-`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`) and skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset.
+`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
 `--metadata-type base-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:

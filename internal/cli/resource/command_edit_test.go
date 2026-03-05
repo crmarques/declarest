@@ -1,0 +1,150 @@
+package resource
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"testing"
+
+	configdomain "github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
+	metadatadomain "github.com/crmarques/declarest/metadata"
+	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/crmarques/declarest/repository"
+	resourcedomain "github.com/crmarques/declarest/resource"
+	"github.com/spf13/cobra"
+)
+
+type editCommandSaveCall struct {
+	logicalPath string
+	value       resourcedomain.Value
+}
+
+func TestEditCommandSavesUsingCanonicalLocalPath(t *testing.T) {
+	previousEditTempFile := editTempFile
+	editTempFile = func(*cobra.Command, string, string, []byte) ([]byte, error) {
+		return []byte(`{"name":"updated"}`), nil
+	}
+	defer func() {
+		editTempFile = previousEditTempFile
+	}()
+
+	orch := &fakeEditCommandOrchestrator{
+		resolvedLocal: resourcedomain.Resource{
+			LogicalPath: "/projects/canonical-test",
+			Payload: map[string]any{
+				"name": "test",
+			},
+		},
+	}
+
+	command := newEditCommand(cliutil.CommandDependencies{
+		Orchestrator:  orch,
+		Contexts:      fakeEditContextService{context: editTestContext()},
+		ResourceStore: &fakeEditRepositoryStore{},
+		Metadata:      fakeEditMetadataService{},
+	}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/projects/test"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext returned error: %v", err)
+	}
+
+	if len(orch.saveCalls) != 1 {
+		t.Fatalf("expected one save call, got %#v", orch.saveCalls)
+	}
+	if got := orch.saveCalls[0].logicalPath; got != "/projects/canonical-test" {
+		t.Fatalf("expected canonical save path, got %q", got)
+	}
+	if len(orch.remoteCalls) != 0 {
+		t.Fatalf("expected no remote fallback, got %#v", orch.remoteCalls)
+	}
+}
+
+type fakeEditCommandOrchestrator struct {
+	orchestratordomain.Orchestrator
+	resolvedLocal   resourcedomain.Resource
+	resolveLocalErr error
+	remoteValue     resourcedomain.Value
+	remoteErr       error
+	remoteCalls     []string
+	saveCalls       []editCommandSaveCall
+}
+
+func (f *fakeEditCommandOrchestrator) ResolveLocalResource(
+	_ context.Context,
+	_ string,
+) (resourcedomain.Resource, error) {
+	if f.resolveLocalErr != nil {
+		return resourcedomain.Resource{}, f.resolveLocalErr
+	}
+	if f.resolvedLocal.LogicalPath == "" {
+		return resourcedomain.Resource{}, faults.NewTypedError(
+			faults.NotFoundError,
+			"not found",
+			nil,
+		)
+	}
+	return f.resolvedLocal, nil
+}
+
+func (f *fakeEditCommandOrchestrator) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+	f.remoteCalls = append(f.remoteCalls, logicalPath)
+	if f.remoteErr != nil {
+		return nil, f.remoteErr
+	}
+	return f.remoteValue, nil
+}
+
+func (f *fakeEditCommandOrchestrator) Save(_ context.Context, logicalPath string, value resourcedomain.Value) error {
+	f.saveCalls = append(f.saveCalls, editCommandSaveCall{
+		logicalPath: logicalPath,
+		value:       value,
+	})
+	return nil
+}
+
+type fakeEditRepositoryStore struct {
+	repository.ResourceStore
+}
+
+type fakeEditContextService struct {
+	configdomain.ContextService
+	context configdomain.Context
+}
+
+func (f fakeEditContextService) ResolveContext(context.Context, configdomain.ContextSelection) (configdomain.Context, error) {
+	if f.context.Name == "" {
+		return configdomain.Context{}, errors.New("missing context")
+	}
+	return f.context, nil
+}
+
+type fakeEditMetadataService struct {
+	metadatadomain.MetadataService
+}
+
+func (fakeEditMetadataService) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func (fakeEditMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func editTestContext() configdomain.Context {
+	return configdomain.Context{
+		Name: "edit-test",
+		Repository: configdomain.Repository{
+			ResourceFormat: configdomain.ResourceFormatJSON,
+			Filesystem: &configdomain.FilesystemRepository{
+				BaseDir: "/tmp",
+			},
+		},
+		ManagedServer: &configdomain.ManagedServer{},
+	}
+}

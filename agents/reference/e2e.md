@@ -59,7 +59,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 40. Runner metadata selection flags MUST include `--metadata-type <base-dir|bundle>`; default mode MUST be `bundle`.
 41. In `bundle` mode, the runner MUST skip local `openapi.yaml` wiring so `managed-server.http.openapi` remains unset, and MUST use managed-server shorthand metadata bundle mappings when available (for example `keycloak-bundle:0.0.1` for `keycloak`).
 42. In `base-dir` mode, managed-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST set `E2E_METADATA_DIR` to that component-local directory and repository-type context fragments MUST emit `metadata.base-dir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset).
-43. In `bundle` mode, when the selected managed-server has no shorthand mapping, the runner MUST continue without setting `metadata.bundle`.
+43. In `bundle` mode, when the selected managed-server has no shorthand mapping, the runner MUST fall back to the component-local `metadata/` directory as `metadata.base-dir` when present; otherwise it MUST continue without setting `metadata.bundle`.
 44. Kubernetes runtime MUST use run-scoped `kind` clusters when platform is `kubernetes` and at least one local containerized component is selected; it MUST persist runtime state (`platform`, `container engine`, `cluster name`, `namespace`, `kubeconfig`) for cleanup/manual handoff.
 45. Kubernetes component startup MUST apply rendered `k8s/*.yaml` manifests in the run namespace and manage service port-forwards from `declarest.e2e/port-forward` service annotations, persisting forward PIDs in component state for stop/cleanup.
 46. For `DECLAREST_E2E_CONTAINER_ENGINE=podman`, kind operations MUST use provider mode `KIND_EXPERIMENTAL_PROVIDER=podman` and preflight MUST fail fast with actionable guidance when provider checks fail.
@@ -147,7 +147,7 @@ Operator handoff:
 11. `cli-manual` with `repo-type=git` still initializes a local git repository so readiness checks do not fail with `git repository not initialized`.
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
 13. `managed-server=keycloak` runs in `bundle` mode fail during context validation when shorthand bundle `keycloak-bundle:0.0.1` cannot be resolved from the default remote path.
-14. `bundle` mode with a managed-server that has no shorthand mapping continues without `metadata.bundle` and without local `openapi.yaml`.
+14. `bundle` mode with a managed-server that has no shorthand mapping falls back to component-local `metadata/` when present, otherwise continues without `metadata.bundle`; in both cases local `openapi.yaml` remains unset.
 15. `--platform kubernetes` with only remote/native selections MUST not create a kind cluster.
 16. `--managed-server-proxy true` without `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL` fails argument validation before runtime startup.
 17. `--profile operator-manual --git-provider git` fails initialization because operator profiles support only `gitea` and `gitlab`.
@@ -175,5 +175,6 @@ Operator handoff:
 16. `./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file` starts the operator stack and runs automated operator reconcile coverage.
 17. `./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file` extends `operator-basic` with corner-case validations.
 18. `./run-e2e.sh --profile operator-manual --managed-server keycloak --repo-type git --git-provider gitea --secret-provider vault` prints `Manual Component Access` from component `manual-info` hooks in handoff output before `Repository provider access`.
-19. `./run-e2e.sh --profile operator-manual --managed-server rundeck --repo-type git --git-provider gitea --secret-provider vault` (with no selected-component `manual-info` output) omits `Manual Component Access` while preserving deterministic handoff section ordering.
-20. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file` registers a gitea push webhook to the run-scoped operator service URL and handoff output prints that URL plus a `kubectl ... jsonpath` command for `declarest.io/webhook-last-received-at`.
+19. `./run-e2e.sh --profile cli-basic --managed-server rundeck` emits `metadata.base-dir` from `test/e2e/components/managed-server/rundeck/metadata` because `rundeck` has no shorthand bundle mapping, while still leaving local `managed-server.http.openapi` unset.
+20. `./run-e2e.sh --profile operator-manual --managed-server rundeck --repo-type git --git-provider gitea --secret-provider vault` (with no selected-component `manual-info` output) omits `Manual Component Access` while preserving deterministic handoff section ordering.
+21. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file` registers a gitea push webhook to the run-scoped operator service URL and handoff output prints that URL plus a `kubectl ... jsonpath` command for `declarest.io/webhook-last-received-at`.

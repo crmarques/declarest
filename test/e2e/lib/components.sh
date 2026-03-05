@@ -208,7 +208,15 @@ e2e_prepare_metadata_workspace() {
   case "${E2E_METADATA:-bundle}" in
     bundle)
       local metadata_bundle
+      local metadata_source="${component_dir}/metadata"
       if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
+        if [[ -d "${metadata_source}" ]]; then
+          E2E_METADATA_DIR="${metadata_source}"
+          export E2E_METADATA_DIR
+          e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; using component metadata dir=${metadata_source}"
+          return 0
+        fi
+
         e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
         return 0
       fi

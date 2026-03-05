@@ -199,6 +199,27 @@ test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
   assert_eq "${E2E_METADATA_DIR:-}" "" "expected metadata workspace dir to stay unset when bundle is selected"
 }
 
+test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_mapping_is_missing() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  E2E_MANAGED_SERVER='rundeck'
+  E2E_METADATA='bundle'
+  E2E_COMPONENT_PATH=()
+  local component_dir="${tmp}/components/managed-server/rundeck"
+  local component_metadata="${component_dir}/metadata"
+  mkdir -p "${component_metadata}"
+  E2E_COMPONENT_PATH['managed-server:rundeck']="${component_dir}"
+
+  e2e_prepare_metadata_workspace
+
+  assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
+  assert_eq "${E2E_METADATA_DIR}" "${component_metadata}" "expected unsupported bundle mode to fall back to component metadata dir"
+}
+
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
   load_hook_libs
   local tmp
@@ -1029,6 +1050,7 @@ test_cycle_detection_fails_with_actionable_message
 test_parallel_hook_failures_retain_component_logs_in_run_artifacts
 test_prepare_metadata_workspace_uses_component_metadata_for_base_dir_mode
 test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode
+test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_mapping_is_missing
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
 test_repo_context_scripts_emit_metadata_bundle_when_set
 test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode

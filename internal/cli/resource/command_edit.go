@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var editTempFile = cliutil.EditTempFile
+
 func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var editor string
@@ -18,15 +20,11 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 		Short: "Edit a local repository resource in an editor",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
+			requestedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
 			}
 
-			repositoryService, err := cliutil.RequireResourceStore(deps)
-			if err != nil {
-				return err
-			}
 			cfg, err := resolveActiveResourceContext(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
@@ -35,7 +33,7 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 				return err
 			}
 
-			currentValue, err := repositoryService.Get(command.Context(), resolvedPath)
+			resolvedPath, currentValue, err := resolveEditSource(command.Context(), deps, requestedPath)
 			if err != nil {
 				return err
 			}
@@ -44,7 +42,7 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 				return err
 			}
 
-			editedBytes, err := cliutil.EditTempFile(
+			editedBytes, err := editTempFile(
 				command,
 				cliutil.ResolveEditorCommand(command.Context(), deps, editor),
 				resourcePayloadEditFilename(cfg),
