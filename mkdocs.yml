@@ -20,28 +20,42 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: getting-started/installation.md
-    - Quickstart: getting-started/quickstart.md
+      - Install: getting-started/installation.md
+      - Quickstart (CLI): getting-started/quickstart.md
+      - Quickstart (Operator): getting-started/quickstart-operator.md
+      - Troubleshooting: getting-started/troubleshooting.md
   - Concepts:
-    - Overview: concepts/overview.md
-    - Contexts: concepts/context.md
-    - Paths and Selectors: concepts/paths-and-selectors.md
-    - Resource Files: concepts/resource.md
-    - Repository: concepts/repository.md
-    - Metadata Overview: concepts/metadata.md
-    - Metadata Overrides: concepts/metadata-overrides.md
-    - Custom Paths: concepts/metadata-custom-paths.md
-    - Secrets: concepts/secrets.md
-  - Workflows:
-    - Sync Resources: workflows/sync.md
-    - Kubernetes Operator: workflows/operator.md
-    - Inspect and Debug Mappings: workflows/ad-hoc.md
-    - Editing Metadata and Contexts: workflows/editing.md
-    - Repository Operations: workflows/repository.md
-    - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
-    - Custom API Modeling Recipes: workflows/custom-api-modeling.md
-    - Secrets and Safe Save: workflows/secrets-and-safe-save.md
+      - Overview: concepts/overview.md
+      - Git repository as source of truth: concepts/git-source-of-truth.md
+      - Operator model: concepts/operator.md
+      - Managed Server: concepts/managed-server.md
+      - CLI role in GitOps: concepts/cli-in-gitops.md
+      - Contexts: concepts/context.md
+      - Paths and Selectors: concepts/paths-and-selectors.md
+      - Resource Files: concepts/resource.md
+      - Repository: concepts/repository.md
+      - Metadata Overview: concepts/metadata.md
+      - Metadata Overrides: concepts/metadata-overrides.md
+      - Custom Paths: concepts/metadata-custom-paths.md
+      - Secrets: concepts/secrets.md
+  - How-to:
+      - Sync Resources (CLI/CI): workflows/sync.md
+      - Run the Operator: workflows/operator.md
+      - Inspect and Debug Mappings: workflows/ad-hoc.md
+      - Editing Metadata and Contexts: workflows/editing.md
+      - Repository Operations: workflows/repository.md
+      - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
+      - Custom API Modeling Recipes: workflows/custom-api-modeling.md
+      - Secrets and Safe Save: workflows/secrets-and-safe-save.md
   - Reference:
-    - Configuration: reference/configuration.md
-    - CLI: reference/cli.md
+      - Configuration: reference/configuration.md
+      - CLI: reference/cli.md
+      - Operator CRDs: reference/operator-crds.md
+      - Syntax (paths/selectors/placeholders): reference/syntax.md
+      - Metadata schema reference: reference/metadata-schema.md
+  - Advanced:
+      - Architecture deep dive: advanced/architecture.md
+      - Operator deep dive: advanced/operator-deep-dive.md
+      - Security hardening: advanced/security.md
+      - Performance and scale: advanced/performance.md
   - Contributing: contributing.md

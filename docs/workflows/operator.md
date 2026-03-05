@@ -1,54 +1,81 @@
-# Kubernetes Operator (Multi-CRD)
+# Run the Operator
 
-DeclaREST includes an Operator SDK based controller manager (`cmd/declarest-operator-manager`) that reconciles repository desired state to managed servers using four namespaced CRDs:
+The Operator is the recommended mode for production GitOps. It continuously reconciles Managed Servers from repository desired state.
+
+## Recommended workflow: Git is source of truth
+
+Use this mental model:
+
+1. Desired state lives in a Git repository.
+2. Admins use the CLI to save/edit/diff desired state locally, then commit and push.
+3. The Operator watches/polls the repository and reconciles `SyncPolicy` targets.
+4. Managed Server real state converges to the latest desired state from Git.
+
+```text
+Git (desired state) -> Operator reconcile loop -> Managed Server (real state)
+```
+
+In this model, direct server edits are drift. Reconciliation corrects drift back to what is declared in Git.
+
+## CRD model
+
+The controller manager (`cmd/declarest-operator-manager`) reconciles four namespaced CRDs:
 
 - `ResourceRepository`
 - `ManagedServer`
 - `SecretStore`
 - `SyncPolicy`
 
-## Resource model
+How they work together:
 
-- `ResourceRepository` polls Git and keeps the latest checked-out revision available to dependent policies.
-- `ManagedServer` defines endpoint/auth plus optional OpenAPI and metadata artifact URLs.
-- `SecretStore` defines the secret backend (`vault` or `file`).
-- `SyncPolicy` references the other three resources and performs repo-to-managed apply (and optional prune).
-- `SyncPolicy.spec.sync.force` forces update calls even when compare output indicates no drift.
-- `SyncPolicy` requeues on `spec.syncInterval` (defaults to 5m), and reconciles when referenced dependency CRDs or referenced Kubernetes Secrets change.
+- `ResourceRepository` polls Git and keeps the current revision available.
+- `ManagedServer` defines endpoint/auth plus optional OpenAPI and metadata artifacts.
+- `SecretStore` defines where secrets are resolved (`vault` or `file`).
+- `SyncPolicy` references the other three and applies/prunes resources for a source path.
 
-## Build and run
+Important behavior:
+
+- `SyncPolicy.spec.sync.force` can force updates even when compare output shows no drift.
+- `SyncPolicy` requeues on `spec.syncInterval` (default `5m`).
+- Reconcile is also triggered by relevant dependency changes and referenced Secret changes.
+
+## Build and run locally
 
 ```bash
 make operator-build
 make operator-run
 ```
 
-Container build:
+Container image:
 
 ```bash
 make operator-image
 ```
 
-## Install on cluster
-
-Apply the generated manifests:
+## Install on a cluster
 
 ```bash
 kubectl create namespace declarest-system
 kubectl apply -k config/default
 ```
 
-Notes:
-
-- `config/default` now includes a validating admission webhook for all four CRDs.
-- The webhook TLS certificate is provisioned via `cert-manager` resources in `config/certmanager`.
-- The manager state volume is PVC-backed (`declarest-operator-state`) rather than `emptyDir`.
+`config/default` includes admission webhook resources and default manager deployment settings.
 
 Apply sample resources:
 
 ```bash
 kubectl apply -k config/samples
 ```
+
+## Check reconcile status
+
+```bash
+kubectl get resourcerepositories,managedservers,secretstores,syncpolicies
+kubectl describe syncpolicy <name>
+kubectl logs -n declarest-system deploy/declarest-operator-controller-manager
+```
+
+Use these to confirm latest fetched revision, policy conditions, and apply/prune stats.
 
 ## Observability
 
@@ -57,7 +84,7 @@ The manager exposes:
 - `/metrics` on `:8080`
 - `/healthz` and `/readyz` on `:8081`
 
-OTLP export is enabled through standard `OTEL_EXPORTER_OTLP_*` environment variables.
+OTLP export can be enabled through standard `OTEL_EXPORTER_OTLP_*` environment variables.
 
 ## Security defaults
 
@@ -68,6 +95,6 @@ The manager deployment uses:
 - dropped Linux capabilities
 - `seccompProfile: RuntimeDefault`
 
-All credentials are read from Kubernetes `Secret` references; sensitive values are not persisted in CR spec/status.
+Credentials are read from Kubernetes `Secret` references; sensitive values are not persisted in CR specs/status.
 
-SSH repository auth requires `knownHostsRef` by default. Host-key verification can only be skipped when `spec.git.auth.sshSecretRef.insecureIgnoreHostKey: true` is explicitly set.
+For SSH repository auth, host verification is required by default (`knownHostsRef`). It is only skipped when `spec.git.auth.sshSecretRef.insecureIgnoreHostKey: true` is explicitly set.
