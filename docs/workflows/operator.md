@@ -52,6 +52,35 @@ Container image:
 make operator-image
 ```
 
+Build a specific image reference:
+
+```bash
+make operator-image OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
+```
+
+## Publish operator images
+
+Operator images are published to GHCR by `.github/workflows/operator-image.yml`.
+
+- Trigger: push a semver tag (`vX.Y.Z`)
+- Published tags: `ghcr.io/crmarques/declarest-operator:vX.Y.Z` and `ghcr.io/crmarques/declarest-operator:latest`
+
+Manual fallback:
+
+```bash
+podman login ghcr.io
+make operator-image OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
+make operator-image-push OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
+make operator-image-push OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=latest
+```
+
+Image pull examples:
+
+```bash
+podman pull ghcr.io/crmarques/declarest-operator:v0.2.2
+podman pull ghcr.io/crmarques/declarest-operator:latest
+```
+
 ## Install on a cluster
 
 ```bash

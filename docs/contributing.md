@@ -66,10 +66,21 @@ Files:
 
 GitHub Pages is published via `.github/workflows/docs.yml`.
 
-## Release workflow (CLI binaries)
+## Release workflows
 
-Release artifacts are built with GoReleaser via `.github/workflows/release.yml` and `.goreleaser.yaml`.
-Tag a semver version (for example `v1.2.3`) to trigger a release build and make `go get github.com/crmarques/declarest/...@v1.2.3` resolve cleanly for downstream Go programs.
+### CLI binaries
+
+CLI release artifacts are built with GoReleaser via `.github/workflows/release.yml` and `.goreleaser.yaml`.
+
+### Operator container image
+
+Operator release images are published to GHCR via `.github/workflows/operator-image.yml`.
+For semver tags (`vX.Y.Z`), the workflow publishes:
+
+- `ghcr.io/crmarques/declarest-operator:vX.Y.Z`
+- `ghcr.io/crmarques/declarest-operator:latest`
+
+Tagging a semver version (for example `v1.2.3`) triggers both release flows.
 
 ## Contribution checklist
 

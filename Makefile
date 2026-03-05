@@ -7,12 +7,15 @@ GOFLAGS ?= -mod=readonly
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/declarest
 OPERATOR_BINARY := $(BIN_DIR)/declarest-operator-manager
+OPERATOR_IMAGE ?= declarest-operator
+OPERATOR_IMAGE_TAG ?= latest
+OPERATOR_IMAGE_REF := $(OPERATOR_IMAGE):$(OPERATOR_IMAGE_TAG)
 TEST_FLAGS ?= -race
 E2E_FLAGS ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image
+.PHONY: help fmt vet lint test e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -65,7 +68,10 @@ operator-test: ## Run operator-focused unit tests
 	$(GO) test $(TEST_FLAGS) ./api/v1alpha1 ./internal/operator/...
 
 operator-image: ## Build the operator manager container image
-	podman build -f Dockerfile.operator -t declarest-operator:latest .
+	podman build -f Dockerfile.operator -t $(OPERATOR_IMAGE_REF) .
+
+operator-image-push: ## Push the operator manager container image
+	podman push $(OPERATOR_IMAGE_REF)
 
 install: ## Install the CLI into $(GOBIN) or GOPATH/bin
 	$(GO) install ./cmd/declarest
