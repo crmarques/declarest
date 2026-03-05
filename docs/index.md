@@ -25,7 +25,7 @@ If you’re used to GitOps workflows, DeclaREST will feel natural: define desire
 ## Usage flow
 
 <p align="center">
-  <img src="assets/usage-flow.jpeg" alt="Usage flow" width="650">
+  <img src="assets/usage-flow.png" alt="Usage flow" width="650">
 </p>
 
 ## Interacting with APIs through DeclaREST CLI
@@ -41,7 +41,7 @@ declarest resource apply /corporations/acme # apply new desired state to managed
 
 Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`, then verify reconciliation:
 
-- [Quickstart (Operator - recommended)](start-here/quickstart-operator.md)
+- [Quickstart](getting-started/quickstart-operator.md)
 
 ## Capabilities snapshot
 
@@ -69,12 +69,10 @@ DeclaREST is usually not the best fit when:
 
 ## Start here
 
-- [What is DeclaREST?](start-here/what-is.md)
-- [GitOps model (CLI vs Operator)](start-here/gitops-model.md)
 - [Install](getting-started/installation.md)
 - [Quickstart (CLI)](getting-started/quickstart.md)
-- [Quickstart (Operator - recommended)](start-here/quickstart-operator.md)
-- [Troubleshooting](start-here/troubleshooting.md)
+- [Quickstart (Operator - recommended)](getting-started/quickstart-operator.md)
+- [Troubleshooting](getting-started/troubleshooting.md)
 
 ## For advanced API modeling
 

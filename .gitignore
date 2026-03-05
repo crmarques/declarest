@@ -65,6 +65,9 @@ Thumbs.db
 .env.*
 .venv/
 
+# mkdocs
+.docs
+
 # E2E runtime artifacts
 test/e2e/.runs/
 .e2e-build/

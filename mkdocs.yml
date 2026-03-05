@@ -5,7 +5,7 @@ repo_name: crmarques/declarest
 
 theme:
   name: material
-  logo: assets/logo.png
+  logo: assets/logo-simple.png
   favicon: assets/favicon.png
   palette:
     - scheme: default
@@ -58,4 +58,6 @@ nav:
       - Operator deep dive: advanced/operator-deep-dive.md
       - Security hardening: advanced/security.md
       - Performance and scale: advanced/performance.md
-  - Contributing: contributing.md
+  - Contributing: 
+      - How to contribute: contributing/contributing.md
+      - E2E testing: contributing/e2e-components.md

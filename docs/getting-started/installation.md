@@ -2,7 +2,7 @@
 
 Keep this page simple: install the CLI, verify it runs, then continue to the quickstart.
 
-## Option 1: Download a release binary (recommended)
+## Option 1: Download a release binary
 
 Releases are published at:
 
