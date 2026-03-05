@@ -973,6 +973,10 @@ func (in *SyncPolicyStatus) DeepCopyInto(out *SyncPolicyStatus) {
 		in, out := &in.LastSuccessfulSyncTime, &out.LastSuccessfulSyncTime
 		*out = (*in).DeepCopy()
 	}
+	if in.LastFullResyncTime != nil {
+		in, out := &in.LastFullResyncTime, &out.LastFullResyncTime
+		*out = (*in).DeepCopy()
+	}
 	out.ResourceStats = in.ResourceStats
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions

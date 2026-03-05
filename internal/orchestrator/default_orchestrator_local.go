@@ -245,6 +245,26 @@ func resolveResourceIdentity(
 	return alias, remoteID, nil
 }
 
+func resolvedRemoteIDFromPayload(md metadata.ResourceMetadata, value resource.Value) (string, bool) {
+	idAttribute := strings.TrimSpace(md.IDFromAttribute)
+	if idAttribute == "" {
+		return "", false
+	}
+
+	payloadMap, ok := value.(map[string]any)
+	if !ok {
+		return "", false
+	}
+
+	remoteID, found := identity.LookupScalarAttribute(payloadMap, idAttribute)
+	remoteID = strings.TrimSpace(remoteID)
+	if !found || remoteID == "" {
+		return "", false
+	}
+
+	return remoteID, true
+}
+
 func logicalPathAlias(logicalPath string) string {
 	if strings.TrimSpace(logicalPath) == "/" {
 		return "/"

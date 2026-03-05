@@ -82,6 +82,10 @@ spec:
                 required:
                 - path
                 type: object
+              syncInterval:
+                type: string
+              fullResyncCron:
+                type: string
               suspend:
                 type: boolean
               sync:
@@ -164,6 +168,13 @@ spec:
                 type: string
               lastSuccessfulSyncTime:
                 format: date-time
+                type: string
+              lastFullResyncTime:
+                format: date-time
+                type: string
+              lastSyncMode:
+                type: string
+              lastSecretResourceVersionHash:
                 type: string
               observedGeneration:
                 format: int64

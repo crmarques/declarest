@@ -130,6 +130,9 @@ func (r *DefaultOrchestrator) applyDesiredState(
 	if err != nil {
 		return resource.Resource{}, err
 	}
+	if resolvedRemoteID, ok := resolvedRemoteIDFromPayload(resourceMd, remoteValue); ok {
+		resourceInfo.RemoteID = resolvedRemoteID
+	}
 
 	if reflect.DeepEqual(localForCompare, remoteForCompare) && !policy.Force {
 		normalizedRemote, normalizeErr := resource.Normalize(remoteValue)

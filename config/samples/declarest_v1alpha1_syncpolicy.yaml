@@ -15,4 +15,6 @@ spec:
   sync:
     force: false
     prune: false
+  # Optional full resync schedule (cron, 5 fields, UTC).
+  # fullResyncCron: "0 * * * *"
   suspend: false

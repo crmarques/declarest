@@ -3,6 +3,9 @@ kind: ResourceRepository
 metadata:
   name: example-repository
 spec:
+  # Context parity:
+  # - repository.resource-format -> spec.resourceFormat
+  # - repository.git.remote.*   -> spec.git.*
   type: git
   pollInterval: 1m
   resourceFormat: json

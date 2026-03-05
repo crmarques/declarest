@@ -10,6 +10,7 @@ import (
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
+	"github.com/crmarques/declarest/faults"
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/internal/bootstrap"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
@@ -72,8 +73,8 @@ func (c *secretRefCache) policiesForSecret(namespace string, secretName string) 
 // SyncPolicyReconciler reconciles SyncPolicy resources.
 type SyncPolicyReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Recorder  record.EventRecorder
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
 	secretRefs secretRefCache
 }
 
@@ -249,11 +250,20 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	secretHash := computeSecretVersionHash(ctx, r.Client, syncPolicy.Namespace, repo, managedServer, secretStore)
+	secretHashChanged := syncPolicy.Status.LastSecretResourceVersionHash != secretHash
+	currentTime := time.Now().UTC()
+	fullResyncDue, fullResyncErr := shouldRunFullResync(syncPolicy.Spec.FullResyncCron, syncPolicy.Status.LastFullResyncTime, currentTime)
+	if fullResyncErr != nil {
+		resultLabel = "error"
+		reasonLabel = conditionReasonSpecInvalid
+		return r.failWithStatus(ctx, syncPolicy, conditionReasonSpecInvalid, fmt.Sprintf("invalid full resync cron: %v", fullResyncErr), 0, "SpecInvalid")
+	}
 	if syncPolicy.Status.ObservedGeneration == syncPolicy.Generation &&
 		syncPolicy.Status.LastAppliedRepoRevision == repoRevision &&
-		syncPolicy.Status.LastSecretResourceVersionHash == secretHash {
+		!secretHashChanged &&
+		!fullResyncDue {
 		logger.Info("sync policy is already at desired state", "revision", repoRevision)
-		return ctrl.Result{RequeueAfter: syncPolicy.Spec.SyncInterval.Duration}, nil
+		return ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(syncPolicy, currentTime)}, nil
 	}
 
 	runtimeBuild, runtimeErr := buildRuntimeContext(ctx, r.Client, syncPolicy, repo, managedServer, secretStore)
@@ -288,30 +298,53 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if syncPolicy.Spec.Source.Recursive != nil {
 		recursive = *syncPolicy.Spec.Source.Recursive
 	}
-	mutationResult, mutateErr := mutateapp.Execute(ctx, mutateapp.Dependencies{
-		Orchestrator: session.Orchestrator,
-		Repository:   session.Services.RepositoryStore(),
-		Metadata:     session.Services.MetadataService(),
-		Secrets:      session.Services.SecretProvider(),
-	}, mutateapp.Request{
-		Operation:        mutateapp.OperationApply,
-		LogicalPath:      syncPolicy.Spec.Source.Path,
-		Recursive:        recursive,
-		Force:            syncPolicy.Spec.Sync.Force,
-		HasExplicitInput: false,
-		RefreshLocal:     false,
-	})
-	if mutateErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonReconcileFailed
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonReconcileFailed, mutateErr.Error(), 0, "SyncFailed")
+	executionPlan, planErr := buildSyncExecutionPlan(
+		ctx,
+		syncPolicy,
+		runtimeBuild.RepositoryLocalPath,
+		repoRevision,
+		secretHashChanged,
+		fullResyncDue,
+	)
+	if planErr != nil {
+		logger.Info("falling back to full sync plan", "reason", planErr.Error())
+		executionPlan = fullSyncExecutionPlan(syncPolicy.Spec.Source.Path, recursive)
 	}
 
-	targetedCount := int32(mutationResult.TargetedCount)
-	appliedCount := int32(len(mutationResult.Items))
+	targetedCount := int32(0)
+	appliedCount := int32(0)
+	for _, target := range executionPlan.ApplyTargets {
+		mutationResult, mutateErr := mutateapp.Execute(ctx, mutateapp.Dependencies{
+			Orchestrator: session.Orchestrator,
+			Repository:   session.Services.RepositoryStore(),
+			Metadata:     session.Services.MetadataService(),
+			Secrets:      session.Services.SecretProvider(),
+		}, mutateapp.Request{
+			Operation:        mutateapp.OperationApply,
+			LogicalPath:      target.Path,
+			Recursive:        target.Recursive,
+			Force:            syncPolicy.Spec.Sync.Force,
+			HasExplicitInput: false,
+			RefreshLocal:     false,
+		})
+		if mutateErr != nil {
+			resultLabel = "error"
+			reasonLabel = conditionReasonReconcileFailed
+			return r.failWithStatus(ctx, syncPolicy, conditionReasonReconcileFailed, mutateErr.Error(), 0, "SyncFailed")
+		}
+		targetedCount += int32(mutationResult.TargetedCount)
+		appliedCount += int32(len(mutationResult.Items))
+	}
+
 	prunedCount := int32(0)
 	if syncPolicy.Spec.Sync.Prune {
-		deleted, pruneErr := r.pruneRemote(ctx, session.Orchestrator, syncPolicy.Spec.Source.Path, recursive)
+		var deleted int
+		var pruneErr error
+		if executionPlan.Mode == syncModeIncremental {
+			deleted, pruneErr = r.pruneRemovedPaths(ctx, session.Orchestrator, executionPlan.PruneTargets)
+		} else {
+			deleted, pruneErr = r.pruneRemote(ctx, session.Orchestrator, syncPolicy.Spec.Source.Path, recursive)
+		}
 		if pruneErr != nil {
 			resultLabel = "error"
 			reasonLabel = conditionReasonReconcileFailed
@@ -323,6 +356,10 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	syncPolicy.Status.LastAppliedRepoRevision = repoRevision
 	syncPolicy.Status.LastSecretResourceVersionHash = secretHash
 	syncPolicy.Status.LastSuccessfulSyncTime = &nowTime
+	if executionPlan.Mode == syncModeFull {
+		syncPolicy.Status.LastFullResyncTime = &nowTime
+	}
+	syncPolicy.Status.LastSyncMode = string(executionPlan.Mode)
 	syncPolicy.Status.ResourceStats = declarestv1alpha1.SyncPolicyResourceStats{
 		Targeted: targetedCount,
 		Applied:  appliedCount,
@@ -345,14 +382,15 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		syncPolicy,
 		corev1.EventTypeNormal,
 		"SyncSucceeded",
-		"sync completed at revision %s (applied=%d pruned=%d targeted=%d)",
+		"sync completed at revision %s (mode=%s applied=%d pruned=%d targeted=%d)",
 		repoRevision,
+		executionPlan.Mode,
 		appliedCount,
 		prunedCount,
 		targetedCount,
 	)
-	logger.Info("sync policy reconciled", "applied", appliedCount, "pruned", prunedCount, "repo_revision", repoRevision)
-	return ctrl.Result{RequeueAfter: syncPolicy.Spec.SyncInterval.Duration}, nil
+	logger.Info("sync policy reconciled", "mode", executionPlan.Mode, "applied", appliedCount, "pruned", prunedCount, "repo_revision", repoRevision)
+	return ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(syncPolicy, time.Now().UTC())}, nil
 }
 
 func (r *SyncPolicyReconciler) pruneRemote(
@@ -397,6 +435,39 @@ func (r *SyncPolicyReconciler) pruneRemote(
 		msgs := make([]string, len(errs))
 		for i, e := range errs {
 			msgs[i] = e.Error()
+		}
+		return deleted, fmt.Errorf("prune completed with %d errors (deleted=%d): %s", len(errs), deleted, strings.Join(msgs, "; "))
+	}
+	return deleted, nil
+}
+
+func (r *SyncPolicyReconciler) pruneRemovedPaths(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPaths []string,
+) (int, error) {
+	candidates := stringSet(logicalPaths)
+	if len(candidates) == 0 {
+		return 0, nil
+	}
+
+	deleted := 0
+	var errs []error
+	for _, candidate := range candidates {
+		if err := orchestratorService.Delete(ctx, candidate, orchestratordomain.DeletePolicy{}); err != nil {
+			if faults.IsCategory(err, faults.NotFoundError) {
+				continue
+			}
+			errs = append(errs, fmt.Errorf("prune %q: %w", candidate, err))
+			continue
+		}
+		deleted++
+	}
+
+	if len(errs) > 0 {
+		msgs := make([]string, len(errs))
+		for i, item := range errs {
+			msgs[i] = item.Error()
 		}
 		return deleted, fmt.Errorf("prune completed with %d errors (deleted=%d): %s", len(errs), deleted, strings.Join(msgs, "; "))
 	}

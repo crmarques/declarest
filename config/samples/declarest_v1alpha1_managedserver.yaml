@@ -3,6 +3,9 @@ kind: ManagedServer
 metadata:
   name: example-managed-server
 spec:
+  # Context parity:
+  # - managed-server.http.*     -> spec.http.*
+  # - metadata.bundle           -> spec.metadata.bundle
   http:
     baseURL: https://managed-server.example.com/api
     requestThrottling:

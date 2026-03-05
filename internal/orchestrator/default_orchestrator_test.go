@@ -1738,6 +1738,76 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	}
 }
 
+func TestDefaultOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *testing.T) {
+	t.Parallel()
+
+	const remoteID = "13de4420-7c8d-4db7-b8f7-2d2a26f2053e"
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"clientId": "testA",
+			"name":     "testA",
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "id",
+		AliasFromAttribute: "clientId",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet):    {Path: "/admin/realms/test/clients/{{.id}}"},
+			string(metadatadomain.OperationList):   {Path: "/admin/realms/test/clients"},
+			string(metadatadomain.OperationUpdate): {Path: "/admin/realms/test/clients/{{.id}}"},
+		},
+	}
+	metadataService := &fakeMetadata{resolveValue: md}
+
+	serverManager := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+		listValue: []resource.Resource{
+			{
+				LogicalPath:    "/admin/realms/test/clients/testA",
+				CollectionPath: "/admin/realms/test/clients",
+				LocalAlias:     "testA",
+				RemoteID:       remoteID,
+				Payload: map[string]any{
+					"id":       remoteID,
+					"clientId": "testA",
+					"name":     "before",
+				},
+			},
+		},
+		updateValue: map[string]any{
+			"id":       remoteID,
+			"clientId": "testA",
+			"name":     "testA",
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+	}
+
+	item, err := orchestrator.Apply(context.Background(), "/admin/realms/test/clients/testA", orch.ApplyPolicy{})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	if serverManager.createCalled {
+		t.Fatal("expected apply to update existing remote resource instead of create")
+	}
+	if !serverManager.updateCalled {
+		t.Fatal("expected apply to update existing remote resource")
+	}
+	if got := serverManager.lastResource.RemoteID; got != remoteID {
+		t.Fatalf("expected update to use resolved remote id %q, got %q", remoteID, got)
+	}
+	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
+		t.Fatalf("expected payload from update response, got %#v", item.Payload)
+	}
+}
+
 func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
 	t.Parallel()
 

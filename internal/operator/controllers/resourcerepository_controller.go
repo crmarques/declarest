@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -402,9 +403,35 @@ func (r *ResourceRepositoryReconciler) setNotReady(
 
 func (r *ResourceRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(resourceRepositoryReconcilePredicate())).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Complete(r)
+}
+
+func resourceRepositoryReconcilePredicate() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(event.CreateEvent) bool {
+			return true
+		},
+		DeleteFunc: func(event.DeleteEvent) bool {
+			return true
+		},
+		GenericFunc: func(event.GenericEvent) bool {
+			return true
+		},
+		UpdateFunc: func(update event.UpdateEvent) bool {
+			if update.ObjectOld == nil || update.ObjectNew == nil {
+				return true
+			}
+			if update.ObjectOld.GetGeneration() != update.ObjectNew.GetGeneration() {
+				return true
+			}
+			oldAnnotations := update.ObjectOld.GetAnnotations()
+			newAnnotations := update.ObjectNew.GetAnnotations()
+			return strings.TrimSpace(oldAnnotations[repositoryWebhookAnnotationLastEventAt]) != strings.TrimSpace(newAnnotations[repositoryWebhookAnnotationLastEventAt]) ||
+				strings.TrimSpace(oldAnnotations[repositoryWebhookAnnotationLastEventID]) != strings.TrimSpace(newAnnotations[repositoryWebhookAnnotationLastEventID])
+		},
+	}
 }
 
 func mergeStringMap(left map[string]string, right map[string]string) map[string]string {

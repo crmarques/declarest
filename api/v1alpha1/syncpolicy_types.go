@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crmarques/declarest/internal/cronexpr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,6 +26,7 @@ type SyncPolicySpec struct {
 	Source                SyncPolicySource          `json:"source"`
 	Sync                  SyncPolicySyncOptions     `json:"sync,omitempty"`
 	SyncInterval          *metav1.Duration          `json:"syncInterval,omitempty"`
+	FullResyncCron        string                    `json:"fullResyncCron,omitempty"`
 	Suspend               bool                      `json:"suspend,omitempty"`
 }
 
@@ -39,8 +41,10 @@ type SyncPolicyStatus struct {
 	ObservedGeneration            int64                   `json:"observedGeneration,omitempty"`
 	LastAttemptTime               *metav1.Time            `json:"lastAttemptTime,omitempty"`
 	LastSuccessfulSyncTime        *metav1.Time            `json:"lastSuccessfulSyncTime,omitempty"`
+	LastFullResyncTime            *metav1.Time            `json:"lastFullResyncTime,omitempty"`
 	LastAttemptedRepoRevision     string                  `json:"lastAttemptedRepoRevision,omitempty"`
 	LastAppliedRepoRevision       string                  `json:"lastAppliedRepoRevision,omitempty"`
+	LastSyncMode                  string                  `json:"lastSyncMode,omitempty"`
 	LastSecretResourceVersionHash string                  `json:"lastSecretResourceVersionHash,omitempty"`
 	ResourceStats                 SyncPolicyResourceStats `json:"resourceStats,omitempty"`
 	Conditions                    []metav1.Condition      `json:"conditions,omitempty"`
@@ -92,6 +96,11 @@ func (s *SyncPolicy) ValidateSpec() error {
 	}
 	if strings.TrimSpace(s.Spec.SecretStoreRef.Name) == "" {
 		return fmt.Errorf("spec.secretStoreRef.name is required")
+	}
+	if strings.TrimSpace(s.Spec.FullResyncCron) != "" {
+		if _, err := cronexpr.Parse(s.Spec.FullResyncCron); err != nil {
+			return fmt.Errorf("spec.fullResyncCron is invalid: %w", err)
+		}
 	}
 	normalizedPath, err := normalizePath(s.Spec.Source.Path)
 	if err != nil {

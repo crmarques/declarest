@@ -27,3 +27,39 @@ func TestSyncPolicyValidateSpecNormalizesPathAndDefaultsRecursive(t *testing.T) 
 		t.Fatalf("expected sync.force default false, got true")
 	}
 }
+
+func TestSyncPolicyValidateSpecAcceptsValidFullResyncCron(t *testing.T) {
+	t.Parallel()
+
+	policy := &SyncPolicy{
+		Spec: SyncPolicySpec{
+			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
+			Source:                SyncPolicySource{Path: "/customers"},
+			FullResyncCron:        "*/30 * * * *",
+		},
+	}
+
+	if err := policy.ValidateSpec(); err != nil {
+		t.Fatalf("ValidateSpec() unexpected error: %v", err)
+	}
+}
+
+func TestSyncPolicyValidateSpecRejectsInvalidFullResyncCron(t *testing.T) {
+	t.Parallel()
+
+	policy := &SyncPolicy{
+		Spec: SyncPolicySpec{
+			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
+			Source:                SyncPolicySource{Path: "/customers"},
+			FullResyncCron:        "invalid-cron",
+		},
+	}
+
+	if err := policy.ValidateSpec(); err == nil {
+		t.Fatal("ValidateSpec() expected fullResyncCron validation error, got nil")
+	}
+}
