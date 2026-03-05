@@ -38,7 +38,7 @@ case_run() {
   fi
 
   jq -c '. + {"owner":"operator-e2e"}' <<<"${resource_payload}" >"${create_file}"
-  case_run_declarest resource save "${resource_path}" -f "${create_file}" -i json
+  case_run_declarest resource save "${resource_path}" -f "${create_file}" -i json --overwrite
   case_expect_success
 
   case_run_declarest repository commit -m 'operator e2e create'
@@ -50,7 +50,7 @@ case_run() {
   case_wait_until 180 3 "operator create sync for ${resource_path}" operator_wait_remote_owner "${resource_path}" 'operator-e2e'
 
   jq -c '. + {"owner":"operator-e2e-updated","displayName":"Operator Demo Updated"}' <"${create_file}" >"${update_file}"
-  case_run_declarest resource save "${resource_path}" -f "${update_file}" -i json
+  case_run_declarest resource save "${resource_path}" -f "${update_file}" -i json --overwrite
   case_expect_success
 
   case_run_declarest repository commit -m 'operator e2e update'
