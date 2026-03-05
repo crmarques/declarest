@@ -4,6 +4,7 @@ MAKEFLAGS += --warn-undefined-variables
 
 GO ?= go
 GOFLAGS ?= -mod=readonly
+GO_VERSION := $(shell awk '/^go /{print $$2; exit}' go.mod)
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/declarest
 OPERATOR_BINARY := $(BIN_DIR)/declarest-operator-manager
@@ -68,7 +69,7 @@ operator-test: ## Run operator-focused unit tests
 	$(GO) test $(TEST_FLAGS) ./api/v1alpha1 ./internal/operator/...
 
 operator-image: ## Build the operator manager container image
-	podman build -f Dockerfile.operator -t $(OPERATOR_IMAGE_REF) .
+	podman build --build-arg GO_VERSION=$(GO_VERSION) -f Dockerfile.operator -t $(OPERATOR_IMAGE_REF) .
 
 operator-image-push: ## Push the operator manager container image
 	podman push $(OPERATOR_IMAGE_REF)
