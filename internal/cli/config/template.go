@@ -144,6 +144,7 @@ contexts:
     #   # Choose at most one metadata source.
     #   # base-dir: /path/to/metadata
     #   # bundle: keycloak-bundle:0.0.1
+    #   # bundle-file: /path/to/keycloak-bundle-0.0.1.tar.gz
 
     # Optional arbitrary key/value preferences.
     # preferences:

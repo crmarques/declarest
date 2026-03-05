@@ -149,17 +149,25 @@ func (s *testContextService) Update(context.Context, config.Context) error { ret
 func (s *testContextService) Delete(context.Context, string) error         { return nil }
 func (s *testContextService) Rename(context.Context, string, string) error { return nil }
 func (s *testContextService) List(context.Context) ([]config.Context, error) {
-	return []config.Context{{Name: "dev"}, {Name: "prod"}}, nil
+	return []config.Context{
+		buildTestContext("dev"),
+		buildTestContext("prod"),
+	}, nil
 }
 func (s *testContextService) SetCurrent(context.Context, string) error { return nil }
 func (s *testContextService) GetCurrent(context.Context) (config.Context, error) {
-	return config.Context{Name: "dev"}, nil
+	return buildTestContext("dev"), nil
 }
 func (s *testContextService) ResolveContext(_ context.Context, selection config.ContextSelection) (config.Context, error) {
 	name := selection.Name
 	if name == "" {
 		name = "dev"
 	}
+	return buildTestContext(name), nil
+}
+func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
+
+func buildTestContext(name string) config.Context {
 	format := config.ResourceFormatJSON
 	if name == "yaml" {
 		format = config.ResourceFormatYAML
@@ -210,9 +218,8 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 				Auth:        resourceServerAuth,
 			},
 		},
-	}, nil
+	}
 }
-func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
 func resolveManagedServerHealthCheckForTestContext(name string) string {
 	switch name {

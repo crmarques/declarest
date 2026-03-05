@@ -245,8 +245,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 				Repository:    validFilesystemRepository(),
 				ManagedServer: validManagedServer(),
 				Metadata: config.Metadata{
-					BaseDir: "/tmp/metadata",
-					Bundle:  "keycloak-bundle:0.0.1",
+					BaseDir:    "/tmp/metadata",
+					Bundle:     "keycloak-bundle:0.0.1",
+					BundleFile: "/tmp/keycloak-bundle-0.0.1.tar.gz",
 				},
 			},
 		},
@@ -779,6 +780,44 @@ current-ctx: dev
 	}
 }
 
+func TestResolveContextDoesNotDefaultMetadataBaseDirWhenBundleFileIsConfigured(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(`
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+    metadata:
+      bundle-file: /tmp/keycloak-bundle-0.0.1.tar.gz
+current-ctx: dev
+`), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
+	if err != nil {
+		t.Fatalf("ResolveContext returned error: %v", err)
+	}
+	if resolved.Metadata.BaseDir != "" {
+		t.Fatalf("expected metadata base-dir to stay empty for bundle-file contexts, got %q", resolved.Metadata.BaseDir)
+	}
+	if resolved.Metadata.BundleFile != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
+		t.Fatalf("expected metadata bundle-file /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
+	}
+}
+
 func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 	t.Parallel()
 
@@ -802,6 +841,38 @@ func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 	}
 	if resolved.Metadata.BaseDir != "" {
 		t.Fatalf("expected metadata base-dir to be cleared when bundle override is configured, got %q", resolved.Metadata.BaseDir)
+	}
+	if resolved.Metadata.BundleFile != "" {
+		t.Fatalf("expected metadata bundle-file to be cleared when bundle override is configured, got %q", resolved.Metadata.BundleFile)
+	}
+}
+
+func TestResolveContextOverrideSupportsMetadataBundleFile(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(providerSelectionContextCatalogYAML), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewFileContextService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
+		Name: "fs",
+		Overrides: map[string]string{
+			"metadata.bundle-file": "/tmp/keycloak-bundle-0.0.1.tar.gz",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected metadata bundle-file override to succeed, got %v", err)
+	}
+	if resolved.Metadata.BundleFile != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
+		t.Fatalf("expected metadata bundle-file override /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
+	}
+	if resolved.Metadata.BaseDir != "" {
+		t.Fatalf("expected metadata base-dir to be cleared when bundle-file override is configured, got %q", resolved.Metadata.BaseDir)
+	}
+	if resolved.Metadata.Bundle != "" {
+		t.Fatalf("expected metadata bundle to be cleared when bundle-file override is configured, got %q", resolved.Metadata.Bundle)
 	}
 }
 

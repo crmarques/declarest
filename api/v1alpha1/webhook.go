@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -13,32 +12,28 @@ import (
 
 // +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-resourcerepository,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=resourcerepositories,verbs=create;update;delete,versions=v1alpha1,name=vresourcerepository-v1alpha1.declarest.io,admissionReviewVersions=v1
 func (r *ResourceRepository) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithValidator(&resourceRepositoryValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-managedserver,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=managedservers,verbs=create;update;delete,versions=v1alpha1,name=vmanagedserver-v1alpha1.declarest.io,admissionReviewVersions=v1
 func (m *ManagedServer) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(m).
+	return ctrl.NewWebhookManagedBy(mgr, m).
 		WithValidator(&managedServerValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-secretstore,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=secretstores,verbs=create;update;delete,versions=v1alpha1,name=vsecretstore-v1alpha1.declarest.io,admissionReviewVersions=v1
 func (s *SecretStore) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(s).
+	return ctrl.NewWebhookManagedBy(mgr, s).
 		WithValidator(&secretStoreValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-syncpolicy,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=syncpolicies,verbs=create;update,versions=v1alpha1,name=vsyncpolicy-v1alpha1.declarest.io,admissionReviewVersions=v1
 func (s *SyncPolicy) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(s).
+	return ctrl.NewWebhookManagedBy(mgr, s).
 		WithValidator(&syncPolicyValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -49,25 +44,18 @@ type resourceRepositoryValidator struct {
 	Client client.Reader
 }
 
-func (v *resourceRepositoryValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	value, ok := obj.(*ResourceRepository)
-	if !ok {
-		return nil, fmt.Errorf("expected ResourceRepository, got %T", obj)
-	}
-	candidate := value.DeepCopy()
+func (v *resourceRepositoryValidator) ValidateCreate(_ context.Context, obj *ResourceRepository) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
 	candidate.Default()
 	return nil, candidate.ValidateSpec()
 }
 
-func (v *resourceRepositoryValidator) ValidateUpdate(ctx context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+func (v *resourceRepositoryValidator) ValidateUpdate(ctx context.Context, _ *ResourceRepository, newObj *ResourceRepository) (admission.Warnings, error) {
 	return v.ValidateCreate(ctx, newObj)
 }
 
-func (v *resourceRepositoryValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	repo, ok := obj.(*ResourceRepository)
-	if !ok {
-		return nil, fmt.Errorf("expected ResourceRepository, got %T", obj)
-	}
+func (v *resourceRepositoryValidator) ValidateDelete(ctx context.Context, obj *ResourceRepository) (admission.Warnings, error) {
+	repo := obj
 	return checkDependencyRef(ctx, v.Client, repo.Namespace, "ResourceRepository", repo.Name, func(sp *SyncPolicy) string {
 		return sp.Spec.ResourceRepositoryRef.Name
 	})
@@ -79,25 +67,18 @@ type managedServerValidator struct {
 	Client client.Reader
 }
 
-func (v *managedServerValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	value, ok := obj.(*ManagedServer)
-	if !ok {
-		return nil, fmt.Errorf("expected ManagedServer, got %T", obj)
-	}
-	candidate := value.DeepCopy()
+func (v *managedServerValidator) ValidateCreate(_ context.Context, obj *ManagedServer) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
 	candidate.Default()
 	return nil, candidate.ValidateSpec()
 }
 
-func (v *managedServerValidator) ValidateUpdate(ctx context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+func (v *managedServerValidator) ValidateUpdate(ctx context.Context, _ *ManagedServer, newObj *ManagedServer) (admission.Warnings, error) {
 	return v.ValidateCreate(ctx, newObj)
 }
 
-func (v *managedServerValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	ms, ok := obj.(*ManagedServer)
-	if !ok {
-		return nil, fmt.Errorf("expected ManagedServer, got %T", obj)
-	}
+func (v *managedServerValidator) ValidateDelete(ctx context.Context, obj *ManagedServer) (admission.Warnings, error) {
+	ms := obj
 	return checkDependencyRef(ctx, v.Client, ms.Namespace, "ManagedServer", ms.Name, func(sp *SyncPolicy) string {
 		return sp.Spec.ManagedServerRef.Name
 	})
@@ -109,24 +90,17 @@ type secretStoreValidator struct {
 	Client client.Reader
 }
 
-func (v *secretStoreValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	value, ok := obj.(*SecretStore)
-	if !ok {
-		return nil, fmt.Errorf("expected SecretStore, got %T", obj)
-	}
-	candidate := value.DeepCopy()
+func (v *secretStoreValidator) ValidateCreate(_ context.Context, obj *SecretStore) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
 	return nil, candidate.ValidateSpec()
 }
 
-func (v *secretStoreValidator) ValidateUpdate(ctx context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+func (v *secretStoreValidator) ValidateUpdate(ctx context.Context, _ *SecretStore, newObj *SecretStore) (admission.Warnings, error) {
 	return v.ValidateCreate(ctx, newObj)
 }
 
-func (v *secretStoreValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	ss, ok := obj.(*SecretStore)
-	if !ok {
-		return nil, fmt.Errorf("expected SecretStore, got %T", obj)
-	}
+func (v *secretStoreValidator) ValidateDelete(ctx context.Context, obj *SecretStore) (admission.Warnings, error) {
+	ss := obj
 	return checkDependencyRef(ctx, v.Client, ss.Namespace, "SecretStore", ss.Name, func(sp *SyncPolicy) string {
 		return sp.Spec.SecretStoreRef.Name
 	})
@@ -138,12 +112,8 @@ type syncPolicyValidator struct {
 	Client client.Reader
 }
 
-func (v *syncPolicyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	value, ok := obj.(*SyncPolicy)
-	if !ok {
-		return nil, fmt.Errorf("expected SyncPolicy, got %T", obj)
-	}
-	candidate := value.DeepCopy()
+func (v *syncPolicyValidator) ValidateCreate(ctx context.Context, obj *SyncPolicy) (admission.Warnings, error) {
+	candidate := obj.DeepCopy()
 	candidate.Default()
 	if err := candidate.ValidateSpec(); err != nil {
 		return nil, err
@@ -151,11 +121,11 @@ func (v *syncPolicyValidator) ValidateCreate(ctx context.Context, obj runtime.Ob
 	return v.validateNoOverlap(ctx, candidate)
 }
 
-func (v *syncPolicyValidator) ValidateUpdate(ctx context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+func (v *syncPolicyValidator) ValidateUpdate(ctx context.Context, _ *SyncPolicy, newObj *SyncPolicy) (admission.Warnings, error) {
 	return v.ValidateCreate(ctx, newObj)
 }
 
-func (v *syncPolicyValidator) ValidateDelete(context.Context, runtime.Object) (admission.Warnings, error) {
+func (v *syncPolicyValidator) ValidateDelete(context.Context, *SyncPolicy) (admission.Warnings, error) {
 	return nil, nil
 }
 

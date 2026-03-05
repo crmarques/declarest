@@ -52,7 +52,7 @@ Factory contract:
 1. `bootstrap.NewSession` MUST assemble default provider implementations.
 2. `bootstrap.NewSession` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
-4. when `metadata.bundle` is configured and `managed-server.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
+4. when `metadata.bundle` or `metadata.bundle-file` is configured and `managed-server.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
 
 Corner case example:
 1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `bootstrap.NewSession` MUST return an `InternalError`.
@@ -95,7 +95,7 @@ One-of invariants:
 2. `managed-server.http.auth` MUST define exactly one of `oauth2`, `basic-auth`, `custom-headers`.
 3. `secret-store` MUST define exactly one of `file` or `vault`.
 4. `secret-store.file` MUST define exactly one of `key`, `key-file`, `passphrase`, `passphrase-file`.
-5. `metadata` MUST define at most one of `base-dir` or `bundle`.
+5. `metadata` MUST define at most one of `base-dir`, `bundle`, or `bundle-file`.
 6. `managed-server.http.proxy` MUST define at least one of `http-url` or `https-url` when configured.
 7. `managed-server.http.proxy.auth` MUST define both `username` and `password` when configured.
  8. `managed-server.http.request-throttling` MUST define at least one of `max-concurrent-requests` or `requests-per-second` when configured.

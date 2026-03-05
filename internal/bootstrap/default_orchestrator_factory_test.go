@@ -128,6 +128,74 @@ paths: {}
 		}
 	})
 
+	t.Run("metadata_bundle_file_local_archive", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.11.tar.gz")
+		writeBundleArchiveForTest(t, archivePath, map[string]string{
+			"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.0.11
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
+`,
+			"openapi.yaml": `
+openapi: 3.0.0
+paths: {}
+`,
+			"metadata/admin/realms/_/metadata.json": `{}`,
+		})
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "bundle-file",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
+				},
+				ManagedServer: &config.ManagedServer{
+					HTTP: &config.HTTPServer{
+						BaseURL: "https://example.com",
+						Auth: &config.HTTPAuth{
+							CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+						},
+					},
+				},
+				Metadata: config.Metadata{
+					BundleFile: archivePath,
+				},
+			},
+		}
+
+		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-file"})
+		if err != nil {
+			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+		}
+		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService for bundle-file metadata source, got %T", defaultOrchestrator.MetadataService())
+		}
+		if defaultOrchestrator.ManagedServerClient() == nil {
+			t.Fatal("expected server manager")
+		}
+		openAPISpec, openAPIErr := defaultOrchestrator.ManagedServerClient().GetOpenAPISpec(context.Background())
+		if openAPIErr != nil {
+			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
+		}
+		specMap, ok := openAPISpec.(map[string]any)
+		if !ok {
+			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+		}
+		if specMap["openapi"] != "3.0.0" {
+			t.Fatalf("expected bundled openapi version 3.0.0, got %v", specMap["openapi"])
+		}
+	})
+
 	t.Run("metadata_bundle_manifest_openapi_url", func(t *testing.T) {
 		t.Parallel()
 

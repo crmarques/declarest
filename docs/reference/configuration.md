@@ -259,7 +259,7 @@ When configured, DeclaREST can:
 
 Explicit metadata overrides still win.
 
-When omitted, and `metadata.bundle` is configured, DeclaREST attempts OpenAPI fallback from the bundle:
+When omitted, and `metadata.bundle` or `metadata.bundle-file` is configured, DeclaREST attempts OpenAPI fallback from the bundle:
 
 - `bundle.yaml` `declarest.openapi` (URL or relative path inside the bundle)
 - bundled `openapi.yaml` at bundle root (peer of `bundle.yaml`)
@@ -349,16 +349,19 @@ metadata:
   # local metadata tree
   # base-dir: /path/to/metadata
   #
-  # or bundle reference (shorthand, URL, or local tar.gz path)
+  # or bundle reference (shorthand or URL)
   # bundle: keycloak-bundle:0.0.1
   # bundle: https://github.com/crmarques/declarest-bundle-keycloak/releases/download/v0.0.1/keycloak-bundle-0.0.1.tar.gz
-  # bundle: /path/to/keycloak-bundle-0.0.1.tar.gz
+  #
+  # or local bundle archive
+  # bundle-file: /path/to/keycloak-bundle-0.0.1.tar.gz
 ```
 
-When both metadata sources are omitted, `metadata.base-dir` defaults to the selected repository base dir.
+When all metadata sources are omitted, `metadata.base-dir` defaults to the selected repository base dir.
 
 Use `metadata.base-dir` when you want metadata files stored separately from resource payload files.
-Use `metadata.bundle` when you want metadata definitions to be consumed from a bundle archive and cached under `~/.declarest/metadata-bundles/`.
+Use `metadata.bundle` when you want metadata definitions to be consumed from a shorthand or URL bundle reference.
+Use `metadata.bundle-file` when you want metadata definitions to be consumed from a local bundle archive file.
 
 ### `metadata.proxy` (optional)
 
@@ -478,6 +481,7 @@ The canonical override keys are:
 - `managed-server.http.health-check`
 - `metadata.base-dir`
 - `metadata.bundle`
+- `metadata.bundle-file`
 
 Example:
 
@@ -509,4 +513,4 @@ declarest config list
 - unknown YAML key (strict decoding)
 - `current-ctx` points to a non-existent context name
 - invalid secret-store one-of configuration
-- both `metadata.base-dir` and `metadata.bundle` set in the same context
+- multiple metadata sources set in the same context (`metadata.base-dir`, `metadata.bundle`, `metadata.bundle-file`)

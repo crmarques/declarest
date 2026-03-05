@@ -256,6 +256,80 @@ current-ctx: bundled
 	}
 }
 
+func TestNewSessionSupportsMetadataBundleFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	tempDir := t.TempDir()
+	bundlePath := filepath.Join(tempDir, "keycloak-bundle-0.0.14.tar.gz")
+	writeBundleArchiveForTest(t, bundlePath, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.0.14
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
+`,
+		"openapi.yaml": `
+openapi: 3.0.0
+paths: {}
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+
+	contextCatalogPath := filepath.Join(tempDir, "contexts.yaml")
+	contextCatalog := []byte(`
+contexts:
+  - name: bundled-file
+    repository:
+      filesystem:
+        base-dir: ` + filepath.Join(tempDir, "repo") + `
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: dev-token
+    metadata:
+      bundle-file: ` + bundlePath + `
+current-ctx: bundled-file
+`)
+	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
+		t.Fatalf("failed to write catalog: %v", err)
+	}
+
+	session, err := NewSession(
+		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
+		config.ContextSelection{Name: "bundled-file"},
+	)
+	if err != nil {
+		t.Fatalf("NewSession returned error: %v", err)
+	}
+	if session.Services.MetadataService() == nil {
+		t.Fatal("expected metadata service when metadata.bundle-file is configured")
+	}
+	if session.Services.ManagedServerClient() == nil {
+		t.Fatal("expected managed server when managed-server is configured")
+	}
+	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
+	if openAPIErr != nil {
+		t.Fatalf("expected OpenAPI to fallback from bundle-file, got error: %v", openAPIErr)
+	}
+	specMap, ok := openAPISpec.(map[string]any)
+	if !ok {
+		t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
+	}
+	if specMap["openapi"] != "3.0.0" {
+		t.Fatalf("expected bundled OpenAPI version 3.0.0, got %v", specMap["openapi"])
+	}
+}
+
 func TestNewSessionFromResolvedContext(t *testing.T) {
 	t.Parallel()
 

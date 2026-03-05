@@ -179,10 +179,14 @@ func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
 }
 
 func resolveMetadataSource(ctx context.Context, context config.Context) (metadataSourceResolution, error) {
-	if strings.TrimSpace(context.Metadata.Bundle) != "" {
+	bundleRef := strings.TrimSpace(context.Metadata.Bundle)
+	if bundleRef == "" {
+		bundleRef = strings.TrimSpace(context.Metadata.BundleFile)
+	}
+	if bundleRef != "" {
 		resolution, err := bundlemetadata.ResolveBundle(
 			ctx,
-			context.Metadata.Bundle,
+			bundleRef,
 			bundlemetadata.WithProxyConfig(context.Metadata.Proxy),
 		)
 		if err != nil {

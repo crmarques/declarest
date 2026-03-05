@@ -506,6 +506,7 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 			"resolve",
 			"--set", "metadata.base-dir=/tmp/meta",
 			"--set", "metadata.bundle=keycloak-bundle:0.0.1",
+			"--set", "metadata.bundle-file=/tmp/keycloak-bundle-0.0.1.tar.gz",
 			"--set", "repository.resource-format=yaml",
 		)
 		if err != nil {
@@ -520,6 +521,9 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 		}
 		if got := service.resolveSelection.Overrides["metadata.bundle"]; got != "keycloak-bundle:0.0.1" {
 			t.Fatalf("expected metadata bundle override to be forwarded, got %q", got)
+		}
+		if got := service.resolveSelection.Overrides["metadata.bundle-file"]; got != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
+			t.Fatalf("expected metadata bundle-file override to be forwarded, got %q", got)
 		}
 		if got := service.resolveSelection.Overrides["repository.resource-format"]; got != "yaml" {
 			t.Fatalf("expected resource format override to be forwarded, got %q", got)
@@ -697,6 +701,44 @@ func TestCheckReportsMetadataBundleAsAccessible(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
 			},
 			Metadata: configdomain.Metadata{Bundle: "keycloak-bundle:0.0.1"},
+		},
+	}
+
+	deps := cliutil.CommandDependencies{
+		Contexts:       contextService,
+		ResourceStore:  &testRepositoryService{},
+		RepositorySync: &testRepositoryService{},
+		Metadata:       &testMetadataService{},
+	}
+	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
+
+	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
+	if err != nil {
+		t.Fatalf("check returned error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"[OK] metadata",
+		"metadata bundle is accessible",
+		"Result: PASS",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected output to contain %q, got %q", snippet, output)
+		}
+	}
+}
+
+func TestCheckReportsMetadataBundleFileAsAccessible(t *testing.T) {
+	t.Parallel()
+
+	contextService := &testContextService{
+		resolveValue: configdomain.Context{
+			Name: "dev",
+			Repository: configdomain.Repository{
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+			},
+			Metadata: configdomain.Metadata{BundleFile: "/tmp/keycloak-bundle-0.0.1.tar.gz"},
 		},
 	}
 
@@ -1412,13 +1454,13 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		resolveValue: configdomain.Context{
+		listValue: []configdomain.Context{{
 			Name: "prod",
 			Repository: configdomain.Repository{
 				ResourceFormat: configdomain.ResourceFormatYAML,
 				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 			},
-		},
+		}},
 	}
 	prompter := &mockPrompter{interactive: true}
 	globalFlags := &cliutil.GlobalFlags{
@@ -1430,8 +1472,8 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show returned error: %v", err)
 	}
-	if service.resolveSelection.Name != "prod" {
-		t.Fatalf("expected show to resolve context prod, got %q", service.resolveSelection.Name)
+	if service.resolveCalled {
+		t.Fatal("expected show to read stored context without calling resolve")
 	}
 	if !strings.Contains(output, "name: prod") {
 		t.Fatalf("expected YAML output with context name prod, got %q", output)
@@ -1445,13 +1487,13 @@ func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		resolveValue: configdomain.Context{
+		listValue: []configdomain.Context{{
 			Name: "prod",
 			Repository: configdomain.Repository{
 				ResourceFormat: configdomain.ResourceFormatYAML,
 				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 			},
-		},
+		}},
 	}
 	prompter := &mockPrompter{interactive: false}
 
@@ -1467,8 +1509,8 @@ func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show returned error: %v", err)
 	}
-	if service.resolveSelection.Name != "prod" {
-		t.Fatalf("expected show to resolve positional context prod, got %q", service.resolveSelection.Name)
+	if service.resolveCalled {
+		t.Fatal("expected show to read stored context without calling resolve")
 	}
 	if !strings.Contains(output, "name: prod") {
 		t.Fatalf("expected YAML output with context name prod, got %q", output)
@@ -1500,12 +1542,20 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		listValue: []configdomain.Context{{Name: "dev"}, {Name: "prod"}},
-		resolveValue: configdomain.Context{
-			Name: "dev",
-			Repository: configdomain.Repository{
-				ResourceFormat: configdomain.ResourceFormatJSON,
-				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/dev"},
+		listValue: []configdomain.Context{
+			{
+				Name: "dev",
+				Repository: configdomain.Repository{
+					ResourceFormat: configdomain.ResourceFormatJSON,
+					Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/dev"},
+				},
+			},
+			{
+				Name: "prod",
+				Repository: configdomain.Repository{
+					ResourceFormat: configdomain.ResourceFormatYAML,
+					Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				},
 			},
 		},
 	}
@@ -1519,14 +1569,56 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show returned error: %v", err)
 	}
-	if service.resolveSelection.Name != "dev" {
-		t.Fatalf("expected interactive show to resolve context dev, got %q", service.resolveSelection.Name)
+	if service.resolveCalled {
+		t.Fatal("expected interactive show to read stored context without calling resolve")
 	}
 	if !strings.Contains(output, "name: dev") {
 		t.Fatalf("expected YAML output with context name dev, got %q", output)
 	}
 	if !strings.Contains(output, "resource-format: json") {
 		t.Fatalf("expected YAML output for full context config, got %q", output)
+	}
+}
+
+func TestShowOmitsDefaultMetadataBaseDir(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{
+		listValue: []configdomain.Context{
+			{
+				Name: "dev",
+				Repository: configdomain.Repository{
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+				},
+				ManagedServer: &configdomain.ManagedServer{
+					HTTP: &configdomain.HTTPServer{
+						BaseURL: "https://example.com/api",
+						Auth: &configdomain.HTTPAuth{
+							CustomHeaders: []configdomain.HeaderTokenAuth{{
+								Header: "Authorization",
+								Value:  "token",
+							}},
+						},
+					},
+				},
+				Metadata: configdomain.Metadata{BaseDir: "/tmp/repo"},
+			},
+		},
+	}
+
+	output, err := executeConfigCommandWithPrompter(
+		t,
+		service,
+		&cliutil.GlobalFlags{Context: "dev", Output: cliutil.OutputText},
+		&mockPrompter{interactive: false},
+		"",
+		"show",
+	)
+	if err != nil {
+		t.Fatalf("show returned error: %v", err)
+	}
+	if strings.Contains(output, "metadata:") {
+		t.Fatalf("expected compact show output to omit default metadata block, got %q", output)
 	}
 }
 

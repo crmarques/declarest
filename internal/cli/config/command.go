@@ -519,7 +519,12 @@ func newShowCommand(
 				}
 			}
 
-			shown, err := contexts.ResolveContext(command.Context(), configdomain.ContextSelection{Name: name})
+			items, err := contexts.List(command.Context())
+			if err != nil {
+				return err
+			}
+
+			shown, _, err := selectContextForView(items, name)
 			if err != nil {
 				return err
 			}
@@ -803,7 +808,7 @@ func checkMetadata(command *cobra.Command, deps cliutil.CommandDependencies, cfg
 		return result
 	}
 
-	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
+	if strings.TrimSpace(cfg.Metadata.Bundle) != "" || strings.TrimSpace(cfg.Metadata.BundleFile) != "" {
 		result.Status = configCheckOK
 		result.Details = "metadata bundle is accessible"
 		return result

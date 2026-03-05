@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
-	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -64,7 +63,7 @@ func editContextCatalog(
 	editor string,
 	catalog configdomain.ContextCatalog,
 ) error {
-	encoded, err := yaml.Marshal(catalog)
+	encoded, err := yaml.Marshal(compactContextCatalogForView(catalog))
 	if err != nil {
 		return cliutil.ValidationError("failed to encode context catalog for editing", err)
 	}
@@ -92,18 +91,12 @@ func editSingleContext(
 	catalog configdomain.ContextCatalog,
 	name string,
 ) error {
-	idx := -1
-	for i, item := range catalog.Contexts {
-		if item.Name == name {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
-		return faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("context %q not found", name), nil)
+	viewContext, idx, err := selectContextForView(catalog.Contexts, name)
+	if err != nil {
+		return err
 	}
 
-	encoded, err := yaml.Marshal(catalog.Contexts[idx])
+	encoded, err := yaml.Marshal(viewContext)
 	if err != nil {
 		return cliutil.ValidationError("failed to encode context for editing", err)
 	}

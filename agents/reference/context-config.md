@@ -26,13 +26,13 @@ Define the canonical context catalog schema, file location, validation rules, an
 9. Config precedence MUST be: runtime flags, environment overrides, persisted context values, engine defaults.
 10. Unknown override keys MUST fail validation.
 11. Missing context catalog files MUST be treated as an empty catalog state.
-12. `metadata` MUST define at most one source: `base-dir` or `bundle`.
-13. `metadata.base-dir` MUST default to the selected repository base-dir when both metadata sources are unset.
+12. `metadata` MUST define at most one source: `base-dir`, `bundle`, or `bundle-file`.
+13. `metadata.base-dir` MUST default to the selected repository base-dir when all metadata sources are unset.
 14. Persisted context YAML MUST omit `metadata.base-dir` when it equals repository base-dir.
 15. Every context MUST define `managed-server.http` with one configured auth mode.
 16. Catalog-level `default-editor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 17. Catalog edit workflows that replace the full YAML document (for example `config edit`) MUST validate strict YAML and context semantics before persisting any file changes.
-18. When `managed-server.http.openapi` is empty and `metadata.bundle` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
+18. When `managed-server.http.openapi` is empty and `metadata.bundle` or `metadata.bundle-file` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
 19. When any proxy block (`managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `http-url` or `https-url`; proxy auth (when provided) MUST include both `username` and `password`.
 20. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
 21. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
@@ -98,6 +98,7 @@ Runtime override keys:
 10. `managed-server.http.proxy.auth.password`.
 11. `metadata.base-dir`.
 12. `metadata.bundle`.
+13. `metadata.bundle-file`.
 
 ## Canonical YAML Template
 ```yaml
@@ -222,6 +223,7 @@ contexts:
       # Choose at most one metadata source.
       # base-dir: /path/to/metadata
       # bundle: keycloak-bundle:0.0.1
+      # bundle-file: /path/to/keycloak-bundle-0.0.1.tar.gz
       # proxy:
       #   http-url: http://proxy.example.com:3128
       #   https-url: http://proxy.example.com:3128
@@ -249,7 +251,7 @@ current-ctx: xxx
 6. Resource server auth one-of violation.
 7. Secret store one-of violation.
 8. Secret file key source one-of violation.
-9. Metadata source one-of violation (`metadata.base-dir` and `metadata.bundle` both set).
+9. Metadata source one-of violation (multiple metadata sources set, for example `metadata.base-dir` with `metadata.bundle`).
 10. Config path resolution failure for home expansion or file access.
 11. Runtime override key not in the supported override-key list.
 12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `current-ctx` resolves to a valid context.
@@ -265,9 +267,10 @@ current-ctx: xxx
 6. `metadata.base-dir` omitted in YAML; resolve still returns repository base-dir as effective metadata base-dir.
 7. `metadata.bundle` configured; resolve keeps `metadata.base-dir` empty and startup resolves metadata from the bundle cache.
 8. `metadata.bundle` provides `declarest.openapi` or peer `openapi.yaml`; startup wires that OpenAPI source only when context `managed-server.http.openapi` is unset.
-9. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
-10. `managed-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
-11. `managed-server.http.health-check` can be absolute and still resolves to a managed-server-relative probe when scheme/host match `managed-server.http.base-url`.
+9. `metadata.bundle-file` configured; resolve keeps `metadata.base-dir` empty and startup resolves metadata from the local bundle archive.
+10. `default-editor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
+11. `managed-server.http.proxy.no-proxy` can be set without proxy auth and still remains valid.
+12. `managed-server.http.health-check` can be absolute and still resolves to a managed-server-relative probe when scheme/host match `managed-server.http.base-url`.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `current-ctx`.
@@ -275,9 +278,10 @@ current-ctx: xxx
 3. `Validate` rejects a config that defines both `repository.git` and `repository.filesystem`.
 4. Corner case: `ResolveContext({Name: "dev", Overrides: {"unknown.key":"x"}})` fails with a validation error for unknown override keys.
 5. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle":"keycloak-bundle:0.0.1"}})` resolves bundle metadata source and clears `metadata.base-dir`.
-5. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
-6. `bootstrap.NewSession(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
-7. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
-8. Corner case: `managed-server.http.auth.custom-headers` with one entry that defines `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
-9. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `managed-server.http.openapi` and `metadata.bundle` that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
-10. Corner case: `ResolveContext({Name: "dev", Overrides: {"managed-server.http.proxy.http-url":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.
+6. Corner case: `ResolveContext({Name: "dev", Overrides: {"metadata.bundle-file":"/tmp/keycloak-bundle-0.0.1.tar.gz"}})` resolves local bundle metadata source and clears both `metadata.base-dir` and `metadata.bundle`.
+7. `List()` on a missing catalog file returns `[]`; `GetCurrent()` returns `NotFoundError` with `current context not set`.
+8. `bootstrap.NewSession(..., ContextSelection{})` returns `NotFoundError` when `current-ctx` is not set.
+9. `config edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
+10. Corner case: `managed-server.http.auth.custom-headers` with one entry that defines `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
+11. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `managed-server.http.openapi` and bundle metadata source (`metadata.bundle` or `metadata.bundle-file`) that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
+12. Corner case: `ResolveContext({Name: "dev", Overrides: {"managed-server.http.proxy.http-url":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.

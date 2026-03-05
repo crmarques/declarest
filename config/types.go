@@ -203,7 +203,8 @@ type TLS struct {
 }
 
 type Metadata struct {
-	BaseDir string     `yaml:"base-dir,omitempty"`
-	Bundle  string     `yaml:"bundle,omitempty"`
-	Proxy   *HTTPProxy `yaml:"proxy,omitempty"`
+	BaseDir    string     `yaml:"base-dir,omitempty"`
+	Bundle     string     `yaml:"bundle,omitempty"`
+	BundleFile string     `yaml:"bundle-file,omitempty"`
+	Proxy      *HTTPProxy `yaml:"proxy,omitempty"`
 }

@@ -93,7 +93,7 @@ func normalizeConfig(cfg config.Context) config.Context {
 
 func applyConfigDefaults(cfg config.Context) config.Context {
 	cfg = normalizeConfig(cfg)
-	if strings.TrimSpace(cfg.Metadata.Bundle) == "" && cfg.Metadata.BaseDir == "" {
+	if strings.TrimSpace(cfg.Metadata.Bundle) == "" && strings.TrimSpace(cfg.Metadata.BundleFile) == "" && cfg.Metadata.BaseDir == "" {
 		cfg.Metadata.BaseDir = contextRepositoryBaseDir(cfg)
 	}
 	cfg = applyProxyDefaults(cfg)
@@ -221,23 +221,7 @@ func normalizeProxy(proxy *config.HTTPProxy) *config.HTTPProxy {
 }
 
 func compactConfigForPersistence(cfg config.Context) config.Context {
-	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
-		cfg.Metadata.BaseDir = ""
-		return cfg
-	}
-	if isDefaultMetadataBaseDir(cfg) {
-		cfg.Metadata.BaseDir = ""
-	}
-	return cfg
-}
-
-func isDefaultMetadataBaseDir(cfg config.Context) bool {
-	if strings.TrimSpace(cfg.Metadata.Bundle) != "" {
-		return false
-	}
-	repoBaseDir := normalizeBaseDirPath(contextRepositoryBaseDir(cfg))
-	metadataBaseDir := normalizeBaseDirPath(cfg.Metadata.BaseDir)
-	return repoBaseDir != "" && metadataBaseDir != "" && repoBaseDir == metadataBaseDir
+	return config.CompactContext(cfg)
 }
 
 func contextRepositoryBaseDir(cfg config.Context) string {
@@ -249,13 +233,6 @@ func contextRepositoryBaseDir(cfg config.Context) string {
 	default:
 		return ""
 	}
-}
-
-func normalizeBaseDirPath(path string) string {
-	if path == "" {
-		return ""
-	}
-	return filepath.Clean(path)
 }
 
 func validateRepository(repository config.Repository) error {
@@ -476,9 +453,10 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 func validateMetadata(metadata config.Metadata) error {
 	baseDir := strings.TrimSpace(metadata.BaseDir)
 	bundle := strings.TrimSpace(metadata.Bundle)
+	bundleFile := strings.TrimSpace(metadata.BundleFile)
 
-	if baseDir != "" && bundle != "" {
-		return faults.NewValidationError("metadata must define at most one of base-dir or bundle", nil)
+	if countSet(baseDir != "", bundle != "", bundleFile != "") > 1 {
+		return faults.NewValidationError("metadata must define at most one of base-dir, bundle, or bundle-file", nil)
 	}
 	if err := validateProxy("metadata.proxy", metadata.Proxy); err != nil {
 		return err
@@ -576,11 +554,19 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {
 				cfg.Metadata.Bundle = ""
+				cfg.Metadata.BundleFile = ""
 			}
 		case "metadata.bundle":
 			cfg.Metadata.Bundle = value
 			if strings.TrimSpace(value) != "" {
 				cfg.Metadata.BaseDir = ""
+				cfg.Metadata.BundleFile = ""
+			}
+		case "metadata.bundle-file":
+			cfg.Metadata.BundleFile = value
+			if strings.TrimSpace(value) != "" {
+				cfg.Metadata.BaseDir = ""
+				cfg.Metadata.Bundle = ""
 			}
 		default:
 			return config.Context{}, unknownOverrideError(key)

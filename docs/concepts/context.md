@@ -12,8 +12,8 @@ A context is the combination of repository backend, managed server, secrets, and
 - The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`). `managed-server.http.health-check` is optional and defines the probe target used by `managed-server check`.
 - `managed-server.http.proxy` MAY be configured. If present, it MUST define at least one of `http-url` or `https-url`. When proxy auth is set, both `username` and `password` are REQUIRED.
 - The optional `secret-store` block MUST define exactly one of `file` or `vault`. File-based stores require one of `key`, `key-file`, `passphrase`, or `passphrase-file`.
-- The optional `metadata` block MAY point to `base-dir` or `bundle`; at most one source is allowed. When both are unset, merge logic defaults to the repository base dir and `metadata.base-dir` SHOULD be omitted in persisted YAML when it matches that default.
-- When `metadata.bundle` is configured and `managed-server.http.openapi` is empty, startup MUST load OpenAPI from the bundle hints: first `bundle.yaml` `declarest.openapi`, then any `openapi.yaml`/`openapi.yml`/`openapi.json` in the bundle root. `metadata.base-dir` remains empty in this case so the bundle takes precedence.
+- The optional `metadata` block MAY point to `base-dir`, `bundle`, or `bundle-file`; at most one source is allowed. When all metadata sources are unset, merge logic defaults to the repository base dir and `metadata.base-dir` SHOULD be omitted in persisted YAML when it matches that default.
+- When `metadata.bundle` or `metadata.bundle-file` is configured and `managed-server.http.openapi` is empty, startup MUST load OpenAPI from the bundle hints: first `bundle.yaml` `declarest.openapi`, then any `openapi.yaml`/`openapi.yml`/`openapi.json` in the bundle root. `metadata.base-dir` remains empty in this case so the bundle takes precedence.
 - YAML decoding is strict: unknown keys anywhere in the catalog MUST fail parsing, and missing blocks or one-of violations (for example both `repository.git` and `repository.filesystem`) result in validation errors instead of silent defaults.
 
 ## Selecting the active context
@@ -45,7 +45,7 @@ Each workflow enforces strict decoding and failure-fast validation before procee
 - Omitting `managed-server` or its `http` block results in validation failure before the bootstrap session is created.
 - Invalid `managed-server.http.health-check` values (unsupported URL form or query parameters) fail validation before command execution.
 - Proxy configurations without `http-url` or `https-url`, or with incomplete auth, are rejected during validation.
-- `metadata.bundle` without an accompanying OpenAPI hint can still provide metadata defaults, but you MUST keep `managed-server.http.openapi` empty so the bundle hints are used instead of conflicting files.
+- `metadata.bundle` or `metadata.bundle-file` without an accompanying OpenAPI hint can still provide metadata defaults, but you MUST keep `managed-server.http.openapi` empty so the bundle hints are used instead of conflicting files.
 
 ### Corner case example
 
@@ -58,4 +58,4 @@ The preceding command fails because `unknown.key` is not on the supported overri
 
 ## Practical tip
 
-When you edit contexts manually, drop `metadata.base-dir` when it equals the repository base dir so the persistence layer can rely on the implicit default. Keep `metadata.bundle` and `managed-server.http.openapi` mutually exclusive: only leave bundle hints populated when you intend to rely on extracted OpenAPI files instead of an explicit URL.
+When you edit contexts manually, drop `metadata.base-dir` when it equals the repository base dir so the persistence layer can rely on the implicit default. Keep bundle metadata sources (`metadata.bundle` or `metadata.bundle-file`) and `managed-server.http.openapi` mutually exclusive: only leave bundle hints populated when you intend to rely on extracted OpenAPI files instead of an explicit URL.
