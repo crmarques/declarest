@@ -27,9 +27,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ResourceRepositoryReconciler reconciles ResourceRepository resources.
@@ -40,7 +42,6 @@ type ResourceRepositoryReconciler struct {
 }
 
 func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	registerMetrics()
 	logger := log.FromContext(ctx).WithValues("resourceRepository", req.NamespacedName.String(), "reconcile_id", uuid.NewString())
 
 	resourceRepository := &declarestv1alpha1.ResourceRepository{}
@@ -59,9 +60,14 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 	if !resourceRepository.DeletionTimestamp.IsZero() {
 		localPath := resolveRepoRootPath(resourceRepository.Namespace, resourceRepository.Name)
-		_ = os.RemoveAll(localPath)
+		if err := os.RemoveAll(localPath); err != nil {
+			logger.Error(err, "failed to clean up repository directory", "path", localPath)
+			emitEventf(r.Recorder, resourceRepository, corev1.EventTypeWarning, "CleanupFailed", "failed to remove repository directory: %v", err)
+		}
 		cacheDir := resolveCacheRootPath(resourceRepository.Namespace, resourceRepository.Name)
-		_ = os.RemoveAll(cacheDir)
+		if err := os.RemoveAll(cacheDir); err != nil {
+			logger.Error(err, "failed to clean up cache directory", "path", cacheDir)
+		}
 		controllerutil.RemoveFinalizer(resourceRepository, finalizerName)
 		return ctrl.Result{}, r.Update(ctx, resourceRepository)
 	}
@@ -191,6 +197,8 @@ func (r *ResourceRepositoryReconciler) ensurePVC(ctx context.Context, resourceRe
 	return nil
 }
 
+const gitOperationTimeout = 5 * time.Minute
+
 func (r *ResourceRepositoryReconciler) syncRepository(ctx context.Context, resourceRepository *declarestv1alpha1.ResourceRepository, localPath string) (string, error) {
 	if err := ensureDir(filepath.Dir(localPath)); err != nil {
 		return "", err
@@ -206,9 +214,14 @@ func (r *ResourceRepositoryReconciler) syncRepository(ctx context.Context, resou
 		branch = "main"
 	}
 
+	// Apply an explicit timeout for git operations to prevent a slow or
+	// unresponsive git server from blocking the controller's work queue.
+	gitCtx, cancel := context.WithTimeout(ctx, gitOperationTimeout)
+	defer cancel()
+
 	// Try incremental fetch on an existing clone first. This avoids a full
 	// re-clone on every reconciliation when nothing has changed.
-	if rev, fetchErr := r.tryFetch(ctx, localPath, authMethod, branch); fetchErr == nil {
+	if rev, fetchErr := r.tryFetch(gitCtx, localPath, authMethod, branch); fetchErr == nil {
 		return rev, nil
 	}
 
@@ -223,7 +236,7 @@ func (r *ResourceRepositoryReconciler) syncRepository(ctx context.Context, resou
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		Progress:      nil,
 	}
-	if _, err := gogit.PlainCloneContext(ctx, tmpPath, false, cloneOptions); err != nil {
+	if _, err := gogit.PlainCloneContext(gitCtx, tmpPath, false, cloneOptions); err != nil {
 		return "", fmt.Errorf("clone repository %s: %w", sanitizeURL(resourceRepository.Spec.Git.URL), err)
 	}
 
@@ -389,7 +402,7 @@ func (r *ResourceRepositoryReconciler) setNotReady(
 
 func (r *ResourceRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.ResourceRepository{}).
+		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Complete(r)
 }

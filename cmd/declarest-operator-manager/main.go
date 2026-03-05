@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -144,6 +146,15 @@ func main() {
 	}
 	if err := manager.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+	if err := manager.AddReadyzCheck("informers", func(_ *http.Request) error {
+		if !manager.GetCache().WaitForCacheSync(ctx) {
+			return fmt.Errorf("informer caches not synced")
+		}
+		return nil
+	}); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to set up informer sync check")
 		os.Exit(1)
 	}
 

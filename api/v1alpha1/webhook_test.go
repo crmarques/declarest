@@ -32,7 +32,8 @@ func TestWebhookValidationResourceRepositoryCreate(t *testing.T) {
 		},
 	}
 
-	warnings, err := repo.ValidateCreate(context.Background(), repo.DeepCopy())
+	v := &resourceRepositoryValidator{}
+	warnings, err := v.ValidateCreate(context.Background(), repo.DeepCopy())
 	if err != nil {
 		t.Fatalf("ValidateCreate() unexpected error: %v", err)
 	}
@@ -58,7 +59,8 @@ func TestWebhookValidationManagedServerCreateRejectsInvalidSpec(t *testing.T) {
 		},
 	}
 
-	if _, err := server.ValidateCreate(context.Background(), server.DeepCopy()); err == nil {
+	v := &managedServerValidator{}
+	if _, err := v.ValidateCreate(context.Background(), server.DeepCopy()); err == nil {
 		t.Fatal("ValidateCreate() expected validation error, got nil")
 	}
 }

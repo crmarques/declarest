@@ -36,6 +36,18 @@ const (
 	conditionReasonReconciling       = "Reconciling"
 	conditionReasonReconcileFailed   = "ReconcileFailed"
 	conditionReasonOverlappingPolicy = "OverlappingPolicy"
+
+	// Distinct condition reasons for better error categorization.
+	conditionReasonSecretResolutionFailed = "SecretResolutionFailed"
+	conditionReasonArtifactDownloadFailed = "ArtifactDownloadFailed"
+	conditionReasonRepositoryUnavailable  = "RepositoryUnavailable"
+	conditionReasonSessionBootstrapFailed = "SessionBootstrapFailed"
+
+	// defaultTransientRequeueInterval is the requeue interval used when a
+	// transient error occurs and no explicit interval is provided. This
+	// prevents resources from becoming permanently stalled on errors that
+	// may resolve without external intervention.
+	defaultTransientRequeueInterval = 30 * time.Second
 )
 
 func now() metav1.Time {
@@ -78,8 +90,16 @@ func returnAfterSetNotReady(
 	if err := setNotReady(ctx, reason, message); err != nil {
 		return ctrl.Result{}, err
 	}
-	if requeueAfter > 0 {
-		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	// Apply the default transient requeue interval when no explicit duration
+	// is set and the error is not a validation issue. This prevents resources
+	// from becoming permanently stalled on transient failures. SpecInvalid
+	// and OverlappingPolicy require user intervention and rely on watch events.
+	interval := requeueAfter
+	if interval <= 0 && reason != conditionReasonSpecInvalid && reason != conditionReasonOverlappingPolicy {
+		interval = defaultTransientRequeueInterval
+	}
+	if interval > 0 {
+		return ctrl.Result{RequeueAfter: interval}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -183,49 +203,11 @@ func writeSecretValueToFileWithCleanup(registry *cleanupRegistry, baseDir string
 }
 
 func hasPathOverlap(a string, b string) bool {
-	left := normalizeOverlapPath(a)
-	right := normalizeOverlapPath(b)
-	if left == right {
-		return true
-	}
-	if strings.HasPrefix(left, right) && boundaryMatch(left, right) {
-		return true
-	}
-	if strings.HasPrefix(right, left) && boundaryMatch(right, left) {
-		return true
-	}
-	return false
+	return declarestv1alpha1.HasPathOverlap(a, b)
 }
 
 func normalizeOverlapPath(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return "/"
-	}
-	if !strings.HasPrefix(value, "/") {
-		value = "/" + value
-	}
-	value = filepath.ToSlash(filepath.Clean(value))
-	if value == "." {
-		value = "/"
-	}
-	if !strings.HasPrefix(value, "/") {
-		value = "/" + value
-	}
-	if value != "/" {
-		value = strings.TrimSuffix(value, "/")
-	}
-	return value
-}
-
-func boundaryMatch(candidate string, prefix string) bool {
-	if prefix == "/" {
-		return true
-	}
-	if len(candidate) <= len(prefix) {
-		return false
-	}
-	return candidate[len(prefix)] == '/'
+	return declarestv1alpha1.NormalizeOverlapPath(raw)
 }
 
 func stringSet(values []string) []string {

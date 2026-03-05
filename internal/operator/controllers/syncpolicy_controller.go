@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
@@ -17,20 +18,63 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+// secretRefCache maps SyncPolicy NamespacedName to the set of Kubernetes Secret
+// names referenced by the policy's dependency CRDs. Updated during reconciliation,
+// read by the Secret watch mapper to avoid O(n*3) API calls per Secret event.
+type secretRefCache struct {
+	mu    sync.RWMutex
+	index map[types.NamespacedName]sets.Set[string]
+}
+
+func (c *secretRefCache) update(key types.NamespacedName, secretNames []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.index == nil {
+		c.index = make(map[types.NamespacedName]sets.Set[string])
+	}
+	if len(secretNames) == 0 {
+		delete(c.index, key)
+		return
+	}
+	c.index[key] = sets.New[string](secretNames...)
+}
+
+func (c *secretRefCache) remove(key types.NamespacedName) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.index, key)
+}
+
+func (c *secretRefCache) policiesForSecret(namespace string, secretName string) []reconcile.Request {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var requests []reconcile.Request
+	for key, names := range c.index {
+		if key.Namespace == namespace && names.Has(secretName) {
+			requests = append(requests, reconcile.Request{NamespacedName: key})
+		}
+	}
+	return requests
+}
 
 // SyncPolicyReconciler reconciles SyncPolicy resources.
 type SyncPolicyReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
+	secretRefs secretRefCache
 }
 
 const (
@@ -40,7 +84,6 @@ const (
 )
 
 func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, reconcileErr error) {
-	registerMetrics()
 	start := time.Now()
 	logger := log.FromContext(ctx).WithValues("syncPolicy", req.NamespacedName.String(), "reconcile_id", uuidString())
 
@@ -59,8 +102,11 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 	if !syncPolicy.DeletionTimestamp.IsZero() {
+		r.secretRefs.remove(req.NamespacedName)
 		cacheDir := resolveCacheRootPath(syncPolicy.Namespace, syncPolicy.Name)
-		_ = os.RemoveAll(cacheDir)
+		if err := os.RemoveAll(cacheDir); err != nil {
+			logger.Error(err, "failed to clean up cache directory", "path", cacheDir)
+		}
 		controllerutil.RemoveFinalizer(syncPolicy, finalizerName)
 		return ctrl.Result{}, r.Update(ctx, syncPolicy)
 	}
@@ -184,6 +230,10 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		)
 	}
 
+	// Update the secret reference cache so the Secret watch mapper can look
+	// up affected SyncPolicies without resolving dependency CRDs each time.
+	r.secretRefs.update(req.NamespacedName, collectSecretNames(repo, managedServer, secretStore))
+
 	repoRevision := strings.TrimSpace(repo.Status.LastFetchedRevision)
 	if repoRevision == "" {
 		reasonLabel = conditionReasonDependencyInvalid
@@ -209,8 +259,8 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	runtimeBuild, runtimeErr := buildRuntimeContext(ctx, r.Client, syncPolicy, repo, managedServer, secretStore)
 	if runtimeErr != nil {
 		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonDependencyInvalid, runtimeErr.Error(), 0, "DependencyInvalid")
+		reasonLabel = conditionReasonRepositoryUnavailable
+		return r.failWithStatus(ctx, syncPolicy, conditionReasonRepositoryUnavailable, runtimeErr.Error(), 0, "RuntimeContextFailed")
 	}
 	if runtimeBuild.Cleanup != nil {
 		defer runtimeBuild.Cleanup()
@@ -219,8 +269,8 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	session, sessionErr := bootstrap.NewSessionFromResolvedContext(runtimeBuild.ResolvedContext)
 	if sessionErr != nil {
 		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonDependencyInvalid, sessionErr.Error(), 0, "DependencyInvalid")
+		reasonLabel = conditionReasonSessionBootstrapFailed
+		return r.failWithStatus(ctx, syncPolicy, conditionReasonSessionBootstrapFailed, sessionErr.Error(), 0, "SessionBootstrapFailed")
 	}
 
 	nowTime := now()
@@ -335,11 +385,20 @@ func (r *SyncPolicyReconciler) pruneRemote(
 	sort.Strings(candidates)
 
 	deleted := 0
+	var errs []error
 	for _, candidate := range candidates {
 		if err := orchestratorService.Delete(ctx, candidate, orchestratordomain.DeletePolicy{}); err != nil {
-			return deleted, fmt.Errorf("prune remote resource %q: %w", candidate, err)
+			errs = append(errs, fmt.Errorf("prune %q: %w", candidate, err))
+			continue
 		}
 		deleted++
+	}
+	if len(errs) > 0 {
+		msgs := make([]string, len(errs))
+		for i, e := range errs {
+			msgs[i] = e.Error()
+		}
+		return deleted, fmt.Errorf("prune completed with %d errors (deleted=%d): %s", len(errs), deleted, strings.Join(msgs, "; "))
 	}
 	return deleted, nil
 }
@@ -461,7 +520,7 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.SyncPolicy{}).
+		For(&declarestv1alpha1.SyncPolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&declarestv1alpha1.ResourceRepository{},
 			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForResourceRepository),
@@ -535,41 +594,12 @@ func (r *SyncPolicyReconciler) syncPoliciesForSecretStore(ctx context.Context, o
 	return reconcileRequestsForSyncPolicies(policies.Items)
 }
 
-func (r *SyncPolicyReconciler) syncPoliciesForSecret(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *SyncPolicyReconciler) syncPoliciesForSecret(_ context.Context, obj client.Object) []reconcile.Request {
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil
 	}
-	policies := &declarestv1alpha1.SyncPolicyList{}
-	if err := r.List(ctx, policies, client.InNamespace(secret.Namespace)); err != nil {
-		log.FromContext(ctx).Error(err, "failed to list SyncPolicies for watch mapper", "trigger_kind", "Secret", "trigger_name", secret.Name)
-		return nil
-	}
-	requests := make([]reconcile.Request, 0)
-	for idx := range policies.Items {
-		item := &policies.Items[idx]
-		// Resolve dependency CRDs and check if any references this Secret.
-		repo := &declarestv1alpha1.ResourceRepository{}
-		if err := r.Get(ctx, types.NamespacedName{Namespace: item.Namespace, Name: item.Spec.ResourceRepositoryRef.Name}, repo); err != nil {
-			continue
-		}
-		ms := &declarestv1alpha1.ManagedServer{}
-		if err := r.Get(ctx, types.NamespacedName{Namespace: item.Namespace, Name: item.Spec.ManagedServerRef.Name}, ms); err != nil {
-			continue
-		}
-		ss := &declarestv1alpha1.SecretStore{}
-		if err := r.Get(ctx, types.NamespacedName{Namespace: item.Namespace, Name: item.Spec.SecretStoreRef.Name}, ss); err != nil {
-			continue
-		}
-		secretNames := collectSecretNames(repo, ms, ss)
-		for _, name := range secretNames {
-			if name == secret.Name {
-				requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: item.Namespace, Name: item.Name}})
-				break
-			}
-		}
-	}
-	return requests
+	return r.secretRefs.policiesForSecret(secret.Namespace, secret.Name)
 }
 
 func reconcileRequestsForSyncPolicies(items []declarestv1alpha1.SyncPolicy) []reconcile.Request {

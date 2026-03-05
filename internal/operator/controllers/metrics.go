@@ -1,15 +1,11 @@
 package controllers
 
 import (
-	"sync"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 var (
-	metricsOnce sync.Once
-
 	resourceRepositoryPollTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "declarest",
@@ -69,15 +65,13 @@ var (
 	)
 )
 
-func registerMetrics() {
-	metricsOnce.Do(func() {
-		metrics.Registry.MustRegister(
-			resourceRepositoryPollTotal,
-			resourceRepositoryRevisionChangesTotal,
-			syncPolicyReconcileTotal,
-			syncPolicyReconcileDurationSeconds,
-			syncPolicyResourcesAppliedTotal,
-			syncPolicyResourcesPrunedTotal,
-		)
-	})
+func init() {
+	metrics.Registry.MustRegister(
+		resourceRepositoryPollTotal,
+		resourceRepositoryRevisionChangesTotal,
+		syncPolicyReconcileTotal,
+		syncPolicyReconcileDurationSeconds,
+		syncPolicyResourcesAppliedTotal,
+		syncPolicyResourcesPrunedTotal,
+	)
 }

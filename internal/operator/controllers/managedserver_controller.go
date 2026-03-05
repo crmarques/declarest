@@ -12,9 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ManagedServerReconciler reconciles ManagedServer resources.
@@ -42,7 +44,9 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	if !managedServer.DeletionTimestamp.IsZero() {
 		cacheDir := resolveCacheRootPath(managedServer.Namespace, managedServer.Name)
-		_ = os.RemoveAll(cacheDir)
+		if err := os.RemoveAll(cacheDir); err != nil {
+			logger.Error(err, "failed to clean up cache directory", "path", cacheDir)
+		}
 		controllerutil.RemoveFinalizer(managedServer, finalizerName)
 		return ctrl.Result{}, r.Update(ctx, managedServer)
 	}
@@ -159,7 +163,7 @@ func (r *ManagedServerReconciler) setNotReady(
 
 func (r *ManagedServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.ManagedServer{}).
+		For(&declarestv1alpha1.ManagedServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
 
