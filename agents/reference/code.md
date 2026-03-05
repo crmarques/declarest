@@ -20,11 +20,12 @@ Define implementation patterns that keep behavior predictable, testable, and mai
 3. Side effects MUST be isolated behind interfaces declared in owner packages.
 4. Error paths MUST preserve root cause context and map to canonical error taxonomy.
 5. Secret material MUST never be logged or included in error messages.
-6. Dependency wiring MUST remain centralized in `core`.
+6. Dependency wiring MUST remain centralized in composition roots (for example `internal/bootstrap`).
 7. Context YAML parsing MUST be strict (unknown keys rejected; one-of invariants enforced).
 8. Provider packages MUST implement owner contracts and MUST NOT instantiate sibling providers.
 9. Go sources MUST be `gofmt`-formatted and follow idiomatic package/export conventions.
 10. Inline or explanatory comments that only restate the behavior already expressed by the code MUST NOT be introduced; contributors MUST improve naming, structure, or tests to capture intent, and when editing code they SHOULD prune existing non-functional comments, leaving comments only for exported-API documentation or compile-time directives that cannot be expressed otherwise.
+11. Kubernetes controller code SHOULD isolate pure planning/normalization logic from reconcile side effects so deterministic behavior is unit-testable without Kubernetes API wiring.
 
 ## Data Contracts
 Implementation structure:
@@ -37,6 +38,7 @@ File design guidance:
 1. Co-locate contract/validator/mapper logic when change cadence is shared.
 2. Separate orchestration from pure transforms.
 3. Separate CLI parsing/validation from execution side effects.
+4. In `internal/operator/controllers`, separate decision logic (for example sync planning/scheduling/classification) from cluster IO (status updates, object fetches, patches).
 
 ## Failure Modes
 1. Hidden coupling through shared mutable state.

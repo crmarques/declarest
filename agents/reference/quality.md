@@ -23,6 +23,7 @@ Define quality gates and security invariants so behavior changes are verifiable 
 6. Path traversal protections MUST be tested for repository and metadata access.
 7. Secret values MUST never appear in logs, errors, or snapshots.
 8. New normative rules SHOULD include an explicit matching test expectation.
+9. Kubernetes operator behavior changes MUST include controller-level coverage for CRD validation/status transitions plus webhook authentication/event-filtering paths.
 
 ## Data Contracts
 Test layers:
@@ -119,6 +120,7 @@ Acceptance contracts:
 71. SyncPolicy overlap contract: multiple SyncPolicies MAY share repository/managed-server/secret-store references, but overlapping source path/subpath scopes MUST fail deterministically even when references differ.
 72. Repository webhook security contract: git webhook receiver rejects invalid signatures/tokens and unsupported events, enforces payload size bounds, and only authenticated push events patch repository webhook-receipt annotations.
 73. Operator webhook integration contract: operator profiles configure provider webhooks (`gitea|gitlab`) and webhook-backed pushes trigger reconcile/update behavior before the repository poll interval in operator-main coverage.
+74. Operator reconcile planning contract: sync planning deterministically selects `full` vs `incremental`, metadata/unknown-path diffs trigger safe fallback to full scope, and secret-version-hash changes force reconcile even when repository revision is unchanged.
 
 ## Failure Modes
 1. Tests pass locally with hidden non-determinism.
@@ -144,3 +146,4 @@ Acceptance contracts:
 9. E2E harness tests verify both platform paths (`--platform compose` and `--platform kubernetes`), including a corner case where `--platform kubernetes` with remote/native-only selections skips kind cluster creation.
 10. E2E harness tests verify operator profile defaulting/validation (`repo-type=git`, `git-provider=gitea`) and in-cluster operator deployment lifecycle behavior (runtime details, handoff commands, automated reconcile cases, and cleanup/teardown).
 11. Unit + integration tests verify managed-server request-throttling validation, shared-gate queue overflow behavior, and repository webhook authentication/annotation patch behavior for valid vs invalid payloads.
+12. Operator unit tests verify sync-plan fallbacks, schedule computation (`syncInterval` vs `fullResyncCron`), and overlap validation behavior with shared vs distinct dependency references.

@@ -16,6 +16,7 @@
 3. `managed-server.md` OpenAPI fallback rules preserve explicit metadata overrides.
 4. `secrets.md` non-disclosure rules are strict and enforceable.
 5. `orchestrator.md` defines idempotent apply behavior and bounded fallbacks.
+6. `k8s-operator.md` (when present) defines deterministic reconcile/status/webhook contracts consistent with CRD/controller behavior.
 
 ## CLI and UX Integrity
 1. `cli.md` command semantics map to orchestrator use cases.

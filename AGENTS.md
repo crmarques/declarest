@@ -26,6 +26,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | `agents/reference/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
 | `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
 | `agents/reference/orchestrator.md` | Orchestration flows | Apply/refresh/diff/list workflows |
+| `agents/reference/k8s-operator.md` | Kubernetes operator contracts | CRD validation, reconcile loops, webhook refresh flows |
 | `agents/reference/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
 | `agents/reference/e2e.md` | E2E harness and component contracts | E2E profile logic, component onboarding, runtime step orchestration |
 | `agents/reference/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
@@ -39,6 +40,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-server.md`, `agents/reference/quality.md` |
 | Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/orchestrator.md`, `agents/reference/quality.md` |
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
+| Kubernetes operator controller/CRD/webhook change | `agents/reference/interfaces.md`, `agents/reference/k8s-operator.md`, `agents/reference/architecture.md`, `agents/reference/quality.md` |
 | E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 | Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
 | Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/code.md`, `agents/reference/quality.md` |
