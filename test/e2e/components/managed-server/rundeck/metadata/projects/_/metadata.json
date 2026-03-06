@@ -1,31 +1,32 @@
 {
-	"resourceInfo": {
-		"idFromAttribute": "name",
-		"aliasFromAttribute": "name"
-	},
-	"operationInfo": {
-		"createResource": {
-			"validate": {
-				"requiredAttributes": [
-					"name"
-				]
-			}
-		},
-		"getResource": {
-			"path": "/project/{{.id}}"
-		},
-		"updateResource": {
-			"httpMethod": "PUT",
-			"path": "/project/{{.id}}/config",
-			"payload": {
-				"jqExpression": ".config // ."
-			}
-		},
-		"deleteResource": {
-			"path": "/project/{{.id}}"
-		},
-		"compareResources": {
-			"path": "/project/{{.id}}"
-		}
-	}
+  "resourceInfo": {
+    "idFromAttribute": "name",
+    "aliasFromAttribute": "name"
+  },
+  "operationInfo": {
+    "getResource": {
+      "path": "/project/{{.id}}"
+    },
+    "createResource": {
+      "validate": {
+        "requiredAttributes": [
+          "name"
+        ]
+      }
+    },
+    "updateResource": {
+      "httpMethod": "PUT",
+      "path": "/project/{{.id}}/config",
+      "payload": {
+        "filterAttributes": null,
+        "jqExpression": ".config // ."
+      }
+    },
+    "deleteResource": {
+      "path": "/project/{{.id}}"
+    },
+    "compareResources": {
+      "path": "/project/{{.id}}"
+    }
+  }
 }

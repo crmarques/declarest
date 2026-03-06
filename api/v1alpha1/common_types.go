@@ -3,9 +3,9 @@ package v1alpha1
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 
+	"github.com/crmarques/declarest/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -128,19 +128,19 @@ func validateGitURL(raw string, fieldPath string) error {
 }
 
 func normalizePath(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("path is required")
+	parsedPath, err := resource.ParseRawPathWithOptions(raw, resource.RawPathParseOptions{
+		AllowMissingLeadingSlash: true,
+	})
+	if err != nil {
+		if strings.TrimSpace(raw) == "" {
+			return "", fmt.Errorf("path is required")
+		}
+		return "", err
 	}
-	if !strings.HasPrefix(trimmed, "/") {
-		trimmed = "/" + trimmed
-	}
-	normalized := path.Clean(trimmed)
-	if normalized == "." {
-		normalized = "/"
-	}
-	if !strings.HasPrefix(normalized, "/") {
-		return "", fmt.Errorf("path must normalize to absolute path")
+
+	normalized, err := resource.NormalizeLogicalPath(parsedPath.Normalized)
+	if err != nil {
+		return "", err
 	}
 	return normalized, nil
 }
@@ -150,48 +150,23 @@ func normalizePath(raw string) (string, error) {
 func HasPathOverlap(a string, b string) bool {
 	left := NormalizeOverlapPath(a)
 	right := NormalizeOverlapPath(b)
-	if left == right {
-		return true
+	if left == "" || right == "" {
+		return false
 	}
-	if strings.HasPrefix(left, right) && overlapBoundaryMatch(left, right) {
-		return true
+	overlap, err := resource.HasLogicalPathOverlap(left, right)
+	if err != nil {
+		return false
 	}
-	if strings.HasPrefix(right, left) && overlapBoundaryMatch(right, left) {
-		return true
-	}
-	return false
+	return overlap
 }
 
 // NormalizeOverlapPath normalizes a logical path for overlap comparison.
 func NormalizeOverlapPath(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return "/"
+	normalized, err := normalizePath(raw)
+	if err != nil {
+		return ""
 	}
-	if !strings.HasPrefix(value, "/") {
-		value = "/" + value
-	}
-	value = path.Clean(value)
-	if value == "." {
-		value = "/"
-	}
-	if !strings.HasPrefix(value, "/") {
-		value = "/" + value
-	}
-	if value != "/" {
-		value = strings.TrimSuffix(value, "/")
-	}
-	return value
-}
-
-func overlapBoundaryMatch(candidate string, prefix string) bool {
-	if prefix == "/" {
-		return true
-	}
-	if len(candidate) <= len(prefix) {
-		return false
-	}
-	return candidate[len(prefix)] == '/'
+	return normalized
 }
 
 func SetCondition(conditions []metav1.Condition, condition metav1.Condition) []metav1.Condition {

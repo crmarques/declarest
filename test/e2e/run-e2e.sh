@@ -100,6 +100,8 @@ step_prepare_runtime() {
 
   e2e_run_cmd go build -o "${E2E_BIN}" ./cmd/declarest || return 1
   if e2e_profile_is_operator; then
+    local go_version
+    go_version=$(e2e_resolve_go_version) || return 1
     e2e_run_cmd env CGO_ENABLED=0 GOOS=linux go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1
     e2e_register_temp_file "${E2E_OPERATOR_BIN}"
     E2E_OPERATOR_IMAGE="localhost/declarest/e2e-operator-manager:${E2E_RUN_ID}"
@@ -109,7 +111,7 @@ step_prepare_runtime() {
       e2e_die "operator binary path is outside repository root: ${E2E_OPERATOR_BIN}"
       return 1
     fi
-    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" --build-arg "MANAGER_BINARY=${operator_binary_rel}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" --build-arg "GO_VERSION=${go_version}" --build-arg "MANAGER_BINARY=${operator_binary_rel}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
     e2e_info "runtime operator image=${E2E_OPERATOR_IMAGE}"
   fi
 

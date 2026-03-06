@@ -7,6 +7,17 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
+type RawPathParseOptions struct {
+	AllowMissingLeadingSlash bool
+}
+
+type ParsedRawPath struct {
+	Raw                      string
+	Normalized               string
+	Segments                 []string
+	ExplicitCollectionTarget bool
+}
+
 // CleanRawPath normalizes an absolute path by replacing backslashes, rejecting
 // traversal segments, and cleaning redundant separators. Unlike
 // NormalizeLogicalPath it does NOT reject reserved segments like "_", so it is
@@ -39,6 +50,42 @@ func CleanRawPath(value string) (string, error) {
 	return cleaned, nil
 }
 
+func ParseRawPathWithOptions(value string, options RawPathParseOptions) (ParsedRawPath, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ParsedRawPath{}, faults.NewTypedError(faults.ValidationError, "logical path must not be empty", nil)
+	}
+
+	normalizedInput := strings.ReplaceAll(trimmed, "\\", "/")
+	explicitCollectionTarget := normalizedInput != "/" && strings.HasSuffix(normalizedInput, "/")
+	if options.AllowMissingLeadingSlash && !strings.HasPrefix(normalizedInput, "/") {
+		normalizedInput = "/" + normalizedInput
+	}
+
+	normalized, err := CleanRawPath(normalizedInput)
+	if err != nil {
+		return ParsedRawPath{}, err
+	}
+	if normalized == "/" {
+		explicitCollectionTarget = false
+	}
+
+	return ParsedRawPath{
+		Raw:                      trimmed,
+		Normalized:               normalized,
+		Segments:                 SplitRawPathSegments(normalized),
+		ExplicitCollectionTarget: explicitCollectionTarget,
+	}, nil
+}
+
+func HasExplicitCollectionTarget(value string) bool {
+	parsed, err := ParseRawPathWithOptions(value, RawPathParseOptions{})
+	if err != nil {
+		return false
+	}
+	return parsed.ExplicitCollectionTarget
+}
+
 func NormalizeLogicalPath(value string) (string, error) {
 	cleaned, err := CleanRawPath(value)
 	if err != nil {
@@ -52,6 +99,28 @@ func NormalizeLogicalPath(value string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+func HasLogicalPathOverlap(a string, b string) (bool, error) {
+	left, err := NormalizeLogicalPath(a)
+	if err != nil {
+		return false, err
+	}
+	right, err := NormalizeLogicalPath(b)
+	if err != nil {
+		return false, err
+	}
+
+	if left == right {
+		return true, nil
+	}
+	if strings.HasPrefix(left, right) && overlapBoundaryMatch(left, right) {
+		return true, nil
+	}
+	if strings.HasPrefix(right, left) && overlapBoundaryMatch(right, left) {
+		return true, nil
+	}
+	return false, nil
 }
 
 func JoinLogicalPath(collectionPath string, segment string) (string, error) {
@@ -116,4 +185,14 @@ func ChildSegment(parentPath string, candidatePath string) (string, bool) {
 	}
 
 	return remaining, true
+}
+
+func overlapBoundaryMatch(candidate string, prefix string) bool {
+	if prefix == "/" {
+		return true
+	}
+	if len(candidate) <= len(prefix) {
+		return false
+	}
+	return candidate[len(prefix)] == '/'
 }

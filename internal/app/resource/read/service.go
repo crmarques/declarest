@@ -330,8 +330,7 @@ func isRootResourceError(err error) bool {
 }
 
 func HasCollectionTargetMarker(rawPath string) bool {
-	trimmed := strings.TrimSpace(rawPath)
-	return trimmed != "" && trimmed != "/" && strings.HasSuffix(trimmed, "/")
+	return resource.HasExplicitCollectionTarget(rawPath)
 }
 
 func NormalizeSource(fromRepository bool, fromRemoteServer bool) (string, error) {

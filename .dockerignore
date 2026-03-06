@@ -3,8 +3,6 @@
 agents
 docs
 test
-faults
-debugctx
 .e2e-build
 .vscode
 test/e2e/.runs

@@ -1,34 +1,34 @@
 {
-  "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "id",
-    "collectionPath": "/project/{{.project}}/jobs"
-  },
-  "operationInfo": {
-    "createResource": {
-      "httpMethod": "POST",
-      "path": "./import",
-      "query": {
-        "dupeOption": "create",
-        "uuidOption": "preserve"
-      }
-    },
-    "getResource": {
-      "path": "/job/{{.id}}"
-    },
-    "updateResource": {
-      "httpMethod": "POST",
-      "path": "./import",
-      "query": {
-        "dupeOption": "update",
-        "uuidOption": "preserve"
-      }
-    },
-    "deleteResource": {
-      "path": "/job/{{.id}}"
-    },
-    "compareResources": {
-      "path": "/job/{{.id}}"
-    }
-  }
+	"resourceInfo": {
+		"idFromAttribute": "id",
+		"aliasFromAttribute": "name",
+		"collectionPath": "/project/{{.name}}/jobs"
+	},
+	"operationInfo": {
+		"createResource": {
+			"httpMethod": "POST",
+			"path": "./import",
+			"query": {
+				"dupeOption": "create",
+				"uuidOption": "preserve"
+			}
+		},
+		"getResource": {
+			"path": "/job/{{.id}}"
+		},
+		"updateResource": {
+			"httpMethod": "POST",
+			"path": "./import",
+			"query": {
+				"dupeOption": "update",
+				"uuidOption": "preserve"
+			}
+		},
+		"deleteResource": {
+			"path": "/job/{{.id}}"
+		},
+		"compareResources": {
+			"path": "/job/{{.id}}"
+		}
+	}
 }

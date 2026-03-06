@@ -15,26 +15,20 @@ import (
 )
 
 func normalizeSavePathPattern(rawPath string) (string, bool, bool, error) {
-	trimmedPath := strings.TrimSpace(rawPath)
-	if trimmedPath == "" {
-		return "", false, false, faults.NewValidationError("path is required", nil)
-	}
-	explicitCollectionTarget := trimmedPath != "/" && strings.HasSuffix(trimmedPath, "/")
-
-	normalizedPath, err := resource.CleanRawPath(trimmedPath)
+	parsedPath, err := resource.ParseRawPathWithOptions(rawPath, resource.RawPathParseOptions{})
 	if err != nil {
 		return "", false, false, err
 	}
 
 	hasWildcard := false
-	for _, segment := range resource.SplitRawPathSegments(normalizedPath) {
+	for _, segment := range parsedPath.Segments {
 		if segment == "_" {
 			hasWildcard = true
 			break
 		}
 	}
 
-	return normalizedPath, hasWildcard, explicitCollectionTarget, nil
+	return parsedPath.Normalized, hasWildcard, parsedPath.ExplicitCollectionTarget, nil
 }
 
 func resolveSaveRemoteValue(

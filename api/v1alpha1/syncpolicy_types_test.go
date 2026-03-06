@@ -63,3 +63,20 @@ func TestSyncPolicyValidateSpecRejectsInvalidFullResyncCron(t *testing.T) {
 		t.Fatal("ValidateSpec() expected fullResyncCron validation error, got nil")
 	}
 }
+
+func TestSyncPolicyValidateSpecRejectsTraversalPath(t *testing.T) {
+	t.Parallel()
+
+	policy := &SyncPolicy{
+		Spec: SyncPolicySpec{
+			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
+			Source:                SyncPolicySource{Path: "/customers/../acme"},
+		},
+	}
+
+	if err := policy.ValidateSpec(); err == nil {
+		t.Fatal("ValidateSpec() expected traversal validation error, got nil")
+	}
+}

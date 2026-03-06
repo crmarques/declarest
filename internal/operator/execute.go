@@ -6,6 +6,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	readapp "github.com/crmarques/declarest/internal/app/resource/read"
+	"github.com/crmarques/declarest/resource"
 )
 
 const (
@@ -36,16 +37,26 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 	if logicalPath == "" {
 		return ReconcileResult{}, faults.NewValidationError("logical path is required", nil)
 	}
+	parsedPath, err := resource.ParseRawPathWithOptions(logicalPath, resource.RawPathParseOptions{
+		AllowMissingLeadingSlash: true,
+	})
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	normalizedPath, err := resource.NormalizeLogicalPath(parsedPath.Normalized)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
 
 	source := strings.TrimSpace(req.Source)
 	if source == "" {
 		source = SourceRemoteServer
 	}
 
-	explicitCollectionTarget := logicalPath != "/" && strings.HasSuffix(logicalPath, "/")
+	explicitCollectionTarget := parsedPath.ExplicitCollectionTarget
 
 	result, err := readapp.Execute(ctx, deps, readapp.Request{
-		LogicalPath:              logicalPath,
+		LogicalPath:              normalizedPath,
 		Source:                   source,
 		ExplicitCollectionTarget: explicitCollectionTarget,
 		ShowSecrets:              req.ShowSecrets,
@@ -57,7 +68,7 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 	}
 
 	return ReconcileResult{
-		LogicalPath: logicalPath,
+		LogicalPath: normalizedPath,
 		Output:      result.OutputValue,
 		TextLines:   result.TextLines,
 	}, nil

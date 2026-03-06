@@ -519,19 +519,19 @@ case_repo_template_sync_tree() {
 
     case_run_declarest resource list "${collection_path}" --remote-server -o json
     case_expect_success
-    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
+    if ! case_expect_sorted_resource_list_payloads "${CASE_LAST_STDOUT}"; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1
     fi
 
-    case_run_declarest resource save "${logical_path}" -f "${resource_file}" -i json
+    case_run_declarest resource save "${logical_path}" -f "${resource_file}" -i json --overwrite
     case_expect_success
 
     case_run_declarest resource apply "${logical_path}"
     case_expect_success
 
-    jq --arg tag "${update_tag}" '. + {"e2eRevision": $tag}' "${resource_file}" >"${update_payload_file}"
+    case_repo_template_write_update_payload "${resource_file}" "${update_payload_file}" "${update_tag}" || return 1
     case_repo_template_update_resource_path "${logical_path}" "${update_payload_file}"
 
     case_run_declarest resource diff "${logical_path}" -o json
@@ -555,12 +555,58 @@ case_repo_template_sync_tree() {
       fi
       case_expect_success
     fi
-    if ! jq -e 'type == "array" and (map(tojson) as $items | $items == ($items | sort))' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
+    if ! case_expect_sorted_resource_list_payloads "${CASE_LAST_STDOUT}"; then
       printf '%s expected deterministic sorted remote list after delete for %s\n' "${case_label}" "${collection_path}" >&2
       printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
       return 1
     fi
   done
+}
+
+case_expect_sorted_resource_list_payloads() {
+  local payload_json=$1
+
+  jq -e '
+    def list_key:
+      if type == "object" then
+        [
+          (.clientId // .alias // .realm // .name // .displayName // .path // .id // .providerId // ""),
+          (tojson)
+        ] | join("\u0000")
+      else
+        tojson
+      end;
+
+    type == "array" and ((map(list_key)) as $keys | $keys == ($keys | sort))
+  ' <<<"${payload_json}" >/dev/null
+}
+
+case_repo_template_write_update_payload() {
+  local source_file=$1
+  local target_file=$2
+  local update_tag=$3
+
+  jq --arg tag "${update_tag}" '
+    if type != "object" then .
+    elif has("displayName") and (.displayName | type == "string") then
+      .displayName = (.displayName + " [" + $tag + "]")
+    elif has("description") and (.description | type == "string") then
+      .description = (.description + " [" + $tag + "]")
+    elif has("requirement") and (.requirement | type == "string") then
+      .requirement = (if .requirement == "ALTERNATIVE" then "REQUIRED" else "ALTERNATIVE" end)
+    elif has("organizationsEnabled") and (.organizationsEnabled | type == "boolean") then
+      .organizationsEnabled = (not .organizationsEnabled)
+    elif has("topLevel") and (.topLevel | type == "string") then
+      .topLevel = (if (.topLevel | ascii_downcase) == "true" then "false" else "true" end)
+    elif has("clientId") and (.clientId | type == "string") then
+      .description = $tag
+    elif has("attributes") and (.attributes | type == "object") then
+      .attributes = (.attributes + {"e2eRevision": $tag})
+    elif has("name") and (.name | type == "string") then
+      .name = (.name + " [" + $tag + "]")
+    else .
+    end
+  ' "${source_file}" >"${target_file}"
 }
 
 case_repo_template_save_resource_path() {
@@ -586,7 +632,7 @@ case_repo_template_create_resource_path() {
 case_repo_template_update_resource_path() {
   local logical_resource_path=$1
   local payload_file=$2
-  case_run_declarest resource save "${logical_resource_path}" -f "${payload_file}" -i json
+  case_run_declarest resource save "${logical_resource_path}" -f "${payload_file}" -i json --overwrite
   case_expect_success
   case_run_declarest resource update "${logical_resource_path}"
   case_expect_success

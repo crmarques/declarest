@@ -101,6 +101,24 @@ e2e_validate_platform() {
   esac
 }
 
+e2e_resolve_go_version() {
+  local go_mod="${E2E_ROOT_DIR}/go.mod"
+  local version
+
+  [[ -f "${go_mod}" ]] || {
+    e2e_die "go.mod not found: ${go_mod}"
+    return 1
+  }
+
+  version=$(awk '/^go /{print $2; exit}' "${go_mod}")
+  [[ -n "${version}" ]] || {
+    e2e_die "unable to resolve Go version from ${go_mod}"
+    return 1
+  }
+
+  printf '%s\n' "${version}"
+}
+
 e2e_compose_cmd() {
   e2e_run_cmd "${E2E_CONTAINER_ENGINE}" compose "$@"
 }

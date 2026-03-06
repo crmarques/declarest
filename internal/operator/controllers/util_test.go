@@ -20,6 +20,8 @@ func TestHasPathOverlap(t *testing.T) {
 		{name: "parent child", left: "/customers", right: "/customers/acme", match: true},
 		{name: "sibling", left: "/customers/acme", right: "/customers/beta", match: false},
 		{name: "root overlap", left: "/", right: "/customers", match: true},
+		{name: "relative path normalized", left: "customers", right: "/customers/acme", match: true},
+		{name: "invalid traversal rejected", left: "/customers/../acme", right: "/customers", match: false},
 	}
 
 	for _, tc := range testCases {

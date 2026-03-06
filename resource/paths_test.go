@@ -78,6 +78,117 @@ func TestNormalizeLogicalPath(t *testing.T) {
 	}
 }
 
+func TestParseRawPathWithOptions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		input              string
+		options            RawPathParseOptions
+		wantNormalized     string
+		wantSegments       []string
+		wantCollectionFlag bool
+		wantError          bool
+	}{
+		{
+			name:               "tracks_trailing_collection_marker",
+			input:              "/customers/",
+			wantNormalized:     "/customers",
+			wantSegments:       []string{"customers"},
+			wantCollectionFlag: true,
+		},
+		{
+			name:           "preserves_root_without_collection_marker",
+			input:          "/",
+			wantNormalized: "/",
+		},
+		{
+			name:           "allows_missing_leading_slash_when_configured",
+			input:          "customers/acme",
+			options:        RawPathParseOptions{AllowMissingLeadingSlash: true},
+			wantNormalized: "/customers/acme",
+			wantSegments:   []string{"customers", "acme"},
+		},
+		{
+			name:      "rejects_relative_path_by_default",
+			input:     "customers/acme",
+			wantError: true,
+		},
+		{
+			name:      "rejects_traversal",
+			input:     "/customers/../acme",
+			wantError: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ParseRawPathWithOptions(test.input, test.options)
+			if test.wantError {
+				assertValidationError(t, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseRawPathWithOptions returned error: %v", err)
+			}
+			if got.Normalized != test.wantNormalized {
+				t.Fatalf("expected normalized %q, got %q", test.wantNormalized, got.Normalized)
+			}
+			if got.ExplicitCollectionTarget != test.wantCollectionFlag {
+				t.Fatalf("expected collection marker=%t, got %t", test.wantCollectionFlag, got.ExplicitCollectionTarget)
+			}
+			if len(got.Segments) != len(test.wantSegments) {
+				t.Fatalf("expected segments %#v, got %#v", test.wantSegments, got.Segments)
+			}
+			for idx := range got.Segments {
+				if got.Segments[idx] != test.wantSegments[idx] {
+					t.Fatalf("expected segments %#v, got %#v", test.wantSegments, got.Segments)
+				}
+			}
+		})
+	}
+}
+
+func TestHasLogicalPathOverlap(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		left      string
+		right     string
+		want      bool
+		wantError bool
+	}{
+		{name: "same_path", left: "/customers/acme", right: "/customers/acme", want: true},
+		{name: "parent_child", left: "/customers", right: "/customers/acme", want: true},
+		{name: "siblings", left: "/customers/acme", right: "/customers/beta", want: false},
+		{name: "root_scope", left: "/", right: "/customers", want: true},
+		{name: "rejects_invalid_path", left: "/customers/../acme", right: "/customers", wantError: true},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := HasLogicalPathOverlap(test.left, test.right)
+			if test.wantError {
+				assertValidationError(t, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("HasLogicalPathOverlap returned error: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("HasLogicalPathOverlap(%q, %q) = %v, want %v", test.left, test.right, got, test.want)
+			}
+		})
+	}
+}
+
 func TestJoinLogicalPath(t *testing.T) {
 	t.Parallel()
 

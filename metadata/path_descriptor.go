@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/resource"
 )
 
 type PathDescriptor struct {
@@ -15,38 +16,13 @@ type PathDescriptor struct {
 }
 
 func ParsePathDescriptor(logicalPath string) (PathDescriptor, error) {
-	trimmed := strings.TrimSpace(logicalPath)
-	if trimmed == "" {
-		return PathDescriptor{}, faults.NewTypedError(
-			faults.ValidationError,
-			"logical path must not be empty",
-			nil,
-		)
+	parsedPath, err := resource.ParseRawPathWithOptions(logicalPath, resource.RawPathParseOptions{})
+	if err != nil {
+		return PathDescriptor{}, err
 	}
 
-	normalizedInput := strings.ReplaceAll(trimmed, "\\", "/")
-	if !strings.HasPrefix(normalizedInput, "/") {
-		return PathDescriptor{}, faults.NewTypedError(
-			faults.ValidationError,
-			"logical path must be absolute",
-			nil,
-		)
-	}
-	trailingCollectionMarker := strings.HasSuffix(normalizedInput, "/")
-
-	rawSegments := strings.Split(normalizedInput, "/")
-	segments := make([]string, 0, len(rawSegments))
-	for _, segment := range rawSegments {
-		if segment == "" || segment == "." {
-			continue
-		}
-		if segment == ".." {
-			return PathDescriptor{}, faults.NewTypedError(
-				faults.ValidationError,
-				"logical path must not contain traversal segments",
-				nil,
-			)
-		}
+	segments := append([]string(nil), parsedPath.Segments...)
+	for _, segment := range segments {
 		if hasWildcardPattern(segment) {
 			if _, err := path.Match(segment, "sample"); err != nil {
 				return PathDescriptor{}, faults.NewTypedError(
@@ -56,11 +32,10 @@ func ParsePathDescriptor(logicalPath string) (PathDescriptor, error) {
 				)
 			}
 		}
-		segments = append(segments, segment)
 	}
 
-	collectionTarget := trailingCollectionMarker
-	selectorMode := trailingCollectionMarker
+	collectionTarget := parsedPath.Normalized == "/" || parsedPath.ExplicitCollectionTarget
+	selectorMode := collectionTarget
 	if len(segments) > 0 && segments[len(segments)-1] == "_" {
 		collectionTarget = true
 		selectorMode = true
@@ -73,9 +48,11 @@ func ParsePathDescriptor(logicalPath string) (PathDescriptor, error) {
 		}
 	}
 
-	selector := "/"
-	if len(segments) > 0 {
-		selector = "/" + strings.Join(segments, "/")
+	selector := parsedPath.Normalized
+	if len(segments) == 0 {
+		selector = "/"
+	} else if len(segments) != len(parsedPath.Segments) || collectionTarget {
+		selector = "/" + joinPathSegments(segments)
 	}
 	selector = path.Clean(selector)
 	if !strings.HasPrefix(selector, "/") {
@@ -95,4 +72,11 @@ func ParsePathDescriptor(logicalPath string) (PathDescriptor, error) {
 		Collection:   collectionTarget,
 		SelectorMode: selectorMode,
 	}, nil
+}
+
+func joinPathSegments(segments []string) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	return strings.Join(segments, "/")
 }
