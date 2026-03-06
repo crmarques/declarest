@@ -13,6 +13,10 @@ OPERATOR_IMAGE_TAG ?= latest
 OPERATOR_IMAGE_REF := $(OPERATOR_IMAGE):$(OPERATOR_IMAGE_TAG)
 TEST_FLAGS ?= -race
 E2E_FLAGS ?=
+DOCS_SITE_DIRS := site docs/site .docs
+DOCS_VENV_DIR := .venv
+E2E_RUNS_DIR := test/e2e/.runs
+E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
@@ -77,8 +81,15 @@ operator-image-push: ## Push the operator manager container image
 install: ## Install the CLI into $(GOBIN) or GOPATH/bin
 	$(GO) install ./cmd/declarest
 
-clean: ## Remove build artifacts
-	rm -rf $(BIN_DIR)
+clean: ## Remove build artifacts and transient docs/e2e outputs
+	test/e2e/run-e2e.sh --clean-all
+	@if command -v deactivate >/dev/null 2>&1; then \
+		deactivate; \
+	fi
+	rm -rf $(BIN_DIR) $(DOCS_SITE_DIRS) $(E2E_RUNS_DIR) $(E2E_BUILD_DIR) $(DOCS_VENV_DIR)
+	@if [ -d test/e2e/components ]; then \
+		find test/e2e/components -type d -name '__pycache__' -prune -exec rm -rf {} +; \
+	fi
 
 tidy: ## Reconcile go.mod and go.sum with the current imports
 	$(GO) mod tidy
