@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 CASE_ID='repo-status-baseline'
-CASE_SCOPE='main'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli operator'
 CASE_REQUIRES=''
 
 case_run() {

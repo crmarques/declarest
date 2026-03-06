@@ -374,11 +374,6 @@ e2e_validate_managed_server_fixture_tree() {
     metadata_files+=("${metadata_file}")
   done < <(find "${metadata_dir}" -type f -path '*/_/metadata.json' | sort)
 
-  if ((${#metadata_files[@]} == 0)); then
-    e2e_die "managed-server ${component_name} has no collection metadata fixtures under ${metadata_dir}"
-    return 1
-  fi
-
   local -a payload_files=()
   local payload_file
   while IFS= read -r payload_file; do

@@ -2,6 +2,111 @@
 
 E2E_CASE_FILES=()
 
+e2e_case_declared_profiles() {
+  local case_scope=$1
+  local case_profiles=$2
+
+  if [[ -n "${case_profiles}" ]]; then
+    printf '%s\n' "${case_profiles}"
+    return 0
+  fi
+
+  if [[ "${case_scope}" == 'operator-main' ]]; then
+    printf 'operator\n'
+    return 0
+  fi
+
+  printf 'cli\n'
+}
+
+e2e_case_validate_profiles() {
+  local case_file=$1
+  local case_scope=$2
+  local case_profiles=$3
+  local token
+  local has_valid=0
+
+  for token in ${case_profiles}; do
+    case "${token}" in
+      cli|operator)
+        has_valid=1
+        ;;
+      *)
+        e2e_die "case ${case_file} has invalid CASE_PROFILES entry: ${token} (allowed: cli, operator)"
+        return 2
+        ;;
+    esac
+  done
+
+  if ((has_valid == 0)); then
+    e2e_die "case ${case_file} must declare at least one CASE_PROFILES entry when set"
+    return 2
+  fi
+
+  if [[ "${case_scope}" == 'operator-main' ]] && [[ " ${case_profiles} " != *' operator '* ]]; then
+    e2e_die "case ${case_file} uses CASE_SCOPE=operator-main but does not include operator in CASE_PROFILES"
+    return 2
+  fi
+
+  return 0
+}
+
+e2e_case_file_matches_current_profile() {
+  local case_file=$1
+  local expected_scope=$2
+  local metadata
+  local case_scope
+  local case_profiles
+  local declared_profiles
+  local current_family
+
+  metadata=$(
+    awk '
+      BEGIN {
+        case_scope = ""
+        case_profiles = ""
+      }
+      /^CASE_SCOPE=/ && case_scope == "" {
+        value = $0
+        sub(/^CASE_SCOPE=/, "", value)
+        gsub(/^'\''|'\''$/, "", value)
+        gsub(/^"|"$/, "", value)
+        case_scope = value
+      }
+      /^CASE_PROFILES=/ && case_profiles == "" {
+        value = $0
+        sub(/^CASE_PROFILES=/, "", value)
+        gsub(/^'\''|'\''$/, "", value)
+        gsub(/^"|"$/, "", value)
+        case_profiles = value
+      }
+      END {
+        printf "%s\x1f%s\n", case_scope, case_profiles
+      }
+    ' "${case_file}"
+  ) || {
+    e2e_die "failed to read case metadata from ${case_file}"
+    return 2
+  }
+
+  IFS=$'\x1f' read -r case_scope case_profiles <<<"${metadata}"
+  if [[ -z "${case_scope}" ]]; then
+    e2e_die "case ${case_file} must declare CASE_SCOPE"
+    return 2
+  fi
+
+  if [[ "${case_scope}" != "${expected_scope}" ]]; then
+    e2e_die "case ${case_file} declared CASE_SCOPE=${case_scope} but was discovered in scope ${expected_scope}"
+    return 2
+  fi
+
+  declared_profiles=$(e2e_case_declared_profiles "${case_scope}" "${case_profiles}") || return 2
+  e2e_case_validate_profiles "${case_file}" "${case_scope}" "${declared_profiles}" || return $?
+
+  current_family=$(e2e_profile_family)
+  [[ " ${declared_profiles} " == *" ${current_family} "* ]]
+}
+
 e2e_collect_scope_case_files() {
   local scope=$1
   local base_dir=$2
@@ -12,7 +117,18 @@ e2e_collect_scope_case_files() {
 
   while IFS= read -r file; do
     [[ -n "${file}" ]] || continue
-    printf '%s\n' "${file}"
+    local match_status=0
+    e2e_case_file_matches_current_profile "${file}" "${scope}" || match_status=$?
+    if ((match_status == 0)); then
+      printf '%s\n' "${file}"
+      continue
+    fi
+
+    if ((match_status == 1)); then
+      continue
+    fi
+
+    return 1
   done < <(find "${scope_dir}" -maxdepth 1 -type f -name '*.sh' | sort)
 }
 

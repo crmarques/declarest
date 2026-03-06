@@ -95,10 +95,12 @@ Runner-managed hook sequence:
 Hook behavior:
 
 - Hooks MUST be executable by `bash` and ShellCheck-friendly.
-- Hooks MUST write generated values to `${E2E_COMPONENT_STATE_FILE}`.
-- `context` SHOULD write to `${E2E_COMPONENT_CONTEXT_FRAGMENT}`.
+- `init` and `configure-auth` MUST leave `${E2E_COMPONENT_STATE_FILE}` present and non-empty on success.
+- Hooks that update state MUST do so deterministically for repeated runs in the same run directory.
+- `context` MUST write a deterministic fragment to `${E2E_COMPONENT_CONTEXT_FRAGMENT}`; components that own persisted context sections (`managed-server`, `repo-type`, `secret-provider`) MUST leave that fragment non-empty on success.
 - `context` MAY accept output path as `$1`; runner also exports `E2E_COMPONENT_CONTEXT_FRAGMENT`.
 - Hooks MUST be idempotent for repeated runs in the same run directory.
+- Hooks MUST fail with actionable stderr output when required state or inputs are missing.
 
 ## Dependency and Parallelism Model
 

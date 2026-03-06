@@ -278,6 +278,28 @@ Expected outputs:
 Failure expectation:
 1. Step 3 fails with `ConflictError`/overlap validation because `/admin/realms/A/clients` overlaps `SyncPolicy A` scope.
 
+### Example 14: Smoke vs Full Profile Selection
+Goal: keep basic profiles fast while letting full profiles run exhaustive compatible coverage.
+
+Inputs:
+1. One shared smoke case with `CASE_PROFILES='cli operator'`.
+2. One shared main case with `CASE_PROFILES='cli operator'`.
+3. One CLI-only main case with no `CASE_PROFILES`.
+
+Execution:
+1. `run-e2e.sh --profile cli-basic` collects only `smoke`.
+2. `run-e2e.sh --profile cli-full` collects `smoke`, `main`, and `corner`.
+3. `run-e2e.sh --profile operator-basic` collects `smoke` and `operator-main`.
+4. `run-e2e.sh --profile operator-full` collects compatible `smoke`, compatible `main`, `operator-main`, and `corner`.
+
+Expected outputs:
+1. CLI-only main cases are excluded from operator profiles.
+2. Shared smoke cases run in both CLI and operator basic profiles.
+3. Case ordering remains deterministic across profile families.
+
+Failure expectation:
+1. Invalid `CASE_PROFILES` metadata fails validation before workload execution.
+
 ### Example 14: Authenticated Git Webhook Triggers Repository Reconcile
 Goal: trigger immediate repository refresh from provider webhook without waiting for poll interval.
 

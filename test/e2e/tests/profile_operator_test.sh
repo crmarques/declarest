@@ -83,13 +83,28 @@ test_operator_profile_automated_scopes() {
   e2e_parse_args --profile operator-basic
   e2e_apply_profile_defaults
   mapfile -t scopes < <(e2e_profile_scopes)
-  assert_eq "${scopes[*]}" "operator-main"
+  assert_eq "${scopes[*]}" "smoke operator-main"
 
   reload_profile_libs
   e2e_parse_args --profile operator-full
   e2e_apply_profile_defaults
   mapfile -t scopes < <(e2e_profile_scopes)
-  assert_eq "${scopes[*]}" "operator-main corner"
+  assert_eq "${scopes[*]}" "smoke main operator-main corner"
+}
+
+test_cli_profile_automated_scopes() {
+  reload_profile_libs
+
+  e2e_parse_args --profile cli-basic
+  e2e_apply_profile_defaults
+  mapfile -t scopes < <(e2e_profile_scopes)
+  assert_eq "${scopes[*]}" "smoke"
+
+  reload_profile_libs
+  e2e_parse_args --profile cli-full
+  e2e_apply_profile_defaults
+  mapfile -t scopes < <(e2e_profile_scopes)
+  assert_eq "${scopes[*]}" "smoke main corner"
 }
 
 test_operator_profile_builds_linux_static_manager_binary() {
@@ -126,6 +141,7 @@ test_operator_profile_rejects_compose_platform
 test_operator_profile_rejects_git_builtin_provider
 test_operator_profile_rejects_secret_provider_none
 test_operator_profile_automated_scopes
+test_cli_profile_automated_scopes
 test_operator_profile_builds_linux_static_manager_binary
 test_operator_profile_uses_supported_repository_poll_interval
 test_operator_profile_sets_home_to_writable_state_dir

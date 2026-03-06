@@ -43,6 +43,7 @@ create_hook_component() {
   cat >"${dir}/scripts/init.sh" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'COMPONENT_KEY=%s\n' "\${E2E_COMPONENT_KEY}" >"\${E2E_COMPONENT_STATE_FILE}"
 ${hook_body}
 EOF
   chmod +x "${dir}/scripts/init.sh"

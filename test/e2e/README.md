@@ -10,8 +10,8 @@ This repository uses a componentized Bash e2e harness.
 
 ## Profiles
 
-- `cli-basic` (default): runs all `main` cases that match the selected stack.
-- `cli-full`: runs all `main` and `corner` cases that match the selected stack.
+- `cli-basic` (default): runs curated `smoke` cases that match the selected stack.
+- `cli-full`: runs all compatible `smoke`, `main`, and `corner` cases.
 - `cli-manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
   - default stack includes `managed-server=simple-api-server`
@@ -29,8 +29,8 @@ This repository uses a componentized Bash e2e harness.
   - requires local component connections, `--repo-type git`, `--git-provider <gitea|gitlab>`, and `--secret-provider <file|vault>`
   - copies the selected managed-server `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs
   - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed server manually
-- `operator-basic`: same operator environment as `operator-manual`, then runs operator-focused automated `main` cases.
-- `operator-full`: same operator environment as `operator-basic`, plus `corner` validations.
+- `operator-basic`: same operator environment as `operator-manual`, then runs compatible shared `smoke` cases plus operator-focused automated `operator-main` cases.
+- `operator-full`: same operator environment as `operator-basic`, then runs all compatible `smoke`, operator-compatible `main`, `operator-main`, and `corner` cases.
 
 ## Platform
 
@@ -137,9 +137,11 @@ The runner prints a live log pointer at startup so progress can be followed with
 
 Cases live under:
 
+-- `test/e2e/cases/smoke/*.sh`
 -- `test/e2e/cases/main/*.sh`
 -- `test/e2e/cases/corner/*.sh`
 -- `test/e2e/cases/operator-main/*.sh`
+-- `test/e2e/components/<type>/<name>/cases/smoke/*.sh` (component-scoped smoke cases)
 -- `test/e2e/components/<type>/<name>/cases/main/*.sh` (component-scoped main cases)
 -- `test/e2e/components/<type>/<name>/cases/corner/*.sh` (component-scoped corner cases)
 
@@ -152,6 +154,7 @@ Each case file must define:
 
 - `CASE_ID`
 - `CASE_SCOPE`
+- optional `CASE_PROFILES` (`cli`, `operator`, or both; default is `cli` except `operator-main` defaults to `operator`)
 - `CASE_REQUIRES` (space-separated requirements)
 - `case_run` function
 
@@ -164,6 +167,13 @@ Missing requirement behavior:
 
 - default: case is `SKIP` with the missing requirement list
 - if a missing requirement was explicitly requested by flags, the case is marked `FAIL`
+
+Scope behavior:
+
+- `smoke` is the curated fast suite used by `*-basic` profiles.
+- `main` is exhaustive shared workflow coverage for `*-full`.
+- `operator-main` is operator-specific workflow coverage.
+- `corner` is exhaustive failure and edge-case coverage for `*-full`.
 
 ## Component Contract
 
@@ -198,7 +208,8 @@ Hook orchestration:
 Fast validation and harness tests:
 
 - `./test/e2e/run-e2e.sh --validate-components` validates all discovered component contracts and fixture metadata.
-- `./test/e2e/tests/run.sh` runs fast Bash contract tests for the E2E harness libraries (args/cases/hooks/ui/cleanup/validation).
+- `./test/e2e/tests/run.sh` runs fast Bash contract tests for the E2E harness libraries, including semantic hook-contract checks for state publication, deterministic context fragments, and repeated hook execution.
+- [TRACEABILITY.md](/home/crmarques/projects/declarest/test/e2e/TRACEABILITY.md) maps core E2E spec areas to the fast Bash and runtime tests that enforce them.
 
 Resource-server components must also provide a fixture tree used by sync-oriented cases:
 

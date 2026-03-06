@@ -14,6 +14,16 @@ case_run() {
   case_run_declarest resource apply "${target_path}"
   case_expect_success
 
+  case_run_declarest resource apply "${target_path}"
+  case_expect_success
+
+  case_run_declarest resource diff "${target_path}" -o json
+  case_expect_success
+  case_expect_output_contains '[]'
+
+  case_run_declarest resource apply "${target_path}" --force
+  case_expect_success
+
   case_run_declarest resource diff "${target_path}" -o json
   case_expect_success
   case_expect_output_contains '[]'

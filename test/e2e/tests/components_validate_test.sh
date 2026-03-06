@@ -155,6 +155,23 @@ _test_validate_all_discovered_components_accepts_valid_fixture_identity_impl() {
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
 
+test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir() {
+  load_components_libs
+  with_temp_e2e_dir _test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir_impl
+}
+
+_test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir_impl() {
+  create_repo_type_component "${E2E_DIR}" true
+  create_managed_server_component "${E2E_DIR}" true
+
+  local component_dir="${E2E_DIR}/components/managed-server/demo"
+  rm -f "${component_dir}/repo-template/api/items/_/metadata.json"
+  mkdir -p "${component_dir}/metadata"
+
+  e2e_discover_components
+  e2e_validate_all_discovered_component_contracts >/dev/null
+}
+
 test_validate_all_discovered_components_rejects_missing_fixture_identity() {
   load_components_libs
   with_temp_e2e_dir _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl

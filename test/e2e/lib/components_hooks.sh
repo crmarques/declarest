@@ -390,10 +390,19 @@ e2e_component_run_hook() {
   mkdir -p -- "$(dirname -- "${state_file}")"
   [[ -f "${state_file}" ]] || : >"${state_file}"
 
+  local context_fragment
+  context_fragment=$(e2e_component_context_fragment_path "${component_key}")
+
   local connection
+  local component_type
   connection=$(e2e_component_connection_for_key "${component_key}")
+  component_type=$(e2e_component_type "${component_key}")
 
   e2e_component_export_env "${component_key}" "${hook_name}"
+
+  if [[ "${hook_name}" == 'context' && -n "${context_fragment}" ]]; then
+    rm -f -- "${context_fragment}"
+  fi
 
   if [[ -f "${script_path}" ]]; then
     e2e_info "component-hook start key=${component_key} hook=${hook_name} connection=${connection} script=${script_path}"
@@ -402,6 +411,21 @@ e2e_component_run_hook() {
       e2e_error "component-hook failed key=${component_key} hook=${hook_name} script=${script_path}"
       return 1
     fi
+
+    case "${hook_name}" in
+      init|configure-auth)
+        if [[ ! -s "${state_file}" ]]; then
+          e2e_error "component-hook contract failed key=${component_key} hook=${hook_name} state-file=${state_file} reason=missing-or-empty-state"
+          return 1
+        fi
+        ;;
+      context)
+        if [[ "${component_type}" != 'git-provider' ]] && [[ -z "${context_fragment}" || ! -s "${context_fragment}" ]]; then
+          e2e_error "component-hook contract failed key=${component_key} hook=${hook_name} fragment=${context_fragment:-<unset>} reason=missing-or-empty-context"
+          return 1
+        fi
+        ;;
+    esac
 
     e2e_info "component-hook done key=${component_key} hook=${hook_name}"
     return 0

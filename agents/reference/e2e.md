@@ -20,7 +20,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 2. Supported profiles MUST be `cli-basic`, `cli-full`, `cli-manual`, `operator-manual`, `operator-basic`, and `operator-full`; default is `cli-basic`.
 3. Runner platform selection MUST support `--platform <compose|kubernetes>` with default `kubernetes`.
 3. Default component selections MUST be `managed-server=simple-api-server`, `repo-type=filesystem`, and `secret-provider=file`.
-4. `cli-basic` MUST run `main` cases only; `cli-full` MUST run `main` + `corner` cases; both run only requirement-compatible cases.
+4. `cli-basic` MUST run `smoke` cases only; `cli-full` MUST run `smoke` + `main` + `corner` cases; both run only requirement-compatible cases.
 5. `cli-manual` MUST start selected local-instantiable components, generate temporary context config, generate shell setup/reset scripts for handoff, and skip automated cases.
 6. `cli-manual` MUST seed the selected context repository directory with the selected managed-server `repo-template` tree.
 7. `cli-manual` MUST reject remote-only connection selections during initialization with actionable validation output.
@@ -42,9 +42,12 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 23. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
 24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resourceInfo.idFromAttribute` or `resourceInfo.aliasFromAttribute`.
 25. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
-26. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`.
-27. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
-28. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
+26. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`; they MAY declare `CASE_PROFILES` as a whitespace-separated subset of `cli operator`.
+27. `smoke` scope MUST represent the curated fast suite used by `cli-basic` and `operator-basic`.
+28. Cases default to `CASE_PROFILES=cli` unless `CASE_SCOPE=operator-main`, which defaults to `CASE_PROFILES=operator`.
+29. Cases discovered for a profile family MUST be filtered by `CASE_PROFILES` before workload execution.
+30. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
+31. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
 29. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
 30. The runner MUST maintain one live execution log file and print its path at startup.
 31. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus run-recorded runtime resources associated with each run (`compose` projects or `kind` clusters), and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that `cli-manual` or `operator-manual` handoff prepended so shells no longer reference cleaned runs.
@@ -66,7 +69,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 47. `operator-manual`, `operator-basic`, and `operator-full` MUST enforce kubernetes-only local-instantiable selections (`--platform kubernetes`, `--repo-type git`, `--git-provider <gitea|gitlab>`, `--secret-provider <file|vault>`, and local connections for selected components) and MUST fail initialization with actionable validation output when unsupported combinations are selected.
 48. Operator profiles MUST seed selected managed-server fixture content into the repository, initialize git, commit/push seeded content to the selected git provider, install operator CRDs, build/load a run-scoped operator image, deploy `declarest-operator-manager` in the run namespace, and generate/apply `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs.
 49. `operator-manual` handoff output MUST include run-scoped setup/reset shell scripts, operator runtime details, and concrete repository-to-managed-server verification commands using managed-server-specific logical path/payload examples.
-50. `operator-basic` MUST execute `operator-main` scope automated cases after operator installation; `operator-full` MUST execute `operator-main` plus `corner` scope automated cases.
+50. `operator-basic` MUST execute `smoke` plus `operator-main` scope automated cases after operator installation; `operator-full` MUST execute compatible `smoke`, compatible `main`, `operator-main`, and `corner` scope automated cases.
 51. Operator readiness waits (`DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS`) MUST default to `120`, reject non-positive values, and cap at `600`.
 52. Operator profiles with git providers `gitea|gitlab` MUST precompute run-scoped repository webhook URL/secret values, configure provider webhooks during access setup, and emit `spec.git.webhook` configuration in generated `ResourceRepository` CRs.
 53. Operator profile manager manifests MUST expose a dedicated in-cluster repository-webhook service endpoint and pass `--repository-webhook-bind-address` to the manager container.
@@ -96,11 +99,17 @@ Optional component hook:
 1. `scripts/manual-info.sh` may emit plain-text access details for `cli-manual` and `operator-manual` profile output; when emitted, runner output groups details in a `Manual Component Access` handoff section before `Repository provider access`.
 2. `scripts/start.sh` and `scripts/stop.sh` may override built-in compose runtime lifecycle adapters.
 3. Built-in adapters are platform-aware: compose (`compose/compose.yaml`) or kubernetes (`k8s/*.yaml` + service annotation-driven port-forward).
+4. Successful `init` and `configure-auth` hooks MUST leave `${E2E_COMPONENT_STATE_FILE}` non-empty; successful `context` hooks for components that own persisted context sections (`managed-server`, `repo-type`, `secret-provider`) MUST leave `${E2E_COMPONENT_CONTEXT_FRAGMENT}` non-empty.
 
 Case requirements (`CASE_REQUIRES`):
 1. Selector format: `key=value`.
 2. Capability format: symbolic value such as `has-secret-provider`.
 3. All requirements are AND-combined.
+
+`CASE_PROFILES`:
+1. Allowed values: `cli`, `operator`.
+2. Omitted value defaults to `cli`, except `operator-main` defaults to `operator`.
+3. Cases whose `CASE_PROFILES` omit the active profile family MUST be excluded before execution.
 
 Case discovery order:
 1. Global cases first: `test/e2e/cases/<scope>/`.
@@ -157,7 +166,7 @@ Operator handoff:
 21. Operator profile with `git-provider=git` does not configure provider webhooks and still fails fast from operator-profile provider validation.
 
 ## Examples
-1. `./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible main cases and reports deterministic summary.
+1. `./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible smoke cases and reports deterministic summary.
 2. `./run-e2e.sh --profile cli-manual --repo-type git --git-provider github --git-provider-connection remote` fails initialization because manual mode is local-instantiable only.
 3. `./run-e2e.sh --profile cli-basic --repo-type git --git-provider gitlab --managed-server simple-api-server` runs dependency-aware parallel hooks while ensuring `repo-type:git` waits for `git-provider:*` initialization.
 4. `./run-e2e.sh --managed-server keycloak --managed-server-auth-type none` fails selection because keycloak requires oauth2 auth-type support.
@@ -172,8 +181,8 @@ Operator handoff:
 13. `./run-e2e.sh --profile cli-manual --platform kubernetes --repo-type filesystem --managed-server keycloak --secret-provider file` starts a run-scoped kind cluster, prints kubeconfig/namespace details for manual interaction, and `./run-e2e.sh --clean <run-id>` deletes the run cluster.
 14. `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://proxy.example:3128 ./run-e2e.sh --profile cli-basic --managed-server-proxy true` injects `managed-server.http.proxy.http-url` into the generated context.
 15. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file` starts a run-scoped kind cluster, installs operator CRDs, deploys the operator manager in-cluster, applies generated CRs, and prints manual repository-to-managed-server verification commands.
-16. `./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file` starts the operator stack and runs automated operator reconcile coverage.
-17. `./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file` extends `operator-basic` with corner-case validations.
+16. `./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file` starts the operator stack and runs compatible shared smoke coverage plus automated operator reconcile coverage.
+17. `./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file` extends `operator-basic` with compatible shared main coverage plus corner-case validations.
 18. `./run-e2e.sh --profile operator-manual --managed-server keycloak --repo-type git --git-provider gitea --secret-provider vault` prints `Manual Component Access` from component `manual-info` hooks in handoff output before `Repository provider access`.
 19. `./run-e2e.sh --profile cli-basic --managed-server rundeck` emits `metadata.base-dir` from `test/e2e/components/managed-server/rundeck/metadata` because `rundeck` has no shorthand bundle mapping, while still leaving local `managed-server.http.openapi` unset.
 20. `./run-e2e.sh --profile operator-manual --managed-server rundeck --repo-type git --git-provider gitea --secret-provider vault` (with no selected-component `manual-info` output) omits `Manual Component Access` while preserving deterministic handoff section ordering.

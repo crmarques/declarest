@@ -1,0 +1,10 @@
+{
+  "name": "platform",
+  "description": "Example project used by the Rundeck E2E fixture tree",
+  "config": {
+    "project.label": "Platform",
+    "project.description": "Managed by declarest E2E",
+    "project.disable.executions": "false",
+    "project.execution.history.cleanup.enabled": "true"
+  }
+}

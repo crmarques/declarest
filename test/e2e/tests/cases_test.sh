@@ -67,22 +67,24 @@ test_collect_case_files_is_deterministic_global_then_component() {
   trap 'rm -rf "${tmp}"' RETURN
 
   E2E_DIR="${tmp}"
-  mkdir -p "${E2E_DIR}/cases/main"
-  mkdir -p "${E2E_DIR}/components/managed-server/demo/cases/main"
+  mkdir -p "${E2E_DIR}/cases/smoke"
+  mkdir -p "${E2E_DIR}/components/managed-server/demo/cases/smoke"
 
-  cat >"${E2E_DIR}/cases/main/02-global-b.sh" <<'EOF'
+  cat >"${E2E_DIR}/cases/smoke/02-global-b.sh" <<'EOF'
 CASE_ID='g2'
-CASE_SCOPE='main'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli operator'
 case_run(){ :; }
 EOF
-  cat >"${E2E_DIR}/cases/main/01-global-a.sh" <<'EOF'
+  cat >"${E2E_DIR}/cases/smoke/01-global-a.sh" <<'EOF'
 CASE_ID='g1'
-CASE_SCOPE='main'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli operator'
 case_run(){ :; }
 EOF
-  cat >"${E2E_DIR}/components/managed-server/demo/cases/main/03-component-c.sh" <<'EOF'
+  cat >"${E2E_DIR}/components/managed-server/demo/cases/smoke/03-component-c.sh" <<'EOF'
 CASE_ID='c3'
-CASE_SCOPE='main'
+CASE_SCOPE='smoke'
 case_run(){ :; }
 EOF
 
@@ -94,12 +96,90 @@ EOF
   e2e_collect_case_files
 
   assert_eq "${#E2E_CASE_FILES[@]}" "3"
-  assert_eq "${E2E_CASE_FILES[0]}" "${E2E_DIR}/cases/main/01-global-a.sh"
-  assert_eq "${E2E_CASE_FILES[1]}" "${E2E_DIR}/cases/main/02-global-b.sh"
-  assert_eq "${E2E_CASE_FILES[2]}" "${E2E_DIR}/components/managed-server/demo/cases/main/03-component-c.sh"
+  assert_eq "${E2E_CASE_FILES[0]}" "${E2E_DIR}/cases/smoke/01-global-a.sh"
+  assert_eq "${E2E_CASE_FILES[1]}" "${E2E_DIR}/cases/smoke/02-global-b.sh"
+  assert_eq "${E2E_CASE_FILES[2]}" "${E2E_DIR}/components/managed-server/demo/cases/smoke/03-component-c.sh"
+}
+
+test_collect_case_files_filters_by_profile_family() {
+  load_case_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  E2E_DIR="${tmp}"
+  mkdir -p "${E2E_DIR}/cases/smoke"
+  mkdir -p "${E2E_DIR}/cases/main"
+  mkdir -p "${E2E_DIR}/cases/operator-main"
+
+  cat >"${E2E_DIR}/cases/smoke/01-shared.sh" <<'EOF'
+CASE_ID='shared'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli operator'
+case_run(){ :; }
+EOF
+  cat >"${E2E_DIR}/cases/main/02-cli-only.sh" <<'EOF'
+CASE_ID='cli-only'
+CASE_SCOPE='main'
+case_run(){ :; }
+EOF
+  cat >"${E2E_DIR}/cases/main/03-operator-compatible.sh" <<'EOF'
+CASE_ID='operator-compatible'
+CASE_SCOPE='main'
+CASE_PROFILES='cli operator'
+case_run(){ :; }
+EOF
+  cat >"${E2E_DIR}/cases/operator-main/04-operator.sh" <<'EOF'
+CASE_ID='operator-only'
+CASE_SCOPE='operator-main'
+case_run(){ :; }
+EOF
+
+  E2E_PROFILE='operator-full'
+  E2E_SELECTED_COMPONENT_KEYS=()
+  E2E_COMPONENT_PATH=()
+
+  e2e_collect_case_files
+
+  assert_eq "${#E2E_CASE_FILES[@]}" "3"
+  assert_eq "${E2E_CASE_FILES[0]}" "${E2E_DIR}/cases/smoke/01-shared.sh"
+  assert_eq "${E2E_CASE_FILES[1]}" "${E2E_DIR}/cases/main/03-operator-compatible.sh"
+  assert_eq "${E2E_CASE_FILES[2]}" "${E2E_DIR}/cases/operator-main/04-operator.sh"
+}
+
+test_collect_case_files_rejects_invalid_case_profiles() {
+  load_case_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  E2E_DIR="${tmp}"
+  mkdir -p "${E2E_DIR}/cases/smoke"
+
+  cat >"${E2E_DIR}/cases/smoke/01-invalid.sh" <<'EOF'
+CASE_ID='invalid'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli invalid'
+case_run(){ :; }
+EOF
+
+  E2E_PROFILE='cli-basic'
+  E2E_SELECTED_COMPONENT_KEYS=()
+  E2E_COMPONENT_PATH=()
+
+  local output status
+  set +e
+  output=$(e2e_collect_scope_case_files smoke "${E2E_DIR}/cases" 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid CASE_PROFILES entry"
 }
 
 test_requirement_requested_explicitly_tracks_capability_selection
 test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector
 test_requirement_requested_explicitly_tracks_managed_server_proxy_capability
 test_collect_case_files_is_deterministic_global_then_component
+test_collect_case_files_filters_by_profile_family
+test_collect_case_files_rejects_invalid_case_profiles

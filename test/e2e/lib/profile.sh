@@ -55,6 +55,16 @@ e2e_profile_is_manual_handoff() {
   e2e_profile_is_cli_manual "${profile}" || e2e_profile_is_operator_manual "${profile}"
 }
 
+e2e_profile_family() {
+  local profile=${1:-${E2E_PROFILE:-}}
+  if e2e_profile_is_operator "${profile}"; then
+    printf 'operator\n'
+    return 0
+  fi
+
+  printf 'cli\n'
+}
+
 e2e_profile_total_steps() {
   local profile=${1:-${E2E_PROFILE:-}}
 
@@ -166,20 +176,20 @@ e2e_validate_profile_rules() {
 e2e_profile_scopes() {
   case "${E2E_PROFILE}" in
     cli-basic)
-      printf 'main\n'
+      printf 'smoke\n'
       ;;
     cli-full)
-      printf 'main\ncorner\n'
+      printf 'smoke\nmain\ncorner\n'
       ;;
     cli-manual)
       ;;
     operator-manual)
       ;;
     operator-basic)
-      printf 'operator-main\n'
+      printf 'smoke\noperator-main\n'
       ;;
     operator-full)
-      printf 'operator-main\ncorner\n'
+      printf 'smoke\nmain\noperator-main\ncorner\n'
       ;;
   esac
 }

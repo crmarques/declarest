@@ -2,6 +2,7 @@
 
 CASE_ID='git-push-status'
 CASE_SCOPE='main'
+CASE_PROFILES='cli operator'
 CASE_REQUIRES='repo-type=git'
 
 case_run() {

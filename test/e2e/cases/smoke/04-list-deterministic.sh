@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 CASE_ID='list-deterministic'
-CASE_SCOPE='main'
+CASE_SCOPE='smoke'
+CASE_PROFILES='cli operator'
 CASE_REQUIRES='has-managed-server'
 
 case_run() {
