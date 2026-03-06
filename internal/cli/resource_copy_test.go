@@ -46,7 +46,7 @@ func TestResourceCopySourceLookup(t *testing.T) {
 		}
 	})
 
-	t.Run("does not fall back to remote source when local resource is not found", func(t *testing.T) {
+	t.Run("falls back to remote source when local resource is not found", func(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
@@ -63,16 +63,17 @@ func TestResourceCopySourceLookup(t *testing.T) {
 		}
 		deps := newResourceSaveDeps(orchestratorService, metadataService)
 
-		_, err := executeForTest(deps, "", "resource", "copy", "/admin/realms/test", "/admin/realms/test-copy")
-		assertTypedCategory(t, err, faults.NotFoundError)
+		if _, err := executeForTest(deps, "", "resource", "copy", "/admin/realms/test", "/admin/realms/test-copy"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if len(orchestratorService.getLocalCalls) != 1 || orchestratorService.getLocalCalls[0] != "/admin/realms/test" {
 			t.Fatalf("expected one local read for source path, got %#v", orchestratorService.getLocalCalls)
 		}
-		if len(orchestratorService.getRemoteCalls) != 0 {
-			t.Fatalf("expected no remote fallback reads for source path, got %#v", orchestratorService.getRemoteCalls)
+		if len(orchestratorService.getRemoteCalls) != 1 || orchestratorService.getRemoteCalls[0] != "/admin/realms/test" {
+			t.Fatalf("expected one remote fallback read for source path, got %#v", orchestratorService.getRemoteCalls)
 		}
-		if len(orchestratorService.saveCalls) != 0 {
-			t.Fatalf("expected no save calls on local miss, got %#v", orchestratorService.saveCalls)
+		if len(orchestratorService.saveCalls) != 1 {
+			t.Fatalf("expected one save call after remote fallback, got %#v", orchestratorService.saveCalls)
 		}
 	})
 }
@@ -236,30 +237,6 @@ func TestResourceCopyOverwriteAllowsReplacingExistingTargetAndCommits(t *testing
 	}
 	if repoService.commitCalls[0] != "declarest: copy resource /admin/realms/test to /admin/realms/test-copy" {
 		t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
-	}
-}
-
-func TestResourceCopyOverrideAliasStillAccepted(t *testing.T) {
-	t.Parallel()
-
-	metadataService := newTestMetadata()
-	orchestratorService := &testOrchestrator{
-		metadataService: metadataService,
-		getLocalValues: map[string]resource.Value{
-			"/admin/realms/test": map[string]any{"realm": "test"},
-		},
-	}
-	deps := testDepsWith(orchestratorService, metadataService)
-
-	if _, err := executeForTest(
-		deps,
-		"",
-		"--context", "git",
-		"resource", "copy",
-		"/admin/realms/test", "/admin/realms/test-copy",
-		"--override",
-	); err != nil {
-		t.Fatalf("unexpected error with --override alias: %v", err)
 	}
 }
 

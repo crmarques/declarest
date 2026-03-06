@@ -41,8 +41,6 @@ func NewLocalResourceRepository(baseDir string, resourceFormat string) *LocalRes
 	}
 }
 
-// Deprecated: Move is a concrete helper and is not part of the repository
-// interfaces. Prefer interface-based flows for new call sites.
 func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPath string) error {
 	fromNormalized, err := resource.NormalizeLogicalPath(fromPath)
 	if err != nil {
@@ -67,20 +65,9 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 
 	if _, statErr := os.Stat(fromFile); statErr != nil {
 		if errors.Is(statErr, os.ErrNotExist) {
-			legacyFromFile, legacyErr := r.legacyPayloadFilePath(fromNormalized)
-			if legacyErr != nil {
-				return legacyErr
-			}
-			if _, legacyStatErr := os.Stat(legacyFromFile); legacyStatErr != nil {
-				if errors.Is(legacyStatErr, os.ErrNotExist) {
-					return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
-				}
-				return internalError("failed to access source resource", legacyStatErr)
-			}
-			fromFile = legacyFromFile
-		} else {
-			return internalError("failed to access source resource", statErr)
+			return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
 		}
+		return internalError("failed to access source resource", statErr)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(toFile), 0o755); err != nil {

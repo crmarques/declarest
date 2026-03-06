@@ -32,7 +32,7 @@ e2e_generate_gitlab_root_password() {
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   gitlab_port=$(e2e_pick_free_port)
-  root_password=$(e2e_env_optional 'DECLAREST_E2E_GITLAB_ROOT_PASSWORD' 'E2E_GITLAB_ROOT_PASSWORD' || true)
+  root_password=$(e2e_env_optional 'DECLAREST_E2E_GITLAB_ROOT_PASSWORD' || true)
   if [[ -z "${root_password}" ]]; then
     root_password=$(e2e_generate_gitlab_root_password)
   fi
@@ -51,9 +51,9 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   exit 0
 fi
 
-gitlab_remote_url=$(e2e_require_env 'DECLAREST_E2E_GITLAB_REMOTE_URL' 'E2E_GITLAB_REMOTE_URL') || exit 1
-gitlab_token=$(e2e_require_env 'DECLAREST_E2E_GITLAB_TOKEN' 'E2E_GITLAB_TOKEN') || exit 1
-gitlab_remote_branch=$(e2e_env_optional 'DECLAREST_E2E_GITLAB_REMOTE_BRANCH' 'E2E_GITLAB_REMOTE_BRANCH' || true)
+gitlab_remote_url=$(e2e_require_env 'DECLAREST_E2E_GITLAB_REMOTE_URL') || exit 1
+gitlab_token=$(e2e_require_env 'DECLAREST_E2E_GITLAB_TOKEN') || exit 1
+gitlab_remote_branch=$(e2e_env_optional 'DECLAREST_E2E_GITLAB_REMOTE_BRANCH' || true)
 gitlab_remote_branch=${gitlab_remote_branch:-main}
 
 e2e_write_state_value "${state_file}" GIT_REMOTE_URL "${gitlab_remote_url}"

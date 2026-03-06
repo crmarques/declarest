@@ -80,9 +80,9 @@ declarest resource apply /corporations/acme --force
 declarest resource create /corporations/acme
 declarest resource update /corporations/acme
 declarest resource delete /corporations/acme --confirm-delete
-declarest resource delete /corporations/acme --confirm-delete --repository --message-override "cleanup customer"
+declarest resource delete /corporations/acme --confirm-delete --source repository --message-override "cleanup customer"
 declarest resource edit /corporations/acme --editor "vi"
-declarest resource copy /corporations/acme /corporations/acme-copy --overrides name=acme-copy
+declarest resource copy /corporations/acme /corporations/acme-copy --override-attributes name=acme-copy
 ```
 
 ### Raw HTTP and templates

@@ -139,8 +139,6 @@ func newRequestMethodCommand(
 
 	if cfg.requireDeleteConfirm {
 		command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
-		command.Flags().BoolVar(&confirmDelete, "force", false, "legacy alias for --confirm-delete")
-		_ = command.Flags().MarkHidden("force")
 		command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete collection children recursively")
 	}
 

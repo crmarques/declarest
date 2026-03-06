@@ -52,10 +52,10 @@ Input flags:
 2. `--format`, `-i` with allowed formats `json|yaml`.
 3. `--payload` as a command-specific inline payload flag for `resource request post` and `resource request put`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline JSON/YAML object text, or dotted assignments (`a=b,c=d,e.f.g=h`), and explicit input MUST override repository-sourced payload loading when provided.
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
-5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation (legacy hidden alias `--force` MAY remain during migrations).
-6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation (legacy hidden alias `--override` MAY remain during migrations).
-7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation (legacy hidden alias `--force` MAY remain during migrations).
-8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent (legacy hidden alias `--force` MAY remain during migrations).
+5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation.
+6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation.
+7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation.
+8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent.
 9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.auto-sync` is disabled.
 
 Path flags:
@@ -67,7 +67,6 @@ Resource source flags:
 1. `resource get` and `resource list` MUST support `--source <remote-server|repository>`.
 2. `resource delete` MUST support `--source <remote-server|repository|both>`.
 3. `resource get|list|delete` MUST default `--source` to `remote-server`.
-4. Legacy source booleans (`--repository`, `--remote-server`, and `--both` for delete) MAY remain as hidden compatibility aliases during migrations.
 
 Core resource commands:
 1. `get`.
@@ -169,13 +168,13 @@ Interactive config commands:
 34. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
 35. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
 36. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
-37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>`, resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`, and remain compatible with legacy absolute key placeholders.
+37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>` and `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
 39. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 40. `resource edit` MUST resolve the edit source from the local repository first, using the same literal-then-bounded metadata-aware fallback as other repository-backed single-resource workflows; when that local resolution returns `NotFound`, it MUST fall back to one remote read for the requested logical path before opening the editor, and it MUST persist the edited payload only when decoding and save validation succeed.
 41. `resource edit` on git repository contexts MUST commit repository changes and MAY auto-sync when the git context enables repository auto-sync.
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
-43. `resource copy --overrides` MUST accept dotted assignments (`a=b,c=d,e.f.g=h`) and apply them to object payloads before save validation.
+43. `resource copy --override-attributes` MUST accept dotted assignments (`a=b,c=d,e.f.g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
 44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resourceInfo.secretInAttributes`.
 45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
@@ -196,7 +195,7 @@ Interactive config commands:
 56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
 57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--format` (`json|yaml`) when payload input is provided.
 58. `resource request post` and `resource request put` MUST also support optional inline `--payload` input, decoded according to `--format`, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
-59. `config add` MUST accept input from `--file <path|->` or stdin.
+59. `config add` MUST accept input from `--payload <path|->` or stdin.
 57. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
 58. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
 59. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
@@ -229,7 +228,7 @@ Interactive config commands:
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
 83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.auto-sync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
-84. `resource delete` when repository deletion is selected (`--source repository|both` or legacy `--repository|--both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
+84. `resource delete` when repository deletion is selected (`--source repository|both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
@@ -282,8 +281,6 @@ Interactive config commands:
 3. Unsupported command/flag combination.
 4. Command requires configured manager not present in active context.
 5. `resource get|list|delete` receives invalid `--source` values.
-6. `resource get|list|delete` receives `--source` combined with legacy source aliases during compatibility periods.
-7. `resource get|list|delete` receives conflicting legacy source flags (`--repository`, `--remote-server`, `--both`).
 8. `resource save` receives both `--as-items` and `--as-one-resource`.
 9. `resource save --as-items` receives non-list input.
 10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, detects metadata-declared plaintext candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--overwrite`.
@@ -403,10 +400,10 @@ Interactive config commands:
 44. `declarest resource request post /customers --payload '{"id":"acme"}'` executes a direct managed-server POST request with inline JSON payload.
 45. `echo '{"id":"acme"}' | declarest resource request put /customers/acme` executes a direct managed-server PUT request from stdin.
 46. `declarest resource request delete /customers/a --path /customers/b` fails with `ValidationError` due to path mismatch.
-47. `declarest config add` opens interactive prompts to build one context configuration when `--file`/stdin input is not provided.
-48. `declarest config add --file contexts.yaml --format yaml` imports all contexts defined in a catalog file.
-49. `declarest config add --file contexts.yaml --format yaml --context-name prod --set-current` imports only `prod` and sets it as current.
-50. `declarest config add --file contexts.yaml --format yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
+47. `declarest config add` opens interactive prompts to build one context configuration when `--payload`/stdin input is not provided.
+48. `declarest config add --payload contexts.yaml --format yaml` imports all contexts defined in a catalog file.
+49. `declarest config add --payload contexts.yaml --format yaml --context-name prod --set-current` imports only `prod` and sets it as current.
+50. `declarest config add --payload contexts.yaml --format yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
 51. `declarest resource save --help` prints help text even when no current context is configured.
 52. `declarest secret detect` scans the whole local repository for secret candidates when no payload input is provided.
 53. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resourceInfo.secretInAttributes` for detected resource paths.
@@ -441,10 +438,10 @@ Interactive config commands:
 82. `declarest config edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
 83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
 84. `declarest resource edit /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c --editor "vi"` resolves the existing alias-based repository entry first; if no local resource matches, it bootstraps the editor from one remote read and saves the edited payload to the requested logical path.
-84. `declarest resource copy /customers/acme /customers/acme-copy --overrides name=acme-copy,spec.tier=gold` copies one repository resource and applies dotted overrides before saving.
-85. `declarest resource copy /admin/realms/test /admin/realms/test2 --overrides realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
+84. `declarest resource copy /customers/acme /customers/acme-copy --override-attributes name=acme-copy,spec.tier=gold` copies one repository resource and applies dotted overrides before saving.
+85. `declarest resource copy /admin/realms/test /admin/realms/test2 --override-attributes realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
 85. `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123` saves a resource and appends `ticket-123` to the default git commit message when the active repository is git.
-86. `declarest resource delete /customers/acme --confirm-delete --repository --message-override 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
+86. `declarest resource delete /customers/acme --confirm-delete --source repository --message-override 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
 87. `declarest repository history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
 88. `declarest repository history` in a filesystem context prints a deterministic not-supported message.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.

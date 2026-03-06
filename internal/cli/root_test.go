@@ -687,20 +687,6 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy_repository_and_remote_server_flags_conflict", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--repository", "--remote-server")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
-	t.Run("source_and_legacy_flags_conflict", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--source", "repository", "--remote-server")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
 	t.Run("invalid_source_value_fails", func(t *testing.T) {
 		t.Parallel()
 
@@ -724,7 +710,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			SecretsFromAttributes: []string{"password"},
 		}
 
-		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--repository")
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "repository")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -750,7 +736,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			SecretsFromAttributes: []string{"password"},
 		}
 
-		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--remote-server")
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "remote-server")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -784,7 +770,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--repository",
+			"--source", "repository",
 			"--show-secrets",
 		)
 		if err != nil {
@@ -821,7 +807,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--repository",
+			"--source", "repository",
 			"--show-secrets",
 		)
 		if err != nil {
@@ -854,7 +840,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--repository",
+			"--source", "repository",
 			"--show-secrets",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -883,7 +869,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--remote-server",
+			"--source", "remote-server",
 			"--show-secrets",
 		)
 		if err != nil {
@@ -922,7 +908,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--remote-server",
+			"--source", "remote-server",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -1006,7 +992,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--remote-server",
+			"--source", "remote-server",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -1308,14 +1294,6 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("delete_legacy_force_alias_still_works", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a", "--force")
-		if err != nil {
-			t.Fatalf("unexpected error with legacy --force alias: %v", err)
-		}
-	})
 }
 
 func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
@@ -1563,7 +1541,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 func TestResourceSaveInputModes(t *testing.T) {
 	t.Parallel()
 
-	t.Run("override_alias_is_accepted", func(t *testing.T) {
+	t.Run("overwrite_flag_is_accepted", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -1574,10 +1552,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--override",
+			"--overwrite",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --override alias: %v", err)
+			t.Fatalf("unexpected error with --overwrite: %v", err)
 		}
 	})
 
@@ -2823,34 +2801,11 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy_source_flags_are_mutually_exclusive", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete", "--repository", "--both")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
-	t.Run("source_and_legacy_flags_conflict", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "repository", "--both")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
 	t.Run("invalid_source_value_fails", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "invalid")
 		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
-	t.Run("legacy_force_alias_still_works", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--force")
-		if err != nil {
-			t.Fatalf("unexpected error with legacy --force alias: %v", err)
-		}
 	})
 }
 
@@ -2932,7 +2887,7 @@ func TestResourceDeleteFallsBackToRequestedPathWhenNoLocalTargetsMatch(t *testin
 func TestResourceDeleteGitCommitMessages(t *testing.T) {
 	t.Parallel()
 
-	t.Run("legacy_repository_flag_commits_to_git_repo", func(t *testing.T) {
+	t.Run("source_repository_commits_to_git_repo", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -2945,7 +2900,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"resource", "delete",
 			"/customers/acme",
 			"--confirm-delete",
-			"--repository",
+			"--source", "repository",
 		)
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
@@ -4674,10 +4629,10 @@ func TestResourceListSourceFlags(t *testing.T) {
 			t.Fatalf("unexpected list error: %v", err)
 		}
 		if !strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected remote-server output with --remote-server, got %q", output)
+			t.Fatalf("expected remote-server output with --source remote-server, got %q", output)
 		}
 		if strings.Contains(output, "repo-only (repo-only)") {
-			t.Fatalf("expected repository output to be absent with --remote-server, got %q", output)
+			t.Fatalf("expected repository output to be absent with --source remote-server, got %q", output)
 		}
 	})
 
@@ -4697,7 +4652,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 			t.Fatalf("expected repository output, got %q", output)
 		}
 		if strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected remote output to be absent with --repository, got %q", output)
+			t.Fatalf("expected remote output to be absent with --source repository, got %q", output)
 		}
 	})
 
@@ -4709,20 +4664,6 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "--http-method") {
 			t.Fatalf("expected http-method/source validation error, got %v", err)
 		}
-	})
-
-	t.Run("legacy_repository_and_remote_server_flags_conflict", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "list", "/", "--repository", "--remote-server")
-		assertTypedCategory(t, err, faults.ValidationError)
-	})
-
-	t.Run("source_and_legacy_flags_conflict", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := executeForTest(testDeps(), "", "resource", "list", "/", "--source", "repository", "--remote-server")
-		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
 	t.Run("invalid_source_value_fails", func(t *testing.T) {

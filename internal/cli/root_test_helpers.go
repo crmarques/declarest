@@ -289,9 +289,6 @@ type requestCall struct {
 	body   resource.Value
 }
 
-func (r *testOrchestrator) Get(_ context.Context, logicalPath string) (resource.Value, error) {
-	return map[string]any{"path": logicalPath, "source": "get"}, nil
-}
 func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
 	r.getLocalCalls = append(r.getLocalCalls, logicalPath)
 	if r.getLocalErr != nil {

@@ -576,7 +576,7 @@ func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
 	}
 }
 
-func TestFSMetadataGetSupportsOperationURLPathSyntax(t *testing.T) {
+func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -605,15 +605,8 @@ func TestFSMetadataGetSupportsOperationURLPathSyntax(t *testing.T) {
 		t.Fatalf("failed to write metadata file %q: %v", filePath, err)
 	}
 
-	decoded, err := service.Get(ctx, "/admin/realms/_/user-registry")
-	if err != nil {
-		t.Fatalf("Get returned error: %v", err)
-	}
-	if decoded.CollectionPath != "/admin/realms/{{.realm}}/components" {
-		t.Fatalf("unexpected collectionPath: %q", decoded.CollectionPath)
-	}
-	if decoded.Operations[string(metadatadomain.OperationGet)].Path != "./{{.id}}" {
-		t.Fatalf("unexpected get path: %#v", decoded.Operations[string(metadatadomain.OperationGet)])
+	if _, err := service.Get(ctx, "/admin/realms/_/user-registry"); err == nil {
+		t.Fatal("expected Get to reject operationInfo.getResource.url.path")
 	}
 }
 

@@ -14,27 +14,6 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-// Deprecated: prefer the orchestrator.Orchestrator interface methods
-// (GetLocal/GetRemote) in new call sites. This convenience method remains for
-// concrete-type compatibility and local-then-remote fallback behavior.
-func (r *DefaultOrchestrator) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
-	localValue, err := r.GetLocal(ctx, logicalPath)
-	if err == nil {
-		return localValue, nil
-	}
-	if !faults.IsCategory(err, faults.NotFoundError) {
-		return nil, err
-	}
-
-	if r == nil || r.server == nil {
-		debugctx.Printf(ctx, "orchestrator get local miss path=%q remote_fallback=false", logicalPath)
-		return nil, err
-	}
-
-	debugctx.Printf(ctx, "orchestrator get local miss path=%q remote_fallback=true", logicalPath)
-	return r.GetRemote(ctx, logicalPath)
-}
-
 func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) (resource.Value, error) {
 	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {

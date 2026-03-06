@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	resourcedomain "github.com/crmarques/declarest/resource"
@@ -110,12 +111,8 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 		return cliutil.CompleteLogicalPaths(cmd, deps, toComplete)
 	})
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "allow replacing the target resource when it already exists")
-	command.Flags().BoolVar(&overwrite, "override", false, "legacy alias for --overwrite")
-	_ = command.Flags().MarkHidden("override")
 	command.Flags().StringVarP(&commitMessageAppend, "message", "m", "", "append text to the default git commit message (git repositories only)")
 	command.Flags().StringVar(&overrideAttributes, "override-attributes", "", "comma-separated dotted key=value attribute overrides for the copied payload")
-	command.Flags().StringVar(&overrideAttributes, "overrides", "", "deprecated alias for --override-attributes")
-	_ = command.Flags().MarkHidden("overrides")
 	command.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= 2 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -173,7 +170,15 @@ func resolveCopySourceValue(
 		}
 		return repositoryService.Get(ctx, normalizedPath)
 	}
-	return orchestratorService.GetLocal(ctx, normalizedPath)
+
+	value, err := orchestratorService.GetLocal(ctx, normalizedPath)
+	if err == nil {
+		return value, nil
+	}
+	if !faults.IsCategory(err, faults.NotFoundError) {
+		return nil, err
+	}
+	return orchestratorService.GetRemote(ctx, normalizedPath)
 }
 
 func applyCopyOverrideAttributes(value resourcedomain.Value, overrideAttributes string) (resourcedomain.Value, error) {

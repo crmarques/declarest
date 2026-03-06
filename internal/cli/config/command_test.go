@@ -1981,9 +1981,6 @@ type testOrchestratorService struct {
 	listRemoteErr error
 }
 
-func (s *testOrchestratorService) Get(context.Context, string) (resource.Value, error) {
-	return nil, nil
-}
 func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Value, error) {
 	return nil, nil
 }

@@ -30,9 +30,9 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 		repository: fakeRepo,
 	}
 
-	value, err := orchestrator.Get(context.Background(), "/customers/acme")
+	value, err := orchestrator.GetLocal(context.Background(), "/customers/acme")
 	if err != nil {
-		t.Fatalf("Get returned error: %v", err)
+		t.Fatalf("GetLocal returned error: %v", err)
 	}
 	if value == nil {
 		t.Fatal("expected non-nil value")
@@ -86,7 +86,7 @@ func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 
 	orchestrator := &DefaultOrchestrator{}
 
-	_, err := orchestrator.Get(context.Background(), "/customers/acme")
+	_, err := orchestrator.GetLocal(context.Background(), "/customers/acme")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -94,13 +94,10 @@ func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
-func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
+func TestDefaultOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		repository: &fakeRepository{
-			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
-		},
 		metadata: &fakeMetadata{
 			resolveErr: faults.NewTypedError(faults.NotFoundError, "metadata not found", nil),
 		},
@@ -109,14 +106,14 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 		},
 	}
 
-	value, err := orchestrator.Get(context.Background(), "/admin/realms/")
+	value, err := orchestrator.GetRemote(context.Background(), "/admin/realms/")
 	if err != nil {
-		t.Fatalf("Get returned error: %v", err)
+		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
 	serverManager := orchestrator.server.(*fakeServer)
 	if !serverManager.getCalled {
-		t.Fatal("expected remote fallback get call")
+		t.Fatal("expected remote get call")
 	}
 	if got := serverManager.lastResource.LogicalPath; got != "/admin/realms" {
 		t.Fatalf("expected normalized remote logical path /admin/realms, got %q", got)
@@ -129,13 +126,10 @@ func TestDefaultOrchestratorGetFallsBackToRemoteWhenLocalMissing(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testing.T) {
+func TestDefaultOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
-		repository: &fakeRepository{
-			getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
-		},
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "realm",
@@ -147,9 +141,9 @@ func TestDefaultOrchestratorGetRemoteFallbackSeedsIdentityFromMetadata(t *testin
 		},
 	}
 
-	_, err := orchestrator.Get(context.Background(), "/admin/realms/platform")
+	_, err := orchestrator.GetRemote(context.Background(), "/admin/realms/platform")
 	if err != nil {
-		t.Fatalf("Get returned error: %v", err)
+		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
 	serverManager := orchestrator.server.(*fakeServer)
@@ -2019,6 +2013,54 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 	}
 	if len(items) != 0 {
 		t.Fatalf("expected no drift after compare transforms, got %#v", items)
+	}
+}
+
+func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"name": "platform",
+			"config": map[string]any{
+				"project.description": "Managed by declarest",
+			},
+		},
+	}
+
+	md := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "name",
+		AliasFromAttribute: "name",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCompare): {
+				JQ: `if type == "object" and has("config") then {name: .name, config: (.config + {"project.name": .name})} else . end`,
+			},
+		},
+	}
+
+	metadataService := &fakeMetadata{resolveValue: md}
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"name": "platform",
+			"config": map[string]any{
+				"project.description": "Managed by declarest",
+				"project.name":        "platform",
+			},
+		},
+	}
+
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata:   metadataService,
+		server:     serverManager,
+	}
+
+	items, err := orchestrator.Diff(context.Background(), "/projects/platform")
+	if err != nil {
+		t.Fatalf("Diff returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected no drift after compare jq transforms, got %#v", items)
 	}
 }
 

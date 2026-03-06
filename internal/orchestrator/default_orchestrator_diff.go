@@ -6,29 +6,78 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
+	"github.com/itchyny/gojq"
 )
 
 func applyCompareTransforms(value resource.Value, operationSpec metadata.OperationSpec) (resource.Value, error) {
-	normalized, err := resource.Normalize(value)
+	steps := metadata.OrderedPayloadTransformSteps(operationSpec)
+	if len(steps) == 0 {
+		return resource.Normalize(value)
+	}
+
+	current, err := resource.Normalize(value)
 	if err != nil {
 		return nil, err
 	}
 
-	filtered := normalized
-	if len(operationSpec.Filter) > 0 {
-		filtered, err = applyFilterPointers(filtered, operationSpec.Filter)
+	for _, step := range steps {
+		switch step {
+		case "filterAttributes":
+			current, err = applyFilterPointers(current, operationSpec.Filter)
+		case "suppressAttributes":
+			current, err = applySuppressPointers(current, operationSpec.Suppress)
+		case "jqExpression":
+			current, err = applyCompareJQ(current, operationSpec.JQ)
+		default:
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if len(operationSpec.Suppress) == 0 {
-		return filtered, nil
+	return resource.Normalize(current)
+}
+
+func applyCompareJQ(value resource.Value, expression string) (resource.Value, error) {
+	trimmedExpression := strings.TrimSpace(expression)
+	if trimmedExpression == "" {
+		return value, nil
 	}
 
-	return applySuppressPointers(filtered, operationSpec.Suppress)
+	query, err := gojq.Parse(trimmedExpression)
+	if err != nil {
+		return nil, faults.NewValidationError("invalid compare jq expression", err)
+	}
+	code, err := gojq.Compile(query)
+	if err != nil {
+		return nil, faults.NewValidationError("invalid compare jq expression", err)
+	}
+
+	iterator := code.Run(value)
+	results := make([]any, 0, 1)
+	for {
+		item, ok := iterator.Next()
+		if !ok {
+			break
+		}
+		if itemErr, isErr := item.(error); isErr {
+			return nil, faults.NewValidationError("failed to evaluate compare jq expression", itemErr)
+		}
+		results = append(results, item)
+	}
+
+	switch len(results) {
+	case 0:
+		return nil, nil
+	case 1:
+		return resource.Normalize(results[0])
+	default:
+		return resource.Normalize(results)
+	}
 }
 
 func buildDiffEntries(logicalPath string, local resource.Value, remote resource.Value) []resource.DiffEntry {

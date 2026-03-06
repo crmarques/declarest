@@ -633,7 +633,7 @@ To use it in your current shell:
   source ${setup_script@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" config show
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository status -o json
-  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource list / --repository -o json
+  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource list / --source repository -o json
 EOFH
 
   if [[ "${E2E_PLATFORM}" == 'kubernetes' && -n "${E2E_KIND_CLUSTER_NAME:-}" ]]; then

@@ -15,8 +15,6 @@ import (
 func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
-	var fromRepository bool
-	var fromRemoteServer bool
 	var recursive bool
 	var httpMethod string
 
@@ -29,7 +27,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			source, err := normalizeReadSourceSelection(sourceFlag, fromRepository, fromRemoteServer)
+			source, err := normalizeReadSourceSelection(sourceFlag)
 			if err != nil {
 				return err
 			}
@@ -87,7 +85,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	bindReadSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer)
+	bindReadSourceFlags(command, &sourceFlag)
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command

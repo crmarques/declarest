@@ -173,10 +173,10 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	}
 }
 
-func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.T) {
+func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema(t *testing.T) {
 	t.Parallel()
 
-	t.Run("legacy_flat_schema", func(t *testing.T) {
+	t.Run("rejects_legacy_flat_schema", func(t *testing.T) {
 		t.Parallel()
 
 		payload := []byte(`{
@@ -193,30 +193,8 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		}`)
 
 		var decoded ResourceMetadata
-		if err := json.Unmarshal(payload, &decoded); err != nil {
-			t.Fatalf("unmarshal returned error: %v", err)
-		}
-
-		if decoded.IDFromAttribute != "id" || decoded.AliasFromAttribute != "name" {
-			t.Fatalf("unexpected identity fields: %+v", decoded)
-		}
-		if !reflect.DeepEqual(decoded.SecretsFromAttributes, []string{"password"}) {
-			t.Fatalf("unexpected secretsFromAttributes: %#v", decoded.SecretsFromAttributes)
-		}
-		if decoded.Operations[string(OperationGet)].Path != "/api/customers/{{.id}}" {
-			t.Fatalf("unexpected get operation: %#v", decoded.Operations[string(OperationGet)])
-		}
-		if decoded.Operations[string(OperationList)].Path != "/api/customers" {
-			t.Fatalf("unexpected list operation: %#v", decoded.Operations[string(OperationList)])
-		}
-		if !reflect.DeepEqual(decoded.Filter, []string{"/items"}) {
-			t.Fatalf("unexpected filter: %#v", decoded.Filter)
-		}
-		if !reflect.DeepEqual(decoded.Suppress, []string{"/updatedAt"}) {
-			t.Fatalf("unexpected suppress: %#v", decoded.Suppress)
-		}
-		if decoded.JQ != "." {
-			t.Fatalf("unexpected jq value: %q", decoded.JQ)
+		if err := json.Unmarshal(payload, &decoded); err == nil {
+			t.Fatal("expected legacy flat schema to be rejected")
 		}
 	})
 
@@ -265,7 +243,7 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 		      }
 		    },
 		    "compareResources": {
-		      "ignoreAttributes": ["/updatedAt"]
+		      "suppressAttributes": ["/updatedAt"]
 		    }
 		  }
 		}`)
@@ -326,12 +304,12 @@ func TestResourceMetadataUnmarshalJSONSupportsLegacyAndNestedSchemas(t *testing.
 			t.Fatalf("unexpected suppress: %#v", decoded.Suppress)
 		}
 		if !reflect.DeepEqual(decoded.Operations[string(OperationCompare)].Suppress, []string{"/updatedAt"}) {
-			t.Fatalf("unexpected compare suppress from ignoreAttributes alias: %#v", decoded.Operations[string(OperationCompare)].Suppress)
+			t.Fatalf("unexpected compare suppress: %#v", decoded.Operations[string(OperationCompare)].Suppress)
 		}
 	})
 }
 
-func TestResourceMetadataUnmarshalJSONSupportsOperationURLPathSyntax(t *testing.T) {
+func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T) {
 	t.Parallel()
 
 	payload := []byte(`{
@@ -348,15 +326,25 @@ func TestResourceMetadataUnmarshalJSONSupportsOperationURLPathSyntax(t *testing.
 	}`)
 
 	var decoded ResourceMetadata
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		t.Fatalf("unmarshal returned error: %v", err)
+	if err := json.Unmarshal(payload, &decoded); err == nil {
+		t.Fatal("expected operationInfo.getResource.url.path to be rejected")
 	}
+}
 
-	if decoded.CollectionPath != "/admin/realms/{{.realm}}/components" {
-		t.Fatalf("unexpected collectionPath: %q", decoded.CollectionPath)
-	}
-	if decoded.Operations[string(OperationGet)].Path != "./{{.id}}" {
-		t.Fatalf("unexpected get operation path: %#v", decoded.Operations[string(OperationGet)])
+func TestResourceMetadataUnmarshalJSONRejectsLegacyCompareTransformAlias(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{
+	  "operationInfo": {
+	    "compareResources": {
+	      "ignoreAttributes": ["/updatedAt"]
+	    }
+	  }
+	}`)
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(payload, &decoded); err == nil {
+		t.Fatal("expected compareResources.ignoreAttributes to be rejected")
 	}
 }
 

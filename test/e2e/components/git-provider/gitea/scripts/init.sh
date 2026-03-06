@@ -20,9 +20,9 @@ e2e_generate_gitea_admin_password() {
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   gitea_port=$(e2e_pick_free_port)
-  admin_username=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_USERNAME' 'E2E_GITEA_ADMIN_USERNAME' || true)
-  admin_password=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_PASSWORD' 'E2E_GITEA_ADMIN_PASSWORD' || true)
-  admin_email=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_EMAIL' 'E2E_GITEA_ADMIN_EMAIL' || true)
+  admin_username=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_USERNAME' || true)
+  admin_password=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_PASSWORD' || true)
+  admin_email=$(e2e_env_optional 'DECLAREST_E2E_GITEA_ADMIN_EMAIL' || true)
 
   admin_username=${admin_username:-root}
   admin_email=${admin_email:-declarest-e2e@example.local}
@@ -52,9 +52,9 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   exit 0
 fi
 
-gitea_remote_url=$(e2e_require_env 'DECLAREST_E2E_GITEA_REMOTE_URL' 'E2E_GITEA_REMOTE_URL') || exit 1
-gitea_token=$(e2e_require_env 'DECLAREST_E2E_GITEA_TOKEN' 'E2E_GITEA_TOKEN') || exit 1
-gitea_remote_branch=$(e2e_env_optional 'DECLAREST_E2E_GITEA_REMOTE_BRANCH' 'E2E_GITEA_REMOTE_BRANCH' || true)
+gitea_remote_url=$(e2e_require_env 'DECLAREST_E2E_GITEA_REMOTE_URL') || exit 1
+gitea_token=$(e2e_require_env 'DECLAREST_E2E_GITEA_TOKEN') || exit 1
+gitea_remote_branch=$(e2e_env_optional 'DECLAREST_E2E_GITEA_REMOTE_BRANCH' || true)
 gitea_remote_branch=${gitea_remote_branch:-main}
 
 e2e_write_state_value "${state_file}" GIT_REMOTE_URL "${gitea_remote_url}"

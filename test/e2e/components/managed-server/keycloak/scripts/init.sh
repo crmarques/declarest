@@ -15,8 +15,8 @@ fi
 
 if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   keycloak_port=$(e2e_pick_free_port)
-  admin_user=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_USER' 'E2E_KEYCLOAK_ADMIN_USER' || true)
-  admin_password=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_PASSWORD' 'E2E_KEYCLOAK_ADMIN_PASSWORD' || true)
+  admin_user=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_USER' || true)
+  admin_password=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_ADMIN_PASSWORD' || true)
   : "${admin_user:=admin}"
   : "${admin_password:=admin}"
   realm='master'
@@ -35,12 +35,12 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   exit 0
 fi
 
-managed_server_base_url=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_BASE_URL' 'E2E_MANAGED_SERVER_BASE_URL') || exit 1
-keycloak_token_url=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_TOKEN_URL' 'E2E_KEYCLOAK_TOKEN_URL') || exit 1
-keycloak_client_id=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_ID' 'E2E_KEYCLOAK_CLIENT_ID') || exit 1
-keycloak_client_secret=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET' 'E2E_KEYCLOAK_CLIENT_SECRET') || exit 1
-keycloak_scope=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_SCOPE' 'E2E_KEYCLOAK_SCOPE' || true)
-keycloak_audience=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_AUDIENCE' 'E2E_KEYCLOAK_AUDIENCE' || true)
+managed_server_base_url=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_BASE_URL') || exit 1
+keycloak_token_url=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_TOKEN_URL') || exit 1
+keycloak_client_id=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_ID') || exit 1
+keycloak_client_secret=$(e2e_require_env 'DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET') || exit 1
+keycloak_scope=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_SCOPE' || true)
+keycloak_audience=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_AUDIENCE' || true)
 
 e2e_write_state_value "${state_file}" KEYCLOAK_BASE_URL "${managed_server_base_url}"
 e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${managed_server_base_url}"

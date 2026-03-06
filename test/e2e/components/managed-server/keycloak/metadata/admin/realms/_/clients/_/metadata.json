@@ -2,7 +2,7 @@
   "resourceInfo": {
     "idFromAttribute": "id",
     "aliasFromAttribute": "clientId",
-    "secretsFromAttributes": [
+    "secretInAttributes": [
       "secret"
     ]
   }

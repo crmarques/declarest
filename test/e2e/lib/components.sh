@@ -181,13 +181,58 @@ e2e_default_metadata_bundle_for_managed_server() {
 
   case "${managed_server}" in
     keycloak)
-      # Use shorthand so the resolver fetches from the default release remote.
       printf 'keycloak-bundle:0.0.1\n'
       ;;
     *)
       return 1
       ;;
   esac
+}
+
+e2e_seed_local_metadata_bundle_cache() {
+  local bundle_ref=$1
+  local metadata_source=$2
+  local openapi_source=${3:-}
+  local bundle_name=${bundle_ref%%:*}
+  local bundle_version=${bundle_ref#*:}
+  local cache_dir="${HOME}/.declarest/metadata-bundles/${bundle_name}-${bundle_version}"
+
+  [[ -d "${metadata_source}" ]] || return 0
+
+  rm -rf -- "${cache_dir}"
+  mkdir -p "${cache_dir}/metadata" || return 1
+
+  if ! cp -R "${metadata_source}/." "${cache_dir}/metadata/"; then
+    e2e_die "failed to seed metadata bundle cache from ${metadata_source}"
+    return 1
+  fi
+
+  if [[ -f "${openapi_source}" ]]; then
+    cp "${openapi_source}" "${cache_dir}/openapi.yaml" || {
+      e2e_die "failed to copy bundle openapi source ${openapi_source}"
+      return 1
+    }
+  fi
+
+  {
+    printf 'apiVersion: declarest.io/v1alpha1\n'
+    printf 'kind: MetadataBundle\n'
+    printf 'name: %s\n' "${bundle_name}"
+    printf 'version: %s\n' "${bundle_version}"
+    printf 'description: E2E metadata bundle for %s.\n' "${E2E_MANAGED_SERVER:-managed-server}"
+    printf 'declarest:\n'
+    printf '  shorthand: %s\n' "${bundle_name}"
+    printf '  metadataRoot: metadata\n'
+    printf '  metadataFileName: metadata.json\n'
+    if [[ -f "${openapi_source}" ]]; then
+      printf '  openapi: openapi.yaml\n'
+    fi
+    printf 'distribution:\n'
+    printf '  artifactTemplate: %s-{version}.tar.gz\n' "${bundle_name}"
+  } >"${cache_dir}/bundle.yaml"
+
+  : >"${cache_dir}/.declarest-bundle-ready"
+  e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
 }
 
 e2e_prepare_metadata_workspace() {
@@ -209,6 +254,7 @@ e2e_prepare_metadata_workspace() {
     bundle)
       local metadata_bundle
       local metadata_source="${component_dir}/metadata"
+      local openapi_source="${component_dir}/openapi.yaml"
       if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
         if [[ -d "${metadata_source}" ]]; then
           E2E_METADATA_DIR="${metadata_source}"
@@ -220,6 +266,7 @@ e2e_prepare_metadata_workspace() {
         e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
         return 0
       fi
+      e2e_seed_local_metadata_bundle_cache "${metadata_bundle}" "${metadata_source}" "${openapi_source}" || return 1
       E2E_METADATA_BUNDLE="${metadata_bundle}"
       export E2E_METADATA_BUNDLE
       e2e_info "managed-server metadata bundle selected bundle=${metadata_bundle}"

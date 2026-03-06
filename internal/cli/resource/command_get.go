@@ -16,8 +16,6 @@ import (
 func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
-	var fromRepository bool
-	var fromRemoteServer bool
 	var showSecrets bool
 	var showMetadata bool
 	var httpMethod string
@@ -43,7 +41,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 				return err
 			}
 
-			source, err := normalizeReadSourceSelection(sourceFlag, fromRepository, fromRemoteServer)
+			source, err := normalizeReadSourceSelection(sourceFlag)
 			if err != nil {
 				return err
 			}
@@ -110,7 +108,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	bindReadSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer)
+	bindReadSourceFlags(command, &sourceFlag)
 	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "show plaintext values for metadata-declared secret attributes")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")
 	bindHTTPMethodFlag(command, &httpMethod)

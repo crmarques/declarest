@@ -3,46 +3,7 @@ package read
 import (
 	"strings"
 	"testing"
-
-	"github.com/crmarques/declarest/faults"
 )
-
-func TestNormalizeSource(t *testing.T) {
-	t.Parallel()
-
-	t.Run("remote_by_default", func(t *testing.T) {
-		t.Parallel()
-		got, err := NormalizeSource(false, false)
-		if err != nil {
-			t.Fatalf("NormalizeSource returned error: %v", err)
-		}
-		if got != SourceRemoteServer {
-			t.Fatalf("expected default source %q, got %q", SourceRemoteServer, got)
-		}
-	})
-
-	t.Run("repository_when_selected", func(t *testing.T) {
-		t.Parallel()
-		got, err := NormalizeSource(true, false)
-		if err != nil {
-			t.Fatalf("NormalizeSource returned error: %v", err)
-		}
-		if got != SourceRepository {
-			t.Fatalf("expected source %q, got %q", SourceRepository, got)
-		}
-	})
-
-	t.Run("rejects_conflicting_flags", func(t *testing.T) {
-		t.Parallel()
-		_, err := NormalizeSource(true, true)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if !faults.IsCategory(err, faults.ValidationError) {
-			t.Fatalf("expected validation error, got %v", err)
-		}
-	})
-}
 
 func TestHasCollectionTargetMarker(t *testing.T) {
 	t.Parallel()

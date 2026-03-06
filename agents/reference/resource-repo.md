@@ -31,11 +31,10 @@ Define local repository semantics for resource persistence, metadata storage, pa
 ## Data Contracts
 Layout contract:
 1. Canonical resource payload at `<logical-path>/resource.<ext>`.
-2. Legacy payload paths at `<logical-path>.<ext>` MAY be read for backward compatibility during migration.
-3. Collection metadata at `<collection-path>/_/metadata.<ext>`.
-4. Resource metadata at `<logical-path>/metadata.<ext>`.
-5. Optional repository control artifacts under repo-specific hidden directory.
-6. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
+2. Collection metadata at `<collection-path>/_/metadata.<ext>`.
+3. Resource metadata at `<logical-path>/metadata.<ext>`.
+4. Optional repository control artifacts under repo-specific hidden directory.
+5. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
 
 Manager method families:
 1. Resource IO: save/get/delete/list/move/exists.

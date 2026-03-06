@@ -26,18 +26,17 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 9. `resource save --handle-secrets` MUST accept an optional comma-separated list of attributes; when omitted, all detected candidates MUST be handled.
 10. `resource save --handle-secrets` MUST store handled plaintext values in the configured secret store with deterministic path-scoped keys and rewrite handled payload values to `{{secret .}}` placeholders before repository persistence.
 11. When resolving resource payload placeholders, `{{secret .}}` MUST map to `<logical-path>:<attribute-path>` and `{{secret <custom-key>}}` MUST map to `<logical-path>:<custom-key>`.
-12. Resource placeholder resolution MUST continue to accept legacy absolute key placeholders (for example `{{secret "/customers/acme:apiToken"}}`) without rewriting failures.
-13. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with plaintext-secret warning including only remaining unhandled candidates that are not declared in metadata, except when `--ignore` is set.
-14. Metadata `resourceInfo.secretInAttributes` entries MUST be treated as explicit secret candidates in detection and handling flows and MUST be automatically stored and masked during default `resource save` persistence workflows.
-15. `resource save --ignore` MUST bypass plaintext-secret save enforcement for all remaining candidates.
-16. For collection/group saves with `resource save --handle-secrets=<attribute-list>`, each requested attribute MUST be applied only to resources where it is present; resources without the attribute MUST be skipped for that attribute without failing the command.
-17. `resource get` MUST redact values for metadata `resourceInfo.secretInAttributes` as `{{secret .}}` placeholders by default for repository and remote-server output modes.
-18. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
-19. `secret detect` without payload input (`--payload <path|->` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
-20. `secret detect --fix` MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for detected resource paths in scope.
-21. `secret detect --fix` with payload input MUST fail with `ValidationError` when no target path is provided.
-22. `secret detect --secret-attribute` MUST restrict apply behavior to one detected attribute and MUST fail with `ValidationError` when the attribute is not detected in payload or repository scope.
-23. Secret-candidate detection MUST ignore numeric-only and boolean-like plaintext values to avoid policy/lifespan and feature-toggle false positives on non-secret fields.
+12. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with plaintext-secret warning including only remaining unhandled candidates that are not declared in metadata, except when `--ignore` is set.
+13. Metadata `resourceInfo.secretInAttributes` entries MUST be treated as explicit secret candidates in detection and handling flows and MUST be automatically stored and masked during default `resource save` persistence workflows.
+14. `resource save --ignore` MUST bypass plaintext-secret save enforcement for all remaining candidates.
+15. For collection/group saves with `resource save --handle-secrets=<attribute-list>`, each requested attribute MUST be applied only to resources where it is present; resources without the attribute MUST be skipped for that attribute without failing the command.
+16. `resource get` MUST redact values for metadata `resourceInfo.secretInAttributes` as `{{secret .}}` placeholders by default for repository and remote-server output modes.
+17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
+18. `secret detect` without payload input (`--payload <path|->` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
+19. `secret detect --fix` MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for detected resource paths in scope.
+20. `secret detect --fix` with payload input MUST fail with `ValidationError` when no target path is provided.
+21. `secret detect --secret-attribute` MUST restrict apply behavior to one detected attribute and MUST fail with `ValidationError` when the attribute is not detected in payload or repository scope.
+22. Secret-candidate detection MUST ignore numeric-only and boolean-like plaintext values to avoid policy/lifespan and feature-toggle false positives on non-secret fields.
 
 ## Data Contracts
 Placeholder syntax:

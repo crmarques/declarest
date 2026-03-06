@@ -82,7 +82,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	case SourceRemoteServer:
 		value, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
-		return Result{}, faults.NewValidationError("invalid source: use --repository or --remote-server", nil)
+		return Result{}, faults.NewValidationError("invalid source: use --source repository|remote-server", nil)
 	}
 	if err != nil {
 		debugctx.Printf(ctx, "resource read failed path=%q source=%q error=%v", req.LogicalPath, req.Source, err)
@@ -331,16 +331,6 @@ func isRootResourceError(err error) bool {
 
 func HasCollectionTargetMarker(rawPath string) bool {
 	return resource.HasExplicitCollectionTarget(rawPath)
-}
-
-func NormalizeSource(fromRepository bool, fromRemoteServer bool) (string, error) {
-	if fromRepository && fromRemoteServer {
-		return "", faults.NewValidationError("flags --repository and --remote-server cannot be used together", nil)
-	}
-	if fromRepository {
-		return SourceRepository, nil
-	}
-	return SourceRemoteServer, nil
 }
 
 func RenderTextLines(lines []string) func(any) []string {

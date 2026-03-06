@@ -227,8 +227,6 @@ func newPushCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	}
 
 	command.Flags().BoolVarP(&forcePush, "force-push", "y", false, "force push")
-	command.Flags().BoolVar(&forcePush, "force", false, "legacy alias for --force-push")
-	_ = command.Flags().MarkHidden("force")
 	return command
 }
 

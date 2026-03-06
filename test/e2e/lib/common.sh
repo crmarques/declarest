@@ -48,9 +48,6 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 if ! declare -p E2E_TEMP_FILES >/dev/null 2>&1; then
   E2E_TEMP_FILES=()
 fi
-if ! declare -p E2E_DEPRECATED_ENV_WARNED >/dev/null 2>&1; then
-  declare -gA E2E_DEPRECATED_ENV_WARNED=()
-fi
 
 e2e_info() {
   printf '[INFO] %s\n' "$*"
@@ -145,30 +142,11 @@ e2e_kubectl_cmd() {
   e2e_run_cmd kubectl "$@"
 }
 
-e2e_warn_deprecated_env() {
-  local legacy_name=$1
-  local canonical_name=$2
-
-  if [[ "${E2E_DEPRECATED_ENV_WARNED[${legacy_name}]:-0}" == '1' ]]; then
-    return 0
-  fi
-
-  E2E_DEPRECATED_ENV_WARNED["${legacy_name}"]=1
-  e2e_warn "env ${legacy_name} is deprecated; use ${canonical_name}"
-}
-
 e2e_env_optional() {
   local canonical_name=$1
-  local legacy_name=${2:-}
 
   if [[ -n "${!canonical_name:-}" ]]; then
     printf '%s\n' "${!canonical_name}"
-    return 0
-  fi
-
-  if [[ -n "${legacy_name}" && -n "${!legacy_name:-}" ]]; then
-    e2e_warn_deprecated_env "${legacy_name}" "${canonical_name}"
-    printf '%s\n' "${!legacy_name}"
     return 0
   fi
 
@@ -177,15 +155,10 @@ e2e_env_optional() {
 
 e2e_require_env() {
   local canonical_name=$1
-  local legacy_name=${2:-}
   local value
 
-  value=$(e2e_env_optional "${canonical_name}" "${legacy_name}") || {
-    if [[ -n "${legacy_name}" ]]; then
-      e2e_die "missing env ${canonical_name} (legacy fallback: ${legacy_name})"
-    else
-      e2e_die "missing env ${canonical_name}"
-    fi
+  value=$(e2e_env_optional "${canonical_name}") || {
+    e2e_die "missing env ${canonical_name}"
     return 1
   }
 
@@ -298,7 +271,6 @@ e2e_state_get() {
   local key=$2
   local b64_key
   local encoded_value
-  local value
 
   if [[ ! -f "${state_file}" ]]; then
     return 1
@@ -310,15 +282,7 @@ e2e_state_get() {
     printf '%s' "${encoded_value}" | base64 -d
     return $?
   fi
-
-  value=$(awk -v k="${key}" 'index($0, k "=") == 1 { print substr($0, length(k) + 2) }' "${state_file}" | tail -n 1 || true)
-  if [[ -z "${value}" ]]; then
-    return 1
-  fi
-
-  # Backward compatibility for pre-base64 state files.
-  # shellcheck disable=SC2086
-  eval "printf '%s\n' ${value}"
+  return 1
 }
 
 e2e_has_tty() {

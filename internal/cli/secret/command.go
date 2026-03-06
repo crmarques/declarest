@@ -119,16 +119,12 @@ func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 type secretGetRequest struct {
 	Path       string
 	Key        string
-	DirectKey  string
 	ListByPath bool
 }
 
 func (r secretGetRequest) ResolvedKey() string {
-	if strings.TrimSpace(r.DirectKey) != "" {
-		return r.DirectKey
-	}
 	if strings.TrimSpace(r.Path) == "" {
-		return ""
+		return strings.TrimSpace(r.Key)
 	}
 	return strings.TrimSpace(r.Path) + ":" + strings.TrimSpace(r.Key)
 }
@@ -206,8 +202,7 @@ func resolveSecretGetFromSingleArg(pathFlag string, hasPathFlag bool, keyFlag st
 		return secretGetRequest{Path: normalizedPathArg, ListByPath: true}, nil
 	}
 
-	// Backward-compatible direct key mode.
-	return secretGetRequest{DirectKey: arg}, nil
+	return secretGetRequest{Key: arg}, nil
 }
 
 func resolveSecretGetFromPathAndKeyArgs(

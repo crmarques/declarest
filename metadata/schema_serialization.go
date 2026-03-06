@@ -11,25 +11,13 @@ import (
 type resourceMetadataWire struct {
 	ResourceInfo  *resourceInfoWire  `json:"resourceInfo,omitempty" yaml:"resourceInfo,omitempty"`
 	OperationInfo *operationInfoWire `json:"operationInfo,omitempty" yaml:"operationInfo,omitempty"`
-
-	// Backward-compatible flat fields.
-	IDFromAttribute       string                            `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute    string                            `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
-	CollectionPath        string                            `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
-	SecretsFromAttributes *[]string                         `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
-	SecretInAttributes    *[]string                         `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
-	Operations            *map[string]resourceOperationWire `json:"operations,omitempty" yaml:"operations,omitempty"`
-	Filter                *[]string                         `json:"filter,omitempty" yaml:"filter,omitempty"`
-	Suppress              *[]string                         `json:"suppress,omitempty" yaml:"suppress,omitempty"`
-	JQ                    string                            `json:"jq,omitempty" yaml:"jq,omitempty"`
 }
 
 type resourceInfoWire struct {
-	IDFromAttribute       string    `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute    string    `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
-	CollectionPath        string    `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
-	SecretInAttributes    *[]string `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
-	SecretsFromAttributes *[]string `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
+	IDFromAttribute    string    `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
+	AliasFromAttribute string    `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	CollectionPath     string    `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	SecretInAttributes *[]string `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
 }
 
 type operationInfoWire struct {
@@ -40,34 +28,16 @@ type operationInfoWire struct {
 	DeleteResource   *resourceOperationWire `json:"deleteResource,omitempty" yaml:"deleteResource,omitempty"`
 	ListCollection   *resourceOperationWire `json:"listCollection,omitempty" yaml:"listCollection,omitempty"`
 	CompareResources *resourceOperationWire `json:"compareResources,omitempty" yaml:"compareResources,omitempty"`
-
-	// Backward-compatible operation names.
-	Get     *resourceOperationWire `json:"get,omitempty" yaml:"get,omitempty"`
-	Create  *resourceOperationWire `json:"create,omitempty" yaml:"create,omitempty"`
-	Update  *resourceOperationWire `json:"update,omitempty" yaml:"update,omitempty"`
-	Delete  *resourceOperationWire `json:"delete,omitempty" yaml:"delete,omitempty"`
-	List    *resourceOperationWire `json:"list,omitempty" yaml:"list,omitempty"`
-	Compare *resourceOperationWire `json:"compare,omitempty" yaml:"compare,omitempty"`
 }
 
 type operationDefaultsWire struct {
 	Payload *payloadTransformWire `json:"payload,omitempty" yaml:"payload,omitempty"`
-
-	// Backward-compatible transform names.
-	Filter   *[]string `json:"filter,omitempty" yaml:"filter,omitempty"`
-	Suppress *[]string `json:"suppress,omitempty" yaml:"suppress,omitempty"`
-	JQ       *string   `json:"jq,omitempty" yaml:"jq,omitempty"`
 }
 
 type payloadTransformWire struct {
 	FilterAttributes   *stringListWire `json:"filterAttributes,omitempty" yaml:"filterAttributes,omitempty"`
 	SuppressAttributes *stringListWire `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
 	JQExpression       *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
-
-	// Backward-compatible transform names.
-	Filter   *[]string `json:"filter,omitempty" yaml:"filter,omitempty"`
-	Suppress *[]string `json:"suppress,omitempty" yaml:"suppress,omitempty"`
-	JQ       *string   `json:"jq,omitempty" yaml:"jq,omitempty"`
 
 	Order []string `json:"-" yaml:"-"`
 }
@@ -91,31 +61,15 @@ type httpHeaderWire struct {
 type resourceOperationWire struct {
 	HTTPMethod  string                   `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
 	Path        string                   `json:"path,omitempty" yaml:"path,omitempty"`
-	URL         *resourceURLWire         `json:"url,omitempty" yaml:"url,omitempty"`
 	Query       *map[string]string       `json:"query,omitempty" yaml:"query,omitempty"`
 	HTTPHeaders *[]httpHeaderWire        `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
 	Body        any                      `json:"body,omitempty" yaml:"body,omitempty"`
 	Payload     *payloadTransformWire    `json:"payload,omitempty" yaml:"payload,omitempty"`
 	Validate    *operationValidationWire `json:"validate,omitempty" yaml:"validate,omitempty"`
 
-	// CompareResources transform fields (ignoreAttributes kept for compatibility decode).
-	IgnoreAttributes   *stringListWire `json:"ignoreAttributes,omitempty" yaml:"ignoreAttributes,omitempty"`
 	FilterAttributes   *stringListWire `json:"filterAttributes,omitempty" yaml:"filterAttributes,omitempty"`
 	SuppressAttributes *stringListWire `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
 	JQExpression       *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
-
-	// Backward-compatible operation names.
-	Method      string             `json:"method,omitempty" yaml:"method,omitempty"`
-	Headers     *map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Accept      string             `json:"accept,omitempty" yaml:"accept,omitempty"`
-	ContentType string             `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Filter      *[]string          `json:"filter,omitempty" yaml:"filter,omitempty"`
-	Suppress    *[]string          `json:"suppress,omitempty" yaml:"suppress,omitempty"`
-	JQ          *string            `json:"jq,omitempty" yaml:"jq,omitempty"`
-}
-
-type resourceURLWire struct {
-	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
 func (m ResourceMetadata) MarshalJSON() ([]byte, error) {
@@ -263,30 +217,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 }
 
 func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
-	metadata := ResourceMetadata{
-		IDFromAttribute:    wire.IDFromAttribute,
-		AliasFromAttribute: wire.AliasFromAttribute,
-		CollectionPath:     wire.CollectionPath,
-		JQ:                 wire.JQ,
-	}
-
-	if wire.SecretInAttributes != nil {
-		metadata.SecretsFromAttributes = cloneStringSlice(*wire.SecretInAttributes)
-	} else if wire.SecretsFromAttributes != nil {
-		metadata.SecretsFromAttributes = cloneStringSlice(*wire.SecretsFromAttributes)
-	}
-	if wire.Operations != nil {
-		metadata.Operations = make(map[string]OperationSpec, len(*wire.Operations))
-		for key, spec := range *wire.Operations {
-			metadata.Operations[key] = operationSpecFromWire(Operation(key), spec)
-		}
-	}
-	if wire.Filter != nil {
-		metadata.Filter = cloneStringSlice(*wire.Filter)
-	}
-	if wire.Suppress != nil {
-		metadata.Suppress = cloneStringSlice(*wire.Suppress)
-	}
+	metadata := ResourceMetadata{}
 
 	if wire.ResourceInfo != nil {
 		resourceInfo := wire.ResourceInfo
@@ -301,8 +232,6 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		}
 		if resourceInfo.SecretInAttributes != nil {
 			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretInAttributes)
-		} else if resourceInfo.SecretsFromAttributes != nil {
-			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretsFromAttributes)
 		}
 	}
 
@@ -321,28 +250,12 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 				metadata.PayloadTransformOrder = cloneStringSlice(defaults.Payload.Order)
 				if defaults.Payload.FilterAttributes != nil {
 					metadata.Filter = cloneStringListWire(defaults.Payload.FilterAttributes)
-				} else if defaults.Payload.Filter != nil {
-					metadata.Filter = cloneStringSlice(*defaults.Payload.Filter)
 				}
 				if defaults.Payload.SuppressAttributes != nil {
 					metadata.Suppress = cloneStringListWire(defaults.Payload.SuppressAttributes)
-				} else if defaults.Payload.Suppress != nil {
-					metadata.Suppress = cloneStringSlice(*defaults.Payload.Suppress)
 				}
 				if defaults.Payload.JQExpression != nil {
 					metadata.JQ = *defaults.Payload.JQExpression
-				} else if defaults.Payload.JQ != nil {
-					metadata.JQ = *defaults.Payload.JQ
-				}
-			} else {
-				if defaults.Filter != nil {
-					metadata.Filter = cloneStringSlice(*defaults.Filter)
-				}
-				if defaults.Suppress != nil {
-					metadata.Suppress = cloneStringSlice(*defaults.Suppress)
-				}
-				if defaults.JQ != nil {
-					metadata.JQ = *defaults.JQ
 				}
 			}
 		}
@@ -383,13 +296,7 @@ func operationInfoIsExplicitEmpty(info *operationInfoWire) bool {
 		info.UpdateResource == nil &&
 		info.DeleteResource == nil &&
 		info.ListCollection == nil &&
-		info.CompareResources == nil &&
-		info.Get == nil &&
-		info.Create == nil &&
-		info.Update == nil &&
-		info.Delete == nil &&
-		info.List == nil &&
-		info.Compare == nil
+		info.CompareResources == nil
 }
 
 func operationInfoToMap(info *operationInfoWire) map[string]OperationSpec {
@@ -405,14 +312,6 @@ func operationInfoToMap(info *operationInfoWire) map[string]OperationSpec {
 		}
 		result[string(operation)] = operationSpecFromWire(operation, *spec)
 	}
-
-	// Legacy names are loaded first so new names win when both are present.
-	set(OperationGet, info.Get)
-	set(OperationCreate, info.Create)
-	set(OperationUpdate, info.Update)
-	set(OperationDelete, info.Delete)
-	set(OperationList, info.List)
-	set(OperationCompare, info.Compare)
 
 	set(OperationGet, info.GetResource)
 	set(OperationCreate, info.CreateResource)
@@ -457,36 +356,18 @@ func operationSpecToWire(operation Operation, spec OperationSpec) *resourceOpera
 }
 
 func operationSpecFromWire(operation Operation, spec resourceOperationWire) OperationSpec {
-	pathValue := spec.Path
-	if strings.TrimSpace(pathValue) == "" && spec.URL != nil {
-		pathValue = spec.URL.Path
-	}
-	methodValue := spec.HTTPMethod
-	if strings.TrimSpace(methodValue) == "" {
-		methodValue = spec.Method
-	}
-
 	decoded := OperationSpec{
-		Method:      methodValue,
-		Path:        pathValue,
-		Accept:      spec.Accept,
-		ContentType: spec.ContentType,
-		Body:        spec.Body,
+		Method: spec.HTTPMethod,
+		Path:   spec.Path,
+		Body:   spec.Body,
 	}
 
 	if spec.Query != nil {
 		decoded.Query = cloneStringMap(*spec.Query)
 	}
+	preserveExplicitEmptyHeaders := spec.HTTPHeaders != nil && len(*spec.HTTPHeaders) == 0
 	if spec.HTTPHeaders != nil {
 		decoded.Headers = httpHeaderListToMap(*spec.HTTPHeaders)
-	} else if spec.Headers != nil {
-		decoded.Headers = cloneStringMap(*spec.Headers)
-	}
-	preserveExplicitEmptyHeaders := false
-	if spec.HTTPHeaders != nil {
-		preserveExplicitEmptyHeaders = len(*spec.HTTPHeaders) == 0
-	} else if spec.Headers != nil {
-		preserveExplicitEmptyHeaders = len(*spec.Headers) == 0
 	}
 	promoteMediaHeadersFromOperationHeaders(&decoded, preserveExplicitEmptyHeaders)
 	applyOperationTransformsFromWire(&decoded, operation == OperationCompare, spec)
@@ -503,43 +384,14 @@ func applyOperationTransformsFromWire(target *OperationSpec, compare bool, spec 
 	if compare {
 		if spec.FilterAttributes != nil {
 			target.Filter = cloneStringListWire(spec.FilterAttributes)
-		} else if spec.Payload != nil {
-			if spec.Payload.FilterAttributes != nil {
-				target.Filter = cloneStringListWire(spec.Payload.FilterAttributes)
-			} else if spec.Payload.Filter != nil {
-				target.Filter = cloneStringSlice(*spec.Payload.Filter)
-			}
-		} else if spec.Filter != nil {
-			target.Filter = cloneStringSlice(*spec.Filter)
 		}
 
 		if spec.SuppressAttributes != nil {
 			target.Suppress = cloneStringListWire(spec.SuppressAttributes)
-		} else if spec.IgnoreAttributes != nil {
-			target.Suppress = cloneStringListWire(spec.IgnoreAttributes)
-		} else if spec.Payload != nil {
-			if spec.Payload.SuppressAttributes != nil {
-				target.Suppress = cloneStringListWire(spec.Payload.SuppressAttributes)
-			} else if spec.Payload.Suppress != nil {
-				target.Suppress = cloneStringSlice(*spec.Payload.Suppress)
-			}
-		} else if spec.Suppress != nil {
-			target.Suppress = cloneStringSlice(*spec.Suppress)
 		}
 
 		if spec.JQExpression != nil {
 			target.JQ = *spec.JQExpression
-		} else if spec.Payload != nil {
-			if spec.Payload.JQExpression != nil {
-				target.JQ = *spec.Payload.JQExpression
-			} else if spec.Payload.JQ != nil {
-				target.JQ = *spec.Payload.JQ
-			}
-		} else if spec.JQ != nil {
-			target.JQ = *spec.JQ
-		}
-		if spec.Payload != nil && len(spec.Payload.Order) > 0 {
-			target.PayloadTransformOrder = cloneStringSlice(spec.Payload.Order)
 		}
 
 		return
@@ -549,30 +401,14 @@ func applyOperationTransformsFromWire(target *OperationSpec, compare bool, spec 
 		target.PayloadTransformOrder = cloneStringSlice(spec.Payload.Order)
 		if spec.Payload.FilterAttributes != nil {
 			target.Filter = cloneStringListWire(spec.Payload.FilterAttributes)
-		} else if spec.Payload.Filter != nil {
-			target.Filter = cloneStringSlice(*spec.Payload.Filter)
 		}
 		if spec.Payload.SuppressAttributes != nil {
 			target.Suppress = cloneStringListWire(spec.Payload.SuppressAttributes)
-		} else if spec.Payload.Suppress != nil {
-			target.Suppress = cloneStringSlice(*spec.Payload.Suppress)
 		}
 		if spec.Payload.JQExpression != nil {
 			target.JQ = *spec.Payload.JQExpression
-		} else if spec.Payload.JQ != nil {
-			target.JQ = *spec.Payload.JQ
 		}
 		return
-	}
-
-	if spec.Filter != nil {
-		target.Filter = cloneStringSlice(*spec.Filter)
-	}
-	if spec.Suppress != nil {
-		target.Suppress = cloneStringSlice(*spec.Suppress)
-	}
-	if spec.JQ != nil {
-		target.JQ = *spec.JQ
 	}
 }
 

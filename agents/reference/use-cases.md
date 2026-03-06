@@ -186,7 +186,7 @@ Inputs:
 Execution:
 1. `declarest resource get /customers/acme` runs without source flags.
 2. `declarest resource get /customers/acme --source repository` runs with repository override.
-3. `declarest resource get /customers/acme --source repository --remote-server` runs with conflicting compatibility-era inputs.
+3. `declarest resource get /customers/acme --source both` runs with an invalid source value.
 
 Expected outputs:
 1. Step 1 reads from remote source by default.
@@ -494,12 +494,12 @@ Goal: commit repository changes after local mutation commands while protecting a
 
 Inputs:
 1. Git repository context with clean worktree.
-2. `resource save` or `resource delete --repository`.
+2. `resource save` or `resource delete --source repository`.
 3. Optional commit-message flags `--message` or `--message-override`.
 
 Execution:
 1. Run `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123`.
-2. Run `declarest resource delete /customers/acme --confirm-delete --repository --message-override 'cleanup customer'`.
+2. Run `declarest resource delete /customers/acme --confirm-delete --source repository --message-override 'cleanup customer'`.
 3. Re-run one command after creating an unrelated uncommitted change in the repo.
 4. Run one command with both `--message` and `--message-override`.
 

@@ -39,17 +39,6 @@ func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, po
 		return nil, statErr
 	}
 
-	legacyPayloadPath, err := r.legacyPayloadFilePath(normalizedPath)
-	if err != nil {
-		return nil, err
-	}
-	if stat, statErr := os.Stat(legacyPayloadPath); statErr == nil && !stat.IsDir() {
-		return []resource.Resource{buildListedResource(normalizedPath)}, nil
-	}
-	if statErr := statFileExists(legacyPayloadPath); statErr != nil {
-		return nil, statErr
-	}
-
 	collectionPath, err := r.collectionDirPath(normalizedPath)
 	if err != nil {
 		return nil, err
@@ -73,16 +62,6 @@ func (r *LocalResourceRepository) Exists(_ context.Context, logicalPath string) 
 	}
 
 	if _, err := os.Stat(payloadPath); err == nil {
-		return true, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, internalError("failed to check resource payload", err)
-	}
-
-	legacyPayloadPath, err := r.legacyPayloadFilePath(normalizedPath)
-	if err != nil {
-		return false, err
-	}
-	if _, err := os.Stat(legacyPayloadPath); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, internalError("failed to check resource payload", err)
@@ -130,19 +109,6 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 			}
 			continue
 		}
-		if !strings.HasSuffix(entry.Name(), r.extension) {
-			continue
-		}
-		if entry.Name() == r.resourceFileName() || entry.Name() == r.metadataFileName() {
-			continue
-		}
-
-		name := strings.TrimSuffix(entry.Name(), r.extension)
-		logicalPath := path.Join(baseLogicalPath, name)
-		if !strings.HasPrefix(logicalPath, "/") {
-			logicalPath = "/" + logicalPath
-		}
-		itemsByPath[logicalPath] = buildListedResource(logicalPath)
 	}
 
 	items := make([]resource.Resource, 0, len(itemsByPath))
@@ -172,7 +138,7 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		if !strings.HasSuffix(entry.Name(), r.extension) {
 			return nil
 		}
-		if entry.Name() == r.metadataFileName() {
+		if entry.Name() != r.resourceFileName() {
 			return nil
 		}
 
@@ -182,22 +148,13 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		}
 		relPath = filepath.ToSlash(relPath)
 
-		var logicalPath string
-		if entry.Name() == r.resourceFileName() {
-			relDir := filepath.ToSlash(filepath.Dir(relPath))
-			if hasReservedSegment(relDir) {
-				return nil
-			}
-			logicalPath = baseLogicalPath
-			if relDir != "." {
-				logicalPath = path.Join(baseLogicalPath, relDir)
-			}
-		} else {
-			noExt := strings.TrimSuffix(relPath, r.extension)
-			if hasReservedSegment(noExt) {
-				return nil
-			}
-			logicalPath = path.Join(baseLogicalPath, noExt)
+		relDir := filepath.ToSlash(filepath.Dir(relPath))
+		if hasReservedSegment(relDir) {
+			return nil
+		}
+		logicalPath := baseLogicalPath
+		if relDir != "." {
+			logicalPath = path.Join(baseLogicalPath, relDir)
 		}
 		if !strings.HasPrefix(logicalPath, "/") {
 			logicalPath = "/" + logicalPath

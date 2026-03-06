@@ -20,14 +20,14 @@ case_run() {
   case_expect_output_contains 'potential plaintext secrets detected'
   case_expect_output_contains '--ignore'
 
-  case_run_declarest resource get "${heuristic_path}" --repository
+  case_run_declarest resource get "${heuristic_path}" --source repository
   case_expect_failure
   case_expect_output_contains 'not found'
 
   case_run_declarest resource save "${heuristic_path}" -f "${plaintext_payload_file}" -i json --ignore
   case_expect_success
 
-  case_run_declarest resource get "${heuristic_path}" --repository -o json
+  case_run_declarest resource get "${heuristic_path}" --source repository -o json
   case_expect_success
   if ! jq -e '.password == "plain-secret" and .name == "acme"' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected --ignore save to persist plaintext payload\n' >&2
@@ -36,8 +36,9 @@ case_run() {
   fi
 
   case_write_json "${metadata_file}" '{
-    "secretsFromAttributes": ["credentials.authValue"],
-    "operations": {}
+    "resourceInfo": {
+      "secretInAttributes": ["credentials.authValue"]
+    }
   }'
 
   case_run_declarest metadata set "${metadata_path}" -f "${metadata_file}" -i json
@@ -63,7 +64,7 @@ case_run() {
   case_run_declarest resource save "${metadata_path}" -f "${metadata_placeholder_payload_file}" -i json
   case_expect_success
 
-  case_run_declarest resource get "${metadata_path}" --repository -o json
+  case_run_declarest resource get "${metadata_path}" --source repository -o json
   case_expect_success
   case_expect_output_contains '{{secret .}}'
 }

@@ -18,9 +18,6 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var sourceFlag string
 	var confirmDelete bool
 	var recursive bool
-	var fromRepository bool
-	var fromRemoteServer bool
-	var fromBoth bool
 	var httpMethod string
 	var commitMessageAppend string
 	var commitMessageOverride string
@@ -44,7 +41,7 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			source, err := normalizeDeleteSourceSelection(sourceFlag, fromRepository, fromRemoteServer, fromBoth)
+			source, err := normalizeDeleteSourceSelection(sourceFlag)
 			if err != nil {
 				return err
 			}
@@ -127,10 +124,8 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
-	command.Flags().BoolVar(&confirmDelete, "force", false, "legacy alias for --confirm-delete")
-	_ = command.Flags().MarkHidden("force")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete recursively")
-	bindDeleteSourceFlags(command, &sourceFlag, &fromRepository, &fromRemoteServer, &fromBoth)
+	bindDeleteSourceFlags(command, &sourceFlag)
 	bindHTTPMethodFlag(command, &httpMethod)
 	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
 	return command

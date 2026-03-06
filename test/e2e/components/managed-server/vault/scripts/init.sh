@@ -27,13 +27,13 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   exit 0
 fi
 
-vault_address=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_BASE_URL' 'E2E_MANAGED_SERVER_BASE_URL') || exit 1
-vault_token=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_TOKEN' 'E2E_MANAGED_SERVER_TOKEN') || exit 1
-vault_mount=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_MOUNT' 'E2E_MANAGED_SERVER_VAULT_MOUNT' || true)
+vault_address=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_BASE_URL') || exit 1
+vault_token=$(e2e_require_env 'DECLAREST_E2E_MANAGED_SERVER_TOKEN') || exit 1
+vault_mount=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_MOUNT' || true)
 vault_mount=${vault_mount:-secret}
-vault_path_prefix=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_PATH_PREFIX' 'E2E_MANAGED_SERVER_VAULT_PATH_PREFIX' || true)
+vault_path_prefix=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_PATH_PREFIX' || true)
 vault_path_prefix=${vault_path_prefix:-declarest-e2e}
-vault_kv_version=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_KV_VERSION' 'E2E_MANAGED_SERVER_VAULT_KV_VERSION' || true)
+vault_kv_version=$(e2e_env_optional 'DECLAREST_E2E_MANAGED_SERVER_VAULT_KV_VERSION' || true)
 vault_kv_version=${vault_kv_version:-2}
 
 e2e_write_state_value "${state_file}" VAULT_ADDRESS "${vault_address}"

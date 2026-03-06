@@ -330,15 +330,15 @@ func (s *FileSecretService) readSnapshotLocked() (secretSnapshot, error) {
 	}
 
 	readKDF := s.kdf
-	if len(salt) > 0 && envelope.KDFTime > 0 && envelope.KDFMemory > 0 && envelope.KDFThreads > 0 {
+	if len(salt) > 0 {
+		if envelope.KDFTime == 0 || envelope.KDFMemory == 0 || envelope.KDFThreads == 0 {
+			return secretSnapshot{}, faults.NewValidationError("secret store KDF parameters are missing", nil)
+		}
 		readKDF = kdfSettings{
 			Time:    envelope.KDFTime,
 			Memory:  envelope.KDFMemory,
 			Threads: envelope.KDFThreads,
 		}
-	} else if len(salt) > 0 && envelope.KDFTime == 0 && envelope.KDFMemory == 0 && envelope.KDFThreads == 0 {
-		// Legacy store written before KDF params were embedded in the envelope.
-		readKDF = kdfSettings{Time: 1, Memory: 64 * 1024, Threads: 4}
 	}
 
 	key, err := s.deriveKeyWithSettings(salt, readKDF)

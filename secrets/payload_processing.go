@@ -527,10 +527,6 @@ func resolvePlaceholderStoreKey(
 		return resolvedAttribute, nil
 	}
 
-	if isAbsoluteSecretKey(resolvedAttribute) {
-		return resolvedAttribute, nil
-	}
-
 	return strings.TrimSpace(resourcePath) + ":" + resolvedAttribute, nil
 }
 
@@ -539,6 +535,9 @@ func resolvePlaceholderAttribute(key string, isCurrent bool, currentPath string)
 		resolved := strings.TrimSpace(key)
 		if resolved == "" {
 			return "", faults.NewValidationError("secret placeholder key must not be empty", nil)
+		}
+		if strings.HasPrefix(resolved, "/") {
+			return "", faults.NewValidationError("secret placeholder key must be relative to the resource path", nil)
 		}
 		return resolved, nil
 	}
@@ -550,15 +549,6 @@ func resolvePlaceholderAttribute(key string, isCurrent bool, currentPath string)
 
 	return resolved, nil
 }
-
-func isAbsoluteSecretKey(value string) bool {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return false
-	}
-	return strings.HasPrefix(trimmed, "/") || strings.Contains(trimmed, ":")
-}
-
 func isLikelySecretValue(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

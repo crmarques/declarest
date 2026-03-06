@@ -218,7 +218,6 @@ func TestResolvePayloadForResource(t *testing.T) {
 		"apiToken": "{{secret .}}",
 		"credentials": map[string]any{
 			"authValue": "{{secret custom-auth}}",
-			"legacy":    "{{secret \"/customers/acme:legacy\"}}",
 		},
 	}
 
@@ -228,8 +227,6 @@ func TestResolvePayloadForResource(t *testing.T) {
 			return "api-token-value", nil
 		case "/customers/acme:custom-auth":
 			return "custom-auth-value", nil
-		case "/customers/acme:legacy":
-			return "legacy-value", nil
 		default:
 			return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
 		}
@@ -242,12 +239,22 @@ func TestResolvePayloadForResource(t *testing.T) {
 		"apiToken": "api-token-value",
 		"credentials": map[string]any{
 			"authValue": "custom-auth-value",
-			"legacy":    "legacy-value",
 		},
 	}
 	if !reflect.DeepEqual(resolved, expected) {
 		t.Fatalf("expected %#v, got %#v", expected, resolved)
 	}
+}
+
+func TestResolvePayloadForResourceRejectsAbsolutePlaceholderKeys(t *testing.T) {
+	t.Parallel()
+
+	_, err := ResolvePayloadForResource(
+		map[string]any{"token": `{{secret "/customers/acme:token"}}`},
+		"/customers/acme",
+		func(string) (string, error) { return "value", nil },
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
 }
 
 func TestResolvePayloadDirectivesForResource(t *testing.T) {

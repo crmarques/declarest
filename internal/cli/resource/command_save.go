@@ -122,8 +122,6 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
 	command.Flags().StringVar(&handleSecrets, "handle-secrets", "", "detect, store, and mask plaintext secrets while saving (optional comma-separated attributes)")
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")
-	command.Flags().BoolVar(&overwrite, "override", false, "legacy alias for --overwrite")
-	_ = command.Flags().MarkHidden("override")
 	command.Flags().BoolVar(&push, "push", false, "push git repository changes after save (git repositories with remote only)")
 	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
 	handleSecretsFlag := command.Flags().Lookup("handle-secrets")

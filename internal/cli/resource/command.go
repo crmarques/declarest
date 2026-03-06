@@ -18,98 +18,43 @@ var (
 	deleteSourceCompletionValues = []string{sourceRemoteServer, sourceRepository, sourceBoth}
 )
 
-func normalizeReadSourceSelection(sourceFlag string, fromRepository bool, fromRemoteServer bool) (string, error) {
-	normalized, err := normalizeSourceSelection(sourceFlag, false, fromRepository, fromRemoteServer, false)
-	if err != nil {
-		return "", err
-	}
-	if normalized == sourceBoth {
-		return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository", nil)
-	}
-	return normalized, nil
+func normalizeReadSourceSelection(sourceFlag string) (string, error) {
+	return normalizeSourceSelection(sourceFlag, false)
 }
 
-func normalizeDeleteSourceSelection(sourceFlag string, fromRepository bool, fromRemoteServer bool, fromBoth bool) (string, error) {
-	return normalizeSourceSelection(sourceFlag, true, fromRepository, fromRemoteServer, fromBoth)
+func normalizeDeleteSourceSelection(sourceFlag string) (string, error) {
+	return normalizeSourceSelection(sourceFlag, true)
 }
 
-func normalizeSourceSelection(
-	sourceFlag string,
-	allowBoth bool,
-	fromRepository bool,
-	fromRemoteServer bool,
-	fromBoth bool,
-) (string, error) {
+func normalizeSourceSelection(sourceFlag string, allowBoth bool) (string, error) {
 	sourceValue := strings.TrimSpace(sourceFlag)
-	if sourceValue != "" {
-		if fromRepository || fromRemoteServer || fromBoth {
-			return "", cliutil.ValidationError(
-				"flag --source cannot be combined with legacy source flags (--repository, --remote-server, --both)",
-				nil,
-			)
-		}
-		switch sourceValue {
-		case sourceRepository, sourceRemoteServer:
-			return sourceValue, nil
-		case sourceBoth:
-			if allowBoth {
-				return sourceValue, nil
-			}
-		}
+	if sourceValue == "" {
+		return sourceRemoteServer, nil
+	}
+
+	switch sourceValue {
+	case sourceRepository, sourceRemoteServer:
+		return sourceValue, nil
+	case sourceBoth:
 		if allowBoth {
-			return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository, both", nil)
+			return sourceValue, nil
 		}
-		return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository", nil)
 	}
 
-	if fromRepository && fromRemoteServer {
-		return "", cliutil.ValidationError("flags --repository and --remote-server cannot be used together", nil)
-	}
 	if allowBoth {
-		explicitSources := 0
-		if fromRepository {
-			explicitSources++
-		}
-		if fromRemoteServer {
-			explicitSources++
-		}
-		if fromBoth {
-			explicitSources++
-		}
-		if explicitSources > 1 {
-			return "", cliutil.ValidationError("flags --repository, --remote-server, and --both are mutually exclusive", nil)
-		}
-		if fromBoth {
-			return sourceBoth, nil
-		}
+		return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository, both", nil)
 	}
-
-	if fromRepository {
-		return sourceRepository, nil
-	}
-	return sourceRemoteServer, nil
+	return "", cliutil.ValidationError("flag --source must be one of: remote-server, repository", nil)
 }
 
-func bindReadSourceFlags(command *cobra.Command, sourceFlag *string, fromRepository *bool, fromRemoteServer *bool) {
+func bindReadSourceFlags(command *cobra.Command, sourceFlag *string) {
 	command.Flags().StringVar(sourceFlag, "source", "", "read/list source: remote-server or repository (default: remote-server)")
 	cliutil.RegisterFlagValueCompletions(command, "source", readSourceCompletionValues)
-
-	command.Flags().BoolVar(fromRepository, "repository", false, "read/list from repository (legacy alias for --source repository)")
-	command.Flags().BoolVar(fromRemoteServer, "remote-server", false, "read/list from remote server (legacy alias for --source remote-server)")
-	_ = command.Flags().MarkHidden("repository")
-	_ = command.Flags().MarkHidden("remote-server")
 }
 
-func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string, fromRepository *bool, fromRemoteServer *bool, fromBoth *bool) {
+func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string) {
 	command.Flags().StringVar(sourceFlag, "source", "", "delete source: remote-server, repository, or both (default: remote-server)")
 	cliutil.RegisterFlagValueCompletions(command, "source", deleteSourceCompletionValues)
-
-	command.Flags().BoolVar(fromRepository, "repository", false, "delete from repository (legacy alias for --source repository)")
-	command.Flags().BoolVar(fromRemoteServer, "remote-server", false, "delete from remote server (legacy alias for --source remote-server)")
-	command.Flags().BoolVar(fromBoth, "both", false, "delete from both remote server and repository (legacy alias for --source both)")
-	_ = command.Flags().MarkHidden("repository")
-	_ = command.Flags().MarkHidden("remote-server")
-	_ = command.Flags().MarkHidden("both")
 }
 
 func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {

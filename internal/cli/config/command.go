@@ -124,8 +124,8 @@ func newAddCommand(
 		Use:   "add [new-context-name]",
 		Short: "Add contexts from input or create one interactively",
 		Example: strings.Join([]string{
-			"  declarest config add --file context.yaml",
-			"  declarest config add --file contexts.yaml --context-name prod",
+			"  declarest config add --payload context.yaml",
+			"  declarest config add --payload contexts.yaml --context-name prod",
 			"  cat contexts.yaml | declarest config add --set-current",
 			"  declarest config add dev",
 		}, "\n"),
@@ -206,8 +206,6 @@ func newAddCommand(
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
-	_ = command.Flags().MarkHidden("file")
 	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
 	command.Flags().StringVar(&contextName, "context-name", "", "context name to import (catalog) or assign (single context)")
 	command.Flags().BoolVar(&setCurrent, "set-current", false, "set imported context as current")
@@ -354,8 +352,6 @@ func newUpdateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
-	_ = command.Flags().MarkHidden("file")
 	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
 	cliutil.RegisterInputFormatFlagCompletion(command)
 	return command
@@ -628,8 +624,6 @@ func newValidateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.Payload, "file", "", "legacy alias for --payload")
-	_ = command.Flags().MarkHidden("file")
 	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
 	cliutil.RegisterInputFormatFlagCompletion(command)
 	return command

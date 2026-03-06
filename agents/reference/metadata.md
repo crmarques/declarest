@@ -33,12 +33,11 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 16. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
 17. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
 18. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
-19. Metadata decoding SHOULD accept `operationInfo.<operation>.url.path` as a compatibility alias for `operationInfo.<operation>.path`.
-20. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
-21. Metadata template-rendered string fields MUST support `{{resource_format .}}`, which resolves to the active repository resource format (`json` or `yaml`) and defaults to `json` when the configured format is empty.
-22. Default metadata operation media directives SHOULD use repository-format-aware templates in `httpHeaders` entries (`Accept: application/{{resource_format .}}` for all default operations and `Content-Type: application/{{resource_format .}}` for `create|update`).
-23. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
-24. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
+19. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
+20. Metadata template-rendered string fields MUST support `{{resource_format .}}`, which resolves to the active repository resource format (`json` or `yaml`) and defaults to `json` when the configured format is empty.
+21. Default metadata operation media directives SHOULD use repository-format-aware templates in `httpHeaders` entries (`Accept: application/{{resource_format .}}` for all default operations and `Content-Type: application/{{resource_format .}}` for `create|update`).
+22. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
+23. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 
 ## Data Contracts
 Supported metadata groups:
@@ -53,8 +52,6 @@ Supported metadata groups:
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
 2. Allowed operation values are `get`, `create`, `update`, `delete`, `list`, and `compare`.
-3. Operation path fields MAY be provided as either `path` or compatibility `url.path`.
-4. Metadata decoding SHOULD accept compatibility aliases `method`, `headers`, `filter`, `suppress`, and `jq` while canonical persistence uses `httpMethod`, `httpHeaders`, and `payload.*` transform fields.
 
 Infer options contract:
 1. `apply`: whether inferred directives are persisted.
@@ -89,9 +86,8 @@ Template context contract:
 6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps.
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
 8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
-9. Relative operation paths resolve against rendered collection paths and keep compatibility for non-relative legacy values (for example `customers` => `/customers`).
-10. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
-11. Invalid metadata template helper usage (for example `{{resource_format "yaml"}}`) returns a typed validation error.
+9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
+10. Invalid metadata template helper usage (for example `{{resource_format "yaml"}}`) returns a typed validation error.
 
 ## Examples
 1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operationInfo.getResource.httpHeaders`.

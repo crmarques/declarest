@@ -10,11 +10,11 @@ const (
 
 func payloadTransformStepForKey(key string) (string, bool) {
 	switch key {
-	case "filterAttributes", "filter":
+	case "filterAttributes":
 		return payloadTransformStepFilter, true
-	case "suppressAttributes", "suppress", "ignoreAttributes":
+	case "suppressAttributes":
 		return payloadTransformStepSuppress, true
-	case "jqExpression", "jq":
+	case "jqExpression":
 		return payloadTransformStepJQ, true
 	default:
 		return "", false

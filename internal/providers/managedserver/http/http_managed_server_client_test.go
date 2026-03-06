@@ -545,6 +545,7 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 			"name":        "platform",
 			"description": "Managed by declarest E2E",
 			"config": map[string]any{
+				"project.name":        "platform",
 				"project.label":       "Platform",
 				"project.description": "Managed by declarest E2E",
 			},
