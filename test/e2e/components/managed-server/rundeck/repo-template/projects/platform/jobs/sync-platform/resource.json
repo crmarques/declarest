@@ -1,6 +1,15 @@
 {
-  "id": "job-platform-sync",
+  "id": "22222222-2222-4222-8222-222222222222",
   "name": "sync-platform",
   "project": "platform",
-  "description": "Synchronize platform configuration"
+  "description": "Synchronize platform configuration",
+  "sequence": {
+    "keepgoing": false,
+    "strategy": "node-first",
+    "commands": [
+      {
+        "exec": "echo sync-platform"
+      }
+    ]
+  }
 }

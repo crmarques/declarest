@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
@@ -470,6 +472,293 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsInMetadataPayloadFieldO
 	if body["c"] != "ble" {
 		t.Fatalf("expected jqExpression to run before suppressAttributes based on metadata field order, got %#v", body)
 	}
+}
+
+func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := filepath.Join(
+		"..",
+		"..",
+		"..",
+		"..",
+		"test",
+		"e2e",
+		"components",
+		"managed-server",
+		"rundeck",
+		"metadata",
+	)
+	service := fsmetadata.NewFSMetadataService(metadataDir, "")
+	client := mustManagedServerClient(
+		t,
+		config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		WithMetadataRenderer(service),
+	)
+	ctx := context.Background()
+
+	t.Run("project_get_normalizes_config_payload", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform",
+			Payload: map[string]any{
+				"name":        "platform",
+				"description": "Managed by declarest E2E",
+				"config": map[string]any{
+					"project.label":       "Platform",
+					"project.description": "Managed by declarest E2E",
+				},
+			},
+		}, md, metadata.OperationGet)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/project/platform/config" {
+			t.Fatalf("expected project config path, got %q", spec.Path)
+		}
+
+		value, err := client.applyOperationPayloadTransforms(ctx, map[string]any{
+			"project.label":       "Platform",
+			"project.description": "Managed by declarest E2E",
+		}, spec)
+		if err != nil {
+			t.Fatalf("applyOperationPayloadTransforms returned error: %v", err)
+		}
+
+		expected := map[string]any{
+			"name":        "platform",
+			"description": "Managed by declarest E2E",
+			"config": map[string]any{
+				"project.label":       "Platform",
+				"project.description": "Managed by declarest E2E",
+			},
+		}
+		if !reflect.DeepEqual(expected, value) {
+			t.Fatalf("unexpected normalized project payload %#v", value)
+		}
+	})
+
+	t.Run("project_update_uses_config_body", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform",
+			Payload: map[string]any{
+				"name":        "platform",
+				"description": "Managed by declarest E2E [rev-2]",
+				"config": map[string]any{
+					"project.label":       "Platform",
+					"project.description": "Managed by declarest E2E",
+				},
+			},
+		}, md, metadata.OperationUpdate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Method != http.MethodPut {
+			t.Fatalf("expected PUT method, got %q", spec.Method)
+		}
+		if spec.Path != "/project/platform/config" {
+			t.Fatalf("expected project config path, got %q", spec.Path)
+		}
+
+		body, ok := spec.Body.(map[string]any)
+		if !ok {
+			t.Fatalf("expected project config body object, got %T", spec.Body)
+		}
+		if body["project.description"] != "Managed by declarest E2E [rev-2]" {
+			t.Fatalf("expected top-level description to flow into project config, got %#v", body)
+		}
+	})
+
+	t.Run("job_create_uses_project_import_path", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/jobs/sync-platform")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/jobs/sync-platform",
+			Payload: map[string]any{
+				"id":          "22222222-2222-4222-8222-222222222222",
+				"name":        "sync-platform",
+				"project":     "platform",
+				"description": "Synchronize platform configuration",
+				"sequence": map[string]any{
+					"keepgoing": false,
+					"strategy":  "node-first",
+					"commands": []any{
+						map[string]any{"exec": "echo sync-platform"},
+					},
+				},
+			},
+		}, md, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/project/platform/jobs/import" {
+			t.Fatalf("expected project jobs import path, got %q", spec.Path)
+		}
+		if spec.Query["dupeOption"] != "create" || spec.Query["uuidOption"] != "preserve" {
+			t.Fatalf("unexpected job import query %#v", spec.Query)
+		}
+		body, ok := spec.Body.([]any)
+		if !ok || len(body) != 1 {
+			t.Fatalf("expected single-item job import array, got %#v", spec.Body)
+		}
+		job, ok := body[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected first import item to be an object, got %#v", body[0])
+		}
+		if job["uuid"] != "22222222-2222-4222-8222-222222222222" {
+			t.Fatalf("expected import payload to map repo id to uuid, got %#v", job)
+		}
+		if _, hasConfig := job["config"]; hasConfig {
+			t.Fatalf("expected job import payload not to inherit project config transform, got %#v", job)
+		}
+	})
+
+	t.Run("job_get_uses_uuid_path_and_normalizes_exported_payload", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/jobs/sync-platform")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/jobs/sync-platform",
+			Payload: map[string]any{
+				"id":          "22222222-2222-4222-8222-222222222222",
+				"name":        "sync-platform",
+				"project":     "platform",
+				"description": "Synchronize platform configuration",
+			},
+		}, md, metadata.OperationGet)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/job/22222222-2222-4222-8222-222222222222" {
+			t.Fatalf("expected job uuid path, got %q", spec.Path)
+		}
+
+		value, err := client.applyOperationPayloadTransforms(ctx, []any{
+			map[string]any{
+				"id":          "22222222-2222-4222-8222-222222222222",
+				"uuid":        "22222222-2222-4222-8222-222222222222",
+				"name":        "sync-platform",
+				"description": "Synchronize platform configuration",
+				"sequence": map[string]any{
+					"keepgoing": false,
+					"strategy":  "node-first",
+					"commands": []any{
+						map[string]any{"exec": "echo sync-platform"},
+					},
+				},
+			},
+		}, spec)
+		if err != nil {
+			t.Fatalf("applyOperationPayloadTransforms returned error: %v", err)
+		}
+
+		expected := map[string]any{
+			"id":          "22222222-2222-4222-8222-222222222222",
+			"name":        "sync-platform",
+			"project":     "platform",
+			"description": "Synchronize platform configuration",
+			"sequence": map[string]any{
+				"keepgoing": false,
+				"strategy":  "node-first",
+				"commands": []any{
+					map[string]any{"exec": "echo sync-platform"},
+				},
+			},
+		}
+		if !reflect.DeepEqual(expected, value) {
+			t.Fatalf("unexpected normalized job payload %#v", value)
+		}
+	})
+
+	t.Run("nodes_list_uses_project_sources_path", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/nodes")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath:    "/projects/platform/nodes",
+			CollectionPath: "/projects/platform/nodes",
+		}, md, metadata.OperationList)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/project/platform/sources" {
+			t.Fatalf("expected project sources list path, got %q", spec.Path)
+		}
+		if spec.JQ != `map(. + {index: (.index | tostring), project: "platform"})` {
+			t.Fatalf("unexpected rendered nodes jq %q", spec.JQ)
+		}
+	})
+
+	t.Run("secret_update_uses_project_key_storage", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/secrets/db-password")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/secrets/db-password",
+			Payload: map[string]any{
+				"name":    "db-password",
+				"type":    "password",
+				"content": "super-secret",
+			},
+		}, md, metadata.OperationUpdate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/storage/keys/projects/platform/db-password" {
+			t.Fatalf("expected project key-storage path, got %q", spec.Path)
+		}
+		if spec.ContentType != "application/x-rundeck-data-password" {
+			t.Fatalf("expected rundeck password content type, got %q", spec.ContentType)
+		}
+		if body, ok := spec.Body.(string); !ok || body != "super-secret" {
+			t.Fatalf("expected secret content body, got %#v", spec.Body)
+		}
+	})
 }
 
 func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
@@ -2304,10 +2593,14 @@ func writeTLSClientPairFiles(t *testing.T) (string, string, string) {
 	return caCertFile, clientCertFile, clientKeyFile
 }
 
-func mustManagedServerClient(t *testing.T, cfg config.HTTPServer) *HTTPManagedServerClient {
+func mustManagedServerClient(
+	t *testing.T,
+	cfg config.HTTPServer,
+	opts ...ManagedServerClientOption,
+) *HTTPManagedServerClient {
 	t.Helper()
 
-	client, err := NewHTTPManagedServerClient(cfg)
+	client, err := NewHTTPManagedServerClient(cfg, opts...)
 	if err != nil {
 		t.Fatalf("NewHTTPManagedServerClient returned error: %v", err)
 	}

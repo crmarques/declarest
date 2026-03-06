@@ -279,6 +279,145 @@ EOF
   assert_file_contains "${managed_server_manifest}" "bundle: 'keycloak-bundle:0.0.1'"
 }
 
+test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_METADATA_DIR="${tmp}/metadata"
+  unset E2E_METADATA_BUNDLE
+
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+{"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
+EOF
+
+  e2e_operator_prepare_managed_server_metadata_bundle
+
+  assert_path_exists "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}"
+  assert_eq \
+    "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}" \
+    "$(e2e_operator_managed_server_metadata_bundle_mount_path)"
+
+  local bundle_manifest archive_listing
+  bundle_manifest=$(tar -xOf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}" bundle.yaml)
+  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}")
+
+  assert_contains "${bundle_manifest}" "name: e2e-rundeck-bundle"
+  assert_contains "${bundle_manifest}" "metadataRoot: metadata"
+  assert_contains "${archive_listing}" "bundle.yaml"
+  assert_contains "${archive_listing}" "metadata/projects/_/metadata.json"
+}
+
+test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_ID='operator-rundeck-metadata-manager'
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_KUBECONFIG="${tmp}/kubeconfig"
+  export E2E_KIND_CLUSTER_NAME='declarest-e2e-operator'
+  export E2E_K8S_NAMESPACE='declarest-operator'
+  export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:test'
+  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_METADATA_DIR="${tmp}/metadata"
+  unset E2E_METADATA_BUNDLE
+
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+{"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
+EOF
+
+  e2e_operator_api_server_endpoint() {
+    printf '10.89.0.1 6443\n'
+  }
+
+  e2e_operator_write_manager_manifest
+
+  local manager_manifest
+  manager_manifest=$(e2e_operator_manager_manifest_path)
+  assert_path_exists "${manager_manifest}"
+  assert_file_contains "${manager_manifest}" "kind: Secret"
+  assert_file_contains "${manager_manifest}" "name: $(e2e_operator_managed_server_metadata_bundle_secret_name)"
+  assert_file_contains "${manager_manifest}" "metadata-bundle.tar.gz:"
+  assert_file_contains "${manager_manifest}" "mountPath: $(e2e_operator_managed_server_metadata_bundle_mount_dir)"
+  assert_file_contains "${manager_manifest}" "secretName: $(e2e_operator_managed_server_metadata_bundle_secret_name)"
+}
+
+test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
+  source_e2e_libs common profile operator components
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_ID='operator-rundeck-metadata-test'
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_STATE_DIR="${E2E_RUN_DIR}/state"
+  export E2E_PLATFORM='kubernetes'
+  export E2E_REPO_TYPE='git'
+  export E2E_GIT_PROVIDER='gitea'
+  export E2E_GIT_PROVIDER_CONNECTION='remote'
+  export E2E_SECRET_PROVIDER='file'
+  export E2E_SECRET_PROVIDER_CONNECTION='local'
+  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_MANAGED_SERVER_CONNECTION='remote'
+  export E2E_MANAGED_SERVER_AUTH_TYPE='custom-header'
+  export E2E_MANAGED_SERVER_MTLS='false'
+  export E2E_METADATA_DIR="${tmp}/metadata"
+  unset E2E_METADATA_BUNDLE
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
+  export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
+  export E2E_OPERATOR_REPOSITORY_NAME='declarest-e2e-repository'
+
+  mkdir -p "${E2E_STATE_DIR}" "${E2E_METADATA_DIR}/projects/_"
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+{"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
+EOF
+
+  local repo_state managed_state secret_state
+  repo_state=$(e2e_component_state_file "$(e2e_component_key 'repo-type' 'git')")
+  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-server' 'rundeck')")
+  secret_state=$(e2e_component_state_file "$(e2e_component_key 'secret-provider' 'file')")
+
+  cat >"${repo_state}" <<'EOF'
+GIT_REMOTE_URL=https://example.com/acme/declarest-e2e.git
+GIT_REMOTE_BRANCH=main
+REPO_RESOURCE_FORMAT=json
+GIT_AUTH_MODE=access-key
+GIT_AUTH_TOKEN=test-token
+EOF
+
+  cat >"${managed_state}" <<'EOF'
+RUNDECK_BASE_URL=https://rundeck.example.com
+RUNDECK_API_VERSION=45
+RUNDECK_AUTH_HEADER=X-Rundeck-Auth-Token
+RUNDECK_API_TOKEN=test-token
+EOF
+
+  cat >"${secret_state}" <<'EOF'
+SECRET_FILE_PATH=/tmp/declarest-e2e-secrets.enc.json
+SECRET_FILE_PASSPHRASE=test-passphrase
+EOF
+
+  e2e_operator_prepare_managed_server_metadata_bundle
+  e2e_operator_write_manifests
+
+  local managed_server_manifest
+  managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
+  assert_file_contains "${managed_server_manifest}" "metadata:"
+  assert_file_contains \
+    "${managed_server_manifest}" \
+    "bundle: '$(e2e_operator_managed_server_metadata_bundle_mount_path)'"
+}
+
 test_operator_example_resource_mapping
 test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
@@ -287,3 +426,6 @@ test_operator_prepare_repository_webhook_derives_namespace_when_unset
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
 test_operator_write_manifests_sets_keycloak_metadata_bundle_ref
+test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir
+test_operator_write_manager_manifest_mounts_prepared_metadata_bundle
+test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path

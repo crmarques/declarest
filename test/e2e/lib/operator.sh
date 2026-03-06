@@ -21,6 +21,72 @@ e2e_operator_b64() {
   printf '%s' "$1" | base64 | tr -d '\n'
 }
 
+e2e_operator_managed_server_metadata_bundle_secret_name() {
+  e2e_operator_scoped_name 'declarest-operator-managed-server-metadata'
+}
+
+e2e_operator_managed_server_metadata_bundle_mount_dir() {
+  printf '/var/run/declarest-managed-server-metadata\n'
+}
+
+e2e_operator_managed_server_metadata_bundle_mount_path() {
+  printf '%s/metadata-bundle.tar.gz\n' "$(e2e_operator_managed_server_metadata_bundle_mount_dir)"
+}
+
+e2e_operator_prepare_managed_server_metadata_bundle() {
+  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE=''
+  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=''
+
+  if [[ -n "${E2E_METADATA_BUNDLE:-}" || -z "${E2E_METADATA_DIR:-}" ]]; then
+    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
+    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+    return 0
+  fi
+
+  if [[ ! -d "${E2E_METADATA_DIR}" ]]; then
+    e2e_die "operator profile metadata directory is unavailable: ${E2E_METADATA_DIR}"
+    return 1
+  fi
+
+  local bundle_name
+  bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVER:-managed-server}-bundle")
+
+  local bundle_root="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle"
+  local archive_path="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle.tar.gz"
+
+  rm -rf -- "${bundle_root}"
+  rm -f -- "${archive_path}"
+  mkdir -p "${bundle_root}/metadata" || return 1
+
+  if ! cp -R "${E2E_METADATA_DIR}/." "${bundle_root}/metadata/"; then
+    e2e_die "failed to copy metadata fixtures into operator bundle workspace: ${E2E_METADATA_DIR}"
+    return 1
+  fi
+
+  cat >"${bundle_root}/bundle.yaml" <<EOF_BUNDLE_MANIFEST
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: ${bundle_name}
+version: 0.0.1
+description: E2E metadata bundle for ${E2E_MANAGED_SERVER:-managed-server}.
+declarest:
+  shorthand: ${bundle_name}
+  metadataRoot: metadata
+  metadataFileName: metadata.json
+EOF_BUNDLE_MANIFEST
+
+  if ! tar -C "${bundle_root}" -czf "${archive_path}" bundle.yaml metadata; then
+    e2e_die "failed to create operator metadata bundle archive: ${archive_path}"
+    return 1
+  fi
+
+  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE="${archive_path}"
+  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_server_metadata_bundle_mount_path)
+  export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
+  export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+  return 0
+}
+
 e2e_operator_sanitize_name() {
   local value=$1
   value=${value//[^a-zA-Z0-9]/-}
@@ -427,7 +493,7 @@ e2e_operator_install_crds() {
   return 0
 }
 
-e2e_operator_start_manager() {
+e2e_operator_write_manager_manifest() {
   if [[ -z "${E2E_OPERATOR_IMAGE:-}" ]]; then
     e2e_die "operator manager image is unavailable: ${E2E_OPERATOR_IMAGE:-<unset>}"
     return 1
@@ -458,12 +524,56 @@ e2e_operator_start_manager() {
   local api_service_host=''
   local api_service_port=''
   read -r api_service_host api_service_port < <(e2e_operator_api_server_endpoint) || return 1
+  e2e_operator_prepare_managed_server_metadata_bundle || return 1
   local manifest_dir
   manifest_dir=$(e2e_operator_manifest_dir)
   mkdir -p "${manifest_dir}" || return 1
 
   local manager_manifest
   manager_manifest=$(e2e_operator_manager_manifest_path)
+  local metadata_bundle_archive="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE:-}"
+  local manager_metadata_secret_yaml=''
+  local manager_metadata_volume_mount_yaml=''
+  local manager_metadata_volume_yaml=''
+  if [[ -n "${metadata_bundle_archive}" ]]; then
+    if [[ ! -f "${metadata_bundle_archive}" ]]; then
+      e2e_die "operator metadata bundle archive is unavailable: ${metadata_bundle_archive}"
+      return 1
+    fi
+
+    local metadata_bundle_secret_name
+    metadata_bundle_secret_name=$(e2e_operator_managed_server_metadata_bundle_secret_name)
+    local metadata_bundle_mount_dir
+    metadata_bundle_mount_dir=$(e2e_operator_managed_server_metadata_bundle_mount_dir)
+
+    manager_metadata_secret_yaml=$(cat <<EOF_MANAGER_METADATA_SECRET
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${metadata_bundle_secret_name}
+  namespace: ${namespace}
+type: Opaque
+data:
+  metadata-bundle.tar.gz: $(base64 < "${metadata_bundle_archive}" | tr -d '\n')
+EOF_MANAGER_METADATA_SECRET
+)
+
+    manager_metadata_volume_mount_yaml=$(cat <<EOF_MANAGER_METADATA_MOUNT
+            - name: managed-server-metadata
+              mountPath: ${metadata_bundle_mount_dir}
+              readOnly: true
+EOF_MANAGER_METADATA_MOUNT
+)
+
+    manager_metadata_volume_yaml=$(cat <<EOF_MANAGER_METADATA_VOLUME
+        - name: managed-server-metadata
+          secret:
+            secretName: ${metadata_bundle_secret_name}
+EOF_MANAGER_METADATA_VOLUME
+)
+  fi
+
   cat >"${manager_manifest}" <<EOF_MANAGER
 apiVersion: v1
 kind: ServiceAccount
@@ -509,6 +619,7 @@ roleRef:
   kind: Role
   name: ${role_name}
   apiGroup: rbac.authorization.k8s.io
+${manager_metadata_secret_yaml}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -582,11 +693,13 @@ spec:
               mountPath: ${runtime_root}
             - name: tmp
               mountPath: /tmp
+${manager_metadata_volume_mount_yaml}
       volumes:
         - name: state
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+${manager_metadata_volume_yaml}
 ---
 apiVersion: v1
 kind: Service
@@ -605,7 +718,24 @@ spec:
       port: 18082
       targetPort: repo-webhook
 EOF_MANAGER
+}
 
+e2e_operator_start_manager() {
+  e2e_operator_write_manager_manifest || return 1
+
+  local manager_manifest
+  manager_manifest=$(e2e_operator_manager_manifest_path)
+  local namespace
+  namespace=$(e2e_operator_effective_namespace)
+  local deployment_name
+  deployment_name=$(e2e_operator_scoped_name 'declarest-operator')
+  local webhook_service_name
+  webhook_service_name=$(e2e_operator_repository_webhook_service_name)
+  local run_label
+  run_label=$(e2e_operator_run_label_value)
+  local runtime_root='/var/lib/declarest'
+  local repo_root="${runtime_root}/repos"
+  local cache_root="${runtime_root}/cache"
   local image_archive="${E2E_RUN_DIR}/operator/manager-image.tar"
   mkdir -p -- "$(dirname -- "${image_archive}")" || return 1
   e2e_info "operator profile exporting manager image archive image=${E2E_OPERATOR_IMAGE} archive=${image_archive}"
@@ -648,6 +778,12 @@ EOF_MANAGER
   e2e_runtime_state_set 'OPERATOR_MANAGER_LOG_FILE' "${E2E_OPERATOR_MANAGER_LOG_FILE}" || return 1
   if [[ -n "${E2E_OPERATOR_MANAGER_POD}" ]]; then
     e2e_runtime_state_set 'OPERATOR_MANAGER_POD' "${E2E_OPERATOR_MANAGER_POD}" || return 1
+  fi
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE:-}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE' "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}" || return 1
+  fi
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH' "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}" || return 1
   fi
   e2e_runtime_state_set 'OPERATOR_REPO_BASE_DIR' "${repo_root}" || return 1
   e2e_runtime_state_set 'OPERATOR_CACHE_BASE_DIR' "${cache_root}" || return 1
@@ -997,6 +1133,9 @@ EOF_REPO_CR_FOOTER
   local tls_client_cert_file=''
   local tls_client_key_file=''
   local metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
+  if [[ -z "${metadata_bundle_ref}" && -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}" ]]; then
+    metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}"
+  fi
   if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     managed_server_tls_enabled='true'
     if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then

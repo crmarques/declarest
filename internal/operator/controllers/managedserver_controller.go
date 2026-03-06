@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,6 +53,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	managedServer.Default()
+	pollInterval := managedServerPollInterval(managedServer)
 	if validationErr := managedServer.ValidateSpec(); validationErr != nil {
 		logger.Error(validationErr, "managed server spec validation failed")
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "SpecInvalid", "validation failed: %v", validationErr)
@@ -62,7 +64,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			},
 			conditionReasonSpecInvalid,
 			validationErr.Error(),
-			managedServer.Spec.PollInterval.Duration,
+			pollInterval,
 		)
 	}
 
@@ -77,7 +79,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			},
 			conditionReasonDependencyInvalid,
 			openAPIErr.Error(),
-			managedServer.Spec.PollInterval.Duration,
+			pollInterval,
 		)
 	}
 	metadataPath, metadataErr := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, cacheDir)
@@ -90,7 +92,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			},
 			conditionReasonDependencyInvalid,
 			metadataErr.Error(),
-			managedServer.Spec.PollInterval.Duration,
+			pollInterval,
 		)
 	}
 
@@ -132,9 +134,16 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		"managed server reconciled",
 		"openapi", shortenPath(openAPIPath),
 		"metadata", shortenPath(metadataPath),
-		"poll_interval", managedServer.Spec.PollInterval.Duration.String(),
+		"poll_interval", pollInterval.String(),
 	)
-	return ctrl.Result{RequeueAfter: managedServer.Spec.PollInterval.Duration}, nil
+	return ctrl.Result{RequeueAfter: pollInterval}, nil
+}
+
+func managedServerPollInterval(managedServer *declarestv1alpha1.ManagedServer) time.Duration {
+	if managedServer == nil || managedServer.Spec.PollInterval == nil || managedServer.Spec.PollInterval.Duration <= 0 {
+		return 10 * time.Minute
+	}
+	return managedServer.Spec.PollInterval.Duration
 }
 
 func (r *ManagedServerReconciler) setNotReady(
