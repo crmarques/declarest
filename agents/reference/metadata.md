@@ -38,16 +38,20 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 21. Default metadata operation media directives SHOULD use repository-format-aware templates in `httpHeaders` entries (`Accept: application/{{resource_format .}}` for all default operations and `Content-Type: application/{{resource_format .}}` for `create|update`).
 22. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
 23. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
+24. `resourceInfo.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
+25. Enabled `resourceInfo.externalizedAttributes` entries MUST treat `path` as a `[]string` object traversal path, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
+26. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
 
 ## Data Contracts
 Supported metadata groups:
 1. `resourceInfo`: identity, secret-attribute, and collection directives.
-2. `operationInfo.createResource/updateResource/deleteResource/getResource/compareResources/listCollection`: operation-specific directives.
-3. `operationInfo.defaults`: shared transform defaults applied before operation-specific overrides.
-4. Operation wire fields: `path`, `httpMethod`, `query`, `httpHeaders`, `body` (including media headers such as `Accept` and `Content-Type` as `httpHeaders` entries).
-5. Transform wire fields: `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression` (with compare-specific top-level fields `compareResources.filterAttributes|suppressAttributes|jqExpression`).
-6. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
-7. Resource-level secret detection fields: `secretInAttributes`.
+2. `resourceInfo.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`).
+3. `operationInfo.createResource/updateResource/deleteResource/getResource/compareResources/listCollection`: operation-specific directives.
+4. `operationInfo.defaults`: shared transform defaults applied before operation-specific overrides.
+5. Operation wire fields: `path`, `httpMethod`, `query`, `httpHeaders`, `body` (including media headers such as `Accept` and `Content-Type` as `httpHeaders` entries).
+6. Transform wire fields: `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression` (with compare-specific top-level fields `compareResources.filterAttributes|suppressAttributes|jqExpression`).
+7. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
+8. Resource-level secret detection fields: `secretInAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -88,6 +92,8 @@ Template context contract:
 8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
 9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
 10. Invalid metadata template helper usage (for example `{{resource_format "yaml"}}`) returns a typed validation error.
+11. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
+12. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
 
 ## Examples
 1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operationInfo.getResource.httpHeaders`.
@@ -99,3 +105,5 @@ Template context contract:
 7. `metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.
 8. `metadata get` resolves `{{resource_format .}}` tokens in metadata string fields to `application/json` or `application/yaml` based on repository format while preserving unrelated templates such as `{{.id}}`.
 9. `operationInfo.createResource.validate.requiredAttributes: ["realm"]` is satisfied for `/admin/realms/platform/...` when `realm` is derived from the logical path template context.
+10. `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]` plus `resource.yaml script: "{{include script.sh}}"` stores script content in a sibling `script.sh` file and expands that file back into the effective payload for apply/diff.
+11. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.

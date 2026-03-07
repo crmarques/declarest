@@ -255,6 +255,7 @@ func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
 		strings.TrimSpace(value.AliasFromAttribute) == "" &&
 		strings.TrimSpace(value.CollectionPath) == "" &&
 		value.SecretsFromAttributes == nil &&
+		value.ExternalizedAttributes == nil &&
 		value.Operations == nil &&
 		value.Filter == nil &&
 		value.Suppress == nil &&

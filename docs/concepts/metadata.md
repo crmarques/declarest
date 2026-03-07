@@ -13,6 +13,7 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 - `resourceInfo.aliasFromAttribute`
 - `resourceInfo.collectionPath`
 - `resourceInfo.secretInAttributes`
+- `resourceInfo.externalizedAttributes`
 
 ### Operation behavior (`operationInfo.*`)
 
@@ -58,6 +59,44 @@ declarest metadata infer /corporations/acme --apply
 ```
 
 Use inference as a starting point, then refine manually for edge cases.
+
+## Externalized text attributes
+
+Use `resourceInfo.externalizedAttributes` when one or more string fields should live in sibling files instead of inline in `resource.yaml`.
+
+Example metadata:
+
+```yaml
+resourceInfo:
+  externalizedAttributes:
+    - path: ["script"]
+      file: "script.sh"
+```
+
+Save flow:
+
+1. `declarest resource save /projects/platform` writes `resource.yaml` with `script: '{{include script.sh}}'`.
+2. The original string content is written to `script.sh` next to `resource.yaml`.
+
+Resulting files:
+
+```yaml
+# resource.yaml
+script: '{{include script.sh}}'
+```
+
+```bash
+# script.sh
+echo "hello from sidecar"
+```
+
+Apply/diff flow:
+
+1. Repository-backed apply/create/update/diff reads `resource.yaml`.
+2. When the configured placeholder is present, DeclaREST loads `script.sh`.
+3. The effective payload sent to diff/apply uses the file content, not the placeholder string.
+
+This is useful for shell scripts, policy text, certificates, or other long text blobs that are easier to review as standalone files.
 
 ## Advanced topics
 

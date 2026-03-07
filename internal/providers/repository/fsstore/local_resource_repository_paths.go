@@ -1,6 +1,7 @@
 package fsstore
 
 import (
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -39,4 +40,46 @@ func (r *LocalResourceRepository) collectionDirPath(logicalPath string) (string,
 		return "", faults.NewValidationError("logical path escapes repository base directory", nil)
 	}
 	return dirPath, nil
+}
+
+func (r *LocalResourceRepository) resourceArtifactFilePath(logicalPath string, file string) (string, error) {
+	resourceDir, err := r.collectionDirPath(logicalPath)
+	if err != nil {
+		return "", err
+	}
+
+	relativeFile, err := normalizeArtifactRelativePath(file)
+	if err != nil {
+		return "", err
+	}
+
+	targetPath := filepath.Join(resourceDir, filepath.FromSlash(relativeFile))
+	if !fsutil.IsPathUnderRoot(r.baseDir, targetPath) {
+		return "", faults.NewValidationError("logical path escapes repository base directory", nil)
+	}
+
+	return targetPath, nil
+}
+
+func normalizeArtifactRelativePath(file string) (string, error) {
+	trimmed := strings.TrimSpace(file)
+	if trimmed == "" {
+		return "", faults.NewValidationError("resource artifact file must not be empty", nil)
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return "", faults.NewValidationError("resource artifact file must stay within the resource directory", nil)
+	}
+
+	cleaned := path.Clean(trimmed)
+	if cleaned == "." || cleaned == "" {
+		return "", faults.NewValidationError("resource artifact file must not be empty", nil)
+	}
+
+	for _, segment := range strings.Split(cleaned, "/") {
+		if segment == ".." {
+			return "", faults.NewValidationError("resource artifact file must stay within the resource directory", nil)
+		}
+	}
+
+	return cleaned, nil
 }

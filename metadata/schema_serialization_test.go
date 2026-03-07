@@ -309,6 +309,93 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 	})
 }
 
+func TestResourceMetadataMarshalJSONIncludesExternalizedAttributes(t *testing.T) {
+	t.Parallel()
+
+	value := ResourceMetadata{
+		ExternalizedAttributes: []ExternalizedAttribute{
+			{
+				Path:           []string{"script"},
+				File:           "script.sh",
+				Template:       "{{include %s}}",
+				Mode:           "text",
+				SaveBehavior:   "externalize",
+				RenderBehavior: "include",
+				Enabled:        boolPointer(true),
+			},
+		},
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal returned error: %v", err)
+	}
+
+	decoded := map[string]any{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal encoded payload returned error: %v", err)
+	}
+
+	resourceInfo, ok := decoded["resourceInfo"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected resourceInfo object, got %#v", decoded["resourceInfo"])
+	}
+
+	items, ok := resourceInfo["externalizedAttributes"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected one externalizedAttributes entry, got %#v", resourceInfo["externalizedAttributes"])
+	}
+	entry, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected externalizedAttributes entry object, got %#v", items[0])
+	}
+	pathValue, ok := entry["path"].([]any)
+	if !ok || len(pathValue) != 1 || pathValue[0] != "script" {
+		t.Fatalf("expected path [script], got %#v", entry["path"])
+	}
+	if entry["file"] != "script.sh" {
+		t.Fatalf("expected file script.sh, got %#v", entry["file"])
+	}
+	if entry["enabled"] != true {
+		t.Fatalf("expected enabled=true, got %#v", entry["enabled"])
+	}
+}
+
+func TestResourceMetadataUnmarshalJSONSupportsExternalizedAttributes(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{
+	  "resourceInfo": {
+	    "externalizedAttributes": [
+	      {
+	        "path": ["spec", "template", "script"],
+	        "file": "script.sh",
+	        "enabled": false
+	      }
+	    ]
+	  }
+	}`)
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+
+	if len(decoded.ExternalizedAttributes) != 1 {
+		t.Fatalf("expected one externalized attribute, got %#v", decoded.ExternalizedAttributes)
+	}
+	entry := decoded.ExternalizedAttributes[0]
+	if !reflect.DeepEqual(entry.Path, []string{"spec", "template", "script"}) {
+		t.Fatalf("unexpected path %#v", entry.Path)
+	}
+	if entry.File != "script.sh" {
+		t.Fatalf("unexpected file %q", entry.File)
+	}
+	if entry.Enabled == nil || *entry.Enabled {
+		t.Fatalf("expected enabled=false, got %#v", entry.Enabled)
+	}
+}
+
 func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T) {
 	t.Parallel()
 

@@ -9,6 +9,10 @@ import (
 )
 
 func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
+	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
+		return err
+	}
+
 	keys := sortedOperationKeys(metadata.Operations)
 	for _, key := range keys {
 		if !metadatadomain.Operation(key).IsValid() {

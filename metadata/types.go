@@ -17,15 +17,36 @@ type InferenceRequest struct {
 }
 
 type ResourceMetadata struct {
-	IDFromAttribute       string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute    string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
-	CollectionPath        string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
-	SecretsFromAttributes []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
-	Operations            map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`
-	Filter                []string                 `json:"filter,omitempty" yaml:"filter,omitempty"`
-	Suppress              []string                 `json:"suppress,omitempty" yaml:"suppress,omitempty"`
-	JQ                    string                   `json:"jq,omitempty" yaml:"jq,omitempty"`
-	PayloadTransformOrder []string                 `json:"-" yaml:"-"`
+	IDFromAttribute        string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
+	AliasFromAttribute     string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	CollectionPath         string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	SecretsFromAttributes  []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
+	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
+	Operations             map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Filter                 []string                 `json:"filter,omitempty" yaml:"filter,omitempty"`
+	Suppress               []string                 `json:"suppress,omitempty" yaml:"suppress,omitempty"`
+	JQ                     string                   `json:"jq,omitempty" yaml:"jq,omitempty"`
+	PayloadTransformOrder  []string                 `json:"-" yaml:"-"`
+}
+
+type ExternalizedAttribute struct {
+	Path           []string `json:"path,omitempty" yaml:"path,omitempty"`
+	File           string   `json:"file,omitempty" yaml:"file,omitempty"`
+	Template       string   `json:"template,omitempty" yaml:"template,omitempty"`
+	Mode           string   `json:"mode,omitempty" yaml:"mode,omitempty"`
+	SaveBehavior   string   `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
+	RenderBehavior string   `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
+	Enabled        *bool    `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+type ResolvedExternalizedAttribute struct {
+	Path           []string
+	File           string
+	Template       string
+	Mode           string
+	SaveBehavior   string
+	RenderBehavior string
+	Enabled        bool
 }
 
 type OperationSpec struct {

@@ -62,6 +62,47 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	}
 }
 
+func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{}
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{
+						Path: []string{"script"},
+						File: "script.sh",
+					},
+				},
+			},
+		},
+	}
+
+	err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{
+		"name":   "ACME",
+		"script": "echo hello",
+	})
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	wantPayload := map[string]any{
+		"name":   "ACME",
+		"script": "{{include script.sh}}",
+	}
+	if !reflect.DeepEqual(wantPayload, repo.savedValue) {
+		t.Fatalf("unexpected saved payload %#v", repo.savedValue)
+	}
+	if len(repo.savedArtifacts) != 1 {
+		t.Fatalf("expected one saved artifact, got %#v", repo.savedArtifacts)
+	}
+	if repo.savedArtifacts[0].File != "script.sh" || string(repo.savedArtifacts[0].Content) != "echo hello" {
+		t.Fatalf("unexpected saved artifact %#v", repo.savedArtifacts[0])
+	}
+}
+
 func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
@@ -123,6 +164,50 @@ func TestDefaultOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 	}
 	if !reflect.DeepEqual(value, map[string]any{"realm": "master"}) {
 		t.Fatalf("unexpected remote payload: %#v", value)
+	}
+}
+
+func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"name":   "ACME",
+			"script": "{{include script.sh}}",
+		},
+		artifactFiles: map[string][]byte{
+			"/customers/acme::script.sh": []byte("echo hello"),
+		},
+	}
+	server := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+	}
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{
+						Path: []string{"script"},
+						File: "script.sh",
+					},
+				},
+			},
+		},
+		server: server,
+	}
+
+	_, err := orchestrator.Apply(context.Background(), "/customers/acme", orch.ApplyPolicy{})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	payload, ok := server.lastResource.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected create payload map, got %T", server.lastResource.Payload)
+	}
+	if got := payload["script"]; got != "echo hello" {
+		t.Fatalf("expected expanded script payload, got %#v", got)
 	}
 }
 
@@ -1348,11 +1433,13 @@ type fakeRepository struct {
 	existsErr    error
 	statusValue  repository.SyncReport
 
-	savedPath   string
-	savedValue  resource.Value
-	getCalls    []string
-	listCalls   []string
-	existsCalls []string
+	savedPath      string
+	savedValue     resource.Value
+	savedArtifacts []repository.ResourceArtifact
+	getCalls       []string
+	listCalls      []string
+	existsCalls    []string
+	artifactFiles  map[string][]byte
 
 	deletePolicy repository.DeletePolicy
 	listPolicy   repository.ListPolicy
@@ -1361,6 +1448,24 @@ type fakeRepository struct {
 func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
 	f.savedPath = logicalPath
 	f.savedValue = value
+	return nil
+}
+
+func (f *fakeRepository) SaveResourceWithArtifacts(
+	_ context.Context,
+	logicalPath string,
+	value resource.Value,
+	artifacts []repository.ResourceArtifact,
+) error {
+	f.savedPath = logicalPath
+	f.savedValue = value
+	f.savedArtifacts = append([]repository.ResourceArtifact(nil), artifacts...)
+	if f.artifactFiles == nil {
+		f.artifactFiles = map[string][]byte{}
+	}
+	for _, artifact := range artifacts {
+		f.artifactFiles[logicalPath+"::"+artifact.File] = append([]byte(nil), artifact.Content...)
+	}
 	return nil
 }
 
@@ -1408,6 +1513,27 @@ func (f *fakeRepository) Exists(_ context.Context, logicalPath string) (bool, er
 	}
 
 	return f.existsValue, nil
+}
+
+func (f *fakeRepository) ReadResourceArtifact(_ context.Context, logicalPath string, file string) ([]byte, error) {
+	if f.artifactFiles == nil {
+		return nil, faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("resource artifact %q not found for %q", file, logicalPath),
+			nil,
+		)
+	}
+
+	content, found := f.artifactFiles[logicalPath+"::"+file]
+	if !found {
+		return nil, faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("resource artifact %q not found for %q", file, logicalPath),
+			nil,
+		)
+	}
+
+	return append([]byte(nil), content...), nil
 }
 func (f *fakeRepository) Move(context.Context, string, string) error { return nil }
 func (f *fakeRepository) Init(context.Context) error                 { return nil }
@@ -2397,6 +2523,48 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	}
 	if got := output["token"]; got != "{{secret .}}" {
 		t.Fatalf("expected secret placeholder to remain unresolved in template output, got %#v", got)
+	}
+}
+
+func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"name":   "ACME",
+			"script": "{{include script.sh}}",
+		},
+		artifactFiles: map[string][]byte{
+			"/customers/acme::script.sh": []byte("echo hello"),
+		},
+	}
+	server := &fakeServer{
+		getValue: map[string]any{
+			"name":   "ACME",
+			"script": "echo hello",
+		},
+	}
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{
+						Path: []string{"script"},
+						File: "script.sh",
+					},
+				},
+			},
+		},
+		server: server,
+	}
+
+	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Diff returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected no diff after externalized expansion, got %#v", items)
 	}
 }
 

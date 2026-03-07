@@ -55,7 +55,7 @@ func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, valu
 	if err != nil {
 		return err
 	}
-	return manager.Save(ctx, logicalPath, value)
+	return r.saveLocalResource(ctx, manager, logicalPath, value)
 }
 
 func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string, policy orchestrator.ApplyPolicy) (resource.Resource, error) {

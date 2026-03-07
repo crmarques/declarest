@@ -28,7 +28,12 @@ func (r *DefaultOrchestrator) buildResourceInfo(
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}
 
-	normalizedPayload, err := resource.Normalize(value)
+	expandedPayload, err := r.expandExternalizedPayload(ctx, normalizedPath, resolvedMetadata, value)
+	if err != nil {
+		return resource.Resource{}, metadata.ResourceMetadata{}, err
+	}
+
+	normalizedPayload, err := resource.Normalize(expandedPayload)
 	if err != nil {
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}

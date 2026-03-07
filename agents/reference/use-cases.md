@@ -239,6 +239,42 @@ Failure expectation:
 1. Dependency selector referencing a non-selected component fails with actionable dependency error.
 2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
 
+### Example 12: Save and Apply With Externalized Attributes
+Goal: keep large text fields in sibling files while preserving apply/diff correctness.
+
+Inputs:
+1. Path `/projects/platform`.
+2. Metadata `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
+3. Remote payload field `script: "echo hello"`.
+
+Execution:
+1. `orchestrator.Orchestrator.Save` persists `/projects/platform/resource.yaml` with `script: "{{include script.sh}}"`.
+2. `repository.ResourceArtifactStore` writes sibling file `script.sh` beside `resource.yaml`.
+3. `orchestrator.Orchestrator.Apply` or `Diff` reloads the local payload and expands `{{include script.sh}}` from the sidecar file before identity resolution, compare transforms, and remote mutation.
+
+Expected outputs:
+1. Repository payload stays compact and deterministic.
+2. Effective apply/diff payload contains `script: "echo hello"`.
+3. Remote compare or mutation does not receive the placeholder string.
+
+### Example 13: Externalized Attribute Missing File
+Goal: fail fast when a placeholder-backed attribute cannot be expanded.
+
+Inputs:
+1. Path `/projects/platform`.
+2. Metadata `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
+3. Local payload `script: "{{include script.sh}}"` with no sibling `script.sh`.
+
+Execution:
+1. Repository-backed `resource apply`, `resource update`, or `resource diff` reads the local payload.
+2. Externalized-attribute expansion attempts to load `script.sh`.
+
+Expected outputs:
+1. Workflow stops before remote HTTP execution or diff generation.
+
+Failure expectation:
+1. Missing sidecar file returns `ValidationError` with the configured attribute path and file name.
+
 ### Example 12: Simple API OAuth2 Guardrail (Corner)
 Goal: ensure `simple-api-server` denies resource operations without a valid bearer token.
 

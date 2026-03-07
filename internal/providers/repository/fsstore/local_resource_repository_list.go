@@ -18,10 +18,6 @@ func (r *LocalResourceRepository) resourceFileName() string {
 	return "resource" + r.extension
 }
 
-func (r *LocalResourceRepository) metadataFileName() string {
-	return "metadata" + r.extension
-}
-
 func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {

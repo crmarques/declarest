@@ -244,14 +244,15 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	openAPIDefaults, _, _ := inferMetadataFromOpenAPISpec(target, openAPISpec)
 	defaults = MergeResourceMetadata(defaults, openAPIDefaults)
 	compact := ResourceMetadata{
-		IDFromAttribute:       inferred.IDFromAttribute,
-		AliasFromAttribute:    inferred.AliasFromAttribute,
-		CollectionPath:        inferred.CollectionPath,
-		SecretsFromAttributes: cloneStringSlice(inferred.SecretsFromAttributes),
-		Operations:            cloneOperationMap(inferred.Operations),
-		Filter:                cloneStringSlice(inferred.Filter),
-		Suppress:              cloneStringSlice(inferred.Suppress),
-		JQ:                    inferred.JQ,
+		IDFromAttribute:        inferred.IDFromAttribute,
+		AliasFromAttribute:     inferred.AliasFromAttribute,
+		CollectionPath:         inferred.CollectionPath,
+		SecretsFromAttributes:  cloneStringSlice(inferred.SecretsFromAttributes),
+		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
+		Operations:             cloneOperationMap(inferred.Operations),
+		Filter:                 cloneStringSlice(inferred.Filter),
+		Suppress:               cloneStringSlice(inferred.Suppress),
+		JQ:                     inferred.JQ,
 	}
 
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)

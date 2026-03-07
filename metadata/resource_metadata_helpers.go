@@ -4,15 +4,16 @@ import "sort"
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
-		IDFromAttribute:       value.IDFromAttribute,
-		AliasFromAttribute:    value.AliasFromAttribute,
-		CollectionPath:        value.CollectionPath,
-		SecretsFromAttributes: cloneStringSlice(value.SecretsFromAttributes),
-		Operations:            make(map[string]OperationSpec, len(value.Operations)),
-		Filter:                cloneStringSlice(value.Filter),
-		Suppress:              cloneStringSlice(value.Suppress),
-		JQ:                    value.JQ,
-		PayloadTransformOrder: cloneStringSlice(value.PayloadTransformOrder),
+		IDFromAttribute:        value.IDFromAttribute,
+		AliasFromAttribute:     value.AliasFromAttribute,
+		CollectionPath:         value.CollectionPath,
+		SecretsFromAttributes:  cloneStringSlice(value.SecretsFromAttributes),
+		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
+		Operations:             make(map[string]OperationSpec, len(value.Operations)),
+		Filter:                 cloneStringSlice(value.Filter),
+		Suppress:               cloneStringSlice(value.Suppress),
+		JQ:                     value.JQ,
+		PayloadTransformOrder:  cloneStringSlice(value.PayloadTransformOrder),
 	}
 
 	for key, operationSpec := range value.Operations {
@@ -37,15 +38,16 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 
 func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) ResourceMetadata {
 	merged := ResourceMetadata{
-		IDFromAttribute:       base.IDFromAttribute,
-		AliasFromAttribute:    base.AliasFromAttribute,
-		CollectionPath:        base.CollectionPath,
-		SecretsFromAttributes: cloneStringSlice(base.SecretsFromAttributes),
-		Operations:            cloneOperationMap(base.Operations),
-		Filter:                cloneStringSlice(base.Filter),
-		Suppress:              cloneStringSlice(base.Suppress),
-		JQ:                    base.JQ,
-		PayloadTransformOrder: cloneStringSlice(base.PayloadTransformOrder),
+		IDFromAttribute:        base.IDFromAttribute,
+		AliasFromAttribute:     base.AliasFromAttribute,
+		CollectionPath:         base.CollectionPath,
+		SecretsFromAttributes:  cloneStringSlice(base.SecretsFromAttributes),
+		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
+		Operations:             cloneOperationMap(base.Operations),
+		Filter:                 cloneStringSlice(base.Filter),
+		Suppress:               cloneStringSlice(base.Suppress),
+		JQ:                     base.JQ,
+		PayloadTransformOrder:  cloneStringSlice(base.PayloadTransformOrder),
 	}
 
 	if overlay.IDFromAttribute != "" {
@@ -59,6 +61,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 	if overlay.SecretsFromAttributes != nil {
 		merged.SecretsFromAttributes = cloneStringSlice(overlay.SecretsFromAttributes)
+	}
+	if overlay.ExternalizedAttributes != nil {
+		merged.ExternalizedAttributes = cloneExternalizedAttributes(overlay.ExternalizedAttributes)
 	}
 	if overlay.Operations != nil {
 		if merged.Operations == nil {
@@ -81,6 +86,35 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	merged.PayloadTransformOrder = mergePayloadTransformOrder(merged.PayloadTransformOrder, overlay.PayloadTransformOrder)
 
 	return merged
+}
+
+func cloneExternalizedAttributes(values []ExternalizedAttribute) []ExternalizedAttribute {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make([]ExternalizedAttribute, len(values))
+	for idx := range values {
+		cloned[idx] = ExternalizedAttribute{
+			Path:           cloneStringSlice(values[idx].Path),
+			File:           values[idx].File,
+			Template:       values[idx].Template,
+			Mode:           values[idx].Mode,
+			SaveBehavior:   values[idx].SaveBehavior,
+			RenderBehavior: values[idx].RenderBehavior,
+			Enabled:        cloneBoolPointer(values[idx].Enabled),
+		}
+	}
+	return cloned
+}
+
+func cloneBoolPointer(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+	return &cloned
 }
 
 func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec {

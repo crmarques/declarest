@@ -16,7 +16,6 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
-	md metadata.ResourceMetadata,
 ) (resource.Value, bool, error) {
 	visited := map[string]struct{}{
 		resourceInfo.LogicalPath: {},

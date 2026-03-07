@@ -127,7 +127,7 @@ Allowed shapes:
 Invariants:
 1. serialization MUST be deterministic.
 2. numeric handling MUST avoid implicit precision loss.
-3. exact placeholder directives (for example `{{secret .}}` and `{{resource_format .}}`) MUST remain string values until workflow-specific resolution.
+3. exact placeholder directives (for example `{{secret .}}`, `{{resource_format .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
 
 ### Type: `metadata.ResourceMetadata`
 Holds behavior directives for a resource or collection.
@@ -135,10 +135,11 @@ Holds behavior directives for a resource or collection.
 Contract groups:
 1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`) and optional `collectionPath` override.
 2. `resourceInfo` secret mapping (`secretInAttributes`).
-3. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
-4. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
-5. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
-6. metadata template helper functions include `{{resource_format .}}` for repository-format-aware values (`json` or `yaml`) in template-rendered metadata string fields.
+3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
+4. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
+5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+6. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
+7. metadata template helper functions include `{{resource_format .}}` for repository-format-aware values (`json` or `yaml`) in template-rendered metadata string fields.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
@@ -411,6 +412,16 @@ Responsibilities:
 
 Method families:
 1. `Save/Get/Delete(policy)/List(policy)/Exists`.
+
+### Interface: `repository.ResourceArtifactStore`
+Responsibilities:
+1. Persist sidecar files for one logical resource alongside the canonical payload file.
+2. Read sidecar files used by metadata-driven payload expansion.
+3. Enforce resource-relative path safety for sidecar files.
+
+Method families:
+1. `SaveResourceWithArtifacts`.
+2. `ReadResourceArtifact`.
 
 ### Interface: `repository.RepositoryCommitter`
 Responsibilities:

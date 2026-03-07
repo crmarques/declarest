@@ -121,6 +121,11 @@ func (r *DefaultOrchestrator) hydrateLocalFallbackCandidate(
 		return resource.Resource{}, getErr
 	}
 
+	candidateValue, expandErr := r.expandExternalizedPayload(ctx, candidate.LogicalPath, md, candidateValue)
+	if expandErr != nil {
+		return resource.Resource{}, expandErr
+	}
+
 	candidatePayload, normalizeErr := resource.Normalize(candidateValue)
 	if normalizeErr != nil {
 		return resource.Resource{}, normalizeErr

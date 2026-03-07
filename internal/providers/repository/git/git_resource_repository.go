@@ -29,6 +29,7 @@ import (
 
 var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
+var _ repository.ResourceArtifactStore = (*GitResourceRepository)(nil)
 
 var proxyEnvMu sync.Mutex
 var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
@@ -70,11 +71,30 @@ func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, va
 	return r.local.Save(ctx, logicalPath, value)
 }
 
+func (r *GitResourceRepository) SaveResourceWithArtifacts(
+	ctx context.Context,
+	logicalPath string,
+	value resource.Value,
+	artifacts []repository.ResourceArtifact,
+) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
+	return r.local.SaveResourceWithArtifacts(ctx, logicalPath, value, artifacts)
+}
+
 func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
 	if err := r.ensureInitializedForOperation(ctx); err != nil {
 		return nil, err
 	}
 	return r.local.Get(ctx, logicalPath)
+}
+
+func (r *GitResourceRepository) ReadResourceArtifact(ctx context.Context, logicalPath string, file string) ([]byte, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return nil, err
+	}
+	return r.local.ReadResourceArtifact(ctx, logicalPath, file)
 }
 
 func (r *GitResourceRepository) Delete(ctx context.Context, logicalPath string, policy repository.DeletePolicy) error {

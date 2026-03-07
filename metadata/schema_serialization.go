@@ -14,10 +14,21 @@ type resourceMetadataWire struct {
 }
 
 type resourceInfoWire struct {
-	IDFromAttribute    string    `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute string    `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
-	CollectionPath     string    `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
-	SecretInAttributes *[]string `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
+	IDFromAttribute        string                       `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
+	AliasFromAttribute     string                       `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	CollectionPath         string                       `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	SecretInAttributes     *[]string                    `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
+	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
+}
+
+type externalizedAttributeWire struct {
+	Path           *[]string `json:"path,omitempty" yaml:"path,omitempty"`
+	File           string    `json:"file,omitempty" yaml:"file,omitempty"`
+	Template       string    `json:"template,omitempty" yaml:"template,omitempty"`
+	Mode           string    `json:"mode,omitempty" yaml:"mode,omitempty"`
+	SaveBehavior   string    `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
+	RenderBehavior string    `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
+	Enabled        *bool     `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 type operationInfoWire struct {
@@ -177,6 +188,9 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	if metadata.SecretsFromAttributes != nil {
 		resourceInfo.SecretInAttributes = stringSlicePointer(metadata.SecretsFromAttributes)
 	}
+	if metadata.ExternalizedAttributes != nil {
+		resourceInfo.ExternalizedAttributes = externalizedAttributeWirePointer(metadata.ExternalizedAttributes)
+	}
 
 	if hasResourceInfo(resourceInfo) {
 		wire.ResourceInfo = &resourceInfo
@@ -233,6 +247,9 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		if resourceInfo.SecretInAttributes != nil {
 			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretInAttributes)
 		}
+		if resourceInfo.ExternalizedAttributes != nil {
+			metadata.ExternalizedAttributes = externalizedAttributesFromWire(*resourceInfo.ExternalizedAttributes)
+		}
 	}
 
 	if wire.OperationInfo != nil {
@@ -273,7 +290,8 @@ func hasResourceInfo(resourceInfo resourceInfoWire) bool {
 	return strings.TrimSpace(resourceInfo.IDFromAttribute) != "" ||
 		strings.TrimSpace(resourceInfo.AliasFromAttribute) != "" ||
 		strings.TrimSpace(resourceInfo.CollectionPath) != "" ||
-		resourceInfo.SecretInAttributes != nil
+		resourceInfo.SecretInAttributes != nil ||
+		resourceInfo.ExternalizedAttributes != nil
 }
 
 func hasOperationInfo(info operationInfoWire) bool {
@@ -649,4 +667,42 @@ func stringMapPointer(values map[string]string) *map[string]string {
 		cloned[key] = value
 	}
 	return &cloned
+}
+
+func externalizedAttributeWirePointer(values []ExternalizedAttribute) *[]externalizedAttributeWire {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make([]externalizedAttributeWire, len(values))
+	for idx := range values {
+		cloned[idx] = externalizedAttributeWire{
+			Path:           stringSlicePointer(values[idx].Path),
+			File:           values[idx].File,
+			Template:       values[idx].Template,
+			Mode:           values[idx].Mode,
+			SaveBehavior:   values[idx].SaveBehavior,
+			RenderBehavior: values[idx].RenderBehavior,
+			Enabled:        cloneBoolPointer(values[idx].Enabled),
+		}
+	}
+	return &cloned
+}
+
+func externalizedAttributesFromWire(values []externalizedAttributeWire) []ExternalizedAttribute {
+	cloned := make([]ExternalizedAttribute, len(values))
+	for idx := range values {
+		cloned[idx] = ExternalizedAttribute{
+			File:           values[idx].File,
+			Template:       values[idx].Template,
+			Mode:           values[idx].Mode,
+			SaveBehavior:   values[idx].SaveBehavior,
+			RenderBehavior: values[idx].RenderBehavior,
+			Enabled:        cloneBoolPointer(values[idx].Enabled),
+		}
+		if values[idx].Path != nil {
+			cloned[idx].Path = cloneStringSlice(*values[idx].Path)
+		}
+	}
+	return cloned
 }

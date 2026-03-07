@@ -15,6 +15,18 @@ type ResourceStore interface {
 	Exists(ctx context.Context, logicalPath string) (bool, error)
 }
 
+type ResourceArtifact struct {
+	File    string
+	Content []byte
+}
+
+// ResourceArtifactStore is an optional repository capability used by workflows
+// that persist or read sidecar files associated with one logical resource.
+type ResourceArtifactStore interface {
+	SaveResourceWithArtifacts(ctx context.Context, logicalPath string, value resource.Value, artifacts []ResourceArtifact) error
+	ReadResourceArtifact(ctx context.Context, logicalPath string, file string) ([]byte, error)
+}
+
 // RepositoryCommitter is an optional repository capability used by commands
 // that want to create a local VCS commit after mutating repository files.
 type RepositoryCommitter interface {
