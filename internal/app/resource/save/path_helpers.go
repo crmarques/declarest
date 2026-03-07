@@ -37,10 +37,12 @@ func resolveSaveRemoteValue(
 	metadataService metadatadomain.MetadataService,
 	logicalPath string,
 	explicitCollectionTarget bool,
+	skipItems []string,
 ) (resource.Value, error) {
 	if explicitCollectionTarget {
 		items, err := remoteReader.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{})
 		if err == nil {
+			items = resource.FilterCollectionItems(logicalPath, items, skipItems)
 			return saveListPayloadFromResources(items), nil
 		}
 		if !isCollectionListShapeError(err) {
@@ -63,6 +65,7 @@ func resolveSaveRemoteValue(
 	if !explicitCollectionTarget && !pathfallback.ShouldUseMetadataCollectionFallback(ctx, metadataService, logicalPath, items) {
 		return nil, err
 	}
+	items = resource.FilterCollectionItems(logicalPath, items, skipItems)
 
 	return saveListPayloadFromResources(items), nil
 }

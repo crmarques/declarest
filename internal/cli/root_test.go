@@ -518,10 +518,10 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("source_remote_server_uses_remote", func(t *testing.T) {
+	t.Run("source_managed_server_uses_remote", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--source", "remote-server")
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--source", "managed-server")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -573,6 +573,95 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		if !strings.Contains(output, "\"name\": \"alpha\"") || !strings.Contains(output, "\"name\": \"beta\"") {
 			t.Fatalf("expected collection payload output, got %q", output)
+		}
+	})
+
+	t.Run("skip_items_filters_managed_server_collection", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/admin/realms/master",
+				LocalAlias:  "master",
+				RemoteID:    "master-id",
+				Payload:     map[string]any{"realm": "master"},
+			},
+			{
+				LogicalPath: "/admin/realms/realm1",
+				LocalAlias:  "realm1",
+				RemoteID:    "realm1-id",
+				Payload:     map[string]any{"realm": "realm1"},
+			},
+			{
+				LogicalPath: "/admin/realms/realm2",
+				LocalAlias:  "realm2",
+				RemoteID:    "realm2-id",
+				Payload:     map[string]any{"realm": "realm2"},
+			},
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/admin/realms/",
+			"--skip-items",
+			"master,realm1",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(output, `"realm": "master"`) || strings.Contains(output, `"realm": "realm1"`) {
+			t.Fatalf("expected skipped realms to be absent, got %q", output)
+		}
+		if !strings.Contains(output, `"realm": "realm2"`) {
+			t.Fatalf("expected non-skipped realm to remain, got %q", output)
+		}
+	})
+
+	t.Run("skip_items_filters_repository_collection", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.localList = []resource.Resource{
+			{
+				LogicalPath: "/customers/acme",
+				LocalAlias:  "acme",
+				RemoteID:    "42",
+				Payload:     map[string]any{"id": "42", "name": "acme"},
+			},
+			{
+				LogicalPath: "/customers/beta",
+				LocalAlias:  "beta",
+				RemoteID:    "84",
+				Payload:     map[string]any{"id": "84", "name": "beta"},
+			},
+		}
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"get",
+			"/customers",
+			"--source",
+			"repository",
+			"--skip-items",
+			"acme",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(output, `"name": "acme"`) {
+			t.Fatalf("expected skipped repository item to be absent, got %q", output)
+		}
+		if !strings.Contains(output, `"name": "beta"`) {
+			t.Fatalf("expected non-skipped repository item to remain, got %q", output)
 		}
 	})
 
@@ -743,7 +832,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("remote_server_masks_metadata_declared_secret_by_default", func(t *testing.T) {
+	t.Run("managed_server_masks_metadata_declared_secret_by_default", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -757,7 +846,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			SecretsFromAttributes: []string{"/password"},
 		}
 
-		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "remote-server")
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-server")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -890,7 +979,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "remote-server",
+			"--source", "managed-server",
 			"--show-secrets",
 		)
 		if err != nil {
@@ -929,7 +1018,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "remote-server",
+			"--source", "managed-server",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -1013,7 +1102,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "remote-server",
+			"--source", "managed-server",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -1840,6 +1929,56 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
+	t.Run("skip_items_filters_remote_collection_before_save", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
+			AliasFromAttribute: "/realm",
+		}
+		orchestrator := &testOrchestrator{
+			metadataService: metadataService,
+			remoteList: []resource.Resource{
+				{
+					LogicalPath: "/admin/realms/master",
+					LocalAlias:  "master",
+					RemoteID:    "master",
+					Payload:     map[string]any{"realm": "master"},
+				},
+				{
+					LogicalPath: "/admin/realms/realm1",
+					LocalAlias:  "realm1",
+					RemoteID:    "realm1",
+					Payload:     map[string]any{"realm": "realm1"},
+				},
+				{
+					LogicalPath: "/admin/realms/realm2",
+					LocalAlias:  "realm2",
+					RemoteID:    "realm2",
+					Payload:     map[string]any{"realm": "realm2"},
+				},
+			},
+		}
+
+		deps := newResourceSaveDeps(orchestrator, metadataService)
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/admin/realms/",
+			"--skip-items",
+			"master,realm1",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call after filtering, got %d", len(orchestrator.saveCalls))
+		}
+		if orchestrator.saveCalls[0].logicalPath != "/admin/realms/realm2" {
+			t.Fatalf("expected only realm2 to be saved, got %#v", orchestrator.saveCalls)
+		}
+	})
+
 	t.Run("stdin_saves_explicit_payload", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
@@ -1932,6 +2071,27 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"--as-one-resource",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("skip_items_conflicts_with_as_one_resource", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+
+		deps := newResourceSaveDeps(orchestrator, metadataService)
+		_, err := executeForTest(
+			deps,
+			`[{"id":"acme"}]`,
+			"resource",
+			"save",
+			"/customers",
+			"--as-one-resource",
+			"--skip-items",
+			"acme",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--skip-items") {
+			t.Fatalf("expected skip-items validation error, got %v", err)
+		}
 	})
 
 	t.Run("plaintext_secret_is_blocked_without_ignore", func(t *testing.T) {
@@ -3103,7 +3263,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"resource", "delete",
 			"/customers/acme",
 			"--confirm-delete",
-			"--source", "remote-server",
+			"--source", "managed-server",
 		)
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
@@ -4695,7 +4855,7 @@ func TestResourceListTextOutputAlignsAliasColumn(t *testing.T) {
 func TestResourceListSourceFlags(t *testing.T) {
 	t.Parallel()
 
-	t.Run("default_lists_from_remote_server", func(t *testing.T) {
+	t.Run("default_lists_from_managed_server", func(t *testing.T) {
 		t.Parallel()
 
 		orchestrator := &testOrchestrator{
@@ -4708,7 +4868,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 			t.Fatalf("unexpected list error: %v", err)
 		}
 		if !strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected remote-server text output by default, got %q", output)
+			t.Fatalf("expected managed-server text output by default, got %q", output)
 		}
 		if strings.Contains(output, "repo-only (repo-only)") {
 			t.Fatalf("expected repository output to be absent by default, got %q", output)
@@ -4732,7 +4892,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 		}
 	})
 
-	t.Run("source_remote_server_lists_from_remote_server", func(t *testing.T) {
+	t.Run("source_managed_server_lists_from_managed_server", func(t *testing.T) {
 		t.Parallel()
 
 		orchestrator := &testOrchestrator{
@@ -4740,15 +4900,15 @@ func TestResourceListSourceFlags(t *testing.T) {
 			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
 			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
-		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "remote-server")
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "managed-server")
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
 		if !strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected remote-server output with --source remote-server, got %q", output)
+			t.Fatalf("expected managed-server output with --source managed-server, got %q", output)
 		}
 		if strings.Contains(output, "repo-only (repo-only)") {
-			t.Fatalf("expected repository output to be absent with --source remote-server, got %q", output)
+			t.Fatalf("expected repository output to be absent with --source managed-server, got %q", output)
 		}
 	})
 
@@ -4787,6 +4947,38 @@ func TestResourceListSourceFlags(t *testing.T) {
 
 		_, err := executeForTest(testDeps(), "", "resource", "list", "/", "--source", "both")
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("skip_items_filters_list_output", func(t *testing.T) {
+		t.Parallel()
+
+		orchestrator := &testOrchestrator{
+			metadataService: newTestMetadata(),
+			remoteList: []resource.Resource{
+				{LogicalPath: "/admin/realms/master", LocalAlias: "master", RemoteID: "master", Payload: map[string]any{"id": "master"}},
+				{LogicalPath: "/admin/realms/realm1", LocalAlias: "realm1", RemoteID: "realm1", Payload: map[string]any{"id": "realm1"}},
+				{LogicalPath: "/admin/realms/realm2", LocalAlias: "realm2", RemoteID: "realm2", Payload: map[string]any{"id": "realm2"}},
+			},
+		}
+
+		output, err := executeForTest(
+			testDepsWith(orchestrator, orchestrator.metadataService),
+			"",
+			"resource",
+			"list",
+			"/admin/realms",
+			"--skip-items",
+			"master,realm1",
+		)
+		if err != nil {
+			t.Fatalf("unexpected list error: %v", err)
+		}
+		if strings.Contains(output, "master (master)") || strings.Contains(output, "realm1 (realm1)") {
+			t.Fatalf("expected skipped items to be absent, got %q", output)
+		}
+		if !strings.Contains(output, "realm2 (realm2)") {
+			t.Fatalf("expected non-skipped item to remain, got %q", output)
+		}
 	})
 }
 

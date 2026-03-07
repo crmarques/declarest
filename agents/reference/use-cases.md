@@ -181,7 +181,7 @@ Goal: read either remote observed state or local desired state deterministically
 
 Inputs:
 1. Path `/customers/acme`.
-2. CLI source flag `--source` with values `repository` or `remote-server`.
+2. CLI source flag `--source` with values `repository` or `managed-server`.
 
 Execution:
 1. `declarest resource get /customers/acme` runs without source flags.

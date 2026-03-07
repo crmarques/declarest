@@ -27,6 +27,7 @@ type ExecuteOptions struct {
 
 	HandleSecretsEnabled      bool
 	RequestedSecretCandidates []string
+	SkipItems                 []string
 }
 
 func Execute(
@@ -43,6 +44,9 @@ func Execute(
 	}
 	if options.AsItems && options.AsOneResource {
 		return faults.NewValidationError("flags --as-items and --as-one-resource cannot be used together", nil)
+	}
+	if options.AsOneResource && len(options.SkipItems) > 0 {
+		return faults.NewValidationError("flag --skip-items is not supported with --as-one-resource", nil)
 	}
 
 	orchestratorService, err := requireOrchestrator(deps)
@@ -88,6 +92,7 @@ func Execute(
 				options.HandleSecretsEnabled,
 				options.RequestedSecretCandidates,
 				options.Force,
+				options.SkipItems,
 			); err != nil {
 				return err
 			}
@@ -110,6 +115,7 @@ func Execute(
 			deps.Metadata,
 			normalizedPath,
 			explicitCollectionTarget,
+			options.SkipItems,
 		)
 		if err != nil {
 			return err
@@ -130,8 +136,10 @@ func Execute(
 		options.HandleSecretsEnabled,
 		options.RequestedSecretCandidates,
 		options.Force,
+		options.SkipItems,
 	)
 }
+
 func saveResolvedPathPayload(
 	ctx context.Context,
 	deps Dependencies,
@@ -145,6 +153,7 @@ func saveResolvedPathPayload(
 	handleSecretsEnabled bool,
 	requestedSecretCandidates []string,
 	force bool,
+	skipItems []string,
 ) error {
 	items, isListPayload, err := extractSaveListItems(value)
 	if err != nil {
@@ -193,6 +202,10 @@ func saveResolvedPathPayload(
 	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)
 	if err != nil {
 		return err
+	}
+	entries = filterSaveEntriesForSkipItems(resolvedPath, entries, skipItems)
+	if len(entries) == 0 {
+		return nil
 	}
 	if err := ensureSaveEntriesWritable(ctx, repositoryService, entries, force); err != nil {
 		return err

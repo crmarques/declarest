@@ -16,6 +16,7 @@ import (
 func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
+	var skipItemsFlag string
 	var showSecrets bool
 	var showMetadata bool
 	var httpMethod string
@@ -26,6 +27,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 		Example: strings.Join([]string{
 			"  declarest resource get /customers/acme",
 			"  declarest resource get --source repository /customers/acme",
+			"  declarest resource get /admin/realms --skip-items master,realm1",
 			"  declarest resource get /customers/acme --show-metadata",
 			"  declarest resource get /customers/acme --show-secrets",
 		}, "\n"),
@@ -45,14 +47,18 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			if err != nil {
 				return err
 			}
+			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
+			if err != nil {
+				return err
+			}
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires managed-server source", nil)
 			}
 
 			runCtx := command.Context()
-			if source == sourceRemoteServer {
+			if source == sourceManagedServer {
 				runCtx, _, err = applyHTTPMethodOverride(runCtx, httpMethod, metadata.OperationGet)
 				if err != nil {
 					return err
@@ -69,6 +75,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			}, readapp.Request{
 				LogicalPath:              resolvedPath,
 				Source:                   source,
+				SkipItems:                skipItems,
 				ExplicitCollectionTarget: readapp.HasCollectionTargetMarker(requestedPath),
 				ShowSecrets:              showSecrets,
 				ShowMetadata:             showMetadata,
@@ -108,6 +115,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
+	bindSkipItemsFlag(command, &skipItemsFlag)
 	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "show plaintext values for metadata-declared secret attributes")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")
 	bindHTTPMethodFlag(command, &httpMethod)

@@ -30,7 +30,7 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 13. Metadata `resourceInfo.secretInAttributes` entries MUST be treated as explicit secret candidates in detection and handling flows and MUST be automatically stored and masked during default `resource save` persistence workflows.
 14. `resource save --ignore` MUST bypass plaintext-secret save enforcement for all remaining candidates.
 15. For collection/group saves with `resource save --handle-secrets=<attribute-list>`, each requested attribute MUST be applied only to resources where it is present; resources without the attribute MUST be skipped for that attribute without failing the command.
-16. `resource get` MUST redact values for metadata `resourceInfo.secretInAttributes` as `{{secret .}}` placeholders by default for repository and remote-server output modes.
+16. `resource get` MUST redact values for metadata `resourceInfo.secretInAttributes` as `{{secret .}}` placeholders by default for repository and managed-server output modes.
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
 18. `secret detect` without payload input (`--payload <path|->` or stdin) MUST scan local repository resources recursively under requested path, defaulting to `/` when no path is provided.
 19. `secret detect --fix` MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for detected resource paths in scope.

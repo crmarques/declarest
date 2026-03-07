@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	SourceRepository   = "repository"
-	SourceRemoteServer = "remote-server"
+	SourceRepository    = "repository"
+	SourceManagedServer = "managed-server"
 )
 
 type Dependencies struct {
@@ -34,6 +34,7 @@ type Dependencies struct {
 type Request struct {
 	LogicalPath              string
 	Source                   string
+	SkipItems                []string
 	ExplicitCollectionTarget bool
 	ShowSecrets              bool
 	ShowMetadata             bool
@@ -58,9 +59,9 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	debugctx.Printf(ctx, "resource read requested path=%q source=%q", req.LogicalPath, req.Source)
 
-	if req.Source == SourceRemoteServer && req.ExplicitCollectionTarget {
+	if req.Source == SourceManagedServer && req.ExplicitCollectionTarget {
 		debugctx.Printf(ctx, "resource read treating %q as remote collection listing", req.LogicalPath)
-		result, err := renderRemoteCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets)
+		result, err := renderRemoteCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems)
 		if err == nil {
 			return result, nil
 		}
@@ -79,21 +80,28 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	switch req.Source {
 	case SourceRepository:
 		value, err = orchestratorService.GetLocal(ctx, req.LogicalPath)
-	case SourceRemoteServer:
+	case SourceManagedServer:
 		value, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
-		return Result{}, faults.NewValidationError("invalid source: use --source repository|remote-server", nil)
+		return Result{}, faults.NewValidationError("invalid source: use --source repository|managed-server", nil)
 	}
 	if err != nil {
 		debugctx.Printf(ctx, "resource read failed path=%q source=%q error=%v", req.LogicalPath, req.Source, err)
 
 		if req.Source == SourceRepository && (isNotFoundError(err) || isRootResourceError(err)) {
 			debugctx.Printf(ctx, "resource read treating %q as repository collection listing", req.LogicalPath)
-			return renderRepositoryCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets)
+			return renderRepositoryCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems)
 		}
-		if req.Source == SourceRemoteServer && !req.ExplicitCollectionTarget && isNotFoundError(err) {
+		if req.Source == SourceManagedServer && !req.ExplicitCollectionTarget && isNotFoundError(err) {
 			debugctx.Printf(ctx, "resource read attempting empty-collection fallback for %q after remote not found", req.LogicalPath)
-			handled, fallbackResult, fallbackErr := renderRemoteCollectionFallback(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets)
+			handled, fallbackResult, fallbackErr := renderRemoteCollectionFallback(
+				ctx,
+				deps,
+				orchestratorService,
+				req.LogicalPath,
+				req.ShowSecrets,
+				req.SkipItems,
+			)
 			if fallbackErr == nil && handled {
 				return fallbackResult, nil
 			}
@@ -138,12 +146,13 @@ func renderRepositoryCollection(
 	orchestratorService orchestrator.LocalReader,
 	logicalPath string,
 	showSecrets bool,
+	skipItems []string,
 ) (Result, error) {
 	items, err := orchestratorService.ListLocal(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
 		return Result{}, err
 	}
-	return renderCollection(ctx, deps, items, showSecrets)
+	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
 }
 
 func renderRemoteCollection(
@@ -152,12 +161,13 @@ func renderRemoteCollection(
 	orchestratorService orchestrator.RemoteReader,
 	logicalPath string,
 	showSecrets bool,
+	skipItems []string,
 ) (Result, error) {
 	items, err := orchestratorService.ListRemote(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
 		return Result{}, err
 	}
-	return renderCollection(ctx, deps, items, showSecrets)
+	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
 }
 
 func renderRemoteCollectionFallback(
@@ -166,6 +176,7 @@ func renderRemoteCollectionFallback(
 	orchestratorService orchestrator.RemoteReader,
 	logicalPath string,
 	showSecrets bool,
+	skipItems []string,
 ) (bool, Result, error) {
 	items, err := orchestratorService.ListRemote(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
@@ -175,14 +186,22 @@ func renderRemoteCollectionFallback(
 		return false, Result{}, nil
 	}
 
-	result, err := renderCollection(ctx, deps, items, showSecrets)
+	result, err := renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
 	if err != nil {
 		return true, Result{}, err
 	}
 	return true, result, nil
 }
 
-func renderCollection(ctx context.Context, deps Dependencies, items []resource.Resource, showSecrets bool) (Result, error) {
+func renderCollection(
+	ctx context.Context,
+	deps Dependencies,
+	collectionPath string,
+	items []resource.Resource,
+	showSecrets bool,
+	skipItems []string,
+) (Result, error) {
+	items = resource.FilterCollectionItems(collectionPath, items, skipItems)
 	if !showSecrets {
 		maskedItems := make([]resource.Resource, 0, len(items))
 		for _, item := range items {

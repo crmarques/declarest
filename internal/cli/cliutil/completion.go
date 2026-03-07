@@ -95,7 +95,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case "remote-server":
+			case "managed-server":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -103,7 +103,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
 			}
-			if commandFlagEnabled(command, "remote-server") {
+			if commandFlagEnabled(command, "managed-server") {
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -112,7 +112,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case "remote-server":
+			case "managed-server":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -120,7 +120,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
 			}
-			if commandFlagEnabled(command, "remote-server") {
+			if commandFlagEnabled(command, "managed-server") {
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -134,7 +134,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case commandFlagString(command, "source") == "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case commandFlagString(command, "source") == "remote-server":
+			case commandFlagString(command, "source") == "managed-server":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			case commandFlagEnabled(command, "both"):

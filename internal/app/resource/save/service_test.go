@@ -102,6 +102,7 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 			&fakeSaveMetadataService{},
 			"/admin/realms/master/user-registry/AD PRD/mappers",
 			true,
+			nil,
 		)
 		if err != nil {
 			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
@@ -146,6 +147,7 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 			metadataService,
 			"/admin/realms/master/user-registry/AD PRD/mappers",
 			false,
+			nil,
 		)
 		if err != nil {
 			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
@@ -182,8 +184,54 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 			&fakeSaveMetadataService{},
 			"/admin/realms/master/user-registry",
 			false,
+			nil,
 		)
 		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
+	t.Run("skip_items_filters_remote_collection_payload", func(t *testing.T) {
+		t.Parallel()
+
+		remoteReader := &fakeSaveRemoteReader{
+			listValue: []resourcedomain.Resource{
+				{
+					LogicalPath: "/admin/realms/master",
+					LocalAlias:  "master",
+					RemoteID:    "master-id",
+					Payload:     map[string]any{"realm": "master"},
+				},
+				{
+					LogicalPath: "/admin/realms/tenant-a",
+					LocalAlias:  "tenant-a",
+					RemoteID:    "tenant-a-id",
+					Payload:     map[string]any{"realm": "tenant-a"},
+				},
+			},
+		}
+
+		value, err := resolveSaveRemoteValue(
+			context.Background(),
+			remoteReader,
+			&fakeSaveMetadataService{},
+			"/admin/realms",
+			true,
+			[]string{"master"},
+		)
+		if err != nil {
+			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
+		}
+
+		items, ok := value.([]any)
+		if !ok || len(items) != 1 {
+			t.Fatalf("expected one filtered list payload item, got %#v", value)
+		}
+		payload, ok := items[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected payload map, got %T", items[0])
+		}
+		if payload["realm"] != "tenant-a" {
+			t.Fatalf("expected tenant-a payload after skip filter, got %#v", payload)
+		}
 	})
 }
 

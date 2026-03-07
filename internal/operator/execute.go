@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	SourceRepository   = readapp.SourceRepository
-	SourceRemoteServer = readapp.SourceRemoteServer
+	SourceRepository    = readapp.SourceRepository
+	SourceManagedServer = readapp.SourceManagedServer
 )
 
 // Dependencies matches readapp.Dependencies; use a type alias to avoid
@@ -50,7 +50,7 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 
 	source := strings.TrimSpace(req.Source)
 	if source == "" {
-		source = SourceRemoteServer
+		source = SourceManagedServer
 	}
 
 	explicitCollectionTarget := parsedPath.ExplicitCollectionTarget

@@ -46,12 +46,12 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			deleteFromRemote := source == sourceRemoteServer || source == sourceBoth
+			deleteFromRemote := source == sourceManagedServer || source == sourceBoth
 			deleteFromRepository := source == sourceRepository || source == sourceBoth
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && !deleteFromRemote {
-				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires managed-server source", nil)
 			}
 
 			var cfg configdomain.Context

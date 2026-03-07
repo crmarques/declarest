@@ -64,9 +64,9 @@ Path flags:
 3. If both positional path and `--path` are provided and values differ, the command MUST fail with `ValidationError`.
 
 Resource source flags:
-1. `resource get` and `resource list` MUST support `--source <remote-server|repository>`.
-2. `resource delete` MUST support `--source <remote-server|repository|both>`.
-3. `resource get|list|delete` MUST default `--source` to `remote-server`.
+1. `resource get` and `resource list` MUST support `--source <managed-server|repository>`.
+2. `resource delete` MUST support `--source <managed-server|repository|both>`.
+3. `resource get|list|delete` MUST default `--source` to `managed-server`.
 
 Core resource commands:
 1. `get`.
@@ -141,15 +141,16 @@ Interactive config commands:
 11. Mutations from stdin MUST validate payload format before side effects.
 12. Option conflicts MUST produce usage errors.
 13. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
-14. `resource get` MUST support `--source <remote-server|repository>`.
-15. `resource get` MUST default to `--source remote-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
-16. `resource get` MUST redact values for metadata-declared `resourceInfo.secretInAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source remote-server` output by default.
+14. `resource get` MUST support `--source <managed-server|repository>`.
+15. `resource get` MUST default to `--source managed-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
+16. `resource get` MUST redact values for metadata-declared `resourceInfo.secretInAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
 18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operationInfo.*` directives under the metadata section.
-19. `resource list` MUST support `--source <remote-server|repository>`.
-20. `resource list` MUST default to `--source remote-server`.
-21. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
-22. `resource delete` MUST support `--source <remote-server|repository|both>` and default to `--source remote-server`.
+19. `resource get|list` MUST support `--skip-items <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
+20. `resource list` MUST support `--source <managed-server|repository>`.
+21. `resource list` MUST default to `--source managed-server`.
+22. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
+23. `resource delete` MUST support `--source <managed-server|repository|both>` and default to `--source managed-server`.
 23. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
 24. `resource apply` MUST treat collection paths as batch targets resolved from local repository resources and default to non-recursive direct-child execution when payload input is absent.
 25. `resource apply --recursive` MUST include descendant resources under the target path when payload input is absent.
@@ -165,6 +166,8 @@ Interactive config commands:
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
 32. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 33. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
+34. `resource save` MUST support `--skip-items <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
+35. `resource save --skip-items` MUST fail with `ValidationError` when `--as-one-resource` is selected.
 34. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
 35. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
 36. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
@@ -209,7 +212,7 @@ Interactive config commands:
 67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
 68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idFromAttribute`.
 69. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
-70. `resource delete --source remote-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
+70. `resource delete --source managed-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
 71. `resource request delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
 72. `resource save` MUST accept `_` as a wildcard path segment when no payload input is provided and MUST expand each wildcard level through remote direct-child list lookups before saving resolved targets.
 73. `resource save` with wildcard path segments and payload input (`--payload <path|->` or stdin) MUST fail with `ValidationError`.
@@ -234,7 +237,7 @@ Interactive config commands:
 87. `resource edit` MUST reject resources whose resolved payload type is `octet-stream` with `ValidationError`.
 88. `resource request <method>` MUST support optional `--accept` and `--content-type` overrides for direct managed-server requests; when omitted, payload-type-aware defaults MAY be resolved from metadata, request format, or response headers.
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
-88. `resource get` with an explicit trailing slash collection marker and remote source (`--source remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
+88. `resource get` with an explicit trailing slash collection marker and remote source (`--source managed-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
 90. `managed-server get baseUrl` MUST print the active context `managedServer.http.baseUrl` and fail with `ValidationError` when `managedServer.http` is not configured.
 91. `managed-server get tokenUrl` MUST print the active context `managedServer.http.auth.oauth2.tokenUrl` and fail with `ValidationError` when OAuth2 auth is not configured.
@@ -425,19 +428,20 @@ Interactive config commands:
 58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct managed-server DELETE request.
 59. `declarest resource request delete /customers --confirm-delete --recursive` issues delete requests for all repository resources under `/customers`.
 60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idFromAttribute` matches the provided path segment when no literal repository resource exists.
-61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source remote-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
-62. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
-63. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
-64. `declarest resource diff /customers` compares all direct-child repository resources in `/customers` and returns a single deterministic diff list.
-65. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
-66. `declarest resource diff /admin/realms/payments --output text` prints lines like `.displayName [Local="Payments Realm"] => [Remote="Payments Realm 2"]`.
-67. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
-68. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
-69. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
-70. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
-71. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
-72. `declarest resource request delete /customers --confirm-delete --recursive` prints no response bodies by default and only the final status footer.
-73. `declarest resource request delete /customers --confirm-delete --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
+61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
+62. `declarest resource get /admin/realms/ --skip-items master,realm1` returns the remaining realm payloads after excluding those collection items.
+63. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
+64. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
+65. `declarest resource diff /customers` compares all direct-child repository resources in `/customers` and returns a single deterministic diff list.
+66. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
+67. `declarest resource diff /admin/realms/payments --output text` prints lines like `.displayName [Local="Payments Realm"] => [Remote="Payments Realm 2"]`.
+68. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
+69. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
+70. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
+71. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
+72. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
+73. `declarest resource request delete /customers --confirm-delete --recursive` prints no response bodies by default and only the final status footer.
+74. `declarest resource request delete /customers --confirm-delete --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
 74. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
 75. `declarest config add dev` skips context-name prompt and starts interactive prompts at repository settings.
 76. `declarest config add --context dev` skips context-name prompt and starts interactive prompts at repository settings.

@@ -181,3 +181,18 @@ func resolveSaveEntryFromResourceShape(item map[string]any) (saveEntry, bool, er
 func buildLogicalPathForSave(collectionPath string, alias string) (string, error) {
 	return resource.JoinLogicalPath(collectionPath, alias)
 }
+
+func filterSaveEntriesForSkipItems(collectionPath string, entries []saveEntry, skipItems []string) []saveEntry {
+	if len(entries) == 0 || len(skipItems) == 0 {
+		return entries
+	}
+
+	filtered := make([]saveEntry, 0, len(entries))
+	for _, entry := range entries {
+		if resource.ShouldSkipCollectionItem(collectionPath, resource.Resource{LogicalPath: entry.LogicalPath}, skipItems) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}

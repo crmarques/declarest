@@ -16,6 +16,7 @@ const handleSecretsAllSentinel = "__all__"
 func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var input cliutil.InputFlags
+	var skipItemsFlag string
 	var asItems bool
 	var asOneResource bool
 	var ignore bool
@@ -31,6 +32,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		Example: strings.Join([]string{
 			"  declarest resource save /customers/acme",
 			"  declarest resource save /customers/acme --payload payload.json",
+			"  declarest resource save /admin/realms --skip-items master,realm1",
 			"  cat payload.json | declarest resource save /customers/acme --payload -",
 			"  declarest resource save /customers/ --as-items < customers.json",
 			"  declarest resource save /customers/acme --handle-secrets",
@@ -50,6 +52,10 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			}
 
 			handleSecretsEnabled, requestedSecretCandidates, err := parseSaveHandleSecretsFlag(command, handleSecrets)
+			if err != nil {
+				return err
+			}
+			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
 			if err != nil {
 				return err
 			}
@@ -101,6 +107,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 					Force:                     overwrite,
 					HandleSecretsEnabled:      handleSecretsEnabled,
 					RequestedSecretCandidates: requestedSecretCandidates,
+					SkipItems:                 skipItems,
 				},
 			); err != nil {
 				return err
@@ -114,6 +121,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	cliutil.BindResourceInputFlags(command, &input)
+	bindSkipItemsFlag(command, &skipItemsFlag)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
 		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or JSON Pointer assignments (/a=b,/c/d=e); binary requires file or stdin"
 	}

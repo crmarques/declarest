@@ -15,6 +15,7 @@ import (
 func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
+	var skipItemsFlag string
 	var recursive bool
 	var httpMethod string
 
@@ -31,10 +32,14 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
+			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
+			if err != nil {
+				return err
+			}
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires managed-server source", nil)
 			}
 
 			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
@@ -51,7 +56,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			}
 
 			runCtx := command.Context()
-			if source == sourceRemoteServer {
+			if source == sourceManagedServer {
 				runCtx, _, err = applyHTTPMethodOverride(runCtx, httpMethod, metadata.OperationList)
 				if err != nil {
 					return err
@@ -62,7 +67,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			switch source {
 			case sourceRepository:
 				items, err = orchestratorService.ListLocal(runCtx, resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
-			case sourceRemoteServer:
+			case sourceManagedServer:
 				fallthrough
 			default:
 				items, err = orchestratorService.ListRemote(runCtx, resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
@@ -70,6 +75,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
+			items = resource.FilterCollectionItems(resolvedPath, items, skipItems)
 
 			payloads := make([]resource.Value, 0, len(items))
 			for _, item := range items {
@@ -86,6 +92,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
+	bindSkipItemsFlag(command, &skipItemsFlag)
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command
