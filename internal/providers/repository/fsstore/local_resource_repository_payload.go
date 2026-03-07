@@ -123,8 +123,8 @@ func (r *LocalResourceRepository) metadataPayloadType(logicalPath string) (strin
 		path string
 		yaml bool
 	}{
-		{path: filepath.Join(basePath, "metadata.json"), yaml: false},
 		{path: filepath.Join(basePath, "metadata.yaml"), yaml: true},
+		{path: filepath.Join(basePath, "metadata.json"), yaml: false},
 	}
 
 	for _, candidate := range candidates {

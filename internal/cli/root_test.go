@@ -377,7 +377,7 @@ func TestMetadataDebugTraceIncludesLookupPath(t *testing.T) {
 		t.Fatalf("expected metadata get output payload, got %q", output)
 	}
 
-	expectedMetadataPath := filepath.Join(baseDir, "admin", "realms", "_", "metadata.json")
+	expectedMetadataPath := filepath.Join(baseDir, "admin", "realms", "_", "metadata.yaml")
 	if !strings.Contains(debugOutput, `debug: metadata get requested path="/admin/realms/"`) {
 		t.Fatalf("expected metadata get debug trace, got %q", debugOutput)
 	}

@@ -211,13 +211,10 @@ case_repo_template_metadata_logical_path() {
   local metadata_file=$1
   local component_name=${2:-}
   local metadata_root
-  local rel_path
   local logical_path
 
   metadata_root=$(case_component_metadata_root "${component_name}") || return 1
-  rel_path=${metadata_file#${metadata_root}/}
-  logical_path=/${rel_path%/metadata.json}
-  logical_path=${logical_path%/}
+  logical_path=$(e2e_metadata_logical_path_from_file "${metadata_root}" "${metadata_file}") || return 1
 
   if [[ ! "${logical_path}" =~ /_($|/) ]]; then
     printf 'metadata logical path must include collection marker (_): %s\n' "${logical_path}" >&2
@@ -399,7 +396,7 @@ case_repo_template_metadata_files() {
   local metadata_root
 
   metadata_root=$(case_component_metadata_root "${component_name}") || return 1
-  find "${metadata_root}" -type f -path '*/_/metadata.json' | sort
+  e2e_find_collection_metadata_files "${metadata_root}"
 }
 
 case_repo_template_resource_files() {

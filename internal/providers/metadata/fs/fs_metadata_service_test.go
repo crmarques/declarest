@@ -2,7 +2,6 @@ package fsmetadata
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestFSMetadataGetSetUnset(t *testing.T) {
@@ -102,6 +102,40 @@ func TestFSMetadataCollectionPathWithTrailingSlash(t *testing.T) {
 
 	_, err = service.Get(ctx, "/admin/realms/")
 	assertTypedCategory(t, err, faults.NotFoundError)
+}
+
+func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.json"), false, metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "json-id",
+		AliasFromAttribute: "json-alias",
+	})
+
+	gotJSON, err := service.Get(ctx, "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get json metadata returned error: %v", err)
+	}
+	if gotJSON.IDFromAttribute != "json-id" || gotJSON.AliasFromAttribute != "json-alias" {
+		t.Fatalf("expected json metadata fallback, got %+v", gotJSON)
+	}
+
+	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.yaml"), true, metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "yaml-id",
+		AliasFromAttribute: "yaml-alias",
+	})
+
+	gotYAML, err := service.Get(ctx, "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get yaml metadata returned error: %v", err)
+	}
+	if gotYAML.IDFromAttribute != "yaml-id" || gotYAML.AliasFromAttribute != "yaml-alias" {
+		t.Fatalf("expected yaml metadata to take precedence, got %+v", gotYAML)
+	}
 }
 
 func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
@@ -443,7 +477,7 @@ func TestFSMetadataValidation(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
-func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
+func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -460,7 +494,7 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
 		t.Fatalf("Set metadata returned error: %v", err)
 	}
 
-	filePath := filepath.Join(baseDir, "admin", "realms", "_", "clients", "_", "metadata.json")
+	filePath := filepath.Join(baseDir, "admin", "realms", "_", "clients", "_", "metadata.yaml")
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read metadata file %q: %v", filePath, err)
@@ -474,7 +508,7 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
 	}
 
 	decoded := map[string]any{}
-	if err := json.Unmarshal(content, &decoded); err != nil {
+	if err := yaml.Unmarshal(content, &decoded); err != nil {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
@@ -490,7 +524,7 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredJSON(t *testing.T) {
 	}
 }
 
-func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
+func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -515,14 +549,14 @@ func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
 		t.Fatalf("Set metadata returned error: %v", err)
 	}
 
-	filePath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
+	filePath := filepath.Join(baseDir, "customers", "acme", "metadata.yaml")
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read metadata file %q: %v", filePath, err)
 	}
 
 	decoded := map[string]any{}
-	if err := json.Unmarshal(content, &decoded); err != nil {
+	if err := yaml.Unmarshal(content, &decoded); err != nil {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
@@ -576,6 +610,36 @@ func TestFSMetadataSetPreservesExplicitEmptyCollections(t *testing.T) {
 	}
 }
 
+func TestFSMetadataSetWritesYAMLAndRemovesExistingJSON(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	service := NewFSMetadataService(baseDir, "")
+	ctx := context.Background()
+
+	jsonPath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
+	writeMetadataFixture(t, jsonPath, false, metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "legacy-id",
+		AliasFromAttribute: "legacy-alias",
+	})
+
+	updated := metadatadomain.ResourceMetadata{
+		IDFromAttribute:    "yaml-id",
+		AliasFromAttribute: "yaml-alias",
+	}
+	if err := service.Set(ctx, "/customers/acme", updated); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	yamlPath := filepath.Join(baseDir, "customers", "acme", "metadata.yaml")
+	if _, err := os.Stat(yamlPath); err != nil {
+		t.Fatalf("expected yaml metadata file %q: %v", yamlPath, err)
+	}
+	if _, err := os.Stat(jsonPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected json metadata file to be removed, got err=%v", err)
+	}
+}
+
 func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	t.Parallel()
 
@@ -621,6 +685,36 @@ func mustSetMetadata(
 
 	if err := service.Set(ctx, logicalPath, metadata); err != nil {
 		t.Fatalf("failed to set metadata %q: %v", logicalPath, err)
+	}
+}
+
+func writeMetadataFixture(
+	t *testing.T,
+	filePath string,
+	useYAML bool,
+	metadata metadatadomain.ResourceMetadata,
+) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("failed to create metadata directory %q: %v", filepath.Dir(filePath), err)
+	}
+
+	var (
+		encoded []byte
+		err     error
+	)
+	if useYAML {
+		encoded, err = metadatadomain.EncodeResourceMetadataYAML(metadata)
+	} else {
+		encoded, err = metadatadomain.EncodeResourceMetadataJSON(metadata, true)
+	}
+	if err != nil {
+		t.Fatalf("failed to encode metadata fixture %q: %v", filePath, err)
+	}
+
+	if err := os.WriteFile(filePath, ensureTrailingNewline(encoded), 0o644); err != nil {
+		t.Fatalf("failed to write metadata fixture %q: %v", filePath, err)
 	}
 }
 

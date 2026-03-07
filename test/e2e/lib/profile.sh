@@ -451,6 +451,101 @@ e2e_profile_repo_provider_state_get() {
   e2e_state_get "${state_file}" "${key}"
 }
 
+e2e_profile_managed_server_state_file() {
+  [[ -n "${E2E_STATE_DIR:-}" ]] || return 1
+  [[ -n "${E2E_MANAGED_SERVER:-}" && "${E2E_MANAGED_SERVER}" != 'none' ]] || return 1
+
+  printf '%s/managed-server-%s.env\n' "${E2E_STATE_DIR}" "${E2E_MANAGED_SERVER}"
+}
+
+e2e_profile_managed_server_state_get() {
+  local key=$1
+  local state_file
+
+  state_file=$(e2e_profile_managed_server_state_file) || return 1
+  e2e_state_get "${state_file}" "${key}"
+}
+
+e2e_profile_managed_server_access_details() {
+  local provider=${E2E_MANAGED_SERVER:-}
+
+  [[ -n "${provider}" && "${provider}" != 'none' ]] || return 0
+
+  case "${provider}" in
+    rundeck)
+      local base_url
+      local api_version
+      local api_base_url=''
+      local web_login=''
+      local auth_mode
+      local username
+      local password
+      local header
+      local token
+
+      base_url=$(e2e_profile_managed_server_state_get 'RUNDECK_BASE_URL' || true)
+      api_version=$(e2e_profile_managed_server_state_get 'RUNDECK_API_VERSION' || true)
+      auth_mode=$(e2e_profile_managed_server_state_get 'RUNDECK_AUTH_MODE' || true)
+      username=$(e2e_profile_managed_server_state_get 'RUNDECK_ADMIN_USER' || true)
+      password=$(e2e_profile_managed_server_state_get 'RUNDECK_ADMIN_PASSWORD' || true)
+      header=$(e2e_profile_managed_server_state_get 'RUNDECK_AUTH_HEADER' || true)
+      token=$(e2e_profile_managed_server_state_get 'RUNDECK_API_TOKEN' || true)
+
+      if [[ -n "${base_url}" ]]; then
+        api_version=${api_version:-45}
+        api_base_url="${base_url%/}/api/${api_version}"
+        web_login="${base_url%/}/user/login"
+      fi
+      case "${auth_mode}" in
+        token)
+          auth_mode='custom-header'
+          ;;
+        '')
+          if [[ -n "${token}" ]]; then
+            auth_mode='custom-header'
+          elif [[ -n "${username}" || -n "${password}" ]]; then
+            auth_mode='basic'
+          fi
+          ;;
+      esac
+
+      {
+        [[ -n "${base_url}" ]] && printf 'Base URL: %s\n' "${base_url}"
+        [[ -n "${api_base_url}" ]] && printf 'API Base URL: %s\n' "${api_base_url}"
+        [[ -n "${web_login}" ]] && printf 'Web Login: %s\n' "${web_login}"
+        [[ -n "${auth_mode}" ]] && printf 'Auth Mode: %s\n' "${auth_mode}"
+        [[ -n "${username}" ]] && printf 'Username: %s\n' "${username}"
+        [[ -n "${password}" ]] && printf 'Password: %s\n' "${password}"
+        [[ -n "${header}" ]] && printf 'Header: %s\n' "${header}"
+        [[ -n "${token}" ]] && printf 'Token: %s\n' "${token}"
+      }
+      ;;
+    vault)
+      local address
+      local vault_token
+      local mount
+      local path_prefix
+      local kv_version
+
+      address=$(e2e_profile_managed_server_state_get 'VAULT_ADDRESS' || true)
+      vault_token=$(e2e_profile_managed_server_state_get 'VAULT_TOKEN' || true)
+      mount=$(e2e_profile_managed_server_state_get 'VAULT_MOUNT' || true)
+      path_prefix=$(e2e_profile_managed_server_state_get 'VAULT_PATH_PREFIX' || true)
+      kv_version=$(e2e_profile_managed_server_state_get 'VAULT_KV_VERSION' || true)
+
+      {
+        [[ -n "${address}" ]] && printf 'Base URL: %s\n' "${address}"
+        printf 'Auth Mode: custom-header\n'
+        printf 'Header: X-Vault-Token\n'
+        [[ -n "${vault_token}" ]] && printf 'Token: %s\n' "${vault_token}"
+        [[ -n "${mount}" ]] && printf 'Mount: %s\n' "${mount}"
+        [[ -n "${path_prefix}" ]] && printf 'Path Prefix: %s\n' "${path_prefix}"
+        [[ -n "${kv_version}" ]] && printf 'KV Version: %s\n' "${kv_version}"
+      }
+      ;;
+  esac
+}
+
 e2e_profile_repo_provider_web_url_from_remote() {
   local remote_url=$1
   local host

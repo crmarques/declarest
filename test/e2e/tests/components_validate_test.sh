@@ -53,7 +53,9 @@ create_managed_server_component() {
   local include_identity_fields=${2:-true}
   local include_compose_artifacts=${3:-true}
   local include_k8s_artifacts=${4:-true}
+  local metadata_extension=${5:-json}
   local component_dir="${root}/components/managed-server/demo"
+  local metadata_file="${component_dir}/repo-template/api/items/_/metadata.${metadata_extension}"
   create_component_common "${component_dir}"
   write_hook_script "${component_dir}/scripts/health.sh"
   if [[ "${include_compose_artifacts}" == 'true' ]]; then
@@ -76,12 +78,25 @@ EOF
   cat >"${component_dir}/repo-template/api/items/alpha/resource.json" <<'EOF'
 {"id":"alpha","name":"alpha"}
 EOF
-  if [[ "${include_identity_fields}" == 'true' ]]; then
-    cat >"${component_dir}/repo-template/api/items/_/metadata.json" <<'EOF'
+  if [[ "${metadata_extension}" == 'yaml' ]]; then
+    if [[ "${include_identity_fields}" == 'true' ]]; then
+      cat >"${metadata_file}" <<'EOF'
+resourceInfo:
+  idFromAttribute: id
+  aliasFromAttribute: name
+EOF
+    else
+      cat >"${metadata_file}" <<'EOF'
+resourceInfo:
+  idFromAttribute: id
+EOF
+    fi
+  elif [[ "${include_identity_fields}" == 'true' ]]; then
+    cat >"${metadata_file}" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"id","aliasFromAttribute":"name"}}
 EOF
   else
-    cat >"${component_dir}/repo-template/api/items/_/metadata.json" <<'EOF'
+    cat >"${metadata_file}" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"id"}}
 EOF
   fi
@@ -155,6 +170,18 @@ _test_validate_all_discovered_components_accepts_valid_fixture_identity_impl() {
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
 
+test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity() {
+  load_components_libs
+  with_temp_e2e_dir _test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity_impl
+}
+
+_test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity_impl() {
+  create_repo_type_component "${E2E_DIR}" true
+  create_managed_server_component "${E2E_DIR}" true true true yaml
+  e2e_discover_components
+  e2e_validate_all_discovered_component_contracts >/dev/null
+}
+
 test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir() {
   load_components_libs
   with_temp_e2e_dir _test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir_impl
@@ -165,7 +192,7 @@ _test_validate_all_discovered_components_allows_empty_managed_server_metadata_di
   create_managed_server_component "${E2E_DIR}" true
 
   local component_dir="${E2E_DIR}/components/managed-server/demo"
-  rm -f "${component_dir}/repo-template/api/items/_/metadata.json"
+  rm -f "${component_dir}/repo-template/api/items/_/metadata.json" "${component_dir}/repo-template/api/items/_/metadata.yaml"
   mkdir -p "${component_dir}/metadata"
 
   e2e_discover_components
@@ -288,5 +315,6 @@ test_validate_all_discovered_components_rejects_missing_fixture_identity
 test_managed_server_auth_type_defaults_prefer_oauth2
 test_managed_server_auth_type_rejects_unsupported_selection
 test_validate_all_discovered_components_rejects_missing_compose_artifacts
+test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity
 test_validate_all_discovered_components_rejects_missing_k8s_artifacts
 test_validate_all_discovered_components_accepts_native_without_runtime_artifacts

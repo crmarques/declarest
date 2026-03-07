@@ -129,21 +129,18 @@ func (s *FSMetadataService) Unset(ctx context.Context, logicalPath string) error
 		targetPath,
 	)
 
-	legacyPath, legacyErr := s.legacyMetadataFilePath(selector, kind)
-	if legacyErr != nil {
-		return legacyErr
+	candidates, err := s.metadataFileCandidates(selector, kind)
+	if err != nil {
+		return err
 	}
 
 	removedAny := false
-	for _, candidate := range []string{targetPath, legacyPath} {
-		if candidate == "" {
-			continue
-		}
-		if err := os.Remove(candidate); err != nil {
+	for _, candidate := range candidates {
+		if err := os.Remove(candidate.path); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, candidate, err)
+			debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, candidate.path, err)
 			return internalError("failed to remove metadata file", err)
 		}
 		removedAny = true
@@ -159,24 +156,9 @@ func (s *FSMetadataService) Unset(ctx context.Context, logicalPath string) error
 }
 
 func (s *FSMetadataService) tryReadMetadata(selector string, kind metadataPathKind) (metadatadomain.ResourceMetadata, bool, error) {
-	targetPath, err := s.metadataFilePath(selector, kind)
+	candidates, err := s.metadataFileCandidates(selector, kind)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, false, err
-	}
-
-	candidates := []struct {
-		path string
-		yaml bool
-	}{
-		{path: targetPath, yaml: false},
-	}
-	if legacyPath, legacyErr := s.legacyMetadataFilePath(selector, kind); legacyErr == nil {
-		candidates = append(candidates, struct {
-			path string
-			yaml bool
-		}{path: legacyPath, yaml: true})
-	} else {
-		return metadatadomain.ResourceMetadata{}, false, legacyErr
 	}
 
 	for _, candidate := range candidates {
@@ -206,7 +188,12 @@ func (s *FSMetadataService) readMetadataFile(targetPath string, yaml bool) (meta
 }
 
 func (s *FSMetadataService) writeMetadataFile(targetPath string, metadata metadatadomain.ResourceMetadata) error {
-	encoded, err := s.encodeMetadata(metadata)
+	yaml, err := metadataPathUsesYAML(targetPath)
+	if err != nil {
+		return err
+	}
+
+	encoded, err := s.encodeMetadata(metadata, yaml)
 	if err != nil {
 		return err
 	}
@@ -237,7 +224,10 @@ func (s *FSMetadataService) writeMetadataFile(targetPath string, metadata metada
 		return internalError("failed to replace metadata file", err)
 	}
 
-	if strings.HasSuffix(targetPath, ".json") {
+	switch {
+	case strings.HasSuffix(targetPath, ".yaml"):
+		_ = os.Remove(strings.TrimSuffix(targetPath, ".yaml") + ".json")
+	case strings.HasSuffix(targetPath, ".json"):
 		_ = os.Remove(strings.TrimSuffix(targetPath, ".json") + ".yaml")
 	}
 
@@ -270,16 +260,38 @@ func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool) (metadatadoma
 	return decoded, nil
 }
 
-func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetadata) ([]byte, error) {
+func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetadata, yaml bool) ([]byte, error) {
 	if err := validateResourceMetadata(metadata); err != nil {
 		return nil, err
 	}
 
-	encoded, err := metadatadomain.EncodeResourceMetadataJSON(metadata, true)
-	if err != nil {
-		return nil, internalError("failed to encode json metadata", err)
+	var (
+		encoded []byte
+		err     error
+	)
+	if yaml {
+		encoded, err = metadatadomain.EncodeResourceMetadataYAML(metadata)
+		if err != nil {
+			return nil, internalError("failed to encode yaml metadata", err)
+		}
+	} else {
+		encoded, err = metadatadomain.EncodeResourceMetadataJSON(metadata, true)
+		if err != nil {
+			return nil, internalError("failed to encode json metadata", err)
+		}
 	}
 	return ensureTrailingNewline(encoded), nil
+}
+
+func metadataPathUsesYAML(targetPath string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(filepath.Ext(targetPath))) {
+	case ".yaml":
+		return true, nil
+	case ".json":
+		return false, nil
+	default:
+		return false, internalError("unsupported metadata file extension", nil)
+	}
 }
 
 func ensureTrailingNewline(data []byte) []byte {

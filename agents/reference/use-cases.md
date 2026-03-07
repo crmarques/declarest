@@ -152,7 +152,7 @@ Execution:
 
 Expected outputs:
 1. Temporary context config is usable after sourcing the generated setup script.
-2. Access output includes component-specific details (for example, local keycloak admin console URL and credentials).
+2. Access output includes component-specific or state-derived managed-server details (for example, local keycloak admin console URL and credentials, or local rundeck API URL and auth token).
 3. Context repository directory contains seeded template resources and collection metadata.
 4. Setup script exports runtime env vars and defines alias `declarest-e2e`; reset script unsets these vars and removes the alias.
 5. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
@@ -239,7 +239,28 @@ Failure expectation:
 1. Dependency selector referencing a non-selected component fails with actionable dependency error.
 2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
 
-### Example 12: Save and Apply With Externalized Attributes
+### Example 12: Metadata Sidecar YAML Preference With JSON Fallback
+Goal: persist metadata in YAML by default while keeping existing JSON sidecars readable.
+
+Inputs:
+1. Logical path `/customers/acme`.
+2. Existing `metadata.json` sidecar with valid metadata.
+3. Later update through `metadata.MetadataStore.Set`.
+
+Execution:
+1. Metadata resolution reads `/customers/acme/metadata.json`.
+2. A subsequent metadata write persists `/customers/acme/metadata.yaml`.
+3. The write removes the superseded `/customers/acme/metadata.json` sidecar.
+
+Expected outputs:
+1. Reads succeed before migration when only JSON exists.
+2. After the write, only `metadata.yaml` remains for that selector path.
+3. If both sidecars exist before cleanup, metadata resolution uses `metadata.yaml` deterministically.
+
+Failure expectation:
+1. Invalid YAML or JSON sidecars fail with `ValidationError` and do not silently fall back to malformed content.
+
+### Example 13: Save and Apply With Externalized Attributes
 Goal: keep large text fields in sibling files while preserving apply/diff correctness.
 
 Inputs:

@@ -27,12 +27,13 @@ Define local repository semantics for resource persistence, metadata storage, pa
 10. Git-backed repository operations that require a local VCS repository state (for example status, history, commit, sync operations) MUST initialize the local git repository automatically when it is missing before continuing operation-specific logic.
 11. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
 12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile (detailed receiver behavior is defined in `agents/reference/k8s-operator.md`).
+13. Resource and collection metadata sidecars MUST support `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default.
 
 ## Data Contracts
 Layout contract:
 1. Canonical resource payload at `<logical-path>/resource.<ext>`.
-2. Collection metadata at `<collection-path>/_/metadata.json`.
-3. Resource metadata at `<logical-path>/metadata.json`.
+2. Collection metadata at `<collection-path>/_/metadata.yaml` by default, with `metadata.json` also accepted.
+3. Resource metadata at `<logical-path>/metadata.yaml` by default, with `metadata.json` also accepted.
 4. Optional repository control artifacts under repo-specific hidden directory.
 5. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
 
@@ -69,12 +70,13 @@ Policy contracts:
 8. Clean requested on a git repo with both tracked edits and untracked files/directories.
 9. Clean requested on a filesystem repository context.
 10. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
+11. Both `metadata.yaml` and `metadata.json` exist for one selector path; repository-backed metadata resolution uses the YAML sidecar deterministically.
 
 ## Examples
 1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
 2. Save `/projects/platform/readme` as plain text writes `/projects/platform/readme/resource.txt`.
 3. Save `/certificates/ca` as octet-stream without an existing file writes `/certificates/ca/resource.bin`.
-4. Set collection metadata for `/customers` writes `/customers/_/metadata.json`.
+4. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`.
 5. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
 6. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
 7. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
@@ -84,3 +86,4 @@ Policy contracts:
 11. `repository clean` on a filesystem repository succeeds without mutating repository files.
 12. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
 13. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
+14. When `/customers/_/metadata.yaml` and `/customers/_/metadata.json` both exist, metadata reads resolve `/customers/_/metadata.yaml` deterministically.

@@ -26,18 +26,19 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 9. Inference from OpenAPI SHOULD propose method/path defaults but MUST NOT overwrite explicit user metadata unless explicitly requested.
 10. Metadata persistence MUST omit nil directive fields from stored files instead of writing `null`.
 11. Metadata persistence MUST preserve explicit empty arrays/maps when they are provided for replacement semantics.
-12. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
-13. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
-14. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
-15. Until recursive metadata inference traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
-16. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
-17. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
-18. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
-19. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
-20. Metadata template-rendered string fields MUST support `{{resource_format .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload type and defaults.
-21. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
-22. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
-23. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
+12. Metadata persistence MUST read selector sidecars from `metadata.yaml` or `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default while removing a superseded sibling sidecar after successful persistence.
+13. Inference MUST accept metadata selector paths containing intermediary `_` segments and trailing collection markers (for example `/admin/realms/_/clients/`).
+14. Selector-path inference SHOULD use OpenAPI path templates when available to infer operation paths and identity attributes, and non-template-safe OpenAPI parameter names MUST fall back to deterministic placeholder names from fallback inference.
+15. Inference output SHOULD omit directives that are equal to deterministic fallback defaults so CLI responses focus on meaningful overrides.
+16. Until recursive metadata inference traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
+17. `resourceInfo.collectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
+18. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
+19. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
+20. List-operation `jq` expressions MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
+21. Metadata template-rendered string fields MUST support `{{resource_format .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload type and defaults.
+22. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
+23. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
+24. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 24. `resourceInfo.payloadType` MAY override filename-derived payload inference for one resource or collection scope and MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`.
 24. `resourceInfo.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
 25. Enabled `resourceInfo.externalizedAttributes` entries MUST treat `path` as a `[]string` object traversal path, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
@@ -88,7 +89,7 @@ Template context contract:
 3. Compare suppression removes all fields and yields empty normalized payload.
 4. Explicit null directive intended to clear inherited field.
 5. `secretInAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
-6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps.
+6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps, default to `metadata.yaml`, and still read legacy `metadata.json` sidecars.
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
 8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
 9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.

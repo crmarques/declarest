@@ -163,11 +163,19 @@ step_operator_install() {
 
 e2e_manual_collect_component_access_info() {
   local component_key
+  local managed_server_key=''
   local details
   local output=''
 
+  if [[ -n "${E2E_MANAGED_SERVER:-}" && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
+    managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  fi
+
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
     details=$(e2e_component_collect_manual_info "${component_key}" || true)
+    if [[ -z "${details//[$'\t\r\n ']}" && -n "${managed_server_key}" && "${component_key}" == "${managed_server_key}" ]]; then
+      details=$(e2e_profile_managed_server_access_details || true)
+    fi
     if [[ -z "${details//[$'\t\r\n ']}" ]]; then
       continue
     fi

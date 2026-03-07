@@ -341,6 +341,33 @@ e2e_validate_component_dependency_catalog() {
   return 0
 }
 
+e2e_metadata_fixture_has_identity_fields() {
+  local metadata_file=$1
+
+  case "${metadata_file}" in
+    *.json)
+      if ! command -v jq >/dev/null 2>&1; then
+        e2e_die 'jq is required to validate managed-server fixture metadata'
+        return 1
+      fi
+
+      jq -e '((.resourceInfo.idFromAttribute // "") | (type == "string" and length > 0)) and ((.resourceInfo.aliasFromAttribute // "") | (type == "string" and length > 0))' \
+        "${metadata_file}" >/dev/null 2>&1
+      return $?
+      ;;
+    *.yaml)
+      grep -Eq '^[[:space:]]*resourceInfo:[[:space:]]*$' "${metadata_file}" \
+        && grep -Eq '^[[:space:]]*idFromAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}" \
+        && grep -Eq '^[[:space:]]*aliasFromAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}"
+      return $?
+      ;;
+    *)
+      e2e_die "unsupported managed-server metadata fixture file: ${metadata_file}"
+      return 1
+      ;;
+  esac
+}
+
 
 e2e_validate_managed_server_fixture_tree() {
   local component_name=$1
@@ -372,7 +399,7 @@ e2e_validate_managed_server_fixture_tree() {
   while IFS= read -r metadata_file; do
     [[ -n "${metadata_file}" ]] || continue
     metadata_files+=("${metadata_file}")
-  done < <(find "${metadata_dir}" -type f -path '*/_/metadata.json' | sort)
+  done < <(e2e_find_collection_metadata_files "${metadata_dir}")
 
   local -a payload_files=()
   local payload_file
@@ -398,18 +425,12 @@ e2e_validate_managed_server_fixture_tree() {
   for metadata_file in "${metadata_files[@]}"; do
     local rel
     rel=${metadata_file#${metadata_dir}/}
-    if [[ "${rel}" != *_/metadata.json ]]; then
-      e2e_die "managed-server ${component_name} has invalid metadata fixture path: ${rel} (expected */_/metadata.json)"
+    if [[ "${rel}" != *_/metadata.json && "${rel}" != *_/metadata.yaml ]]; then
+      e2e_die "managed-server ${component_name} has invalid metadata fixture path: ${rel} (expected */_/metadata.json or */_/metadata.yaml)"
       return 1
     fi
 
-    if ! command -v jq >/dev/null 2>&1; then
-      e2e_die 'jq is required to validate managed-server fixture metadata'
-      return 1
-    fi
-
-    if ! jq -e '((.resourceInfo.idFromAttribute // "") | (type == "string" and length > 0)) and ((.resourceInfo.aliasFromAttribute // "") | (type == "string" and length > 0))' \
-      "${metadata_file}" >/dev/null 2>&1; then
+    if ! e2e_metadata_fixture_has_identity_fields "${metadata_file}"; then
       e2e_die "managed-server ${component_name} metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute: ${rel}"
       return 1
     fi

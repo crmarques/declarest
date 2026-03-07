@@ -18,7 +18,7 @@ This repository uses a componentized Bash e2e harness.
   - remote component selections are rejected in Step 1
   - when a managed-server is selected, its `repo-template` tree is copied into the context repository directory
   - when `repo-type=git`, the runner initializes the local git repository before handoff so `config check`/`repository status` are immediately usable
-  - component manual access details are printed in manual handoff output before `Repository provider access` when available
+  - component manual access details are printed in manual handoff output before `Repository provider access` when available; if the selected managed-server has no `manual-info` hook output, the runner falls back to state-derived managed-server connection details
   - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `test/e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
   - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
@@ -196,7 +196,7 @@ Compose-runtime components must also include:
 
 Optional hooks:
 
-- `scripts/manual-info.sh`: printed in manual handoff output before `Repository provider access` in `cli-manual` and `operator-manual` profiles
+- `scripts/manual-info.sh`: printed in manual handoff output before `Repository provider access` in `cli-manual` and `operator-manual` profiles; when the selected managed-server has no hook output, the runner prints state-derived managed-server details instead
 - `scripts/start.sh` and `scripts/stop.sh`: override built-in start/stop adapters (compose or kubernetes) when needed
 
 Hook orchestration:
@@ -220,7 +220,7 @@ For the `keycloak` managed-server, the runner connects directly to Keycloak Admi
 Fixture tree rules:
 
 - tree layout must match the repository format exactly.
-- collection metadata must be stored at `<logical-collection>/_/metadata.json`.
+- collection metadata must be stored at `<logical-collection>/_/metadata.yaml` or `<logical-collection>/_/metadata.json` (YAML preferred for new fixtures).
 - resource payloads must be stored at `<logical-resource>/resource.json`.
 - metadata paths may be nested (for example `/admin/realms/_/organizations/_`) to avoid duplicated metadata files.
 - when metadata paths include intermediary `/_/`, the e2e loader expands them to concrete collection metadata paths from template resources before calling `declarest metadata set`.

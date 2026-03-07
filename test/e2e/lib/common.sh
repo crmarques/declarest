@@ -285,6 +285,52 @@ e2e_state_get() {
   return 1
 }
 
+e2e_metadata_file_name_for_root() {
+  local root=$1
+
+  if [[ -d "${root}" ]]; then
+    if find "${root}" -type f -name 'metadata.yaml' | grep -q .; then
+      printf 'metadata.yaml\n'
+      return 0
+    fi
+    if find "${root}" -type f -name 'metadata.json' | grep -q .; then
+      printf 'metadata.json\n'
+      return 0
+    fi
+  fi
+
+  printf 'metadata.yaml\n'
+}
+
+e2e_find_collection_metadata_files() {
+  local root=$1
+  find "${root}" -type f \( -path '*/_/metadata.yaml' -o -path '*/_/metadata.json' \) | sort
+}
+
+e2e_metadata_logical_path_from_file() {
+  local metadata_root=$1
+  local metadata_file=$2
+  local rel_path
+  local logical_path
+
+  rel_path=${metadata_file#${metadata_root}/}
+  case "${rel_path}" in
+    */metadata.yaml)
+      logical_path=/${rel_path%/metadata.yaml}
+      ;;
+    */metadata.json)
+      logical_path=/${rel_path%/metadata.json}
+      ;;
+    *)
+      printf 'unsupported metadata fixture path: %s\n' "${metadata_file}" >&2
+      return 1
+      ;;
+  esac
+
+  logical_path=${logical_path%/}
+  printf '%s\n' "${logical_path}"
+}
+
 e2e_has_tty() {
   [[ -t 1 ]]
 }

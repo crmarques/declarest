@@ -196,8 +196,11 @@ e2e_seed_local_metadata_bundle_cache() {
   local bundle_name=${bundle_ref%%:*}
   local bundle_version=${bundle_ref#*:}
   local cache_dir="${HOME}/.declarest/metadata-bundles/${bundle_name}-${bundle_version}"
+  local metadata_file_name
 
   [[ -d "${metadata_source}" ]] || return 0
+
+  metadata_file_name=$(e2e_metadata_file_name_for_root "${metadata_source}") || return 1
 
   rm -rf -- "${cache_dir}"
   mkdir -p "${cache_dir}/metadata" || return 1
@@ -223,7 +226,7 @@ e2e_seed_local_metadata_bundle_cache() {
     printf 'declarest:\n'
     printf '  shorthand: %s\n' "${bundle_name}"
     printf '  metadataRoot: metadata\n'
-    printf '  metadataFileName: metadata.json\n'
+    printf '  metadataFileName: %s\n' "${metadata_file_name}"
     if [[ -f "${openapi_source}" ]]; then
       printf '  openapi: openapi.yaml\n'
     fi

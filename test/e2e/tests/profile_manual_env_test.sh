@@ -220,7 +220,43 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   fi
 }
 
+test_managed_server_access_details_formats_rundeck_state() {
+  load_profile_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_STATE_DIR="${tmp}/state"
+  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_MANAGED_SERVER_CONNECTION='local'
+  mkdir -p "${E2E_STATE_DIR}"
+
+  local state_file="${E2E_STATE_DIR}/managed-server-rundeck.env"
+  : >"${state_file}"
+  e2e_write_state_value "${state_file}" 'RUNDECK_BASE_URL' 'http://127.0.0.1:24444'
+  e2e_write_state_value "${state_file}" 'RUNDECK_API_VERSION' '45'
+  e2e_write_state_value "${state_file}" 'RUNDECK_AUTH_MODE' 'token'
+  e2e_write_state_value "${state_file}" 'RUNDECK_ADMIN_USER' 'admin'
+  e2e_write_state_value "${state_file}" 'RUNDECK_ADMIN_PASSWORD' 'admin-pass'
+  e2e_write_state_value "${state_file}" 'RUNDECK_AUTH_HEADER' 'X-Rundeck-Auth-Token'
+  e2e_write_state_value "${state_file}" 'RUNDECK_API_TOKEN' 'rundeck-token'
+
+  local output
+  output=$(e2e_profile_managed_server_access_details)
+
+  assert_contains "${output}" "Base URL: http://127.0.0.1:24444"
+  assert_contains "${output}" "API Base URL: http://127.0.0.1:24444/api/45"
+  assert_contains "${output}" "Web Login: http://127.0.0.1:24444/user/login"
+  assert_contains "${output}" "Auth Mode: custom-header"
+  assert_contains "${output}" "Username: admin"
+  assert_contains "${output}" "Password: admin-pass"
+  assert_contains "${output}" "Header: X-Rundeck-Auth-Token"
+  assert_contains "${output}" "Token: rundeck-token"
+}
+
 test_manual_env_scripts_install_and_restore_prompt_hook
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig
 test_manual_handoff_prints_kubectl_and_repo_provider_access
+test_managed_server_access_details_formats_rundeck_state

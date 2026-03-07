@@ -1,0 +1,28 @@
+resourceInfo:
+    idFromAttribute: name
+    aliasFromAttribute: name
+operationInfo:
+    getResource:
+        path: /project/{{.id}}/config
+        payload:
+            filterAttributes: null
+            jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), description: (.description // (.config["project.description"] // "")), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", description: (."project.description" // ""), config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'
+    createResource:
+        httpMethod: POST
+        path: /projects
+        payload:
+            filterAttributes: null
+            jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'
+    updateResource:
+        httpMethod: PUT
+        path: /project/{{.id}}/config
+        payload:
+            filterAttributes: null
+            jqExpression: 'if type == "object" and has("config") then (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end)) else (. + {"project.name": (."project.name" // "{{.id}}")}) end'
+    deleteResource:
+        path: /project/{{.id}}
+    listCollection:
+        path: /projects
+    compareResources:
+        path: /project/{{.id}}/config
+        jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), description: (.description // (.config["project.description"] // "")), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", description: (."project.description" // ""), config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'
