@@ -2,7 +2,6 @@ package resource
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,10 +9,10 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
 )
 
 func resolveActiveResourceContext(
@@ -37,38 +36,78 @@ func resolveActiveResourceContext(
 	return contexts.ResolveContext(ctx, configdomain.ContextSelection{Name: contextName})
 }
 
-func resourcePayloadEditFormat(cfg configdomain.Context) string {
-	switch strings.TrimSpace(cfg.Repository.ResourceFormat) {
-	case configdomain.ResourceFormatYAML:
-		return cliutil.OutputYAML
+func resourcePayloadEditType(
+	ctx context.Context,
+	deps cliutil.CommandDependencies,
+	cfg configdomain.Context,
+	logicalPath string,
+	value resourcedomain.Value,
+) (string, error) {
+	if deps.Metadata != nil {
+		md, err := deps.Metadata.ResolveForPath(ctx, logicalPath)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(md.PayloadType) != "" {
+			return metadata.EffectivePayloadType(md, cfg.Repository.ResourceFormat)
+		}
+	}
+
+	if _, ok := resourcedomain.BinaryBytes(value); ok {
+		return resourcedomain.PayloadTypeOctetStream, nil
+	}
+	if _, ok := value.(string); ok {
+		candidate := metadata.NormalizeResourceFormat(cfg.Repository.ResourceFormat)
+		if resourcedomain.IsTextPayloadType(candidate) {
+			return candidate, nil
+		}
+		return resourcedomain.PayloadTypeText, nil
+	}
+
+	candidate := metadata.NormalizeResourceFormat(cfg.Repository.ResourceFormat)
+	if resourcedomain.IsStructuredPayloadType(candidate) {
+		return candidate, nil
+	}
+	switch candidate {
+	case resourcedomain.PayloadTypeXML,
+		resourcedomain.PayloadTypeHCL,
+		resourcedomain.PayloadTypeINI,
+		resourcedomain.PayloadTypeProperties,
+		resourcedomain.PayloadTypeText,
+		resourcedomain.PayloadTypeOctetStream:
+		return resourcedomain.PayloadTypeJSON, nil
 	default:
-		return cliutil.OutputJSON
+		return candidate, nil
 	}
 }
 
-func resourcePayloadEditFilename(cfg configdomain.Context) string {
-	if resourcePayloadEditFormat(cfg) == cliutil.OutputYAML {
-		return "resource.yaml"
-	}
-	return "resource.json"
-}
-
-func encodeResourcePayloadForEdit(cfg configdomain.Context, value resourcedomain.Value) ([]byte, error) {
-	normalized, err := resourcedomain.Normalize(value)
+func resourcePayloadEditFilename(payloadType string) string {
+	extension, err := resourcedomain.PayloadExtension(payloadType)
 	if err != nil {
+		return "resource.json"
+	}
+	return "resource" + extension
+}
+
+func validateEditPayloadType(payloadType string) error {
+	if resourcedomain.IsBinaryPayloadType(payloadType) {
+		return cliutil.ValidationError("resource edit does not support octet-stream payloads; use file or stdin based mutation commands", nil)
+	}
+	return nil
+}
+
+func encodeResourcePayloadForEdit(payloadType string, value resourcedomain.Value) ([]byte, error) {
+	if err := validateEditPayloadType(payloadType); err != nil {
 		return nil, err
 	}
-
-	switch resourcePayloadEditFormat(cfg) {
-	case cliutil.OutputYAML:
-		return yaml.Marshal(normalized)
-	default:
-		return json.MarshalIndent(normalized, "", "  ")
-	}
+	return resourcedomain.EncodePayloadPretty(value, payloadType)
 }
 
-func decodeResourcePayloadFromEdit(cfg configdomain.Context, data []byte) (resourcedomain.Value, error) {
-	return cliutil.DecodeInputData[resourcedomain.Value](data, resourcePayloadEditFormat(cfg))
+func decodeResourcePayloadFromEdit(payloadType string, data []byte) (resourcedomain.Value, error) {
+	if err := validateEditPayloadType(payloadType); err != nil {
+		return nil, err
+	}
+	return resourcedomain.DecodePayload(data, payloadType)
 }
 
 func commitAndMaybeAutoSyncRepository(

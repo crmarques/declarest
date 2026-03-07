@@ -54,7 +54,7 @@ Per-context fields:
 
 Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
-2. `repository.resource-format` allowed values: `json` or `yaml`.
+2. `repository.resource-format` allowed values: `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`.
 3. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
 
 Resource server auth one-of contract:
@@ -105,8 +105,8 @@ Runtime override keys:
 contexts:
   - name: xxx
     repository:
-      # Optional resource file format: json or yaml.
-      # When omitted, declarest uses the remote resource format default.
+      # Optional default payload type: json, yaml, xml, hcl, ini, properties, text, or octet-stream.
+      # When omitted, declarest uses runtime inference before engine defaults.
       # resource-format: json
       # Choose exactly one repository type: filesystem or git.
       git:

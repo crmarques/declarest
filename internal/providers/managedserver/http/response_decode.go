@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,63 +15,83 @@ func encodeRequestBody(contentType string, body any) ([]byte, error) {
 		return nil, nil
 	}
 
-	if strings.Contains(strings.ToLower(contentType), "json") || strings.TrimSpace(contentType) == "" {
-		normalized, err := resource.Normalize(body)
-		if err != nil {
-			return nil, err
+	payloadType, ok := resource.PayloadTypeForMediaType(contentType)
+	if !ok {
+		switch {
+		case resource.IsBinaryValue(body):
+			payloadType = resource.PayloadTypeOctetStream
+		case strings.TrimSpace(contentType) == "":
+			payloadType = resource.PayloadTypeJSON
+		default:
+			payloadType = resource.PayloadTypeText
 		}
-		encoded, err := json.Marshal(normalized)
-		if err != nil {
-			return nil, faults.NewValidationError("failed to encode JSON request body", err)
-		}
-		return encoded, nil
 	}
 
-	switch typed := body.(type) {
-	case string:
-		return []byte(typed), nil
-	case []byte:
-		return typed, nil
-	default:
-		encoded, err := json.Marshal(typed)
-		if err != nil {
-			return nil, faults.NewValidationError("failed to encode request body", err)
-		}
-		return encoded, nil
-	}
-}
-
-func decodeJSONResponse(body []byte) (resource.Value, error) {
-	if len(bytes.TrimSpace(body)) == 0 {
-		return nil, nil
-	}
-
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, faults.NewValidationError("response body is not valid JSON", err)
-	}
-
-	normalized, err := resource.Normalize(value)
+	encoded, err := resource.EncodePayload(body, payloadType)
 	if err != nil {
 		return nil, err
 	}
-	return normalized, nil
+	return encoded, nil
 }
 
-func decodeRequestResponse(body []byte) (resource.Value, error) {
-	if len(bytes.TrimSpace(body)) == 0 {
+func decodeResponseBody(body []byte, headers http.Header, fallbackPayloadType string) (resource.Value, error) {
+	if len(body) == 0 {
 		return nil, nil
 	}
 
-	value, err := decodeJSONResponse(body)
-	if err == nil {
-		return value, nil
+	fallbackType := strings.TrimSpace(fallbackPayloadType)
+	headerType := ""
+	if headers != nil {
+		if contentType := strings.TrimSpace(headers.Get("Content-Type")); contentType != "" {
+			if inferred, ok := resource.PayloadTypeForMediaType(contentType); ok {
+				headerType = inferred
+			}
+		}
 	}
 
-	return string(body), nil
+	candidates := responseDecodeCandidates(headerType, fallbackType)
+	if len(candidates) == 0 {
+		candidates = []string{resource.PayloadTypeJSON}
+	}
+	if resource.IsStructuredPayloadType(candidates[0]) && len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
+
+	var lastErr error
+	for _, candidate := range candidates {
+		decoded, err := resource.DecodePayload(body, candidate)
+		if err == nil {
+			return decoded, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func responseDecodeCandidates(headerType string, fallbackType string) []string {
+	candidates := make([]string, 0, 3)
+	appendCandidate := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == trimmed {
+				return
+			}
+		}
+		candidates = append(candidates, trimmed)
+	}
+
+	switch {
+	case headerType == resource.PayloadTypeText && resource.IsStructuredPayloadType(fallbackType):
+		appendCandidate(fallbackType)
+		appendCandidate(headerType)
+	default:
+		appendCandidate(headerType)
+		appendCandidate(fallbackType)
+	}
+	return candidates
 }
 
 func classifyStatusError(statusCode int, body []byte) error {

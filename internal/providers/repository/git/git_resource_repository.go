@@ -50,13 +50,13 @@ type GitResourceRepository struct {
 	autoInit bool
 }
 
-func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string) *GitResourceRepository {
+func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string, metadataBaseDir ...string) *GitResourceRepository {
 	var remoteProxy *config.HTTPProxy
 	if repoConfig.Remote != nil {
 		remoteProxy = proxyhelper.Clone(repoConfig.Remote.Proxy)
 	}
 	return &GitResourceRepository{
-		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat),
+		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat, metadataBaseDir...),
 		baseDir:  repoConfig.Local.BaseDir,
 		remote:   repoConfig.Remote,
 		proxy:    remoteProxy,

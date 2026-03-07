@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -55,6 +57,18 @@ func DecodeInputData[T any](data []byte, format string) (T, error) {
 	return output, nil
 }
 
+func DecodeResourceValueInputData(data []byte, format string) (resource.Value, error) {
+	payloadType, err := resourceInputPayloadType(format)
+	if err != nil {
+		return nil, err
+	}
+	return resource.DecodePayload(data, payloadType)
+}
+
+func IsBinaryInputFormat(format string) bool {
+	return strings.EqualFold(strings.TrimSpace(format), resource.PayloadTypeBinary)
+}
+
 func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte, error) {
 	if flags.Payload != "" && flags.Payload != stdinFileIndicator {
 		file, err := os.Open(flags.Payload)
@@ -68,6 +82,9 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 		data, err := readAllWithLimit(file, maxInputBytes)
 		if err != nil {
 			return nil, err
+		}
+		if len(data) == 0 && IsBinaryInputFormat(flags.Format) {
+			return data, nil
 		}
 		if len(bytes.TrimSpace(data)) == 0 {
 			return nil, ValidationError("input is empty", nil)
@@ -90,6 +107,12 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	if len(data) == 0 && IsBinaryInputFormat(flags.Format) {
+		if required || flags.Payload == stdinFileIndicator {
+			return data, nil
+		}
+		return nil, nil
+	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		if required {
 			return nil, ValidationError(MissingInputMessage, nil)
@@ -109,4 +132,27 @@ func readAllWithLimit(reader io.Reader, maxBytes int64) ([]byte, error) {
 		return nil, ValidationError("input exceeds maximum supported size", errors.New("input too large"))
 	}
 	return data, nil
+}
+
+func resourceInputPayloadType(format string) (string, error) {
+	switch strings.TrimSpace(format) {
+	case "", OutputJSON:
+		return resource.PayloadTypeJSON, nil
+	case OutputYAML:
+		return resource.PayloadTypeYAML, nil
+	case resource.PayloadTypeXML:
+		return resource.PayloadTypeXML, nil
+	case resource.PayloadTypeHCL:
+		return resource.PayloadTypeHCL, nil
+	case resource.PayloadTypeINI:
+		return resource.PayloadTypeINI, nil
+	case resource.PayloadTypeProperties:
+		return resource.PayloadTypeProperties, nil
+	case resource.PayloadTypeText:
+		return resource.PayloadTypeText, nil
+	case resource.PayloadTypeBinary:
+		return resource.PayloadTypeOctetStream, nil
+	default:
+		return "", ValidationError("invalid input format: use json, yaml, xml, hcl, ini, properties, text, or binary", nil)
+	}
 }

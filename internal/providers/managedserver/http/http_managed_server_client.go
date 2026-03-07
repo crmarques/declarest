@@ -133,12 +133,12 @@ func (g *HTTPManagedServerClient) Get(ctx context.Context, resourceInfo resource
 		return nil, err
 	}
 
-	body, _, err := g.execute(ctx, spec)
+	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	value, err := decodeJSONResponse(body)
+	value, err := decodeResponseBody(body, headers, g.metadataPayloadType(md))
 	if err != nil {
 		return nil, err
 	}
@@ -152,12 +152,12 @@ func (g *HTTPManagedServerClient) Create(ctx context.Context, resourceInfo resou
 		return nil, err
 	}
 
-	body, _, err := g.execute(ctx, spec)
+	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	return decodeJSONResponse(body)
+	return decodeResponseBody(body, headers, g.metadataPayloadType(md))
 }
 
 func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error) {
@@ -166,12 +166,12 @@ func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resou
 		return nil, err
 	}
 
-	body, _, err := g.execute(ctx, spec)
+	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	return decodeJSONResponse(body)
+	return decodeResponseBody(body, headers, g.metadataPayloadType(md))
 }
 
 func (g *HTTPManagedServerClient) Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error {
@@ -193,12 +193,12 @@ func (g *HTTPManagedServerClient) List(ctx context.Context, collectionPath strin
 		return nil, err
 	}
 
-	body, _, err := g.execute(ctx, spec)
+	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	return g.decodeListResponse(ctx, collectionPath, md, spec, body)
+	return g.decodeListResponse(ctx, collectionPath, md, spec, body, headers)
 }
 
 func (g *HTTPManagedServerClient) Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -52,6 +53,21 @@ func TestReadOptionalInputWithFileDashEmptyInputReturnsNil(t *testing.T) {
 	}
 }
 
+func TestReadOptionalInputWithFileDashEmptyBinaryReturnsEmptySlice(t *testing.T) {
+	command := newCommandWithStdin("")
+
+	data, err := ReadOptionalInput(command, InputFlags{Payload: stdinFileIndicator, Format: resource.PayloadTypeBinary})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if data == nil {
+		t.Fatal("expected explicit binary stdin to preserve empty payload")
+	}
+	if len(data) != 0 {
+		t.Fatalf("expected empty binary payload, got %q", string(data))
+	}
+}
+
 func TestReadInputRejectsOversizedStdin(t *testing.T) {
 	command := newCommandWithStdin(strings.Repeat("a", maxInputBytes+1))
 
@@ -77,5 +93,20 @@ func TestReadInputRejectsOversizedFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "maximum supported size") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDecodeResourceValueInputDataBinary(t *testing.T) {
+	value, err := DecodeResourceValueInputData([]byte("abc"), resource.PayloadTypeBinary)
+	if err != nil {
+		t.Fatalf("DecodeResourceValueInputData returned error: %v", err)
+	}
+
+	binaryValue, ok := value.(resource.BinaryValue)
+	if !ok {
+		t.Fatalf("expected BinaryValue, got %T", value)
+	}
+	if string(binaryValue.Bytes) != "abc" {
+		t.Fatalf("expected binary payload bytes %q, got %q", "abc", string(binaryValue.Bytes))
 	}
 }

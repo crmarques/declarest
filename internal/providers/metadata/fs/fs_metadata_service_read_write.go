@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
@@ -129,13 +129,28 @@ func (s *FSMetadataService) Unset(ctx context.Context, logicalPath string) error
 		targetPath,
 	)
 
-	if err := os.Remove(targetPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			debugctx.Printf(ctx, "metadata fs unset no-op logical_path=%q file=%q", logicalPath, targetPath)
-			return nil
+	legacyPath, legacyErr := s.legacyMetadataFilePath(selector, kind)
+	if legacyErr != nil {
+		return legacyErr
+	}
+
+	removedAny := false
+	for _, candidate := range []string{targetPath, legacyPath} {
+		if candidate == "" {
+			continue
 		}
-		debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, targetPath, err)
-		return internalError("failed to remove metadata file", err)
+		if err := os.Remove(candidate); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			debugctx.Printf(ctx, "metadata fs unset failed logical_path=%q file=%q error=%v", logicalPath, candidate, err)
+			return internalError("failed to remove metadata file", err)
+		}
+		removedAny = true
+	}
+	if !removedAny {
+		debugctx.Printf(ctx, "metadata fs unset no-op logical_path=%q file=%q", logicalPath, targetPath)
+		return nil
 	}
 
 	_ = cleanupEmptyParents(filepath.Dir(targetPath), s.baseDir)
@@ -149,23 +164,41 @@ func (s *FSMetadataService) tryReadMetadata(selector string, kind metadataPathKi
 		return metadatadomain.ResourceMetadata{}, false, err
 	}
 
-	item, err := s.readMetadataFile(targetPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return metadatadomain.ResourceMetadata{}, false, nil
-		}
-		return metadatadomain.ResourceMetadata{}, false, err
+	candidates := []struct {
+		path string
+		yaml bool
+	}{
+		{path: targetPath, yaml: false},
 	}
-	return item, true, nil
+	if legacyPath, legacyErr := s.legacyMetadataFilePath(selector, kind); legacyErr == nil {
+		candidates = append(candidates, struct {
+			path string
+			yaml bool
+		}{path: legacyPath, yaml: true})
+	} else {
+		return metadatadomain.ResourceMetadata{}, false, legacyErr
+	}
+
+	for _, candidate := range candidates {
+		item, err := s.readMetadataFile(candidate.path, candidate.yaml)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return metadatadomain.ResourceMetadata{}, false, err
+		}
+		return item, true, nil
+	}
+	return metadatadomain.ResourceMetadata{}, false, nil
 }
 
-func (s *FSMetadataService) readMetadataFile(targetPath string) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) readMetadataFile(targetPath string, yaml bool) (metadatadomain.ResourceMetadata, error) {
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
 
-	item, err := s.decodeMetadata(data)
+	item, err := s.decodeMetadata(data, yaml)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
@@ -204,17 +237,21 @@ func (s *FSMetadataService) writeMetadataFile(targetPath string, metadata metada
 		return internalError("failed to replace metadata file", err)
 	}
 
+	if strings.HasSuffix(targetPath, ".json") {
+		_ = os.Remove(strings.TrimSuffix(targetPath, ".json") + ".yaml")
+	}
+
 	return nil
 }
 
-func (s *FSMetadataService) decodeMetadata(data []byte) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool) (metadatadomain.ResourceMetadata, error) {
 	var (
 		decoded metadatadomain.ResourceMetadata
 		err     error
 	)
 
-	switch s.resourceFormat {
-	case config.ResourceFormatYAML:
+	switch {
+	case yaml:
 		decoded, err = metadatadomain.DecodeResourceMetadataYAML(data)
 		if err != nil {
 			return metadatadomain.ResourceMetadata{}, faults.NewValidationError("invalid yaml metadata", err)
@@ -238,20 +275,11 @@ func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetad
 		return nil, err
 	}
 
-	switch s.resourceFormat {
-	case config.ResourceFormatYAML:
-		encoded, err := metadatadomain.EncodeResourceMetadataYAML(metadata)
-		if err != nil {
-			return nil, internalError("failed to encode yaml metadata", err)
-		}
-		return encoded, nil
-	default:
-		encoded, err := metadatadomain.EncodeResourceMetadataJSON(metadata, true)
-		if err != nil {
-			return nil, internalError("failed to encode json metadata", err)
-		}
-		return ensureTrailingNewline(encoded), nil
+	encoded, err := metadatadomain.EncodeResourceMetadataJSON(metadata, true)
+	if err != nil {
+		return nil, internalError("failed to encode json metadata", err)
 	}
+	return ensureTrailingNewline(encoded), nil
 }
 
 func ensureTrailingNewline(data []byte) []byte {

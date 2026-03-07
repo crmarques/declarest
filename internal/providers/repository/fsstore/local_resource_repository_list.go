@@ -15,7 +15,7 @@ import (
 )
 
 func (r *LocalResourceRepository) resourceFileName() string {
-	return "resource" + r.extension
+	return "resource"
 }
 
 func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
@@ -24,15 +24,12 @@ func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, po
 		return nil, err
 	}
 
-	payloadPath, err := r.payloadFilePath(normalizedPath)
+	info, err := r.discoverPayloadFile(normalizedPath)
 	if err != nil {
 		return nil, err
 	}
-	if stat, statErr := os.Stat(payloadPath); statErr == nil && !stat.IsDir() {
+	if info != nil {
 		return []resource.Resource{buildListedResource(normalizedPath)}, nil
-	}
-	if statErr := statFileExists(payloadPath); statErr != nil {
-		return nil, statErr
 	}
 
 	collectionPath, err := r.collectionDirPath(normalizedPath)
@@ -52,15 +49,12 @@ func (r *LocalResourceRepository) Exists(_ context.Context, logicalPath string) 
 		return false, err
 	}
 
-	payloadPath, err := r.payloadFilePath(normalizedPath)
+	info, err := r.discoverPayloadFile(normalizedPath)
 	if err != nil {
 		return false, err
 	}
-
-	if _, err := os.Stat(payloadPath); err == nil {
+	if info != nil {
 		return true, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, internalError("failed to check resource payload", err)
 	}
 
 	collectionPath, err := r.collectionDirPath(normalizedPath)
@@ -92,16 +86,17 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 				continue
 			}
 
-			resourceFilePath := filepath.Join(collectionPath, entry.Name(), r.resourceFileName())
-			if stat, statErr := os.Stat(resourceFilePath); statErr == nil && !stat.IsDir() {
-				logicalPath := path.Join(baseLogicalPath, entry.Name())
-				if !strings.HasPrefix(logicalPath, "/") {
-					logicalPath = "/" + logicalPath
-				}
+			logicalPath := path.Join(baseLogicalPath, entry.Name())
+			if !strings.HasPrefix(logicalPath, "/") {
+				logicalPath = "/" + logicalPath
+			}
+
+			info, infoErr := r.payloadFileInfoFromDir(logicalPath, filepath.Join(collectionPath, entry.Name()))
+			if infoErr != nil {
+				return nil, infoErr
+			}
+			if info != nil {
 				itemsByPath[logicalPath] = buildListedResource(logicalPath)
-				continue
-			} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-				return nil, internalError("failed to inspect collection resource payload", statErr)
 			}
 			continue
 		}
@@ -125,17 +120,11 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() {
-			if entry.Name() == "_" {
-				return filepath.SkipDir
-			}
+		if !entry.IsDir() {
 			return nil
 		}
-		if !strings.HasSuffix(entry.Name(), r.extension) {
-			return nil
-		}
-		if entry.Name() != r.resourceFileName() {
-			return nil
+		if entry.Name() == "_" {
+			return filepath.SkipDir
 		}
 
 		relPath, relErr := filepath.Rel(collectionPath, filePath)
@@ -144,18 +133,23 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		}
 		relPath = filepath.ToSlash(relPath)
 
-		relDir := filepath.ToSlash(filepath.Dir(relPath))
-		if hasReservedSegment(relDir) {
+		if hasReservedSegment(relPath) {
 			return nil
 		}
 		logicalPath := baseLogicalPath
-		if relDir != "." {
-			logicalPath = path.Join(baseLogicalPath, relDir)
+		if relPath != "." {
+			logicalPath = path.Join(baseLogicalPath, relPath)
 		}
 		if !strings.HasPrefix(logicalPath, "/") {
 			logicalPath = "/" + logicalPath
 		}
-		itemsByPath[logicalPath] = buildListedResource(logicalPath)
+		info, infoErr := r.payloadFileInfoFromDir(logicalPath, filePath)
+		if infoErr != nil {
+			return infoErr
+		}
+		if info != nil {
+			itemsByPath[logicalPath] = buildListedResource(logicalPath)
+		}
 		return nil
 	})
 	if err != nil {
@@ -174,13 +168,6 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		return items[i].LogicalPath < items[j].LogicalPath
 	})
 	return items, nil
-}
-
-func statFileExists(filePath string) error {
-	if _, err := os.Stat(filePath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return internalError("failed to inspect resource payload", err)
-	}
-	return nil
 }
 
 func buildListedResource(logicalPath string) resource.Resource {

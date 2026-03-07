@@ -31,6 +31,16 @@ var (
 		OutputJSON,
 		OutputYAML,
 	}
+	resourceInputFormatCompletionValues = []string{
+		OutputJSON,
+		OutputYAML,
+		resource.PayloadTypeXML,
+		resource.PayloadTypeHCL,
+		resource.PayloadTypeINI,
+		resource.PayloadTypeProperties,
+		resource.PayloadTypeText,
+		resource.PayloadTypeBinary,
+	}
 )
 
 type completionDataSource uint8
@@ -242,6 +252,10 @@ func RegisterOutputFlagCompletion(command *cobra.Command) {
 
 func RegisterInputFormatFlagCompletion(command *cobra.Command) {
 	RegisterFlagValueCompletions(command, "format", inputFormatCompletionValues)
+}
+
+func RegisterResourceInputFormatFlagCompletion(command *cobra.Command) {
+	RegisterFlagValueCompletions(command, "format", resourceInputFormatCompletionValues)
 }
 
 func RegisterFlagValueCompletions(command *cobra.Command, flagName string, values []string) {

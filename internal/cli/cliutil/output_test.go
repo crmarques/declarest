@@ -2,8 +2,10 @@ package cliutil
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -65,5 +67,56 @@ func TestValidateOutputFormatForCommandPath(t *testing.T) {
 				t.Fatalf("ValidateOutputFormatForCommandPath(%q, %q) error=%v, wantErr=%t", testCase.path, testCase.format, err, testCase.wantErr)
 			}
 		})
+	}
+}
+
+func TestWriteOutputAutoWritesBinaryBytesWithoutNewline(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
+
+	if err := WriteOutput(command, OutputAuto, resource.BinaryValue{Bytes: []byte("abc")}, nil); err != nil {
+		t.Fatalf("WriteOutput returned error: %v", err)
+	}
+	if got := stdout.String(); got != "abc" {
+		t.Fatalf("expected raw binary output, got %q", got)
+	}
+}
+
+func TestWriteOutputJSONWrapsBinaryPayload(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
+
+	if err := WriteOutput(command, OutputJSON, resource.BinaryValue{Bytes: []byte("abc")}, nil); err != nil {
+		t.Fatalf("WriteOutput returned error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "\"encoding\": \"base64\"") {
+		t.Fatalf("expected base64 encoding wrapper, got %q", output)
+	}
+	if !strings.Contains(output, "\"data\": \"YWJj\"") {
+		t.Fatalf("expected base64 payload data, got %q", output)
+	}
+}
+
+func TestWriteOutputAutoRejectsBinaryCollections(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
+
+	err := WriteOutput(command, OutputAuto, []any{resource.BinaryValue{Bytes: []byte("abc")}}, nil)
+	if err == nil {
+		t.Fatal("expected binary collection validation error")
+	}
+	if !strings.Contains(err.Error(), "binary collections require") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -24,6 +24,19 @@ func (g *HTTPManagedServerClient) validateOperationPayload(
 		return nil
 	}
 
+	payloadType := g.metadataPayloadType(md)
+	if strings.TrimSpace(md.PayloadType) == "" {
+		if inferred, ok := resource.PayloadTypeForMediaType(spec.ContentType); ok {
+			payloadType = inferred
+		}
+	}
+	if !resource.IsStructuredPayloadType(payloadType) {
+		return faults.NewValidationError(
+			fmt.Sprintf("operation payload validation requires structured payloads, got %q", payloadType),
+			nil,
+		)
+	}
+
 	normalizedBody, err := resource.Normalize(spec.Body)
 	if err != nil {
 		return err

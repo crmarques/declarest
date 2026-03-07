@@ -23,6 +23,15 @@ func normalizeValue(value any) (any, error) {
 	switch typed := value.(type) {
 	case nil, bool, string:
 		return typed, nil
+	case BinaryValue:
+		return CloneBinaryValue(typed), nil
+	case *BinaryValue:
+		if typed == nil {
+			return nil, nil
+		}
+		return CloneBinaryValue(*typed), nil
+	case []byte:
+		return BinaryValue{Bytes: append([]byte(nil), typed...)}, nil
 	case float32:
 		return normalizeFloat(float64(typed))
 	case float64:

@@ -10,10 +10,11 @@ func TestResolveResourceFormatTemplatesInMetadata(t *testing.T) {
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
 				Path:        "/api/customers/{{.id}}",
-				Accept:      "application/{{resource_format .}}",
+				Accept:      "{{payload_media_type .}}",
 				ContentType: "application/{{resource_format .}}",
 				Query: map[string]string{
-					"format": "{{resource_format .}}",
+					"format":    "{{resource_format .}}",
+					"extension": "{{payload_extension .}}",
 				},
 			},
 		},
@@ -39,5 +40,8 @@ func TestResolveResourceFormatTemplatesInMetadata(t *testing.T) {
 	}
 	if getSpec.Query["format"] != "yaml" {
 		t.Fatalf("expected query.format to resolve, got %q", getSpec.Query["format"])
+	}
+	if getSpec.Query["extension"] != ".yaml" {
+		t.Fatalf("expected query.extension to resolve, got %q", getSpec.Query["extension"])
 	}
 }

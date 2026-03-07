@@ -36,7 +36,7 @@ func newRequestCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 		{method: "options", short: "Send OPTIONS request"},
 		{method: "post", short: "Send POST request", allowInlinePayload: true},
 		{method: "put", short: "Send PUT request", allowInlinePayload: true},
-		{method: "patch", short: "Send PATCH request"},
+		{method: "patch", short: "Send PATCH request", allowInlinePayload: true},
 		{method: "delete", short: "Send DELETE request", requireDeleteConfirm: true, supportsRecursive: true},
 		{method: "trace", short: "Send TRACE request"},
 		{method: "connect", short: "Send CONNECT request"},
@@ -56,6 +56,9 @@ func newRequestMethodCommand(
 	var pathFlag string
 	var inputFormat string
 	var payloadInputs []string
+	var headerInputs []string
+	var accept string
+	var contentType string
 	var confirmDelete bool
 	var recursive bool
 
@@ -92,6 +95,10 @@ func newRequestMethodCommand(
 			if !hasBody {
 				body = nil
 			}
+			headers, err := parseRequestHeaders(headerInputs)
+			if err != nil {
+				return err
+			}
 
 			result, err := requestapp.Execute(command.Context(), requestapp.Dependencies{
 				Orchestrator: deps.Orchestrator,
@@ -99,6 +106,9 @@ func newRequestMethodCommand(
 				Method:         methodUpper,
 				LogicalPath:    normalizedPath,
 				Body:           body,
+				Headers:        headers,
+				Accept:         accept,
+				ContentType:    contentType,
 				ResolveTargets: cfg.requireDeleteConfirm,
 				Recursive:      recursive,
 			})
@@ -132,10 +142,19 @@ func newRequestMethodCommand(
 		"payload",
 		"f",
 		nil,
-		"payload file path (use '-' for stdin); post/put also accept inline payload",
+		"payload file path (use '-' for stdin); post/put/patch also accept inline payload; binary requires file or stdin",
 	)
-	command.Flags().StringVarP(&inputFormat, "format", "i", cliutil.OutputJSON, "input format: json|yaml")
-	cliutil.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVarP(
+		&inputFormat,
+		"format",
+		"i",
+		cliutil.OutputJSON,
+		"input format: json|yaml|xml|hcl|ini|properties|text|binary",
+	)
+	cliutil.RegisterResourceInputFormatFlagCompletion(command)
+	command.Flags().StringArrayVarP(&headerInputs, "header", "H", nil, "request header in 'Name: Value' or 'Name=Value' form")
+	command.Flags().StringVar(&accept, "accept", "", "explicit Accept header override")
+	command.Flags().StringVar(&contentType, "content-type", "", "explicit Content-Type header override")
 
 	if cfg.requireDeleteConfirm {
 		command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
@@ -156,14 +175,14 @@ func decodeOptionalRequestPayload(
 	}
 
 	if len(payloadInputs) == 0 {
-		data, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{})
+		data, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{Format: inputFormat})
 		if err != nil {
 			return nil, false, err
 		}
-		if len(data) == 0 {
+		if data == nil {
 			return nil, false, nil
 		}
-		value, err := cliutil.DecodeInputData[resource.Value](data, inputFormat)
+		value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
@@ -179,14 +198,14 @@ func decodeOptionalRequestPayload(
 		if err != nil {
 			return nil, false, err
 		}
-		value, err := cliutil.DecodeInputData[resource.Value](data, inputFormat)
+		value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
 		return value, true, nil
 	}
 
-	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{})
+	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{Format: inputFormat})
 	if err != nil {
 		return nil, false, err
 	}
@@ -195,7 +214,10 @@ func decodeOptionalRequestPayload(
 	}
 
 	if allowInlinePayload && !requestPayloadLooksLikeExistingFile(payloadArg) {
-		value, err := cliutil.DecodeInputData[resource.Value]([]byte(payloadArg), inputFormat)
+		if cliutil.IsBinaryInputFormat(inputFormat) {
+			return nil, false, cliutil.ValidationError("binary request payload requires --payload <path|-> or stdin", nil)
+		}
+		value, err := cliutil.DecodeResourceValueInputData([]byte(payloadArg), inputFormat)
 		if err != nil {
 			return nil, false, err
 		}
@@ -206,11 +228,48 @@ func decodeOptionalRequestPayload(
 	if err != nil {
 		return nil, false, err
 	}
-	value, err := cliutil.DecodeInputData[resource.Value](data, inputFormat)
+	value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
 	if err != nil {
 		return nil, false, err
 	}
 	return value, true, nil
+}
+
+func parseRequestHeaders(values []string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	headers := make(map[string]string, len(values))
+	for _, raw := range values {
+		name, value, err := splitRequestHeader(raw)
+		if err != nil {
+			return nil, err
+		}
+		headers[name] = value
+	}
+	return headers, nil
+}
+
+func splitRequestHeader(raw string) (string, string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", "", cliutil.ValidationError("flag --header cannot be empty", nil)
+	}
+
+	separator := strings.Index(trimmed, ":")
+	if separator < 0 {
+		separator = strings.Index(trimmed, "=")
+	}
+	if separator < 0 {
+		return "", "", cliutil.ValidationError("flag --header must use 'Name: Value' or 'Name=Value' syntax", nil)
+	}
+
+	name := strings.TrimSpace(trimmed[:separator])
+	if name == "" {
+		return "", "", cliutil.ValidationError("flag --header requires a header name", nil)
+	}
+	return name, strings.TrimSpace(trimmed[separator+1:]), nil
 }
 
 func requestPayloadLooksLikeExistingFile(value string) bool {
@@ -236,7 +295,7 @@ func writeRequestOutput[T any](
 	globalFlags *cliutil.GlobalFlags,
 	value T,
 ) error {
-	outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+	outputFormat, err := cliutil.ResolvePayloadAwareOutputFormat(command.Context(), deps, globalFlags, value)
 	if err != nil {
 		return err
 	}

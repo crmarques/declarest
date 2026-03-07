@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crmarques/declarest/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -106,8 +107,10 @@ func (r *ResourceRepository) ValidateSpec() error {
 	if r.Spec.PollInterval.Duration < 30*time.Second {
 		return fmt.Errorf("spec.pollInterval must be at least 30s")
 	}
-	if strings.TrimSpace(r.Spec.ResourceFormat) != "" && strings.TrimSpace(r.Spec.ResourceFormat) != "json" && strings.TrimSpace(r.Spec.ResourceFormat) != "yaml" {
-		return fmt.Errorf("spec.resourceFormat must be one of: json, yaml")
+	if strings.TrimSpace(r.Spec.ResourceFormat) != "" {
+		if _, err := resource.ValidatePayloadType(r.Spec.ResourceFormat); err != nil {
+			return fmt.Errorf("spec.resourceFormat must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream")
+		}
 	}
 	if r.Spec.Git == nil {
 		return fmt.Errorf("spec.git is required")

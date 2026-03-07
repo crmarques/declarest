@@ -96,9 +96,9 @@ func newCreateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	cliutil.BindInputFlags(command, &input)
+	cliutil.BindResourceInputFlags(command, &input)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
-		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
+		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d); binary requires file or stdin"
 	}
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	command.Flags().BoolVar(&refreshRepository, "refresh-repository", false, "re-fetch remote mutation results into the repository")

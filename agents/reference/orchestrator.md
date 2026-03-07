@@ -25,16 +25,17 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 8. Fallback behavior MUST be deterministic and bounded; no unbounded search loops.
 9. Conflict conditions MUST return typed `ConflictError` with actionable context.
 10. Compare/diff output MUST be stable for identical inputs.
-11. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
-12. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
-13. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint, and they SHOULD preserve `NotFound` when a nested collection read fails because the parent resource is also `NotFound`.
-14. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering, but only when the requested logical path depth does not exceed the resolved selector/collection template depth; singleton fallback MUST NOT collapse explicit child identity segments and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
+11. Binary payload comparison MUST be whole-payload only: identical bytes mean no drift, and differing bytes MUST produce one deterministic root-level replace diff entry.
+12. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idFromAttribute` when literal lookup returns `NotFound`.
+13. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
+14. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint, and they SHOULD preserve `NotFound` when a nested collection read fails because the parent resource is also `NotFound`.
+15. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering, but only when the requested logical path depth does not exceed the resolved selector/collection template depth; singleton fallback MUST NOT collapse explicit child identity segments and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
 
 ## Data Contracts
 Core orchestrator workflows:
 1. Local read/write: get/save/list local resources.
 2. Remote read/write: get/create/update/delete/list remote resources.
-3. Orchestration workflows: apply, refresh, explain, diff, template.
+3. Orchestration workflows: apply, refresh, explain, diff, template, request.
 4. Repository administration: init, refresh, push, reset, check, status.
 
 Policy contract:
@@ -43,6 +44,7 @@ Policy contract:
 Resolution contract:
 1. Input path -> metadata resolution -> `resource.Resource` identity resolution -> operation spec -> execution.
 2. Optional secret masking/resolution performed at boundaries.
+3. Direct request workflows MUST preserve the full rendered request contract, including metadata-derived query parameters, headers, `Accept`, and `Content-Type`, through managed-server execution.
 
 ## Failure Modes
 1. Metadata resolved but required remote identity missing.

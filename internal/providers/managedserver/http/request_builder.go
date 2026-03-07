@@ -66,8 +66,9 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 		return metadata.OperationSpec{}, faults.NewValidationError(fmt.Sprintf("operation %q has no HTTP method", operation), nil)
 	}
 
+	payloadType := g.metadataPayloadType(md)
 	if strings.TrimSpace(spec.Accept) == "" {
-		spec.Accept, err = g.defaultResourceMediaType()
+		spec.Accept, err = g.defaultResourceMediaType(payloadType)
 		if err != nil {
 			return metadata.OperationSpec{}, err
 		}
@@ -75,7 +76,7 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 
 	if operationRequiresBody(operation) {
 		if strings.TrimSpace(spec.ContentType) == "" {
-			spec.ContentType, err = g.defaultResourceMediaType()
+			spec.ContentType, err = g.defaultResourceMediaType(payloadType)
 			if err != nil {
 				return metadata.OperationSpec{}, err
 			}

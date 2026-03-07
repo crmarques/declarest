@@ -113,9 +113,9 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	cliutil.BindInputFlags(command, &input)
+	cliutil.BindResourceInputFlags(command, &input)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
-		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d)"
+		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or dotted assignments (a=b,c=d); binary requires file or stdin"
 	}
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")

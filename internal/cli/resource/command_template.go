@@ -23,10 +23,6 @@ func newTemplateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.G
 			if err != nil {
 				return err
 			}
-			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
-			}
 
 			value, err := resourceinputapp.DecodeRequiredPayloadInput(command, input)
 			if err != nil {
@@ -42,6 +38,10 @@ func newTemplateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.G
 				return err
 			}
 
+			outputFormat, err := cliutil.ResolvePayloadAwareOutputFormat(command.Context(), deps, globalFlags, templated)
+			if err != nil {
+				return err
+			}
 			return cliutil.WriteOutput(command, outputFormat, templated, func(w io.Writer, item resource.Value) error {
 				_, writeErr := fmt.Fprintln(w, item)
 				return writeErr
@@ -52,6 +52,6 @@ func newTemplateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.G
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	cliutil.BindInputFlags(command, &input)
+	cliutil.BindResourceInputFlags(command, &input)
 	return command
 }

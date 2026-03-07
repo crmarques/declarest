@@ -36,7 +36,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Repository webhook endpoint path: `/webhooks/repository/<namespace>/<repository>`; when `watch-namespace` is set, single-segment `<repository>` form MAY be accepted and resolves to that namespace.
 4. Repository webhook annotation `declarest.io/webhook-last-received-at` stores the last accepted provider event timestamp (`RFC3339Nano`).
 5. Repository webhook annotation `declarest.io/webhook-last-event-id` stores provider event identifiers when present.
-6. `ResourceRepository` defaults: `spec.git.branch=main` when omitted; `spec.resourceFormat=json` when omitted.
+6. `ResourceRepository` defaults: `spec.git.branch=main` when omitted; `spec.resourceFormat=json` when omitted, where `resourceFormat` defines the default payload type for new resources and allowed values are `json|yaml|xml|hcl|ini|properties|text|octet-stream`.
 7. `ManagedServer` defaults: `spec.http.auth.oauth2.grantType=client_credentials` when omitted; `spec.pollInterval=10m` when omitted.
 8. `SyncPolicy` defaults: `spec.source.recursive=true` and `spec.syncInterval=5m` when omitted.
 9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows.

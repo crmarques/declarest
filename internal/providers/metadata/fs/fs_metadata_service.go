@@ -21,7 +21,6 @@ const (
 type FSMetadataService struct {
 	baseDir        string
 	resourceFormat string
-	extension      string
 }
 
 func NewFSMetadataService(baseDir string, resourceFormat string) *FSMetadataService {
@@ -30,15 +29,9 @@ func NewFSMetadataService(baseDir string, resourceFormat string) *FSMetadataServ
 		format = config.ResourceFormatJSON
 	}
 
-	extension := ".json"
-	if format == config.ResourceFormatYAML {
-		extension = ".yaml"
-	}
-
 	return &FSMetadataService{
 		baseDir:        filepath.Clean(baseDir),
 		resourceFormat: format,
-		extension:      extension,
 	}
 }
 

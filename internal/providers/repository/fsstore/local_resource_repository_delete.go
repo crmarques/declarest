@@ -19,19 +19,17 @@ func (r *LocalResourceRepository) Delete(_ context.Context, logicalPath string, 
 		return err
 	}
 
-	payloadPath, err := r.payloadFilePath(normalizedPath)
+	info, err := r.discoverPayloadFile(normalizedPath)
 	if err != nil {
 		return err
 	}
 
-	if stat, statErr := os.Stat(payloadPath); statErr == nil && !stat.IsDir() {
-		if err := os.Remove(payloadPath); err != nil {
+	if info != nil {
+		if err := os.Remove(info.Path); err != nil {
 			return internalError("failed to remove resource payload", err)
 		}
-		_ = r.cleanupEmptyParents(filepath.Dir(payloadPath))
+		_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
 		return nil
-	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-		return internalError("failed to inspect resource payload", statErr)
 	}
 
 	collectionPath, err := r.collectionDirPath(normalizedPath)
@@ -60,25 +58,24 @@ func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) 
 				continue
 			}
 
-			resourceFilePath := filepath.Join(collectionPath, entry.Name(), r.resourceFileName())
-			if stat, statErr := os.Stat(resourceFilePath); statErr == nil && !stat.IsDir() {
-				if err := os.Remove(resourceFilePath); err != nil {
+			resourceDir := filepath.Join(collectionPath, entry.Name())
+			relativeDir, relErr := filepath.Rel(r.baseDir, resourceDir)
+			if relErr != nil {
+				return internalError("failed to resolve collection resource path", relErr)
+			}
+			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
+			info, infoErr := r.payloadFileInfoFromDir(logicalPath, resourceDir)
+			if infoErr != nil {
+				return infoErr
+			}
+			if info != nil {
+				if err := os.Remove(info.Path); err != nil {
 					return internalError("failed to delete resource from collection", err)
 				}
-				_ = r.cleanupEmptyParents(filepath.Dir(resourceFilePath))
-			} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-				return internalError("failed to inspect collection resource payload", statErr)
+				_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
 			}
 			continue
 		}
-		if entry.Name() != r.resourceFileName() {
-			continue
-		}
-		resourceFilePath := filepath.Join(collectionPath, entry.Name())
-		if err := os.Remove(resourceFilePath); err != nil {
-			return internalError("failed to delete resource from collection", err)
-		}
-		_ = r.cleanupEmptyParents(filepath.Dir(resourceFilePath))
 	}
 	return nil
 }
@@ -92,18 +89,24 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 			if entry.Name() == "_" {
 				return filepath.SkipDir
 			}
+			relativeDir, relErr := filepath.Rel(r.baseDir, filePath)
+			if relErr != nil {
+				return relErr
+			}
+			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
+			info, infoErr := r.payloadFileInfoFromDir(logicalPath, filePath)
+			if infoErr != nil {
+				return infoErr
+			}
+			if info == nil {
+				return nil
+			}
+			if err := os.Remove(info.Path); err != nil {
+				return err
+			}
+			_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
 			return nil
 		}
-		if !strings.HasSuffix(entry.Name(), r.extension) {
-			return nil
-		}
-		if entry.Name() != r.resourceFileName() {
-			return nil
-		}
-		if err := os.Remove(filePath); err != nil {
-			return err
-		}
-		_ = r.cleanupEmptyParents(filepath.Dir(filePath))
 		return nil
 	})
 	if err != nil {

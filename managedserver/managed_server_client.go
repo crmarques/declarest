@@ -7,6 +7,16 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+type RequestSpec struct {
+	Method      string
+	Path        string
+	Query       map[string]string
+	Headers     map[string]string
+	Accept      string
+	ContentType string
+	Body        resource.Value
+}
+
 type ManagedServerClient interface {
 	Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error)
 	Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error)
@@ -14,7 +24,7 @@ type ManagedServerClient interface {
 	Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error
 	List(ctx context.Context, collectionPath string, metadata metadata.ResourceMetadata) ([]resource.Resource, error)
 	Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error)
-	Request(ctx context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error)
+	Request(ctx context.Context, spec RequestSpec) (resource.Value, error)
 	GetOpenAPISpec(ctx context.Context) (resource.Value, error)
 }
 

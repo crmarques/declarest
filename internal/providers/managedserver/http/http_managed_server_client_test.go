@@ -1075,9 +1075,11 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 
 	_, err := client.Request(
 		validationCtx,
-		http.MethodPost,
-		"/admin/realms/platform/clients",
-		map[string]any{"clientId": "declarest-cli"},
+		managedserverdomain.RequestSpec{
+			Method: http.MethodPost,
+			Path:   "/admin/realms/platform/clients",
+			Body:   map[string]any{"clientId": "declarest-cli"},
+		},
 	)
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
@@ -1085,9 +1087,11 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 
 	_, err = client.Request(
 		validationCtx,
-		http.MethodPost,
-		"/admin/realms/platform/clients",
-		map[string]any{},
+		managedserverdomain.RequestSpec{
+			Method: http.MethodPost,
+			Path:   "/admin/realms/platform/clients",
+			Body:   map[string]any{},
+		},
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
 	if got := atomic.LoadInt32(&requestCount); got != 1 {
@@ -1933,7 +1937,10 @@ func TestRequestOperations(t *testing.T) {
 			},
 		})
 
-		value, err := client.Request(context.Background(), http.MethodGet, "/test", nil)
+		value, err := client.Request(context.Background(), managedserverdomain.RequestSpec{
+			Method: http.MethodGet,
+			Path:   "/test",
+		})
 		if err != nil {
 			t.Fatalf("Request returned error: %v", err)
 		}
@@ -1975,9 +1982,13 @@ func TestRequestOperations(t *testing.T) {
 			},
 		})
 
-		_, err := client.Request(context.Background(), http.MethodPost, "/test", map[string]any{
-			"id":   "a",
-			"name": "alpha",
+		_, err := client.Request(context.Background(), managedserverdomain.RequestSpec{
+			Method: http.MethodPost,
+			Path:   "/test",
+			Body: map[string]any{
+				"id":   "a",
+				"name": "alpha",
+			},
 		})
 		if err != nil {
 			t.Fatalf("Request returned error: %v", err)
@@ -2000,7 +2011,10 @@ func TestRequestOperations(t *testing.T) {
 			},
 		})
 
-		value, err := client.Request(context.Background(), http.MethodGet, "/health", nil)
+		value, err := client.Request(context.Background(), managedserverdomain.RequestSpec{
+			Method: http.MethodGet,
+			Path:   "/health",
+		})
 		if err != nil {
 			t.Fatalf("Request returned error: %v", err)
 		}
@@ -2019,10 +2033,16 @@ func TestRequestOperations(t *testing.T) {
 			},
 		})
 
-		_, err := client.Request(context.Background(), "", "/test", nil)
+		_, err := client.Request(context.Background(), managedserverdomain.RequestSpec{
+			Method: "",
+			Path:   "/test",
+		})
 		assertTypedCategory(t, err, faults.ValidationError)
 
-		_, err = client.Request(context.Background(), http.MethodGet, "", nil)
+		_, err = client.Request(context.Background(), managedserverdomain.RequestSpec{
+			Method: http.MethodGet,
+			Path:   "",
+		})
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }

@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
@@ -324,6 +326,28 @@ func (r *DefaultOrchestrator) resolveComparedPayloads(
 	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localValue)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	payloadType, payloadTypeErr := metadata.EffectivePayloadType(resourceMd, r.effectiveResourceFormat())
+	if payloadTypeErr != nil {
+		return nil, nil, payloadTypeErr
+	}
+	if !resource.IsStructuredPayloadType(payloadType) {
+		if len(compareSpec.Filter) > 0 || len(compareSpec.Suppress) > 0 || strings.TrimSpace(compareSpec.JQ) != "" {
+			return nil, nil, faults.NewValidationError(
+				fmt.Sprintf("compare transforms require structured payloads, got %q", payloadType),
+				nil,
+			)
+		}
+		normalizedLocal, err := resource.Normalize(localValue)
+		if err != nil {
+			return nil, nil, err
+		}
+		normalizedRemote, err := resource.Normalize(remoteValue)
+		if err != nil {
+			return nil, nil, err
+		}
+		return normalizedLocal, normalizedRemote, nil
 	}
 
 	localTransformed, err := applyCompareTransforms(localValue, compareSpec)

@@ -117,29 +117,41 @@ Invariants:
 2. `CurrentCtx` MUST reference an existing context when contexts are present.
 
 ### Type: `resource.Value`
-Represents JSON-compatible content.
+Represents structured or opaque resource content.
 
 Allowed shapes:
 1. map object.
 2. array.
 3. scalar (`string`, `number`, `bool`, `null`).
+4. `resource.BinaryValue`.
 
 Invariants:
 1. serialization MUST be deterministic.
 2. numeric handling MUST avoid implicit precision loss.
 3. exact placeholder directives (for example `{{secret .}}`, `{{resource_format .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
+4. opaque binary payloads MUST use `resource.BinaryValue` instead of raw `[]byte`.
+
+### Type: `resource.BinaryValue`
+Represents opaque binary payload content.
+
+Required fields:
+1. `Bytes`.
+
+Invariants:
+1. `Bytes` MUST be treated as opaque content and MUST NOT assume UTF-8 text semantics.
+2. structured CLI output MUST serialize `resource.BinaryValue` as a base64 wrapper object rather than raw byte arrays.
 
 ### Type: `metadata.ResourceMetadata`
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`) and optional `collectionPath` override.
+1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`), optional `collectionPath` override, and optional `payloadType` override.
 2. `resourceInfo` secret mapping (`secretInAttributes`).
 3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
 5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
 6. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
-7. metadata template helper functions include `{{resource_format .}}` for repository-format-aware values (`json` or `yaml`) in template-rendered metadata string fields.
+7. metadata template helper functions include `{{resource_format .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
@@ -155,6 +167,20 @@ Required fields:
 
 Optional fields:
 1. `Validate` (`metadata.OperationValidationSpec`).
+
+### Type: `managedserver.RequestSpec`
+Represents one concrete managed-server HTTP request.
+
+Required fields:
+1. `Method`.
+2. `Path`.
+
+Optional fields:
+1. `Query`.
+2. `Headers`.
+3. `Accept`.
+4. `ContentType`.
+5. `Body`.
 
 ### Type: `metadata.OperationValidationSpec`
 Represents operation payload validation directives.

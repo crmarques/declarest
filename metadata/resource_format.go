@@ -1,45 +1,29 @@
 package metadata
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"text/template"
 
 	"github.com/crmarques/declarest/faults"
-)
-
-const (
-	resourceFormatJSON = "json"
-	resourceFormatYAML = "yaml"
+	"github.com/crmarques/declarest/resource"
 )
 
 var resourceFormatTemplateTokenPattern = regexp.MustCompile(`\{\{\s*resource_format\s+\.\s*\}\}`)
+var payloadTypeTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_type\s+\.\s*\}\}`)
+var payloadMediaTypeTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_media_type\s+\.\s*\}\}`)
+var payloadExtensionTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_extension\s+\.\s*\}\}`)
 
 // NormalizeResourceFormat trims and lowercases the configured repository
 // resource format and defaults empty values to json.
 func NormalizeResourceFormat(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	if normalized == "" {
-		return resourceFormatJSON
-	}
-	return normalized
+	return resource.NormalizePayloadType(value)
 }
 
 // ValidateResourceFormat returns the normalized repository resource format when
 // it is supported by the runtime.
 func ValidateResourceFormat(value string) (string, error) {
-	normalized := NormalizeResourceFormat(value)
-	switch normalized {
-	case resourceFormatJSON, resourceFormatYAML:
-		return normalized, nil
-	default:
-		return "", faults.NewTypedError(
-			faults.ValidationError,
-			fmt.Sprintf("unsupported resource format %q", strings.TrimSpace(value)),
-			nil,
-		)
-	}
+	return resource.ValidatePayloadType(value)
 }
 
 // ResourceFormatMediaType returns the default media type used for metadata
@@ -49,7 +33,22 @@ func ResourceFormatMediaType(value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "application/" + format, nil
+	return resource.PayloadMediaType(format)
+}
+
+func ResourceFormatExtension(value string) (string, error) {
+	format, err := ValidateResourceFormat(value)
+	if err != nil {
+		return "", err
+	}
+	return resource.PayloadExtension(format)
+}
+
+func EffectivePayloadType(metadata ResourceMetadata, fallback string) (string, error) {
+	if strings.TrimSpace(metadata.PayloadType) != "" {
+		return ValidateResourceFormat(metadata.PayloadType)
+	}
+	return ValidateResourceFormat(fallback)
 }
 
 // ResolveResourceFormatTemplatesInMetadata replaces metadata string template
@@ -99,6 +98,24 @@ func ResolveResourceFormatTemplatesInMetadata(value ResourceMetadata, resourceFo
 // TemplateFuncMap returns metadata template helpers evaluated against the
 // provided render scope.
 func TemplateFuncMap(scope map[string]any) template.FuncMap {
+	resolveScopePayloadType := func(arg any) (string, error) {
+		if arg != nil {
+			if _, ok := arg.(map[string]any); !ok {
+				return "", faults.NewTypedError(
+					faults.ValidationError,
+					"payload_type template function expects root scope argument (.)",
+					nil,
+				)
+			}
+		}
+
+		candidate := scopeString(scopeValue(scope, "payloadType"))
+		if strings.TrimSpace(candidate) == "" {
+			candidate = scopeString(scopeValue(scope, "resourceFormat"))
+		}
+		return ValidateResourceFormat(candidate)
+	}
+
 	return template.FuncMap{
 		"resource_format": func(arg any) (string, error) {
 			if arg != nil {
@@ -112,6 +129,21 @@ func TemplateFuncMap(scope map[string]any) template.FuncMap {
 			}
 			return ValidateResourceFormat(scopeString(scopeValue(scope, "resourceFormat")))
 		},
+		"payload_type": resolveScopePayloadType,
+		"payload_media_type": func(arg any) (string, error) {
+			payloadType, err := resolveScopePayloadType(arg)
+			if err != nil {
+				return "", err
+			}
+			return ResourceFormatMediaType(payloadType)
+		},
+		"payload_extension": func(arg any) (string, error) {
+			payloadType, err := resolveScopePayloadType(arg)
+			if err != nil {
+				return "", err
+			}
+			return ResourceFormatExtension(payloadType)
+		},
 	}
 }
 
@@ -123,10 +155,21 @@ func scopeValue(scope map[string]any, key string) any {
 }
 
 func replaceResourceFormatTemplateTokens(value string, resourceFormat string) string {
-	if strings.TrimSpace(value) == "" || !strings.Contains(value, "resource_format") {
+	if strings.TrimSpace(value) == "" {
 		return value
 	}
-	return resourceFormatTemplateTokenPattern.ReplaceAllString(value, resourceFormat)
+
+	resolved := resourceFormatTemplateTokenPattern.ReplaceAllString(value, resourceFormat)
+	resolved = payloadTypeTemplateTokenPattern.ReplaceAllString(resolved, resourceFormat)
+
+	if mediaType, err := ResourceFormatMediaType(resourceFormat); err == nil {
+		resolved = payloadMediaTypeTemplateTokenPattern.ReplaceAllString(resolved, mediaType)
+	}
+	if extension, err := ResourceFormatExtension(resourceFormat); err == nil {
+		resolved = payloadExtensionTemplateTokenPattern.ReplaceAllString(resolved, extension)
+	}
+
+	return resolved
 }
 
 func resolveResourceFormatTemplateTokensInValue(value any, resourceFormat string) (any, error) {

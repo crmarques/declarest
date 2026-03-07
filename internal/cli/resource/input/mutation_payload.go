@@ -32,8 +32,11 @@ func DecodeOptionalMutationPayloadInput(
 	if payloadArgLooksLikeExistingFile(payloadArg) {
 		return DecodeOptionalPayloadInput(command, flags)
 	}
+	if cliutil.IsBinaryInputFormat(flags.Format) {
+		return nil, false, cliutil.ValidationError("binary payload input requires --payload <path|-> or stdin", nil)
+	}
 
-	if value, err := cliutil.DecodeInputData[resource.Value]([]byte(payloadArg), flags.Format); err == nil {
+	if value, err := cliutil.DecodeResourceValueInputData([]byte(payloadArg), flags.Format); err == nil {
 		return value, true, nil
 	}
 

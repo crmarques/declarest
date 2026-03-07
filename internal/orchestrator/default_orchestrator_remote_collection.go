@@ -373,7 +373,7 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	scope["resourceFormat"] = r.effectiveResourceFormat()
+	applyOrchestratorPayloadScope(scope, metadataCopy, r.effectiveResourceFormat())
 
 	spec, err := metadata.ResolveOperationSpecWithScope(ctx, metadataCopy, operation, scope)
 	if err != nil {
@@ -383,4 +383,25 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 		spec.Method = overrideMethod
 	}
 	return spec, nil
+}
+
+func applyOrchestratorPayloadScope(scope map[string]any, md metadata.ResourceMetadata, fallback string) {
+	if scope == nil {
+		return
+	}
+
+	scope["resourceFormat"] = metadata.NormalizeResourceFormat(fallback)
+
+	payloadType, err := metadata.EffectivePayloadType(md, fallback)
+	if err != nil {
+		payloadType = metadata.NormalizeResourceFormat(fallback)
+	}
+	scope["payloadType"] = payloadType
+
+	if mediaType, mediaErr := metadata.ResourceFormatMediaType(payloadType); mediaErr == nil {
+		scope["payloadMediaType"] = mediaType
+	}
+	if extension, extensionErr := metadata.ResourceFormatExtension(payloadType); extensionErr == nil {
+		scope["payloadExtension"] = extension
+	}
 }

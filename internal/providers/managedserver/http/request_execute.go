@@ -10,34 +10,43 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
 func (g *HTTPManagedServerClient) Request(
 	ctx context.Context,
-	method string,
-	endpointPath string,
-	body resource.Value,
+	requestSpec managedserverdomain.RequestSpec,
 ) (resource.Value, error) {
-	resolvedMethod := strings.ToUpper(strings.TrimSpace(method))
+	resolvedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 	if resolvedMethod == "" {
 		return nil, faults.NewValidationError("request method is required", nil)
 	}
 
-	resolvedPath := normalizeRequestPath(endpointPath)
+	resolvedPath := normalizeRequestPath(requestSpec.Path)
 	if resolvedPath == "" {
 		return nil, faults.NewValidationError("request path is required", nil)
 	}
 
 	spec := metadata.OperationSpec{
-		Method: resolvedMethod,
-		Path:   resolvedPath,
-		Accept: defaultMediaType,
-		Body:   body,
+		Method:      resolvedMethod,
+		Path:        resolvedPath,
+		Query:       cloneStringMap(requestSpec.Query),
+		Headers:     cloneStringMap(requestSpec.Headers),
+		Accept:      requestSpec.Accept,
+		ContentType: requestSpec.ContentType,
+		Body:        requestSpec.Body,
 	}
-	if body != nil {
-		spec.ContentType = defaultMediaType
+	if strings.TrimSpace(spec.Accept) == "" {
+		spec.Accept = defaultMediaType
+	}
+	if spec.Body != nil && strings.TrimSpace(spec.ContentType) == "" {
+		if resource.IsBinaryValue(spec.Body) {
+			spec.ContentType = "application/octet-stream"
+		} else {
+			spec.ContentType = defaultMediaType
+		}
 	}
 
 	_, hasOperation := requestMethodOperation(resolvedMethod)
@@ -61,12 +70,12 @@ func (g *HTTPManagedServerClient) Request(
 		}
 	}
 
-	responseBody, _, err := g.execute(ctx, spec)
+	responseBody, responseHeaders, err := g.execute(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	return decodeRequestResponse(responseBody)
+	return decodeResponseBody(responseBody, responseHeaders, g.requestFallbackPayloadType(ctx, requestSpec, spec))
 }
 
 func (g *HTTPManagedServerClient) execute(ctx context.Context, spec metadata.OperationSpec) ([]byte, http.Header, error) {

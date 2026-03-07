@@ -1176,7 +1176,11 @@ func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
 	}
 
 	body := resource.Value(map[string]any{"id": "a"})
-	value, err := orchestrator.Request(context.Background(), "POST", "/test", body)
+	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "POST",
+		Path:   "/test",
+		Body:   body,
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1220,7 +1224,11 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 		"providerId": "ldap",
 		"name":       "AD Production",
 	})
-	_, err := orchestrator.Request(context.Background(), "POST", "/admin/realms/acme/user-registry/", body)
+	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "POST",
+		Path:   "/admin/realms/acme/user-registry/",
+		Body:   body,
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1259,7 +1267,10 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 		metadata: metadataService,
 	}
 
-	_, err := orchestrator.Request(context.Background(), "GET", "/admin/realms/master/user-registry", nil)
+	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "GET",
+		Path:   "/admin/realms/master/user-registry",
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1300,7 +1311,10 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 		},
 	}
 
-	value, err := orchestrator.Request(context.Background(), "GET", "/admin/realms/master/clients/account", nil)
+	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "GET",
+		Path:   "/admin/realms/master/clients/account",
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1349,7 +1363,10 @@ func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterN
 		},
 	}
 
-	_, err := orchestrator.Request(context.Background(), "DELETE", "/admin/realms/acme/organizations/alpha", nil)
+	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "DELETE",
+		Path:   "/admin/realms/acme/organizations/alpha",
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1390,12 +1407,11 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 		"requirement": "ALTERNATIVE",
 	})
 
-	value, err := orchestrator.Request(
-		context.Background(),
-		"PUT",
-		"/admin/realms/acme/authentication/flows/test/executions",
-		body,
-	)
+	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "PUT",
+		Path:   "/admin/realms/acme/authentication/flows/test/executions",
+		Body:   body,
+	})
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
 	}
@@ -1418,7 +1434,10 @@ func TestDefaultOrchestratorRequestRequiresServer(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{}
-	_, err := orchestrator.Request(context.Background(), "GET", "/test", nil)
+	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+		Method: "GET",
+		Path:   "/test",
+	})
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
@@ -1710,12 +1729,12 @@ func (f *fakeServer) Exists(context.Context, resource.Resource, metadatadomain.R
 	return f.existsValue, nil
 }
 
-func (f *fakeServer) Request(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+func (f *fakeServer) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
 	f.requestCalled = true
-	f.requestMethod = method
-	f.requestPath = endpointPath
-	f.requestPaths = append(f.requestPaths, endpointPath)
-	f.requestBody = body
+	f.requestMethod = spec.Method
+	f.requestPath = spec.Path
+	f.requestPaths = append(f.requestPaths, spec.Path)
+	f.requestBody = spec.Body
 	if len(f.requestErrs) > 0 {
 		err := f.requestErrs[0]
 		f.requestErrs = f.requestErrs[1:]

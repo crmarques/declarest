@@ -161,7 +161,10 @@ func newCheckCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			if _, err := managedServerClient.Request(command.Context(), http.MethodGet, probePath, nil); err != nil {
+			if _, err := managedServerClient.Request(command.Context(), managedserverdomain.RequestSpec{
+				Method: http.MethodGet,
+				Path:   probePath,
+			}); err != nil {
 				return err
 			}
 

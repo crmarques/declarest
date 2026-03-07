@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -66,8 +67,9 @@ func (g *HTTPManagedServerClient) decodeListResponse(
 	md metadata.ResourceMetadata,
 	spec metadata.OperationSpec,
 	body []byte,
+	headers http.Header,
 ) ([]resource.Resource, error) {
-	payload, err := decodeJSONResponse(body)
+	payload, err := decodeResponseBody(body, headers, g.metadataPayloadType(md))
 	if err != nil {
 		return nil, err
 	}

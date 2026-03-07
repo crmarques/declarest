@@ -18,7 +18,7 @@ Define local repository semantics for resource persistence, metadata storage, pa
 1. All paths MUST be normalized logical absolute paths before IO.
 2. Filesystem joins MUST reject traversal outside configured roots.
 3. Reserved segment `_` MUST be treated as metadata namespace.
-4. Resource data format MUST be explicit (`json` or `yaml`) per context.
+4. Resource payload type MUST be explicit for new-file writes, using metadata/file discovery before falling back to the repository default (`json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`).
 5. Save operations MUST be atomic at file level.
 6. Repository sync conflicts MUST surface typed conflict errors with remediation hints.
 7. Push operations MUST never leak credentials in error output.
@@ -31,8 +31,8 @@ Define local repository semantics for resource persistence, metadata storage, pa
 ## Data Contracts
 Layout contract:
 1. Canonical resource payload at `<logical-path>/resource.<ext>`.
-2. Collection metadata at `<collection-path>/_/metadata.<ext>`.
-3. Resource metadata at `<logical-path>/metadata.<ext>`.
+2. Collection metadata at `<collection-path>/_/metadata.json`.
+3. Resource metadata at `<logical-path>/metadata.json`.
 4. Optional repository control artifacts under repo-specific hidden directory.
 5. Optional git webhook contract under `spec.git.webhook` (`provider`, `secretRef`) for operator-triggered refresh signaling.
 
@@ -50,33 +50,37 @@ Policy contracts:
 
 ## Failure Modes
 1. Traversal attempt using relative path segments.
-2. Resource and metadata extension mismatch for context format.
-3. Push rejected due to remote divergence.
-4. Missing remote configuration for sync operation.
-5. History requested from a repository backend that does not support local VCS history.
-6. Push requested on a freshly auto-initialized git repo without a local HEAD/commit.
-7. Webhook payload rejected due to invalid provider signature/token.
+2. Multiple payload files matching `resource.*` under one logical path.
+3. Unknown payload suffix without metadata/default type guidance.
+4. Push rejected due to remote divergence.
+5. Missing remote configuration for sync operation.
+6. History requested from a repository backend that does not support local VCS history.
+7. Push requested on a freshly auto-initialized git repo without a local HEAD/commit.
+8. Webhook payload rejected due to invalid provider signature/token.
 
 ## Edge Cases
 1. Rename required after alias change while keeping payload unchanged.
 2. Simultaneous metadata and resource path updates in one operation.
 3. Empty collection list with metadata present.
 4. Reset requested with uncommitted local changes.
-5. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.
-6. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
-7. Clean requested on a git repo with both tracked edits and untracked files/directories.
-8. Clean requested on a filesystem repository context.
-9. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
+5. Existing payload suffix is unknown but metadata `payloadType` still resolves runtime behavior.
+6. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.
+7. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
+8. Clean requested on a git repo with both tracked edits and untracked files/directories.
+9. Clean requested on a filesystem repository context.
+10. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
 
 ## Examples
 1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
-2. Set collection metadata for `/customers` writes `/customers/_/metadata.json`.
-3. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
-4. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
-5. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
-6. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
-7. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
-8. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
-9. `repository clean` on a filesystem repository succeeds without mutating repository files.
-10. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
-11. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
+2. Save `/projects/platform/readme` as plain text writes `/projects/platform/readme/resource.txt`.
+3. Save `/certificates/ca` as octet-stream without an existing file writes `/certificates/ca/resource.bin`.
+4. Set collection metadata for `/customers` writes `/customers/_/metadata.json`.
+5. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
+6. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
+7. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
+8. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
+9. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
+10. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
+11. `repository clean` on a filesystem repository succeeds without mutating repository files.
+12. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
+13. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.

@@ -6,6 +6,7 @@ import (
 
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	resourcedomain "github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,11 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			encoded, err := encodeResourcePayloadForEdit(cfg, currentValue)
+			payloadType, err := resourcePayloadEditType(command.Context(), deps, cfg, resolvedPath, currentValue)
+			if err != nil {
+				return err
+			}
+			encoded, err := encodeResourcePayloadForEdit(payloadType, currentValue)
 			if err != nil {
 				return err
 			}
@@ -45,17 +50,17 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			editedBytes, err := editTempFile(
 				command,
 				cliutil.ResolveEditorCommand(command.Context(), deps, editor),
-				resourcePayloadEditFilename(cfg),
+				resourcePayloadEditFilename(payloadType),
 				encoded,
 			)
 			if err != nil {
 				return err
 			}
-			if len(bytes.TrimSpace(editedBytes)) == 0 {
+			if resourcedomain.IsStructuredPayloadType(payloadType) && len(bytes.TrimSpace(editedBytes)) == 0 {
 				return cliutil.ValidationError("edited resource payload is empty", nil)
 			}
 
-			editedValue, err := decodeResourcePayloadFromEdit(cfg, editedBytes)
+			editedValue, err := decodeResourcePayloadFromEdit(payloadType, editedBytes)
 			if err != nil {
 				return err
 			}

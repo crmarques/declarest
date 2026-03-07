@@ -7,23 +7,25 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/providers/fsutil"
+	"github.com/crmarques/declarest/resource"
 )
 
-func (r *LocalResourceRepository) resourcePayloadFilePath(logicalPath string) (string, error) {
+func (r *LocalResourceRepository) canonicalPayloadFilePath(logicalPath string, payloadType string) (string, error) {
 	if r.baseDir == "" {
 		return "", faults.NewValidationError("repository base directory must not be empty", nil)
 	}
 
+	extension, err := resource.PayloadExtension(payloadType)
+	if err != nil {
+		return "", err
+	}
+
 	relative := strings.TrimPrefix(logicalPath, "/")
-	filePath := filepath.Join(r.baseDir, filepath.FromSlash(relative), "resource"+r.extension)
+	filePath := filepath.Join(r.baseDir, filepath.FromSlash(relative), "resource"+extension)
 	if !fsutil.IsPathUnderRoot(r.baseDir, filePath) {
 		return "", faults.NewValidationError("logical path escapes repository base directory", nil)
 	}
 	return filePath, nil
-}
-
-func (r *LocalResourceRepository) payloadFilePath(logicalPath string) (string, error) {
-	return r.resourcePayloadFilePath(logicalPath)
 }
 
 func (r *LocalResourceRepository) collectionDirPath(logicalPath string) (string, error) {

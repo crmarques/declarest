@@ -36,6 +36,18 @@ func BindInputFlags(command *cobra.Command, flags *InputFlags) {
 	RegisterInputFormatFlagCompletion(command)
 }
 
+func BindResourceInputFlags(command *cobra.Command, flags *InputFlags) {
+	command.Flags().StringVarP(&flags.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
+	command.Flags().StringVarP(
+		&flags.Format,
+		"format",
+		"i",
+		OutputJSON,
+		"input format: json|yaml|xml|hcl|ini|properties|text|binary",
+	)
+	RegisterResourceInputFormatFlagCompletion(command)
+}
+
 func BindPathFlag(command *cobra.Command, path *string) {
 	command.Flags().StringVarP(path, "path", "p", "", "resource path")
 }

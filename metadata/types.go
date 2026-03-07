@@ -20,6 +20,7 @@ type ResourceMetadata struct {
 	IDFromAttribute        string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
 	AliasFromAttribute     string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
 	CollectionPath         string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	SecretsFromAttributes  []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
 	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 	Operations             map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`

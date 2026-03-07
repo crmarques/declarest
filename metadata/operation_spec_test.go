@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
@@ -608,6 +609,87 @@ func TestInferFromOpenAPISetsOperationValidationFromRequestBodySchema(t *testing
 	}
 }
 
+func TestInferFromOpenAPIInfersOctetStreamPayloadType(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/files": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/octet-stream": map[string]any{
+									"schema": map[string]any{
+										"type":   "string",
+										"format": "binary",
+									},
+								},
+							},
+						},
+					},
+				},
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/octet-stream": map[string]any{
+								"schema": map[string]any{
+									"type":   "string",
+									"format": "binary",
+								},
+							},
+						},
+					},
+				},
+			},
+			"/files/{id}": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/octet-stream": map[string]any{
+									"schema": map[string]any{
+										"type":   "string",
+										"format": "binary",
+									},
+								},
+							},
+						},
+					},
+				},
+				"put": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/octet-stream": map[string]any{
+								"schema": map[string]any{
+									"type":   "string",
+									"format": "binary",
+								},
+							},
+						},
+					},
+				},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/files", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	if inferred.PayloadType != resource.PayloadTypeOctetStream {
+		t.Fatalf("expected octet-stream payload type, got %q", inferred.PayloadType)
+	}
+	if inferred.Operations[string(OperationCreate)].Validate != nil {
+		t.Fatalf("expected binary create validation to be omitted, got %#v", inferred.Operations[string(OperationCreate)].Validate)
+	}
+	if inferred.Operations[string(OperationUpdate)].Validate != nil {
+		t.Fatalf("expected binary update validation to be omitted, got %#v", inferred.Operations[string(OperationUpdate)].Validate)
+	}
+}
+
 func TestCompactInferredMetadataDefaultsOmitsFallbackOperations(t *testing.T) {
 	t.Parallel()
 
@@ -742,6 +824,86 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIValidationDefaults(t *testin
 	}
 	if len(compact.Operations) != 0 {
 		t.Fatalf("expected openapi validation defaults to be omitted, got %#v", compact.Operations)
+	}
+}
+
+func TestCompactInferredMetadataDefaultsOmitsOpenAPIPayloadTypeDefaults(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/files": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/octet-stream": map[string]any{
+									"schema": map[string]any{
+										"type":   "string",
+										"format": "binary",
+									},
+								},
+							},
+						},
+					},
+				},
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/octet-stream": map[string]any{
+								"schema": map[string]any{
+									"type":   "string",
+									"format": "binary",
+								},
+							},
+						},
+					},
+				},
+			},
+			"/files/{id}": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/octet-stream": map[string]any{
+									"schema": map[string]any{
+										"type":   "string",
+										"format": "binary",
+									},
+								},
+							},
+						},
+					},
+				},
+				"put": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/octet-stream": map[string]any{
+								"schema": map[string]any{
+									"type":   "string",
+									"format": "binary",
+								},
+							},
+						},
+					},
+				},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/files", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+
+	compact, err := CompactInferredMetadataDefaults("/files", inferred, openAPISpec)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+
+	if compact.PayloadType != "" {
+		t.Fatalf("expected inferred payloadType default to be omitted, got %q", compact.PayloadType)
 	}
 }
 

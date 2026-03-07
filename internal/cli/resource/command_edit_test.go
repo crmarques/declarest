@@ -65,6 +65,41 @@ func TestEditCommandSavesUsingCanonicalLocalPath(t *testing.T) {
 	}
 }
 
+func TestEditCommandRejectsBinaryPayloads(t *testing.T) {
+	previousEditTempFile := editTempFile
+	editTempFile = func(*cobra.Command, string, string, []byte) ([]byte, error) {
+		t.Fatal("editTempFile should not be called for binary payloads")
+		return nil, nil
+	}
+	defer func() {
+		editTempFile = previousEditTempFile
+	}()
+
+	orch := &fakeEditCommandOrchestrator{
+		resolvedLocal: resourcedomain.Resource{
+			LogicalPath: "/projects/binary-test",
+			Payload:     resourcedomain.BinaryValue{Bytes: []byte("abc")},
+		},
+	}
+
+	command := newEditCommand(cliutil.CommandDependencies{
+		Orchestrator:  orch,
+		Contexts:      fakeEditContextService{context: editTestContext()},
+		ResourceStore: &fakeEditRepositoryStore{},
+		Metadata:      fakeEditMetadataService{},
+	}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/projects/binary-test"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	err := command.ExecuteContext(context.Background())
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("octet-stream")) {
+		t.Fatalf("expected octet-stream validation message, got %v", err)
+	}
+}
+
 type fakeEditCommandOrchestrator struct {
 	orchestratordomain.Orchestrator
 	resolvedLocal   resourcedomain.Resource

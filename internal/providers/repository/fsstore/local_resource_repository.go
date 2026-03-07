@@ -19,26 +19,21 @@ var _ repository.RepositoryTreeReader = (*LocalResourceRepository)(nil)
 var _ repository.ResourceArtifactStore = (*LocalResourceRepository)(nil)
 
 type LocalResourceRepository struct {
-	baseDir        string
-	resourceFormat string
-	extension      string
+	baseDir         string
+	resourceFormat  string
+	metadataBaseDir string
 }
 
-func NewLocalResourceRepository(baseDir string, resourceFormat string) *LocalResourceRepository {
+func NewLocalResourceRepository(baseDir string, resourceFormat string, metadataBaseDir ...string) *LocalResourceRepository {
 	format := resourceFormat
 	if format == "" {
 		format = config.ResourceFormatJSON
 	}
 
-	extension := ".json"
-	if format == config.ResourceFormatYAML {
-		extension = ".yaml"
-	}
-
 	return &LocalResourceRepository{
-		baseDir:        filepath.Clean(baseDir),
-		resourceFormat: format,
-		extension:      extension,
+		baseDir:         filepath.Clean(baseDir),
+		resourceFormat:  format,
+		metadataBaseDir: firstMetadataBaseDir(metadataBaseDir),
 	}
 }
 
@@ -55,31 +50,44 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 		return faults.NewValidationError("move requires resource paths", nil)
 	}
 
-	fromFile, err := r.payloadFilePath(fromNormalized)
+	fromInfo, err := r.discoverPayloadFile(fromNormalized)
 	if err != nil {
 		return err
 	}
-	toFile, err := r.payloadFilePath(toNormalized)
-	if err != nil {
-		return err
+	if fromInfo == nil {
+		return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
 	}
 
-	if _, statErr := os.Stat(fromFile); statErr != nil {
-		if errors.Is(statErr, os.ErrNotExist) {
-			return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
+	targetPayloadType := fromInfo.PayloadType
+	if metadataPayloadType, found, metadataErr := r.metadataPayloadType(toNormalized); metadataErr != nil {
+		return metadataErr
+	} else if found {
+		targetPayloadType = metadataPayloadType
+	}
+
+	var toFile string
+	if fromInfo.PreserveExistingName && targetPayloadType == fromInfo.PayloadType {
+		destinationDir, err := r.collectionDirPath(toNormalized)
+		if err != nil {
+			return err
 		}
-		return internalError("failed to access source resource", statErr)
+		toFile = filepath.Join(destinationDir, fromInfo.Name)
+	} else {
+		toFile, err = r.canonicalPayloadFilePath(toNormalized, targetPayloadType)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(toFile), 0o755); err != nil {
 		return internalError("failed to create destination directory", err)
 	}
 
-	if err := os.Rename(fromFile, toFile); err != nil {
+	if err := os.Rename(fromInfo.Path, toFile); err != nil {
 		return internalError("failed to move resource", err)
 	}
 
-	_ = r.cleanupEmptyParents(filepath.Dir(fromFile))
+	_ = r.cleanupEmptyParents(filepath.Dir(fromInfo.Path))
 	return nil
 }
 

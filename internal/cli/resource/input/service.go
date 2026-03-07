@@ -1,9 +1,6 @@
 package input
 
 import (
-	"errors"
-
-	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -15,14 +12,18 @@ func DecodeOptionalPayloadInput(
 	command *cobra.Command,
 	flags cliutil.InputFlags,
 ) (resource.Value, bool, error) {
-	value, err := cliutil.DecodeInput[resource.Value](command, flags)
-	if err == nil {
-		return value, true, nil
+	data, err := cliutil.ReadOptionalInput(command, flags)
+	if err != nil {
+		return nil, false, err
 	}
-	if isMissingInputError(err) {
+	if data == nil {
 		return nil, false, nil
 	}
-	return nil, false, err
+	value, err := cliutil.DecodeResourceValueInputData(data, flags.Format)
+	if err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
 }
 
 // DecodeRequiredPayloadInput decodes a required payload value from --payload or stdin.
@@ -38,15 +39,4 @@ func DecodeRequiredPayloadInput(
 		return nil, cliutil.ValidationError(cliutil.MissingInputMessage, nil)
 	}
 	return value, nil
-}
-
-func isMissingInputError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var typedErr *faults.TypedError
-	return errors.As(err, &typedErr) &&
-		typedErr.Category == faults.ValidationError &&
-		typedErr.Message == cliutil.MissingInputMessage
 }

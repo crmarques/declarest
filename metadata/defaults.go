@@ -18,10 +18,10 @@ var defaultMetadataOperations = []Operation{
 func DefaultResourceMetadata() ResourceMetadata {
 	operations := make(map[string]OperationSpec, len(defaultMetadataOperations))
 	for _, operation := range defaultMetadataOperations {
-		defaultAccept := "application/{{resource_format .}}"
+		defaultAccept := "{{payload_media_type .}}"
 		defaultContentType := ""
 		if operation == OperationCreate || operation == OperationUpdate {
-			defaultContentType = "application/{{resource_format .}}"
+			defaultContentType = "{{payload_media_type .}}"
 		}
 		operations[string(operation)] = OperationSpec{
 			Method:      DefaultOperationMethod(operation),

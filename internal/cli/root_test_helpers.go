@@ -12,6 +12,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	clitestkit "github.com/crmarques/declarest/internal/cli/testkit"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -284,9 +285,12 @@ type listCall struct {
 }
 
 type requestCall struct {
-	method string
-	path   string
-	body   resource.Value
+	method      string
+	path        string
+	body        resource.Value
+	headers     map[string]string
+	accept      string
+	contentType string
 }
 
 func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
@@ -317,19 +321,22 @@ func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (res
 	}
 	return map[string]any{"path": logicalPath, "source": "remote"}, nil
 }
-func (r *testOrchestrator) Request(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+func (r *testOrchestrator) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
 	r.requestCalls = append(r.requestCalls, requestCall{
-		method: method,
-		path:   endpointPath,
-		body:   body,
+		method:      spec.Method,
+		path:        spec.Path,
+		body:        spec.Body,
+		headers:     cloneTestStringMap(spec.Headers),
+		accept:      spec.Accept,
+		contentType: spec.ContentType,
 	})
 	if r.requestErr != nil {
 		return nil, r.requestErr
 	}
 	return map[string]any{
-		"method": method,
-		"path":   endpointPath,
-		"body":   body,
+		"method": spec.Method,
+		"path":   spec.Path,
+		"body":   spec.Body,
 	}, nil
 }
 func (r *testOrchestrator) GetOpenAPISpec(_ context.Context) (resource.Value, error) {
@@ -747,11 +754,14 @@ func (s *testManagedServerClient) Exists(context.Context, resource.Resource, met
 	return true, nil
 }
 
-func (s *testManagedServerClient) Request(_ context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error) {
+func (s *testManagedServerClient) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
 	s.requests = append(s.requests, requestCall{
-		method: method,
-		path:   endpointPath,
-		body:   body,
+		method:      spec.Method,
+		path:        spec.Path,
+		body:        spec.Body,
+		headers:     cloneTestStringMap(spec.Headers),
+		accept:      spec.Accept,
+		contentType: spec.ContentType,
 	})
 	if s.requestErr != nil {
 		return nil, s.requestErr
@@ -776,6 +786,18 @@ func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error
 func (r *testRepository) Save(context.Context, string, resource.Value) error { return nil }
 func (r *testRepository) Get(context.Context, string) (resource.Value, error) {
 	return map[string]any{"id": "acme"}, nil
+}
+
+func cloneTestStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 func (r *testRepository) Delete(_ context.Context, logicalPath string, policy repository.DeletePolicy) error {
 	r.deleteCalls = append(r.deleteCalls, deleteCall{

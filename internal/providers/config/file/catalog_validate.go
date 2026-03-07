@@ -10,6 +10,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
+	"github.com/crmarques/declarest/resource"
 )
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
@@ -236,10 +237,13 @@ func contextRepositoryBaseDir(cfg config.Context) string {
 }
 
 func validateRepository(repository config.Repository) error {
-	if repository.ResourceFormat != "" &&
-		repository.ResourceFormat != config.ResourceFormatJSON &&
-		repository.ResourceFormat != config.ResourceFormatYAML {
-		return faults.NewValidationError("repository.resource-format must be json or yaml", nil)
+	if repository.ResourceFormat != "" {
+		if _, err := resource.ValidatePayloadType(repository.ResourceFormat); err != nil {
+			return faults.NewValidationError(
+				"repository.resource-format must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream",
+				nil,
+			)
+		}
 	}
 	if repository.ResourceFormat == "" {
 		repository.ResourceFormat = config.ResourceFormatJSON

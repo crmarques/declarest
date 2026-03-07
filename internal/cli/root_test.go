@@ -1169,6 +1169,69 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
+	t.Run("post_binary_payload_forwards_headers_and_media_overrides", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+
+		output, err := executeForTest(
+			deps,
+			"abc",
+			"resource", "request", "post",
+			"/items",
+			"--payload", "-",
+			"--format", "binary",
+			"--header", "X-Test: value",
+			"--accept", "application/octet-stream",
+			"--content-type", "application/octet-stream",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "" {
+			t.Fatalf("expected non-verbose binary post output to be empty, got %q", output)
+		}
+		if len(orchestrator.requestCalls) != 1 {
+			t.Fatalf("expected one request call, got %#v", orchestrator.requestCalls)
+		}
+
+		call := orchestrator.requestCalls[0]
+		if call.accept != "application/octet-stream" {
+			t.Fatalf("expected Accept override to be forwarded, got %#v", call)
+		}
+		if call.contentType != "application/octet-stream" {
+			t.Fatalf("expected Content-Type override to be forwarded, got %#v", call)
+		}
+		if call.headers["X-Test"] != "value" {
+			t.Fatalf("expected custom header to be forwarded, got %#v", call.headers)
+		}
+		body, ok := call.body.(resource.BinaryValue)
+		if !ok {
+			t.Fatalf("expected binary request body, got %#v", call.body)
+		}
+		if string(body.Bytes) != "abc" {
+			t.Fatalf("expected binary request bytes %q, got %q", "abc", string(body.Bytes))
+		}
+	})
+
+	t.Run("post_binary_inline_payload_is_rejected", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(
+			testDeps(),
+			"",
+			"resource", "request", "post",
+			"/items",
+			"--payload", "abc",
+			"--format", "binary",
+		)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "binary request payload requires") {
+			t.Fatalf("expected inline binary validation error, got %v", err)
+		}
+	})
+
 	t.Run("delete_requires_force", func(t *testing.T) {
 		t.Parallel()
 
@@ -1294,6 +1357,42 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
+}
+
+func TestResourceGetAutoOutputSupportsTextAndBinaryPayloads(t *testing.T) {
+	t.Parallel()
+
+	t.Run("text payload renders raw text", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteValue = "hello\nworld"
+
+		output, err := executeForTest(deps, "", "--output", "auto", "resource", "get", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "hello\nworld" {
+			t.Fatalf("expected raw text output, got %q", output)
+		}
+	})
+
+	t.Run("binary payload renders raw bytes", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteValue = resource.BinaryValue{Bytes: []byte("abc")}
+
+		output, err := executeForTest(deps, "", "--output", "auto", "resource", "get", "/customers/acme")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output != "abc" {
+			t.Fatalf("expected raw binary output, got %q", output)
+		}
+	})
 }
 
 func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {

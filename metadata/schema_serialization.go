@@ -17,6 +17,7 @@ type resourceInfoWire struct {
 	IDFromAttribute        string                       `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
 	AliasFromAttribute     string                       `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
 	CollectionPath         string                       `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	SecretInAttributes     *[]string                    `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 }
@@ -184,6 +185,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		IDFromAttribute:    metadata.IDFromAttribute,
 		AliasFromAttribute: metadata.AliasFromAttribute,
 		CollectionPath:     metadata.CollectionPath,
+		PayloadType:        metadata.PayloadType,
 	}
 	if metadata.SecretsFromAttributes != nil {
 		resourceInfo.SecretInAttributes = stringSlicePointer(metadata.SecretsFromAttributes)
@@ -244,6 +246,9 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		if resourceInfo.CollectionPath != "" {
 			metadata.CollectionPath = resourceInfo.CollectionPath
 		}
+		if resourceInfo.PayloadType != "" {
+			metadata.PayloadType = resourceInfo.PayloadType
+		}
 		if resourceInfo.SecretInAttributes != nil {
 			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretInAttributes)
 		}
@@ -290,6 +295,7 @@ func hasResourceInfo(resourceInfo resourceInfoWire) bool {
 	return strings.TrimSpace(resourceInfo.IDFromAttribute) != "" ||
 		strings.TrimSpace(resourceInfo.AliasFromAttribute) != "" ||
 		strings.TrimSpace(resourceInfo.CollectionPath) != "" ||
+		strings.TrimSpace(resourceInfo.PayloadType) != "" ||
 		resourceInfo.SecretInAttributes != nil ||
 		resourceInfo.ExternalizedAttributes != nil
 }

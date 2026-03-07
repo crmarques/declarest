@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	managedserver "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
@@ -24,7 +25,7 @@ func resolveOperationSpecTemplates(
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	templateScope["resourceFormat"] = metadata.NormalizeResourceFormat(resourceFormat)
+	applyPayloadTemplateScope(templateScope, md, resourceFormat)
 
 	templateMetadata := metadata.ResourceMetadata{
 		CollectionPath: md.CollectionPath,
@@ -50,12 +51,46 @@ func (g *HTTPManagedServerClient) effectiveResourceFormat() string {
 	return metadata.NormalizeResourceFormat(g.resourceFormat)
 }
 
-func (g *HTTPManagedServerClient) defaultResourceMediaType() (string, error) {
-	mediaType, err := metadata.ResourceFormatMediaType(g.effectiveResourceFormat())
+func (g *HTTPManagedServerClient) metadataPayloadType(md metadata.ResourceMetadata) string {
+	payloadType, err := metadata.EffectivePayloadType(md, g.effectiveResourceFormat())
+	if err != nil {
+		return g.effectiveResourceFormat()
+	}
+	return payloadType
+}
+
+func (g *HTTPManagedServerClient) defaultResourceMediaType(payloadType string) (string, error) {
+	mediaType, err := metadata.ResourceFormatMediaType(payloadType)
 	if err != nil {
 		return "", faults.NewValidationError("invalid repository resource format", err)
 	}
 	return mediaType, nil
+}
+
+func (g *HTTPManagedServerClient) requestFallbackPayloadType(
+	ctx context.Context,
+	requestSpec managedserver.RequestSpec,
+	spec metadata.OperationSpec,
+) string {
+	if _, resourceInput, _, ok := metadata.RequestOperationValidation(ctx); ok {
+		return g.metadataPayloadType(resourceInput.Metadata)
+	}
+	if payloadType, ok := resource.PayloadTypeForMediaType(requestSpec.Accept); ok {
+		return payloadType
+	}
+	if payloadType, ok := resource.PayloadTypeForMediaType(spec.Accept); ok {
+		return payloadType
+	}
+	if payloadType, ok := resource.PayloadTypeForMediaType(requestSpec.ContentType); ok {
+		return payloadType
+	}
+	if payloadType, ok := resource.PayloadTypeForMediaType(spec.ContentType); ok {
+		return payloadType
+	}
+	if resource.IsBinaryValue(spec.Body) {
+		return resource.PayloadTypeOctetStream
+	}
+	return g.effectiveResourceFormat()
 }
 
 func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool, bool) {
@@ -145,6 +180,27 @@ func cloneStringSlice(values []string) []string {
 	cloned := make([]string, len(values))
 	copy(cloned, values)
 	return cloned
+}
+
+func applyPayloadTemplateScope(scope map[string]any, md metadata.ResourceMetadata, resourceFormat string) {
+	if scope == nil {
+		return
+	}
+
+	scope["resourceFormat"] = metadata.NormalizeResourceFormat(resourceFormat)
+
+	payloadType, err := metadata.EffectivePayloadType(md, resourceFormat)
+	if err != nil {
+		payloadType = metadata.NormalizeResourceFormat(resourceFormat)
+	}
+	scope["payloadType"] = payloadType
+
+	if mediaType, mediaErr := metadata.ResourceFormatMediaType(payloadType); mediaErr == nil {
+		scope["payloadMediaType"] = mediaType
+	}
+	if extension, extensionErr := metadata.ResourceFormatExtension(payloadType); extensionErr == nil {
+		scope["payloadExtension"] = extension
+	}
 }
 
 func joinBaseAndRequestPath(basePath string, requestPath string) string {

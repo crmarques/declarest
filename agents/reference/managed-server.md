@@ -26,12 +26,13 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 9. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
-12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to `application/<repository.resource-format>` (`json` when omitted); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
-13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload.
+12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload type media mapping (`application/octet-stream` for `octet-stream`, `text/plain` for text-like codecs, and repository-default mapping when payload type cannot be inferred); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
+13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`.
 14. Payload validation context MUST include path-derived template fields (for example `realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
 15. OpenAPI document URLs MAY be cross-origin relative to `managed-server.http.base-url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
 16. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
 17. When `managed-server.http.request-throttling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
+18. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
 
 ## Data Contracts
 Request spec fields:
@@ -46,7 +47,8 @@ Request spec fields:
 
 Server interface operations:
 1. `Get/Create/Update/Delete/List/Exists`.
-2. `GetOpenAPISpec`.
+2. `Request`.
+3. `GetOpenAPISpec`.
 
 OpenAPI document compatibility:
 1. `openapi: 3.x` documents use `requestBody.content` and response `content` directly.
@@ -78,12 +80,15 @@ Request throttling fields:
 5. Validation schema reference is configured but OpenAPI request-body/schema pointer cannot be resolved.
 6. Swagger 2.0 operation omits `parameters[in=body].schema`; `validate.schemaRef=openapi:request-body` fails with `ValidationError`.
 7. Two concurrent sync workflows targeting the same managed server share one throttle scope and one queue budget.
+8. OpenAPI advertises `application/octet-stream` or `format: binary`, and the resolved payload type becomes `octet-stream`.
+9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
 
 ## Examples
-1. `Get` operation uses `operationInfo.getResource.path` plus default `Accept: application/<repository.resource-format>` (for example `application/yaml` in YAML repositories).
-2. `Update` operation resolves `ContentType` from metadata or defaults to `application/<repository.resource-format>` and sends normalized payload body.
+1. `Get` operation uses `operationInfo.getResource.path` plus payload-type-aware default `Accept`.
+2. `Update` operation resolves `ContentType` from metadata or payload-type defaults and sends structured or opaque payload body accordingly.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).
 5. `Create` operation validation can require `realm` while resolving `realm` implicitly from `/admin/realms/<realm>/...` logical paths.
 6. Swagger 2.0 `consumes/produces` plus body `parameters` support `Create` fallback defaults (`ContentType`/`Accept`) and `openapi:request-body` validation without requiring OpenAPI 3 syntax.
 7. With `request-throttling.max-concurrent-requests=1` and `queue-size=1`, a third concurrent request fails fast with `ConflictError` while two earlier requests are in-flight/queued.
+8. `Get` of a binary certificate endpoint returns `resource.BinaryValue` when the server responds `application/octet-stream`.

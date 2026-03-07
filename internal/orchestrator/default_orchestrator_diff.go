@@ -90,6 +90,10 @@ func collectDiffEntries(entries *[]resource.DiffEntry, logicalPath string, point
 	if reflect.DeepEqual(local, remote) {
 		return
 	}
+	if resource.IsBinaryValue(local) || resource.IsBinaryValue(remote) {
+		appendDiffEntry(entries, logicalPath, "", "replace", local, remote)
+		return
+	}
 
 	localObject, localIsObject := local.(map[string]any)
 	remoteObject, remoteIsObject := remote.(map[string]any)

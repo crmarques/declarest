@@ -51,11 +51,6 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 				return cliutil.ValidationError("flag --http-method requires remote-server source", nil)
 			}
 
-			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
-			}
-
 			runCtx := command.Context()
 			if source == sourceRemoteServer {
 				runCtx, _, err = applyHTTPMethodOverride(runCtx, httpMethod, metadata.OperationGet)
@@ -90,6 +85,10 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			}
 			debugctx.Printf(runCtx, "resource get succeeded path=%q value_type=%T source=%q", resolvedPath, result.OutputValue, source)
 
+			outputFormat, err := cliutil.ResolvePayloadAwareOutputFormat(command.Context(), deps, globalFlags, result.OutputValue)
+			if err != nil {
+				return err
+			}
 			return cliutil.WriteOutput(command, outputFormat, result.OutputValue, func(w io.Writer, value any) error {
 				if !result.HasTextLines() {
 					_, writeErr := fmt.Fprintln(w, value)

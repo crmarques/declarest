@@ -44,7 +44,7 @@ type CompletionService interface {
 }
 
 type RequestExecutor interface {
-	Request(ctx context.Context, method string, endpointPath string, body resource.Value) (resource.Value, error)
+	Request(ctx context.Context, spec managedserver.RequestSpec) (resource.Value, error)
 }
 
 type RepositoryWriter interface {

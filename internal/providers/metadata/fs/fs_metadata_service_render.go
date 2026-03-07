@@ -68,7 +68,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	templateValue["resourceFormat"] = metadatadomain.NormalizeResourceFormat(s.resourceFormat)
+	applyPayloadTemplateScope(templateValue, metadata, s.resourceFormat)
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, metadata, operation, templateValue)
 	if err != nil {
@@ -154,7 +154,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	templateScope["resourceFormat"] = metadatadomain.NormalizeResourceFormat(s.resourceFormat)
+	applyPayloadTemplateScope(templateScope, resolvedMetadata, s.resourceFormat)
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
 	if err != nil {
@@ -254,10 +254,32 @@ func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
 	return strings.TrimSpace(value.IDFromAttribute) == "" &&
 		strings.TrimSpace(value.AliasFromAttribute) == "" &&
 		strings.TrimSpace(value.CollectionPath) == "" &&
+		strings.TrimSpace(value.PayloadType) == "" &&
 		value.SecretsFromAttributes == nil &&
 		value.ExternalizedAttributes == nil &&
 		value.Operations == nil &&
 		value.Filter == nil &&
 		value.Suppress == nil &&
 		strings.TrimSpace(value.JQ) == ""
+}
+
+func applyPayloadTemplateScope(scope map[string]any, metadata metadatadomain.ResourceMetadata, fallback string) {
+	if scope == nil {
+		return
+	}
+
+	scope["resourceFormat"] = metadatadomain.NormalizeResourceFormat(fallback)
+
+	payloadType, err := metadatadomain.EffectivePayloadType(metadata, fallback)
+	if err != nil {
+		payloadType = metadatadomain.NormalizeResourceFormat(fallback)
+	}
+	scope["payloadType"] = payloadType
+
+	if mediaType, mediaErr := metadatadomain.ResourceFormatMediaType(payloadType); mediaErr == nil {
+		scope["payloadMediaType"] = mediaType
+	}
+	if extension, extensionErr := metadatadomain.ResourceFormatExtension(payloadType); extensionErr == nil {
+		scope["payloadExtension"] = extension
+	}
 }

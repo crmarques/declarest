@@ -68,11 +68,13 @@ func buildDefaultOrchestratorFromResolvedContext(
 		repo = fsstore.NewLocalResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
 			resolvedContext.Repository.ResourceFormat,
+			metadataSource.BaseDir,
 		)
 	case resolvedContext.Repository.Git != nil:
 		repo = gitrepository.NewGitResourceRepository(
 			*resolvedContext.Repository.Git,
 			resolvedContext.Repository.ResourceFormat,
+			metadataSource.BaseDir,
 		)
 	}
 

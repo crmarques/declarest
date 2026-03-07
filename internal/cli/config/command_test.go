@@ -13,6 +13,7 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -1987,7 +1988,7 @@ func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Va
 func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Value, error) {
 	return nil, nil
 }
-func (s *testOrchestratorService) Request(context.Context, string, string, resource.Value) (resource.Value, error) {
+func (s *testOrchestratorService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Value, error) {
 	return nil, nil
 }
 func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Value, error) {

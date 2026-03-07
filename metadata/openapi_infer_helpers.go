@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"path"
+	"sort"
 
 	"github.com/crmarques/declarest/faults"
 )
@@ -190,8 +191,64 @@ func inferMetadataFromOpenAPISpec(
 	if len(operations) == 0 {
 		return ResourceMetadata{}, resourceIdentityAttribute, resourceSchemaAttributes
 	}
+	payloadType := inferOpenAPIMetadataPayloadType(collectionCandidate, resourceCandidate, pathItems, openAPISpec)
 	return ResourceMetadata{
 		CollectionPath: collectionPath,
 		Operations:     operations,
+		PayloadType:    payloadType,
 	}, resourceIdentityAttribute, resourceSchemaAttributes
+}
+
+func inferOpenAPIMetadataPayloadType(
+	collectionCandidate openAPICandidate,
+	resourceCandidate openAPICandidate,
+	pathItems map[string]map[string]any,
+	openAPISpec any,
+) string {
+	seen := map[string]struct{}{}
+	collectOpenAPICandidatePayloadTypes(seen, collectionCandidate, pathItems, openAPISpec)
+	collectOpenAPICandidatePayloadTypes(seen, resourceCandidate, pathItems, openAPISpec)
+	if len(seen) != 1 {
+		return ""
+	}
+
+	for payloadType := range seen {
+		return payloadType
+	}
+	return ""
+}
+
+func collectOpenAPICandidatePayloadTypes(
+	target map[string]struct{},
+	candidate openAPICandidate,
+	pathItems map[string]map[string]any,
+	openAPISpec any,
+) {
+	if candidate.path == "" || len(pathItems) == 0 {
+		return
+	}
+
+	pathItem, found := pathItems[candidate.path]
+	if !found {
+		return
+	}
+
+	methods := make([]string, 0, len(candidate.methods))
+	for method := range candidate.methods {
+		methods = append(methods, method)
+	}
+	sort.Strings(methods)
+	for _, method := range methods {
+		operationValue, found := pathItem[method]
+		if !found {
+			continue
+		}
+		operationItem, ok := asStringMap(operationValue)
+		if !ok {
+			continue
+		}
+		for _, payloadType := range inferOpenAPIOperationPayloadTypes(operationItem, openAPISpec) {
+			target[payloadType] = struct{}{}
+		}
+	}
 }
