@@ -2,6 +2,13 @@ resourceInfo:
     idFromAttribute: id
     aliasFromAttribute: name
     collectionPath: /projects/{{.project}}/jobs
+    externalizedAttributes:
+        - path:
+            - sequence
+            - commands
+            - '*'
+            - script
+          file: script.sh
 operationInfo:
     getResource:
         path: /job/{{.id}}

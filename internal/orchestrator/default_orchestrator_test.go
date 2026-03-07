@@ -103,6 +103,61 @@ func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
 	}
 }
 
+func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{}
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{
+						Path: []string{"sequence", "commands", "*", "script"},
+						File: "script.sh",
+					},
+				},
+			},
+		},
+	}
+
+	err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{
+		"name": "ACME",
+		"sequence": map[string]any{
+			"commands": []any{
+				map[string]any{"script": "echo first"},
+				map[string]any{"exec": "echo inline"},
+				map[string]any{"script": "echo third"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	wantPayload := map[string]any{
+		"name": "ACME",
+		"sequence": map[string]any{
+			"commands": []any{
+				map[string]any{"script": "{{include script-0.sh}}"},
+				map[string]any{"exec": "echo inline"},
+				map[string]any{"script": "{{include script-2.sh}}"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(wantPayload, repo.savedValue) {
+		t.Fatalf("unexpected saved payload %#v", repo.savedValue)
+	}
+
+	wantArtifacts := []repository.ResourceArtifact{
+		{File: "script-0.sh", Content: []byte("echo first")},
+		{File: "script-2.sh", Content: []byte("echo third")},
+	}
+	if !reflect.DeepEqual(wantArtifacts, repo.savedArtifacts) {
+		t.Fatalf("unexpected saved artifacts %#v", repo.savedArtifacts)
+	}
+}
+
 func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
@@ -208,6 +263,68 @@ func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *
 	}
 	if got := payload["script"]; got != "echo hello" {
 		t.Fatalf("expected expanded script payload, got %#v", got)
+	}
+}
+
+func TestDefaultOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepository{
+		getValue: map[string]any{
+			"name": "ACME",
+			"sequence": map[string]any{
+				"commands": []any{
+					map[string]any{"script": "{{include script-0.sh}}"},
+					map[string]any{"exec": "echo inline"},
+					map[string]any{"script": "{{include script-2.sh}}"},
+				},
+			},
+		},
+		artifactFiles: map[string][]byte{
+			"/customers/acme::script-0.sh": []byte("echo first"),
+			"/customers/acme::script-2.sh": []byte("echo third"),
+		},
+	}
+	server := &fakeServer{
+		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
+	}
+	orchestrator := &DefaultOrchestrator{
+		repository: repo,
+		metadata: &fakeMetadata{
+			resolveValue: metadatadomain.ResourceMetadata{
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{
+						Path: []string{"sequence", "commands", "*", "script"},
+						File: "script.sh",
+					},
+				},
+			},
+		},
+		server: server,
+	}
+
+	_, err := orchestrator.Apply(context.Background(), "/customers/acme", orch.ApplyPolicy{})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	payload, ok := server.lastResource.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected create payload map, got %T", server.lastResource.Payload)
+	}
+
+	wantPayload := map[string]any{
+		"name": "ACME",
+		"sequence": map[string]any{
+			"commands": []any{
+				map[string]any{"script": "echo first"},
+				map[string]any{"exec": "echo inline"},
+				map[string]any{"script": "echo third"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(wantPayload, payload) {
+		t.Fatalf("unexpected expanded payload %#v", payload)
 	}
 }
 

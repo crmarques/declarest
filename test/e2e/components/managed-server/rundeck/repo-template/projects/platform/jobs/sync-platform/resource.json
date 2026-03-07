@@ -8,7 +8,7 @@
     "strategy": "node-first",
     "commands": [
       {
-        "exec": "echo sync-platform"
+        "script": "{{include script-0.sh}}"
       }
     ]
   }

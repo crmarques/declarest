@@ -71,6 +71,8 @@ resourceInfo:
   externalizedAttributes:
     - path: ["script"]
       file: "script.sh"
+    - path: ["sequence", "commands", "*", "script"]
+      file: "script.sh"
 ```
 
 Save flow:
@@ -97,6 +99,8 @@ Apply/diff flow:
 3. The effective payload sent to diff/apply uses the file content, not the placeholder string.
 
 This is useful for shell scripts, policy text, certificates, or other long text blobs that are easier to review as standalone files.
+
+For array-backed fields, use `*` to match each element. The configured `file` acts as the base name and DeclaREST appends the matched wildcard indexes before the extension, so `script.sh` becomes `script-0.sh`, `script-1.sh`, and so on.
 
 ## Advanced topics
 

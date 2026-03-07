@@ -3,6 +3,9 @@ package resourceexternalization
 import (
 	"context"
 	"fmt"
+	pathpkg "path"
+	"strconv"
+	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
@@ -19,6 +22,13 @@ type ExtractResult struct {
 	Artifacts []repository.ResourceArtifact
 }
 
+type externalizedTarget struct {
+	ConcretePath []string
+	File         string
+	Placeholder  string
+	Value        any
+}
+
 func Extract(value resource.Value, entries []metadata.ResolvedExternalizedAttribute) (ExtractResult, error) {
 	normalized, err := resource.Normalize(value)
 	if err != nil {
@@ -33,30 +43,26 @@ func Extract(value resource.Value, entries []metadata.ResolvedExternalizedAttrib
 		return ExtractResult{}, err
 	}
 
-	artifacts := make([]repository.ResourceArtifact, 0, len(entries))
-	for _, entry := range entries {
-		currentValue, found, err := lookupPathValue(cloned, entry.Path)
-		if err != nil {
-			return ExtractResult{}, wrapPathError(entry.Path, "resolve externalized attribute", err)
-		}
-		if !found {
-			continue
-		}
+	targets, err := resolveExternalizedTargets(cloned, entries)
+	if err != nil {
+		return ExtractResult{}, err
+	}
 
-		textValue, ok := currentValue.(string)
+	artifacts := make([]repository.ResourceArtifact, 0, len(targets))
+	for _, target := range targets {
+		textValue, ok := target.Value.(string)
 		if !ok {
 			return ExtractResult{}, faults.NewValidationError(
-				fmt.Sprintf("externalized attribute %s must be a string value", formatAttributePath(entry.Path)),
+				fmt.Sprintf("externalized attribute %s must be a string value", formatAttributePath(target.ConcretePath)),
 				nil,
 			)
 		}
 
-		placeholder := fmt.Sprintf(entry.Template, entry.File)
-		if err := assignPathValue(cloned, entry.Path, placeholder, false); err != nil {
-			return ExtractResult{}, wrapPathError(entry.Path, "replace externalized attribute placeholder", err)
+		if err := assignPathValue(cloned, target.ConcretePath, target.Placeholder); err != nil {
+			return ExtractResult{}, wrapPathError(target.ConcretePath, "replace externalized attribute placeholder", err)
 		}
 		artifacts = append(artifacts, repository.ResourceArtifact{
-			File:    entry.File,
+			File:    target.File,
 			Content: []byte(textValue),
 		})
 	}
@@ -92,42 +98,38 @@ func Expand(
 		return nil, err
 	}
 
-	for _, entry := range entries {
-		currentValue, found, err := lookupPathValue(cloned, entry.Path)
-		if err != nil {
-			return nil, wrapPathError(entry.Path, "resolve externalized attribute", err)
-		}
-		if !found {
-			continue
-		}
+	targets, err := resolveExternalizedTargets(cloned, entries)
+	if err != nil {
+		return nil, err
+	}
 
-		textValue, ok := currentValue.(string)
+	for _, target := range targets {
+		textValue, ok := target.Value.(string)
 		if !ok {
 			continue
 		}
 
-		placeholder := fmt.Sprintf(entry.Template, entry.File)
-		if textValue != placeholder {
+		if textValue != target.Placeholder {
 			continue
 		}
 		if reader == nil {
 			return nil, faults.NewValidationError(
 				fmt.Sprintf(
 					"externalized attribute %s requires a configured repository artifact reader",
-					formatAttributePath(entry.Path),
+					formatAttributePath(target.ConcretePath),
 				),
 				nil,
 			)
 		}
 
-		content, err := reader.ReadResourceArtifact(ctx, logicalPath, entry.File)
+		content, err := reader.ReadResourceArtifact(ctx, logicalPath, target.File)
 		if err != nil {
 			if faults.IsCategory(err, faults.NotFoundError) {
 				return nil, faults.NewValidationError(
 					fmt.Sprintf(
 						"externalized attribute %s references missing file %q",
-						formatAttributePath(entry.Path),
-						entry.File,
+						formatAttributePath(target.ConcretePath),
+						target.File,
 					),
 					err,
 				)
@@ -135,8 +137,8 @@ func Expand(
 			return nil, err
 		}
 
-		if err := assignPathValue(cloned, entry.Path, string(content), false); err != nil {
-			return nil, wrapPathError(entry.Path, "expand externalized attribute", err)
+		if err := assignPathValue(cloned, target.ConcretePath, string(content)); err != nil {
+			return nil, wrapPathError(target.ConcretePath, "expand externalized attribute", err)
 		}
 	}
 
@@ -170,65 +172,248 @@ func cloneValue(value any) (any, error) {
 	}
 }
 
-func lookupPathValue(value any, path []string) (any, bool, error) {
-	current := value
-	for idx, segment := range path {
-		object, ok := current.(map[string]any)
+func resolveExternalizedTargets(
+	value any,
+	entries []metadata.ResolvedExternalizedAttribute,
+) ([]externalizedTarget, error) {
+	targets := make([]externalizedTarget, 0, len(entries))
+	seenConcretePaths := map[string]struct{}{}
+	seenFiles := map[string]struct{}{}
+
+	for _, entry := range entries {
+		matches, err := resolvePathMatches(value, entry.Path)
+		if err != nil {
+			return nil, wrapPathError(entry.Path, "resolve externalized attribute", err)
+		}
+
+		for _, match := range matches {
+			concreteKey := strings.Join(match.ConcretePath, "\x00")
+			if _, exists := seenConcretePaths[concreteKey]; exists {
+				return nil, faults.NewValidationError(
+					fmt.Sprintf(
+						"externalized attribute %s resolves duplicate concrete path %s",
+						formatAttributePath(entry.Path),
+						formatAttributePath(match.ConcretePath),
+					),
+					nil,
+				)
+			}
+			seenConcretePaths[concreteKey] = struct{}{}
+
+			file := resolveArtifactFile(entry.File, match.WildcardIndices)
+			if _, exists := seenFiles[file]; exists {
+				return nil, faults.NewValidationError(
+					fmt.Sprintf(
+						"externalized attribute %s resolves duplicate artifact file %q",
+						formatAttributePath(entry.Path),
+						file,
+					),
+					nil,
+				)
+			}
+			seenFiles[file] = struct{}{}
+
+			targets = append(targets, externalizedTarget{
+				ConcretePath: match.ConcretePath,
+				File:         file,
+				Placeholder:  fmt.Sprintf(entry.Template, file),
+				Value:        match.Value,
+			})
+		}
+	}
+
+	return targets, nil
+}
+
+type pathMatch struct {
+	ConcretePath    []string
+	WildcardIndices []int
+	Value           any
+}
+
+func resolvePathMatches(value any, path []string) ([]pathMatch, error) {
+	if len(path) == 0 {
+		return nil, nil
+	}
+
+	return collectPathMatches(value, path, nil, nil)
+}
+
+func collectPathMatches(
+	current any,
+	path []string,
+	concretePath []string,
+	wildcardIndices []int,
+) ([]pathMatch, error) {
+	if len(path) == 0 {
+		return []pathMatch{{
+			ConcretePath:    append([]string(nil), concretePath...),
+			WildcardIndices: append([]int(nil), wildcardIndices...),
+			Value:           current,
+		}}, nil
+	}
+
+	segment := path[0]
+	switch typed := current.(type) {
+	case map[string]any:
+		child, found := typed[segment]
+		if !found {
+			return nil, nil
+		}
+		return collectPathMatches(child, path[1:], appendPathSegment(concretePath, segment), wildcardIndices)
+	case []any:
+		if segment == "*" {
+			matches := make([]pathMatch, 0, len(typed))
+			for idx := range typed {
+				childMatches, err := collectPathMatches(
+					typed[idx],
+					path[1:],
+					appendPathSegment(concretePath, strconv.Itoa(idx)),
+					appendWildcardIndex(wildcardIndices, idx),
+				)
+				if err != nil {
+					return nil, err
+				}
+				matches = append(matches, childMatches...)
+			}
+			return matches, nil
+		}
+
+		index, ok := parseArrayIndex(segment)
 		if !ok {
-			return nil, false, faults.NewValidationError(
+			return nil, faults.NewValidationError(
 				fmt.Sprintf(
-					"externalized attribute path %s crosses non-object segment %q",
-					formatAttributePath(path[:idx]),
+					"externalized attribute path %s must use \"*\" or a numeric index before segment %q",
+					formatAttributePath(concretePath),
 					segment,
 				),
 				nil,
 			)
 		}
-
-		child, found := object[segment]
-		if !found {
-			return nil, false, nil
+		if index < 0 || index >= len(typed) {
+			return nil, nil
 		}
-		current = child
+		return collectPathMatches(typed[index], path[1:], appendPathSegment(concretePath, strconv.Itoa(index)), wildcardIndices)
+	default:
+		return nil, faults.NewValidationError(
+			fmt.Sprintf(
+				"externalized attribute path %s crosses a non-traversable value before segment %q",
+				formatAttributePath(concretePath),
+				segment,
+			),
+			nil,
+		)
 	}
-
-	return current, true, nil
 }
 
-func assignPathValue(value any, path []string, replacement any, createMissing bool) error {
-	current, ok := value.(map[string]any)
-	if !ok {
-		return faults.NewValidationError("externalized attribute root payload must be an object", nil)
+func assignPathValue(value any, path []string, replacement any) error {
+	if len(path) == 0 {
+		return faults.NewValidationError("externalized attribute path must not be empty", nil)
 	}
 
+	current := value
 	for idx := 0; idx < len(path)-1; idx++ {
 		segment := path[idx]
-		next, found := current[segment]
-		if !found {
-			if !createMissing {
+
+		switch typed := current.(type) {
+		case map[string]any:
+			next, found := typed[segment]
+			if !found {
 				return faults.NewValidationError(
 					fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path[:idx+1])),
 					nil,
 				)
 			}
-			child := map[string]any{}
-			current[segment] = child
-			current = child
-			continue
-		}
-
-		child, ok := next.(map[string]any)
-		if !ok {
+			current = next
+		case []any:
+			index, ok := parseArrayIndex(segment)
+			if !ok || index < 0 || index >= len(typed) {
+				return faults.NewValidationError(
+					fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path[:idx+1])),
+					nil,
+				)
+			}
+			current = typed[index]
+		default:
 			return faults.NewValidationError(
 				fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatAttributePath(path[:idx+1])),
 				nil,
 			)
 		}
-		current = child
 	}
 
-	current[path[len(path)-1]] = replacement
-	return nil
+	lastSegment := path[len(path)-1]
+	switch typed := current.(type) {
+	case map[string]any:
+		typed[lastSegment] = replacement
+		return nil
+	case []any:
+		index, ok := parseArrayIndex(lastSegment)
+		if !ok || index < 0 || index >= len(typed) {
+			return faults.NewValidationError(
+				fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path)),
+				nil,
+			)
+		}
+		typed[index] = replacement
+		return nil
+	default:
+		return faults.NewValidationError(
+			fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatAttributePath(path[:len(path)-1])),
+			nil,
+		)
+	}
+}
+
+func resolveArtifactFile(base string, wildcardIndices []int) string {
+	if len(wildcardIndices) == 0 {
+		return base
+	}
+
+	dir := pathpkg.Dir(base)
+	name := pathpkg.Base(base)
+	ext := pathpkg.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	if stem == "" {
+		stem = name
+		ext = ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString(stem)
+	for _, idx := range wildcardIndices {
+		builder.WriteString("-")
+		builder.WriteString(strconv.Itoa(idx))
+	}
+	builder.WriteString(ext)
+
+	if dir == "." {
+		return builder.String()
+	}
+	return pathpkg.Join(dir, builder.String())
+}
+
+func appendPathSegment(path []string, segment string) []string {
+	out := append([]string(nil), path...)
+	out = append(out, segment)
+	return out
+}
+
+func appendWildcardIndex(indices []int, index int) []int {
+	out := append([]int(nil), indices...)
+	out = append(out, index)
+	return out
+}
+
+func parseArrayIndex(value string) (int, bool) {
+	if value == "" {
+		return 0, false
+	}
+	index, err := strconv.Atoi(value)
+	if err != nil || index < 0 {
+		return 0, false
+	}
+	return index, true
 }
 
 func formatAttributePath(path []string) string {

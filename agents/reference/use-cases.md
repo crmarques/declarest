@@ -278,7 +278,25 @@ Expected outputs:
 2. Effective apply/diff payload contains `script: "echo hello"`.
 3. Remote compare or mutation does not receive the placeholder string.
 
-### Example 13: Externalized Attribute Missing File
+### Example 14: Externalized Array Script Attributes (Corner)
+Goal: externalize only script-bearing Rundeck job steps while preserving deterministic filenames for array matches.
+
+Inputs:
+1. Path `/projects/platform/jobs/sync-platform`.
+2. Metadata `resourceInfo.externalizedAttributes: [{path:["sequence","commands","*","script"], file:"script.sh"}]`.
+3. Payload `sequence.commands` contains `[{"script":"echo first"},{"exec":"echo inline"},{"script":"echo third"}]`.
+
+Execution:
+1. `orchestrator.Orchestrator.Save` persists placeholders for the matching steps only.
+2. `repository.ResourceArtifactStore` writes `script-0.sh` and `script-2.sh`.
+3. `orchestrator.Orchestrator.Apply` or `Diff` expands those placeholders back into the matching command objects before remote comparison or mutation.
+
+Expected outputs:
+1. The middle `exec` command remains inline and untouched.
+2. Matching script steps use deterministic indexed placeholders and sidecar filenames.
+3. Effective apply/diff payload restores the original script strings at indexes `0` and `2`.
+
+### Example 15: Externalized Attribute Missing File
 Goal: fail fast when a placeholder-backed attribute cannot be expanded.
 
 Inputs:

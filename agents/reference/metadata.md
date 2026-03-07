@@ -41,13 +41,14 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 24. OpenAPI-backed inference SHOULD populate `operationInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 24. `resourceInfo.payloadType` MAY override filename-derived payload inference for one resource or collection scope and MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`.
 24. `resourceInfo.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
-25. Enabled `resourceInfo.externalizedAttributes` entries MUST treat `path` as a `[]string` object traversal path, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
-26. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
+25. Enabled `resourceInfo.externalizedAttributes` entries MUST treat `path` as a `[]string` traversal path, MUST traverse object keys by literal segment, MUST traverse arrays only through zero-based numeric segments or `*` wildcard segments, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
+26. When an enabled externalized-attribute `path` uses one or more `*` wildcard array segments, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
+27. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
 
 ## Data Contracts
 Supported metadata groups:
 1. `resourceInfo`: identity, payload-type, secret-attribute, and collection directives.
-2. `resourceInfo.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`).
+2. `resourceInfo.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` segments select object keys literally and arrays via numeric or `*` wildcard segments.
 3. `operationInfo.createResource/updateResource/deleteResource/getResource/compareResources/listCollection`: operation-specific directives.
 4. `operationInfo.defaults`: shared transform defaults applied before operation-specific overrides.
 5. Operation wire fields: `path`, `httpMethod`, `query`, `httpHeaders`, `body` (including media headers such as `Accept` and `Content-Type` as `httpHeaders` entries).
@@ -96,7 +97,8 @@ Template context contract:
 10. Invalid metadata template helper usage (for example `{{resource_format "yaml"}}`) returns a typed validation error.
 11. `payloadType: octet-stream` disables structured payload transforms and validation rules for that scope.
 11. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
-12. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
+12. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
+13. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
 
 ## Examples
 1. `/customers/_` defines `operationInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operationInfo.getResource.httpHeaders`.
@@ -110,4 +112,5 @@ Template context contract:
 9. `operationInfo.createResource.validate.requiredAttributes: ["realm"]` is satisfied for `/admin/realms/platform/...` when `realm` is derived from the logical path template context.
 10. OpenAPI inference for an endpoint with `application/octet-stream` request or response media infers `resourceInfo.payloadType: octet-stream` when explicit metadata is absent.
 10. `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]` plus `resource.yaml script: "{{include script.sh}}"` stores script content in a sibling `script.sh` file and expands that file back into the effective payload for apply/diff.
-11. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.
+11. `resourceInfo.externalizedAttributes: [{path:["sequence","commands","*","script"], file:"script.sh"}]` plus a payload with script commands stores placeholders such as `{{include script-0.sh}}` and `{{include script-2.sh}}` for the matching array elements only.
+12. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.

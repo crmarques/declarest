@@ -96,6 +96,68 @@ func TestExtractRejectsNonStringValues(t *testing.T) {
 	}
 }
 
+func TestExtractExternalizesWildcardArrayAttributes(t *testing.T) {
+	t.Parallel()
+
+	result, err := Extract(
+		map[string]any{
+			"sequence": map[string]any{
+				"commands": []any{
+					map[string]any{"script": "echo first"},
+					map[string]any{"exec": "echo inline"},
+					map[string]any{"script": "echo third"},
+				},
+			},
+		},
+		[]metadata.ResolvedExternalizedAttribute{
+			{
+				Path:           []string{"sequence", "commands", "*", "script"},
+				File:           "script.sh",
+				Template:       metadata.DefaultExternalizedAttributeTemplate,
+				Mode:           metadata.ExternalizedAttributeModeText,
+				SaveBehavior:   metadata.ExternalizedAttributeSaveBehaviorExternalize,
+				RenderBehavior: metadata.ExternalizedAttributeRenderBehaviorInclude,
+				Enabled:        true,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Extract returned error: %v", err)
+	}
+
+	wantPayload := map[string]any{
+		"sequence": map[string]any{
+			"commands": []any{
+				map[string]any{"script": "{{include script-0.sh}}"},
+				map[string]any{"exec": "echo inline"},
+				map[string]any{"script": "{{include script-2.sh}}"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(wantPayload, result.Payload) {
+		t.Fatalf("unexpected extracted payload %#v", result.Payload)
+	}
+
+	wantArtifacts := []struct {
+		file    string
+		content string
+	}{
+		{file: "script-0.sh", content: "echo first"},
+		{file: "script-2.sh", content: "echo third"},
+	}
+	if len(result.Artifacts) != len(wantArtifacts) {
+		t.Fatalf("expected %d artifacts, got %#v", len(wantArtifacts), result.Artifacts)
+	}
+	for idx, want := range wantArtifacts {
+		if got := result.Artifacts[idx].File; got != want.file {
+			t.Fatalf("expected artifact %d file %q, got %q", idx, want.file, got)
+		}
+		if got := string(result.Artifacts[idx].Content); got != want.content {
+			t.Fatalf("expected artifact %d content %q, got %q", idx, want.content, got)
+		}
+	}
+}
+
 func TestExpandReplacesPlaceholderBackedAttributes(t *testing.T) {
 	t.Parallel()
 
@@ -155,6 +217,57 @@ func TestExpandRejectsMissingReferencedFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "references missing file") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExpandReplacesWildcardArrayPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	result, err := Expand(
+		context.Background(),
+		fakeArtifactReader{
+			files: map[string][]byte{
+				"/customers/acme::script-0.sh": []byte("echo first"),
+				"/customers/acme::script-2.sh": []byte("echo third"),
+			},
+		},
+		"/customers/acme",
+		map[string]any{
+			"sequence": map[string]any{
+				"commands": []any{
+					map[string]any{"script": "{{include script-0.sh}}"},
+					map[string]any{"exec": "echo inline"},
+					map[string]any{"script": "{{include script-2.sh}}"},
+				},
+			},
+		},
+		[]metadata.ResolvedExternalizedAttribute{
+			{
+				Path:           []string{"sequence", "commands", "*", "script"},
+				File:           "script.sh",
+				Template:       metadata.DefaultExternalizedAttributeTemplate,
+				Mode:           metadata.ExternalizedAttributeModeText,
+				SaveBehavior:   metadata.ExternalizedAttributeSaveBehaviorExternalize,
+				RenderBehavior: metadata.ExternalizedAttributeRenderBehaviorInclude,
+				Enabled:        true,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Expand returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"sequence": map[string]any{
+			"commands": []any{
+				map[string]any{"script": "echo first"},
+				map[string]any{"exec": "echo inline"},
+				map[string]any{"script": "echo third"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(want, result) {
+		t.Fatalf("unexpected expanded payload %#v", result)
 	}
 }
 
