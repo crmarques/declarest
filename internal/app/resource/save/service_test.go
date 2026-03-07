@@ -189,6 +189,36 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 
+	t.Run("not_found_get_keeps_not_found_when_parent_only_has_wildcard_item_child", func(t *testing.T) {
+		t.Parallel()
+
+		notFoundErr := faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		remoteReader := &fakeSaveRemoteReader{
+			getErr: notFoundErr,
+			listValue: []resourcedomain.Resource{
+				{
+					LogicalPath: "/projects/asdfads/platform",
+					Payload:     map[string]any{"name": "platform"},
+				},
+			},
+		}
+		metadataService := &fakeSaveMetadataService{
+			wildcardChildren: map[string]bool{
+				"/projects": true,
+			},
+		}
+
+		_, err := resolveSaveRemoteValue(
+			context.Background(),
+			remoteReader,
+			metadataService,
+			"/projects/asdfads",
+			false,
+			nil,
+		)
+		assertTypedCategory(t, err, faults.NotFoundError)
+	})
+
 	t.Run("skip_items_filters_remote_collection_payload", func(t *testing.T) {
 		t.Parallel()
 

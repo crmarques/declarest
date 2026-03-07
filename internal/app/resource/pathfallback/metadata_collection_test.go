@@ -37,11 +37,11 @@ func (f *fakeMetadataCollectionChildren) HasCollectionWildcardChild(_ context.Co
 func TestShouldUseMetadataCollectionFallback(t *testing.T) {
 	t.Parallel()
 
-	t.Run("empty_list_always_uses_fallback", func(t *testing.T) {
+	t.Run("non_resolver_metadata_disables_fallback_for_empty_list", func(t *testing.T) {
 		t.Parallel()
 
-		if !ShouldUseMetadataCollectionFallback(context.Background(), nil, "/a/b", nil) {
-			t.Fatal("expected empty list to enable fallback")
+		if ShouldUseMetadataCollectionFallback(context.Background(), nil, "/a/b", nil) {
+			t.Fatal("expected non-resolver metadata to disable fallback")
 		}
 	})
 
@@ -88,6 +88,22 @@ func TestShouldUseMetadataCollectionFallback(t *testing.T) {
 		}
 	})
 
+	t.Run("matching_metadata_child_enables_fallback_for_empty_list", func(t *testing.T) {
+		t.Parallel()
+
+		resolver := &fakeMetadataCollectionChildren{children: []string{"user-registry", "clients"}}
+
+		ok := ShouldUseMetadataCollectionFallback(
+			context.Background(),
+			resolver,
+			"/admin/realms/acme/user-registry",
+			nil,
+		)
+		if !ok {
+			t.Fatal("expected metadata child match to enable fallback for empty collections")
+		}
+	})
+
 	t.Run("non_matching_metadata_child_disables_fallback", func(t *testing.T) {
 		t.Parallel()
 
@@ -99,23 +115,23 @@ func TestShouldUseMetadataCollectionFallback(t *testing.T) {
 		}
 	})
 
-	t.Run("wildcard_metadata_child_enables_fallback", func(t *testing.T) {
+	t.Run("wildcard_item_child_does_not_enable_collection_fallback", func(t *testing.T) {
 		t.Parallel()
 
 		resolver := &fakeMetadataCollectionChildren{wildcard: true}
-		items := []resource.Resource{{LogicalPath: "/admin/realms/acme"}}
+		items := []resource.Resource{{LogicalPath: "/projects/asdfads/platform"}}
 
 		ok := ShouldUseMetadataCollectionFallback(
 			context.Background(),
 			resolver,
-			"/admin/realms/acme/authentication/flows/test/executions/Cookie",
+			"/projects/asdfads",
 			items,
 		)
-		if !ok {
-			t.Fatal("expected wildcard metadata to enable fallback")
+		if ok {
+			t.Fatal("expected wildcard item metadata to keep child resource path as not found")
 		}
-		if resolver.wildcardLastPath != "/admin/realms/acme/authentication/flows/test/executions" {
-			t.Fatalf("expected wildcard lookup on parent path, got %q", resolver.wildcardLastPath)
+		if resolver.wildcardLastPath != "" {
+			t.Fatalf("expected no wildcard lookup for collection fallback, got %q", resolver.wildcardLastPath)
 		}
 	})
 }

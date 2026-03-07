@@ -694,7 +694,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("remote_not_found_without_collection_marker_renders_empty_collection_when_list_is_empty", func(t *testing.T) {
+	t.Run("remote_not_found_without_collection_marker_renders_empty_collection_when_metadata_declares_branch", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -709,6 +709,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				},
 			},
 		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.collectionChildren["/admin/realms/master"] = []string{"user-registry"}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/admin/realms/master/user-registry")
 		if err != nil {
@@ -748,6 +750,33 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/admin/realms/master/user-registry"}) {
 			t.Fatalf("expected one remote list fallback call, got %#v", orchestrator.listRemoteCalls)
+		}
+	})
+
+	t.Run("remote_not_found_without_collection_marker_keeps_not_found_when_parent_only_has_wildcard_item_child", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteErr = faults.NewTypedError(faults.NotFoundError, "resource not found", nil)
+		orchestrator.remoteList = []resource.Resource{
+			{
+				LogicalPath: "/projects/asdfads/platform",
+				Payload: map[string]any{
+					"name": "platform",
+				},
+			},
+		}
+		metadataService := deps.Metadata.(*testMetadata)
+		metadataService.wildcardChildren["/projects"] = true
+
+		_, err := executeForTest(deps, "", "resource", "get", "/projects/asdfads")
+		assertTypedCategory(t, err, faults.NotFoundError)
+		if !reflect.DeepEqual(orchestrator.getRemoteCalls, []string{"/projects/asdfads"}) {
+			t.Fatalf("expected one remote get call, got %#v", orchestrator.getRemoteCalls)
+		}
+		if !reflect.DeepEqual(orchestrator.listRemoteCalls, []string{"/projects/asdfads"}) {
+			t.Fatalf("expected one remote list fallback probe, got %#v", orchestrator.listRemoteCalls)
 		}
 	})
 
