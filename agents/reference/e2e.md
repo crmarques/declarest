@@ -28,7 +28,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 9. Step statuses MUST be `RUNNING`, `OK`, `FAIL`, `SKIP` and rendered as bracketed labels such as `[RUNNING]`, `[OK]`, `[FAILED]`, `[SKIP]`.
 10. Non-TTY mode MUST emit deterministic plain logs; TTY mode MAY use live spinner/color output.
 11. Step output MUST resemble a table framed by divider lines above and below the header row `STEP | ACTION | SPAN | STATUS`, print that header once per run, center each header label within its column, render spinner glyphs inside the `ACTION` column while a step is running, populate `SPAN` only after the step finishes, and center `STEP`, `SPAN`, and `STATUS` values for every row.
-12. Final summary MUST include step outcomes, case counters, duration, context file path, and logs path.
+12. Final summary MUST include step outcomes, resolved execution parameters (including explicit selections and defaulted values), case counters, duration, context file path, and logs path.
 13. Each component under `test/e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
 14. Local containerized (`COMPONENT_RUNTIME_KIND=compose`) components MUST provide `compose/compose.yaml`, at least one `k8s/*.yaml` manifest, and `scripts/health.sh`.
 15. `component.env` MUST declare `COMPONENT_CONTRACT_VERSION=1`, `COMPONENT_RUNTIME_KIND`, and `COMPONENT_DEPENDS_ON` explicitly.
@@ -189,3 +189,5 @@ Operator handoff:
 19. `./run-e2e.sh --profile cli-basic --managed-server rundeck` emits `metadata.base-dir` from `test/e2e/components/managed-server/rundeck/metadata` because `rundeck` has no shorthand bundle mapping, while still leaving local `managed-server.http.openapi` unset.
 20. `./run-e2e.sh --profile operator-manual --managed-server rundeck --repo-type git --git-provider gitea --secret-provider vault` prints `Manual Component Access` with rundeck URL and credentials via managed-server-state fallback even when no selected-component `manual-info` output is present.
 21. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file` registers a gitea push webhook to the run-scoped operator service URL and handoff output prints that URL plus a `kubectl ... jsonpath` command for `declarest.io/webhook-last-received-at`.
+22. `./run-e2e.sh --profile cli-basic --managed-server rundeck` prints summary parameter lines for omitted defaults such as `platform: kubernetes (default)` and `managed-server-auth-type: custom-header (component-default)`.
+23. `./run-e2e.sh --profile operator-manual --managed-server simple-api-server --secret-provider file` prints summary parameter lines for operator profile defaults such as `repository-type: git (profile-default)` and `git-provider: gitea (profile-default)` when those flags are omitted.

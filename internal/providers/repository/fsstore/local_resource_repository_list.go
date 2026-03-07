@@ -14,10 +14,6 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *LocalResourceRepository) resourceFileName() string {
-	return "resource"
-}
-
 func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, policy repository.ListPolicy) ([]resource.Resource, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {

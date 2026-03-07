@@ -132,6 +132,7 @@ The runner reports progress in grouped steps:
 
 TTY mode renders dynamic spinner/status updates. Non-TTY mode emits structured plain step lines.
 The runner prints a live log pointer at startup so progress can be followed with `tail -f`.
+The final summary also prints the resolved execution parameters for the run and annotates each value as `explicit`, `default`, `profile-default`, `component-default`, `env`, or `not-applicable` when applicable.
 
 ## Case Model
 

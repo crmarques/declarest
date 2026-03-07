@@ -242,6 +242,135 @@ ui_selected_components_summary() {
   printf '%s\n' "${labels[*]}"
 }
 
+ui_parameter_is_explicit() {
+  local key=$1
+  if ! declare -F e2e_is_explicit >/dev/null 2>&1; then
+    return 1
+  fi
+
+  e2e_is_explicit "${key}"
+}
+
+ui_profile_is_operator() {
+  case "${E2E_PROFILE:-}" in
+    operator-manual|operator-basic|operator-full)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+ui_execution_parameter_source() {
+  local key=$1
+
+  case "${key}" in
+    managed-server-auth-type)
+      if ui_parameter_is_explicit 'managed-server-auth-type'; then
+        printf 'explicit\n'
+      elif [[ -n "${E2E_MANAGED_SERVER_AUTH_TYPE:-}" ]]; then
+        printf 'component-default\n'
+      else
+        printf 'default\n'
+      fi
+      return 0
+      ;;
+    repository-type)
+      if ui_parameter_is_explicit 'repo-type'; then
+        printf 'explicit\n'
+      elif ui_profile_is_operator && [[ "${E2E_REPO_TYPE:-}" == 'git' ]]; then
+        printf 'profile-default\n'
+      else
+        printf 'default\n'
+      fi
+      return 0
+      ;;
+    git-provider)
+      if [[ -z "${E2E_GIT_PROVIDER:-}" ]]; then
+        printf 'not-applicable\n'
+      elif ui_parameter_is_explicit 'git-provider'; then
+        printf 'explicit\n'
+      elif ui_profile_is_operator && [[ "${E2E_GIT_PROVIDER}" == 'gitea' ]]; then
+        printf 'profile-default\n'
+      else
+        printf 'default\n'
+      fi
+      return 0
+      ;;
+    git-provider-connection)
+      if [[ -z "${E2E_GIT_PROVIDER:-}" ]]; then
+        printf 'not-applicable\n'
+      elif ui_parameter_is_explicit 'git-provider-connection'; then
+        printf 'explicit\n'
+      else
+        printf 'default\n'
+      fi
+      return 0
+      ;;
+    container-engine)
+      if [[ -n "${DECLAREST_E2E_CONTAINER_ENGINE:-}" ]]; then
+        printf 'env\n'
+      else
+        printf 'default\n'
+      fi
+      return 0
+      ;;
+  esac
+
+  if ui_parameter_is_explicit "${key}"; then
+    printf 'explicit\n'
+  else
+    printf 'default\n'
+  fi
+}
+
+ui_execution_parameter_line() {
+  local label=$1
+  local value=$2
+  local source=${3:-}
+
+  if [[ -n "${source}" ]]; then
+    printf '%s: %s (%s)\n' "${label}" "${value}" "${source}"
+    return 0
+  fi
+
+  printf '%s: %s\n' "${label}" "${value}"
+}
+
+ui_execution_parameter_lines() {
+  local git_provider='none'
+  local git_provider_connection='n/a'
+
+  if [[ -n "${E2E_GIT_PROVIDER:-}" ]]; then
+    git_provider="${E2E_GIT_PROVIDER}"
+    git_provider_connection="${E2E_GIT_PROVIDER_CONNECTION:-local}"
+  fi
+
+  ui_execution_parameter_line 'profile' "${E2E_PROFILE:-n/a}" "$(ui_execution_parameter_source 'profile')"
+  ui_execution_parameter_line 'platform' "${E2E_PLATFORM:-n/a}" "$(ui_execution_parameter_source 'platform')"
+  ui_execution_parameter_line 'metadata-type' "${E2E_METADATA:-n/a}" "$(ui_execution_parameter_source 'metadata')"
+  ui_execution_parameter_line 'managed-server' "${E2E_MANAGED_SERVER:-n/a}" "$(ui_execution_parameter_source 'managed-server')"
+  ui_execution_parameter_line 'managed-server-connection' "${E2E_MANAGED_SERVER_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'managed-server-connection')"
+  ui_execution_parameter_line 'managed-server-auth-type' "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" "$(ui_execution_parameter_source 'managed-server-auth-type')"
+  ui_execution_parameter_line 'managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS:-false}" "$(ui_execution_parameter_source 'managed-server-mtls')"
+  ui_execution_parameter_line 'managed-server-proxy' "${E2E_MANAGED_SERVER_PROXY:-false}" "$(ui_execution_parameter_source 'managed-server-proxy')"
+  ui_execution_parameter_line 'repository-type' "${E2E_REPO_TYPE:-n/a}" "$(ui_execution_parameter_source 'repository-type')"
+  ui_execution_parameter_line 'git-provider' "${git_provider}" "$(ui_execution_parameter_source 'git-provider')"
+  ui_execution_parameter_line 'git-provider-connection' "${git_provider_connection}" "$(ui_execution_parameter_source 'git-provider-connection')"
+  ui_execution_parameter_line 'secret-provider' "${E2E_SECRET_PROVIDER:-n/a}" "$(ui_execution_parameter_source 'secret-provider')"
+  ui_execution_parameter_line 'secret-provider-connection' "${E2E_SECRET_PROVIDER_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'secret-provider-connection')"
+  ui_execution_parameter_line 'container-engine' "${E2E_CONTAINER_ENGINE:-n/a}" "$(ui_execution_parameter_source 'container-engine')"
+}
+
+ui_print_execution_parameters() {
+  local indent=${1:-}
+  local line
+
+  while IFS= read -r line; do
+    printf '%s%s\n' "${indent}" "${line}"
+  done < <(ui_execution_parameter_lines)
+}
+
 ui_write_step_log_header() {
   local step_log=$1
   local step_number=$2
@@ -257,19 +386,10 @@ ui_write_step_log_header() {
       "${E2E_PLATFORM:-n/a}" \
       "${E2E_KEEP_RUNTIME:-0}" \
       "${E2E_VERBOSE:-0}"
-    printf '[%s] stack platform=%s repo-type=%s managed-server=%s(%s) managed-server-security=auth-type:%s mtls:%s proxy:%s git-provider=%s(%s) secret-provider=%s(%s)\n' \
-      "$(e2e_now_utc)" \
-      "${E2E_PLATFORM:-n/a}" \
-      "${E2E_REPO_TYPE:-n/a}" \
-      "${E2E_MANAGED_SERVER:-n/a}" \
-      "${E2E_MANAGED_SERVER_CONNECTION:-n/a}" \
-      "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" \
-      "${E2E_MANAGED_SERVER_MTLS:-false}" \
-      "${E2E_MANAGED_SERVER_PROXY:-false}" \
-      "${E2E_GIT_PROVIDER:-none}" \
-      "${E2E_GIT_PROVIDER_CONNECTION:-n/a}" \
-      "${E2E_SECRET_PROVIDER:-n/a}" \
-      "${E2E_SECRET_PROVIDER_CONNECTION:-n/a}"
+    printf '[%s] execution-parameters:\n' "$(e2e_now_utc)"
+    while IFS= read -r line; do
+      printf '[%s]   %s\n' "$(e2e_now_utc)" "${line}"
+    done < <(ui_execution_parameter_lines)
     printf '[%s] selected-components: %s\n' "$(e2e_now_utc)" "$(ui_selected_components_summary)"
     printf '[%s] log-path=%s\n' "$(e2e_now_utc)" "${step_log}"
   } >>"${step_log}"
@@ -490,6 +610,11 @@ ui_print_summary() {
       "$(ui_step_state_label "${state}")" \
       "$(e2e_format_duration "${duration}")"
   done
+
+  printf '\n'
+  printf 'Execution Parameters\n'
+  printf '%s\n' '--------------------'
+  ui_print_execution_parameters '  '
 
   printf '\n'
   printf '  cases total=%d passed=%d failed=%d skipped=%d\n' \

@@ -51,7 +51,7 @@ Acceptance contracts:
 10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repository status` output contract, and verbose worktree-detail coverage for `repository status --verbose`.
 11. E2E profiles: `cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full` workload behavior, `smoke|main|operator-main|corner` case selection, `CASE_PROFILES` family filtering, deterministic step statuses, manual-profile managed-server access handoff details, and operator-profile installation/handoff/automation validation.
-12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`) and actionable failure log pointers.
+12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`), actionable failure log pointers, and final-summary execution parameters that distinguish explicit selections from defaulted values (including profile defaults, component-elected defaults, and env-backed container engine selection).
 13. Resource-server fixtures: metadata `resourceInfo` identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
 14. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
 15. OAuth2 component auth: `client_credentials` token issuance and managed-server auth rejection when oauth2 config is missing or invalid.
@@ -150,5 +150,6 @@ Acceptance contracts:
 9. E2E harness tests verify both platform paths (`--platform compose` and `--platform kubernetes`), including a corner case where `--platform kubernetes` with remote/native-only selections skips kind cluster creation.
 10. Unit and harness tests verify metadata sidecars support `metadata.yaml` and `metadata.json`, prefer YAML when both exist, and surface selected managed-server access details in manual-profile handoff output even without a component `manual-info` hook.
 11. E2E harness tests verify operator profile defaulting/validation (`repo-type=git`, `git-provider=gitea`) and in-cluster operator deployment lifecycle behavior (runtime details, handoff commands, automated reconcile cases, and cleanup/teardown).
-12. Unit + integration tests verify managed-server request-throttling validation, shared-gate queue overflow behavior, and repository webhook authentication/annotation patch behavior for valid vs invalid payloads.
-13. Operator unit tests verify sync-plan fallbacks, schedule computation (`syncInterval` vs `fullResyncCron`), and overlap validation behavior with shared vs distinct dependency references.
+12. E2E harness tests verify summary execution parameters report explicit selections, component-elected auth defaults, and operator profile defaults deterministically.
+13. Unit + integration tests verify managed-server request-throttling validation, shared-gate queue overflow behavior, and repository webhook authentication/annotation patch behavior for valid vs invalid payloads.
+14. Operator unit tests verify sync-plan fallbacks, schedule computation (`syncInterval` vs `fullResyncCron`), and overlap validation behavior with shared vs distinct dependency references.
