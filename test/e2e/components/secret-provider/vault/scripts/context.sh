@@ -11,12 +11,12 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 }
 
 {
-  printf 'secret-store:\n'
+  printf 'secretStore:\n'
   printf '  vault:\n'
   printf '    address: %s\n' "${VAULT_ADDRESS}"
   printf '    mount: %s\n' "${VAULT_MOUNT:-secret}"
-  printf '    path-prefix: %s\n' "${VAULT_PATH_PREFIX:-declarest-e2e}"
-  printf '    kv-version: %s\n' "${VAULT_KV_VERSION:-2}"
+  printf '    pathPrefix: %s\n' "${VAULT_PATH_PREFIX:-declarest-e2e}"
+  printf '    kvVersion: %s\n' "${VAULT_KV_VERSION:-2}"
   printf '    auth:\n'
 
   case "${VAULT_AUTH_MODE:-token}" in
@@ -30,9 +30,9 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
       printf '        mount: %s\n' "${VAULT_AUTH_MOUNT:-userpass}"
       ;;
     approle)
-      printf '      approle:\n'
-      printf '        role-id: %s\n' "${VAULT_ROLE_ID}"
-      printf '        secret-id: %s\n' "${VAULT_SECRET_ID}"
+      printf '      appRole:\n'
+      printf '        roleId: %s\n' "${VAULT_ROLE_ID}"
+      printf '        secretId: %s\n' "${VAULT_SECRET_ID}"
       printf '        mount: %s\n' "${VAULT_AUTH_MOUNT:-approle}"
       ;;
   esac

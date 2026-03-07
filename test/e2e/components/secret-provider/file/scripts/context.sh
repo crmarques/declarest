@@ -11,7 +11,7 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 }
 
 {
-  printf 'secret-store:\n'
+  printf 'secretStore:\n'
   printf '  file:\n'
   printf '    path: %s\n' "${SECRET_FILE_PATH}"
   printf '    passphrase: %s\n' "${SECRET_FILE_PASSPHRASE}"

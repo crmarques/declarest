@@ -37,7 +37,45 @@ e2e_operator_prepare_managed_server_metadata_bundle() {
   E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE=''
   E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=''
 
-  if [[ -n "${E2E_METADATA_BUNDLE:-}" || -z "${E2E_METADATA_DIR:-}" ]]; then
+  local archive_path="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle.tar.gz"
+  mkdir -p "${E2E_RUN_DIR}/operator" || return 1
+
+  if [[ -n "${E2E_METADATA_BUNDLE:-}" ]]; then
+    local bundle_ref="${E2E_METADATA_BUNDLE}"
+    local bundle_name=${bundle_ref%%:*}
+    local bundle_version=${bundle_ref#*:}
+    local cache_dir="${HOME}/.declarest/metadata-bundles/${bundle_name}-${bundle_version}"
+
+    if [[ -f "${cache_dir}/bundle.yaml" && -d "${cache_dir}/metadata" ]]; then
+      local -a archive_entries=(bundle.yaml metadata)
+      local openapi_name
+      for openapi_name in openapi.yaml openapi.yml openapi.json; do
+        if [[ -f "${cache_dir}/${openapi_name}" ]]; then
+          archive_entries+=("${openapi_name}")
+          break
+        fi
+      done
+
+      rm -f -- "${archive_path}"
+      if ! tar -C "${cache_dir}" -czf "${archive_path}" "${archive_entries[@]}"; then
+        e2e_die "failed to create operator metadata bundle archive from cache: ${cache_dir}"
+        return 1
+      fi
+
+      E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE="${archive_path}"
+      E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_server_metadata_bundle_mount_path)
+      export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
+      export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+      return 0
+    fi
+
+    e2e_info "operator metadata bundle cache unavailable for bundle=${bundle_ref}; using bundle ref without local archive"
+    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
+    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+    return 0
+  fi
+
+  if [[ -z "${E2E_METADATA_DIR:-}" ]]; then
     export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
     export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
     return 0
@@ -52,7 +90,6 @@ e2e_operator_prepare_managed_server_metadata_bundle() {
   bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVER:-managed-server}-bundle")
 
   local bundle_root="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle"
-  local archive_path="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle.tar.gz"
   local metadata_file_name
 
   rm -rf -- "${bundle_root}"
@@ -1135,9 +1172,9 @@ EOF_REPO_CR_FOOTER
   local tls_ca_file=''
   local tls_client_cert_file=''
   local tls_client_key_file=''
-  local metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
-  if [[ -z "${metadata_bundle_ref}" && -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}" ]]; then
-    metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}"
+  local metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}"
+  if [[ -z "${metadata_bundle_ref}" ]]; then
+    metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
   fi
   if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     managed_server_tls_enabled='true'
@@ -1625,7 +1662,7 @@ To use it in your current shell:
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource save ${resource_path@Q} --payload ${resource_payload@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository commit -m ${commit_message@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository push
-  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource get ${resource_path@Q} --source remote-server
+  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource get ${resource_path@Q} --source managed-server
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository "${repository_name}" -o jsonpath='{.metadata.annotations.declarest\\.io/webhook-last-received-at}'
 EOF_HANDOFF
 

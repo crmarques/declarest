@@ -13,7 +13,7 @@ operator_wait_remote_owner() {
   local logical_path=$1
   local expected_owner=$2
 
-  case_run_declarest resource get "${logical_path}" --source remote-server -o json
+  case_run_declarest resource get "${logical_path}" --source managed-server -o json
   ((CASE_LAST_STATUS == 0)) || return 1
 
   jq -e --arg owner "${expected_owner}" '.owner == $owner' <<<"${CASE_LAST_STDOUT}" >/dev/null

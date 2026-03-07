@@ -291,7 +291,7 @@ EOF
     assert_eq "$(context_metadata_line "${fragment_file}")" "  bundle: keycloak-bundle:0.0.1" "expected ${script_path} to emit metadata.bundle"
 
     run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "" "${metadata_dir}"
-    assert_eq "$(context_metadata_line "${fragment_file}")" "  base-dir: ${metadata_dir}" "expected ${script_path} to emit metadata.base-dir fallback"
+    assert_eq "$(context_metadata_line "${fragment_file}")" "  baseDir: ${metadata_dir}" "expected ${script_path} to emit metadata.baseDir fallback"
   done
 }
 

@@ -12,10 +12,10 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 
 {
   printf 'repository:\n'
-  printf '  resource-format: %s\n' "${REPO_RESOURCE_FORMAT:-json}"
+  printf '  resourceFormat: %s\n' "${REPO_RESOURCE_FORMAT:-json}"
   printf '  git:\n'
   printf '    local:\n'
-  printf '      base-dir: %s\n' "${REPO_BASE_DIR}"
+  printf '      baseDir: %s\n' "${REPO_BASE_DIR}"
   printf '    remote:\n'
   printf '      url: %s\n' "${GIT_REMOTE_URL}"
   printf '      branch: %s\n' "${GIT_REMOTE_BRANCH:-main}"
@@ -23,14 +23,14 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 
   if [[ "${GIT_AUTH_MODE:-}" == 'basic' ]]; then
     printf '      auth:\n'
-    printf '        basic-auth:\n'
+    printf '        basicAuth:\n'
     printf '          username: %s\n' "${GIT_AUTH_USERNAME}"
     printf '          password: %s\n' "${GIT_AUTH_PASSWORD}"
   fi
 
   if [[ "${GIT_AUTH_MODE:-}" == 'access-key' ]]; then
     printf '      auth:\n'
-    printf '        access-key:\n'
+    printf '        accessKey:\n'
     printf '          token: %s\n' "${GIT_AUTH_TOKEN}"
   fi
 
@@ -39,6 +39,6 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
     printf '  bundle: %s\n' "${E2E_METADATA_BUNDLE}"
   else
     metadata_base_dir=${E2E_METADATA_DIR:-${REPO_BASE_DIR}}
-    printf '  base-dir: %s\n' "${metadata_base_dir}"
+    printf '  baseDir: %s\n' "${metadata_base_dir}"
   fi
 } >"${fragment_file}"

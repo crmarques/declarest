@@ -105,7 +105,7 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   output=$(e2e_profile_operator_handoff 'e2e-operator')
 
   assert_contains "${output}" "resource save '/api/projects/operator-demo' --payload"
-  assert_contains "${output}" "resource get '/api/projects/operator-demo' --source remote-server"
+  assert_contains "${output}" "resource get '/api/projects/operator-demo' --source managed-server"
   assert_contains "${output}" "manager-deployment: declarest-operator"
   assert_contains "${output}" "repository-webhook-url: ${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}"
   assert_contains "${output}" "kubectl --kubeconfig \"${E2E_KUBECONFIG}\" -n \"${E2E_OPERATOR_NAMESPACE}\" logs deployment/\"${E2E_OPERATOR_MANAGER_DEPLOYMENT}\" --tail=80"
@@ -219,7 +219,7 @@ test_operator_ready_timeout_validation_and_cap() {
   assert_contains "${output}" "invalid operator readiness timeout"
 }
 
-test_operator_write_manifests_sets_keycloak_metadata_bundle_ref() {
+test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path() {
   source_e2e_libs common profile operator components
 
   local tmp
@@ -240,11 +240,26 @@ test_operator_write_manifests_sets_keycloak_metadata_bundle_ref() {
   export E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
   export E2E_MANAGED_SERVER_MTLS='false'
   export E2E_METADATA_BUNDLE='keycloak-bundle:0.0.1'
+  export HOME="${tmp}/home"
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=''
   export E2E_OPERATOR_REPOSITORY_NAME='declarest-e2e-repository'
 
   mkdir -p "${E2E_STATE_DIR}"
+  mkdir -p "${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_"
+  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/bundle.yaml" <<'EOF'
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.0.1
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+  metadataFileName: metadata.json
+EOF
+  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.json" <<'EOF'
+{"resourceInfo":{"idFromAttribute":"/realm","aliasFromAttribute":"/realm"}}
+EOF
 
   local repo_state managed_state secret_state
   repo_state=$(e2e_component_state_file "$(e2e_component_key 'repo-type' 'git')")
@@ -271,12 +286,15 @@ SECRET_FILE_PATH=/tmp/declarest-e2e-secrets.enc.json
 SECRET_FILE_PASSPHRASE=test-passphrase
 EOF
 
+  e2e_operator_prepare_managed_server_metadata_bundle
   e2e_operator_write_manifests
 
   local managed_server_manifest
   managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
   assert_file_contains "${managed_server_manifest}" "metadata:"
-  assert_file_contains "${managed_server_manifest}" "bundle: 'keycloak-bundle:0.0.1'"
+  assert_file_contains \
+    "${managed_server_manifest}" \
+    "bundle: '$(e2e_operator_managed_server_metadata_bundle_mount_path)'"
 }
 
 test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
@@ -293,7 +311,7 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
   cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
-{"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
+{"resourceInfo":{"idFromAttribute":"/name","aliasFromAttribute":"/name"}}
 EOF
 
   e2e_operator_prepare_managed_server_metadata_bundle
@@ -358,7 +376,7 @@ test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
   cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
-{"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
+{"resourceInfo":{"idFromAttribute":"/name","aliasFromAttribute":"/name"}}
 EOF
 
   e2e_operator_api_server_endpoint() {
@@ -451,7 +469,7 @@ test_operator_prepare_repository_webhook_builds_scoped_url
 test_operator_prepare_repository_webhook_derives_namespace_when_unset
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
-test_operator_write_manifests_sets_keycloak_metadata_bundle_ref
+test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path
 test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir
 test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 test_operator_write_manager_manifest_mounts_prepared_metadata_bundle

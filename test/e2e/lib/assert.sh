@@ -153,7 +153,7 @@ case_context_repo_base_dir() {
     return 1
   }
 
-  awk '$1 == "base-dir:" { print $2; exit }' "${context_file}"
+  awk '$1 == "baseDir:" { print $2; exit }' "${context_file}"
 }
 
 case_repo_commit_setup_changes_if_git() {
@@ -514,7 +514,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource create "${logical_path}" -f "${resource_file}" -i json
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote-server -o json
+    case_run_declarest resource list "${collection_path}" --source managed-server -o json
     case_expect_success
     if ! case_expect_sorted_resource_list_payloads "${CASE_LAST_STDOUT}"; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
@@ -545,7 +545,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource delete "${logical_path}" -y
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source remote-server -o json
+    case_run_declarest resource list "${collection_path}" --source managed-server -o json
     if ((CASE_LAST_STATUS != 0)); then
       if grep -qi 'status 404' <<<"${CASE_LAST_OUTPUT}"; then
         continue

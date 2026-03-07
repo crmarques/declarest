@@ -50,9 +50,9 @@ case "${selected_auth_type}" in
 esac
 
 {
-  printf 'managed-server:\n'
+  printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    base-url: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
+  printf '    baseUrl: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
@@ -64,18 +64,18 @@ esac
     fi
 
     printf '    tls:\n'
-    printf '      ca-cert-file: %s\n' "${SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST}"
-    printf '      client-cert-file: %s\n' "${SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST}"
-    printf '      client-key-file: %s\n' "${SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST}"
+    printf '      caCertFile: %s\n' "${SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST}"
+    printf '      clientCertFile: %s\n' "${SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST}"
+    printf '      clientKeyFile: %s\n' "${SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST}"
   fi
 
   printf '    auth:\n'
   if [[ "${enable_oauth2}" == 'true' ]]; then
     printf '      oauth2:\n'
-    printf '        token-url: %s\n' "${SIMPLE_API_SERVER_TOKEN_URL}"
-    printf '        grant-type: client_credentials\n'
-    printf '        client-id: %s\n' "${SIMPLE_API_SERVER_CLIENT_ID}"
-    printf '        client-secret: %s\n' "${SIMPLE_API_SERVER_CLIENT_SECRET}"
+    printf '        tokenUrl: %s\n' "${SIMPLE_API_SERVER_TOKEN_URL}"
+    printf '        grantType: client_credentials\n'
+    printf '        clientId: %s\n' "${SIMPLE_API_SERVER_CLIENT_ID}"
+    printf '        clientSecret: %s\n' "${SIMPLE_API_SERVER_CLIENT_SECRET}"
 
     if [[ -n "${SIMPLE_API_SERVER_SCOPE:-}" ]]; then
       printf '        scope: %s\n' "${SIMPLE_API_SERVER_SCOPE}"
@@ -84,11 +84,11 @@ esac
       printf '        audience: %s\n' "${SIMPLE_API_SERVER_AUDIENCE}"
     fi
   elif [[ "${enable_basic_auth}" == 'true' ]]; then
-    printf '      basic-auth:\n'
+    printf '      basicAuth:\n'
     printf '        username: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME}"
     printf '        password: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD}"
   else
-    printf '      custom-headers:\n'
+    printf '      customHeaders:\n'
     printf '        - header: Authorization\n'
     printf '          prefix: Bearer\n'
     printf '          value: simple-api-oauth2-disabled\n'
