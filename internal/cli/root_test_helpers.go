@@ -178,15 +178,19 @@ func buildTestContext(name string) config.Context {
 		ResourceFormat: format,
 		Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 	}
-	if name == "git" || name == "git-no-remote" {
+	if name == "git" || name == "git-no-remote" || name == "git-auto-sync-disabled" {
 		gitRepo := &config.GitRepository{
 			Local: config.GitLocal{
 				BaseDir: "/tmp/repo",
 			},
 		}
-		if name == "git" {
+		if name == "git" || name == "git-auto-sync-disabled" {
 			gitRepo.Remote = &config.GitRemote{
 				URL: "https://example.invalid/repo.git",
+			}
+			if name == "git-auto-sync-disabled" {
+				autoSyncFalse := false
+				gitRepo.Remote.AutoSync = &autoSyncFalse
 			}
 		}
 		repositoryConfig = config.Repository{
@@ -214,11 +218,20 @@ func buildTestContext(name string) config.Context {
 		Repository: repositoryConfig,
 		ManagedServer: &config.ManagedServer{
 			HTTP: &config.HTTPServer{
-				BaseURL:     "https://api.example.invalid",
+				BaseURL:     resolveManagedServerBaseURLForTestContext(name),
 				HealthCheck: resolveManagedServerHealthCheckForTestContext(name),
 				Auth:        resourceServerAuth,
 			},
 		},
+	}
+}
+
+func resolveManagedServerBaseURLForTestContext(name string) string {
+	switch name {
+	case "health-check-base-path":
+		return "https://api.example.invalid/admin/api/45"
+	default:
+		return "https://api.example.invalid"
 	}
 }
 

@@ -218,6 +218,20 @@ Failure expectation:
 2. `--as-items --as-one-resource` fails with `ValidationError`.
 
 ### Example 11: E2E Dependency-Aware Parallel Component Hooks
+Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
+
+Inputs:
+1. Managed-server component with checked-in `metadata/` fixtures.
+2. E2E case that calls `metadata set` or `secret detect --fix`.
+
+Execution:
+1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
+2. Generated context points `metadata.base-dir` at that run-scoped copy.
+3. Case mutates metadata through CLI commands.
+
+Expected outputs:
+1. Case assertions still observe the metadata changes through the generated context.
+2. Checked-in component metadata directories remain unchanged after the run.
 Goal: run component hooks in parallel when possible without violating dependency constraints.
 
 Inputs:

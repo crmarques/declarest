@@ -168,8 +168,8 @@ func TestResourceCopyGitContextCommitsRepositoryChange(t *testing.T) {
 	if repoService.commitCalls[0] != "declarest: copy resource /admin/realms/test to /admin/realms/test-copy" {
 		t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
 	}
-	if repoService.pushCalls != 0 {
-		t.Fatalf("expected copy auto-commit to avoid push, got %d push calls", repoService.pushCalls)
+	if repoService.pushCalls != 1 {
+		t.Fatalf("expected copy auto-commit to push by default, got %d push calls", repoService.pushCalls)
 	}
 }
 

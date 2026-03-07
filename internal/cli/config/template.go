@@ -22,7 +22,7 @@ contexts:
         #   url: https://example.com/org/repo.git
         #   branch: main
         #   provider: github
-        #   auto-sync: false
+        #   auto-sync: true
         #
         #   # Optional auth.
         #   auth:

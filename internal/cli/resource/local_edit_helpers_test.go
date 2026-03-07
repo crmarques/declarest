@@ -145,6 +145,66 @@ func TestEnsureCleanGitWorktreeForAutoCommitStillChecksWhenAutoInitDisabled(t *t
 	}
 }
 
+func TestCommitAndMaybeAutoSyncRepositoryPushesWhenAutoSyncIsUnset(t *testing.T) {
+	t.Parallel()
+
+	sync := &stubRepositorySync{}
+	err := commitAndMaybeAutoSyncRepository(
+		context.Background(),
+		cliutil.CommandDependencies{RepositorySync: sync},
+		configdomain.Context{
+			Repository: configdomain.Repository{
+				Git: &configdomain.GitRepository{
+					Local:  configdomain.GitLocal{BaseDir: t.TempDir()},
+					Remote: &configdomain.GitRemote{URL: "https://example.invalid/repo.git"},
+				},
+			},
+		},
+		"test commit",
+	)
+	if err != nil {
+		t.Fatalf("expected default auto-sync push to succeed, got %v", err)
+	}
+	if sync.commitCalls != 1 {
+		t.Fatalf("expected one commit call, got %d", sync.commitCalls)
+	}
+	if sync.pushCalls != 1 {
+		t.Fatalf("expected one push call when auto-sync is unset, got %d", sync.pushCalls)
+	}
+}
+
+func TestCommitAndMaybeAutoSyncRepositorySkipsPushWhenAutoSyncIsFalse(t *testing.T) {
+	t.Parallel()
+
+	autoSyncFalse := false
+	sync := &stubRepositorySync{}
+	err := commitAndMaybeAutoSyncRepository(
+		context.Background(),
+		cliutil.CommandDependencies{RepositorySync: sync},
+		configdomain.Context{
+			Repository: configdomain.Repository{
+				Git: &configdomain.GitRepository{
+					Local: configdomain.GitLocal{BaseDir: t.TempDir()},
+					Remote: &configdomain.GitRemote{
+						URL:      "https://example.invalid/repo.git",
+						AutoSync: &autoSyncFalse,
+					},
+				},
+			},
+		},
+		"test commit",
+	)
+	if err != nil {
+		t.Fatalf("expected explicit auto-sync=false to skip push cleanly, got %v", err)
+	}
+	if sync.commitCalls != 1 {
+		t.Fatalf("expected one commit call, got %d", sync.commitCalls)
+	}
+	if sync.pushCalls != 0 {
+		t.Fatalf("expected push to be skipped when auto-sync is false, got %d calls", sync.pushCalls)
+	}
+}
+
 type stubRepositorySync struct {
 	status          repository.SyncReport
 	syncStatusErr   error
@@ -152,6 +212,8 @@ type stubRepositorySync struct {
 	history         []repository.HistoryEntry
 	historyErr      error
 	historyCalls    int
+	commitCalls     int
+	pushCalls       int
 }
 
 func (s *stubRepositorySync) Init(context.Context) error                          { return nil }
@@ -159,7 +221,14 @@ func (s *stubRepositorySync) Refresh(context.Context) error                     
 func (s *stubRepositorySync) Clean(context.Context) error                         { return nil }
 func (s *stubRepositorySync) Reset(context.Context, repository.ResetPolicy) error { return nil }
 func (s *stubRepositorySync) Check(context.Context) error                         { return nil }
-func (s *stubRepositorySync) Push(context.Context, repository.PushPolicy) error   { return nil }
+func (s *stubRepositorySync) Push(context.Context, repository.PushPolicy) error {
+	s.pushCalls++
+	return nil
+}
+func (s *stubRepositorySync) Commit(context.Context, string) (bool, error) {
+	s.commitCalls++
+	return true, nil
+}
 func (s *stubRepositorySync) SyncStatus(context.Context) (repository.SyncReport, error) {
 	s.syncStatusCalls++
 	if s.syncStatusErr != nil {

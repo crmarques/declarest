@@ -132,6 +132,33 @@ func TestPrintTemplateRejectsUnexpectedArguments(t *testing.T) {
 	}
 }
 
+func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testing.T) {
+	t.Parallel()
+
+	probePath, err := resolveManagedServerHealthCheckProbePath(configdomain.Context{
+		ManagedServer: &configdomain.ManagedServer{
+			HTTP: &configdomain.HTTPServer{
+				BaseURL: "https://api.example.invalid/admin/api/45",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected base-url fallback to succeed, got %v", err)
+	}
+	if probePath != "/admin/api/45" {
+		t.Fatalf("expected probe path /admin/api/45, got %q", probePath)
+	}
+	if got := renderManagedServerHealthCheckTarget(configdomain.Context{
+		ManagedServer: &configdomain.ManagedServer{
+			HTTP: &configdomain.HTTPServer{
+				BaseURL: "https://api.example.invalid/admin/api/45",
+			},
+		},
+	}); got != "https://api.example.invalid/admin/api/45" {
+		t.Fatalf("expected rendered target to use base-url fallback, got %q", got)
+	}
+}
+
 func TestAddImportsSingleContextAndSupportsRename(t *testing.T) {
 	t.Parallel()
 
@@ -796,11 +823,11 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		ResourceStore:  &testRepositoryService{},
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
-		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+		Contexts:            contextService,
+		ResourceStore:       &testRepositoryService{},
+		RepositorySync:      &testRepositoryService{},
+		Metadata:            &testMetadataService{},
+		ManagedServerClient: &testManagedServerClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -2025,6 +2052,35 @@ func (s *testOrchestratorService) Diff(context.Context, string) ([]resource.Diff
 	return nil, nil
 }
 func (s *testOrchestratorService) Template(context.Context, string, resource.Value) (resource.Value, error) {
+	return nil, nil
+}
+
+type testManagedServerClientService struct {
+	requestErr error
+}
+
+func (s *testManagedServerClientService) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testManagedServerClientService) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testManagedServerClientService) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
+	return nil, nil
+}
+func (s *testManagedServerClientService) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
+	return nil
+}
+func (s *testManagedServerClientService) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+	return nil, nil
+}
+func (s *testManagedServerClientService) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
+	return false, nil
+}
+func (s *testManagedServerClientService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Value, error) {
+	return nil, s.requestErr
+}
+func (s *testManagedServerClientService) GetOpenAPISpec(context.Context) (resource.Value, error) {
 	return nil, nil
 }
 

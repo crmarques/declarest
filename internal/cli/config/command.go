@@ -4,13 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/spf13/cobra"
 )
 
@@ -843,17 +845,27 @@ func checkManagedServer(command *cobra.Command, deps cliutil.CommandDependencies
 		return result
 	}
 
-	orchestratorService, err := cliutil.RequireOrchestrator(deps)
+	managedServerClient, err := cliutil.RequireManagedServerClient(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
 		return result
 	}
 
-	_, err = orchestratorService.ListRemote(command.Context(), "/", orchestratordomain.ListPolicy{Recursive: false})
+	probePath, err := resolveManagedServerHealthCheckProbePath(cfg)
+	if err != nil {
+		result.Status = configCheckFail
+		result.Error = err.Error()
+		return result
+	}
+
+	_, err = managedServerClient.Request(command.Context(), managedserverdomain.RequestSpec{
+		Method: http.MethodGet,
+		Path:   probePath,
+	})
 	if err == nil {
 		result.Status = configCheckOK
-		result.Details = "managed server probe succeeded"
+		result.Details = fmt.Sprintf("managed server probe succeeded (GET %s)", renderManagedServerHealthCheckTarget(cfg))
 		return result
 	}
 
@@ -868,6 +880,85 @@ func checkManagedServer(command *cobra.Command, deps cliutil.CommandDependencies
 		result.Error = err.Error()
 		return result
 	}
+}
+
+func renderManagedServerHealthCheckTarget(cfg configdomain.Context) string {
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		return "/"
+	}
+	healthCheck := strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+	if healthCheck != "" {
+		return healthCheck
+	}
+	return strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL)
+}
+
+func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string, error) {
+	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+		return "/", nil
+	}
+
+	healthCheck := strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+	if healthCheck == "" {
+		baseURL := strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL)
+		if baseURL == "" {
+			return "/", nil
+		}
+		parsed, err := url.Parse(baseURL)
+		if err != nil {
+			return "", cliutil.ValidationError("managed-server.http.base-url is invalid", err)
+		}
+		basePath := strings.TrimSpace(parsed.Path)
+		if basePath == "" {
+			return "/", nil
+		}
+		if !strings.HasPrefix(basePath, "/") {
+			basePath = "/" + basePath
+		}
+		return basePath, nil
+	}
+
+	parsed, err := url.Parse(healthCheck)
+	if err != nil {
+		return "", cliutil.ValidationError("managed-server.http.health-check is invalid", err)
+	}
+	if strings.TrimSpace(parsed.RawQuery) != "" {
+		return "", cliutil.ValidationError("managed-server.http.health-check must not include query parameters", nil)
+	}
+	if parsed.Scheme == "" && parsed.Host == "" {
+		parsedPath := strings.TrimSpace(parsed.Path)
+		if parsedPath == "" {
+			return "", cliutil.ValidationError("managed-server.http.health-check is invalid", nil)
+		}
+		if !strings.HasPrefix(parsedPath, "/") {
+			parsedPath = "/" + parsedPath
+		}
+		return parsedPath, nil
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", cliutil.ValidationError("managed-server.http.health-check URL must use http or https", nil)
+	}
+	if parsed.Host == "" {
+		return "", cliutil.ValidationError("managed-server.http.health-check URL host is required", nil)
+	}
+	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL))
+	if err != nil {
+		return "", cliutil.ValidationError("managed-server.http.base-url is invalid", err)
+	}
+	if !strings.EqualFold(parsed.Scheme, baseParsed.Scheme) || !strings.EqualFold(parsed.Host, baseParsed.Host) {
+		return "", cliutil.ValidationError(
+			"managed-server.http.health-check URL must share scheme and host with managed-server.http.base-url",
+			nil,
+		)
+	}
+	parsedPath := strings.TrimSpace(parsed.Path)
+	if parsedPath == "" {
+		return "/", nil
+	}
+	if !strings.HasPrefix(parsedPath, "/") {
+		parsedPath = "/" + parsedPath
+	}
+	return parsedPath, nil
 }
 
 func checkSecretStore(command *cobra.Command, deps cliutil.CommandDependencies, cfg configdomain.Context) configCheckResult {

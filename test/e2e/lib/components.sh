@@ -238,6 +238,27 @@ e2e_seed_local_metadata_bundle_cache() {
   e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
 }
 
+e2e_prepare_metadata_workspace_copy() {
+  local metadata_source=$1
+  local workspace_dir="${E2E_RUN_DIR}/managed-server-metadata"
+
+  [[ -d "${metadata_source}" ]] || return 0
+
+  rm -rf -- "${workspace_dir}"
+  mkdir -p "${workspace_dir}" || {
+    e2e_die "failed to create metadata workspace dir=${workspace_dir}"
+    return 1
+  }
+  cp -R "${metadata_source}/." "${workspace_dir}/" || {
+    e2e_die "failed to copy metadata workspace from ${metadata_source} to ${workspace_dir}"
+    return 1
+  }
+
+  E2E_METADATA_DIR="${workspace_dir}"
+  export E2E_METADATA_DIR
+  e2e_info "managed-server metadata workspace prepared source=${metadata_source} dir=${workspace_dir}"
+}
+
 e2e_prepare_metadata_workspace() {
   unset E2E_METADATA_DIR
   unset E2E_METADATA_BUNDLE
@@ -260,9 +281,8 @@ e2e_prepare_metadata_workspace() {
       local openapi_source="${component_dir}/openapi.yaml"
       if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
         if [[ -d "${metadata_source}" ]]; then
-          E2E_METADATA_DIR="${metadata_source}"
-          export E2E_METADATA_DIR
-          e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; using component metadata dir=${metadata_source}"
+          e2e_prepare_metadata_workspace_copy "${metadata_source}" || return 1
+          e2e_info "metadata type bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; using metadata workspace copy"
           return 0
         fi
 
@@ -281,9 +301,8 @@ e2e_prepare_metadata_workspace() {
         return 0
       fi
 
-      E2E_METADATA_DIR="${metadata_source}"
-      export E2E_METADATA_DIR
-      e2e_info "managed-server metadata directory selected dir=${metadata_source}"
+      e2e_prepare_metadata_workspace_copy "${metadata_source}" || return 1
+      e2e_info "managed-server metadata directory selected from source=${metadata_source}"
       return 0
       ;;
     *)

@@ -95,7 +95,7 @@ repository:
       url: https://github.com/example/config-repo.git
       branch: main
       provider: github
-      auto-sync: false
+      auto-sync: true
       auth:
         access-key:
           token: ${GIT_TOKEN}
@@ -407,7 +407,7 @@ contexts:
           url: git@github.com:acme/keycloak-config.git
           branch: main
           provider: github
-          auto-sync: false
+          auto-sync: true
           auth:
             ssh:
               user: git

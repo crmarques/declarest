@@ -274,6 +274,27 @@ func TestManagedServerCheck(t *testing.T) {
 		}
 	})
 
+	t.Run("defaults_probe_to_managed_server_base_url_path", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+
+		output, err := executeForTest(deps, "", "--context", "health-check-base-path", "managed-server", "check")
+		if err != nil {
+			t.Fatalf("expected base-url fallback probe to succeed, got %v", err)
+		}
+		if !strings.Contains(output, "https://api.example.invalid/admin/api/45") {
+			t.Fatalf("expected output to include managed-server base-url fallback target, got %q", output)
+		}
+		if len(managedServerClient.requests) != 1 {
+			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		}
+		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/admin/api/45" {
+			t.Fatalf("expected GET /admin/api/45 probe request, got %#v", managedServerClient.requests[0])
+		}
+	})
+
 	t.Run("non_success_probe_fails", func(t *testing.T) {
 		t.Parallel()
 
@@ -2596,8 +2617,8 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		if repoService.commitCalls[0] != "declarest: save resource /customers/acme" {
 			t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
 		}
-		if repoService.pushCalls != 0 {
-			t.Fatalf("expected save auto-commit to avoid push, got %d push calls", repoService.pushCalls)
+		if repoService.pushCalls != 1 {
+			t.Fatalf("expected save auto-commit to push by default, got %d push calls", repoService.pushCalls)
 		}
 	})
 
@@ -2610,7 +2631,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		_, err := executeForTest(
 			deps,
 			"",
-			"--context", "git",
+			"--context", "git-auto-sync-disabled",
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme","name":"Acme"}`,

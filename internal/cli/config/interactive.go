@@ -201,11 +201,14 @@ func promptGitRemote(command *cobra.Command, prompter configPrompter) (*configdo
 		Provider: provider,
 	}
 
-	autoSync, err := prompter.Confirm(command, "Enable git remote auto-sync?", false)
+	autoSync, err := prompter.Confirm(command, "Enable git remote auto-sync?", true)
 	if err != nil {
 		return nil, err
 	}
-	remote.AutoSync = autoSync
+	if !autoSync {
+		autoSyncFalse := false
+		remote.AutoSync = &autoSyncFalse
+	}
 
 	includeAuth, err := prompter.Confirm(command, "Configure git remote auth?", false)
 	if err != nil {

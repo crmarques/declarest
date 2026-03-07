@@ -62,10 +62,17 @@ type GitRemote struct {
 	URL      string     `yaml:"url"`
 	Branch   string     `yaml:"branch,omitempty"`
 	Provider string     `yaml:"provider,omitempty"`
-	AutoSync bool       `yaml:"auto-sync,omitempty"`
+	AutoSync *bool      `yaml:"auto-sync,omitempty"`
 	Auth     *GitAuth   `yaml:"auth,omitempty"`
 	TLS      *TLS       `yaml:"tls,omitempty"`
 	Proxy    *HTTPProxy `yaml:"proxy,omitempty"`
+}
+
+func (g GitRemote) AutoSyncEnabled() bool {
+	if g.AutoSync == nil {
+		return true
+	}
+	return *g.AutoSync
 }
 
 type GitAuth struct {

@@ -48,9 +48,10 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 29. Cases discovered for a profile family MUST be filtered by `CASE_PROFILES` before workload execution.
 30. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
 31. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
-29. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
-30. The runner MUST maintain one live execution log file and print its path at startup.
-31. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus run-recorded runtime resources associated with each run (`compose` projects or `kind` clusters), and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that `cli-manual` or `operator-manual` handoff prepended so shells no longer reference cleaned runs.
+32. When managed-server metadata is sourced from a component `metadata/` directory, the runner MUST copy it into a run-scoped workspace under `test/e2e/.runs/<run-id>/` before generating contexts so metadata-mutating cases never write into checked-in component fixtures.
+33. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
+34. The runner MUST maintain one live execution log file and print its path at startup.
+35. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus run-recorded runtime resources associated with each run (`compose` projects or `kind` clusters), and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that `cli-manual` or `operator-manual` handoff prepended so shells no longer reference cleaned runs.
 32. Components MAY implement optional `scripts/manual-info.sh`; in `cli-manual` and `operator-manual` profiles, the runner MUST execute this hook for selected components after startup and print aggregated hook output in a `Manual Component Access` handoff section before `Repository provider access`.
 33. When the selected managed-server component has no `scripts/manual-info.sh` hook or it emits no output, manual profiles MUST print state-derived managed-server connection details in the same `Manual Component Access` section when that state is available.
 34. Runner security selection flags MUST include `--managed-server-auth-type <none|basic|oauth2|custom-header>` and `--managed-server-mtls`; `--managed-server-mtls` defaults to `false`, and auth type defaults MUST be elected by the selected managed-server component when the flag is omitted (preference order SHOULD be `oauth2`, then `custom-header`, then `basic`, then `none`).
@@ -159,13 +160,14 @@ Operator handoff:
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
 13. `managed-server=keycloak` runs in `bundle` mode fail during context validation when shorthand bundle `keycloak-bundle:0.0.1` cannot be resolved from the default remote path.
 14. `bundle` mode with a managed-server that has no shorthand mapping falls back to component-local `metadata/` when present, otherwise continues without `metadata.bundle`; in both cases local `openapi.yaml` remains unset.
-15. `--platform kubernetes` with only remote/native selections MUST not create a kind cluster.
-16. `--managed-server-proxy true` without `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL` fails argument validation before runtime startup.
-17. `--profile operator-manual --git-provider git` fails initialization because operator profiles support only `gitea` and `gitlab`.
-18. `--profile operator-manual --secret-provider none` fails initialization because operator profiles require an instantiated secret provider.
-19. Operator profiles in kubernetes mode rewrite localhost component URLs to in-cluster endpoints (preferring component pod IP, then service ClusterIP/DNS) so the in-cluster manager can reach local providers.
-20. Manual profiles with no component manual-info output omit the `Manual Component Access` section and still render handoff access sections deterministically.
-21. Operator profile with `git-provider=git` does not configure provider webhooks and still fails fast from operator-profile provider validation.
+15. Metadata-mutating E2E cases (for example `metadata set` or `secret detect --fix`) write only into the run-scoped metadata workspace copy and MUST leave checked-in component metadata directories unchanged.
+16. `--platform kubernetes` with only remote/native selections MUST not create a kind cluster.
+17. `--managed-server-proxy true` without `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL` fails argument validation before runtime startup.
+18. `--profile operator-manual --git-provider git` fails initialization because operator profiles support only `gitea` and `gitlab`.
+19. `--profile operator-manual --secret-provider none` fails initialization because operator profiles require an instantiated secret provider.
+20. Operator profiles in kubernetes mode rewrite localhost component URLs to in-cluster endpoints (preferring component pod IP, then service ClusterIP/DNS) so the in-cluster manager can reach local providers.
+21. Manual profiles with no component manual-info output omit the `Manual Component Access` section and still render handoff access sections deterministically.
+22. Operator profile with `git-provider=git` does not configure provider webhooks and still fails fast from operator-profile provider validation.
 
 ## Examples
 1. `./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible smoke cases and reports deterministic summary.

@@ -132,7 +132,7 @@ func commitAndMaybeAutoSyncRepository(
 		return nil
 	}
 
-	if cfg.Repository.Git.Remote == nil || !cfg.Repository.Git.Remote.AutoSync {
+	if cfg.Repository.Git.Remote == nil || !cfg.Repository.Git.Remote.AutoSyncEnabled() {
 		return nil
 	}
 
@@ -178,8 +178,13 @@ func commitAndMaybePushRepository(
 	if err != nil {
 		return err
 	}
-	if !push || !committed {
+	if !committed {
 		return nil
+	}
+	if !push {
+		if cfg.Repository.Git.Remote == nil || !cfg.Repository.Git.Remote.AutoSyncEnabled() {
+			return nil
+		}
 	}
 
 	syncService, err := cliutil.RequireRepositorySync(deps)

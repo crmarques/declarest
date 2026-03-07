@@ -179,7 +179,9 @@ test_prepare_metadata_workspace_uses_component_metadata_for_base_dir_mode() {
   e2e_prepare_metadata_workspace
 
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected metadata bundle to stay unset for base-dir mode"
-  assert_eq "${E2E_METADATA_DIR}" "${component_metadata}" "expected metadata dir to reference component metadata path"
+  assert_eq "${E2E_METADATA_DIR}" "${E2E_RUN_DIR}/managed-server-metadata" "expected metadata dir to use run workspace copy"
+  assert_path_exists "${E2E_METADATA_DIR}"
+  assert_eq "$(cd "${E2E_METADATA_DIR}" && pwd)" "$(cd "${E2E_RUN_DIR}/managed-server-metadata" && pwd)" "expected deterministic metadata workspace path"
 }
 
 test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
@@ -218,7 +220,8 @@ test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_map
   e2e_prepare_metadata_workspace
 
   assert_eq "${E2E_METADATA_BUNDLE:-}" "" "expected unsupported bundle mode to keep metadata bundle unset"
-  assert_eq "${E2E_METADATA_DIR}" "${component_metadata}" "expected unsupported bundle mode to fall back to component metadata dir"
+  assert_eq "${E2E_METADATA_DIR}" "${E2E_RUN_DIR}/managed-server-metadata" "expected unsupported bundle mode to fall back to run workspace copy"
+  assert_path_exists "${E2E_METADATA_DIR}"
 }
 
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {

@@ -37,6 +37,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 20. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
 21. `managed-server.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 22. `managed-server.http.health-check` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
+23. `repository.git.remote.auto-sync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -56,6 +57,7 @@ Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
 2. `repository.resource-format` allowed values: `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`.
 3. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
+4. `repository.git.remote.auto-sync` defaults to `true` when omitted.
 
 Resource server auth one-of contract:
 1. Exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be set under `managed-server.http.auth`.
@@ -69,7 +71,7 @@ Resource server proxy contract:
 4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secret-store.vault.proxy`, and `metadata.proxy`, and they inherit the shared proxy unless an empty `proxy:` block explicitly disables it for their component.
 
 Resource server health-check contract:
-1. `managed-server.http.health-check` MAY be omitted; when omitted, probe commands target the managed-server base path (`/` relative to `managed-server.http.base-url`).
+1. `managed-server.http.health-check` MAY be omitted; when omitted, probe commands target `managed-server.http.base-url` itself and reuse its normalized path.
 2. Relative `managed-server.http.health-check` values MUST be normalized as managed-server request paths.
 3. Absolute `managed-server.http.health-check` values MUST use `http` or `https` and MUST share scheme/host with `managed-server.http.base-url`.
 4. `managed-server.http.health-check` MUST NOT include query parameters.

@@ -182,13 +182,28 @@ func renderHealthCheckTarget(httpConfig configdomain.HTTPServer) string {
 	if healthCheck != "" {
 		return healthCheck
 	}
-	return "/"
+	return strings.TrimSpace(httpConfig.BaseURL)
 }
 
 func resolveHealthCheckProbePath(httpConfig configdomain.HTTPServer) (string, error) {
 	healthCheck := strings.TrimSpace(httpConfig.HealthCheck)
 	if healthCheck == "" {
-		return "/", nil
+		baseURL := strings.TrimSpace(httpConfig.BaseURL)
+		if baseURL == "" {
+			return "/", nil
+		}
+		baseParsed, err := url.Parse(baseURL)
+		if err != nil {
+			return "", cliutil.ValidationError("managed-server.http.base-url is invalid", err)
+		}
+		basePath := strings.TrimSpace(baseParsed.Path)
+		if basePath == "" {
+			return "/", nil
+		}
+		if !strings.HasPrefix(basePath, "/") {
+			basePath = "/" + basePath
+		}
+		return basePath, nil
 	}
 
 	parsed, err := url.Parse(healthCheck)
