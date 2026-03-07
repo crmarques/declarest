@@ -1,6 +1,6 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "realm",
-    "aliasFromAttribute": "realm"
+    "idFromAttribute": "/realm",
+    "aliasFromAttribute": "/realm"
   }
 }

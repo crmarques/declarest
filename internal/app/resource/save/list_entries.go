@@ -128,7 +128,15 @@ func resolveSaveListItemAlias(
 	}
 
 	// Fallback keeps list save usable when metadata identity attributes are absent.
-	for _, candidate := range []string{"clientId", "id", "name", "alias", "key", "uuid", "uid"} {
+	for _, candidate := range []string{
+		resource.JSONPointerForObjectKey("clientId"),
+		resource.JSONPointerForObjectKey("id"),
+		resource.JSONPointerForObjectKey("name"),
+		resource.JSONPointerForObjectKey("alias"),
+		resource.JSONPointerForObjectKey("key"),
+		resource.JSONPointerForObjectKey("uuid"),
+		resource.JSONPointerForObjectKey("uid"),
+	} {
 		value, found := identity.LookupScalarAttribute(payload, candidate)
 		if !found || strings.TrimSpace(value) == "" {
 			continue

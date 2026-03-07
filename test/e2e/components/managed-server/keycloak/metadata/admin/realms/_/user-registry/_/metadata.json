@@ -1,10 +1,10 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name",
+    "idFromAttribute": "/id",
+    "aliasFromAttribute": "/name",
     "collectionPath": "/admin/realms/{{.realm}}/components",
     "secretInAttributes": [
-      "config.bindCredential[0]"
+      "/config/bindCredential/0"
     ]
   },
   "operationInfo": {

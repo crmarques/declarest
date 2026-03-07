@@ -59,7 +59,7 @@ func TestNormalizePlaceholders(t *testing.T) {
 		}
 
 		expected := map[string]any{
-			"apiToken": "{{secret .}}",
+			"apiToken": "{{secret \"apiToken\"}}",
 		}
 		if !reflect.DeepEqual(got, expected) {
 			t.Fatalf("expected %#v, got %#v", expected, got)
@@ -105,8 +105,8 @@ func TestMaskResolveAndDetect(t *testing.T) {
 
 		if !reflect.DeepEqual(stored, map[string]string{
 			"already-masked": "already-value",
-			"apiToken":       "token-value",
-			"password":       "pass-value",
+			"/apiToken":      "token-value",
+			"/password":      "pass-value",
 		}) {
 			t.Fatalf("unexpected stored secrets: %#v", stored)
 		}
@@ -115,7 +115,7 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("DetectSecretCandidates returned error: %v", err)
 		}
-		expectedCandidates := []string{"apiToken", "password"}
+		expectedCandidates := []string{"/apiToken", "/password"}
 		if !reflect.DeepEqual(candidates, expectedCandidates) {
 			t.Fatalf("expected candidates %#v, got %#v", expectedCandidates, candidates)
 		}
@@ -191,8 +191,8 @@ func TestMaskResolveAndDetect(t *testing.T) {
 		if !reflect.DeepEqual(masked, expectedMasked) {
 			t.Fatalf("expected masked %#v, got %#v", expectedMasked, masked)
 		}
-		if got := stored["credentials.clientSecret"]; got != "super-secret" {
-			t.Fatalf("expected stored nested key credentials.clientSecret, got %#v", stored)
+		if got := stored["/credentials/clientSecret"]; got != "super-secret" {
+			t.Fatalf("expected stored nested key /credentials/clientSecret, got %#v", stored)
 		}
 
 		resolved, err := ResolvePayload(masked, func(key string) (string, error) {
@@ -223,7 +223,7 @@ func TestResolvePayloadForResource(t *testing.T) {
 
 	resolved, err := ResolvePayloadForResource(input, "/customers/acme", func(key string) (string, error) {
 		switch key {
-		case "/customers/acme:apiToken":
+		case "/customers/acme:/apiToken":
 			return "api-token-value", nil
 		case "/customers/acme:custom-auth":
 			return "custom-auth-value", nil
@@ -273,7 +273,7 @@ func TestResolvePayloadDirectivesForResource(t *testing.T) {
 			"/customers/acme",
 			"yaml",
 			func(key string) (string, error) {
-				if key != "/customers/acme:token" {
+				if key != "/customers/acme:/token" {
 					return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
 				}
 				return "secret-value", nil

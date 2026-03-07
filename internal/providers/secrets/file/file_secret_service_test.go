@@ -116,8 +116,8 @@ func TestFileSecretServicePayloadOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DetectSecretCandidates returned error: %v", err)
 	}
-	if !reflect.DeepEqual(candidates, []string{"apiToken"}) {
-		t.Fatalf("expected [apiToken], got %#v", candidates)
+	if !reflect.DeepEqual(candidates, []string{"/apiToken"}) {
+		t.Fatalf("expected [/apiToken], got %#v", candidates)
 	}
 }
 

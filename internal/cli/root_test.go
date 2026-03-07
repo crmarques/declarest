@@ -333,7 +333,7 @@ func TestOutputPolicyValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "managed-server:") {
+		if !strings.Contains(output, "managedServer:") {
 			t.Fatalf("expected yaml context output, got %q", output)
 		}
 	})
@@ -728,7 +728,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"password"},
+			SecretsFromAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "repository")
@@ -754,7 +754,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"password"},
+			SecretsFromAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "remote-server")
@@ -782,7 +782,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"password"},
+			SecretsFromAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(
@@ -818,7 +818,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 
 		secretProvider := deps.Secrets.(*testSecretProvider)
-		if err := secretProvider.Store(context.Background(), "/customers/acme:password", "stored-secret"); err != nil {
+		if err := secretProvider.Store(context.Background(), "/customers/acme:/password", "stored-secret"); err != nil {
 			t.Fatalf("unexpected secret store setup error: %v", err)
 		}
 
@@ -881,7 +881,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"password"},
+			SecretsFromAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(
@@ -915,7 +915,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {
 					Path: "/api/customers/acme",
@@ -1000,7 +1000,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Metadata.(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 
 		output, err := executeForTest(
@@ -1461,7 +1461,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 			"",
 			"resource", "apply",
 			"/customers/acme",
-			"--payload", "id=acme,name=Acme,spec.tier=gold",
+			"--payload", "/id=acme,/name=Acme,/spec/tier=gold",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1523,8 +1523,8 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 
 				metadataService := newTestMetadata()
 				metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
-					IDFromAttribute:    "realm",
-					AliasFromAttribute: "realm",
+					IDFromAttribute:    "/realm",
+					AliasFromAttribute: "/realm",
 				}
 				metadataService.wildcardChildren["/admin/realms"] = true
 
@@ -1536,7 +1536,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 					"",
 					"resource", testCase.command,
 					"/admin/realms",
-					"--payload", "realm=test",
+					"--payload", "/realm=test",
 				)
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -1571,8 +1571,8 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/test"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "realm",
-			AliasFromAttribute: "realm",
+			IDFromAttribute:    "/realm",
+			AliasFromAttribute: "/realm",
 		}
 		metadataService.wildcardChildren["/admin/realms"] = true
 		orchestrator := &testOrchestrator{metadataService: metadataService}
@@ -1583,7 +1583,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 			"",
 			"resource", "create",
 			"/admin/realms/test",
-			"--payload", "realm=test",
+			"--payload", "/realm=test",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1635,7 +1635,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 			"",
 			"resource", "save",
 			"/customers/acme",
-			"--payload", "id=acme,name=Acme,spec.tier=gold",
+			"--payload", "/id=acme,/name=Acme,/spec/tier=gold",
 			"--overwrite",
 		)
 		if err != nil {
@@ -1712,7 +1712,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("without_input_collection_marker_reads_remote_list_when_resource_get_is_not_found", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/user-registry/AD PRD/mappers"] = metadatadomain.ResourceMetadata{
-			AliasFromAttribute: "name",
+			AliasFromAttribute: "/name",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -1766,7 +1766,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("without_input_remote_list_falls_back_to_common_item_identity_attributes", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			AliasFromAttribute: "clientId",
+			AliasFromAttribute: "/clientId",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -1813,7 +1813,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("default_list_payload_saves_as_items", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -1873,7 +1873,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("as_one_resource_overrides_list_item_save", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -1958,7 +1958,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("list_save_blocks_all_items_before_any_write_when_plaintext_secret_is_detected", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -1979,8 +1979,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("list_save_metadata_declared_plaintext_secret_is_auto_masked_and_stored", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "id",
-			SecretsFromAttributes: []string{"secret"},
+			IDFromAttribute:       "/id",
+			SecretsFromAttributes: []string{"/secret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2007,7 +2007,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if got := savedPayload["secret"]; got != `{{secret .}}` {
 			t.Fatalf("expected saved secret placeholder, got %#v", got)
 		}
-		if secretProvider.values["/customers/acme:secret"] != "plain-secret" {
+		if secretProvider.values["/customers/acme:/secret"] != "plain-secret" {
 			t.Fatalf("expected stored secret value, got %#v", secretProvider.values)
 		}
 	})
@@ -2015,7 +2015,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_auto_masks_and_stores_plaintext", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"credentials.authValue"},
+			SecretsFromAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2046,7 +2046,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		if got := credentials["authValue"]; got != `{{secret .}}` {
 			t.Fatalf("expected masked authValue placeholder, got %#v", got)
 		}
-		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+		if secretProvider.values["/customers/acme:/credentials/authValue"] != "plain-secret" {
 			t.Fatalf("expected stored metadata-declared secret, got %#v", secretProvider.values)
 		}
 	})
@@ -2054,7 +2054,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_requires_secret_provider", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"credentials.authValue"},
+			SecretsFromAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2079,7 +2079,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_accepts_placeholders", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"credentials.authValue"},
+			SecretsFromAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2123,7 +2123,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("ignore_flag_allows_metadata_declared_secret", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"password"},
+			SecretsFromAttributes: []string{"/password"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2147,8 +2147,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("handle_secrets_masks_payload_updates_metadata_and_stores_secret_values", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "id",
-			SecretsFromAttributes: []string{"credentials.authValue", "existingSecret"},
+			IDFromAttribute:       "/id",
+			SecretsFromAttributes: []string{"/credentials/authValue", "/existingSecret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
@@ -2184,15 +2184,15 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("expected authValue placeholder, got %#v", got)
 		}
 
-		if secretProvider.values["/customers/acme:apiToken"] != "token-abc" {
+		if secretProvider.values["/customers/acme:/apiToken"] != "token-abc" {
 			t.Fatalf("expected stored apiToken value, got %#v", secretProvider.values)
 		}
-		if secretProvider.values["/customers/acme:credentials.authValue"] != "plain-secret" {
+		if secretProvider.values["/customers/acme:/credentials/authValue"] != "plain-secret" {
 			t.Fatalf("expected stored authValue value, got %#v", secretProvider.values)
 		}
 
 		updatedMetadata := metadataService.items["/customers/acme"]
-		expected := []string{"apiToken", "credentials.authValue", "existingSecret"}
+		expected := []string{"/apiToken", "/credentials/authValue", "/existingSecret"}
 		if !reflect.DeepEqual(updatedMetadata.SecretsFromAttributes, expected) {
 			t.Fatalf("expected merged metadata attributes %#v, got %#v", expected, updatedMetadata.SecretsFromAttributes)
 		}
@@ -2201,7 +2201,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("handle_secrets_list_payload_uses_path_scoped_secret_keys", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
@@ -2237,10 +2237,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("expected second path-scoped placeholder, got %#v", got)
 		}
 
-		if secretProvider.values["/customers/acme:password"] != "alpha-secret" {
+		if secretProvider.values["/customers/acme:/password"] != "alpha-secret" {
 			t.Fatalf("expected /customers/acme password stored, got %#v", secretProvider.values)
 		}
-		if secretProvider.values["/customers/beta:password"] != "beta-secret" {
+		if secretProvider.values["/customers/beta:/password"] != "beta-secret" {
 			t.Fatalf("expected /customers/beta password stored, got %#v", secretProvider.values)
 		}
 	})
@@ -2277,19 +2277,19 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets=password",
+			"--handle-secrets=/password",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
+		if !strings.Contains(err.Error(), `attributes [/apiToken]`) {
 			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
 		}
 		if len(orchestrator.saveCalls) != 0 {
 			t.Fatalf("expected no save calls when unhandled secrets remain, got %d", len(orchestrator.saveCalls))
 		}
-		if secretProvider.values["/customers/acme:password"] != "pw-123" {
+		if secretProvider.values["/customers/acme:/password"] != "pw-123" {
 			t.Fatalf("expected requested secret candidate to be stored, got %#v", secretProvider.values)
 		}
-		if _, found := secretProvider.values["/customers/acme:apiToken"]; found {
+		if _, found := secretProvider.values["/customers/acme:/apiToken"]; found {
 			t.Fatalf("expected unhandled candidate to not be stored, got %#v", secretProvider.values)
 		}
 	})
@@ -2305,10 +2305,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets=apiToken",
+			"--handle-secrets=/apiToken",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "apiToken" was not detected`) {
+		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "/apiToken" was not detected`) {
 			t.Fatalf("expected unknown requested candidate error, got %q", err.Error())
 		}
 	})
@@ -2316,7 +2316,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("remote_list_handle_secrets_subset_updates_wildcard_metadata_then_fails_on_unhandled", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2334,10 +2334,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/master/clients",
-			"--handle-secrets=secret",
+			"--handle-secrets=/secret",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), `attributes [apiToken]`) {
+		if !strings.Contains(err.Error(), `attributes [/apiToken]`) {
 			t.Fatalf("expected warning with only unhandled secret candidate, got %q", err.Error())
 		}
 		if len(orchestrator.saveCalls) != 0 {
@@ -2345,13 +2345,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
-		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
+		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"/secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
-		if secretProvider.values["/admin/realms/master/clients/app-a:secret"] != "sec-a" {
+		if secretProvider.values["/admin/realms/master/clients/app-a:/secret"] != "sec-a" {
 			t.Fatalf("expected app-a secret to be stored, got %#v", secretProvider.values)
 		}
-		if _, found := secretProvider.values["/admin/realms/master/clients/app-a:apiToken"]; found {
+		if _, found := secretProvider.values["/admin/realms/master/clients/app-a:/apiToken"]; found {
 			t.Fatalf("expected unhandled apiToken to not be stored, got %#v", secretProvider.values)
 		}
 	})
@@ -2359,7 +2359,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("remote_list_handle_secrets_subset_with_ignore_saves_items", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2376,7 +2376,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/master/clients",
-			"--handle-secrets=secret",
+			"--handle-secrets=/secret",
 			"--ignore",
 		)
 		if err != nil {
@@ -2398,7 +2398,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
-		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"secret"}) {
+		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"/secret"}) {
 			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
 		}
 	})
@@ -2406,10 +2406,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("wildcard_handle_secrets_requested_attribute_skips_collections_without_candidate", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		metadataService.items["/admin/realms/tenant-a/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2436,10 +2436,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/_/clients",
-			"--handle-secrets=secret",
+			"--handle-secrets=/secret",
 		)
 		if err != nil {
-			t.Fatalf("unexpected wildcard save error with --handle-secrets=secret: %v", err)
+			t.Fatalf("unexpected wildcard save error with --handle-secrets=/secret: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 2 {
 			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
@@ -2469,10 +2469,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			t.Fatalf("expected tenant payload preserved, got %#v", got)
 		}
 
-		if secretProvider.values["/admin/realms/master/clients/app-a:secret"] != "sec-a" {
+		if secretProvider.values["/admin/realms/master/clients/app-a:/secret"] != "sec-a" {
 			t.Fatalf("expected master secret to be stored, got %#v", secretProvider.values)
 		}
-		if _, found := secretProvider.values["/admin/realms/tenant-a/clients/app-b:secret"]; found {
+		if _, found := secretProvider.values["/admin/realms/tenant-a/clients/app-b:/secret"]; found {
 			t.Fatalf("expected tenant secret key to be absent, got %#v", secretProvider.values)
 		}
 	})
@@ -3150,7 +3150,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected resolve error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
 			t.Fatalf("expected resolved metadata output, got %q", output)
 		}
 	})
@@ -3338,13 +3338,13 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer selector error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
 			t.Fatalf("expected inferred idFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"/clientId\"") {
 			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"secret\"\n    ]") {
+		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"/secret\"\n    ]") {
 			t.Fatalf("expected inferred secretInAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\": null") ||
@@ -3388,13 +3388,13 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer selector error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
 			t.Fatalf("expected inferred idFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"clientId\"") {
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"/clientId\"") {
 			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"secret\"\n    ]") {
+		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"/secret\"\n    ]") {
 			t.Fatalf("expected inferred secretInAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
@@ -3433,10 +3433,10 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer collection-path error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected inferred idFromAttribute=realm, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected inferred aliasFromAttribute=realm, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
@@ -3449,9 +3449,9 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/_/clients/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "id",
-			AliasFromAttribute:    "clientId",
-			SecretsFromAttributes: []string{"secret"},
+			IDFromAttribute:       "/id",
+			AliasFromAttribute:    "/clientId",
+			SecretsFromAttributes: []string{"/secret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3478,8 +3478,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.rejectSelectorPathInResolve = true
 		metadataService.items["/admin/realms/_/user-registry"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3493,8 +3493,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected selector metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"id\"") ||
-			!strings.Contains(output, "\"aliasFromAttribute\": \"name\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") ||
+			!strings.Contains(output, "\"aliasFromAttribute\": \"/name\"") {
 			t.Fatalf("expected selector metadata payload in output, got %q", output)
 		}
 	})
@@ -3504,8 +3504,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "realm",
-			AliasFromAttribute: "realm",
+			IDFromAttribute:    "/realm",
+			AliasFromAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3519,7 +3519,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected idFromAttribute override in metadata get output, got %q", output)
 		}
 		if !strings.Contains(output, "\"getResource\"") ||
@@ -3564,8 +3564,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "realm",
-			AliasFromAttribute: "realm",
+			IDFromAttribute:    "/realm",
+			AliasFromAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3600,8 +3600,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "realm",
-			AliasFromAttribute: "realm",
+			IDFromAttribute:    "/realm",
+			AliasFromAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3616,7 +3616,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get overrides-only error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected idFromAttribute override in metadata get overrides-only output, got %q", output)
 		}
 		if strings.Contains(output, "\"getResource\"") || strings.Contains(output, "\"listCollection\"") {
@@ -3656,10 +3656,10 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get fallback error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected inferred idFromAttribute in metadata get fallback output, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"aliasFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected inferred aliasFromAttribute in metadata get fallback output, got %q", output)
 		}
 		if !strings.Contains(output, "\"getResource\"") || !strings.Contains(output, "\"listCollection\"") {
@@ -3704,7 +3704,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get overrides-only fallback error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"realm\"") {
+		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
 			t.Fatalf("expected inferred idFromAttribute in metadata get overrides-only fallback output, got %q", output)
 		}
 		if strings.Contains(output, "\"getResource\"") || strings.Contains(output, "\"listCollection\"") {
@@ -3780,7 +3780,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if !found {
 			t.Fatal("expected inferred metadata to be persisted")
 		}
-		if stored.IDFromAttribute != "realm" || stored.AliasFromAttribute != "realm" {
+		if stored.IDFromAttribute != "/realm" || stored.AliasFromAttribute != "/realm" {
 			t.Fatalf("expected persisted compact identity attributes, got %#v", stored)
 		}
 		if len(stored.Operations) != 0 {
@@ -3859,10 +3859,10 @@ func TestSecretCommands(t *testing.T) {
 			key   string
 			value string
 		}{
-			{key: "/customers/acme:apiToken", value: "token-123"},
-			{key: "/customers/acme:password", value: "pw-123"},
-			{key: "/customers/acme:quoted", value: `he said "hi"`},
-			{key: "/customers/beta:apiToken", value: "token-b"},
+			{key: "/customers/acme:/apiToken", value: "token-123"},
+			{key: "/customers/acme:/password", value: "pw-123"},
+			{key: "/customers/acme:/quoted", value: `he said "hi"`},
+			{key: "/customers/beta:/apiToken", value: "token-b"},
 		}
 		for _, item := range seedSecrets {
 			if _, err := executeForTest(deps, "", "secret", "store", item.key, item.value); err != nil {
@@ -3878,26 +3878,26 @@ func TestSecretCommands(t *testing.T) {
 			{
 				name:   "path_only_lists_all_for_path",
 				args:   []string{"secret", "get", "/customers/acme"},
-				expect: "apiToken=token-123\npassword=pw-123\nquoted=he said \"hi\"\n",
+				expect: "/apiToken=token-123\n/password=pw-123\n/quoted=he said \"hi\"\n",
 			},
 			{
 				name:   "path_and_key_positional",
-				args:   []string{"secret", "get", "/customers/acme", "apiToken"},
+				args:   []string{"secret", "get", "/customers/acme", "/apiToken"},
 				expect: "token-123\n",
 			},
 			{
 				name:   "path_flag_only_lists_all_for_path",
 				args:   []string{"secret", "get", "--path", "/customers/acme"},
-				expect: "apiToken=token-123\npassword=pw-123\nquoted=he said \"hi\"\n",
+				expect: "/apiToken=token-123\n/password=pw-123\n/quoted=he said \"hi\"\n",
 			},
 			{
 				name:   "path_and_key_flags",
-				args:   []string{"secret", "get", "--path", "/customers/acme", "--key", "apiToken"},
+				args:   []string{"secret", "get", "--path", "/customers/acme", "--key", "/apiToken"},
 				expect: "token-123\n",
 			},
 			{
 				name:   "composite_path_key",
-				args:   []string{"secret", "get", "/customers/acme:apiToken"},
+				args:   []string{"secret", "get", "/customers/acme:/apiToken"},
 				expect: "token-123\n",
 			},
 		}
@@ -3923,11 +3923,11 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:quoted", `he said "hi"`); err != nil {
+		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:/quoted", `he said "hi"`); err != nil {
 			t.Fatalf("store returned error: %v", err)
 		}
 
-		output, err := executeForTest(deps, "", "secret", "get", "/customers/acme", "quoted")
+		output, err := executeForTest(deps, "", "secret", "get", "/customers/acme", "/quoted")
 		if err != nil {
 			t.Fatalf("get returned error: %v", err)
 		}
@@ -3947,11 +3947,11 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:apiToken", "token-123"); err != nil {
+		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:/apiToken", "token-123"); err != nil {
 			t.Fatalf("store returned error: %v", err)
 		}
 
-		_, err := executeForTest(deps, "", "--output", "json", "secret", "get", "/customers/acme:apiToken")
+		_, err := executeForTest(deps, "", "--output", "json", "secret", "get", "/customers/acme:/apiToken")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -3986,7 +3986,7 @@ func TestSecretCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("detect returned error: %v", err)
 		}
-		if !strings.Contains(detected, `"apiToken"`) || !strings.Contains(detected, `"password"`) {
+		if !strings.Contains(detected, `"/apiToken"`) || !strings.Contains(detected, `"/password"`) {
 			t.Fatalf("expected detected candidates in output, got %q", detected)
 		}
 	})
@@ -4018,8 +4018,8 @@ func TestSecretCommands(t *testing.T) {
 			!strings.Contains(output, "\"LogicalPath\": \"/customers/beta\"") {
 			t.Fatalf("expected repo scan output to include both resources, got %q", output)
 		}
-		if !strings.Contains(output, "\"Attributes\": [\n      \"password\"\n    ]") ||
-			!strings.Contains(output, "\"Attributes\": [\n      \"apiToken\"\n    ]") {
+		if !strings.Contains(output, "\"Attributes\": [\n      \"/password\"\n    ]") ||
+			!strings.Contains(output, "\"Attributes\": [\n      \"/apiToken\"\n    ]") {
 			t.Fatalf("expected detected attributes per resource, got %q", output)
 		}
 	})
@@ -4069,11 +4069,11 @@ func TestSecretCommands(t *testing.T) {
 		}
 
 		updated := metadataService.items["/customers/acme"]
-		expected := []string{"apiToken", "password"}
+		expected := []string{"/apiToken", "/password"}
 		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
 			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
 		}
-		if updated.IDFromAttribute != "id" {
+		if updated.IDFromAttribute != "/id" {
 			t.Fatalf("expected existing idFromAttribute to be preserved, got %q", updated.IDFromAttribute)
 		}
 	})
@@ -4098,7 +4098,7 @@ func TestSecretCommands(t *testing.T) {
 		}
 
 		updated := metadataService.items["/customers/acme"]
-		expected := []string{"password"}
+		expected := []string{"/password"}
 		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
 			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
 		}
@@ -4125,10 +4125,10 @@ func TestSecretCommands(t *testing.T) {
 			t.Fatalf("detect --fix without input returned error: %v", err)
 		}
 
-		if !reflect.DeepEqual(metadataService.items["/customers/acme"].SecretsFromAttributes, []string{"password"}) {
+		if !reflect.DeepEqual(metadataService.items["/customers/acme"].SecretsFromAttributes, []string{"/password"}) {
 			t.Fatalf("expected /customers/acme metadata update, got %#v", metadataService.items["/customers/acme"].SecretsFromAttributes)
 		}
-		if !reflect.DeepEqual(metadataService.items["/customers/beta"].SecretsFromAttributes, []string{"apiToken"}) {
+		if !reflect.DeepEqual(metadataService.items["/customers/beta"].SecretsFromAttributes, []string{"/apiToken"}) {
 			t.Fatalf("expected /customers/beta metadata update, got %#v", metadataService.items["/customers/beta"].SecretsFromAttributes)
 		}
 	})
@@ -4159,8 +4159,8 @@ func TestSecretCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "id",
-			SecretsFromAttributes: []string{"password"},
+			IDFromAttribute:       "/id",
+			SecretsFromAttributes: []string{"/password"},
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {Path: "/api/customers/acme"},
 			},
@@ -4174,18 +4174,17 @@ func TestSecretCommands(t *testing.T) {
 			"detect",
 			"/customers/acme",
 			"--fix",
-			"--secret-attribute",
-			"apiToken",
+			"--secret-attribute", "/apiToken",
 		)
 		if err != nil {
 			t.Fatalf("detect --fix --secret-attribute returned error: %v", err)
 		}
-		if !strings.Contains(output, `"apiToken"`) || strings.Contains(output, `"password"`) {
+		if !strings.Contains(output, `"/apiToken"`) || strings.Contains(output, `"/password"`) {
 			t.Fatalf("expected filtered output with only apiToken, got %q", output)
 		}
 
 		updated := metadataService.items["/customers/acme"]
-		expected := []string{"apiToken", "password"}
+		expected := []string{"/apiToken", "/password"}
 		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
 			t.Fatalf("expected merged secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
 		}
@@ -4204,8 +4203,7 @@ func TestSecretCommands(t *testing.T) {
 			"detect",
 			"/customers/acme",
 			"--fix",
-			"--secret-attribute",
-			"apiToken",
+			"--secret-attribute", "/apiToken",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
@@ -4231,8 +4229,7 @@ func TestSecretCommands(t *testing.T) {
 			"",
 			"secret",
 			"detect",
-			"--secret-attribute",
-			"password",
+			"--secret-attribute", "/password",
 		)
 		if err != nil {
 			t.Fatalf("detect repo scan --secret-attribute returned error: %v", err)
@@ -4261,8 +4258,7 @@ func TestSecretCommands(t *testing.T) {
 			"",
 			"secret",
 			"detect",
-			"--secret-attribute",
-			"apiToken",
+			"--secret-attribute", "/apiToken",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 	})

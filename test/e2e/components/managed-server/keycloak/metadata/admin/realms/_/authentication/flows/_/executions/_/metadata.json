@@ -1,7 +1,7 @@
 {
 	"resourceInfo": {
-		"idFromAttribute": "id",
-		"aliasFromAttribute": "displayName"
+		"idFromAttribute": "/id",
+		"aliasFromAttribute": "/displayName"
 	},
 	"operationInfo": {
 		"createResource": {
@@ -9,7 +9,7 @@
 			"payload": {
 				"jqExpression": ". | .provider = .providerId",
 				"suppressAttributes": [
-					"providerId"
+					"/providerId"
 				]
 			}
 		},

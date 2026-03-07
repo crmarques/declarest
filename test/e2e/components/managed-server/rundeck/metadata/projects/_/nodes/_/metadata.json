@@ -1,7 +1,7 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "index",
-    "aliasFromAttribute": "index",
+    "idFromAttribute": "/index",
+    "aliasFromAttribute": "/index",
     "collectionPath": "/projects/{{.project}}/nodes"
   },
   "operationInfo": {

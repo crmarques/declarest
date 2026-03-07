@@ -21,7 +21,7 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 	ctx := context.Background()
 
 	resourceMetadata := metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"credentials.authValue"},
+		SecretsFromAttributes: []string{"/credentials/authValue"},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {Path: "/api/customers/{{.id}}"},
 		},
@@ -112,28 +112,28 @@ func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
 	ctx := context.Background()
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.json"), false, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "json-id",
-		AliasFromAttribute: "json-alias",
+		IDFromAttribute:    "/json-id",
+		AliasFromAttribute: "/json-alias",
 	})
 
 	gotJSON, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get json metadata returned error: %v", err)
 	}
-	if gotJSON.IDFromAttribute != "json-id" || gotJSON.AliasFromAttribute != "json-alias" {
+	if gotJSON.IDFromAttribute != "/json-id" || gotJSON.AliasFromAttribute != "/json-alias" {
 		t.Fatalf("expected json metadata fallback, got %+v", gotJSON)
 	}
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.yaml"), true, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "yaml-id",
-		AliasFromAttribute: "yaml-alias",
+		IDFromAttribute:    "/yaml-id",
+		AliasFromAttribute: "/yaml-alias",
 	})
 
 	gotYAML, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get yaml metadata returned error: %v", err)
 	}
-	if gotYAML.IDFromAttribute != "yaml-id" || gotYAML.AliasFromAttribute != "yaml-alias" {
+	if gotYAML.IDFromAttribute != "/yaml-id" || gotYAML.AliasFromAttribute != "/yaml-alias" {
 		t.Fatalf("expected yaml metadata to take precedence, got %+v", gotYAML)
 	}
 }
@@ -230,20 +230,20 @@ func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"credentials.rootSecret"},
+		SecretsFromAttributes: []string{"/credentials/rootSecret"},
 	})
 	mustSetMetadata(t, service, ctx, "/customers/*", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"credentials.wildcardSecret"},
+		SecretsFromAttributes: []string{"/credentials/wildcardSecret"},
 	})
 	mustSetMetadata(t, service, ctx, "/customers/acme/_", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"credentials.literalSecret"},
+		SecretsFromAttributes: []string{"/credentials/literalSecret"},
 	})
 
 	resolved, err := service.ResolveForPath(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
-	expected := []string{"credentials.literalSecret"}
+	expected := []string{"/credentials/literalSecret"}
 	if !reflect.DeepEqual(expected, resolved.SecretsFromAttributes) {
 		t.Fatalf("expected literal layer to replace secret attributes, got %#v", resolved.SecretsFromAttributes)
 	}
@@ -257,12 +257,12 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "realm",
-		AliasFromAttribute: "realm",
+		IDFromAttribute:    "/realm",
+		AliasFromAttribute: "/realm",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/clients", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "clientId",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/clientId",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCreate): {
 				Path: "/admin/realms/{{.realm}}/clients",
@@ -274,10 +274,10 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
-	if resolved.IDFromAttribute != "id" {
+	if resolved.IDFromAttribute != "/id" {
 		t.Fatalf("expected clients idFromAttribute from intermediary placeholder metadata, got %q", resolved.IDFromAttribute)
 	}
-	if resolved.AliasFromAttribute != "clientId" {
+	if resolved.AliasFromAttribute != "/clientId" {
 		t.Fatalf(
 			"expected clients aliasFromAttribute from intermediary placeholder metadata, got %q",
 			resolved.AliasFromAttribute,
@@ -296,13 +296,13 @@ func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *tes
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "name",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/name",
 		CollectionPath:     "/admin/realms/{{.realm}}/components",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "name",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/name",
 		CollectionPath:     "/admin/realms/{{.realm}}/components",
 	})
 
@@ -325,8 +325,8 @@ func TestFSMetadataHasCollectionWildcardChild(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/authentication/flows/_/executions/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "displayName",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/displayName",
 	})
 
 	ok, err := service.HasCollectionWildcardChild(
@@ -356,8 +356,8 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "slug",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/slug",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path: "/api{{.collectionPath}}/{{.alias}}/{{.remoteID}}",
@@ -392,7 +392,7 @@ func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testi
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
-		IDFromAttribute: "id",
+		IDFromAttribute: "/id",
 		CollectionPath:  "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
@@ -439,8 +439,8 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "id",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/id",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path:   "/api/customers/{{.id}}",
@@ -485,9 +485,9 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
-		IDFromAttribute:       "id",
-		AliasFromAttribute:    "clientId",
-		SecretsFromAttributes: []string{"secret"},
+		IDFromAttribute:       "/id",
+		AliasFromAttribute:    "/clientId",
+		SecretsFromAttributes: []string{"/secret"},
 	}
 
 	if err := service.Set(ctx, "/admin/realms/_/clients/_", metadata); err != nil {
@@ -619,13 +619,13 @@ func TestFSMetadataSetWritesYAMLAndRemovesExistingJSON(t *testing.T) {
 
 	jsonPath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
 	writeMetadataFixture(t, jsonPath, false, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "legacy-id",
-		AliasFromAttribute: "legacy-alias",
+		IDFromAttribute:    "/legacy-id",
+		AliasFromAttribute: "/legacy-alias",
 	})
 
 	updated := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "yaml-id",
-		AliasFromAttribute: "yaml-alias",
+		IDFromAttribute:    "/yaml-id",
+		AliasFromAttribute: "/yaml-alias",
 	}
 	if err := service.Set(ctx, "/customers/acme", updated); err != nil {
 		t.Fatalf("Set metadata returned error: %v", err)

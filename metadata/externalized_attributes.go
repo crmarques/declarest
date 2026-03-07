@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/resource"
 )
 
 const (
@@ -35,8 +36,7 @@ func ResolveExternalizedAttributes(metadata ResourceMetadata) ([]ResolvedExterna
 			return nil, err
 		}
 
-		pathKey := strings.Join(entry.Path, "\x00")
-		if previous, exists := pathIndexByKey[pathKey]; exists {
+		if previous, exists := pathIndexByKey[entry.Path]; exists {
 			return nil, faults.NewValidationError(
 				fmt.Sprintf(
 					"resourceInfo.externalizedAttributes[%d].path duplicates resourceInfo.externalizedAttributes[%d].path",
@@ -46,7 +46,7 @@ func ResolveExternalizedAttributes(metadata ResourceMetadata) ([]ResolvedExterna
 				nil,
 			)
 		}
-		pathIndexByKey[pathKey] = idx
+		pathIndexByKey[entry.Path] = idx
 
 		if previous, exists := fileIndexByKey[entry.File]; exists {
 			return nil, faults.NewValidationError(
@@ -142,31 +142,24 @@ func resolveExternalizedAttribute(item ExternalizedAttribute, idx int) (Resolved
 	}, nil
 }
 
-func normalizeExternalizedAttributePath(value []string, idx int) ([]string, error) {
-	if len(value) == 0 {
-		return nil, faults.NewValidationError(
+func normalizeExternalizedAttributePath(value string, idx int) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", faults.NewValidationError(
 			fmt.Sprintf("resourceInfo.externalizedAttributes[%d].path must not be empty", idx),
 			nil,
 		)
 	}
 
-	normalized := make([]string, 0, len(value))
-	for segmentIdx, segment := range value {
-		trimmed := strings.TrimSpace(segment)
-		if trimmed == "" {
-			return nil, faults.NewValidationError(
-				fmt.Sprintf(
-					"resourceInfo.externalizedAttributes[%d].path[%d] must not be empty",
-					idx,
-					segmentIdx,
-				),
-				nil,
-			)
-		}
-		normalized = append(normalized, trimmed)
+	tokens, err := resource.ParseJSONPointer(trimmed)
+	if err != nil {
+		return "", faults.NewValidationError(
+			fmt.Sprintf("resourceInfo.externalizedAttributes[%d].path must be a valid JSON pointer", idx),
+			err,
+		)
 	}
 
-	return normalized, nil
+	return resource.JSONPointerFromTokens(tokens), nil
 }
 
 func normalizeExternalizedAttributeFile(value string, idx int) (string, error) {

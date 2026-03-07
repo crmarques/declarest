@@ -331,7 +331,7 @@ func inferOpenAPIOperationValidationSpec(
 	if len(required) > 0 {
 		names := make([]string, 0, len(required))
 		for key := range required {
-			names = append(names, key)
+			names = append(names, resource.JSONPointerForObjectKey(key))
 		}
 		sort.Strings(names)
 		spec.RequiredAttributes = names

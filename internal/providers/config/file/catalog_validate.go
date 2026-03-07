@@ -18,7 +18,7 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 
 	if len(contextCatalog.Contexts) == 0 {
 		if contextCatalog.CurrentCtx != "" {
-			return faults.NewValidationError("current-ctx must be empty when contexts list is empty", nil)
+			return faults.NewValidationError("currentCtx must be empty when contexts list is empty", nil)
 		}
 		return nil
 	}
@@ -39,11 +39,11 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	}
 
 	if contextCatalog.CurrentCtx == "" {
-		return faults.NewValidationError("current-ctx must be set when contexts are defined", nil)
+		return faults.NewValidationError("currentCtx must be set when contexts are defined", nil)
 	}
 
 	if _, exists := seen[contextCatalog.CurrentCtx]; !exists {
-		return faults.NewValidationError(fmt.Sprintf("current-ctx %q does not match any context", contextCatalog.CurrentCtx), nil)
+		return faults.NewValidationError(fmt.Sprintf("currentCtx %q does not match any context", contextCatalog.CurrentCtx), nil)
 	}
 
 	return nil
@@ -179,7 +179,7 @@ func buildProxyTargets(cfg *config.Context) []proxyTarget {
 	targets := make([]proxyTarget, 0, 4)
 	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
 		targets = append(targets, proxyTarget{
-			name:  "managed-server.http.proxy",
+			name:  "managedServer.http.proxy",
 			proxy: &cfg.ManagedServer.HTTP.Proxy,
 		})
 	}
@@ -191,7 +191,7 @@ func buildProxyTargets(cfg *config.Context) []proxyTarget {
 	}
 	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
 		targets = append(targets, proxyTarget{
-			name:  "secret-store.vault.proxy",
+			name:  "secretStore.vault.proxy",
 			proxy: &cfg.SecretStore.Vault.Proxy,
 		})
 	}
@@ -240,7 +240,7 @@ func validateRepository(repository config.Repository) error {
 	if repository.ResourceFormat != "" {
 		if _, err := resource.ValidatePayloadType(repository.ResourceFormat); err != nil {
 			return faults.NewValidationError(
-				"repository.resource-format must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream",
+				"repository.resourceFormat must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream",
 				nil,
 			)
 		}
@@ -258,7 +258,7 @@ func validateRepository(repository config.Repository) error {
 
 	if repository.Git != nil {
 		if repository.Git.Local.BaseDir == "" {
-			return faults.NewValidationError("repository.git.local.base-dir is required", nil)
+			return faults.NewValidationError("repository.git.local.baseDir is required", nil)
 		}
 		if repository.Git.Remote != nil {
 			if repository.Git.Remote.URL == "" {
@@ -266,7 +266,7 @@ func validateRepository(repository config.Repository) error {
 			}
 			if repository.Git.Remote.Auth != nil {
 				if countSet(repository.Git.Remote.Auth.BasicAuth != nil, repository.Git.Remote.Auth.SSH != nil, repository.Git.Remote.Auth.AccessKey != nil) != 1 {
-					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basic-auth, ssh, access-key", nil)
+					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basicAuth, ssh, accessKey", nil)
 				}
 			}
 			if err := validateProxy("repository.git.remote.proxy", repository.Git.Remote.Proxy); err != nil {
@@ -276,7 +276,7 @@ func validateRepository(repository config.Repository) error {
 	}
 
 	if repository.Filesystem != nil && repository.Filesystem.BaseDir == "" {
-		return faults.NewValidationError("repository.filesystem.base-dir is required", nil)
+		return faults.NewValidationError("repository.filesystem.baseDir is required", nil)
 	}
 
 	return nil
@@ -284,16 +284,16 @@ func validateRepository(repository config.Repository) error {
 
 func validateManagedServer(resourceServer *config.ManagedServer) error {
 	if resourceServer == nil {
-		return faults.NewValidationError("managed-server is required", nil)
+		return faults.NewValidationError("managedServer is required", nil)
 	}
 	if resourceServer.HTTP == nil {
-		return faults.NewValidationError("managed-server must define http", nil)
+		return faults.NewValidationError("managedServer must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("managed-server.http.base-url is required", nil)
+		return faults.NewValidationError("managedServer.http.baseUrl is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
-		return faults.NewValidationError("managed-server.http.auth is required", nil)
+		return faults.NewValidationError("managedServer.http.auth is required", nil)
 	}
 
 	if countSet(
@@ -301,27 +301,27 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		resourceServer.HTTP.Auth.BasicAuth != nil,
 		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
 	) != 1 {
-		return faults.NewValidationError("managed-server.http.auth must define exactly one of oauth2, basic-auth, custom-headers", nil)
+		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basicAuth, customHeaders", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return faults.NewValidationError("managed-server.http.auth.oauth2 requires token-url, grant-type, client-id, client-secret", nil)
+			return faults.NewValidationError("managedServer.http.auth.oauth2 requires tokenUrl, grantType, clientId, clientSecret", nil)
 		}
 	}
 
 	if resourceServer.HTTP.Auth.BasicAuth != nil {
 		basic := resourceServer.HTTP.Auth.BasicAuth
 		if basic.Username == "" || basic.Password == "" {
-			return faults.NewValidationError("managed-server.http.auth.basic-auth requires username and password", nil)
+			return faults.NewValidationError("managedServer.http.auth.basicAuth requires username and password", nil)
 		}
 	}
 
 	for idx, head := range resourceServer.HTTP.Auth.CustomHeaders {
 		if head.Header == "" || head.Value == "" {
 			return faults.NewValidationError(
-				fmt.Sprintf("managed-server.http.auth.custom-headers[%d] requires header and value", idx),
+				fmt.Sprintf("managedServer.http.auth.customHeaders[%d] requires header and value", idx),
 				nil,
 			)
 		}
@@ -341,7 +341,7 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 }
 
 func validateManagedServerProxy(proxy *config.HTTPProxy) error {
-	return validateProxy("managed-server.http.proxy", proxy)
+	return validateProxy("managedServer.http.proxy", proxy)
 }
 
 func validateManagedServerRequestThrottling(throttling *config.HTTPRequestThrottling) error {
@@ -349,25 +349,25 @@ func validateManagedServerRequestThrottling(throttling *config.HTTPRequestThrott
 		return nil
 	}
 	if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling must define at least one of max-concurrent-requests or requests-per-second", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond", nil)
 	}
 	if throttling.MaxConcurrentRequests < 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.max-concurrent-requests must be greater than zero when set", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.maxConcurrentRequests must be greater than zero when set", nil)
 	}
 	if throttling.QueueSize < 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.queue-size must be greater than or equal to zero", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.queueSize must be greater than or equal to zero", nil)
 	}
 	if throttling.QueueSize > 0 && throttling.MaxConcurrentRequests <= 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.queue-size requires max-concurrent-requests", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.queueSize requires maxConcurrentRequests", nil)
 	}
 	if throttling.RequestsPerSecond < 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.requests-per-second must be greater than zero when set", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.requestsPerSecond must be greater than zero when set", nil)
 	}
 	if throttling.Burst < 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.burst must be greater than zero when set", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.burst must be greater than zero when set", nil)
 	}
 	if throttling.Burst > 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managed-server.http.request-throttling.burst requires requests-per-second", nil)
+		return faults.NewValidationError("managedServer.http.requestThrottling.burst requires requestsPerSecond", nil)
 	}
 	return nil
 }
@@ -380,30 +380,30 @@ func validateManagedServerHealthCheck(value string) error {
 
 	parsed, err := url.Parse(healthCheck)
 	if err != nil {
-		return faults.NewValidationError("managed-server.http.health-check is invalid", err)
+		return faults.NewValidationError("managedServer.http.healthCheck is invalid", err)
 	}
 	if strings.TrimSpace(parsed.RawQuery) != "" {
-		return faults.NewValidationError("managed-server.http.health-check must not include query parameters", nil)
+		return faults.NewValidationError("managedServer.http.healthCheck must not include query parameters", nil)
 	}
 
 	// Relative paths are interpreted against managed-server.http.base-url.
 	if parsed.Scheme == "" && parsed.Host == "" {
 		if strings.TrimSpace(parsed.Path) == "" {
-			return faults.NewValidationError("managed-server.http.health-check is invalid", nil)
+			return faults.NewValidationError("managedServer.http.healthCheck is invalid", nil)
 		}
 		return nil
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return faults.NewValidationError("managed-server.http.health-check URL must use http or https", nil)
+		return faults.NewValidationError("managedServer.http.healthCheck URL must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return faults.NewValidationError("managed-server.http.health-check URL host is required", nil)
+		return faults.NewValidationError("managedServer.http.healthCheck URL host is required", nil)
 	}
 
 	_, err = filepath.Rel("/", parsed.Path)
 	if err != nil {
-		return faults.NewValidationError("managed-server.http.health-check URL path is invalid", err)
+		return faults.NewValidationError("managedServer.http.healthCheck URL path is invalid", err)
 	}
 
 	return nil
@@ -415,12 +415,12 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 	}
 
 	if countSet(secretStore.File != nil, secretStore.Vault != nil) != 1 {
-		return faults.NewValidationError("secret-store must define exactly one of file or vault", nil)
+		return faults.NewValidationError("secretStore must define exactly one of file or vault", nil)
 	}
 
 	if secretStore.File != nil {
 		if secretStore.File.Path == "" {
-			return faults.NewValidationError("secret-store.file.path is required", nil)
+			return faults.NewValidationError("secretStore.file.path is required", nil)
 		}
 		if countSet(
 			secretStore.File.Key != "",
@@ -428,25 +428,25 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 			secretStore.File.Passphrase != "",
 			secretStore.File.PassphraseFile != "",
 		) != 1 {
-			return faults.NewValidationError("secret-store.file must define exactly one of key, key-file, passphrase, passphrase-file", nil)
+			return faults.NewValidationError("secretStore.file must define exactly one of key, keyFile, passphrase, passphraseFile", nil)
 		}
 	}
 
 	if secretStore.Vault != nil {
 		if secretStore.Vault.Address == "" {
-			return faults.NewValidationError("secret-store.vault.address is required", nil)
+			return faults.NewValidationError("secretStore.vault.address is required", nil)
 		}
 		if secretStore.Vault.Auth == nil {
-			return faults.NewValidationError("secret-store.vault.auth is required", nil)
+			return faults.NewValidationError("secretStore.vault.auth is required", nil)
 		}
 		if countSet(
 			secretStore.Vault.Auth.Token != "",
 			secretStore.Vault.Auth.Password != nil,
 			secretStore.Vault.Auth.AppRole != nil,
 		) != 1 {
-			return faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
+			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole", nil)
 		}
-		if err := validateProxy("secret-store.vault.proxy", secretStore.Vault.Proxy); err != nil {
+		if err := validateProxy("secretStore.vault.proxy", secretStore.Vault.Proxy); err != nil {
 			return err
 		}
 	}
@@ -460,7 +460,7 @@ func validateMetadata(metadata config.Metadata) error {
 	bundleFile := strings.TrimSpace(metadata.BundleFile)
 
 	if countSet(baseDir != "", bundle != "", bundleFile != "") > 1 {
-		return faults.NewValidationError("metadata must define at most one of base-dir, bundle, or bundle-file", nil)
+		return faults.NewValidationError("metadata must define at most one of baseDir, bundle, or bundleFile", nil)
 	}
 	if err := validateProxy("metadata.proxy", metadata.Proxy); err != nil {
 		return err
@@ -474,7 +474,7 @@ func validateProxy(field string, proxy *config.HTTPProxy) error {
 		return nil
 	}
 	if !proxyhelper.HasURLs(proxy) {
-		return faults.NewValidationError(field+" must define at least one of http-url or https-url", nil)
+		return faults.NewValidationError(field+" must define at least one of httpUrl or httpsUrl", nil)
 	}
 	if _, err := proxyhelper.Build(field, proxy); err != nil {
 		return err
@@ -486,55 +486,55 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 	for _, key := range sortedOverrideKeys(overrides) {
 		value := overrides[key]
 		switch key {
-		case "repository.resource-format":
+		case "repository.resourceFormat":
 			cfg.Repository.ResourceFormat = value
-		case "repository.git.local.base-dir":
+		case "repository.git.local.baseDir":
 			if cfg.Repository.Git == nil {
-				return config.Context{}, faults.NewValidationError("override repository.git.local.base-dir requires repository.git to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override repository.git.local.baseDir requires repository.git to be configured", nil)
 			}
 			cfg.Repository.Git.Local.BaseDir = value
-		case "repository.filesystem.base-dir":
+		case "repository.filesystem.baseDir":
 			if cfg.Repository.Filesystem == nil {
-				return config.Context{}, faults.NewValidationError("override repository.filesystem.base-dir requires repository.filesystem to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "managed-server.http.base-url":
+		case "managedServer.http.baseUrl":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.base-url requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.baseUrl requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.BaseURL = value
-		case "managed-server.http.health-check":
+		case "managedServer.http.healthCheck":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.health-check requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.healthCheck requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.HealthCheck = value
-		case "managed-server.http.proxy.http-url":
+		case "managedServer.http.proxy.httpUrl":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.http-url requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpUrl requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.HTTPURL = value
-		case "managed-server.http.proxy.https-url":
+		case "managedServer.http.proxy.httpsUrl":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.https-url requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpsUrl requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.HTTPSURL = value
-		case "managed-server.http.proxy.no-proxy":
+		case "managedServer.http.proxy.noProxy":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.no-proxy requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.noProxy requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.NoProxy = value
-		case "managed-server.http.proxy.auth.username":
+		case "managedServer.http.proxy.auth.username":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.username requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.username requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -543,9 +543,9 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.Auth.Username = value
-		case "managed-server.http.proxy.auth.password":
+		case "managedServer.http.proxy.auth.password":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managed-server.http.proxy.auth.password requires managed-server.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.password requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -554,7 +554,7 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.Auth.Password = value
-		case "metadata.base-dir":
+		case "metadata.baseDir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {
 				cfg.Metadata.Bundle = ""
@@ -566,7 +566,7 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.Metadata.BaseDir = ""
 				cfg.Metadata.BundleFile = ""
 			}
-		case "metadata.bundle-file":
+		case "metadata.bundleFile":
 			cfg.Metadata.BundleFile = value
 			if strings.TrimSpace(value) != "" {
 				cfg.Metadata.BaseDir = ""

@@ -25,7 +25,7 @@ func TestExtractExternalizesConfiguredStringAttributes(t *testing.T) {
 		},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"script"},
+				Path:           "/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -34,7 +34,7 @@ func TestExtractExternalizesConfiguredStringAttributes(t *testing.T) {
 				Enabled:        true,
 			},
 			{
-				Path:           []string{"spec", "template", "script"},
+				Path:           "/spec/template/script",
 				File:           "nested.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -78,7 +78,7 @@ func TestExtractRejectsNonStringValues(t *testing.T) {
 		map[string]any{"script": map[string]any{"inline": true}},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"script"},
+				Path:           "/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -111,7 +111,7 @@ func TestExtractExternalizesWildcardArrayAttributes(t *testing.T) {
 		},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"sequence", "commands", "*", "script"},
+				Path:           "/sequence/commands/*/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -172,7 +172,7 @@ func TestExpandReplacesPlaceholderBackedAttributes(t *testing.T) {
 		map[string]any{"script": "{{include script.sh}}"},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"script"},
+				Path:           "/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -202,7 +202,7 @@ func TestExpandRejectsMissingReferencedFile(t *testing.T) {
 		map[string]any{"script": "{{include script.sh}}"},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"script"},
+				Path:           "/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,
@@ -243,7 +243,7 @@ func TestExpandReplacesWildcardArrayPlaceholders(t *testing.T) {
 		},
 		[]metadata.ResolvedExternalizedAttribute{
 			{
-				Path:           []string{"sequence", "commands", "*", "script"},
+				Path:           "/sequence/commands/*/script",
 				File:           "script.sh",
 				Template:       metadata.DefaultExternalizedAttributeTemplate,
 				Mode:           metadata.ExternalizedAttributeModeText,

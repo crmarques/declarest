@@ -30,7 +30,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
 		service := &testContextService{}
 		_, err := executeConfigCommand(t, service, &cliutil.GlobalFlags{}, `{
   "name": "dev",
-  "repository": {"filesystem": {"base-dir": "/tmp/repo"}},
+  "repository": {"filesystem": {"baseDir": "/tmp/repo"}},
   "unknown": true
 }`, "add", "--format", "json")
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -47,7 +47,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
 name: dev
 repository:
   filesystem:
-    base-dir: /tmp/repo
+    baseDir: /tmp/repo
 unknown: true
 `, "update", "--format", "yaml")
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -62,7 +62,7 @@ unknown: true
 		service := &testContextService{}
 		_, err := executeConfigCommand(t, service, &cliutil.GlobalFlags{}, `{
   "name": "dev",
-  "repository": {"filesystem": {"base-dir": "/tmp/repo", "extra": true}}
+  "repository": {"filesystem": {"baseDir": "/tmp/repo", "extra": true}}
 }`, "validate")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.validateCalled {
@@ -87,23 +87,23 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 
 	requiredSnippets := []string{
 		"contexts:",
-		"current-ctx:",
+		"currentCtx:",
 		"repository:",
 		"git:",
 		"filesystem:",
-		"managed-server:",
-		"health-check:",
+		"managedServer:",
+		"healthCheck:",
 		"auth:",
 		"proxy:",
-		"http-url:",
-		"https-url:",
-		"no-proxy:",
+		"httpUrl:",
+		"httpsUrl:",
+		"noProxy:",
 		"oauth2:",
-		"basic-auth:",
-		"custom-headers:",
+		"basicAuth:",
+		"customHeaders:",
 		"prefix: Bearer",
 		"value: change-me",
-		"secret-store:",
+		"secretStore:",
 		"file:",
 		"vault:",
 		"preferences:",
@@ -143,7 +143,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected base-url fallback to succeed, got %v", err)
+		t.Fatalf("expected baseUrl fallback to succeed, got %v", err)
 	}
 	if probePath != "/admin/api/45" {
 		t.Fatalf("expected probe path /admin/api/45, got %q", probePath)
@@ -155,7 +155,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 			},
 		},
 	}); got != "https://api.example.invalid/admin/api/45" {
-		t.Fatalf("expected rendered target to use base-url fallback, got %q", got)
+		t.Fatalf("expected rendered target to use baseUrl fallback, got %q", got)
 	}
 }
 
@@ -171,9 +171,9 @@ func TestAddImportsSingleContextAndSupportsRename(t *testing.T) {
 name: dev
 repository:
   filesystem:
-    base-dir: /tmp/dev
+    baseDir: /tmp/dev
 metadata:
-  base-dir: /tmp/meta
+  baseDir: /tmp/meta
 `,
 		"add",
 		"--format", "yaml",
@@ -206,7 +206,7 @@ func TestCreateDefaultsInputFormatToYAML(t *testing.T) {
 name: dev
 repository:
   filesystem:
-    base-dir: /tmp/dev
+    baseDir: /tmp/dev
 `,
 		"add",
 	)
@@ -234,7 +234,7 @@ func TestCreateInputModeAppliesContextNameFromPositionalArg(t *testing.T) {
 name: from-input
 repository:
   filesystem:
-    base-dir: /tmp/dev
+    baseDir: /tmp/dev
 `,
 		"add",
 		"from-arg",
@@ -264,12 +264,12 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
   - name: prod
     repository:
       filesystem:
-        base-dir: /tmp/prod
-current-ctx: prod
+        baseDir: /tmp/prod
+currentCtx: prod
 `,
 		"add",
 	)
@@ -297,7 +297,7 @@ func TestAddSetCurrentForSingleContext(t *testing.T) {
 name: dev
 repository:
   filesystem:
-    base-dir: /tmp/dev
+    baseDir: /tmp/dev
 `,
 		"add",
 		"--format", "yaml",
@@ -332,12 +332,12 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
   - name: prod
     repository:
       filesystem:
-        base-dir: /tmp/prod
-current-ctx: prod
+        baseDir: /tmp/prod
+currentCtx: prod
 `,
 		"add",
 		"--format", "yaml",
@@ -372,12 +372,12 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
   - name: prod
     repository:
       filesystem:
-        base-dir: /tmp/prod
-current-ctx: prod
+        baseDir: /tmp/prod
+currentCtx: prod
 `,
 		"add",
 		"--format", "yaml",
@@ -391,7 +391,7 @@ current-ctx: prod
 		t.Fatalf("expected two created contexts, got %d", len(service.createdContexts))
 	}
 	if service.setCurrentName != "prod" {
-		t.Fatalf("expected set current prod from catalog current-ctx, got %q", service.setCurrentName)
+		t.Fatalf("expected set current prod from catalog currentCtx, got %q", service.setCurrentName)
 	}
 }
 
@@ -408,11 +408,11 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
   - name: prod
     repository:
       filesystem:
-        base-dir: /tmp/prod
+        baseDir: /tmp/prod
 `,
 		"add",
 		"--format", "yaml",
@@ -437,7 +437,7 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
 `,
 		"add",
 		"--format", "yaml",
@@ -466,7 +466,7 @@ func TestAddRejectsCollisionsBeforeCreate(t *testing.T) {
 name: dev
 repository:
   filesystem:
-    base-dir: /tmp/dev
+    baseDir: /tmp/dev
 `,
 			"add",
 			"--format", "yaml",
@@ -490,11 +490,11 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev
+        baseDir: /tmp/dev
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/dev2
+        baseDir: /tmp/dev2
 `,
 			"add",
 			"--format", "yaml",
@@ -532,10 +532,10 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 			globalFlags,
 			"",
 			"resolve",
-			"--set", "metadata.base-dir=/tmp/meta",
+			"--set", "metadata.baseDir=/tmp/meta",
 			"--set", "metadata.bundle=keycloak-bundle:0.0.1",
-			"--set", "metadata.bundle-file=/tmp/keycloak-bundle-0.0.1.tar.gz",
-			"--set", "repository.resource-format=yaml",
+			"--set", "metadata.bundleFile=/tmp/keycloak-bundle-0.0.1.tar.gz",
+			"--set", "repository.resourceFormat=yaml",
 		)
 		if err != nil {
 			t.Fatalf("resolve returned error: %v", err)
@@ -544,16 +544,16 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 		if service.resolveSelection.Name != "dev" {
 			t.Fatalf("expected selection name dev, got %q", service.resolveSelection.Name)
 		}
-		if got := service.resolveSelection.Overrides["metadata.base-dir"]; got != "/tmp/meta" {
+		if got := service.resolveSelection.Overrides["metadata.baseDir"]; got != "/tmp/meta" {
 			t.Fatalf("expected metadata override to be forwarded, got %q", got)
 		}
 		if got := service.resolveSelection.Overrides["metadata.bundle"]; got != "keycloak-bundle:0.0.1" {
 			t.Fatalf("expected metadata bundle override to be forwarded, got %q", got)
 		}
-		if got := service.resolveSelection.Overrides["metadata.bundle-file"]; got != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
-			t.Fatalf("expected metadata bundle-file override to be forwarded, got %q", got)
+		if got := service.resolveSelection.Overrides["metadata.bundleFile"]; got != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
+			t.Fatalf("expected metadata bundleFile override to be forwarded, got %q", got)
 		}
-		if got := service.resolveSelection.Overrides["repository.resource-format"]; got != "yaml" {
+		if got := service.resolveSelection.Overrides["repository.resourceFormat"]; got != "yaml" {
 			t.Fatalf("expected resource format override to be forwarded, got %q", got)
 		}
 	})
@@ -627,13 +627,13 @@ func TestConfigOutputAcrossFormats(t *testing.T) {
 		expectedSnippet string
 	}{
 		{name: "list_text", format: cliutil.OutputText, commandArgs: []string{"list"}, expectedSnippet: "dev\nprod\n"},
-		{name: "list_json", format: cliutil.OutputJSON, commandArgs: []string{"list"}, expectedSnippet: "\"Name\": \"dev\""},
+		{name: "list_json", format: cliutil.OutputJSON, commandArgs: []string{"list"}, expectedSnippet: "\"name\": \"dev\""},
 		{name: "list_yaml", format: cliutil.OutputYAML, commandArgs: []string{"list"}, expectedSnippet: "- name: dev"},
 		{name: "current_text", format: cliutil.OutputText, commandArgs: []string{"current"}, expectedSnippet: "dev\n"},
-		{name: "current_json", format: cliutil.OutputJSON, commandArgs: []string{"current"}, expectedSnippet: "\"Name\": \"dev\""},
+		{name: "current_json", format: cliutil.OutputJSON, commandArgs: []string{"current"}, expectedSnippet: "\"name\": \"dev\""},
 		{name: "current_yaml", format: cliutil.OutputYAML, commandArgs: []string{"current"}, expectedSnippet: "name: dev"},
 		{name: "resolve_text", format: cliutil.OutputText, commandArgs: []string{"resolve"}, expectedSnippet: "prod\n"},
-		{name: "resolve_json", format: cliutil.OutputJSON, commandArgs: []string{"resolve"}, expectedSnippet: "\"Name\": \"prod\""},
+		{name: "resolve_json", format: cliutil.OutputJSON, commandArgs: []string{"resolve"}, expectedSnippet: "\"name\": \"prod\""},
 		{name: "resolve_yaml", format: cliutil.OutputYAML, commandArgs: []string{"resolve"}, expectedSnippet: "name: prod"},
 	}
 
@@ -708,8 +708,8 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		"[OK] context",
 		"[OK] repository",
 		"[OK] metadata",
-		"[SKIP] managed-server",
-		"[SKIP] secret-store",
+		"[SKIP] managedServer",
+		"[SKIP] secretStore",
 		"Result: PASS",
 	}
 	for _, snippet := range expectedSnippets {
@@ -835,7 +835,7 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check returned error: %v", err)
 	}
-	if !strings.Contains(output, "[WARN] managed-server") {
+	if !strings.Contains(output, "[WARN] managedServer") {
 		t.Fatalf("expected warn status for managed server probe, got %q", output)
 	}
 	if !strings.Contains(output, "Result: PASS") {
@@ -886,11 +886,11 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	assertTypedCategory(t, err, faults.ValidationError)
 
-	if !strings.Contains(output, "[FAIL] managed-server") {
-		t.Fatalf("expected managed-server failure in output, got %q", output)
+	if !strings.Contains(output, "[FAIL] managedServer") {
+		t.Fatalf("expected managedServer failure in output, got %q", output)
 	}
-	if !strings.Contains(output, "[FAIL] secret-store") {
-		t.Fatalf("expected secret-store failure in output, got %q", output)
+	if !strings.Contains(output, "[FAIL] secretStore") {
+		t.Fatalf("expected secretStore failure in output, got %q", output)
 	}
 	if !strings.Contains(output, "Result: FAIL") {
 		t.Fatalf("expected fail result in output, got %q", output)
@@ -1023,7 +1023,7 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1051,10 +1051,10 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 		t.Fatalf("unexpected repository config: %#v", service.createdContext.Repository)
 	}
 	if service.createdContext.Metadata.BaseDir != "/tmp/meta" {
-		t.Fatalf("expected metadata base-dir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
 	}
 	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managed-server configuration")
+		t.Fatal("expected managedServer configuration")
 	}
 	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select resource format (optional; remote-default keeps remote resource format)" {
 		t.Fatalf("expected optional resource format prompt, got %#v", prompter.selectPrompts)
@@ -1068,7 +1068,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1085,7 +1085,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	}
 
 	if service.createdContext.Metadata.BaseDir != "/tmp/repo" {
-		t.Fatalf("expected metadata base-dir to default to repository base-dir /tmp/repo, got %q", service.createdContext.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir to default to repository baseDir /tmp/repo, got %q", service.createdContext.Metadata.BaseDir)
 	}
 	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatYAML {
 		t.Fatalf("expected yaml resource format, got %q", service.createdContext.Repository.ResourceFormat)
@@ -1093,8 +1093,8 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	if len(prompter.inputPrompts) < 3 {
 		t.Fatalf("expected at least 3 input prompts, got %d", len(prompter.inputPrompts))
 	}
-	if got := prompter.inputPrompts[2]; got != "Metadata base-dir (defaults to /tmp/repo): " {
-		t.Fatalf("expected metadata prompt with repository base-dir value, got %q", got)
+	if got := prompter.inputPrompts[2]; got != "Metadata baseDir (defaults to /tmp/repo): " {
+		t.Fatalf("expected metadata prompt with repository baseDir value, got %q", got)
 	}
 }
 
@@ -1122,7 +1122,7 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 		selects: []string{
 			configdomain.ResourceFormatYAML,
 			"filesystem",
-			"custom-headers",
+			"customHeaders",
 		},
 		confirms: []bool{
 			false,
@@ -1148,21 +1148,21 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 	}
 
 	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managed-server configuration")
+		t.Fatal("expected managedServer configuration")
 	}
 	if service.createdContext.ManagedServer.HTTP.Proxy == nil {
-		t.Fatal("expected managed-server proxy configuration")
+		t.Fatal("expected managedServer proxy configuration")
 	}
 
 	proxy := service.createdContext.ManagedServer.HTTP.Proxy
 	if proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy http-url, got %q", proxy.HTTPURL)
+		t.Fatalf("expected proxy httpUrl, got %q", proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != "" {
-		t.Fatalf("expected empty proxy https-url, got %q", proxy.HTTPSURL)
+		t.Fatalf("expected empty proxy httpsUrl, got %q", proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != "localhost,127.0.0.1" {
-		t.Fatalf("expected proxy no-proxy, got %q", proxy.NoProxy)
+		t.Fatalf("expected proxy noProxy, got %q", proxy.NoProxy)
 	}
 	if proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
@@ -1179,7 +1179,7 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1205,8 +1205,8 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	if len(prompter.inputPrompts) < 1 {
 		t.Fatal("expected input prompts for repository settings")
 	}
-	if got := prompter.inputPrompts[0]; got != "Repository base-dir: " {
-		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", got)
+	if got := prompter.inputPrompts[0]; got != "Repository baseDir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository baseDir, got %q", got)
 	}
 }
 
@@ -1217,7 +1217,7 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "custom-headers"},
+		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1242,8 +1242,8 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	if len(prompter.inputPrompts) < 1 {
 		t.Fatal("expected input prompts for repository settings")
 	}
-	if got := prompter.inputPrompts[0]; got != "Repository base-dir: " {
-		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", got)
+	if got := prompter.inputPrompts[0]; got != "Repository baseDir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository baseDir, got %q", got)
 	}
 }
 
@@ -1272,7 +1272,7 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "custom-headers"},
+		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1299,7 +1299,7 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "git", "custom-headers"},
+		selects:     []string{configdomain.ResourceFormatYAML, "git", "customHeaders"},
 		confirms: []bool{
 			false,
 			false,
@@ -1328,10 +1328,10 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 		t.Fatalf("expected git repository config, got %#v", service.createdContext.Repository)
 	}
 	if service.createdContext.Repository.Git.Local.AutoInitEnabled() {
-		t.Fatal("expected git local auto-init to be disabled")
+		t.Fatal("expected git local autoInit to be disabled")
 	}
 	if service.createdContext.Repository.Git.Local.AutoInit == nil {
-		t.Fatal("expected auto-init=false to be persisted explicitly")
+		t.Fatal("expected autoInit=false to be persisted explicitly")
 	}
 }
 
@@ -1351,8 +1351,8 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"",
 			"https://idp.example.com/token",
 			"",
-			"client-id",
-			"client-secret",
+			"clientId",
+			"clientSecret",
 			"",
 			"",
 			"scope-a",
@@ -1371,7 +1371,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"filesystem",
 			"oauth2",
 			"file",
-			"key-file",
+			"keyFile",
 		},
 		confirms: []bool{
 			true,
@@ -1407,42 +1407,42 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 		t.Fatalf("expected repository format json, got %q", service.createdContext.Repository.ResourceFormat)
 	}
 	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managed-server http configuration")
+		t.Fatal("expected managedServer http configuration")
 	}
 	if service.createdContext.ManagedServer.HTTP.Auth == nil {
-		t.Fatal("expected managed-server auth configuration")
+		t.Fatal("expected managedServer auth configuration")
 	}
 	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
-		t.Fatal("expected managed-server oauth2 configuration")
+		t.Fatal("expected managedServer oauth2 configuration")
 	}
 	if service.createdContext.ManagedServer.HTTP.Auth.BasicAuth != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
 	if len(service.createdContext.ManagedServer.HTTP.Auth.CustomHeaders) != 0 {
-		t.Fatal("custom-headers auth should not be configured when oauth2 is selected")
+		t.Fatal("customHeaders auth should not be configured when oauth2 is selected")
 	}
 	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
 		t.Fatalf(
-			"expected oauth2 grant-type default %q, got %q",
+			"expected oauth2 grantType default %q, got %q",
 			configdomain.OAuthClientCreds,
 			service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType,
 		)
 	}
 
 	if service.createdContext.SecretStore == nil || service.createdContext.SecretStore.File == nil {
-		t.Fatal("expected file secret-store configuration")
+		t.Fatal("expected file secretStore configuration")
 	}
 	if service.createdContext.SecretStore.File.KeyFile != "/tmp/key.txt" {
-		t.Fatalf("expected secret-store key-file /tmp/key.txt, got %q", service.createdContext.SecretStore.File.KeyFile)
+		t.Fatalf("expected secretStore keyFile /tmp/key.txt, got %q", service.createdContext.SecretStore.File.KeyFile)
 	}
 	if service.createdContext.SecretStore.File.Key != "" {
-		t.Fatal("secret-store key should not be set when key-file source is selected")
+		t.Fatal("secretStore key should not be set when keyFile source is selected")
 	}
 	if service.createdContext.SecretStore.File.Passphrase != "" || service.createdContext.SecretStore.File.PassphraseFile != "" {
-		t.Fatal("secret-store passphrase fields should not be set when key-file source is selected")
+		t.Fatal("secretStore passphrase fields should not be set when keyFile source is selected")
 	}
 	if service.createdContext.SecretStore.File.KDF == nil {
-		t.Fatal("expected secret-store KDF configuration")
+		t.Fatal("expected secretStore KDF configuration")
 	}
 	if service.createdContext.SecretStore.File.KDF.Time != 1 ||
 		service.createdContext.SecretStore.File.KDF.Memory != 65536 ||
@@ -1453,8 +1453,8 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if value := service.createdContext.Preferences["env"]; value != "dev" {
 		t.Fatalf("expected preference env=dev, got %q", value)
 	}
-	if len(prompter.inputPrompts) == 0 || prompter.inputPrompts[0] != "Repository base-dir: " {
-		t.Fatalf("expected first prompt to skip context name and ask repository base-dir, got %q", prompter.inputPrompts)
+	if len(prompter.inputPrompts) == 0 || prompter.inputPrompts[0] != "Repository baseDir: " {
+		t.Fatalf("expected first prompt to skip context name and ask repository baseDir, got %q", prompter.inputPrompts)
 	}
 }
 
@@ -1506,7 +1506,7 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	if !strings.Contains(output, "name: prod") {
 		t.Fatalf("expected YAML output with context name prod, got %q", output)
 	}
-	if !strings.Contains(output, "resource-format: yaml") {
+	if !strings.Contains(output, "resourceFormat: yaml") {
 		t.Fatalf("expected YAML output for full context config, got %q", output)
 	}
 }
@@ -1603,7 +1603,7 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	if !strings.Contains(output, "name: dev") {
 		t.Fatalf("expected YAML output with context name dev, got %q", output)
 	}
-	if !strings.Contains(output, "resource-format: json") {
+	if !strings.Contains(output, "resourceFormat: json") {
 		t.Fatalf("expected YAML output for full context config, got %q", output)
 	}
 }

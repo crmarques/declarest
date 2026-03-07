@@ -358,8 +358,8 @@ func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testi
 	})
 
 	md := metadata.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "name",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/name",
 		CollectionPath:     "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
@@ -397,7 +397,7 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsForCreateUpdate(t *test
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationCreate): {
 				Path:     "/bla",
-				Suppress: []string{"bla"},
+				Suppress: []string{"/bla"},
 				JQ:       ". | .c = .test",
 			},
 		},
@@ -435,7 +435,7 @@ func TestBuildRequestFromMetadataAppliesPayloadTransformsInMetadataPayloadFieldO
 	      "path": "/bla",
 	      "payload": {
 	        "jqExpression": ". | .c = .bla",
-	        "suppressAttributes": ["bla"]
+	        "suppressAttributes": ["/bla"]
 	      }
 	    }
 	  }
@@ -781,7 +781,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 				string(metadata.OperationCreate): {
 					Path: "/admin/realms/{{.realm}}/clients",
 					Validate: &metadata.OperationValidationSpec{
-						RequiredAttributes: []string{"realm", "clientId"},
+						RequiredAttributes: []string{"/realm", "/clientId"},
 					},
 				},
 			},
@@ -813,7 +813,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 				string(metadata.OperationCreate): {
 					Path: "/customers",
 					Validate: &metadata.OperationValidationSpec{
-						RequiredAttributes: []string{"realm"},
+						RequiredAttributes: []string{"/realm"},
 					},
 				},
 			},
@@ -1069,7 +1069,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 			},
 		},
 		&metadata.OperationValidationSpec{
-			RequiredAttributes: []string{"realm", "clientId"},
+			RequiredAttributes: []string{"/realm", "/clientId"},
 		},
 	)
 
@@ -1124,7 +1124,7 @@ func TestGetAppliesPayloadTransformsAfterResponseDecode(t *testing.T) {
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationGet): {
 				Path:     "/bla/ble",
-				Suppress: []string{"bla"},
+				Suppress: []string{"/bla"},
 				JQ:       ". | .c = .test",
 			},
 		},
@@ -2168,7 +2168,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2206,8 +2206,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2248,8 +2248,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/api/projects/widgets", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Path: `/api/projects/widgets`,
@@ -2297,8 +2297,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		)
 
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2358,8 +2358,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		)
 
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/AD/mappers", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2398,8 +2398,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					JQ: "[ .[] | select(.providerId == ]",
@@ -2425,8 +2425,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Path: `/admin/realms/publico-br/user-registry/ldap-test/mappers`,
@@ -2453,8 +2453,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			AliasFromAttribute: "alias",
-			IDFromAttribute:    "id",
+			AliasFromAttribute: "/alias",
+			IDFromAttribute:    "/id",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2483,7 +2483,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/admin/realms", metadata.ResourceMetadata{
-			IDFromAttribute: "realm",
+			IDFromAttribute: "/realm",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2512,7 +2512,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "ambiguous") {
@@ -2536,7 +2536,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDFromAttribute: "id",
+			IDFromAttribute: "/id",
 		})
 		assertTypedCategory(t, err, faults.ConflictError)
 	})
@@ -2557,8 +2557,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			AliasFromAttribute: "alias",
-			IDFromAttribute:    "id",
+			AliasFromAttribute: "/alias",
+			IDFromAttribute:    "/id",
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 	})

@@ -95,7 +95,7 @@ func TestResourceCopyOverrideAttributes(t *testing.T) {
 		"",
 		"resource", "copy",
 		"/admin/realms/test", "/admin/realms/test-copy",
-		"--override-attributes", "realm=test-copy,enabled=true",
+		"--override-attributes", "/realm=test-copy,/enabled=true",
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

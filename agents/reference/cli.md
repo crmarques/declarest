@@ -50,13 +50,13 @@ Global flags:
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
 2. `--format`, `-i` with allowed formats `json|yaml|xml|hcl|ini|properties|text|binary`; `binary` maps to `application/octet-stream`.
-3. `--payload` as a command-specific inline payload flag for `resource request post` and `resource request put`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured formats, or dotted assignments (`a=b,c=d,e.f.g=h`), and explicit input MUST override repository-sourced payload loading when provided. Inline payload text and dotted assignments MUST NOT be accepted for `--format binary`.
+3. `--payload` as a command-specific inline payload flag for `resource request post` and `resource request put`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured formats, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. Inline payload text and JSON Pointer assignments MUST NOT be accepted for `--format binary`.
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
 5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation.
 6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation.
 7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation.
 8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent.
-9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.auto-sync` is disabled.
+9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.autoSync` is disabled.
 
 Path flags:
 1. Path-aware commands MUST accept `--path`, `-p`.
@@ -106,8 +106,8 @@ Selected command names:
 17. `secret detect`.
 18. `completion`.
 19. `version`.
-20. `managed-server get base-url`.
-19. `managed-server get token-url`.
+20. `managed-server get baseUrl`.
+19. `managed-server get tokenUrl`.
 20. `managed-server get access-token`.
 21. `managed-server check`.
 
@@ -153,37 +153,37 @@ Interactive config commands:
 23. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
 24. `resource apply` MUST treat collection paths as batch targets resolved from local repository resources and default to non-recursive direct-child execution when payload input is absent.
 25. `resource apply --recursive` MUST include descendant resources under the target path when payload input is absent.
-26. `resource apply` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single target path and use explicit input instead of loading repository payloads; apply MUST read remote state first, create only on `NotFound`, compare desired vs remote with metadata compare directives, and update only when drift exists unless `--force` is set.
+26. `resource apply` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or JSON Pointer assignments) for a single target path and use explicit input instead of loading repository payloads; apply MUST read remote state first, create only on `NotFound`, compare desired vs remote with metadata compare directives, and update only when drift exists unless `--force` is set.
 27. `resource apply` MUST reject `--recursive` when explicit payload input is provided.
-28. `resource create` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute create for each resolved target.
-29. `resource update` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or dotted assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute remote updates for each matching resource.
+28. `resource create` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or JSON Pointer assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute create for each resolved target.
+29. `resource update` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or JSON Pointer assignments) for a single remote mutation, and when payload input is absent it MUST load local repository payloads for resources under the target path and execute remote updates for each matching resource.
 30. `resource update` without `--recursive` MUST mutate only direct-child resources for collection paths when payload input is absent.
 31. `resource update --recursive` MUST include descendant resources under the target path when payload input is absent.
 32. `resource apply|create|update` explicit-input mode MUST accept a collection target path when metadata exposes a wildcard child under that path and the payload contains metadata-derived alias/id values; the CLI MUST infer one concrete child logical path from the payload identity before remote mutation, and explicit resource-path inputs MUST preserve identity-match validation behavior.
 32. `resource apply --force` MUST execute update after remote read even when metadata compare output indicates no drift.
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
-34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or dotted assignments.
+34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
 32. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
 33. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
 34. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
 35. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
-36. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
-37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<attribute-path>` and `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
+36. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
+37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` and `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
 39. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 40. `resource edit` MUST resolve the edit source from the local repository first, using the same literal-then-bounded metadata-aware fallback as other repository-backed single-resource workflows; when that local resolution returns `NotFound`, it MUST fall back to one remote read for the requested logical path before opening the editor, and it MUST persist the edited payload only when decoding and save validation succeed.
-41. `resource edit` on git repository contexts MUST commit repository changes and MAY auto-sync when the git context enables repository auto-sync.
+41. `resource edit` on git repository contexts MUST commit repository changes and MAY autoSync when the git context enables repository autoSync.
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
-43. `resource copy --override-attributes` MUST accept dotted assignments (`a=b,c=d,e.f.g=h`) and apply them to object payloads before save validation.
+43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
 44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resourceInfo.secretInAttributes`.
 45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 46. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
 47. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for each detected resource path in scope.
-48. `secret detect --secret-attribute <attr>` MUST apply only that detected attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
-49. `secret get` MUST accept `secret get <path>`, `secret get <path> <key>`, `secret get --path <path>`, `secret get --path <path> --key <key>`, and `secret get <path>:<key>` in addition to direct key mode (`secret get <key>`).
+48. `secret detect --secret-attribute <pointer>` MUST apply only that detected JSON Pointer attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
+49. `secret get` MUST accept `secret get <path>`, `secret get <path> <pointer>`, `secret get --path <path>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
 50. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
-51. `secret get` with path+key input (`<path> <key>`, `--path`+`--key`, or `<path>:<key>`) MUST resolve the canonical secret key as `<path>:<key>`.
+51. `secret get` with path+key input (`<path> <pointer>`, `--path`+`--key`, or `<path>:<pointer>`) MUST resolve the canonical secret key as `<path>:<pointer>`.
 52. `secret get --key` MUST require `--path`.
 49. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 50. `config show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
@@ -227,7 +227,7 @@ Interactive config commands:
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
-83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.auto-sync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
+83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.autoSync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
 84. `resource delete` when repository deletion is selected (`--source repository|both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
@@ -236,9 +236,9 @@ Interactive config commands:
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source remote-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
-90. `managed-server get base-url` MUST print the active context `managed-server.http.base-url` and fail with `ValidationError` when `managed-server.http` is not configured.
-91. `managed-server get token-url` MUST print the active context `managed-server.http.auth.oauth2.token-url` and fail with `ValidationError` when OAuth2 auth is not configured.
-92. `managed-server get access-token` MUST fetch and print the OAuth2 access token from `managed-server.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
+90. `managed-server get baseUrl` MUST print the active context `managedServer.http.baseUrl` and fail with `ValidationError` when `managedServer.http` is not configured.
+91. `managed-server get tokenUrl` MUST print the active context `managedServer.http.auth.oauth2.tokenUrl` and fail with `ValidationError` when OAuth2 auth is not configured.
+92. `managed-server get access-token` MUST fetch and print the OAuth2 access token from `managedServer.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
 93. `managed-server check` MUST probe managed-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
 94. Commands with plain-text-only output (`secret get`, `repository tree`, `managed-server get *`, `managed-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
 95. `config show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
@@ -275,7 +275,7 @@ Interactive config commands:
 20. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
 21. `repository status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 22. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.
-23. `managed-server get base-url|token-url|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
+23. `managed-server get baseUrl|tokenUrl|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
 24. `managed-server check` text output MUST print a concise probe result line and MAY include one additional line with the probe error detail when connectivity is confirmed through a warning-category response.
 25. The CLI MUST support `--no-color` to disable ANSI color output for status labels, and `NO_COLOR` environment variable MUST also disable ANSI color output.
 26. CLI process exit codes SHOULD map typed error categories deterministically (for example validation, not-found, auth, conflict, transport) instead of collapsing all errors to one exit code.
@@ -296,7 +296,7 @@ Interactive config commands:
 15. `secret detect --secret-attribute` value is not detected in payload or repository scope.
 16. `config add --context-name` does not match any catalog context.
 17. `resource request post|put` receives inline `--payload` together with the `--payload <path|->` or stdin option.
-18. Binary payload mode receives inline `--payload` text or dotted assignments.
+18. Binary payload mode receives inline `--payload` text or JSON Pointer assignments.
 19. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
 20. `resource request delete` is invoked without `--confirm-delete`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
@@ -308,7 +308,7 @@ Interactive config commands:
 27. Context-catalog mutation input omits required `managed-server`.
 28. `secret get --key <key>` is invoked without `--path`.
 29. `secret get <path>:` uses an empty key segment.
-30. `managed-server get token-url` or `managed-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
+30. `managed-server get tokenUrl` or `managed-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
 31. `resource save|delete` receives both `--message` and `--message-override`.
 32. `resource save|delete` auto-commit is attempted while the git worktree already has unrelated uncommitted changes.
 33. `resource save --push` is invoked when the active repository is filesystem or when git remote configuration is missing.
@@ -331,7 +331,7 @@ Interactive config commands:
 13. `resource apply`, `resource create`, or `resource update` is invoked on a collection that has only nested descendants and omits `--recursive`.
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
 15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
-16. `resource save --push` is used with `repository.git.remote.auto-sync: false` and still pushes the new save commit to the configured remote.
+16. `resource save --push` is used with `repository.git.remote.autoSync: false` and still pushes the new save commit to the configured remote.
 17. `resource get /files/blob --output text` writes raw binary bytes without a trailing newline when `/files/blob` resolves to payload type `octet-stream`.
 18. `resource get /files/blob --output json` emits a stable base64 wrapper with `encoding`, `mediaType`, and `data`.
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
@@ -346,7 +346,7 @@ Interactive config commands:
 24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
-26. `managed-server get token-url` or `managed-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
+26. `managed-server get tokenUrl` or `managed-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
 27. `managed-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
 28. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
 
@@ -378,10 +378,10 @@ Interactive config commands:
 23. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
 24. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
 25. `declarest resource save /customers/acme --ignore < payload.json` bypasses plaintext-secret save guard.
-26. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [credentials.authValue]` stores and masks `credentials.authValue` automatically before repository persistence.
+26. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
 27. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
 28. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
-29. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.auto-sync` is disabled.
+29. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
 29. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
 30. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
 27. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
@@ -460,7 +460,7 @@ Interactive config commands:
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.
-87. `declarest managed-server get base-url` prints the active context managed-server HTTP base URL.
-88. `declarest managed-server get token-url` prints the active context managed-server OAuth2 token URL.
+87. `declarest managed-server get baseUrl` prints the active context managed-server HTTP base URL.
+88. `declarest managed-server get tokenUrl` prints the active context managed-server OAuth2 token URL.
 89. `declarest managed-server get access-token` prints only the OAuth2 access token for the active context managed server.
 90. `declarest managed-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.

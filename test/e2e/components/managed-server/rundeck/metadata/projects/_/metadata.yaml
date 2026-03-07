@@ -1,6 +1,6 @@
 resourceInfo:
-    idFromAttribute: name
-    aliasFromAttribute: name
+    idFromAttribute: /name
+    aliasFromAttribute: /name
 operationInfo:
     getResource:
         path: /project/{{.id}}/config

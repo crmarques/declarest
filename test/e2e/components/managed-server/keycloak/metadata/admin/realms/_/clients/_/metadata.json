@@ -1,9 +1,9 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "clientId",
+    "idFromAttribute": "/id",
+    "aliasFromAttribute": "/clientId",
     "secretInAttributes": [
-      "secret"
+      "/secret"
     ]
   }
 }

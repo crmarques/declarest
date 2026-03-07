@@ -53,13 +53,13 @@ func Extract(value resource.Value, entries []metadata.ResolvedExternalizedAttrib
 		textValue, ok := target.Value.(string)
 		if !ok {
 			return ExtractResult{}, faults.NewValidationError(
-				fmt.Sprintf("externalized attribute %s must be a string value", formatAttributePath(target.ConcretePath)),
+				fmt.Sprintf("externalized attribute %s must be a string value", formatConcreteAttributePath(target.ConcretePath)),
 				nil,
 			)
 		}
 
 		if err := assignPathValue(cloned, target.ConcretePath, target.Placeholder); err != nil {
-			return ExtractResult{}, wrapPathError(target.ConcretePath, "replace externalized attribute placeholder", err)
+			return ExtractResult{}, wrapPathError(formatConcreteAttributePath(target.ConcretePath), "replace externalized attribute placeholder", err)
 		}
 		artifacts = append(artifacts, repository.ResourceArtifact{
 			File:    target.File,
@@ -116,7 +116,7 @@ func Expand(
 			return nil, faults.NewValidationError(
 				fmt.Sprintf(
 					"externalized attribute %s requires a configured repository artifact reader",
-					formatAttributePath(target.ConcretePath),
+					formatConcreteAttributePath(target.ConcretePath),
 				),
 				nil,
 			)
@@ -128,7 +128,7 @@ func Expand(
 				return nil, faults.NewValidationError(
 					fmt.Sprintf(
 						"externalized attribute %s references missing file %q",
-						formatAttributePath(target.ConcretePath),
+						formatConcreteAttributePath(target.ConcretePath),
 						target.File,
 					),
 					err,
@@ -138,7 +138,7 @@ func Expand(
 		}
 
 		if err := assignPathValue(cloned, target.ConcretePath, string(content)); err != nil {
-			return nil, wrapPathError(target.ConcretePath, "expand externalized attribute", err)
+			return nil, wrapPathError(formatConcreteAttributePath(target.ConcretePath), "expand externalized attribute", err)
 		}
 	}
 
@@ -193,7 +193,7 @@ func resolveExternalizedTargets(
 					fmt.Sprintf(
 						"externalized attribute %s resolves duplicate concrete path %s",
 						formatAttributePath(entry.Path),
-						formatAttributePath(match.ConcretePath),
+						formatConcreteAttributePath(match.ConcretePath),
 					),
 					nil,
 				)
@@ -231,12 +231,16 @@ type pathMatch struct {
 	Value           any
 }
 
-func resolvePathMatches(value any, path []string) ([]pathMatch, error) {
-	if len(path) == 0 {
+func resolvePathMatches(value any, pointer string) ([]pathMatch, error) {
+	tokens, err := resource.ParseJSONPointer(pointer)
+	if err != nil {
+		return nil, err
+	}
+	if len(tokens) == 0 {
 		return nil, nil
 	}
 
-	return collectPathMatches(value, path, nil, nil)
+	return collectPathMatches(value, tokens, nil, nil)
 }
 
 func collectPathMatches(
@@ -284,7 +288,7 @@ func collectPathMatches(
 			return nil, faults.NewValidationError(
 				fmt.Sprintf(
 					"externalized attribute path %s must use \"*\" or a numeric index before segment %q",
-					formatAttributePath(concretePath),
+					formatConcreteAttributePath(concretePath),
 					segment,
 				),
 				nil,
@@ -298,7 +302,7 @@ func collectPathMatches(
 		return nil, faults.NewValidationError(
 			fmt.Sprintf(
 				"externalized attribute path %s crosses a non-traversable value before segment %q",
-				formatAttributePath(concretePath),
+				formatConcreteAttributePath(concretePath),
 				segment,
 			),
 			nil,
@@ -320,7 +324,7 @@ func assignPathValue(value any, path []string, replacement any) error {
 			next, found := typed[segment]
 			if !found {
 				return faults.NewValidationError(
-					fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path[:idx+1])),
+					fmt.Sprintf("externalized attribute path %s is missing", formatConcreteAttributePath(path[:idx+1])),
 					nil,
 				)
 			}
@@ -329,14 +333,14 @@ func assignPathValue(value any, path []string, replacement any) error {
 			index, ok := parseArrayIndex(segment)
 			if !ok || index < 0 || index >= len(typed) {
 				return faults.NewValidationError(
-					fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path[:idx+1])),
+					fmt.Sprintf("externalized attribute path %s is missing", formatConcreteAttributePath(path[:idx+1])),
 					nil,
 				)
 			}
 			current = typed[index]
 		default:
 			return faults.NewValidationError(
-				fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatAttributePath(path[:idx+1])),
+				fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatConcreteAttributePath(path[:idx+1])),
 				nil,
 			)
 		}
@@ -351,7 +355,7 @@ func assignPathValue(value any, path []string, replacement any) error {
 		index, ok := parseArrayIndex(lastSegment)
 		if !ok || index < 0 || index >= len(typed) {
 			return faults.NewValidationError(
-				fmt.Sprintf("externalized attribute path %s is missing", formatAttributePath(path)),
+				fmt.Sprintf("externalized attribute path %s is missing", formatConcreteAttributePath(path)),
 				nil,
 			)
 		}
@@ -359,7 +363,7 @@ func assignPathValue(value any, path []string, replacement any) error {
 		return nil
 	default:
 		return faults.NewValidationError(
-			fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatAttributePath(path[:len(path)-1])),
+			fmt.Sprintf("externalized attribute path %s crosses a non-object value", formatConcreteAttributePath(path[:len(path)-1])),
 			nil,
 		)
 	}
@@ -416,23 +420,15 @@ func parseArrayIndex(value string) (int, bool) {
 	return index, true
 }
 
-func formatAttributePath(path []string) string {
-	if len(path) == 0 {
-		return "[]"
-	}
-
-	formatted := "["
-	for idx, segment := range path {
-		if idx > 0 {
-			formatted += ", "
-		}
-		formatted += fmt.Sprintf("%q", segment)
-	}
-	formatted += "]"
-	return formatted
+func formatAttributePath(path string) string {
+	return path
 }
 
-func wrapPathError(path []string, action string, err error) error {
+func formatConcreteAttributePath(path []string) string {
+	return resource.JSONPointerFromTokens(path)
+}
+
+func wrapPathError(path string, action string, err error) error {
 	if err == nil {
 		return nil
 	}

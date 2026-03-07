@@ -3,71 +3,71 @@ package config
 const contextTemplateYAML = `# Context catalog template for declarest.
 # Fill the fields you need and remove examples/comments as desired.
 # Optional default editor for commands that open an editor (defaults to vi).
-# default-editor: vi
+# defaultEditor: vi
 contexts:
   - name: my-context
     repository:
       # Optional resource file format used by repository operations: json or yaml.
       # If omitted, declarest uses the remote resource format default.
-      # resource-format: yaml
+      # resourceFormat: yaml
 
       # Mutually exclusive: choose exactly one repository backend.
       git:
         local:
-          base-dir: /path/to/repository
-          # auto-init: true
+          baseDir: /path/to/repository
+          # autoInit: true
 
         # Optional remote configuration.
         # remote:
         #   url: https://example.com/org/repo.git
         #   branch: main
         #   provider: github
-        #   auto-sync: true
+        #   autoSync: true
         #
         #   # Optional auth.
         #   auth:
         #     # Mutually exclusive: choose exactly one auth method.
-        #     basic-auth:
+        #     basicAuth:
         #       username: change-me
         #       password: change-me
         #     # ssh:
         #     #   user: git
-        #     #   private-key-file: /path/to/id_rsa
+        #     #   privateKeyFile: /path/to/id_rsa
         #     #   passphrase: change-me
-        #     #   known-hosts-file: /path/to/known_hosts
-        #     #   insecure-ignore-host-key: false
-        #     # access-key:
+        #     #   knownHostsFile: /path/to/known_hosts
+        #     #   insecureIgnoreHostKey: false
+        #     # accessKey:
         #     #   token: change-me
         #
         #   # Optional TLS.
         #   tls:
-        #     ca-cert-file: /path/to/ca.pem
-        #     client-cert-file: /path/to/client.pem
-        #     client-key-file: /path/to/client-key.pem
-        #     insecure-skip-verify: false
+        #     caCertFile: /path/to/ca.pem
+        #     clientCertFile: /path/to/client.pem
+        #     clientKeyFile: /path/to/client-key.pem
+        #     insecureSkipVerify: false
 
       # filesystem:
-      #   base-dir: /path/to/repository
+      #   baseDir: /path/to/repository
 
-    # Required managed-server.
-    managed-server:
+    # Required managedServer.
+    managedServer:
       http:
-        base-url: https://example.com/api
-        # health-check: /health
+        baseUrl: https://example.com/api
+        # healthCheck: /health
         # openapi: /path/to/openapi-or-swagger.yaml
         # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
 
         # Optional default request headers.
-        # default-headers:
+        # defaultHeaders:
         #   X-Example: value
 
-        # Optional managed-server proxy.
+        # Optional managedServer proxy.
         # proxy:
         #   # Configure one or both proxy URLs.
-        #   http-url: http://proxy.example.com:3128
-        #   https-url: http://proxy.example.com:3128
+        #   httpUrl: http://proxy.example.com:3128
+        #   httpsUrl: http://proxy.example.com:3128
         #   # Optional comma-separated bypass rules.
-        #   no-proxy: localhost,127.0.0.1,.svc.cluster.local
+        #   noProxy: localhost,127.0.0.1,.svc.cluster.local
         #   # Optional proxy auth.
         #   auth:
         #     username: proxy-user
@@ -75,43 +75,43 @@ contexts:
 
         # Mutually exclusive: choose exactly one auth method.
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: change-me
           # oauth2:
-          #   token-url: https://example.com/oauth/token
-          #   grant-type: client_credentials
-          #   client-id: change-me
-          #   client-secret: change-me
+          #   tokenUrl: https://example.com/oauth/token
+          #   grantType: client_credentials
+          #   clientId: change-me
+          #   clientSecret: change-me
           #   username: change-me
           #   password: change-me
           #   scope: api.read
           #   audience: https://example.com/
-          # basic-auth:
+          # basicAuth:
           #   username: change-me
           #   password: change-me
-          # custom-headers:
+          # customHeaders:
           #   - header: X-API-Key
           #     value: change-me
 
         # Optional TLS.
         # tls:
-        #   ca-cert-file: /path/to/ca.pem
-        #   client-cert-file: /path/to/client.pem
-        #   client-key-file: /path/to/client-key.pem
-        #   insecure-skip-verify: false
+        #   caCertFile: /path/to/ca.pem
+        #   clientCertFile: /path/to/client.pem
+        #   clientKeyFile: /path/to/client-key.pem
+        #   insecureSkipVerify: false
 
     # Optional secret store.
-    # secret-store:
+    # secretStore:
     #   # Mutually exclusive: choose exactly one provider.
     #   file:
     #     path: /path/to/secrets.json
     #     # Mutually exclusive: choose exactly one key source.
     #     passphrase: change-me
     #     # key: base64-encoded-key
-    #     # key-file: /path/to/key.txt
-    #     # passphrase-file: /path/to/passphrase.txt
+    #     # keyFile: /path/to/key.txt
+    #     # passphraseFile: /path/to/passphrase.txt
     #     # Optional KDF tuning.
     #     # kdf:
     #     #   time: 1
@@ -120,8 +120,8 @@ contexts:
     #   # vault:
     #   #   address: https://vault.example.com
     #   #   mount: secret
-    #   #   path-prefix: declarest
-    #   #   kv-version: 2
+    #   #   pathPrefix: declarest
+    #   #   kvVersion: 2
     #   #   auth:
     #   #     # Mutually exclusive: choose exactly one vault auth method.
     #   #     token: s.xxxx
@@ -129,27 +129,27 @@ contexts:
     #   #     #   username: vault-user
     #   #     #   password: vault-pass
     #   #     #   mount: userpass
-    #   #     # approle:
-    #   #     #   role-id: role-id
-    #   #     #   secret-id: secret-id
+    #   #     # appRole:
+    #   #     #   roleId: role-id
+    #   #     #   secretId: secret-id
     #   #     #   mount: approle
     #   #   tls:
-    #   #     ca-cert-file: /path/to/ca.pem
-    #   #     client-cert-file: /path/to/client.pem
-    #   #     client-key-file: /path/to/client-key.pem
-    #   #     insecure-skip-verify: false
+    #   #     caCertFile: /path/to/ca.pem
+    #   #     clientCertFile: /path/to/client.pem
+    #   #     clientKeyFile: /path/to/client-key.pem
+    #   #     insecureSkipVerify: false
 
     # Optional metadata source.
     # metadata:
     #   # Choose at most one metadata source.
-    #   # base-dir: /path/to/metadata
+    #   # baseDir: /path/to/metadata
     #   # bundle: keycloak-bundle:0.0.1
-    #   # bundle-file: /path/to/keycloak-bundle-0.0.1.tar.gz
+    #   # bundleFile: /path/to/keycloak-bundle-0.0.1.tar.gz
 
     # Optional arbitrary key/value preferences.
     # preferences:
     #   env: dev
     #   owner: team-a
 
-current-ctx: my-context
+currentCtx: my-context
 `

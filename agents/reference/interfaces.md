@@ -52,7 +52,7 @@ Factory contract:
 1. `bootstrap.NewSession` MUST assemble default provider implementations.
 2. `bootstrap.NewSession` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
-4. when `metadata.bundle` or `metadata.bundle-file` is configured and `managed-server.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
+4. when `metadata.bundle` or `metadata.bundleFile` is configured and `managedServer.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
 
 Corner case example:
 1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `bootstrap.NewSession` MUST return an `InternalError`.
@@ -84,33 +84,34 @@ Optional fields:
 1. `SecretStore` typed secret store configuration object.
 2. `Preferences` settings map.
 3. `Metadata` typed metadata configuration object.
-4. `managed-server.http.health-check` optional probe target used by `managed-server check`.
+4. `managedServer.http.healthCheck` optional probe target used by `managed-server check`.
+5. Metadata attribute references (`idFromAttribute`, `aliasFromAttribute`, `secretInAttributes[*]`, `externalizedAttributes[*].path`, payload `filterAttributes`/`suppressAttributes`, compare suppress/filter fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
 
-YAML key contract:
-1. keys MUST use kebab-case.
+User-config key contract:
+1. persisted keys MUST use camelCase.
 2. unknown keys MUST fail strict decoding.
 
 One-of invariants:
 1. `repository` MUST define exactly one of `git` or `filesystem`.
-2. `managed-server.http.auth` MUST define exactly one of `oauth2`, `basic-auth`, `custom-headers`.
-3. `secret-store` MUST define exactly one of `file` or `vault`.
-4. `secret-store.file` MUST define exactly one of `key`, `key-file`, `passphrase`, `passphrase-file`.
-5. `metadata` MUST define at most one of `base-dir`, `bundle`, or `bundle-file`.
-6. `managed-server.http.proxy` MUST define at least one of `http-url` or `https-url` when configured.
-7. `managed-server.http.proxy.auth` MUST define both `username` and `password` when configured.
- 8. `managed-server.http.request-throttling` MUST define at least one of `max-concurrent-requests` or `requests-per-second` when configured.
- 9. `managed-server.http.request-throttling.queue-size` MUST NOT be set unless `max-concurrent-requests` is set.
- 10. `managed-server.http.request-throttling.burst` MUST NOT be set unless `requests-per-second` is set.
+2. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders`.
+3. `secretStore` MUST define exactly one of `file` or `vault`.
+4. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
+5. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
+6. `managedServer.http.proxy` MUST define at least one of `httpUrl` or `httpsUrl` when configured.
+7. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
+8. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
+9. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
+10. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.
 
 Required fields:
 1. `Contexts`: list of full `config.Context` objects.
-2. `CurrentCtx`: active context name mapped to YAML key `current-ctx`.
+2. `CurrentCtx`: active context name mapped to persisted key `currentCtx`.
 
 Optional fields:
-1. `DefaultEditor`: default editor command mapped to YAML key `default-editor`.
+1. `DefaultEditor`: default editor command mapped to persisted key `defaultEditor`.
 
 Invariants:
 1. context names MUST be unique and non-empty.
@@ -149,7 +150,7 @@ Contract groups:
 2. `resourceInfo` secret mapping (`secretInAttributes`).
 3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
-5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
 6. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
 7. metadata template helper functions include `{{resource_format .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
 

@@ -101,7 +101,7 @@ func cloneExternalizedAttributes(values []ExternalizedAttribute) []ExternalizedA
 	cloned := make([]ExternalizedAttribute, len(values))
 	for idx := range values {
 		cloned[idx] = ExternalizedAttribute{
-			Path:           cloneStringSlice(values[idx].Path),
+			Path:           values[idx].Path,
 			File:           values[idx].File,
 			Template:       values[idx].Template,
 			Mode:           values[idx].Mode,

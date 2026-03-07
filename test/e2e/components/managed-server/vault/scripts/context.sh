@@ -12,19 +12,19 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 
 selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-custom-header}
 if [[ "${selected_auth_type}" != 'custom-header' ]]; then
-  printf 'managed-server vault does not support auth-type %s (supported: custom-header)\n' "${selected_auth_type}" >&2
+  printf 'managedServer vault does not support auth-type %s (supported: custom-header)\n' "${selected_auth_type}" >&2
   exit 1
 fi
 
 {
-  printf 'managed-server:\n'
+  printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    base-url: %s\n' "${VAULT_ADDRESS}"
+  printf '    baseUrl: %s\n' "${VAULT_ADDRESS}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
   printf '    auth:\n'
-  printf '      custom-headers:\n'
+  printf '      customHeaders:\n'
   printf '        - header: X-Vault-Token\n'
   printf '          value: %s\n' "${VAULT_TOKEN}"
 } >"${fragment_file}"

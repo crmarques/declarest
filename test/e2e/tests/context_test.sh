@@ -23,15 +23,15 @@ write_context_fixture() {
   cat >"${path}" <<'EOF'
 contexts:
   - name: e2e-basic
-    managed-server:
+    managedServer:
       http:
-        base-url: http://127.0.0.1:8080
+        baseUrl: http://127.0.0.1:8080
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: token-dev
-current-ctx: e2e-basic
+currentCtx: e2e-basic
 EOF
 }
 
@@ -53,9 +53,9 @@ test_inserts_proxy_block_when_managed_server_proxy_enabled() {
   e2e_context_insert_managed_server_proxy "${context_file}"
 
   assert_file_contains "${context_file}" "proxy:"
-  assert_file_contains "${context_file}" "http-url: 'http://proxy.example.com:3128'"
-  assert_file_contains "${context_file}" "https-url: 'https://proxy.example.com:3128'"
-  assert_file_contains "${context_file}" "no-proxy: 'localhost,127.0.0.1'"
+  assert_file_contains "${context_file}" "httpUrl: 'http://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "httpsUrl: 'https://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "noProxy: 'localhost,127.0.0.1'"
   assert_file_contains "${context_file}" "username: 'proxy-user'"
   assert_file_contains "${context_file}" "password: 'proxy-pass'"
 }
@@ -93,7 +93,7 @@ test_rejects_proxy_enable_without_proxy_urls() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "--managed-server-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
+  assert_contains "${output}" "--managedServer-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
 }
 
 test_inserts_proxy_block_when_managed_server_proxy_enabled

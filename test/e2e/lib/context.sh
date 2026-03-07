@@ -17,7 +17,7 @@ e2e_context_build() {
     sed 's/^/    /' "${fragment}" >>"${context_file}"
   done < <(find "${E2E_CONTEXT_DIR}" -type f -name '*.yaml' | sort)
 
-  printf 'current-ctx: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
+  printf 'currentCtx: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
   e2e_context_insert_managed_server_openapi "${context_file}"
   e2e_context_insert_managed_server_proxy "${context_file}"
 }
@@ -30,7 +30,7 @@ e2e_context_insert_managed_server_openapi() {
   fi
 
   local component_key
-  component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  component_key=$(e2e_component_key 'managedServer' "${E2E_MANAGED_SERVER}")
   local openapi_spec="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   if [[ -z "${openapi_spec}" || ! -f "${openapi_spec}" ]]; then
     return 0
@@ -42,7 +42,7 @@ e2e_context_insert_managed_server_openapi() {
   elif command -v python >/dev/null 2>&1; then
     python_cmd='python'
   else
-    e2e_info 'skipping managed-server openapi patch: python interpreter unavailable'
+    e2e_info 'skipping managedServer openapi patch: python interpreter unavailable'
     return 0
   fi
 
@@ -70,7 +70,7 @@ has_openapi = False
 for idx, line in enumerate(lines):
     stripped = line.lstrip()
     if resource_indent is None:
-        if stripped.startswith('managed-server:'):
+        if stripped.startswith('managedServer:'):
             resource_indent = len(line) - len(stripped)
             in_resource_block = True
         continue
@@ -86,7 +86,7 @@ for idx, line in enumerate(lines):
         has_openapi = True
         break
 
-    if stripped.startswith('base-url:'):
+    if stripped.startswith('baseUrl:'):
         base_url_idx = idx
 
 if has_openapi or base_url_idx is None:
@@ -101,7 +101,7 @@ PY
   )
 
   if [[ "${patch_output}" == 'PATCHED' ]]; then
-    e2e_info "managed-server http.openapi injected into ${context_file}"
+    e2e_info "managedServer http.openapi injected into ${context_file}"
   fi
 
   return 0
@@ -125,13 +125,13 @@ e2e_context_insert_managed_server_proxy() {
   local proxy_auth_password="${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}"
 
   if [[ -z "${proxy_http_url}" && -z "${proxy_https_url}" ]]; then
-    e2e_die "--managed-server-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
+    e2e_die "--managedServer-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
     return 1
   fi
 
   if [[ -n "${proxy_auth_username}" || -n "${proxy_auth_password}" ]]; then
     if [[ -z "${proxy_auth_username}" || -z "${proxy_auth_password}" ]]; then
-      e2e_die 'managed-server proxy auth requires both username and password'
+      e2e_die 'managedServer proxy auth requires both username and password'
       return 1
     fi
   fi
@@ -142,7 +142,7 @@ e2e_context_insert_managed_server_proxy() {
   elif command -v python >/dev/null 2>&1; then
     python_cmd='python'
   else
-    e2e_info 'skipping managed-server proxy patch: python interpreter unavailable'
+    e2e_info 'skipping managedServer proxy patch: python interpreter unavailable'
     return 0
   fi
 
@@ -185,7 +185,7 @@ for idx, line in enumerate(lines):
     indent = len(line) - len(stripped)
 
     if resource_indent is None:
-        if stripped.startswith("managed-server:"):
+        if stripped.startswith("managedServer:"):
             resource_indent = indent
             in_resource = True
         continue
@@ -204,7 +204,7 @@ for idx, line in enumerate(lines):
         if stripped.startswith("proxy:"):
             has_proxy = True
             break
-        if stripped.startswith("base-url:") or stripped.startswith("openapi:"):
+        if stripped.startswith("baseUrl:") or stripped.startswith("openapi:"):
             insert_idx = idx + 1
         continue
 
@@ -218,11 +218,11 @@ auth_field_indent = nested_indent + 2
 
 block = [" " * proxy_indent + "proxy:"]
 if http_url:
-    block.append(" " * nested_indent + f"http-url: {y(http_url)}")
+    block.append(" " * nested_indent + f"httpUrl: {y(http_url)}")
 if https_url:
-    block.append(" " * nested_indent + f"https-url: {y(https_url)}")
+    block.append(" " * nested_indent + f"httpsUrl: {y(https_url)}")
 if no_proxy:
-    block.append(" " * nested_indent + f"no-proxy: {y(no_proxy)}")
+    block.append(" " * nested_indent + f"noProxy: {y(no_proxy)}")
 if auth_username or auth_password:
     block.append(" " * nested_indent + "auth:")
     block.append(" " * auth_field_indent + f"username: {y(auth_username)}")
@@ -237,7 +237,7 @@ PY
   )
 
   if [[ "${patch_output}" == 'PATCHED' ]]; then
-    e2e_info "managed-server http.proxy injected into ${context_file}"
+    e2e_info "managedServer http.proxy injected into ${context_file}"
   fi
 
   return 0

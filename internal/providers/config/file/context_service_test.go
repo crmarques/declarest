@@ -24,7 +24,7 @@ func TestDecodeCatalogSuccess(t *testing.T) {
 		t.Fatalf("expected 1 context, got %d", len(contextCatalog.Contexts))
 	}
 	if contextCatalog.CurrentCtx != "dev" {
-		t.Fatalf("expected current-ctx dev, got %q", contextCatalog.CurrentCtx)
+		t.Fatalf("expected currentCtx dev, got %q", contextCatalog.CurrentCtx)
 	}
 }
 
@@ -37,16 +37,16 @@ contexts:
     repository:
       git:
         local:
-          base-dir: /tmp/repo
-    managed-server:
+          baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-current-ctx: git
+currentCtx: git
 `))
 	if err != nil {
 		t.Fatalf("decodeCatalog returned error: %v", err)
@@ -57,10 +57,10 @@ current-ctx: git
 
 	local := contextCatalog.Contexts[0].Repository.Git.Local
 	if !local.AutoInitEnabled() {
-		t.Fatal("expected repository.git.local.auto-init to default to true when omitted")
+		t.Fatal("expected repository.git.local.autoInit to default to true when omitted")
 	}
 	if local.AutoInit != nil {
-		t.Fatalf("expected omitted auto-init to remain nil for compact persistence, got %#v", local.AutoInit)
+		t.Fatalf("expected omitted autoInit to remain nil for compact persistence, got %#v", local.AutoInit)
 	}
 }
 
@@ -73,17 +73,17 @@ contexts:
     repository:
       git:
         local:
-          base-dir: /tmp/repo
-          auto-init: false
-    managed-server:
+          baseDir: /tmp/repo
+          autoInit: false
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-current-ctx: git
+currentCtx: git
 `))
 	if err != nil {
 		t.Fatalf("decodeCatalog returned error: %v", err)
@@ -94,10 +94,10 @@ current-ctx: git
 
 	local := contextCatalog.Contexts[0].Repository.Git.Local
 	if local.AutoInit == nil {
-		t.Fatal("expected explicit auto-init=false to be preserved")
+		t.Fatal("expected explicit autoInit=false to be preserved")
 	}
 	if local.AutoInitEnabled() {
-		t.Fatal("expected repository.git.local.auto-init=false to be respected")
+		t.Fatal("expected repository.git.local.autoInit=false to be respected")
 	}
 }
 
@@ -109,9 +109,9 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/repo
+        baseDir: /tmp/repo
         unknown-key: true
-current-ctx: dev
+currentCtx: dev
 `
 	_, err := decodeCatalog([]byte(invalidYAML))
 	if err == nil {
@@ -133,7 +133,7 @@ func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 
 	err := validateCatalog(contextCatalog)
 	if err == nil {
-		t.Fatal("expected current-ctx mismatch error")
+		t.Fatal("expected currentCtx mismatch error")
 	}
 }
 
@@ -394,7 +394,7 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 
 		resolvedContext, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 			Name:      "fs",
-			Overrides: map[string]string{"repository.filesystem.base-dir": "/tmp/override"},
+			Overrides: map[string]string{"repository.filesystem.baseDir": "/tmp/override"},
 		})
 		if err != nil {
 			t.Fatalf("ResolveContext returned error: %v", err)
@@ -403,7 +403,7 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 			t.Fatal("expected filesystem repository to be configured")
 		}
 		if resolvedContext.Repository.Filesystem.BaseDir != "/tmp/override" {
-			t.Fatalf("expected override base-dir /tmp/override, got %q", resolvedContext.Repository.Filesystem.BaseDir)
+			t.Fatalf("expected override baseDir /tmp/override, got %q", resolvedContext.Repository.Filesystem.BaseDir)
 		}
 	})
 }
@@ -571,7 +571,7 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 		t.Fatalf("ResolveContext(stage) returned error: %v", err)
 	}
 	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/stage" {
-		t.Fatalf("expected updated filesystem base-dir, got %#v", resolved.Repository.Filesystem)
+		t.Fatalf("expected updated filesystem baseDir, got %#v", resolved.Repository.Filesystem)
 	}
 
 	if err := contextService.Delete(context.Background(), "stage"); err != nil {
@@ -663,7 +663,7 @@ func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
 		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
 	}
 	if contextCatalog.Contexts[0].Repository.ResourceFormat != config.ResourceFormatJSON {
-		t.Fatalf("expected default resource-format json, got %q", contextCatalog.Contexts[0].Repository.ResourceFormat)
+		t.Fatalf("expected default resourceFormat json, got %q", contextCatalog.Contexts[0].Repository.ResourceFormat)
 	}
 }
 
@@ -691,7 +691,7 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 		t.Fatalf("failed to read saved context catalog: %v", err)
 	}
 	if strings.Contains(string(raw), "metadata:") {
-		t.Fatalf("expected metadata block to be omitted when base-dir matches repository base-dir, got:\n%s", string(raw))
+		t.Fatalf("expected metadata block to be omitted when baseDir matches repository baseDir, got:\n%s", string(raw))
 	}
 
 	contextCatalog, err := decodeCatalogFile(path)
@@ -702,7 +702,7 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
 	}
 	if contextCatalog.Contexts[0].Metadata.BaseDir != "" {
-		t.Fatalf("expected persisted metadata base-dir to be empty, got %q", contextCatalog.Contexts[0].Metadata.BaseDir)
+		t.Fatalf("expected persisted metadata baseDir to be empty, got %q", contextCatalog.Contexts[0].Metadata.BaseDir)
 	}
 }
 
@@ -720,7 +720,7 @@ func TestResolveContextDefaultsResourceFormatWhenMissing(t *testing.T) {
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
 	if resolved.Repository.ResourceFormat != config.ResourceFormatJSON {
-		t.Fatalf("expected resolved default resource-format json, got %q", resolved.Repository.ResourceFormat)
+		t.Fatalf("expected resolved default resourceFormat json, got %q", resolved.Repository.ResourceFormat)
 	}
 }
 
@@ -738,7 +738,7 @@ func TestResolveContextDefaultsMetadataBaseDirWhenMissing(t *testing.T) {
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
 	if resolved.Metadata.BaseDir != "/tmp/repo" {
-		t.Fatalf("expected metadata base-dir default /tmp/repo, got %q", resolved.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir default /tmp/repo, got %q", resolved.Metadata.BaseDir)
 	}
 }
 
@@ -751,18 +751,18 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
     metadata:
       bundle: keycloak-bundle:0.0.1
-current-ctx: dev
+currentCtx: dev
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
@@ -773,7 +773,7 @@ current-ctx: dev
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
 	if resolved.Metadata.BaseDir != "" {
-		t.Fatalf("expected metadata base-dir to stay empty for bundle contexts, got %q", resolved.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir to stay empty for bundle contexts, got %q", resolved.Metadata.BaseDir)
 	}
 	if resolved.Metadata.Bundle != "keycloak-bundle:0.0.1" {
 		t.Fatalf("expected metadata bundle keycloak-bundle:0.0.1, got %q", resolved.Metadata.Bundle)
@@ -789,18 +789,18 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
     metadata:
-      bundle-file: /tmp/keycloak-bundle-0.0.1.tar.gz
-current-ctx: dev
+      bundleFile: /tmp/keycloak-bundle-0.0.1.tar.gz
+currentCtx: dev
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
@@ -811,10 +811,10 @@ current-ctx: dev
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
 	if resolved.Metadata.BaseDir != "" {
-		t.Fatalf("expected metadata base-dir to stay empty for bundle-file contexts, got %q", resolved.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir to stay empty for bundleFile contexts, got %q", resolved.Metadata.BaseDir)
 	}
 	if resolved.Metadata.BundleFile != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
-		t.Fatalf("expected metadata bundle-file /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
+		t.Fatalf("expected metadata bundleFile /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
 	}
 }
 
@@ -840,10 +840,10 @@ func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 		t.Fatalf("expected metadata bundle override keycloak-bundle:0.0.1, got %q", resolved.Metadata.Bundle)
 	}
 	if resolved.Metadata.BaseDir != "" {
-		t.Fatalf("expected metadata base-dir to be cleared when bundle override is configured, got %q", resolved.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir to be cleared when bundle override is configured, got %q", resolved.Metadata.BaseDir)
 	}
 	if resolved.Metadata.BundleFile != "" {
-		t.Fatalf("expected metadata bundle-file to be cleared when bundle override is configured, got %q", resolved.Metadata.BundleFile)
+		t.Fatalf("expected metadata bundleFile to be cleared when bundle override is configured, got %q", resolved.Metadata.BundleFile)
 	}
 }
 
@@ -859,20 +859,20 @@ func TestResolveContextOverrideSupportsMetadataBundleFile(t *testing.T) {
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"metadata.bundle-file": "/tmp/keycloak-bundle-0.0.1.tar.gz",
+			"metadata.bundleFile": "/tmp/keycloak-bundle-0.0.1.tar.gz",
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected metadata bundle-file override to succeed, got %v", err)
+		t.Fatalf("expected metadata bundleFile override to succeed, got %v", err)
 	}
 	if resolved.Metadata.BundleFile != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
-		t.Fatalf("expected metadata bundle-file override /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
+		t.Fatalf("expected metadata bundleFile override /tmp/keycloak-bundle-0.0.1.tar.gz, got %q", resolved.Metadata.BundleFile)
 	}
 	if resolved.Metadata.BaseDir != "" {
-		t.Fatalf("expected metadata base-dir to be cleared when bundle-file override is configured, got %q", resolved.Metadata.BaseDir)
+		t.Fatalf("expected metadata baseDir to be cleared when bundleFile override is configured, got %q", resolved.Metadata.BaseDir)
 	}
 	if resolved.Metadata.Bundle != "" {
-		t.Fatalf("expected metadata bundle to be cleared when bundle-file override is configured, got %q", resolved.Metadata.Bundle)
+		t.Fatalf("expected metadata bundle to be cleared when bundleFile override is configured, got %q", resolved.Metadata.Bundle)
 	}
 }
 
@@ -887,16 +887,16 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 	contextService := NewFileContextService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
-		Overrides: map[string]string{"managed-server.http.base-url": "https://override.example.com"},
+		Overrides: map[string]string{"managedServer.http.baseUrl": "https://override.example.com"},
 	})
 	if err != nil {
-		t.Fatalf("expected managed-server override to succeed, got %v", err)
+		t.Fatalf("expected managedServer override to succeed, got %v", err)
 	}
 	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil {
-		t.Fatalf("expected managed-server configuration, got %#v", resolved.ManagedServer)
+		t.Fatalf("expected managedServer configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.BaseURL != "https://override.example.com" {
-		t.Fatalf("expected managed-server base-url override, got %q", resolved.ManagedServer.HTTP.BaseURL)
+		t.Fatalf("expected managedServer baseUrl override, got %q", resolved.ManagedServer.HTTP.BaseURL)
 	}
 }
 
@@ -911,16 +911,16 @@ func TestResolveContextOverrideSupportsManagedServerHealthCheckWhenConfigured(t 
 	contextService := NewFileContextService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
-		Overrides: map[string]string{"managed-server.http.health-check": "https://override.example.com/healthz"},
+		Overrides: map[string]string{"managedServer.http.healthCheck": "https://override.example.com/healthz"},
 	})
 	if err != nil {
-		t.Fatalf("expected managed-server health-check override to succeed, got %v", err)
+		t.Fatalf("expected managedServer healthCheck override to succeed, got %v", err)
 	}
 	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil {
-		t.Fatalf("expected managed-server configuration, got %#v", resolved.ManagedServer)
+		t.Fatalf("expected managedServer configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.HealthCheck != "https://override.example.com/healthz" {
-		t.Fatalf("expected managed-server health-check override, got %q", resolved.ManagedServer.HTTP.HealthCheck)
+		t.Fatalf("expected managedServer healthCheck override, got %q", resolved.ManagedServer.HTTP.HealthCheck)
 	}
 }
 
@@ -936,28 +936,28 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"managed-server.http.proxy.http-url":      "http://proxy.example.com:3128",
-			"managed-server.http.proxy.https-url":     "https://proxy.example.com:3128",
-			"managed-server.http.proxy.no-proxy":      "localhost,127.0.0.1",
-			"managed-server.http.proxy.auth.username": "proxy-user",
-			"managed-server.http.proxy.auth.password": "proxy-pass",
+			"managedServer.http.proxy.httpUrl":       "http://proxy.example.com:3128",
+			"managedServer.http.proxy.httpsUrl":      "https://proxy.example.com:3128",
+			"managedServer.http.proxy.noProxy":       "localhost,127.0.0.1",
+			"managedServer.http.proxy.auth.username": "proxy-user",
+			"managedServer.http.proxy.auth.password": "proxy-pass",
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected managed-server proxy overrides to succeed, got %v", err)
+		t.Fatalf("expected managedServer proxy overrides to succeed, got %v", err)
 	}
 
 	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil || resolved.ManagedServer.HTTP.Proxy == nil {
-		t.Fatalf("expected managed-server proxy configuration, got %#v", resolved.ManagedServer)
+		t.Fatalf("expected managedServer proxy configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy http-url override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
+		t.Fatalf("expected proxy httpUrl override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
-		t.Fatalf("expected proxy https-url override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
+		t.Fatalf("expected proxy httpsUrl override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
-		t.Fatalf("expected proxy no-proxy override, got %q", resolved.ManagedServer.HTTP.Proxy.NoProxy)
+		t.Fatalf("expected proxy noProxy override, got %q", resolved.ManagedServer.HTTP.Proxy.NoProxy)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
@@ -984,9 +984,9 @@ func TestResolveContextProxyInheritance(t *testing.T) {
 		t.Fatalf("expected proxy inheritance to succeed, got %v", err)
 	}
 
-	assertProxyConfig(t, "managed-server", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "managedServer", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
-	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "secretStore", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "metadata", resolved.Metadata.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 }
 
@@ -1004,9 +1004,9 @@ func TestResolveContextProxyExplicitDisable(t *testing.T) {
 		t.Fatalf("expected proxy disable scenario to succeed, got %v", err)
 	}
 
-	assertProxyConfig(t, "managed-server", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "managedServer", resolved.ManagedServer.HTTP.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
-	assertProxyConfig(t, "secret-store", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
+	assertProxyConfig(t, "secretStore", resolved.SecretStore.Vault.Proxy, "http://proxy.example.com:3128", "https://proxy.example.com:3128", "localhost,127.0.0.1", "proxy-user", "proxy-pass")
 
 	if resolved.Metadata.Proxy == nil {
 		t.Fatalf("expected metadata proxy block to remain present even when disabling, got nil")
@@ -1056,7 +1056,7 @@ func TestUpdatePreservesProxyOmissionsFromStoredContext(t *testing.T) {
 	}
 	persisted := contextCatalog.Contexts[0]
 	if persisted.ManagedServer == nil || persisted.ManagedServer.HTTP == nil || persisted.ManagedServer.HTTP.Proxy == nil {
-		t.Fatalf("expected managed-server proxy to remain persisted, got %#v", persisted.ManagedServer)
+		t.Fatalf("expected managedServer proxy to remain persisted, got %#v", persisted.ManagedServer)
 	}
 	if persisted.Repository.Git == nil || persisted.Repository.Git.Remote == nil {
 		t.Fatalf("expected git repository to remain persisted, got %#v", persisted.Repository.Git)
@@ -1081,13 +1081,13 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 		t.Fatalf("expected %s proxy to be configured, got nil", component)
 	}
 	if proxy.HTTPURL != httpURL {
-		t.Fatalf("expected %s proxy http-url %q, got %q", component, httpURL, proxy.HTTPURL)
+		t.Fatalf("expected %s proxy httpUrl %q, got %q", component, httpURL, proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != httpsURL {
-		t.Fatalf("expected %s proxy https-url %q, got %q", component, httpsURL, proxy.HTTPSURL)
+		t.Fatalf("expected %s proxy httpsUrl %q, got %q", component, httpsURL, proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != noProxy {
-		t.Fatalf("expected %s proxy no-proxy %q, got %q", component, noProxy, proxy.NoProxy)
+		t.Fatalf("expected %s proxy noProxy %q, got %q", component, noProxy, proxy.NoProxy)
 	}
 	if proxy.Auth == nil {
 		t.Fatalf("expected %s proxy auth to be configured", component)
@@ -1112,8 +1112,8 @@ func TestResolveContextOverrideFailureIsDeterministic(t *testing.T) {
 	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"repository.git.local.base-dir": "/tmp/git",
-			"aaa.unknown":                   "x",
+			"repository.git.local.baseDir": "/tmp/git",
+			"aaa.unknown":                  "x",
 		},
 	})
 	if err == nil {
@@ -1206,109 +1206,109 @@ const validContextCatalogYAML = `
 contexts:
   - name: dev
     repository:
-      resource-format: json
+      resourceFormat: json
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-    secret-store:
+    secretStore:
       file:
         path: /tmp/secrets.json
         passphrase: change-me
     metadata:
-      base-dir: /tmp/metadata
-current-ctx: dev
+      baseDir: /tmp/metadata
+currentCtx: dev
 `
 
 const providerSelectionContextCatalogYAML = `
 contexts:
   - name: fs
     repository:
-      resource-format: json
+      resourceFormat: json
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
 
   - name: git
     repository:
-      resource-format: json
+      resourceFormat: json
       git:
         local:
-          base-dir: /tmp/repo
-    managed-server:
+          baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
 
   - name: http
     repository:
-      resource-format: json
+      resourceFormat: json
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
 
   - name: file-secret
     repository:
-      resource-format: json
+      resourceFormat: json
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-    secret-store:
+    secretStore:
       file:
         path: /tmp/secrets.json
         passphrase: change-me
 
   - name: vault-secret
     repository:
-      resource-format: json
+      resourceFormat: json
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-    secret-store:
+    secretStore:
       vault:
         address: https://vault.example.com
         auth:
           token: s.xxxx
 
-current-ctx: fs
+currentCtx: fs
 `
 
 const contextCatalogWithoutResourceFormatYAML = `
@@ -1316,132 +1316,132 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: /tmp/repo
-    managed-server:
+        baseDir: /tmp/repo
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-current-ctx: dev
+currentCtx: dev
 `
 
 const proxyInheritanceContextCatalogYAML = `
 contexts:
   - name: shared
     repository:
-      resource-format: json
+      resourceFormat: json
       git:
         local:
-          base-dir: /tmp/repo
+          baseDir: /tmp/repo
         remote:
           url: https://example.com/config.git
           auth:
-            basic-auth:
+            basicAuth:
               username: git
               password: secret
-    managed-server:
+    managedServer:
       http:
-        base-url: https://api.example.com
+        baseUrl: https://api.example.com
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-    secret-store:
+    secretStore:
       vault:
         address: https://vault.example.com
         auth:
           token: vault-token
         proxy:
-          http-url: http://proxy.example.com:3128
-          https-url: https://proxy.example.com:3128
-          no-proxy: localhost,127.0.0.1
+          httpUrl: http://proxy.example.com:3128
+          httpsUrl: https://proxy.example.com:3128
+          noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
             password: proxy-pass
     metadata:
-      base-dir: /tmp/metadata
-current-ctx: shared
+      baseDir: /tmp/metadata
+currentCtx: shared
 `
 
 const proxyDisableContextCatalogYAML = `
 contexts:
   - name: disable
     repository:
-      resource-format: json
+      resourceFormat: json
       git:
         local:
-          base-dir: /tmp/repo
+          baseDir: /tmp/repo
         remote:
           url: https://example.com/config.git
           auth:
-            basic-auth:
+            basicAuth:
               username: git
               password: secret
-    managed-server:
+    managedServer:
       http:
-        base-url: https://api.example.com
+        baseUrl: https://api.example.com
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          http-url: http://proxy.example.com:3128
-          https-url: https://proxy.example.com:3128
-          no-proxy: localhost,127.0.0.1
+          httpUrl: http://proxy.example.com:3128
+          httpsUrl: https://proxy.example.com:3128
+          noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
             password: proxy-pass
-    secret-store:
+    secretStore:
       vault:
         address: https://vault.example.com
         auth:
           token: vault-token
     metadata:
-      base-dir: /tmp/metadata
+      baseDir: /tmp/metadata
       proxy: {}
-current-ctx: disable
+currentCtx: disable
 `
 
 const proxyPersistenceContextCatalogYAML = `
 contexts:
   - name: persist
     repository:
-      resource-format: json
+      resourceFormat: json
       git:
         local:
-          base-dir: /tmp/repo
+          baseDir: /tmp/repo
         remote:
           url: https://example.com/config.git
           auth:
-            basic-auth:
+            basicAuth:
               username: git
               password: secret
-    managed-server:
+    managedServer:
       http:
-        base-url: https://api.example.com
+        baseUrl: https://api.example.com
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          http-url: http://proxy.example.com:3128
-          https-url: https://proxy.example.com:3128
-          no-proxy: localhost,127.0.0.1
+          httpUrl: http://proxy.example.com:3128
+          httpsUrl: https://proxy.example.com:3128
+          noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
             password: proxy-pass
-    secret-store:
+    secretStore:
       vault:
         address: https://vault.example.com
         auth:
           token: vault-token
     metadata:
-      base-dir: /tmp/metadata
-current-ctx: persist
+      baseDir: /tmp/metadata
+currentCtx: persist
 `

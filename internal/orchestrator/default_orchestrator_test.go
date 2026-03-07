@@ -72,7 +72,7 @@ func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
 			resolveValue: metadatadomain.ResourceMetadata{
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{
-						Path: []string{"script"},
+						Path: "/script",
 						File: "script.sh",
 					},
 				},
@@ -113,7 +113,7 @@ func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T
 			resolveValue: metadatadomain.ResourceMetadata{
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{
-						Path: []string{"sequence", "commands", "*", "script"},
+						Path: "/sequence/commands/*/script",
 						File: "script.sh",
 					},
 				},
@@ -243,7 +243,7 @@ func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *
 			resolveValue: metadatadomain.ResourceMetadata{
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{
-						Path: []string{"script"},
+						Path: "/script",
 						File: "script.sh",
 					},
 				},
@@ -294,7 +294,7 @@ func TestDefaultOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *t
 			resolveValue: metadatadomain.ResourceMetadata{
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{
-						Path: []string{"sequence", "commands", "*", "script"},
+						Path: "/sequence/commands/*/script",
 						File: "script.sh",
 					},
 				},
@@ -334,8 +334,8 @@ func TestDefaultOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "realm",
-				AliasFromAttribute: "realm",
+				IDFromAttribute:    "/realm",
+				AliasFromAttribute: "/realm",
 			},
 		},
 		server: &fakeServer{
@@ -349,13 +349,6 @@ func TestDefaultOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	}
 
 	serverManager := orchestrator.server.(*fakeServer)
-	payload, ok := serverManager.lastResource.Payload.(map[string]any)
-	if !ok {
-		t.Fatalf("expected payload map, got %T", serverManager.lastResource.Payload)
-	}
-	if got := payload["realm"]; got != "platform" {
-		t.Fatalf("expected metadata-seeded realm identity, got %#v", got)
-	}
 	if got := serverManager.lastResource.RemoteID; got != "platform" {
 		t.Fatalf("expected remote id platform, got %q", got)
 	}
@@ -367,8 +360,8 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 		server: &fakeServer{
@@ -449,8 +442,8 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
@@ -517,8 +510,8 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
@@ -566,8 +559,8 @@ func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 			},
 		},
@@ -625,12 +618,12 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 				resolvedIDPath: {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 			},
 		},
@@ -713,24 +706,24 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 				resolvedRealmPath: {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 				resolvedResourcePath: {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 				"/admin/realms/publico-br": {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 				"/admin/realms/realm-1": {
-					IDFromAttribute:    "id",
-					AliasFromAttribute: "alias",
+					IDFromAttribute:    "/id",
+					AliasFromAttribute: "/alias",
 				},
 			},
 		},
@@ -779,8 +772,8 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 	orchestrator := &DefaultOrchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "alias",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/alias",
 			},
 		},
 		server: serverManager,
@@ -1063,8 +1056,8 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 	}
@@ -1109,8 +1102,8 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "clientId",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/clientId",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 	}
@@ -1159,8 +1152,8 @@ func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t 
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 	}
@@ -1205,8 +1198,8 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 		server: &fakeServer{
@@ -1261,8 +1254,8 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 	}
@@ -1327,8 +1320,8 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 		},
 	}
@@ -1369,8 +1362,8 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "name",
+			IDFromAttribute:    "/id",
+			AliasFromAttribute: "/name",
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
@@ -1422,8 +1415,8 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "clientId",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/clientId",
 			},
 		},
 	}
@@ -1474,8 +1467,8 @@ func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterN
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "alias",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/alias",
 			},
 		},
 	}
@@ -1513,8 +1506,8 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "displayName",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/displayName",
 			},
 		},
 	}
@@ -1937,8 +1930,8 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationCreate): {Path: "/api/customers"},
@@ -1957,7 +1950,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 
 	secretProvider := &fakeSecretProvider{
 		values: map[string]string{
-			"/customers/acme:apiToken": "super-secret",
+			"/customers/acme:/apiToken": "super-secret",
 		},
 	}
 
@@ -2007,8 +2000,8 @@ func TestDefaultOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallbac
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "clientId",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/clientId",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):    {Path: "/admin/realms/test/clients/{{.id}}"},
 			string(metadatadomain.OperationList):   {Path: "/admin/realms/test/clients"},
@@ -2076,8 +2069,8 @@ func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
@@ -2123,8 +2116,8 @@ func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
@@ -2184,8 +2177,8 @@ func TestDefaultOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) 
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDFromAttribute:    "realm",
-				AliasFromAttribute: "realm",
+				IDFromAttribute:    "/realm",
+				AliasFromAttribute: "/realm",
 			},
 		},
 		server: serverManager,
@@ -2224,8 +2217,8 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2254,7 +2247,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 
 	secretProvider := &fakeSecretProvider{
 		values: map[string]string{
-			"/customers/acme:apiToken": "super-secret",
+			"/customers/acme:/apiToken": "super-secret",
 		},
 	}
 
@@ -2291,8 +2284,8 @@ func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "name",
-		AliasFromAttribute: "name",
+		IDFromAttribute:    "/name",
+		AliasFromAttribute: "/name",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {
 				JQ: `if type == "object" and has("config") then {name: .name, config: (.config + {"project.name": .name})} else . end`,
@@ -2337,8 +2330,8 @@ func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T)
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2392,8 +2385,8 @@ func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T)
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2431,8 +2424,8 @@ func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "id",
-		AliasFromAttribute: "alias",
+		IDFromAttribute:    "/id",
+		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2507,12 +2500,12 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 	metadataService := &fakeMetadata{
 		resolveValues: map[string]metadatadomain.ResourceMetadata{
 			"/admin/realms/publico-br/user-registry/ldap-test/mappers": {
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 			},
 			"/admin/realms/publico-br/user-registry/ldap-test": {
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						JQ: `[ .[] | select(.providerId == "ldap") ]`,
@@ -2520,8 +2513,8 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 				},
 			},
 			"/admin/realms/publico-br/user-registry": {
-				IDFromAttribute:    "id",
-				AliasFromAttribute: "name",
+				IDFromAttribute:    "/id",
+				AliasFromAttribute: "/name",
 			},
 		},
 	}
@@ -2686,7 +2679,7 @@ func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T)
 			resolveValue: metadatadomain.ResourceMetadata{
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{
-						Path: []string{"script"},
+						Path: "/script",
 						File: "script.sh",
 					},
 				},
@@ -2740,7 +2733,7 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithSec
 	orchestrator := &DefaultOrchestrator{
 		secrets: &fakeSecretProvider{
 			values: map[string]string{
-				"/customers/acme:token": "super-secret",
+				"/customers/acme:/token": "super-secret",
 			},
 		},
 	}

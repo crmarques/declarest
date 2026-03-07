@@ -84,28 +84,28 @@ contexts:
   - name: dev
     repository:
       filesystem:
-        base-dir: ` + devRepo + `
-    managed-server:
+        baseDir: ` + devRepo + `
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: dev-token
   - name: prod
     repository:
       filesystem:
-        base-dir: ` + prodRepo + `
-    managed-server:
+        baseDir: ` + prodRepo + `
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: prod-token
-current-ctx: dev
+currentCtx: dev
 `)
 	if err := os.WriteFile(path, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -145,17 +145,17 @@ func TestNewSessionAllowsRemoteOnlyContextWithoutRepository(t *testing.T) {
 	contextCatalog := []byte(`
 contexts:
   - name: remote-only
-    managed-server:
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: dev-token
     metadata:
-      base-dir: ` + metadataDir + `
-current-ctx: remote-only
+      baseDir: ` + metadataDir + `
+currentCtx: remote-only
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -178,7 +178,7 @@ current-ctx: remote-only
 		t.Fatal("expected managed server to be configured")
 	}
 	if session.Services.MetadataService() == nil {
-		t.Fatal("expected metadata service when metadata.base-dir is configured")
+		t.Fatal("expected metadata service when metadata.baseDir is configured")
 	}
 }
 
@@ -213,18 +213,18 @@ contexts:
   - name: bundled
     repository:
       filesystem:
-        base-dir: ` + filepath.Join(tempDir, "repo") + `
-    managed-server:
+        baseDir: ` + filepath.Join(tempDir, "repo") + `
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: dev-token
     metadata:
       bundle: ` + bundlePath + `
-current-ctx: bundled
+currentCtx: bundled
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -241,7 +241,7 @@ current-ctx: bundled
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
 	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server when managed-server is configured")
+		t.Fatal("expected managed server when managedServer is configured")
 	}
 	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
@@ -287,18 +287,18 @@ contexts:
   - name: bundled-file
     repository:
       filesystem:
-        base-dir: ` + filepath.Join(tempDir, "repo") + `
-    managed-server:
+        baseDir: ` + filepath.Join(tempDir, "repo") + `
+    managedServer:
       http:
-        base-url: https://example.com/api
+        baseUrl: https://example.com/api
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: dev-token
     metadata:
-      bundle-file: ` + bundlePath + `
-current-ctx: bundled-file
+      bundleFile: ` + bundlePath + `
+currentCtx: bundled-file
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -312,14 +312,14 @@ current-ctx: bundled-file
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 	if session.Services.MetadataService() == nil {
-		t.Fatal("expected metadata service when metadata.bundle-file is configured")
+		t.Fatal("expected metadata service when metadata.bundleFile is configured")
 	}
 	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server when managed-server is configured")
+		t.Fatal("expected managed server when managedServer is configured")
 	}
 	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
-		t.Fatalf("expected OpenAPI to fallback from bundle-file, got error: %v", openAPIErr)
+		t.Fatalf("expected OpenAPI to fallback from bundleFile, got error: %v", openAPIErr)
 	}
 	specMap, ok := openAPISpec.(map[string]any)
 	if !ok {

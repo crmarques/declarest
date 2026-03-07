@@ -269,13 +269,13 @@ func resolveSetCurrentContext(selection addContextSelection) (string, error) {
 			}
 		}
 		return "", cliutil.ValidationError(
-			fmt.Sprintf("input current-ctx %q is not present in imported contexts", selection.CurrentCtx),
+			fmt.Sprintf("input currentCtx %q is not present in imported contexts", selection.CurrentCtx),
 			nil,
 		)
 	}
 
 	return "", cliutil.ValidationError(
-		"set-current requires a single imported context or a catalog current-ctx value",
+		"set-current requires a single imported context or a catalog currentCtx value",
 		nil,
 	)
 }
@@ -567,7 +567,7 @@ func newResolveCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 			"  declarest config resolve",
 			"  declarest config resolve prod",
 			"  declarest config resolve --context prod",
-			"  declarest config resolve --set managed-server.http.base-url=https://api.example.com",
+			"  declarest config resolve --set managedServer.http.baseUrl=https://api.example.com",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -813,19 +813,19 @@ func checkMetadata(command *cobra.Command, deps cliutil.CommandDependencies, cfg
 	baseDir := strings.TrimSpace(cfg.Metadata.BaseDir)
 	if baseDir == "" {
 		result.Status = configCheckFail
-		result.Error = "metadata.base-dir is empty"
+		result.Error = "metadata.baseDir is empty"
 		return result
 	}
 
 	info, err := os.Stat(baseDir)
 	if err != nil {
 		result.Status = configCheckFail
-		result.Error = fmt.Sprintf("metadata base-dir check failed: %v", err)
+		result.Error = fmt.Sprintf("metadata baseDir check failed: %v", err)
 		return result
 	}
 	if !info.IsDir() {
 		result.Status = configCheckFail
-		result.Error = "metadata base-dir is not a directory"
+		result.Error = "metadata baseDir is not a directory"
 		return result
 	}
 
@@ -836,7 +836,7 @@ func checkMetadata(command *cobra.Command, deps cliutil.CommandDependencies, cfg
 
 func checkManagedServer(command *cobra.Command, deps cliutil.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
-		Component: "managed-server",
+		Component: "managedServer",
 	}
 
 	if cfg.ManagedServer == nil {
@@ -906,7 +906,7 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 		}
 		parsed, err := url.Parse(baseURL)
 		if err != nil {
-			return "", cliutil.ValidationError("managed-server.http.base-url is invalid", err)
+			return "", cliutil.ValidationError("managedServer.http.baseUrl is invalid", err)
 		}
 		basePath := strings.TrimSpace(parsed.Path)
 		if basePath == "" {
@@ -920,15 +920,15 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 
 	parsed, err := url.Parse(healthCheck)
 	if err != nil {
-		return "", cliutil.ValidationError("managed-server.http.health-check is invalid", err)
+		return "", cliutil.ValidationError("managedServer.http.healthCheck is invalid", err)
 	}
 	if strings.TrimSpace(parsed.RawQuery) != "" {
-		return "", cliutil.ValidationError("managed-server.http.health-check must not include query parameters", nil)
+		return "", cliutil.ValidationError("managedServer.http.healthCheck must not include query parameters", nil)
 	}
 	if parsed.Scheme == "" && parsed.Host == "" {
 		parsedPath := strings.TrimSpace(parsed.Path)
 		if parsedPath == "" {
-			return "", cliutil.ValidationError("managed-server.http.health-check is invalid", nil)
+			return "", cliutil.ValidationError("managedServer.http.healthCheck is invalid", nil)
 		}
 		if !strings.HasPrefix(parsedPath, "/") {
 			parsedPath = "/" + parsedPath
@@ -936,18 +936,18 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 		return parsedPath, nil
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", cliutil.ValidationError("managed-server.http.health-check URL must use http or https", nil)
+		return "", cliutil.ValidationError("managedServer.http.healthCheck URL must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return "", cliutil.ValidationError("managed-server.http.health-check URL host is required", nil)
+		return "", cliutil.ValidationError("managedServer.http.healthCheck URL host is required", nil)
 	}
 	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL))
 	if err != nil {
-		return "", cliutil.ValidationError("managed-server.http.base-url is invalid", err)
+		return "", cliutil.ValidationError("managedServer.http.baseUrl is invalid", err)
 	}
 	if !strings.EqualFold(parsed.Scheme, baseParsed.Scheme) || !strings.EqualFold(parsed.Host, baseParsed.Host) {
 		return "", cliutil.ValidationError(
-			"managed-server.http.health-check URL must share scheme and host with managed-server.http.base-url",
+			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.baseUrl",
 			nil,
 		)
 	}
@@ -963,7 +963,7 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 
 func checkSecretStore(command *cobra.Command, deps cliutil.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
-		Component: "secret-store",
+		Component: "secretStore",
 	}
 
 	if cfg.SecretStore == nil {

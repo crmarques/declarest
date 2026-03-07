@@ -31,17 +31,17 @@ type ResourceMetadata struct {
 }
 
 type ExternalizedAttribute struct {
-	Path           []string `json:"path,omitempty" yaml:"path,omitempty"`
-	File           string   `json:"file,omitempty" yaml:"file,omitempty"`
-	Template       string   `json:"template,omitempty" yaml:"template,omitempty"`
-	Mode           string   `json:"mode,omitempty" yaml:"mode,omitempty"`
-	SaveBehavior   string   `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
-	RenderBehavior string   `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
-	Enabled        *bool    `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Path           string `json:"path,omitempty" yaml:"path,omitempty"`
+	File           string `json:"file,omitempty" yaml:"file,omitempty"`
+	Template       string `json:"template,omitempty" yaml:"template,omitempty"`
+	Mode           string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	SaveBehavior   string `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
+	RenderBehavior string `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 type ResolvedExternalizedAttribute struct {
-	Path           []string
+	Path           string
 	File           string
 	Template       string
 	Mode           string

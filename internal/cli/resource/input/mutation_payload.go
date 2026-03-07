@@ -11,7 +11,7 @@ import (
 
 // DecodeOptionalMutationPayloadInput decodes explicit payload input for
 // resource mutation commands. It supports file paths, stdin ("-"), inline
-// JSON/YAML, and dotted assignment shorthand like "a=b,c=d,e.f=g".
+// JSON/YAML, and JSON Pointer assignment shorthand like "/a=b,/c=d,/e/f=g".
 func DecodeOptionalMutationPayloadInput(
 	command *cobra.Command,
 	flags cliutil.InputFlags,
@@ -40,7 +40,7 @@ func DecodeOptionalMutationPayloadInput(
 		return value, true, nil
 	}
 
-	if objectValue, err := cliutil.ParseDottedAssignmentsObject(payloadArg); err == nil {
+	if objectValue, err := cliutil.ParsePointerAssignmentsObject(payloadArg); err == nil {
 		return objectValue, true, nil
 	}
 

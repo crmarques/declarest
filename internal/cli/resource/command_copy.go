@@ -26,8 +26,8 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			"  declarest resource copy /a/b/c /x/y/z",
 			"  declarest resource copy /a/b/c /x/y/z --overwrite",
 			"  declarest resource copy /a/b/c /x/y/z --message ticket-123",
-			"  declarest resource copy /a/b/c /x/y/z --override-attributes a=b,c=d,e.f.g=h",
-			"  declarest resource copy --path /a/b/c --target-path /x/y/z --override-attributes a=b",
+			"  declarest resource copy /a/b/c /x/y/z --override-attributes /a=b,/c=d,/e/f/g=h",
+			"  declarest resource copy --path /a/b/c --target-path /x/y/z --override-attributes /a=b",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -112,7 +112,7 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	})
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "allow replacing the target resource when it already exists")
 	command.Flags().StringVarP(&commitMessageAppend, "message", "m", "", "append text to the default git commit message (git repositories only)")
-	command.Flags().StringVar(&overrideAttributes, "override-attributes", "", "comma-separated dotted key=value attribute overrides for the copied payload")
+	command.Flags().StringVar(&overrideAttributes, "override-attributes", "", "comma-separated JSON-pointer=value attribute overrides for the copied payload")
 	command.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= 2 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -194,7 +194,7 @@ func applyCopyOverrideAttributes(value resourcedomain.Value, overrideAttributes 
 	if !ok {
 		return nil, cliutil.ValidationError("--override-attributes requires an object payload", nil)
 	}
-	if err := cliutil.ApplyDottedAssignmentsObject(payloadMap, overrideAttributes); err != nil {
+	if err := cliutil.ApplyPointerAssignmentsObject(payloadMap, overrideAttributes); err != nil {
 		return nil, err
 	}
 	return resourcedomain.Normalize(payloadMap)

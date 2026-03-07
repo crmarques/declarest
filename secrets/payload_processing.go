@@ -177,7 +177,7 @@ func DetectSecretCandidates(value resource.Value) ([]string, error) {
 	}
 
 	candidates := make(map[string]struct{})
-	if err := collectDetectedCandidates(normalized, candidates, 0); err != nil {
+	if err := collectDetectedCandidates(normalized, "", candidates, 0); err != nil {
 		return nil, err
 	}
 
@@ -209,7 +209,7 @@ func normalizePlaceholdersValue(value any, currentPath string, depth int) (any, 
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := normalizePlaceholdersValue(typed[idx], "", depth+1)
+			child, err := normalizePlaceholdersValue(typed[idx], joinAttributePath(currentPath, strconv.Itoa(idx)), depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -283,7 +283,13 @@ func collectMaskCandidates(
 		}
 	case []any:
 		for idx := range typed {
-			if err := collectMaskCandidates(typed[idx], currentPath, candidates, scopeByKey, depth+1); err != nil {
+			if err := collectMaskCandidates(
+				typed[idx],
+				joinAttributePath(currentPath, strconv.Itoa(idx)),
+				candidates,
+				scopeByKey,
+				depth+1,
+			); err != nil {
 				return err
 			}
 		}
@@ -326,7 +332,7 @@ func applyMask(value any, currentPath string, candidates map[string]string, dept
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := applyMask(typed[idx], currentPath, candidates, depth+1)
+			child, err := applyMask(typed[idx], joinAttributePath(currentPath, strconv.Itoa(idx)), candidates, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -364,7 +370,14 @@ func resolvePayloadValue(
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := resolvePayloadValue(typed[idx], "", resourcePath, cache, getFn, depth+1)
+			child, err := resolvePayloadValue(
+				typed[idx],
+				joinAttributePath(currentPath, strconv.Itoa(idx)),
+				resourcePath,
+				cache,
+				getFn,
+				depth+1,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -401,7 +414,7 @@ func resolvePayloadValue(
 	}
 }
 
-func collectDetectedCandidates(value any, candidates map[string]struct{}, depth int) error {
+func collectDetectedCandidates(value any, currentPath string, candidates map[string]struct{}, depth int) error {
 	if depth > maxPayloadDepth {
 		return faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
 	}
@@ -409,6 +422,7 @@ func collectDetectedCandidates(value any, candidates map[string]struct{}, depth 
 	case map[string]any:
 		for _, key := range sortedKeys(typed) {
 			field := typed[key]
+			attributePath := joinAttributePath(currentPath, key)
 			if isLikelySecretKey(key) {
 				stringValue, isString := field.(string)
 				if isString {
@@ -417,18 +431,18 @@ func collectDetectedCandidates(value any, candidates map[string]struct{}, depth 
 						return err
 					}
 					if !isPlaceholder && isLikelySecretValue(stringValue) {
-						candidates[key] = struct{}{}
+						candidates[attributePath] = struct{}{}
 					}
 				}
 			}
 
-			if err := collectDetectedCandidates(field, candidates, depth+1); err != nil {
+			if err := collectDetectedCandidates(field, attributePath, candidates, depth+1); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for idx := range typed {
-			if err := collectDetectedCandidates(typed[idx], candidates, depth+1); err != nil {
+			if err := collectDetectedCandidates(typed[idx], joinAttributePath(currentPath, strconv.Itoa(idx)), candidates, depth+1); err != nil {
 				return err
 			}
 		}
@@ -582,10 +596,11 @@ func joinAttributePath(prefix string, key string) string {
 	if trimmedKey == "" {
 		return ""
 	}
+	escapedKey := resource.EscapeJSONPointerToken(trimmedKey)
 	if strings.TrimSpace(prefix) == "" {
-		return trimmedKey
+		return "/" + escapedKey
 	}
-	return prefix + "." + trimmedKey
+	return prefix + "/" + escapedKey
 }
 
 func sortedKeys(values map[string]any) []string {

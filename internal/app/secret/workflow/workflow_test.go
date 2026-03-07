@@ -81,13 +81,13 @@ func TestResolveAttributePathsAndMaskValue(t *testing.T) {
 		},
 	}
 
-	paths := ResolveAttributePaths(payload, []string{"password", "auth.token"})
-	wantPaths := []string{"auth.password", "auth.token"}
+	paths := ResolveAttributePaths(payload, []string{"/auth/password", "/auth/token"})
+	wantPaths := []string{"/auth/password", "/auth/token"}
 	if !reflect.DeepEqual(paths, wantPaths) {
 		t.Fatalf("unexpected attribute paths: got=%#v want=%#v", paths, wantPaths)
 	}
 
-	masked, err := MaskValue(resource.Value(payload), []string{"password"})
+	masked, err := MaskValue(resource.Value(payload), []string{"/auth/password"})
 	if err != nil {
 		t.Fatalf("MaskValue returned error: %v", err)
 	}
@@ -120,8 +120,8 @@ func TestResolveAttributePathsForCandidates(t *testing.T) {
 		"empty": "",
 	}
 
-	got := ResolveAttributePathsForCandidates(payload, []string{"password", "db.user", "missing"})
-	want := []string{"db.password", "db.user", "password"}
+	got := ResolveAttributePathsForCandidates(payload, []string{"/password", "/db/user", "/missing"})
+	want := []string{"/db/user", "/password"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected candidate paths: got=%#v want=%#v", got, want)
 	}

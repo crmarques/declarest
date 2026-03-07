@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/resource"
 )
 
 func ResolveOperationSpec(ctx context.Context, metadata ResourceMetadata, operation Operation, value any) (OperationSpec, error) {
@@ -197,13 +198,13 @@ func InferFromOpenAPISpec(
 			openAPIResourceAttributes,
 		)
 		if strings.TrimSpace(idAttribute) != "" {
-			inferred.IDFromAttribute = idAttribute
+			inferred.IDFromAttribute = resource.JSONPointerForObjectKey(idAttribute)
 		}
 		if strings.TrimSpace(aliasAttribute) != "" {
-			inferred.AliasFromAttribute = aliasAttribute
+			inferred.AliasFromAttribute = resource.JSONPointerForObjectKey(aliasAttribute)
 		}
 		if shouldInferSecretAttribute(target) {
-			inferred.SecretsFromAttributes = []string{"secret"}
+			inferred.SecretsFromAttributes = []string{resource.JSONPointerForObjectKey("secret")}
 		}
 	}
 

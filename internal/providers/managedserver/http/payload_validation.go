@@ -80,16 +80,17 @@ func mergeValidationPayloadFields(normalizedBody resource.Value, derivedFields m
 		}
 	}
 
-	merged := make(map[string]any, len(baseObject)+len(derivedFields))
-	for key, value := range baseObject {
-		merged[key] = value
-	}
-	keys := sortedMapKeysAny(derivedFields)
-	for _, key := range keys {
-		if _, exists := merged[key]; exists {
+	merged := resource.DeepCopyValue(baseObject)
+	for _, pointer := range sortedMapKeysAny(derivedFields) {
+		if _, found, err := resource.LookupJSONPointer(merged, pointer); err == nil && found {
 			continue
 		}
-		merged[key] = derivedFields[key]
+
+		next, err := resource.SetJSONPointerValue(merged, pointer, derivedFields[pointer])
+		if err != nil {
+			continue
+		}
+		merged = next
 	}
 
 	return merged
@@ -104,7 +105,7 @@ func deriveValidationPathFields(resourceInfo resource.Resource, md metadata.Reso
 		if trimmedKey == "" || trimmedValue == "" {
 			continue
 		}
-		fields[trimmedKey] = trimmedValue
+		fields[resource.JSONPointerForObjectKey(trimmedKey)] = trimmedValue
 	}
 
 	if aliasAttribute := strings.TrimSpace(md.AliasFromAttribute); aliasAttribute != "" {
@@ -129,27 +130,22 @@ func deriveValidationPathFields(resourceInfo resource.Resource, md metadata.Reso
 }
 
 func validateOperationRequiredAttributes(payload resource.Value, attributes []string) error {
-	names, err := normalizePayloadAttributeNames("validate.requiredAttributes", attributes)
+	pointers, err := normalizePayloadAttributePointers("validate.requiredAttributes", attributes)
 	if err != nil {
 		return err
 	}
-	if len(names) == 0 {
+	if len(pointers) == 0 {
 		return nil
 	}
 
-	objectPayload, ok := payload.(map[string]any)
-	if !ok {
-		return faults.NewValidationError(
-			"operation payload validation requiredAttributes requires an object payload",
-			nil,
-		)
-	}
-
 	missing := make([]string, 0)
-	for _, name := range names {
-		value, exists := objectPayload[name]
-		if !exists || value == nil {
-			missing = append(missing, name)
+	for _, pointer := range pointers {
+		value, found, lookupErr := resource.LookupJSONPointer(payload, pointer)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		if !found || value == nil {
+			missing = append(missing, pointer)
 		}
 	}
 	if len(missing) > 0 {
@@ -305,18 +301,24 @@ func augmentSchemaValidationPayload(
 		return payload
 	}
 
-	merged := make(map[string]any, len(payloadObject)+len(derivedFields))
-	for key, value := range payloadObject {
-		merged[key] = value
+	allowedPointers := make(map[string]struct{}, len(allowedFields))
+	for key := range allowedFields {
+		allowedPointers[resource.JSONPointerForObjectKey(key)] = struct{}{}
 	}
-	for _, key := range sortedMapKeysAny(derivedFields) {
-		if _, allowed := allowedFields[key]; !allowed {
+
+	merged := resource.DeepCopyValue(payloadObject)
+	for _, pointer := range sortedMapKeysAny(derivedFields) {
+		if _, allowed := allowedPointers[pointer]; !allowed {
 			continue
 		}
-		if _, exists := merged[key]; exists {
+		if _, found, err := resource.LookupJSONPointer(merged, pointer); err == nil && found {
 			continue
 		}
-		merged[key] = derivedFields[key]
+		next, err := resource.SetJSONPointerValue(merged, pointer, derivedFields[pointer])
+		if err != nil {
+			continue
+		}
+		merged = next
 	}
 
 	return merged

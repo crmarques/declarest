@@ -53,6 +53,7 @@ Goal: cross-cutting or shared responsibilities must be accessed through centrali
 - Identify unused code (unused types/functions, dead branches, redundant wrappers).
 - Flag over-engineering (excess layers, unused interfaces, redundant indirections).
 - Propose removals/simplifications that reduce surface area while preserving behavior.
+- Remove any non-function comment. code should be self-explainatory
 
 6) Naming and first-look readability
 - Ensure packages, files, types, interfaces, and function names explain intent immediately.
@@ -84,6 +85,7 @@ C) Improvement implementation plan (step-by-step)
   - validation (build/tests/lint).
 - Include any new/updated manager interfaces and how callers will migrate.
 - Keep the plan incremental: after each step, the system should remain working and the structure should be improved.
+- Remove any backward-compatibility code. keep code lean and clean
 
 D) Optional: illustrative examples
 Where helpful, include small pseudo-code examples of:

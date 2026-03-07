@@ -220,7 +220,15 @@ func identityAttributeCandidates(md metadata.ResourceMetadata) []string {
 	addCandidate(md.AliasFromAttribute)
 
 	// Keep local fallback usable when repository metadata points at aliases only.
-	for _, fallback := range []string{"id", "clientId", "name", "alias", "key", "uuid", "uid"} {
+	for _, fallback := range []string{
+		resource.JSONPointerForObjectKey("id"),
+		resource.JSONPointerForObjectKey("clientId"),
+		resource.JSONPointerForObjectKey("name"),
+		resource.JSONPointerForObjectKey("alias"),
+		resource.JSONPointerForObjectKey("key"),
+		resource.JSONPointerForObjectKey("uuid"),
+		resource.JSONPointerForObjectKey("uid"),
+	} {
 		addCandidate(fallback)
 	}
 

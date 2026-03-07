@@ -45,78 +45,94 @@ func (g *HTTPManagedServerClient) applyOperationPayloadTransforms(
 }
 
 func applyPayloadFilterAttributes(value resource.Value, attributes []string) (resource.Value, error) {
+	pointers, err := normalizePayloadAttributePointers("filterAttributes", attributes)
+	if err != nil {
+		return nil, err
+	}
 	if value == nil {
 		return nil, nil
 	}
 
-	objectValue, ok := value.(map[string]any)
-	if !ok {
-		return nil, faults.NewValidationError("payload filterAttributes requires an object payload", nil)
-	}
+	filtered := any(nil)
+	for _, pointer := range pointers {
+		if pointer == "" {
+			return resource.DeepCopyValue(value), nil
+		}
 
-	names, err := normalizePayloadAttributeNames("filterAttributes", attributes)
-	if err != nil {
-		return nil, err
-	}
-
-	filtered := make(map[string]any, len(names))
-	for _, name := range names {
-		item, found := objectValue[name]
+		item, found, err := resource.LookupJSONPointer(value, pointer)
+		if err != nil {
+			return nil, err
+		}
 		if !found {
 			continue
 		}
-		filtered[name] = item
+		filtered, err = resource.SetJSONPointerValue(filtered, pointer, item)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if filtered == nil {
+		switch value.(type) {
+		case []any:
+			return []any{}, nil
+		case map[string]any:
+			return map[string]any{}, nil
+		default:
+			return nil, nil
+		}
 	}
 
 	return filtered, nil
 }
 
 func applyPayloadSuppressAttributes(value resource.Value, attributes []string) (resource.Value, error) {
+	pointers, err := normalizePayloadAttributePointers("suppressAttributes", attributes)
+	if err != nil {
+		return nil, err
+	}
 	if value == nil {
 		return nil, nil
 	}
 
-	objectValue, ok := value.(map[string]any)
-	if !ok {
-		return nil, faults.NewValidationError("payload suppressAttributes requires an object payload", nil)
-	}
+	filtered := resource.DeepCopyValue(value)
+	for _, pointer := range pointers {
+		if pointer == "" {
+			return nil, nil
+		}
 
-	names, err := normalizePayloadAttributeNames("suppressAttributes", attributes)
-	if err != nil {
-		return nil, err
-	}
-
-	filtered := make(map[string]any, len(objectValue))
-	for key, item := range objectValue {
-		filtered[key] = item
-	}
-	for _, name := range names {
-		delete(filtered, name)
+		filtered, err = resource.DeleteJSONPointerValue(filtered, pointer)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return filtered, nil
 }
 
-func normalizePayloadAttributeNames(field string, attributes []string) ([]string, error) {
+func normalizePayloadAttributePointers(field string, attributes []string) ([]string, error) {
 	if attributes == nil {
 		return nil, nil
 	}
 
-	names := make([]string, 0, len(attributes))
+	pointers := make([]string, 0, len(attributes))
 	seen := make(map[string]struct{}, len(attributes))
 	for _, raw := range attributes {
-		name := strings.TrimSpace(raw)
-		if name == "" {
-			return nil, faults.NewValidationError("payload "+field+" contains an empty attribute name", nil)
+		pointer := strings.TrimSpace(raw)
+		if pointer == "" {
+			return nil, faults.NewValidationError("payload "+field+" contains an empty JSON pointer", nil)
 		}
-		if _, exists := seen[name]; exists {
+		if _, err := resource.ParseJSONPointer(pointer); err != nil {
+			return nil, faults.NewValidationError("payload "+field+" contains an invalid JSON pointer", err)
+		}
+		if _, exists := seen[pointer]; exists {
 			continue
 		}
-		seen[name] = struct{}{}
-		names = append(names, name)
+		seen[pointer] = struct{}{}
+		pointers = append(pointers, pointer)
 	}
 
-	return names, nil
+	return pointers, nil
 }
 
 func (g *HTTPManagedServerClient) applyPayloadJQ(ctx context.Context, payload resource.Value, expression string) (resource.Value, error) {

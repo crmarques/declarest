@@ -23,13 +23,13 @@ type resourceInfoWire struct {
 }
 
 type externalizedAttributeWire struct {
-	Path           *[]string `json:"path,omitempty" yaml:"path,omitempty"`
-	File           string    `json:"file,omitempty" yaml:"file,omitempty"`
-	Template       string    `json:"template,omitempty" yaml:"template,omitempty"`
-	Mode           string    `json:"mode,omitempty" yaml:"mode,omitempty"`
-	SaveBehavior   string    `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
-	RenderBehavior string    `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
-	Enabled        *bool     `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Path           string `json:"path,omitempty" yaml:"path,omitempty"`
+	File           string `json:"file,omitempty" yaml:"file,omitempty"`
+	Template       string `json:"template,omitempty" yaml:"template,omitempty"`
+	Mode           string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	SaveBehavior   string `json:"saveBehavior,omitempty" yaml:"saveBehavior,omitempty"`
+	RenderBehavior string `json:"renderBehavior,omitempty" yaml:"renderBehavior,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 type operationInfoWire struct {
@@ -683,7 +683,7 @@ func externalizedAttributeWirePointer(values []ExternalizedAttribute) *[]externa
 	cloned := make([]externalizedAttributeWire, len(values))
 	for idx := range values {
 		cloned[idx] = externalizedAttributeWire{
-			Path:           stringSlicePointer(values[idx].Path),
+			Path:           values[idx].Path,
 			File:           values[idx].File,
 			Template:       values[idx].Template,
 			Mode:           values[idx].Mode,
@@ -699,15 +699,13 @@ func externalizedAttributesFromWire(values []externalizedAttributeWire) []Extern
 	cloned := make([]ExternalizedAttribute, len(values))
 	for idx := range values {
 		cloned[idx] = ExternalizedAttribute{
+			Path:           values[idx].Path,
 			File:           values[idx].File,
 			Template:       values[idx].Template,
 			Mode:           values[idx].Mode,
 			SaveBehavior:   values[idx].SaveBehavior,
 			RenderBehavior: values[idx].RenderBehavior,
 			Enabled:        cloneBoolPointer(values[idx].Enabled),
-		}
-		if values[idx].Path != nil {
-			cloned[idx].Path = cloneStringSlice(*values[idx].Path)
 		}
 	}
 	return cloned

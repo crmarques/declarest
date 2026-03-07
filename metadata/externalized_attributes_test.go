@@ -12,7 +12,7 @@ func TestResolveExternalizedAttributesAppliesDefaults(t *testing.T) {
 	resolved, err := ResolveExternalizedAttributes(ResourceMetadata{
 		ExternalizedAttributes: []ExternalizedAttribute{
 			{
-				Path: []string{"script"},
+				Path: "/script",
 				File: "script.sh",
 			},
 		},
@@ -23,7 +23,7 @@ func TestResolveExternalizedAttributesAppliesDefaults(t *testing.T) {
 
 	want := []ResolvedExternalizedAttribute{
 		{
-			Path:           []string{"script"},
+			Path:           "/script",
 			File:           "script.sh",
 			Template:       DefaultExternalizedAttributeTemplate,
 			Mode:           ExternalizedAttributeModeText,
@@ -43,12 +43,12 @@ func TestResolveExternalizedAttributesIgnoresDisabledEntries(t *testing.T) {
 	resolved, err := ResolveExternalizedAttributes(ResourceMetadata{
 		ExternalizedAttributes: []ExternalizedAttribute{
 			{
-				Path:    []string{"script"},
+				Path:    "/script",
 				File:    "ignored.sh",
 				Enabled: boolPointer(false),
 			},
 			{
-				Path: []string{"spec", "template", "script"},
+				Path: "/spec/template/script",
 				File: "script.sh",
 			},
 		},
@@ -60,7 +60,7 @@ func TestResolveExternalizedAttributesIgnoresDisabledEntries(t *testing.T) {
 	if len(resolved) != 1 {
 		t.Fatalf("expected one enabled entry, got %#v", resolved)
 	}
-	if !reflect.DeepEqual(resolved[0].Path, []string{"spec", "template", "script"}) {
+	if resolved[0].Path != "/spec/template/script" {
 		t.Fatalf("unexpected nested path %#v", resolved[0].Path)
 	}
 }
@@ -77,8 +77,8 @@ func TestResolveExternalizedAttributesValidatesDuplicatesAndPaths(t *testing.T) 
 			name: "duplicate_path",
 			metadata: ResourceMetadata{
 				ExternalizedAttributes: []ExternalizedAttribute{
-					{Path: []string{"script"}, File: "script-1.sh"},
-					{Path: []string{"script"}, File: "script-2.sh"},
+					{Path: "/script", File: "script-1.sh"},
+					{Path: "/script", File: "script-2.sh"},
 				},
 			},
 			wantErr: "duplicates",
@@ -87,8 +87,8 @@ func TestResolveExternalizedAttributesValidatesDuplicatesAndPaths(t *testing.T) 
 			name: "duplicate_file",
 			metadata: ResourceMetadata{
 				ExternalizedAttributes: []ExternalizedAttribute{
-					{Path: []string{"script"}, File: "script.sh"},
-					{Path: []string{"config"}, File: "script.sh"},
+					{Path: "/script", File: "script.sh"},
+					{Path: "/config", File: "script.sh"},
 				},
 			},
 			wantErr: "duplicates",
@@ -106,7 +106,7 @@ func TestResolveExternalizedAttributesValidatesDuplicatesAndPaths(t *testing.T) 
 			name: "empty_file",
 			metadata: ResourceMetadata{
 				ExternalizedAttributes: []ExternalizedAttribute{
-					{Path: []string{"script"}},
+					{Path: "/script"},
 				},
 			},
 			wantErr: "file must not be empty",
@@ -115,7 +115,7 @@ func TestResolveExternalizedAttributesValidatesDuplicatesAndPaths(t *testing.T) 
 			name: "path_traversal",
 			metadata: ResourceMetadata{
 				ExternalizedAttributes: []ExternalizedAttribute{
-					{Path: []string{"script"}, File: "../script.sh"},
+					{Path: "/script", File: "../script.sh"},
 				},
 			},
 			wantErr: "must stay within the resource directory",

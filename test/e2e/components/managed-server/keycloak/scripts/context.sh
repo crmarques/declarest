@@ -11,19 +11,19 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 }
 
 {
-  printf 'managed-server:\n'
+  printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    base-url: %s\n' "${KEYCLOAK_BASE_URL}"
-  printf '    health-check: %s/realms/master/account\n' "${KEYCLOAK_BASE_URL}"
+  printf '    baseUrl: %s\n' "${KEYCLOAK_BASE_URL}"
+  printf '    healthCheck: %s/realms/master/account\n' "${KEYCLOAK_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
   printf '    auth:\n'
   printf '      oauth2:\n'
-    printf '        token-url: %s\n' "${KEYCLOAK_TOKEN_URL}"
-  printf '        grant-type: client_credentials\n'
-  printf '        client-id: %s\n' "${KEYCLOAK_CLIENT_ID}"
-  printf '        client-secret: %s\n' "${KEYCLOAK_CLIENT_SECRET}"
+    printf '        tokenUrl: %s\n' "${KEYCLOAK_TOKEN_URL}"
+  printf '        grantType: client_credentials\n'
+  printf '        clientId: %s\n' "${KEYCLOAK_CLIENT_ID}"
+  printf '        clientSecret: %s\n' "${KEYCLOAK_CLIENT_SECRET}"
 
   if [[ -n "${KEYCLOAK_SCOPE:-}" ]]; then
     printf '        scope: %s\n' "${KEYCLOAK_SCOPE}"

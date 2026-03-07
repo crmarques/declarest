@@ -10,10 +10,10 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	t.Parallel()
 
 	value := ResourceMetadata{
-		IDFromAttribute:       "id",
-		AliasFromAttribute:    "name",
+		IDFromAttribute:       "/id",
+		AliasFromAttribute:    "/name",
 		CollectionPath:        "/api/customers",
-		SecretsFromAttributes: []string{"credentials.password"},
+		SecretsFromAttributes: []string{"/credentials/password"},
 		Operations: map[string]OperationSpec{
 			string(OperationCreate): {
 				Path:        "/api/customers",
@@ -62,17 +62,17 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected resourceInfo object, got %#v", decoded["resourceInfo"])
 	}
-	if resourceInfo["idFromAttribute"] != "id" {
+	if resourceInfo["idFromAttribute"] != "/id" {
 		t.Fatalf("expected resourceInfo.idFromAttribute=id, got %#v", resourceInfo["idFromAttribute"])
 	}
-	if resourceInfo["aliasFromAttribute"] != "name" {
+	if resourceInfo["aliasFromAttribute"] != "/name" {
 		t.Fatalf("expected resourceInfo.aliasFromAttribute=name, got %#v", resourceInfo["aliasFromAttribute"])
 	}
 	if resourceInfo["collectionPath"] != "/api/customers" {
 		t.Fatalf("expected resourceInfo.collectionPath=/api/customers, got %#v", resourceInfo["collectionPath"])
 	}
 	secretAttributes, ok := resourceInfo["secretInAttributes"].([]any)
-	if !ok || len(secretAttributes) != 1 || secretAttributes[0] != "credentials.password" {
+	if !ok || len(secretAttributes) != 1 || secretAttributes[0] != "/credentials/password" {
 		t.Fatalf("expected resourceInfo.secretInAttributes, got %#v", resourceInfo["secretInAttributes"])
 	}
 
@@ -180,8 +180,8 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		t.Parallel()
 
 		payload := []byte(`{
-		  "idFromAttribute": "id",
-		  "aliasFromAttribute": "name",
+		  "idFromAttribute": "/id",
+		  "aliasFromAttribute": "/name",
 		  "secretsFromAttributes": ["password"],
 		  "operations": {
 		    "get": {"path": "/api/customers/{{.id}}"},
@@ -203,8 +203,8 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 
 		payload := []byte(`{
 		  "resourceInfo": {
-		    "idFromAttribute": "realm",
-		    "aliasFromAttribute": "realm",
+		    "idFromAttribute": "/realm",
+		    "aliasFromAttribute": "/realm",
 		    "collectionPath": "/admin/realms",
 		    "secretInAttributes": []
 		  },
@@ -220,7 +220,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		      "httpMethod": "POST",
 		      "path": "/admin/realms",
 		      "validate": {
-		        "requiredAttributes": ["realm"],
+		        "requiredAttributes": ["/realm"],
 		        "schemaRef": "openapi:request-body"
 		      }
 		    },
@@ -253,7 +253,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 			t.Fatalf("unmarshal returned error: %v", err)
 		}
 
-		if decoded.IDFromAttribute != "realm" || decoded.AliasFromAttribute != "realm" {
+		if decoded.IDFromAttribute != "/realm" || decoded.AliasFromAttribute != "/realm" {
 			t.Fatalf("unexpected identity fields: %+v", decoded)
 		}
 		if decoded.CollectionPath != "/admin/realms" {
@@ -281,7 +281,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		if createValidate == nil {
 			t.Fatal("expected create validate block to be decoded")
 		}
-		if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"realm"}) {
+		if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"/realm"}) {
 			t.Fatalf("unexpected create validate.requiredAttributes: %#v", createValidate.RequiredAttributes)
 		}
 		if createValidate.SchemaRef != "openapi:request-body" {
@@ -315,7 +315,7 @@ func TestResourceMetadataMarshalJSONIncludesExternalizedAttributes(t *testing.T)
 	value := ResourceMetadata{
 		ExternalizedAttributes: []ExternalizedAttribute{
 			{
-				Path:           []string{"script"},
+				Path:           "/script",
 				File:           "script.sh",
 				Template:       "{{include %s}}",
 				Mode:           "text",
@@ -349,9 +349,9 @@ func TestResourceMetadataMarshalJSONIncludesExternalizedAttributes(t *testing.T)
 	if !ok {
 		t.Fatalf("expected externalizedAttributes entry object, got %#v", items[0])
 	}
-	pathValue, ok := entry["path"].([]any)
-	if !ok || len(pathValue) != 1 || pathValue[0] != "script" {
-		t.Fatalf("expected path [script], got %#v", entry["path"])
+	pathValue, ok := entry["path"].(string)
+	if !ok || pathValue != "/script" {
+		t.Fatalf("expected path /script, got %#v", entry["path"])
 	}
 	if entry["file"] != "script.sh" {
 		t.Fatalf("expected file script.sh, got %#v", entry["file"])
@@ -368,7 +368,7 @@ func TestResourceMetadataUnmarshalJSONSupportsExternalizedAttributes(t *testing.
 	  "resourceInfo": {
 	    "externalizedAttributes": [
 	      {
-	        "path": ["spec", "template", "script"],
+	        "path": "/spec/template/script",
 	        "file": "script.sh",
 	        "enabled": false
 	      }
@@ -385,7 +385,7 @@ func TestResourceMetadataUnmarshalJSONSupportsExternalizedAttributes(t *testing.
 		t.Fatalf("expected one externalized attribute, got %#v", decoded.ExternalizedAttributes)
 	}
 	entry := decoded.ExternalizedAttributes[0]
-	if !reflect.DeepEqual(entry.Path, []string{"spec", "template", "script"}) {
+	if entry.Path != "/spec/template/script" {
 		t.Fatalf("unexpected path %#v", entry.Path)
 	}
 	if entry.File != "script.sh" {
@@ -442,12 +442,12 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarPayloadTransformAttributes(t
 	  "operationInfo": {
 	    "defaults": {
 	      "payload": {
-	        "filterAttributes": "name"
+	        "filterAttributes": "/name"
 	      }
 	    },
 	    "createResource": {
 	      "payload": {
-	        "suppressAttributes": "secret"
+	        "suppressAttributes": "/secret"
 	      }
 	    }
 	  }
@@ -458,11 +458,11 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarPayloadTransformAttributes(t
 		t.Fatalf("unmarshal returned error: %v", err)
 	}
 
-	if !reflect.DeepEqual(decoded.Filter, []string{"name"}) {
+	if !reflect.DeepEqual(decoded.Filter, []string{"/name"}) {
 		t.Fatalf("expected scalar defaults payload filter to decode as single-item list, got %#v", decoded.Filter)
 	}
 	createSpec := decoded.Operations[string(OperationCreate)]
-	if !reflect.DeepEqual(createSpec.Suppress, []string{"secret"}) {
+	if !reflect.DeepEqual(createSpec.Suppress, []string{"/secret"}) {
 		t.Fatalf("expected scalar create payload suppress to decode as single-item list, got %#v", createSpec.Suppress)
 	}
 }
@@ -474,7 +474,7 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarValidateRequiredAttributes(t
 	  "operationInfo": {
 	    "createResource": {
 	      "validate": {
-	        "requiredAttributes": "realm"
+	        "requiredAttributes": "/realm"
 	      }
 	    }
 	  }
@@ -489,7 +489,7 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarValidateRequiredAttributes(t
 	if createValidate == nil {
 		t.Fatal("expected create validate block to be decoded")
 	}
-	if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"realm"}) {
+	if !reflect.DeepEqual(createValidate.RequiredAttributes, []string{"/realm"}) {
 		t.Fatalf("expected scalar requiredAttributes to decode as single-item list, got %#v", createValidate.RequiredAttributes)
 	}
 }

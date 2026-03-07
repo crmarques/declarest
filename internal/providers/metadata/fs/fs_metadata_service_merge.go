@@ -6,6 +6,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/resource"
 )
 
 func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
@@ -19,6 +20,15 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	}
 
 	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
+		return err
+	}
+	if err := validateAttributePointer("resourceInfo.idFromAttribute", metadata.IDFromAttribute); err != nil {
+		return err
+	}
+	if err := validateAttributePointer("resourceInfo.aliasFromAttribute", metadata.AliasFromAttribute); err != nil {
+		return err
+	}
+	if err := validateAttributePointers("resourceInfo.secretInAttributes", metadata.SecretsFromAttributes); err != nil {
 		return err
 	}
 	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.Filter, metadata.Suppress, metadata.JQ, nil); err != nil {
@@ -57,6 +67,12 @@ func validateStructuredPayloadDirectives(
 	jq string,
 	validate *metadatadomain.OperationValidationSpec,
 ) error {
+	if err := validateAttributePointers(scope+" filterAttributes", filter); err != nil {
+		return err
+	}
+	if err := validateAttributePointers(scope+" suppressAttributes", suppress); err != nil {
+		return err
+	}
 	if strings.TrimSpace(payloadType) == "" || payloadType == metadatadomain.NormalizeResourceFormat("json") || payloadType == metadatadomain.NormalizeResourceFormat("yaml") {
 		return nil
 	}
@@ -84,6 +100,9 @@ func validateOperationValidationSpec(
 				nil,
 			)
 		}
+	}
+	if err := validateAttributePointers(fmt.Sprintf("operation %q validate.requiredAttributes", operation), spec.RequiredAttributes); err != nil {
+		return err
 	}
 
 	for idx, assertion := range spec.Assertions {
@@ -113,4 +132,28 @@ func validateOperationValidationSpec(
 		),
 		nil,
 	)
+}
+
+func validateAttributePointer(field string, value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	if _, err := resource.ParseJSONPointer(trimmed); err != nil {
+		return faults.NewValidationError(field+" must be a valid JSON pointer", err)
+	}
+	return nil
+}
+
+func validateAttributePointers(field string, values []string) error {
+	for idx, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return faults.NewValidationError(fmt.Sprintf("%s[%d] must not be empty", field, idx), nil)
+		}
+		if _, err := resource.ParseJSONPointer(trimmed); err != nil {
+			return faults.NewValidationError(fmt.Sprintf("%s[%d] must be a valid JSON pointer", field, idx), err)
+		}
+	}
+	return nil
 }

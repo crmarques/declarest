@@ -84,7 +84,7 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 		return configdomain.Context{}, err
 	}
 
-	metadataPrompt := fmt.Sprintf("Metadata base-dir (defaults to %s): ", repositoryBaseDir)
+	metadataPrompt := fmt.Sprintf("Metadata baseDir (defaults to %s): ", repositoryBaseDir)
 	metadataBaseDir, err := promptOptionalInput(command, prompter, metadataPrompt)
 	if err != nil {
 		return configdomain.Context{}, err
@@ -100,7 +100,7 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 	}
 	contextCfg.ManagedServer = resourceServer
 
-	includeSecretStore, err := prompter.Confirm(command, "Configure secret-store?", false)
+	includeSecretStore, err := prompter.Confirm(command, "Configure secretStore?", false)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
@@ -135,19 +135,19 @@ func promptRepositoryConfig(
 ) (string, error) {
 	switch strings.TrimSpace(repositoryType) {
 	case "filesystem":
-		baseDir, err := promptRequiredInput(command, prompter, "Repository base-dir: ", "repository base-dir")
+		baseDir, err := promptRequiredInput(command, prompter, "Repository baseDir: ", "repository baseDir")
 		if err != nil {
 			return "", err
 		}
 		contextCfg.Repository.Filesystem = &configdomain.FilesystemRepository{BaseDir: baseDir}
 		return baseDir, nil
 	case "git":
-		baseDir, err := promptRequiredInput(command, prompter, "Git local base-dir: ", "git local base-dir")
+		baseDir, err := promptRequiredInput(command, prompter, "Git local baseDir: ", "git local baseDir")
 		if err != nil {
 			return "", err
 		}
 
-		autoInit, err := prompter.Confirm(command, "Enable git local auto-init?", true)
+		autoInit, err := prompter.Confirm(command, "Enable git local autoInit?", true)
 		if err != nil {
 			return "", err
 		}
@@ -201,7 +201,7 @@ func promptGitRemote(command *cobra.Command, prompter configPrompter) (*configdo
 		Provider: provider,
 	}
 
-	autoSync, err := prompter.Confirm(command, "Enable git remote auto-sync?", true)
+	autoSync, err := prompter.Confirm(command, "Enable git remote autoSync?", true)
 	if err != nil {
 		return nil, err
 	}
@@ -238,19 +238,19 @@ func promptGitRemote(command *cobra.Command, prompter configPrompter) (*configdo
 }
 
 func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdomain.GitAuth, error) {
-	method, err := prompter.Select(command, "Select git auth method", []string{"basic-auth", "ssh", "access-key"})
+	method, err := prompter.Select(command, "Select git auth method", []string{"basicAuth", "ssh", "accessKey"})
 	if err != nil {
 		return nil, err
 	}
 
 	auth := &configdomain.GitAuth{}
 	switch strings.TrimSpace(method) {
-	case "basic-auth":
-		username, inputErr := promptRequiredInput(command, prompter, "Git basic-auth username: ", "git basic-auth username")
+	case "basicAuth":
+		username, inputErr := promptRequiredInput(command, prompter, "Git basicAuth username: ", "git basicAuth username")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		password, inputErr := promptRequiredInput(command, prompter, "Git basic-auth password: ", "git basic-auth password")
+		password, inputErr := promptRequiredInput(command, prompter, "Git basicAuth password: ", "git basicAuth password")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -266,8 +266,8 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 		privateKeyFile, inputErr := promptRequiredInput(
 			command,
 			prompter,
-			"Git SSH private-key-file: ",
-			"git ssh private-key-file",
+			"Git SSH privateKeyFile: ",
+			"git ssh privateKeyFile",
 		)
 		if inputErr != nil {
 			return nil, inputErr
@@ -276,11 +276,11 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		knownHostsFile, inputErr := promptOptionalInput(command, prompter, "Git SSH known-hosts-file (optional): ")
+		knownHostsFile, inputErr := promptOptionalInput(command, prompter, "Git SSH knownHostsFile (optional): ")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		insecureIgnoreHostKey, inputErr := prompter.Confirm(command, "Git SSH insecure-ignore-host-key?", false)
+		insecureIgnoreHostKey, inputErr := prompter.Confirm(command, "Git SSH insecureIgnoreHostKey?", false)
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -291,8 +291,8 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 			KnownHostsFile:        knownHostsFile,
 			InsecureIgnoreHostKey: insecureIgnoreHostKey,
 		}
-	case "access-key":
-		token, inputErr := promptRequiredInput(command, prompter, "Git access-key token: ", "git access-key token")
+	case "accessKey":
+		token, inputErr := promptRequiredInput(command, prompter, "Git accessKey token: ", "git accessKey token")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -305,7 +305,7 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 }
 
 func promptManagedServer(command *cobra.Command, prompter configPrompter) (*configdomain.ManagedServer, error) {
-	baseURL, err := promptRequiredInput(command, prompter, "Managed-server base-url: ", "managed-server base-url")
+	baseURL, err := promptRequiredInput(command, prompter, "Managed-server baseUrl: ", "managedServer baseUrl")
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 		OpenAPI: openAPI,
 	}
 
-	includeHeaders, err := prompter.Confirm(command, "Configure managed-server default headers?", false)
+	includeHeaders, err := prompter.Confirm(command, "Configure managedServer default headers?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 		server.DefaultHeaders = headers
 	}
 
-	includeProxy, err := prompter.Confirm(command, "Configure managed-server proxy?", false)
+	includeProxy, err := prompter.Confirm(command, "Configure managedServer proxy?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 	}
 	server.Auth = auth
 
-	includeTLS, err := prompter.Confirm(command, "Configure managed-server TLS?", false)
+	includeTLS, err := prompter.Confirm(command, "Configure managedServer TLS?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -365,21 +365,21 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 }
 
 func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPProxy, error) {
-	httpURL, err := promptOptionalInput(command, prompter, "Proxy http-url (optional): ")
+	httpURL, err := promptOptionalInput(command, prompter, "Proxy httpUrl (optional): ")
 	if err != nil {
 		return nil, err
 	}
 
-	httpsURL, err := promptOptionalInput(command, prompter, "Proxy https-url (optional): ")
+	httpsURL, err := promptOptionalInput(command, prompter, "Proxy httpsUrl (optional): ")
 	if err != nil {
 		return nil, err
 	}
 
 	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
-		return nil, cliutil.ValidationError("managed-server proxy requires at least one of http-url or https-url", nil)
+		return nil, cliutil.ValidationError("managedServer proxy requires at least one of httpUrl or httpsUrl", nil)
 	}
 
-	noProxy, err := promptOptionalInput(command, prompter, "Proxy no-proxy list (optional): ")
+	noProxy, err := promptOptionalInput(command, prompter, "Proxy noProxy list (optional): ")
 	if err != nil {
 		return nil, err
 	}
@@ -415,8 +415,8 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPAuth, error) {
 	method, err := prompter.Select(
 		command,
-		"Select managed-server auth method",
-		[]string{"oauth2", "basic-auth", "custom-headers"},
+		"Select managedServer auth method",
+		[]string{"oauth2", "basicAuth", "customHeaders"},
 	)
 	if err != nil {
 		return nil, err
@@ -428,8 +428,8 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		tokenURL, inputErr := promptRequiredInput(
 			command,
 			prompter,
-			"OAuth2 token-url: ",
-			"oauth2 token-url",
+			"OAuth2 tokenUrl: ",
+			"oauth2 tokenUrl",
 		)
 		if inputErr != nil {
 			return nil, inputErr
@@ -437,7 +437,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		grantType, inputErr := promptOptionalInput(
 			command,
 			prompter,
-			fmt.Sprintf("OAuth2 grant-type (default %s): ", configdomain.OAuthClientCreds),
+			fmt.Sprintf("OAuth2 grantType (default %s): ", configdomain.OAuthClientCreds),
 		)
 		if inputErr != nil {
 			return nil, inputErr
@@ -445,11 +445,11 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		if grantType == "" {
 			grantType = configdomain.OAuthClientCreds
 		}
-		clientID, inputErr := promptRequiredInput(command, prompter, "OAuth2 client-id: ", "oauth2 client-id")
+		clientID, inputErr := promptRequiredInput(command, prompter, "OAuth2 clientId: ", "oauth2 clientId")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		clientSecret, inputErr := promptRequiredInput(command, prompter, "OAuth2 client-secret: ", "oauth2 client-secret")
+		clientSecret, inputErr := promptRequiredInput(command, prompter, "OAuth2 clientSecret: ", "oauth2 clientSecret")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -479,7 +479,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Scope:        scope,
 			Audience:     audience,
 		}
-	case "basic-auth":
+	case "basicAuth":
 		username, inputErr := promptRequiredInput(command, prompter, "Basic auth username: ", "basic auth username")
 		if inputErr != nil {
 			return nil, inputErr
@@ -492,14 +492,14 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Username: username,
 			Password: password,
 		}
-	case "custom-headers":
+	case "customHeaders":
 		customHeaders, inputErr := promptCustomHeaders(command, prompter)
 		if inputErr != nil {
 			return nil, inputErr
 		}
 		auth.CustomHeaders = customHeaders
 	default:
-		return nil, cliutil.ValidationError("invalid managed-server auth method selected", nil)
+		return nil, cliutil.ValidationError("invalid managedServer auth method selected", nil)
 	}
 
 	return auth, nil
@@ -539,7 +539,7 @@ func promptCustomHeaders(command *cobra.Command, prompter configPrompter) ([]con
 }
 
 func promptSecretStore(command *cobra.Command, prompter configPrompter) (*configdomain.SecretStore, error) {
-	provider, err := prompter.Select(command, "Select secret-store provider", []string{"file", "vault"})
+	provider, err := prompter.Select(command, "Select secretStore provider", []string{"file", "vault"})
 	if err != nil {
 		return nil, err
 	}
@@ -559,21 +559,21 @@ func promptSecretStore(command *cobra.Command, prompter configPrompter) (*config
 		}
 		store.Vault = vaultStore
 	default:
-		return nil, cliutil.ValidationError("invalid secret-store provider selected", nil)
+		return nil, cliutil.ValidationError("invalid secretStore provider selected", nil)
 	}
 
 	return store, nil
 }
 
 func promptFileSecretStore(command *cobra.Command, prompter configPrompter) (*configdomain.FileSecretStore, error) {
-	path, err := promptRequiredInput(command, prompter, "Secret-store file path: ", "secret-store file path")
+	path, err := promptRequiredInput(command, prompter, "Secret-store file path: ", "secretStore file path")
 	if err != nil {
 		return nil, err
 	}
 	keySource, err := prompter.Select(
 		command,
-		"Select secret-store file key source",
-		[]string{"key", "key-file", "passphrase", "passphrase-file"},
+		"Select secretStore file key source",
+		[]string{"key", "keyFile", "passphrase", "passphraseFile"},
 	)
 	if err != nil {
 		return nil, err
@@ -582,36 +582,36 @@ func promptFileSecretStore(command *cobra.Command, prompter configPrompter) (*co
 	store := &configdomain.FileSecretStore{Path: path}
 	switch strings.TrimSpace(keySource) {
 	case "key":
-		store.Key, err = promptRequiredInput(command, prompter, "Secret-store file key: ", "secret-store file key")
-	case "key-file":
+		store.Key, err = promptRequiredInput(command, prompter, "Secret-store file key: ", "secretStore file key")
+	case "keyFile":
 		store.KeyFile, err = promptRequiredInput(
 			command,
 			prompter,
-			"Secret-store file key-file: ",
-			"secret-store file key-file",
+			"Secret-store file keyFile: ",
+			"secretStore file keyFile",
 		)
 	case "passphrase":
 		store.Passphrase, err = promptRequiredInput(
 			command,
 			prompter,
 			"Secret-store file passphrase: ",
-			"secret-store file passphrase",
+			"secretStore file passphrase",
 		)
-	case "passphrase-file":
+	case "passphraseFile":
 		store.PassphraseFile, err = promptRequiredInput(
 			command,
 			prompter,
-			"Secret-store file passphrase-file: ",
-			"secret-store file passphrase-file",
+			"Secret-store file passphraseFile: ",
+			"secretStore file passphraseFile",
 		)
 	default:
-		return nil, cliutil.ValidationError("invalid secret-store file key source selected", nil)
+		return nil, cliutil.ValidationError("invalid secretStore file key source selected", nil)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	includeKDF, err := prompter.Confirm(command, "Configure secret-store file KDF parameters?", false)
+	includeKDF, err := prompter.Confirm(command, "Configure secretStore file KDF parameters?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -667,11 +667,11 @@ func promptVaultSecretStore(command *cobra.Command, prompter configPrompter) (*c
 	if err != nil {
 		return nil, err
 	}
-	pathPrefix, err := promptOptionalInput(command, prompter, "Vault path-prefix (optional): ")
+	pathPrefix, err := promptOptionalInput(command, prompter, "Vault pathPrefix (optional): ")
 	if err != nil {
 		return nil, err
 	}
-	kvVersion, hasKVVersion, err := promptOptionalInt(command, prompter, "Vault kv-version (optional integer): ", "vault kv-version")
+	kvVersion, hasKVVersion, err := promptOptionalInt(command, prompter, "Vault kvVersion (optional integer): ", "vault kvVersion")
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +706,7 @@ func promptVaultSecretStore(command *cobra.Command, prompter configPrompter) (*c
 }
 
 func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdomain.VaultAuth, error) {
-	method, err := prompter.Select(command, "Select vault auth method", []string{"token", "password", "approle"})
+	method, err := prompter.Select(command, "Select vault auth method", []string{"token", "password", "appRole"})
 	if err != nil {
 		return nil, err
 	}
@@ -737,16 +737,16 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 			Password: password,
 			Mount:    mount,
 		}
-	case "approle":
-		roleID, inputErr := promptRequiredInput(command, prompter, "Vault approle role-id: ", "vault approle role-id")
+	case "appRole":
+		roleID, inputErr := promptRequiredInput(command, prompter, "Vault appRole roleId: ", "vault appRole roleId")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		secretID, inputErr := promptRequiredInput(command, prompter, "Vault approle secret-id: ", "vault approle secret-id")
+		secretID, inputErr := promptRequiredInput(command, prompter, "Vault appRole secretId: ", "vault appRole secretId")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		mount, inputErr := promptOptionalInput(command, prompter, "Vault approle mount (optional): ")
+		mount, inputErr := promptOptionalInput(command, prompter, "Vault appRole mount (optional): ")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -763,19 +763,19 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 }
 
 func promptTLS(command *cobra.Command, prompter configPrompter) (*configdomain.TLS, error) {
-	caCertFile, err := promptOptionalInput(command, prompter, "TLS ca-cert-file (optional): ")
+	caCertFile, err := promptOptionalInput(command, prompter, "TLS caCertFile (optional): ")
 	if err != nil {
 		return nil, err
 	}
-	clientCertFile, err := promptOptionalInput(command, prompter, "TLS client-cert-file (optional): ")
+	clientCertFile, err := promptOptionalInput(command, prompter, "TLS clientCertFile (optional): ")
 	if err != nil {
 		return nil, err
 	}
-	clientKeyFile, err := promptOptionalInput(command, prompter, "TLS client-key-file (optional): ")
+	clientKeyFile, err := promptOptionalInput(command, prompter, "TLS client-keyFile (optional): ")
 	if err != nil {
 		return nil, err
 	}
-	insecureSkipVerify, err := prompter.Confirm(command, "TLS insecure-skip-verify?", false)
+	insecureSkipVerify, err := prompter.Confirm(command, "TLS insecureSkipVerify?", false)
 	if err != nil {
 		return nil, err
 	}

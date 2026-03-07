@@ -1,11 +1,11 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name",
+    "idFromAttribute": "/id",
+    "aliasFromAttribute": "/name",
     "collectionPath": "/projects/{{.project}}/jobs",
     "externalizedAttributes": [
       {
-        "path": ["sequence", "commands", "*", "script"],
+        "path": "/sequence/commands/*/script",
         "file": "script.sh"
       }
     ]

@@ -1,6 +1,6 @@
 {
   "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "alias"
+    "idFromAttribute": "/id",
+    "aliasFromAttribute": "/alias"
   }
 }

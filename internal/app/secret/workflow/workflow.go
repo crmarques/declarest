@@ -9,7 +9,6 @@ import (
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
-	"github.com/crmarques/declarest/resource/identity"
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
@@ -92,8 +91,8 @@ func DetectMetadataSecretCandidates(value resource.Value, attributes []string) [
 		}
 		seenAttributes[attribute] = struct{}{}
 
-		fieldValue, found := identity.LookupScalarAttribute(payload, attribute)
-		if !found || strings.TrimSpace(fieldValue) == "" {
+		fieldValue, found, err := resource.LookupJSONPointerString(payload, attribute)
+		if err != nil || !found || strings.TrimSpace(fieldValue) == "" {
 			continue
 		}
 		if IsPlaceholderValue(fieldValue) {
@@ -116,16 +115,11 @@ func ResolveAttributePathsForCandidates(payload map[string]any, candidates []str
 		if candidate == "" {
 			continue
 		}
-
-		if strings.Contains(candidate, ".") {
-			fieldValue, found := identity.LookupScalarAttribute(payload, candidate)
-			if found && strings.TrimSpace(fieldValue) != "" && !IsPlaceholderValue(fieldValue) {
-				attributes[candidate] = struct{}{}
-			}
+		fieldValue, found, err := resource.LookupJSONPointerString(payload, candidate)
+		if err != nil || !found || strings.TrimSpace(fieldValue) == "" || IsPlaceholderValue(fieldValue) {
 			continue
 		}
-
-		collectCandidateAttributePaths(payload, "", candidate, attributes)
+		attributes[candidate] = struct{}{}
 	}
 
 	result := make([]string, 0, len(attributes))
@@ -143,13 +137,9 @@ func ResolveAttributePaths(payload map[string]any, secretAttributes []string) []
 		if attribute == "" {
 			continue
 		}
-		if strings.Contains(attribute, ".") {
-			if _, _, found := FindAttributeParentMap(payload, attribute); found {
-				resolvedPaths[attribute] = struct{}{}
-			}
-			continue
+		if _, found, err := resource.LookupJSONPointer(payload, attribute); err == nil && found {
+			resolvedPaths[attribute] = struct{}{}
 		}
-		collectAttributePaths(payload, "", attribute, resolvedPaths)
 	}
 
 	paths := make([]string, 0, len(resolvedPaths))
@@ -195,16 +185,11 @@ func StoreAndMaskAttribute(
 	logicalPath string,
 	attribute string,
 ) error {
-	secretValue, found := identity.LookupScalarAttribute(payload, attribute)
-	if !found || strings.TrimSpace(secretValue) == "" {
+	secretValue, found, err := resource.LookupJSONPointerString(payload, attribute)
+	if err != nil || !found || strings.TrimSpace(secretValue) == "" {
 		return nil
 	}
 	if IsPlaceholderValue(secretValue) {
-		return nil
-	}
-
-	parent, leafKey, found := FindAttributeParentMap(payload, attribute)
-	if !found {
 		return nil
 	}
 
@@ -213,8 +198,8 @@ func StoreAndMaskAttribute(
 		return err
 	}
 
-	parent[leafKey] = PlaceholderValue()
-	return nil
+	_, err = resource.SetJSONPointerValue(payload, attribute, PlaceholderValue())
+	return err
 }
 
 func PersistDetectedAttributes(
@@ -244,41 +229,6 @@ func PersistDetectedAttributes(
 	)
 
 	return metadataService.Set(ctx, logicalPath, currentMetadata)
-}
-
-func FindAttributeParentMap(payload map[string]any, attribute string) (map[string]any, string, bool) {
-	segments := strings.Split(strings.TrimSpace(attribute), ".")
-	if len(segments) == 0 {
-		return nil, "", false
-	}
-
-	current := payload
-	for idx := 0; idx < len(segments)-1; idx++ {
-		segment := strings.TrimSpace(segments[idx])
-		if segment == "" {
-			return nil, "", false
-		}
-
-		nextRaw, exists := current[segment]
-		if !exists {
-			return nil, "", false
-		}
-		next, ok := nextRaw.(map[string]any)
-		if !ok {
-			return nil, "", false
-		}
-		current = next
-	}
-
-	leafKey := strings.TrimSpace(segments[len(segments)-1])
-	if leafKey == "" {
-		return nil, "", false
-	}
-	if _, exists := current[leafKey]; !exists {
-		return nil, "", false
-	}
-
-	return current, leafKey, true
 }
 
 func PlaceholderValue() string {
@@ -351,69 +301,13 @@ func isNumericOnlyString(value string) bool {
 func maskPayload(payload map[string]any, secretAttributes []string) {
 	paths := ResolveAttributePaths(payload, secretAttributes)
 	for _, attributePath := range paths {
-		parent, leafKey, found := FindAttributeParentMap(payload, attributePath)
-		if !found {
-			continue
-		}
-
-		currentValue := parent[leafKey]
-		if currentValue == nil {
+		currentValue, found, err := resource.LookupJSONPointer(payload, attributePath)
+		if err != nil || !found || currentValue == nil {
 			continue
 		}
 		if stringValue, ok := currentValue.(string); ok && IsPlaceholderValue(stringValue) {
 			continue
 		}
-		parent[leafKey] = PlaceholderValue()
-	}
-}
-
-func collectAttributePaths(
-	value any,
-	prefix string,
-	attribute string,
-	paths map[string]struct{},
-) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, field := range typed {
-			currentPath := key
-			if prefix != "" {
-				currentPath = prefix + "." + key
-			}
-			if key == attribute {
-				paths[currentPath] = struct{}{}
-			}
-			collectAttributePaths(field, currentPath, attribute, paths)
-		}
-	case []any:
-		// Arrays are intentionally ignored because metadata secret paths are map-path based.
-		return
-	}
-}
-
-func collectCandidateAttributePaths(
-	value any,
-	prefix string,
-	candidate string,
-	attributes map[string]struct{},
-) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, field := range typed {
-			attribute := key
-			if prefix != "" {
-				attribute = prefix + "." + key
-			}
-			if key == candidate {
-				fieldValue, ok := field.(string)
-				if ok && strings.TrimSpace(fieldValue) != "" && !IsPlaceholderValue(fieldValue) {
-					attributes[attribute] = struct{}{}
-				}
-			}
-			collectCandidateAttributePaths(field, attribute, candidate, attributes)
-		}
-	case []any:
-		// Arrays are intentionally skipped because metadata attributes are map-path based.
-		return
+		_, _ = resource.SetJSONPointerValue(payload, attributePath, PlaceholderValue())
 	}
 }
