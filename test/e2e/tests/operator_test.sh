@@ -313,6 +313,32 @@ EOF
   assert_contains "${archive_listing}" "metadata/projects/_/metadata.json"
 }
 
+test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures() {
+  load_operator_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  export E2E_RUN_DIR="${tmp}/run"
+  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_METADATA_DIR="${REPO_ROOT}/test/e2e/components/managed-server/rundeck/metadata"
+  unset E2E_METADATA_BUNDLE
+
+  mkdir -p "${E2E_RUN_DIR}"
+
+  e2e_operator_prepare_managed_server_metadata_bundle
+
+  local archive_listing
+  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}")
+
+  assert_contains "${archive_listing}" "metadata/projects/_/jobs/_/metadata.json"
+  assert_not_contains "${archive_listing}" "metadata/projects/platform/jobs/_/metadata.yaml"
+  assert_not_contains "${archive_listing}" "metadata/save-input-modes-items/_/metadata.yaml"
+  assert_not_contains "${archive_listing}" "metadata/save-secret-guard/metadata/metadata.yaml"
+  assert_not_contains "${archive_listing}" "metadata/secret-detect-fix/acme/metadata.yaml"
+}
+
 test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
   load_operator_libs
 
@@ -427,5 +453,6 @@ test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
 test_operator_write_manifests_sets_keycloak_metadata_bundle_ref
 test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir
+test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 test_operator_write_manager_manifest_mounts_prepared_metadata_bundle
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path
