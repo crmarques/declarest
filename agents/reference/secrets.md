@@ -25,7 +25,8 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 8. `resource save` MUST fail by default when non-metadata-declared potential plaintext secrets are detected and MUST require explicit `--ignore` or `--handle-secrets` override to proceed.
 9. `resource save --handle-secrets` MUST accept an optional comma-separated list of attributes; when omitted, all detected candidates MUST be handled.
 10. `resource save --handle-secrets` MUST store handled plaintext values in the configured secret store with deterministic path-scoped keys and rewrite handled payload values to `{{secret .}}` placeholders before repository persistence.
-11. When resolving resource payload placeholders, `{{secret .}}` MUST map to `<logical-path>:<attribute-path>` and `{{secret <custom-key>}}` MUST map to `<logical-path>:<custom-key>`.
+11. `resource save --as-secret` MUST store the entire encoded resource payload in the configured secret store under key `<logical-path>:.` and MUST persist only an exact root `{{secret .}}` placeholder in the repository.
+12. When resolving resource payload placeholders, `{{secret .}}` MUST map to `<logical-path>:<attribute-path>` for attribute-scoped placeholders, an exact whole-resource `{{secret .}}` payload MUST map to `<logical-path>:.`, and `{{secret <custom-key>}}` MUST map to `<logical-path>:<custom-key>`.
 12. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with plaintext-secret warning including only remaining unhandled candidates that are not declared in metadata, except when `--ignore` is set.
 13. Metadata `resourceInfo.secretInAttributes` entries MUST be treated as explicit secret candidates in detection and handling flows and MUST be automatically stored and masked during default `resource save` persistence workflows.
 14. `resource save --ignore` MUST bypass plaintext-secret save enforcement for all remaining candidates.
@@ -44,6 +45,10 @@ Placeholder syntax:
 2. `{{secret <key-name>}}` for explicit key override.
 3. Legacy quoted explicit keys (for example `{{secret "key-name"}}`) remain valid.
 
+Whole-resource store contract:
+1. `resource save --as-secret` uses path-scoped key `<logical-path>:.`.
+2. UTF-8 whole-resource secret values SHOULD remain directly readable in the secret store; non-UTF-8 content MAY use a deterministic reversible encoding as long as decode behavior remains descriptor-aware.
+
 Secret manager method families:
 1. Lifecycle: `Init`.
 2. CRUD: `Store/Get/Delete/List`.
@@ -60,6 +65,7 @@ Store contracts:
 3. Payload masking attempts on unsupported structures.
 4. Encryption key or passphrase misconfiguration.
 5. `resource save` detects metadata-declared plaintext secret candidates but no secret store provider is configured.
+6. `resource save --as-secret` is invoked without a configured secret store provider.
 
 ## Edge Cases
 1. Field contains literal text matching placeholder pattern but is not a secret.
@@ -84,3 +90,4 @@ Store contracts:
 12. `resource get /customers/acme` redacts `password` to `{{secret .}}` when metadata for `/customers/acme` includes `resourceInfo.secretInAttributes: [password]`.
 13. `resource get /customers/acme --show-secrets` prints plaintext `password` even when metadata declares that attribute as secret.
 14. `resource save /customers/acme` fails with `ValidationError` when metadata declares `password` as secret and no secret store provider is configured.
+15. `resource save /projects/platform/secrets/private-key --payload private.key --as-secret` stores the full key content under `/projects/platform/secrets/private-key:.`, leaves `resource.key` containing only `{{secret .}}`, and `resource apply /projects/platform/secrets/private-key` resolves the placeholder back to the original `.key` payload.

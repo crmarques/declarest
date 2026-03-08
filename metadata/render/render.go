@@ -66,6 +66,11 @@ func RenderResourceMetadataWithFormat(
 	scope["payloadType"] = descriptor.PayloadType
 	scope["payloadMediaType"] = descriptor.MediaType
 	scope["payloadExtension"] = descriptor.Extension
+	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(descriptor.MediaType) != "" {
+		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
+			scope["contentType"] = descriptor.MediaType
+		}
+	}
 
 	resolvedCollectionPath, err := resolveCollectionPath(metadataValue.CollectionPath, scope)
 	if err != nil {

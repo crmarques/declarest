@@ -2036,6 +2036,43 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
+	t.Run("file_payload_preserves_unknown_extension_for_opaque_content", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		orchestrator := &testOrchestrator{metadataService: metadataService}
+
+		payloadFile := filepath.Join(t.TempDir(), "private.key")
+		if err := os.WriteFile(payloadFile, []byte("opaque"), 0o600); err != nil {
+			t.Fatalf("failed to write payload file: %v", err)
+		}
+
+		deps := newResourceSaveDeps(orchestrator, metadataService)
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/customers/acme",
+			"--payload",
+			payloadFile,
+			"--overwrite",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
+		}
+		if orchestrator.saveCalls[0].descriptor.PayloadType != resource.PayloadTypeOctetStream {
+			t.Fatalf("expected octet-stream payload type, got %q", orchestrator.saveCalls[0].descriptor.PayloadType)
+		}
+		if orchestrator.saveCalls[0].descriptor.Extension != ".key" {
+			t.Fatalf("expected .key extension, got %q", orchestrator.saveCalls[0].descriptor.Extension)
+		}
+		if _, ok := orchestrator.saveCalls[0].value.(resource.BinaryValue); !ok {
+			t.Fatalf("expected BinaryValue payload, got %T", orchestrator.saveCalls[0].value)
+		}
+	})
+
 	t.Run("as_one_resource_overrides_list_item_save", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{

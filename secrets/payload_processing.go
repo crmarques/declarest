@@ -97,6 +97,15 @@ func ResolvePayloadDirectivesForResource(
 		return withDescriptor, nil
 	}
 
+	if resolvedWholeResource, handled, err := ResolveWholeResourcePlaceholderForResource(
+		withDescriptor,
+		logicalPath,
+		resolvedDescriptor,
+		getFn,
+	); handled || err != nil {
+		return resolvedWholeResource, err
+	}
+
 	cache := make(map[string]string)
 	output, err := resolvePayloadValue(withDescriptor, "", strings.TrimSpace(logicalPath), cache, getFn, 0)
 	if err != nil {

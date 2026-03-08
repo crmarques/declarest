@@ -11,7 +11,8 @@ Examples:
 - `application/json` -> `resource.json`
 - `application/yaml` -> `resource.yaml`
 - `application/xml` -> `resource.xml`
-- unknown media type from `blob.bin` -> `resource.bin` with internal media type `application/octet-stream`
+- opaque input file `private.key` -> `resource.key` with internal media type `application/octet-stream`
+- unknown payload with no usable suffix hint -> `resource.bin` with internal media type `application/octet-stream`
 
 ## Repository layout
 

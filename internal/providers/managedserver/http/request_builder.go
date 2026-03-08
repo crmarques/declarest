@@ -88,9 +88,12 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo reso
 				Descriptor: bodyDescriptor,
 			}
 		}
-		transformedBody, err := g.applyOperationPayloadTransforms(ctx, spec.Body, spec)
-		if err != nil {
-			return metadata.OperationSpec{}, err
+		transformedBody := unwrapContentValue(spec.Body)
+		if resource.IsStructuredPayloadType(bodyDescriptor.PayloadType) {
+			transformedBody, err = g.applyOperationPayloadTransforms(ctx, spec.Body, spec)
+			if err != nil {
+				return metadata.OperationSpec{}, err
+			}
 		}
 		spec.Body = resource.Content{
 			Value:      transformedBody,

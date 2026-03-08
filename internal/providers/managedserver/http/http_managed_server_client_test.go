@@ -791,6 +791,47 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 			t.Fatalf("expected secret content body, got %#v", bodyContent.Value)
 		}
 	})
+
+	t.Run("secret_update_accepts_raw_private_key_payload", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/secrets/private-key")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/secrets/private-key",
+			Payload:     resource.BinaryValue{Bytes: []byte("private-key-bytes")},
+			PayloadDescriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+				Extension: ".key",
+			}),
+		}, md, metadata.OperationUpdate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/storage/keys/projects/platform/private-key" {
+			t.Fatalf("expected project key-storage path, got %q", spec.Path)
+		}
+		if spec.ContentType != "application/octet-stream" {
+			t.Fatalf("expected octet-stream content type, got %q", spec.ContentType)
+		}
+		bodyContent, ok := spec.Body.(resource.Content)
+		if !ok {
+			t.Fatalf("expected secret body content, got %T", spec.Body)
+		}
+		body, ok := bodyContent.Value.(resource.BinaryValue)
+		if !ok {
+			t.Fatalf("expected binary secret body, got %T", bodyContent.Value)
+		}
+		if string(body.Bytes) != "private-key-bytes" {
+			t.Fatalf("expected raw binary secret body, got %q", string(body.Bytes))
+		}
+		if bodyContent.Descriptor.Extension != ".key" {
+			t.Fatalf("expected .key descriptor extension, got %q", bodyContent.Descriptor.Extension)
+		}
+	})
 }
 
 func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {

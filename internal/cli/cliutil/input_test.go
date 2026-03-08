@@ -110,3 +110,38 @@ func TestDecodeResourceValueInputDataBinary(t *testing.T) {
 		t.Fatalf("expected binary payload bytes %q, got %q", "abc", string(binaryValue.Bytes))
 	}
 }
+
+func TestDecodeResourceContentInputDataPreservesUnknownFileExtensionForOpaquePayloads(t *testing.T) {
+	t.Parallel()
+
+	content, err := DecodeResourceContentInputData([]byte("opaque"), "", "private.key")
+	if err != nil {
+		t.Fatalf("DecodeResourceContentInputData returned error: %v", err)
+	}
+
+	if content.Descriptor.PayloadType != resource.PayloadTypeOctetStream {
+		t.Fatalf("expected octet-stream payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if content.Descriptor.MediaType != "application/octet-stream" {
+		t.Fatalf("expected octet-stream media type, got %q", content.Descriptor.MediaType)
+	}
+	if content.Descriptor.Extension != ".key" {
+		t.Fatalf("expected .key extension, got %q", content.Descriptor.Extension)
+	}
+	if _, ok := content.Value.(resource.BinaryValue); !ok {
+		t.Fatalf("expected BinaryValue payload, got %T", content.Value)
+	}
+}
+
+func TestDecodeResourceContentInputDataPreservesUnknownFileExtensionForExplicitOctetStream(t *testing.T) {
+	t.Parallel()
+
+	content, err := DecodeResourceContentInputData([]byte("opaque"), "application/octet-stream", "private.key")
+	if err != nil {
+		t.Fatalf("DecodeResourceContentInputData returned error: %v", err)
+	}
+
+	if content.Descriptor.Extension != ".key" {
+		t.Fatalf("expected .key extension, got %q", content.Descriptor.Extension)
+	}
+}

@@ -131,6 +131,7 @@ Invariants:
 2. numeric handling MUST avoid implicit precision loss.
 3. exact placeholder directives (for example `{{secret .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
 4. opaque binary payloads MUST use `resource.BinaryValue` instead of raw `[]byte`.
+5. when a whole resource payload is persisted as the exact placeholder `{{secret .}}`, workflow-specific resolution MUST treat `.` as the root payload scope for that logical path.
 
 ### Type: `resource.BinaryValue`
 Represents opaque binary payload content.

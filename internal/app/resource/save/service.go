@@ -16,6 +16,7 @@ type Dependencies = appdeps.Dependencies
 type ExecuteOptions struct {
 	AsItems       bool
 	AsOneResource bool
+	AsSecret      bool
 	Ignore        bool
 	Force         bool
 
@@ -39,8 +40,20 @@ func Execute(
 	if options.AsItems && options.AsOneResource {
 		return faults.NewValidationError("flags --as-items and --as-one-resource cannot be used together", nil)
 	}
+	if options.AsSecret && options.AsItems {
+		return faults.NewValidationError("flags --as-secret and --as-items cannot be used together", nil)
+	}
 	if options.AsOneResource && len(options.SkipItems) > 0 {
 		return faults.NewValidationError("flag --skip-items is not supported with --as-one-resource", nil)
+	}
+	if options.AsSecret && len(options.SkipItems) > 0 {
+		return faults.NewValidationError("flag --skip-items is not supported with --as-secret", nil)
+	}
+	if options.AsSecret && options.HandleSecretsEnabled {
+		return faults.NewValidationError("flags --as-secret and --handle-secrets cannot be used together", nil)
+	}
+	if options.AsSecret && options.Ignore {
+		return faults.NewValidationError("flags --as-secret and --ignore cannot be used together", nil)
 	}
 
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
@@ -82,6 +95,7 @@ func Execute(
 				remoteValue,
 				options.AsItems,
 				options.AsOneResource,
+				options.AsSecret,
 				options.Ignore,
 				options.HandleSecretsEnabled,
 				options.RequestedSecretCandidates,
@@ -126,6 +140,7 @@ func Execute(
 		value,
 		options.AsItems,
 		options.AsOneResource,
+		options.AsSecret,
 		options.Ignore,
 		options.HandleSecretsEnabled,
 		options.RequestedSecretCandidates,
@@ -143,6 +158,7 @@ func saveResolvedPathPayload(
 	content resource.Content,
 	asItems bool,
 	asOneResource bool,
+	asSecret bool,
 	ignore bool,
 	handleSecretsEnabled bool,
 	requestedSecretCandidates []string,
@@ -154,9 +170,12 @@ func saveResolvedPathPayload(
 		return err
 	}
 
-	if asOneResource || (!asItems && !isListPayload) {
+	if asSecret || asOneResource || (!asItems && !isListPayload) {
 		if err := ensureSaveTargetAllowed(ctx, repositoryService, resolvedPath, force); err != nil {
 			return err
+		}
+		if asSecret {
+			return saveResolvedPathAsSecret(ctx, deps, orchestratorService, resolvedPath, content)
 		}
 		value := content.Value
 		if handleSecretsEnabled {
@@ -290,4 +309,3 @@ func saveResolvedPathPayload(
 
 	return nil
 }
-

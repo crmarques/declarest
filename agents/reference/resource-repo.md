@@ -18,7 +18,7 @@ Define local repository semantics for resource persistence, metadata storage, pa
 1. All paths MUST be normalized logical absolute paths before IO.
 2. Filesystem joins MUST reject traversal outside configured roots.
 3. Reserved segment `_` MUST be treated as metadata namespace.
-4. Resource payload type MUST be explicit for new-file writes, using metadata/file discovery before falling back to the repository default (`json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`).
+4. Resource payload type MUST be explicit for new-file writes, using metadata/file discovery before falling back to the repository default (`json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`); opaque input files with unknown suffixes MUST preserve the provided suffix and use `.bin` only when no suffix or stronger payload hint is available.
 5. Save operations MUST be atomic at file level.
 6. Repository sync conflicts MUST surface typed conflict errors with remediation hints.
 7. Push operations MUST never leak credentials in error output.
@@ -28,6 +28,7 @@ Define local repository semantics for resource persistence, metadata storage, pa
 11. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
 12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile (detailed receiver behavior is defined in `agents/reference/k8s-operator.md`).
 13. Resource and collection metadata sidecars MUST support `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default.
+14. When `resource save --as-secret` is selected, the repository payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream files).
 
 ## Data Contracts
 Layout contract:
@@ -65,25 +66,29 @@ Policy contracts:
 3. Empty collection list with metadata present.
 4. Reset requested with uncommitted local changes.
 5. Existing payload suffix is unknown but metadata `payloadType` still resolves runtime behavior.
-6. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.
-7. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
-8. Clean requested on a git repo with both tracked edits and untracked files/directories.
-9. Clean requested on a filesystem repository context.
-10. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
-11. Both `metadata.yaml` and `metadata.json` exist for one selector path; repository-backed metadata resolution uses the YAML sidecar deterministically.
+6. Opaque file input uses an unknown suffix (for example `.key`) and persistence keeps `resource.key` with octet-stream semantics instead of rewriting to `resource.bin`.
+7. Whole-resource secret saves keep the original payload suffix while replacing the repository payload with an exact root placeholder.
+8. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.
+9. First repo interaction runs against an existing repository base directory that has resource files but no `.git/` directory yet.
+10. Clean requested on a git repo with both tracked edits and untracked files/directories.
+11. Clean requested on a filesystem repository context.
+12. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
+13. Both `metadata.yaml` and `metadata.json` exist for one selector path; repository-backed metadata resolution uses the YAML sidecar deterministically.
 
 ## Examples
 1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
 2. Save `/projects/platform/readme` as plain text writes `/projects/platform/readme/resource.txt`.
 3. Save `/certificates/ca` as octet-stream without an existing file writes `/certificates/ca/resource.bin`.
-4. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`.
-5. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
-6. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
-7. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
-8. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
-9. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
-10. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
-11. `repository clean` on a filesystem repository succeeds without mutating repository files.
-12. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
-13. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
-14. When `/customers/_/metadata.yaml` and `/customers/_/metadata.json` both exist, metadata reads resolve `/customers/_/metadata.yaml` deterministically.
+4. Save `/projects/platform/secrets/private-key` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` and still treats the payload as octet-stream.
+5. Save `/projects/platform/secrets/private-key --as-secret` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` containing only `{{secret .}}` while the original payload bytes live in the secret store.
+6. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`.
+7. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
+8. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.
+9. `repository history` on a filesystem repository prints a deterministic not-supported message and performs no repository mutation.
+10. `repository history --path customers --grep fix --max-count 5` returns only local commits matching the combined filters when the backend is git.
+11. `repository status` on a git context with an existing base directory but no `.git/` auto-initializes the local git repository and then returns a deterministic sync status report.
+12. `repository clean` on a git repository discards tracked worktree edits and removes untracked files/directories.
+13. `repository clean` on a filesystem repository succeeds without mutating repository files.
+14. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
+15. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
+16. When `/customers/_/metadata.yaml` and `/customers/_/metadata.json` both exist, metadata reads resolve `/customers/_/metadata.yaml` deterministically.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/crmarques/declarest/resource"
@@ -87,13 +88,25 @@ func IsBinaryInputFormat(contentType string) bool {
 
 func resourceInputPayloadDescriptor(data []byte, contentType string, sourceName string) (resource.PayloadDescriptor, error) {
 	if trimmed := strings.TrimSpace(contentType); trimmed != "" {
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{MediaType: trimmed}), nil
+		descriptor := resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{MediaType: trimmed})
+		if descriptor.PayloadType == resource.PayloadTypeOctetStream {
+			if extension := strings.TrimSpace(filepath.Ext(sourceName)); extension != "" {
+				descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+					MediaType: trimmed,
+					Extension: extension,
+				})
+			}
+		}
+		return descriptor, nil
 	}
 	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
 		return descriptor, nil
 	}
 	if resource.StructuredLookingPayload(data) {
 		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}), nil
+	}
+	if extension := strings.TrimSpace(filepath.Ext(sourceName)); extension != "" {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{Extension: extension}), nil
 	}
 	return resource.DefaultOctetStreamDescriptor(), nil
 }

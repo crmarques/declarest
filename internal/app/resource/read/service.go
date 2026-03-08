@@ -119,7 +119,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		metadataSnapshot = &snapshot
 	}
 
-	finalValue, err := prepareSecretsForOutput(ctx, deps, req.LogicalPath, rawValue, req.ShowSecrets)
+	finalValue, err := prepareSecretsForOutput(ctx, deps, req.LogicalPath, rawValue, content.Descriptor, req.ShowSecrets)
 	if err != nil {
 		return Result{}, err
 	}
@@ -211,7 +211,7 @@ func renderCollection(
 	} else {
 		resolvedItems := make([]resource.Resource, 0, len(items))
 		for _, item := range items {
-			resolvedPayload, err := resolveSecretsForOutput(ctx, deps, item.LogicalPath, item.Payload)
+			resolvedPayload, err := resolveSecretsForOutput(ctx, deps, item.LogicalPath, item.Payload, item.PayloadDescriptor)
 			if err != nil {
 				return Result{}, err
 			}
@@ -239,10 +239,11 @@ func prepareSecretsForOutput(
 	deps Dependencies,
 	logicalPath string,
 	value resource.Value,
+	descriptor resource.PayloadDescriptor,
 	showSecrets bool,
 ) (resource.Value, error) {
 	if showSecrets {
-		return resolveSecretsForOutput(ctx, deps, logicalPath, value)
+		return resolveSecretsForOutput(ctx, deps, logicalPath, value, descriptor)
 	}
 	return maskSecretsForOutput(ctx, deps, logicalPath, value)
 }
@@ -268,6 +269,7 @@ func resolveSecretsForOutput(
 	deps Dependencies,
 	logicalPath string,
 	value resource.Value,
+	descriptor resource.PayloadDescriptor,
 ) (resource.Value, error) {
 	if value == nil {
 		return nil, nil
@@ -278,18 +280,28 @@ func resolveSecretsForOutput(
 		return nil, err
 	}
 
-	if deps.Secrets == nil {
-		return secretdomain.ResolvePayloadForResource(value, normalizedPath, func(string) (string, error) {
-			return "", faults.NewValidationError(
-				"flag --show-secrets requires a configured secret provider when payload includes placeholders",
-				nil,
-			)
-		})
+	getSecret := func(string) (string, error) {
+		return "", faults.NewValidationError(
+			"flag --show-secrets requires a configured secret provider when payload includes placeholders",
+			nil,
+		)
+	}
+	if deps.Secrets != nil {
+		getSecret = func(key string) (string, error) {
+			return deps.Secrets.Get(ctx, key)
+		}
 	}
 
-	return secretdomain.ResolvePayloadForResource(value, normalizedPath, func(key string) (string, error) {
-		return deps.Secrets.Get(ctx, key)
-	})
+	if resolvedWholeResource, handled, err := secretdomain.ResolveWholeResourcePlaceholderForResource(
+		value,
+		normalizedPath,
+		descriptor,
+		getSecret,
+	); handled || err != nil {
+		return resolvedWholeResource, err
+	}
+
+	return secretdomain.ResolvePayloadForResource(value, normalizedPath, getSecret)
 }
 
 func renderMetadataSnapshot(

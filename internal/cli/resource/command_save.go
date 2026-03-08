@@ -19,6 +19,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var skipItemsFlag string
 	var asItems bool
 	var asOneResource bool
+	var asSecret bool
 	var ignore bool
 	var handleSecrets string
 	var overwrite bool
@@ -36,6 +37,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			"  cat payload.json | declarest resource save /customers/acme --payload -",
 			"  declarest resource save /customers/ --as-items < customers.json",
 			"  declarest resource save /customers/acme --handle-secrets",
+			"  declarest resource save /projects/platform/secrets/private-key --payload private.key --as-secret",
 			"  declarest resource save /customers/acme --overwrite",
 			"  declarest --context git resource save /customers/acme --payload payload.json --overwrite --push",
 		}, "\n"),
@@ -103,6 +105,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				resourcesave.ExecuteOptions{
 					AsItems:                   asItems,
 					AsOneResource:             asOneResource,
+					AsSecret:                  asSecret,
 					Ignore:                    ignore,
 					Force:                     overwrite,
 					HandleSecretsEnabled:      handleSecretsEnabled,
@@ -127,6 +130,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
+	command.Flags().BoolVar(&asSecret, "as-secret", false, "store the whole saved resource payload in the secret store and persist only a root placeholder")
 	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
 	command.Flags().StringVar(&handleSecrets, "handle-secrets", "", "detect, store, and mask plaintext secrets while saving (optional comma-separated attributes)")
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")

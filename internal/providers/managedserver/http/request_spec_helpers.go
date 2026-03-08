@@ -241,6 +241,11 @@ func applyPayloadTemplateScope(scope map[string]any, md metadata.ResourceMetadat
 	scope["payloadType"] = activeDescriptor.PayloadType
 	scope["payloadMediaType"] = activeDescriptor.MediaType
 	scope["payloadExtension"] = activeDescriptor.Extension
+	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(activeDescriptor.MediaType) != "" {
+		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
+			scope["contentType"] = activeDescriptor.MediaType
+		}
+	}
 }
 
 func payloadDescriptorFromValue(value any) resource.PayloadDescriptor {

@@ -127,10 +127,10 @@ type testServiceAccessor struct {
 	server   managedserverdomain.ManagedServerClient
 }
 
-func (a *testServiceAccessor) RepositoryStore() repository.ResourceStore           { return a.store }
-func (a *testServiceAccessor) RepositorySync() repository.RepositorySync           { return a.sync }
-func (a *testServiceAccessor) MetadataService() metadatadomain.MetadataService     { return a.metadata }
-func (a *testServiceAccessor) SecretProvider() secretdomain.SecretProvider          { return a.secrets }
+func (a *testServiceAccessor) RepositoryStore() repository.ResourceStore       { return a.store }
+func (a *testServiceAccessor) RepositorySync() repository.RepositorySync       { return a.sync }
+func (a *testServiceAccessor) MetadataService() metadatadomain.MetadataService { return a.metadata }
+func (a *testServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return a.secrets }
 func (a *testServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
 	return a.server
 }
@@ -282,9 +282,9 @@ type testOrchestrator struct {
 	applyValuePolicy []orchestrator.ApplyPolicy
 	createCalls      []savedResource
 	updateCalls      []savedResource
-	diffCalls  []string
-	diffValues map[string][]resource.DiffEntry
-	diffErr    error
+	diffCalls        []string
+	diffValues       map[string][]resource.DiffEntry
+	diffErr          error
 	getLocalValues   map[string]resource.Value
 	localList        []resource.Resource
 	remoteList       []resource.Resource
@@ -294,6 +294,7 @@ type testOrchestrator struct {
 type savedResource struct {
 	logicalPath string
 	value       resource.Value
+	descriptor  resource.PayloadDescriptor
 }
 
 type deleteCall struct {
@@ -368,6 +369,7 @@ func (r *testOrchestrator) Save(_ context.Context, logicalPath string, content r
 	r.saveCalls = append(r.saveCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       content.Value,
+		descriptor:  content.Descriptor,
 	})
 	return r.saveErr
 }
@@ -380,6 +382,7 @@ func (r *testOrchestrator) ApplyWithContent(_ context.Context, logicalPath strin
 	r.applyValueCalls = append(r.applyValueCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       content.Value,
+		descriptor:  content.Descriptor,
 	})
 	r.applyValuePolicy = append(r.applyValuePolicy, policy)
 	return resource.Resource{LogicalPath: logicalPath}, nil
@@ -388,6 +391,7 @@ func (r *testOrchestrator) Create(_ context.Context, logicalPath string, content
 	r.createCalls = append(r.createCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       content.Value,
+		descriptor:  content.Descriptor,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
@@ -395,6 +399,7 @@ func (r *testOrchestrator) Update(_ context.Context, logicalPath string, content
 	r.updateCalls = append(r.updateCalls, savedResource{
 		logicalPath: logicalPath,
 		value:       content.Value,
+		descriptor:  content.Descriptor,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }

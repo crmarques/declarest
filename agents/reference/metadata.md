@@ -36,9 +36,10 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 19. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
 20. List-operation `payloadMutation[*].jqExpression` entries MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
 21. Metadata template-rendered string fields MUST support `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload descriptor.
-22. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
-23. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
-24. OpenAPI-backed inference SHOULD populate `operationsInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
+22. Metadata template scopes MUST expose `contentType` as the active payload media type when the payload itself does not already define `contentType`, so media-aware templates work for raw text or octet-stream payloads.
+23. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
+24. Operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be preserved through metadata merge/render/serialization and MUST remain operation-scoped.
+25. OpenAPI-backed inference SHOULD populate `operationsInfo.createResource/updateResource.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 24. `resourceInfo.payloadType` MAY override filename-derived payload inference for one resource or collection scope and MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`.
 25. Metadata attribute references (`resourceInfo.idFromAttribute`, `resourceInfo.aliasFromAttribute`, `resourceInfo.secretInAttributes[*]`, `resourceInfo.externalizedAttributes[*].path`, `payloadMutation[*].selectAttributes`, `payloadMutation[*].suppressAttributes`, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
 26. `resourceInfo.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
@@ -71,6 +72,7 @@ Template context contract:
 3. Context attributes: logical path, collection path, alias, remote ID.
 4. Relative references allowed with `../` traversal semantics bound to ancestor levels.
 5. Helper functions `payload_type`, `payload_media_type`, and `payload_extension` with root-scope call form `{{... .}}`.
+6. Compatibility alias `contentType` populated from the active payload media type when the payload map does not already define `contentType`.
 
 ## Layering Algorithm
 1. Start with engine defaults.
@@ -96,10 +98,11 @@ Template context contract:
 8. Collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes.
 9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
 10. Invalid metadata template helper usage (for example `{{payload_type "yaml"}}`) returns a typed validation error.
-11. `payloadType: octet-stream` disables structured payload transforms and validation rules for that scope.
-11. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
-12. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
-13. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
+11. Raw octet-stream or text payloads can still render templates that read `contentType`; when the payload is not a map object, that alias resolves from the active payload descriptor instead of failing on a missing key.
+12. `payloadType: octet-stream` disables structured payload transforms and validation rules for that scope.
+13. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
+14. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
+15. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
 
 ## Examples
 1. `/customers/_` defines `operationsInfo.getResource.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operationsInfo.getResource.httpHeaders`.
@@ -115,3 +118,4 @@ Template context contract:
 10. `resourceInfo.externalizedAttributes: [{path:"/script", file:"script.sh"}]` plus `resource.yaml script: "{{include script.sh}}"` stores script content in a sibling `script.sh` file and expands that file back into the effective payload for apply/diff.
 11. `resourceInfo.externalizedAttributes: [{path:"/sequence/commands/*/script", file:"script.sh"}]` plus a payload with script commands stores placeholders such as `{{include script-0.sh}}` and `{{include script-2.sh}}` for the matching array elements only.
 12. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.
+13. Rundeck-style metadata can render `{{index . "contentType"}}` for a raw `resource.key` payload because the template scope injects `contentType: application/octet-stream` from the active descriptor.
