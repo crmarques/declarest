@@ -50,7 +50,7 @@ Global flags:
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
 2. `--content-type`, `-i` with accepted values including full MIME types and shortnames such as `json|yaml|xml|hcl|ini|properties|text|binary|octet-stream`; unknown values normalize to `application/octet-stream`.
-3. `--payload` as a command-specific inline payload flag for `resource request post`, `resource request put`, and `resource request patch`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured or text codecs, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. Inline payload text and JSON Pointer assignments MUST NOT be accepted for binary content types.
+3. `--payload` as a command-specific inline payload flag for `resource request post`, `resource request put`, and `resource request patch`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured or text codecs, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. For resource mutation commands, path-looking `--payload` values (for example `private.key`, `./payload.json`, or `dir/payload.key`) MUST be treated as file inputs first and MUST fail when the file is missing rather than being decoded as literal inline payload. Inline payload text and JSON Pointer assignments MUST NOT be accepted for binary content types.
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
 5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation.
 6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation.
@@ -296,13 +296,14 @@ Interactive config commands:
 10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, detects metadata-declared plaintext candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--overwrite`.
 11. `resource save --handle-secrets=<attr-list>` includes one or more attributes that are not detected in the payload.
 12. `resource save --as-secret` is combined with `--as-items`, `--skip-items`, `--handle-secrets`, or `--ignore`.
-12. `resource create` is invoked without payload input and no matching local resources exist under the target path.
-13. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
-14. `secret detect --fix` is provided with payload input but without path input.
-15. `secret detect --secret-attribute` value is not detected in payload or repository scope.
-16. `config add --context-name` does not match any catalog context.
-17. `resource request post|put` receives inline `--payload` together with the `--payload <path|->` or stdin option.
-18. Binary payload mode receives inline `--payload` text or JSON Pointer assignments.
+13. `resource apply|create|update|save` receives a path-looking `--payload` value that does not resolve to an input file.
+14. `resource create` is invoked without payload input and no matching local resources exist under the target path.
+15. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
+16. `secret detect --fix` is provided with payload input but without path input.
+17. `secret detect --secret-attribute` value is not detected in payload or repository scope.
+18. `config add --context-name` does not match any catalog context.
+19. `resource request post|put` receives inline `--payload` together with the `--payload <path|->` or stdin option.
+20. Binary payload mode receives inline `--payload` text or JSON Pointer assignments.
 19. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
 20. `resource request delete` is invoked without `--confirm-delete`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
@@ -388,18 +389,19 @@ Interactive config commands:
 27. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
 28. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
 29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --as-secret --overwrite` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.` and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
-29. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
-29. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
-30. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
-27. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
-28. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
-29. `declarest secret get --path /customers/acme --key apiToken` prints only the secret value for `/customers/acme:apiToken`.
-30. `declarest secret get /customers/acme:apiToken` prints only the secret value for `/customers/acme:apiToken`.
-31. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
-32. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
-33. `declarest metadata render /customers/acme get` renders metadata operation spec.
-34. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
-35. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
+30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --overwrite` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
+31. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
+32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
+33. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
+34. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
+35. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
+36. `declarest secret get --path /customers/acme --key apiToken` prints only the secret value for `/customers/acme:apiToken`.
+37. `declarest secret get /customers/acme:apiToken` prints only the secret value for `/customers/acme:apiToken`.
+38. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
+39. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
+40. `declarest metadata render /customers/acme get` renders metadata operation spec.
+41. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
+42. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
 36. `declarest repository push --force-push` executes force push with explicit safety acknowledgment.
 37. `declarest repository status` reports local/remote sync status without mutating repository state.
 38. `declarest repository status --verbose` prints sync summary plus git-style local worktree details (for example modified or untracked files) in git contexts.

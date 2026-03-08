@@ -2,6 +2,7 @@ package input
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/cliutil"
@@ -43,15 +44,20 @@ func DecodeOptionalMutationPayloadInput(
 		}, true, nil
 	}
 
-	if value, err := cliutil.DecodeResourceContentInputData([]byte(payloadArg), flags.ContentType, ""); err == nil {
-		return value, true, nil
+	if payloadArgLooksLikeFilePath(payloadArg) {
+		_, readErr := cliutil.ReadInput(command, flags)
+		if readErr != nil {
+			return resource.Content{}, false, readErr
+		}
+		return resource.Content{}, false, cliutil.ValidationError("invalid payload input", nil)
 	}
 
-	// Preserve the existing missing-file behavior when the input looks like a
-	// path but does not exist and also does not parse as supported inline input.
-	_, readErr := cliutil.ReadInput(command, flags)
-	if readErr != nil {
-		return resource.Content{}, false, readErr
+	if !mutationPayloadAllowsInlineLiteral(flags.ContentType, payloadArg) {
+		return resource.Content{}, false, cliutil.ValidationError("invalid payload input", nil)
+	}
+
+	if value, err := cliutil.DecodeResourceContentInputData([]byte(payloadArg), flags.ContentType, ""); err == nil {
+		return value, true, nil
 	}
 
 	return resource.Content{}, false, cliutil.ValidationError("invalid payload input", nil)
@@ -63,4 +69,30 @@ func payloadArgLooksLikeExistingFile(value string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func payloadArgLooksLikeFilePath(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == "-" {
+		return false
+	}
+	if filepath.IsAbs(trimmed) {
+		return true
+	}
+	if strings.HasPrefix(trimmed, ".") || strings.HasPrefix(trimmed, "~") {
+		return true
+	}
+	if strings.ContainsAny(trimmed, `/\`) {
+		return true
+	}
+	return filepath.Ext(trimmed) != ""
+}
+
+func mutationPayloadAllowsInlineLiteral(contentType string, payloadArg string) bool {
+	trimmedContentType := strings.TrimSpace(contentType)
+	if trimmedContentType != "" {
+		descriptor, ok := resource.PayloadDescriptorForContentType(trimmedContentType)
+		return ok && !resource.IsBinaryPayloadType(descriptor.PayloadType)
+	}
+	return resource.StructuredLookingPayload([]byte(payloadArg))
 }

@@ -81,3 +81,42 @@ func TestLocalResourceRepositorySavePreservesUnknownPayloadExtensionAsOctetStrea
 		t.Fatalf("expected binary value, got %T", content.Value)
 	}
 }
+
+func TestLocalResourceRepositorySavePreservesOpaqueKeyBytes(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	err := repo.Save(context.Background(), "/projects/platform/secrets/private-key", resource.Content{
+		Value:      resource.BinaryValue{Bytes: []byte("private-key-bytes")},
+		Descriptor: resource.PayloadDescriptor{Extension: ".key"},
+	})
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	resourceFile := filepath.Join(root, "projects", "platform", "secrets", "private-key", "resource.key")
+	data, err := os.ReadFile(resourceFile)
+	if err != nil {
+		t.Fatalf("expected resource.key to be written: %v", err)
+	}
+	if string(data) != "private-key-bytes" {
+		t.Fatalf("expected original key bytes, got %q", string(data))
+	}
+
+	content, err := repo.Get(context.Background(), "/projects/platform/secrets/private-key")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if content.Descriptor.Extension != ".key" {
+		t.Fatalf("expected .key extension, got %q", content.Descriptor.Extension)
+	}
+	binaryValue, ok := content.Value.(resource.BinaryValue)
+	if !ok {
+		t.Fatalf("expected binary value, got %T", content.Value)
+	}
+	if string(binaryValue.Bytes) != "private-key-bytes" {
+		t.Fatalf("expected original key bytes on readback, got %q", string(binaryValue.Bytes))
+	}
+}

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,47 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/resource"
 )
+
+func TestResourceSaveFilePayloadPreservesOpaqueExtensionAndBytes(t *testing.T) {
+	t.Parallel()
+
+	metadataService := newTestMetadata()
+	orchestrator := &testOrchestrator{metadataService: metadataService}
+	deps := newResourceSaveDeps(orchestrator, metadataService)
+
+	payloadFile := filepath.Join(t.TempDir(), "private.key")
+	if err := os.WriteFile(payloadFile, []byte("private-key-bytes"), 0o600); err != nil {
+		t.Fatalf("failed to write payload file: %v", err)
+	}
+
+	_, err := executeForTest(
+		deps,
+		"",
+		"resource",
+		"save",
+		"/projects/platform/secrets/private-key",
+		"--payload",
+		payloadFile,
+		"--overwrite",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(orchestrator.saveCalls) != 1 {
+		t.Fatalf("expected one save call, got %d", len(orchestrator.saveCalls))
+	}
+	if orchestrator.saveCalls[0].descriptor.Extension != ".key" {
+		t.Fatalf("expected .key extension, got %q", orchestrator.saveCalls[0].descriptor.Extension)
+	}
+	binaryValue, ok := orchestrator.saveCalls[0].value.(resource.BinaryValue)
+	if !ok {
+		t.Fatalf("expected BinaryValue payload, got %T", orchestrator.saveCalls[0].value)
+	}
+	if string(binaryValue.Bytes) != "private-key-bytes" {
+		t.Fatalf("expected original file bytes, got %q", string(binaryValue.Bytes))
+	}
+}
 
 func TestResourceSaveAsSecretStoresWholePayloadInSecretStore(t *testing.T) {
 	t.Parallel()
@@ -54,6 +97,34 @@ func TestResourceSaveAsSecretStoresWholePayloadInSecretStore(t *testing.T) {
 	secretProvider := deps.Services.(*testServiceAccessor).secrets.(*testSecretProvider)
 	if got := secretProvider.values["/projects/platform/secrets/private-key:."]; got != "private-key-bytes" {
 		t.Fatalf("expected whole payload to be stored under root key, got %#v", secretProvider.values)
+	}
+}
+
+func TestResourceSaveRejectsMissingPathLikePayload(t *testing.T) {
+	t.Parallel()
+
+	metadataService := newTestMetadata()
+	orchestrator := &testOrchestrator{metadataService: metadataService}
+	deps := newResourceSaveDeps(orchestrator, metadataService)
+
+	_, err := executeForTest(
+		deps,
+		"",
+		"resource",
+		"save",
+		"/projects/platform/secrets/private-key",
+		"--payload",
+		"test/e2e/.runs/20260308-170415-3098387/private.key",
+		"--overwrite",
+	)
+	if err == nil {
+		t.Fatal("expected missing payload file error")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("expected not-exist error, got %v", err)
+	}
+	if len(orchestrator.saveCalls) != 0 {
+		t.Fatalf("expected save to fail before mutation, got %d save calls", len(orchestrator.saveCalls))
 	}
 }
 
