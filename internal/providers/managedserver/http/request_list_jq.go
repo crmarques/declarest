@@ -21,7 +21,7 @@ var (
 	jqCacheOrder []string
 )
 
-func (g *HTTPManagedServerClient) applyListJQ(ctx context.Context, payload any, expression string) (any, error) {
+func (g *Client) applyListJQ(ctx context.Context, payload any, expression string) (any, error) {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {
 		return payload, nil
@@ -58,7 +58,7 @@ func (g *HTTPManagedServerClient) applyListJQ(ctx context.Context, payload any, 
 	return results, nil
 }
 
-func (g *HTTPManagedServerClient) compileListJQCode(ctx context.Context, expression string) (*gojq.Code, error) {
+func (g *Client) compileListJQCode(ctx context.Context, expression string) (*gojq.Code, error) {
 	if !strings.Contains(expression, "resource(") {
 		return cachedListJQCode(expression)
 	}
@@ -104,7 +104,7 @@ func cachedListJQCode(expression string) (*gojq.Code, error) {
 	return code, nil
 }
 
-func (g *HTTPManagedServerClient) listJQResourceFunction(ctx context.Context) func(any, []any) any {
+func (g *Client) listJQResourceFunction(ctx context.Context) func(any, []any) any {
 	cache := make(map[string]resource.Value)
 
 	return func(_ any, args []any) any {
@@ -145,7 +145,7 @@ func parseListJQResourcePathArg(args []any) (string, error) {
 	return trimmed, nil
 }
 
-func (g *HTTPManagedServerClient) resolveListJQResource(ctx context.Context, logicalPath string) (resource.Value, error) {
+func (g *Client) resolveListJQResource(ctx context.Context, logicalPath string) (resource.Value, error) {
 	resolved, found, err := managedserverdomain.ResolveListJQResource(ctx, logicalPath)
 	if err != nil {
 		return nil, err

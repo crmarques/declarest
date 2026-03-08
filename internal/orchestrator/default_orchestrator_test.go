@@ -24,7 +24,7 @@ func suppressMutation(attributes ...string) []metadatadomain.PayloadMutationStep
 	return []metadatadomain.PayloadMutationStep{{SuppressAttributes: attributes}}
 }
 
-func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
+func TestOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	t.Parallel()
 
 	fakeRepo := &fakeRepository{
@@ -34,7 +34,7 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: fakeRepo,
 	}
 
@@ -70,11 +70,11 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
+func TestOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -111,11 +111,11 @@ func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T) {
+func TestOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -166,11 +166,11 @@ func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T
 	}
 }
 
-func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
+func TestOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -185,10 +185,10 @@ func TestDefaultOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
+func TestOrchestratorRequiresRepository(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 
 	_, err := orchestrator.GetLocal(context.Background(), "/customers/acme")
 	if err == nil {
@@ -198,10 +198,10 @@ func TestDefaultOrchestratorRequiresRepository(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
-func TestDefaultOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
+func TestOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveErr: faults.NewTypedError(faults.NotFoundError, "metadata not found", nil),
 		},
@@ -230,7 +230,7 @@ func TestDefaultOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *testing.T) {
+func TestOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -245,7 +245,7 @@ func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *
 	server := &fakeServer{
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -274,7 +274,7 @@ func TestDefaultOrchestratorApplyExpandsExternalizedAttributesFromRepository(t *
 	}
 }
 
-func TestDefaultOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *testing.T) {
+func TestOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -296,7 +296,7 @@ func TestDefaultOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *t
 	server := &fakeServer{
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -336,10 +336,10 @@ func TestDefaultOrchestratorApplyExpandsWildcardArrayExternalizedAttributes(t *t
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
+func TestOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/realm",
@@ -362,10 +362,10 @@ func TestDefaultOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
+func TestOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/id",
@@ -416,7 +416,7 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T) {
+func TestOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T) {
 	t.Parallel()
 
 	requestPath := "/admin/realms/publico-br/user-registry"
@@ -447,7 +447,7 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/id",
@@ -491,7 +491,7 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate(t *testing.T) {
+func TestOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate(t *testing.T) {
 	t.Parallel()
 
 	requestPath := "/admin/realms/publico-br/user-registry/xxx"
@@ -515,7 +515,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/id",
@@ -541,7 +541,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *testing.T) {
+func TestOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *testing.T) {
 	t.Parallel()
 
 	requestPath := "/admin/realms/publico-br/user-registry"
@@ -564,7 +564,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/id",
@@ -579,7 +579,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(
 	assertTypedCategory(t, err, faults.NotFoundError)
 }
 
-func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallback(t *testing.T) {
+func TestOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallback(t *testing.T) {
 	t.Parallel()
 
 	aliasPath := "/admin/realms/publico-br/organizations/teste"
@@ -622,7 +622,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
@@ -661,7 +661,7 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t *testing.T) {
+func TestOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t *testing.T) {
 	t.Parallel()
 
 	aliasPath := "/admin/realms/publico-br/organizations/teste"
@@ -710,7 +710,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
@@ -759,7 +759,7 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackProbeResponseIsInvalid(t *testing.T) {
+func TestOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackProbeResponseIsInvalid(t *testing.T) {
 	t.Parallel()
 
 	requestPath := "/admin/realms/xxxxx/organizations"
@@ -777,7 +777,7 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				IDFromAttribute:    "/id",
@@ -802,7 +802,7 @@ func TestDefaultOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackP
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIHintsCollection(t *testing.T) {
+func TestOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIHintsCollection(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -831,7 +831,7 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIH
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -852,7 +852,7 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIH
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenRepositoryHintsCollection(t *testing.T) {
+func TestOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenRepositoryHintsCollection(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -874,7 +874,7 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenReposito
 			nil,
 		),
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repositoryManager,
 		server:     serverManager,
 	}
@@ -900,7 +900,7 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenReposito
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOrRepositoryHints(t *testing.T) {
+func TestOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOrRepositoryHints(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -911,7 +911,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 			nil,
 		),
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
@@ -933,7 +933,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOr
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpenAPIChildEndpoints(t *testing.T) {
+func TestOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpenAPIChildEndpoints(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -962,7 +962,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpe
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -979,7 +979,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForConcreteResourcePathWithOpe
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourceIsMissing(t *testing.T) {
+func TestOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourceIsMissing(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1008,7 +1008,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourc
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -1023,7 +1023,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundForCollectionWhenParentResourc
 	}
 }
 
-func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadIsInvalid(t *testing.T) {
+func TestOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadIsInvalid(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1033,7 +1033,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadI
 			nil,
 		),
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -1045,7 +1045,7 @@ func TestDefaultOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadI
 	}
 }
 
-func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T) {
+func TestOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -1060,7 +1060,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1091,7 +1091,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 	}
 }
 
-func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUsesAlias(t *testing.T) {
+func TestOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUsesAlias(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -1106,7 +1106,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1130,7 +1130,7 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 	}
 }
 
-func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t *testing.T) {
+func TestOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -1156,7 +1156,7 @@ func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t 
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1187,7 +1187,7 @@ func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t 
 	}
 }
 
-func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testing.T) {
+func TestOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -1202,7 +1202,7 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1236,7 +1236,7 @@ func TestDefaultOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testin
 	}
 }
 
-func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *testing.T) {
+func TestOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1258,7 +1258,7 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1283,13 +1283,13 @@ func TestDefaultOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 	}
 }
 
-func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
+func TestOrchestratorRequestDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
 		requestValue: map[string]any{"ok": true},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 	}
 
@@ -1320,7 +1320,7 @@ func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
+func TestOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1333,7 +1333,7 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server:   serverManager,
 		metadata: metadataService,
 	}
@@ -1362,7 +1362,7 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *testing.T) {
+func TestOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1380,7 +1380,7 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server:   serverManager,
 		metadata: metadataService,
 	}
@@ -1401,7 +1401,7 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 	}
 }
 
-func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNotFound(t *testing.T) {
+func TestOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNotFound(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1419,7 +1419,7 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1449,7 +1449,7 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 	}
 }
 
-func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *testing.T) {
+func TestOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1471,7 +1471,7 @@ func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterN
 			},
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1500,7 +1500,7 @@ func TestDefaultOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterN
 	}
 }
 
-func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedNotFound(t *testing.T) {
+func TestOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedNotFound(t *testing.T) {
 	t.Parallel()
 
 	serverManager := &fakeServer{
@@ -1510,7 +1510,7 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 		},
 		requestValue: map[string]any{"ok": true},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -1548,10 +1548,10 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 	}
 }
 
-func TestDefaultOrchestratorRequestRequiresServer(t *testing.T) {
+func TestOrchestratorRequestRequiresServer(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
 		Method: "GET",
 		Path:   "/test",
@@ -1683,7 +1683,6 @@ func (f *fakeRepository) ReadResourceArtifact(_ context.Context, logicalPath str
 
 	return append([]byte(nil), content...), nil
 }
-func (f *fakeRepository) Move(context.Context, string, string) error { return nil }
 func (f *fakeRepository) Init(context.Context) error                 { return nil }
 func (f *fakeRepository) Refresh(context.Context) error              { return nil }
 func (f *fakeRepository) Clean(context.Context) error                { return nil }
@@ -1937,7 +1936,7 @@ func (f *fakeSecretProvider) DetectSecretCandidates(_ context.Context, value res
 	return secretdomain.DetectSecretCandidates(value)
 }
 
-func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
+func TestOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -1973,7 +1972,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2006,7 +2005,7 @@ func TestDefaultOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *testing.T) {
+func TestOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *testing.T) {
 	t.Parallel()
 
 	const remoteID = "13de4420-7c8d-4db7-b8f7-2d2a26f2053e"
@@ -2051,7 +2050,7 @@ func TestDefaultOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallbac
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2076,7 +2075,7 @@ func TestDefaultOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallbac
 	}
 }
 
-func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
+func TestOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2105,7 +2104,7 @@ func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2123,7 +2122,7 @@ func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T
 	}
 }
 
-func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
+func TestOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2157,7 +2156,7 @@ func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2175,7 +2174,7 @@ func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.
 	}
 }
 
-func TestDefaultOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) {
+func TestOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2192,7 +2191,7 @@ func TestDefaultOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) 
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -2222,7 +2221,7 @@ func TestDefaultOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) 
 	}
 }
 
-func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
+func TestOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2270,7 +2269,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2290,7 +2289,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 	}
 }
 
-func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
+func TestOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2323,7 +2322,7 @@ func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2338,7 +2337,7 @@ func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
+func TestOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2363,7 +2362,7 @@ func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T)
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2393,7 +2392,7 @@ func TestDefaultOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T)
 	}
 }
 
-func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
+func TestOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2422,7 +2421,7 @@ func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T)
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2432,7 +2431,7 @@ func TestDefaultOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T)
 	assertTypedCategory(t, err, faults.ConflictError)
 }
 
-func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(t *testing.T) {
+func TestOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2476,7 +2475,7 @@ func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2486,10 +2485,10 @@ func TestDefaultOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(
 	assertTypedCategory(t, err, faults.ConflictError)
 }
 
-func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
+func TestOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: &fakeRepository{},
 		metadata:   &fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{}},
 		server: &fakeServer{
@@ -2513,7 +2512,7 @@ func TestDefaultOrchestratorListRemoteSortsDeterministically(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
+func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 	t.Parallel()
 
 	metadataService := &fakeMetadata{
@@ -2610,7 +2609,7 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 		},
 	}
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: &fakeRepository{},
 		metadata:   metadataService,
 		server:     serverManager,
@@ -2633,10 +2632,10 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 	}
 }
 
-func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
+func TestOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: &fakeRepository{},
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -2673,7 +2672,7 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 	}
 }
 
-func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T) {
+func TestOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
@@ -2691,7 +2690,7 @@ func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T)
 			"script": "echo hello",
 		},
 	}
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
@@ -2715,10 +2714,10 @@ func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T)
 	}
 }
 
-func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithoutSecrets(t *testing.T) {
+func TestOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithoutSecrets(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 
 	resolved, err := orchestrator.resolvePayloadForRemote(
 		context.Background(),
@@ -2744,10 +2743,10 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWith
 	}
 }
 
-func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithSecrets(t *testing.T) {
+func TestOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithSecrets(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{
+	orchestrator := &Orchestrator{
 		secrets: &fakeSecretProvider{
 			values: map[string]string{
 				"/customers/acme:/token": "super-secret",
@@ -2779,10 +2778,10 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWith
 	}
 }
 
-func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
+func TestOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",
@@ -2807,10 +2806,10 @@ func TestDefaultOrchestratorRenderOperationSpecListUsesCollectionPathFallback(t 
 	}
 }
 
-func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(t *testing.T) {
+func TestOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 	resourceInfo := resource.Resource{
 		LogicalPath:    "/admin/realms/platform/clients/declarest-cli/resource",
 		CollectionPath: "/admin/realms/platform/clients",
@@ -2835,10 +2834,10 @@ func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(
 	}
 }
 
-func TestDefaultOrchestratorRenderOperationSpecSupportsPayloadTemplateFunc(t *testing.T) {
+func TestOrchestratorRenderOperationSpecSupportsPayloadTemplateFunc(t *testing.T) {
 	t.Parallel()
 
-	orchestrator := &DefaultOrchestrator{}
+	orchestrator := &Orchestrator{}
 
 	spec, err := orchestrator.renderOperationSpec(
 		context.Background(),

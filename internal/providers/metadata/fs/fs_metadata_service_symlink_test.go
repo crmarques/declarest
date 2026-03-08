@@ -20,7 +20,7 @@ func TestFSMetadataServiceSetRejectsSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create symlink: %v", err)
 	}
 
-	service := NewFSMetadataService(root, "json")
+	service := NewFSMetadataService(root)
 	err := service.Set(context.Background(), "/customers/acme", metadata.ResourceMetadata{})
 	if err == nil {
 		t.Fatal("expected set to reject symlink escape path")

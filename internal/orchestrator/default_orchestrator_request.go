@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"maps"
 	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
@@ -11,7 +12,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *DefaultOrchestrator) Request(
+func (r *Orchestrator) Request(
 	ctx context.Context,
 	requestSpec managedserver.RequestSpec,
 ) (resource.Content, error) {
@@ -116,7 +117,7 @@ func (r *DefaultOrchestrator) Request(
 	return value, nil
 }
 
-func (r *DefaultOrchestrator) retryRequestResolvedMutationWithLiteralPath(
+func (r *Orchestrator) retryRequestResolvedMutationWithLiteralPath(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	original managedserver.RequestSpec,
@@ -140,7 +141,7 @@ func (r *DefaultOrchestrator) retryRequestResolvedMutationWithLiteralPath(
 	return value, true, err
 }
 
-func (r *DefaultOrchestrator) retryRequestNotFoundWithMetadata(
+func (r *Orchestrator) retryRequestNotFoundWithMetadata(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	requestSpec managedserver.RequestSpec,
@@ -193,7 +194,7 @@ func (r *DefaultOrchestrator) retryRequestNotFoundWithMetadata(
 	}
 }
 
-func (r *DefaultOrchestrator) resolveRequestSpec(
+func (r *Orchestrator) resolveRequestSpec(
 	ctx context.Context,
 	requestSpec managedserver.RequestSpec,
 ) (managedserver.RequestSpec, context.Context, error) {
@@ -312,8 +313,8 @@ func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.
 	resolved := managedserver.RequestSpec{
 		Method:      strings.ToUpper(strings.TrimSpace(spec.Method)),
 		Path:        spec.Path,
-		Query:       cloneRequestStringMap(spec.Query),
-		Headers:     cloneRequestStringMap(spec.Headers),
+		Query:       maps.Clone(spec.Query),
+		Headers:     maps.Clone(spec.Headers),
 		Accept:      spec.Accept,
 		ContentType: spec.ContentType,
 		Body:        requestBodyContent(spec.Body, spec.ContentType),
@@ -353,24 +354,12 @@ func cloneRequestSpec(value managedserver.RequestSpec) managedserver.RequestSpec
 	return managedserver.RequestSpec{
 		Method:      value.Method,
 		Path:        value.Path,
-		Query:       cloneRequestStringMap(value.Query),
-		Headers:     cloneRequestStringMap(value.Headers),
+		Query:       maps.Clone(value.Query),
+		Headers:     maps.Clone(value.Headers),
 		Accept:      value.Accept,
 		ContentType: value.ContentType,
 		Body:        value.Body,
 	}
-}
-
-func cloneRequestStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
 }
 
 func normalizeRequestPathForOrchestrator(value string) string {
@@ -411,7 +400,7 @@ func requestBodyContent(value any, contentType string) resource.Content {
 	}
 }
 
-func (r *DefaultOrchestrator) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
+func (r *Orchestrator) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
 		return resource.Content{}, err

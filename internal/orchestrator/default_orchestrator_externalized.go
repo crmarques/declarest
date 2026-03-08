@@ -10,7 +10,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *DefaultOrchestrator) saveLocalResource(
+func (r *Orchestrator) saveLocalResource(
 	ctx context.Context,
 	manager repository.ResourceStore,
 	logicalPath string,
@@ -59,7 +59,7 @@ func (r *DefaultOrchestrator) saveLocalResource(
 	)
 }
 
-func (r *DefaultOrchestrator) expandExternalizedPayload(
+func (r *Orchestrator) expandExternalizedPayload(
 	ctx context.Context,
 	logicalPath string,
 	md metadata.ResourceMetadata,

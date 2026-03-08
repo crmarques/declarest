@@ -30,7 +30,7 @@ func newExplainCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 			if err != nil {
 				return err
 			}
-			items, err := orchestratorService.Explain(command.Context(), resolvedPath)
+			items, err := orchestratorService.Diff(command.Context(), resolvedPath)
 			if err != nil {
 				return err
 			}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
@@ -71,7 +72,7 @@ func resolveSaveEntriesForItems(
 		}
 		if !usedResourceEntryShape {
 			if !metadataResolved {
-				metadataService, metadataErr := requireMetadataService(deps)
+				metadataService, metadataErr := appdeps.RequireMetadataService(deps)
 				if metadataErr != nil {
 					return nil, metadataErr
 				}

@@ -9,7 +9,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) applyOperationPayloadTransforms(
+func (g *Client) applyOperationPayloadTransforms(
 	ctx context.Context,
 	payload any,
 	spec metadata.OperationSpec,
@@ -134,7 +134,7 @@ func normalizePayloadAttributePointers(field string, attributes []string) ([]str
 	return pointers, nil
 }
 
-func (g *HTTPManagedServerClient) applyPayloadJQ(ctx context.Context, payload resource.Value, expression string) (resource.Value, error) {
+func (g *Client) applyPayloadJQ(ctx context.Context, payload resource.Value, expression string) (resource.Value, error) {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {
 		return payload, nil

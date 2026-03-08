@@ -7,12 +7,10 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	resourcesave "github.com/crmarques/declarest/internal/app/resource/save"
-	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
-	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
-	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 type Operation string
@@ -23,12 +21,7 @@ const (
 	OperationUpdate Operation = "update"
 )
 
-type Dependencies struct {
-	Orchestrator orchestratordomain.Orchestrator
-	Repository   repository.ResourceStore
-	Metadata     metadatadomain.MetadataService
-	Secrets      secretdomain.SecretProvider
-}
+type Dependencies = appdeps.Dependencies
 
 type Request struct {
 	Operation        Operation
@@ -47,7 +40,7 @@ type Result struct {
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
-	orchestratorService, err := requireOrchestrator(deps)
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
 		return Result{}, err
 	}
@@ -271,9 +264,3 @@ func logicalPathDepth(logicalPath string) int {
 	return len(strings.Split(trimmed, "/"))
 }
 
-func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
-	if deps.Orchestrator == nil {
-		return nil, faults.NewValidationError("orchestrator is not configured", nil)
-	}
-	return deps.Orchestrator, nil
-}

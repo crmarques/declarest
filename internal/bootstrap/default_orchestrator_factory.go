@@ -23,11 +23,11 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func buildDefaultOrchestrator(
+func buildOrchestrator(
 	ctx context.Context,
 	contextService config.ContextService,
 	selection config.ContextSelection,
-) (*internalorchestrator.DefaultOrchestrator, error) {
+) (*internalorchestrator.Orchestrator, error) {
 	if contextService == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "context service must not be nil", nil)
 	}
@@ -37,13 +37,13 @@ func buildDefaultOrchestrator(
 		return nil, err
 	}
 
-	return buildDefaultOrchestratorFromResolvedContext(ctx, resolvedContext)
+	return buildOrchestratorFromResolvedContext(ctx, resolvedContext)
 }
 
-func buildDefaultOrchestratorFromResolvedContext(
+func buildOrchestratorFromResolvedContext(
 	ctx context.Context,
 	resolvedContext config.Context,
-) (*internalorchestrator.DefaultOrchestrator, error) {
+) (*internalorchestrator.Orchestrator, error) {
 	emitSecurityWarnings(os.Stderr, resolvedContext)
 
 	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)
@@ -82,11 +82,11 @@ func buildDefaultOrchestratorFromResolvedContext(
 		serverConfig := *resolvedContext.ManagedServer.HTTP
 		serverConfig.OpenAPI = effectiveOpenAPISource(serverConfig.OpenAPI, metadataSource.OpenAPI)
 
-		serverOptions := []httpmanagedserver.ManagedServerClientOption{}
+		serverOptions := []httpmanagedserver.ClientOption{}
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
 			serverOptions = append(serverOptions, httpmanagedserver.WithMetadataRenderer(renderer))
 		}
-		serverManager, err := httpmanagedserver.NewHTTPManagedServerClient(
+		serverManager, err := httpmanagedserver.NewClient(
 			serverConfig,
 			serverOptions...,
 		)
@@ -116,7 +116,7 @@ func buildDefaultOrchestratorFromResolvedContext(
 		}
 	}
 
-	return internalorchestrator.NewDefaultOrchestrator(
+	return internalorchestrator.New(
 		repo,
 		metadataService,
 		srv,

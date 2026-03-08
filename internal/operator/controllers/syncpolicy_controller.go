@@ -14,6 +14,7 @@ import (
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/internal/bootstrap"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,193 +85,198 @@ const (
 	syncPolicyIndexSecretStoreRef        = "spec.secretStoreRef.name"
 )
 
-func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, reconcileErr error) {
-	start := time.Now()
-	logger := log.FromContext(ctx).WithValues("syncPolicy", req.NamespacedName.String(), "reconcile_id", uuidString())
+// syncPolicyReconciliation holds the state and dependencies for a single reconciliation of a SyncPolicy.
+type syncPolicyReconciliation struct {
+	*SyncPolicyReconciler
+	ctx         context.Context
+	req         ctrl.Request
+	logger      logr.Logger
+	policy      *declarestv1alpha1.SyncPolicy
+	repo        *declarestv1alpha1.ResourceRepository
+	server      *declarestv1alpha1.ManagedServer
+	secret      *declarestv1alpha1.SecretStore
+	resultLabel string
+	reasonLabel string
+}
 
-	syncPolicy := &declarestv1alpha1.SyncPolicy{}
-	if err := r.Get(ctx, req.NamespacedName, syncPolicy); err != nil {
+func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	recon := &syncPolicyReconciliation{
+		SyncPolicyReconciler: r,
+		ctx:                  ctx,
+		req:                  req,
+		logger:               log.FromContext(ctx).WithValues("syncPolicy", req.NamespacedName.String(), "reconcile_id", uuidString()),
+		policy:               &declarestv1alpha1.SyncPolicy{},
+		resultLabel:          "success",
+		reasonLabel:          conditionReasonReady,
+	}
+	return recon.reconcile()
+}
+
+func (r *syncPolicyReconciliation) reconcile() (result ctrl.Result, reconcileErr error) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start).Seconds()
+		syncPolicyReconcileTotal.WithLabelValues(r.req.Namespace, r.req.Name, r.resultLabel, r.reasonLabel).Inc()
+		syncPolicyReconcileDurationSeconds.WithLabelValues(r.req.Namespace, r.req.Name, r.resultLabel).Observe(duration)
+	}()
+
+	if err := r.Get(r.ctx, r.req.NamespacedName, r.policy); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	if !controllerutil.ContainsFinalizer(syncPolicy, finalizerName) {
-		controllerutil.AddFinalizer(syncPolicy, finalizerName)
-		if err := r.Update(ctx, syncPolicy); err != nil {
-			return ctrl.Result{}, err
+	// Handle finalizer logic
+	if res, err := r.handleFinalizer(); err != nil || res != nil {
+		return *res, err
+	}
+
+	r.policy.Default()
+
+	// Validate spec and check if suspended
+	if res, err := r.validatePrerequisites(); err != nil || res != nil {
+		return *res, err
+	}
+
+	// Load all dependencies
+	if res, err := r.loadDependencies(); err != nil || res != nil {
+		return *res, err
+	}
+
+	// Check if the policy is already in the desired state
+	if res, err := r.checkSyncStatus(); err != nil || res != nil {
+		return *res, err
+	}
+
+	// Perform the synchronization
+	return r.performSync()
+}
+
+func (r *syncPolicyReconciliation) handleFinalizer() (*ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(r.policy, finalizerName) {
+		controllerutil.AddFinalizer(r.policy, finalizerName)
+		if err := r.Update(r.ctx, r.policy); err != nil {
+			return &ctrl.Result{}, err
 		}
 	}
-	if !syncPolicy.DeletionTimestamp.IsZero() {
-		r.secretRefs.remove(req.NamespacedName)
-		cacheDir := resolveCacheRootPath(syncPolicy.Namespace, syncPolicy.Name)
+
+	if !r.policy.DeletionTimestamp.IsZero() {
+		r.secretRefs.remove(r.req.NamespacedName)
+		cacheDir := resolveCacheRootPath(r.policy.Namespace, r.policy.Name)
 		if err := os.RemoveAll(cacheDir); err != nil {
-			logger.Error(err, "failed to clean up cache directory", "path", cacheDir)
+			r.logger.Error(err, "failed to clean up cache directory", "path", cacheDir)
 		}
-		controllerutil.RemoveFinalizer(syncPolicy, finalizerName)
-		return ctrl.Result{}, r.Update(ctx, syncPolicy)
+		controllerutil.RemoveFinalizer(r.policy, finalizerName)
+		if err := r.Update(r.ctx, r.policy); err != nil {
+			return &ctrl.Result{}, err
+		}
+		return &ctrl.Result{}, nil
+	}
+	return nil, nil
+}
+
+func (r *syncPolicyReconciliation) validatePrerequisites() (*ctrl.Result, error) {
+	if validationErr := r.policy.ValidateSpec(); validationErr != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonSpecInvalid
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonSpecInvalid, validationErr.Error(), 0, "SpecInvalid")
+		return &res, err
 	}
 
-	syncPolicy.Default()
-
-	resultLabel := "success"
-	reasonLabel := conditionReasonReady
-	defer func() {
-		duration := time.Since(start).Seconds()
-		syncPolicyReconcileTotal.WithLabelValues(req.Namespace, req.Name, resultLabel, reasonLabel).Inc()
-		syncPolicyReconcileDurationSeconds.WithLabelValues(req.Namespace, req.Name, resultLabel).Observe(duration)
-	}()
-
-	if validationErr := syncPolicy.ValidateSpec(); validationErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonSpecInvalid
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonSpecInvalid, validationErr.Error(), 0, "SpecInvalid")
-	}
-
-	if syncPolicy.Spec.Suspend {
+	if r.policy.Spec.Suspend {
 		nowTime := now()
-		syncPolicy.Status.ObservedGeneration = syncPolicy.Generation
-		syncPolicy.Status.LastAttemptTime = &nowTime
-		syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeReady, metav1.ConditionFalse, conditionReasonSuspended, "sync policy is suspended")
-		syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeStalled, metav1.ConditionFalse, conditionReasonSuspended, "")
-		syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionFalse, conditionReasonSuspended, "")
-		if err := r.Status().Update(ctx, syncPolicy); err != nil {
-			resultLabel = "error"
-			reasonLabel = conditionReasonSuspended
-			return ctrl.Result{}, err
+		r.policy.Status.ObservedGeneration = r.policy.Generation
+		r.policy.Status.LastAttemptTime = &nowTime
+		r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeReady, metav1.ConditionFalse, conditionReasonSuspended, "sync policy is suspended")
+		r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeStalled, metav1.ConditionFalse, conditionReasonSuspended, "")
+		r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionFalse, conditionReasonSuspended, "")
+		if err := r.Status().Update(r.ctx, r.policy); err != nil {
+			r.resultLabel = "error"
+			r.reasonLabel = conditionReasonSuspended
+			return &ctrl.Result{}, err
 		}
-		emitEventf(r.Recorder, syncPolicy, corev1.EventTypeNormal, "Suspended", "sync policy is suspended")
-		reasonLabel = conditionReasonSuspended
-		return ctrl.Result{}, nil
+		emitEventf(r.Recorder, r.policy, corev1.EventTypeNormal, "Suspended", "sync policy is suspended")
+		r.reasonLabel = conditionReasonSuspended
+		return &ctrl.Result{}, nil
 	}
 
-	if overlapErr := r.validateNoOverlap(ctx, syncPolicy); overlapErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonOverlappingPolicy
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonOverlappingPolicy, overlapErr.Error(), 0, "OverlappingPolicy")
+	if overlapErr := r.validateNoOverlap(r.ctx, r.policy); overlapErr != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonOverlappingPolicy
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonOverlappingPolicy, overlapErr.Error(), 0, "OverlappingPolicy")
+		return &res, err
 	}
 
-	repo := &declarestv1alpha1.ResourceRepository{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: syncPolicy.Namespace, Name: syncPolicy.Spec.ResourceRepositoryRef.Name}, repo); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("resolve resource repository: %v", err),
-			0,
-			"DependencyInvalid",
-		)
-	}
-	repo.Default()
-	if err := repo.ValidateSpec(); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("invalid referenced resource repository: %v", err),
-			0,
-			"DependencyInvalid",
-		)
+	return nil, nil
+}
+
+func (r *syncPolicyReconciliation) loadDependencies() (*ctrl.Result, error) {
+	var err error
+	r.repo, err = r.loadResourceRepository()
+	if err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyInvalid
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve resource repository: %v", err), 0, "DependencyInvalid")
+		return &res, err
 	}
 
-	managedServer := &declarestv1alpha1.ManagedServer{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: syncPolicy.Namespace, Name: syncPolicy.Spec.ManagedServerRef.Name}, managedServer); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("resolve managed server: %v", err),
-			0,
-			"DependencyInvalid",
-		)
-	}
-	managedServer.Default()
-	if err := managedServer.ValidateSpec(); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("invalid referenced managed server: %v", err),
-			0,
-			"DependencyInvalid",
-		)
+	r.server, err = r.loadManagedServer()
+	if err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyInvalid
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve managed server: %v", err), 0, "DependencyInvalid")
+		return &res, err
 	}
 
-	secretStore := &declarestv1alpha1.SecretStore{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: syncPolicy.Namespace, Name: syncPolicy.Spec.SecretStoreRef.Name}, secretStore); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("resolve secret store: %v", err),
-			0,
-			"DependencyInvalid",
-		)
-	}
-	if err := secretStore.ValidateSpec(); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonDependencyInvalid
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			fmt.Sprintf("invalid referenced secret store: %v", err),
-			0,
-			"DependencyInvalid",
-		)
+	r.secret, err = r.loadSecretStore()
+	if err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyInvalid
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve secret store: %v", err), 0, "DependencyInvalid")
+		return &res, err
 	}
 
-	// Update the secret reference cache so the Secret watch mapper can look
-	// up affected SyncPolicies without resolving dependency CRDs each time.
-	r.secretRefs.update(req.NamespacedName, collectSecretNames(repo, managedServer, secretStore))
+	r.secretRefs.update(r.req.NamespacedName, collectSecretNames(r.repo, r.server, r.secret))
+	return nil, nil
+}
 
-	repoRevision := strings.TrimSpace(repo.Status.LastFetchedRevision)
+func (r *syncPolicyReconciliation) checkSyncStatus() (*ctrl.Result, error) {
+	repoRevision := strings.TrimSpace(r.repo.Status.LastFetchedRevision)
 	if repoRevision == "" {
-		reasonLabel = conditionReasonDependencyInvalid
-		resultLabel = "error"
-		return r.failWithStatus(
-			ctx,
-			syncPolicy,
-			conditionReasonDependencyInvalid,
-			"resource repository has no fetched revision yet",
-			repo.Spec.PollInterval.Duration,
-			"DependencyInvalid",
-		)
+		r.reasonLabel = conditionReasonDependencyInvalid
+		r.resultLabel = "error"
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, "resource repository has no fetched revision yet", r.repo.Spec.PollInterval.Duration, "DependencyInvalid")
+		return &res, err
 	}
 
-	secretHash := computeSecretVersionHash(ctx, r.Client, syncPolicy.Namespace, repo, managedServer, secretStore)
-	secretHashChanged := syncPolicy.Status.LastSecretResourceVersionHash != secretHash
+	secretHash := computeSecretVersionHash(r.ctx, r.Client, r.policy.Namespace, r.repo, r.server, r.secret)
+	secretHashChanged := r.policy.Status.LastSecretResourceVersionHash != secretHash
 	currentTime := time.Now().UTC()
-	fullResyncDue, fullResyncErr := shouldRunFullResync(syncPolicy.Spec.FullResyncCron, syncPolicy.Status.LastFullResyncTime, currentTime)
+	fullResyncDue, fullResyncErr := shouldRunFullResync(r.policy.Spec.FullResyncCron, r.policy.Status.LastFullResyncTime, currentTime)
 	if fullResyncErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonSpecInvalid
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonSpecInvalid, fmt.Sprintf("invalid full resync cron: %v", fullResyncErr), 0, "SpecInvalid")
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonSpecInvalid
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonSpecInvalid, fmt.Sprintf("invalid full resync cron: %v", fullResyncErr), 0, "SpecInvalid")
+		return &res, err
 	}
-	if syncPolicy.Status.ObservedGeneration == syncPolicy.Generation &&
-		syncPolicy.Status.LastAppliedRepoRevision == repoRevision &&
+
+	if r.policy.Status.ObservedGeneration == r.policy.Generation &&
+		r.policy.Status.LastAppliedRepoRevision == repoRevision &&
 		!secretHashChanged &&
 		!fullResyncDue {
-		logger.Info("sync policy is already at desired state", "revision", repoRevision)
-		return ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(syncPolicy, currentTime)}, nil
+		r.logger.Info("sync policy is already at desired state", "revision", repoRevision)
+		return &ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(r.policy, currentTime)}, nil
 	}
+	return nil, nil
+}
 
-	runtimeBuild, runtimeErr := buildRuntimeContext(ctx, r.Client, syncPolicy, repo, managedServer, secretStore)
+func (r *syncPolicyReconciliation) performSync() (ctrl.Result, error) {
+	runtimeBuild, runtimeErr := buildRuntimeContext(r.ctx, r.Client, r.policy, r.repo, r.server, r.secret)
 	if runtimeErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonRepositoryUnavailable
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonRepositoryUnavailable, runtimeErr.Error(), 0, "RuntimeContextFailed")
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonRepositoryUnavailable
+		return r.failWithStatus(r.ctx, r.policy, conditionReasonRepositoryUnavailable, runtimeErr.Error(), 0, "RuntimeContextFailed")
 	}
 	if runtimeBuild.Cleanup != nil {
 		defer runtimeBuild.Cleanup()
@@ -278,43 +284,154 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	session, sessionErr := bootstrap.NewSessionFromResolvedContext(runtimeBuild.ResolvedContext)
 	if sessionErr != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonSessionBootstrapFailed
-		return r.failWithStatus(ctx, syncPolicy, conditionReasonSessionBootstrapFailed, sessionErr.Error(), 0, "SessionBootstrapFailed")
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonSessionBootstrapFailed
+		return r.failWithStatus(r.ctx, r.policy, conditionReasonSessionBootstrapFailed, sessionErr.Error(), 0, "SessionBootstrapFailed")
 	}
 
 	nowTime := now()
-	syncPolicy.Status.ObservedGeneration = syncPolicy.Generation
-	syncPolicy.Status.LastAttemptTime = &nowTime
-	syncPolicy.Status.LastAttemptedRepoRevision = repoRevision
-	syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionTrue, conditionReasonReconciling, "applying repository state")
-	if err := r.Status().Update(ctx, syncPolicy); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonReconcileFailed
+	r.policy.Status.ObservedGeneration = r.policy.Generation
+	r.policy.Status.LastAttemptTime = &nowTime
+	r.policy.Status.LastAttemptedRepoRevision = r.repo.Status.LastFetchedRevision
+	r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionTrue, conditionReasonReconciling, "applying repository state")
+	if err := r.Status().Update(r.ctx, r.policy); err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonReconcileFailed
 		return ctrl.Result{}, err
 	}
 
-	recursive := true
-	if syncPolicy.Spec.Source.Recursive != nil {
-		recursive = *syncPolicy.Spec.Source.Recursive
+	executionPlan, err := r.buildExecutionPlan(runtimeBuild.RepositoryLocalPath, r.repo.Status.LastFetchedRevision)
+	if err != nil {
+		r.logger.Info("falling back to full sync plan", "reason", err.Error())
+		recursive := r.policy.Spec.Source.Recursive == nil || *r.policy.Spec.Source.Recursive
+		plan := fullSyncExecutionPlan(r.policy.Spec.Source.Path, recursive)
+		executionPlan = &plan
 	}
-	executionPlan, planErr := buildSyncExecutionPlan(
-		ctx,
-		syncPolicy,
-		runtimeBuild.RepositoryLocalPath,
+
+	targetedCount, appliedCount, err := r.applyChanges(session, executionPlan)
+	if err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonReconcileFailed
+		return r.failWithStatus(r.ctx, r.policy, conditionReasonReconcileFailed, err.Error(), 0, "SyncFailed")
+	}
+
+	prunedCount, err := r.pruneChanges(session, executionPlan)
+	if err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonReconcileFailed
+		return r.failWithStatus(r.ctx, r.policy, conditionReasonReconcileFailed, err.Error(), 0, "SyncFailed")
+	}
+
+	return r.updateSuccessStatus(executionPlan, targetedCount, appliedCount, prunedCount)
+}
+
+func (r *syncPolicyReconciliation) updateSuccessStatus(plan *syncExecutionPlan, targeted, applied, pruned int32) (ctrl.Result, error) {
+	nowTime := now()
+	secretHash := computeSecretVersionHash(r.ctx, r.Client, r.policy.Namespace, r.repo, r.server, r.secret)
+	repoRevision := r.repo.Status.LastFetchedRevision
+
+	r.policy.Status.LastAppliedRepoRevision = repoRevision
+	r.policy.Status.LastSecretResourceVersionHash = secretHash
+	r.policy.Status.LastSuccessfulSyncTime = &nowTime
+	if plan.Mode == syncModeFull {
+		r.policy.Status.LastFullResyncTime = &nowTime
+	}
+	r.policy.Status.LastSyncMode = string(plan.Mode)
+	r.policy.Status.ResourceStats = declarestv1alpha1.SyncPolicyResourceStats{
+		Targeted: targeted,
+		Applied:  applied,
+		Pruned:   pruned,
+		Failed:   targeted - applied,
+	}
+	r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionFalse, conditionReasonReady, "")
+	r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeReady, metav1.ConditionTrue, conditionReasonReady, "sync successful")
+	r.policy.Status.Conditions = setStatusCondition(r.policy.Status.Conditions, declarestv1alpha1.ConditionTypeStalled, metav1.ConditionFalse, conditionReasonReady, "")
+	if err := r.Status().Update(r.ctx, r.policy); err != nil {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonReconcileFailed
+		return ctrl.Result{}, err
+	}
+
+	syncPolicyResourcesAppliedTotal.WithLabelValues(r.req.Namespace, r.req.Name).Add(float64(applied))
+	syncPolicyResourcesPrunedTotal.WithLabelValues(r.req.Namespace, r.req.Name).Add(float64(pruned))
+	emitEventf(
+		r.Recorder,
+		r.policy,
+		corev1.EventTypeNormal,
+		"SyncSucceeded",
+		"sync completed at revision %s (mode=%s applied=%d pruned=%d targeted=%d)",
+		repoRevision,
+		plan.Mode,
+		applied,
+		pruned,
+		targeted,
+	)
+	r.logger.Info("sync policy reconciled", "mode", plan.Mode, "applied", applied, "pruned", pruned, "repo_revision", repoRevision)
+	return ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(r.policy, time.Now().UTC())}, nil
+}
+
+func (r *syncPolicyReconciliation) loadResourceRepository() (*declarestv1alpha1.ResourceRepository, error) {
+	repo := &declarestv1alpha1.ResourceRepository{}
+	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ResourceRepositoryRef.Name}, repo); err != nil {
+		return nil, err
+	}
+	repo.Default()
+	if err := repo.ValidateSpec(); err != nil {
+		return nil, fmt.Errorf("invalid referenced resource repository: %w", err)
+	}
+	return repo, nil
+}
+
+func (r *syncPolicyReconciliation) loadManagedServer() (*declarestv1alpha1.ManagedServer, error) {
+	server := &declarestv1alpha1.ManagedServer{}
+	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ManagedServerRef.Name}, server); err != nil {
+		return nil, err
+	}
+	server.Default()
+	if err := server.ValidateSpec(); err != nil {
+		return nil, fmt.Errorf("invalid referenced managed server: %w", err)
+	}
+	return server, nil
+}
+
+func (r *syncPolicyReconciliation) loadSecretStore() (*declarestv1alpha1.SecretStore, error) {
+	secret := &declarestv1alpha1.SecretStore{}
+	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.SecretStoreRef.Name}, secret); err != nil {
+		return nil, err
+	}
+	if err := secret.ValidateSpec(); err != nil {
+		return nil, fmt.Errorf("invalid referenced secret store: %w", err)
+	}
+	return secret, nil
+}
+
+func (r *syncPolicyReconciliation) buildExecutionPlan(repoPath, repoRevision string) (*syncExecutionPlan, error) {
+	secretHash := computeSecretVersionHash(r.ctx, r.Client, r.policy.Namespace, r.repo, r.server, r.secret)
+	secretHashChanged := r.policy.Status.LastSecretResourceVersionHash != secretHash
+	currentTime := time.Now().UTC()
+	fullResyncDue, err := shouldRunFullResync(r.policy.Spec.FullResyncCron, r.policy.Status.LastFullResyncTime, currentTime)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := buildSyncExecutionPlan(
+		r.ctx,
+		r.policy,
+		repoPath,
 		repoRevision,
 		secretHashChanged,
 		fullResyncDue,
 	)
-	if planErr != nil {
-		logger.Info("falling back to full sync plan", "reason", planErr.Error())
-		executionPlan = fullSyncExecutionPlan(syncPolicy.Spec.Source.Path, recursive)
+	if err != nil {
+		return nil, err
 	}
+	return &plan, nil
+}
 
-	targetedCount := int32(0)
-	appliedCount := int32(0)
-	for _, target := range executionPlan.ApplyTargets {
-		mutationResult, mutateErr := mutateapp.Execute(ctx, mutateapp.Dependencies{
+func (r *syncPolicyReconciliation) applyChanges(session bootstrap.Session, plan *syncExecutionPlan) (int32, int32, error) {
+	var targetedCount, appliedCount int32
+	for _, target := range plan.ApplyTargets {
+		mutationResult, mutateErr := mutateapp.Execute(r.ctx, mutateapp.Dependencies{
 			Orchestrator: session.Orchestrator,
 			Repository:   session.Services.RepositoryStore(),
 			Metadata:     session.Services.MetadataService(),
@@ -323,74 +440,36 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			Operation:        mutateapp.OperationApply,
 			LogicalPath:      target.Path,
 			Recursive:        target.Recursive,
-			Force:            syncPolicy.Spec.Sync.Force,
+			Force:            r.policy.Spec.Sync.Force,
 			HasExplicitInput: false,
 			RefreshLocal:     false,
 		})
 		if mutateErr != nil {
-			resultLabel = "error"
-			reasonLabel = conditionReasonReconcileFailed
-			return r.failWithStatus(ctx, syncPolicy, conditionReasonReconcileFailed, mutateErr.Error(), 0, "SyncFailed")
+			return 0, 0, mutateErr
 		}
 		targetedCount += int32(mutationResult.TargetedCount)
 		appliedCount += int32(len(mutationResult.Items))
 	}
+	return targetedCount, appliedCount, nil
+}
 
-	prunedCount := int32(0)
-	if syncPolicy.Spec.Sync.Prune {
-		var deleted int
-		var pruneErr error
-		if executionPlan.Mode == syncModeIncremental {
-			deleted, pruneErr = r.pruneRemovedPaths(ctx, session.Orchestrator, executionPlan.PruneTargets)
-		} else {
-			deleted, pruneErr = r.pruneRemote(ctx, session.Orchestrator, syncPolicy.Spec.Source.Path, recursive)
-		}
-		if pruneErr != nil {
-			resultLabel = "error"
-			reasonLabel = conditionReasonReconcileFailed
-			return r.failWithStatus(ctx, syncPolicy, conditionReasonReconcileFailed, pruneErr.Error(), 0, "SyncFailed")
-		}
-		prunedCount = int32(deleted)
+func (r *syncPolicyReconciliation) pruneChanges(session bootstrap.Session, plan *syncExecutionPlan) (int32, error) {
+	if !r.policy.Spec.Sync.Prune {
+		return 0, nil
 	}
 
-	syncPolicy.Status.LastAppliedRepoRevision = repoRevision
-	syncPolicy.Status.LastSecretResourceVersionHash = secretHash
-	syncPolicy.Status.LastSuccessfulSyncTime = &nowTime
-	if executionPlan.Mode == syncModeFull {
-		syncPolicy.Status.LastFullResyncTime = &nowTime
+	var deleted int
+	var pruneErr error
+	if plan.Mode == syncModeIncremental {
+		deleted, pruneErr = r.pruneRemovedPaths(r.ctx, session.Orchestrator, plan.PruneTargets)
+	} else {
+		recursive := r.policy.Spec.Source.Recursive == nil || *r.policy.Spec.Source.Recursive
+		deleted, pruneErr = r.pruneRemote(r.ctx, session.Orchestrator, r.policy.Spec.Source.Path, recursive)
 	}
-	syncPolicy.Status.LastSyncMode = string(executionPlan.Mode)
-	syncPolicy.Status.ResourceStats = declarestv1alpha1.SyncPolicyResourceStats{
-		Targeted: targetedCount,
-		Applied:  appliedCount,
-		Pruned:   prunedCount,
-		Failed:   targetedCount - appliedCount,
+	if pruneErr != nil {
+		return 0, pruneErr
 	}
-	syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeReconciling, metav1.ConditionFalse, conditionReasonReady, "")
-	syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeReady, metav1.ConditionTrue, conditionReasonReady, "sync successful")
-	syncPolicy.Status.Conditions = setStatusCondition(syncPolicy.Status.Conditions, declarestv1alpha1.ConditionTypeStalled, metav1.ConditionFalse, conditionReasonReady, "")
-	if err := r.Status().Update(ctx, syncPolicy); err != nil {
-		resultLabel = "error"
-		reasonLabel = conditionReasonReconcileFailed
-		return ctrl.Result{}, err
-	}
-
-	syncPolicyResourcesAppliedTotal.WithLabelValues(req.Namespace, req.Name).Add(float64(appliedCount))
-	syncPolicyResourcesPrunedTotal.WithLabelValues(req.Namespace, req.Name).Add(float64(prunedCount))
-	emitEventf(
-		r.Recorder,
-		syncPolicy,
-		corev1.EventTypeNormal,
-		"SyncSucceeded",
-		"sync completed at revision %s (mode=%s applied=%d pruned=%d targeted=%d)",
-		repoRevision,
-		executionPlan.Mode,
-		appliedCount,
-		prunedCount,
-		targetedCount,
-	)
-	logger.Info("sync policy reconciled", "mode", executionPlan.Mode, "applied", appliedCount, "pruned", prunedCount, "repo_revision", repoRevision)
-	return ctrl.Result{RequeueAfter: syncPolicyRequeueAfter(syncPolicy, time.Now().UTC())}, nil
+	return int32(deleted), nil
 }
 
 func (r *SyncPolicyReconciler) pruneRemote(

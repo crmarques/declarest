@@ -13,7 +13,7 @@ import (
 	"github.com/crmarques/declarest/resource/identity"
 )
 
-func (r *DefaultOrchestrator) resolveLocalResourceForRead(
+func (r *Orchestrator) resolveLocalResourceForRead(
 	ctx context.Context,
 	logicalPath string,
 ) (resource.Resource, error) {
@@ -111,7 +111,7 @@ func (r *DefaultOrchestrator) resolveLocalResourceForRead(
 	}
 }
 
-func (r *DefaultOrchestrator) hydrateLocalFallbackCandidate(
+func (r *Orchestrator) hydrateLocalFallbackCandidate(
 	ctx context.Context,
 	manager repository.ResourceStore,
 	md metadata.ResourceMetadata,

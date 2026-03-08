@@ -9,10 +9,12 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	resourcedomain "github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -40,10 +42,12 @@ func TestEditCommandSavesUsingCanonicalLocalPath(t *testing.T) {
 	}
 
 	command := newEditCommand(cliutil.CommandDependencies{
-		Orchestrator:  orch,
-		Contexts:      fakeEditContextService{context: editTestContext()},
-		ResourceStore: &fakeEditRepositoryStore{},
-		Metadata:      fakeEditMetadataService{},
+		Orchestrator: orch,
+		Contexts:     fakeEditContextService{context: editTestContext()},
+		Services: &fakeEditServiceAccessor{
+			store:    &fakeEditRepositoryStore{},
+			metadata: fakeEditMetadataService{},
+		},
 	}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/projects/test"})
 	command.SetIn(bytes.NewBuffer(nil))
@@ -83,10 +87,12 @@ func TestEditCommandRejectsBinaryPayloads(t *testing.T) {
 	}
 
 	command := newEditCommand(cliutil.CommandDependencies{
-		Orchestrator:  orch,
-		Contexts:      fakeEditContextService{context: editTestContext()},
-		ResourceStore: &fakeEditRepositoryStore{},
-		Metadata:      fakeEditMetadataService{},
+		Orchestrator: orch,
+		Contexts:     fakeEditContextService{context: editTestContext()},
+		Services: &fakeEditServiceAccessor{
+			store:    &fakeEditRepositoryStore{},
+			metadata: fakeEditMetadataService{},
+		},
 	}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/projects/binary-test"})
 	command.SetIn(bytes.NewBuffer(nil))
@@ -173,6 +179,17 @@ func (fakeEditMetadataService) ResolveForPath(context.Context, string) (metadata
 func (fakeEditMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
 	return metadatadomain.ResourceMetadata{}, nil
 }
+
+type fakeEditServiceAccessor struct {
+	store    repository.ResourceStore
+	metadata metadatadomain.MetadataService
+}
+
+func (a *fakeEditServiceAccessor) RepositoryStore() repository.ResourceStore              { return a.store }
+func (a *fakeEditServiceAccessor) RepositorySync() repository.RepositorySync              { return nil }
+func (a *fakeEditServiceAccessor) MetadataService() metadatadomain.MetadataService        { return a.metadata }
+func (a *fakeEditServiceAccessor) SecretProvider() secretdomain.SecretProvider             { return nil }
+func (a *fakeEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient { return nil }
 
 func editTestContext() configdomain.Context {
 	return configdomain.Context{

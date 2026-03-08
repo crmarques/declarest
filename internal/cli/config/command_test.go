@@ -18,6 +18,7 @@ import (
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
+	secretsdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -687,10 +688,12 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		ResourceStore:  &testRepositoryService{},
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			store:    &testRepositoryService{},
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -729,10 +732,12 @@ func TestCheckReportsMetadataBundleAsAccessible(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		ResourceStore:  &testRepositoryService{},
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			store:    &testRepositoryService{},
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -767,10 +772,12 @@ func TestCheckReportsMetadataBundleFileAsAccessible(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		ResourceStore:  &testRepositoryService{},
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			store:    &testRepositoryService{},
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -819,11 +826,13 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:            contextService,
-		ResourceStore:       &testRepositoryService{},
-		RepositorySync:      &testRepositoryService{},
-		Metadata:            &testMetadataService{},
-		ManagedServerClient: &testManagedServerClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			store:    &testRepositoryService{},
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+			server:   &testManagedServerClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -870,12 +879,14 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		ResourceStore:  &testRepositoryService{},
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
-		Orchestrator:   &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
-		Secrets:        &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
+		Contexts:     contextService,
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
+		Services: &testConfigServiceAccessor{
+			store:    &testRepositoryService{},
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+			secrets:  &testSecretProviderService{listErr: faults.NewTypedError(faults.TransportError, "secret store unavailable", nil)},
+		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
 
@@ -907,9 +918,11 @@ func TestCheckUsesPositionalContextNameWhenProvided(t *testing.T) {
 	}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		RepositorySync: &testRepositoryService{},
-		Metadata:       &testMetadataService{},
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			sync:     &testRepositoryService{},
+			metadata: &testMetadataService{},
+		},
 	}
 
 	_, err := executeConfigCommandWithDeps(t, deps, &cliutil.GlobalFlags{Output: cliutil.OutputText}, "", "check", "prod")
@@ -955,9 +968,11 @@ func TestInitInitializesRepositoryAndMetadata(t *testing.T) {
 	metadataService := &testMetadataService{}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		RepositorySync: repositoryService,
-		Metadata:       metadataService,
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			sync:     repositoryService,
+			metadata: metadataService,
+		},
 	}
 
 	_, err := executeConfigCommandWithDeps(
@@ -990,9 +1005,11 @@ func TestInitRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) {
 	metadataService := &testMetadataService{}
 
 	deps := cliutil.CommandDependencies{
-		Contexts:       contextService,
-		RepositorySync: repositoryService,
-		Metadata:       metadataService,
+		Contexts: contextService,
+		Services: &testConfigServiceAccessor{
+			sync:     repositoryService,
+			metadata: metadataService,
+		},
 	}
 
 	_, err := executeConfigCommandWithDeps(
@@ -1924,7 +1941,6 @@ func (s *testRepositoryService) List(context.Context, string, repository.ListPol
 	return nil, nil
 }
 func (s *testRepositoryService) Exists(context.Context, string) (bool, error) { return false, nil }
-func (s *testRepositoryService) Move(context.Context, string, string) error   { return nil }
 func (s *testRepositoryService) Init(context.Context) error {
 	s.initCalled = true
 	return s.initErr
@@ -2020,9 +2036,6 @@ func (s *testOrchestratorService) ListLocal(context.Context, string, orchestrato
 func (s *testOrchestratorService) ListRemote(context.Context, string, orchestratordomain.ListPolicy) ([]resource.Resource, error) {
 	return nil, s.listRemoteErr
 }
-func (s *testOrchestratorService) Explain(context.Context, string) ([]resource.DiffEntry, error) {
-	return nil, nil
-}
 func (s *testOrchestratorService) Diff(context.Context, string) ([]resource.DiffEntry, error) {
 	return nil, nil
 }
@@ -2099,6 +2112,30 @@ func (s *testSecretProviderService) NormalizeSecretPlaceholders(context.Context,
 }
 func (s *testSecretProviderService) DetectSecretCandidates(context.Context, resource.Value) ([]string, error) {
 	return nil, nil
+}
+
+type testConfigServiceAccessor struct {
+	store    repository.ResourceStore
+	sync     repository.RepositorySync
+	metadata metadatadomain.MetadataService
+	secrets  secretsdomain.SecretProvider
+	server   managedserverdomain.ManagedServerClient
+}
+
+func (a *testConfigServiceAccessor) RepositoryStore() repository.ResourceStore {
+	return a.store
+}
+func (a *testConfigServiceAccessor) RepositorySync() repository.RepositorySync {
+	return a.sync
+}
+func (a *testConfigServiceAccessor) MetadataService() metadatadomain.MetadataService {
+	return a.metadata
+}
+func (a *testConfigServiceAccessor) SecretProvider() secretsdomain.SecretProvider {
+	return a.secrets
+}
+func (a *testConfigServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+	return a.server
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

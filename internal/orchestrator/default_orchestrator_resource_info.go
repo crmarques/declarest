@@ -11,7 +11,7 @@ import (
 	"github.com/crmarques/declarest/resource/identity"
 )
 
-func (r *DefaultOrchestrator) buildResourceInfo(
+func (r *Orchestrator) buildResourceInfo(
 	ctx context.Context,
 	logicalPath string,
 	content resource.Content,
@@ -53,7 +53,7 @@ func (r *DefaultOrchestrator) buildResourceInfo(
 	}, resolvedMetadata, nil
 }
 
-func (r *DefaultOrchestrator) buildResourceInfoForRemoteRead(
+func (r *Orchestrator) buildResourceInfoForRemoteRead(
 	ctx context.Context,
 	logicalPath string,
 ) (resource.Resource, metadata.ResourceMetadata, error) {

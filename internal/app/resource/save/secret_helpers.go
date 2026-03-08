@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
@@ -93,7 +94,7 @@ func handleSaveSecrets(
 		return nil, nil, faults.NewValidationError("--handle-secrets requires object payloads", nil)
 	}
 
-	secretProvider, err := requireSecretProvider(deps)
+	secretProvider, err := appdeps.RequireSecretProvider(deps)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,7 +143,7 @@ func autoHandleDeclaredSaveSecrets(
 		return normalizedValue, nil
 	}
 
-	secretProvider, err := requireSecretProvider(deps)
+	secretProvider, err := appdeps.RequireSecretProvider(deps)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func autoHandleDeclaredSaveSecretsForEntries(
 		return entries, nil
 	}
 
-	secretProvider, err := requireSecretProvider(deps)
+	secretProvider, err := appdeps.RequireSecretProvider(deps)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +467,7 @@ func persistSaveSecretAttributes(
 		return nil
 	}
 
-	metadataService, err := requireMetadataService(deps)
+	metadataService, err := appdeps.RequireMetadataService(deps)
 	if err != nil {
 		return err
 	}

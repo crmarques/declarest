@@ -44,8 +44,8 @@ func resourcePayloadEditType(
 	value resourcedomain.Value,
 ) (string, error) {
 	_ = cfg
-	if deps.Metadata != nil {
-		md, err := deps.Metadata.ResolveForPath(ctx, logicalPath)
+	if deps.Services != nil && deps.Services.MetadataService() != nil {
+		md, err := deps.Services.MetadataService().ResolveForPath(ctx, logicalPath)
 		if err != nil {
 			return "", err
 		}
@@ -196,10 +196,13 @@ func commitRepositoryIfGit(
 }
 
 func resolveRepositoryCommitter(deps cliutil.CommandDependencies) (repository.RepositoryCommitter, error) {
+	if deps.Services == nil {
+		return nil, cliutil.ValidationError("git repository commit capability is not available", nil)
+	}
 	var committer repository.RepositoryCommitter
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryCommitter); ok {
+	if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryCommitter); ok {
 		committer = candidate
-	} else if candidate, ok := deps.ResourceStore.(repository.RepositoryCommitter); ok {
+	} else if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryCommitter); ok {
 		committer = candidate
 	}
 	if committer == nil {
@@ -292,10 +295,13 @@ func shouldSkipCleanGitWorktreeCheckForFreshBootstrapRepo(
 		return false
 	}
 
+	if deps.Services == nil {
+		return false
+	}
 	var historyReader repository.RepositoryHistoryReader
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryHistoryReader); ok {
+	if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryHistoryReader); ok {
 		historyReader = candidate
-	} else if candidate, ok := deps.ResourceStore.(repository.RepositoryHistoryReader); ok {
+	} else if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryHistoryReader); ok {
 		historyReader = candidate
 	}
 	if historyReader == nil {

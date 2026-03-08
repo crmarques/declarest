@@ -2,18 +2,16 @@ package request
 
 import (
 	"context"
+	"maps"
 	"strings"
 
-	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
 	"github.com/crmarques/declarest/managedserver"
-	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 )
 
-type Dependencies struct {
-	Orchestrator orchestratordomain.Orchestrator
-}
+type Dependencies = appdeps.Dependencies
 
 type Request struct {
 	Method         string
@@ -31,7 +29,7 @@ type Result struct {
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
-	orchestratorService, err := requireOrchestrator(deps)
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
 		return Result{}, err
 	}
@@ -40,7 +38,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	baseSpec := managedserver.RequestSpec{
 		Method:      method,
 		Path:        req.LogicalPath,
-		Headers:     cloneStringMap(req.Headers),
+		Headers:     maps.Clone(req.Headers),
 		Accept:      req.Accept,
 		ContentType: req.ContentType,
 		Body:        req.Body,
@@ -72,21 +70,4 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	return Result{Values: results}, nil
 }
 
-func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
-	if deps.Orchestrator == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "orchestrator is not configured", nil)
-	}
-	return deps.Orchestrator, nil
-}
 
-func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
-}

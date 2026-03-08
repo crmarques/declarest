@@ -36,11 +36,11 @@ func TestNewSession(t *testing.T) {
 		t.Fatal("expected non-nil resource orchestrator")
 	}
 
-	if _, ok := session.Contexts.(*configfile.FileContextService); !ok {
-		t.Fatalf("expected FileContextService, got %T", session.Contexts)
+	if _, ok := session.Contexts.(*configfile.Service); !ok {
+		t.Fatalf("expected configfile.Service, got %T", session.Contexts)
 	}
-	if _, ok := session.Orchestrator.(*internalorchestrator.DefaultOrchestrator); !ok {
-		t.Fatalf("expected DefaultOrchestrator, got %T", session.Orchestrator)
+	if _, ok := session.Orchestrator.(*internalorchestrator.Orchestrator); !ok {
+		t.Fatalf("expected Orchestrator, got %T", session.Orchestrator)
 	}
 }
 

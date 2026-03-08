@@ -23,7 +23,7 @@ import (
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
 )
 
-func TestBuildDefaultOrchestratorWiring(t *testing.T) {
+func TestBuildOrchestratorWiring(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	t.Run("filesystem_context_without_optional_managers", func(t *testing.T) {
@@ -38,25 +38,25 @@ func TestBuildDefaultOrchestratorWiring(t *testing.T) {
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{
 			Name:      "fs",
 			Overrides: map[string]string{"repository.filesystem.base-dir": "/tmp/override"},
 		})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
-			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
+		if _, ok := orch.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", orch.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService, got %T", defaultOrchestrator.MetadataService())
+		if _, ok := orch.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService, got %T", orch.MetadataService())
 		}
-		if defaultOrchestrator.ManagedServerClient() != nil {
-			t.Fatalf("expected nil server manager, got %T", defaultOrchestrator.ManagedServerClient())
+		if orch.ManagedServerClient() != nil {
+			t.Fatalf("expected nil server manager, got %T", orch.ManagedServerClient())
 		}
-		if defaultOrchestrator.SecretProvider() != nil {
-			t.Fatalf("expected nil secrets provider, got %T", defaultOrchestrator.SecretProvider())
+		if orch.SecretProvider() != nil {
+			t.Fatalf("expected nil secrets provider, got %T", orch.SecretProvider())
 		}
 	})
 
@@ -105,17 +105,17 @@ paths: {}
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", defaultOrchestrator.MetadataService())
+		if _, ok := orch.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService for bundle metadata source, got %T", orch.MetadataService())
 		}
-		if defaultOrchestrator.ManagedServerClient() == nil {
+		if orch.ManagedServerClient() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := defaultOrchestrator.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -173,17 +173,17 @@ paths: {}
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-file"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-file"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if _, ok := defaultOrchestrator.MetadataService().(*fsmetadata.FSMetadataService); !ok {
-			t.Fatalf("expected FSMetadataService for bundle-file metadata source, got %T", defaultOrchestrator.MetadataService())
+		if _, ok := orch.MetadataService().(*fsmetadata.FSMetadataService); !ok {
+			t.Fatalf("expected FSMetadataService for bundle-file metadata source, got %T", orch.MetadataService())
 		}
-		if defaultOrchestrator.ManagedServerClient() == nil {
+		if orch.ManagedServerClient() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := defaultOrchestrator.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -245,15 +245,15 @@ distribution:
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.ManagedServerClient() == nil {
+		if orch.ManagedServerClient() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
 		}
@@ -314,15 +314,15 @@ distribution:
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if defaultOrchestrator.ManagedServerClient() == nil {
+		if orch.ManagedServerClient() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := defaultOrchestrator.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
 		}
@@ -363,19 +363,19 @@ distribution:
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "git-http-file-secret"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.RepositoryStore().(*gitrepository.GitResourceRepository); !ok {
-			t.Fatalf("expected GitResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
+		if _, ok := orch.RepositoryStore().(*gitrepository.GitResourceRepository); !ok {
+			t.Fatalf("expected GitResourceRepository, got %T", orch.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.ManagedServerClient().(*httpmanagedserver.HTTPManagedServerClient); !ok {
-			t.Fatalf("expected HTTPManagedServerClient, got %T", defaultOrchestrator.ManagedServerClient())
+		if _, ok := orch.ManagedServerClient().(*httpmanagedserver.Client); !ok {
+			t.Fatalf("expected Client, got %T", orch.ManagedServerClient())
 		}
-		if _, ok := defaultOrchestrator.SecretProvider().(*filesecrets.FileSecretService); !ok {
-			t.Fatalf("expected FileSecretService, got %T", defaultOrchestrator.SecretProvider())
+		if _, ok := orch.SecretProvider().(*filesecrets.FileSecretService); !ok {
+			t.Fatalf("expected FileSecretService, got %T", orch.SecretProvider())
 		}
 	})
 
@@ -399,16 +399,16 @@ distribution:
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "fs-vault-secret"})
 		if err != nil {
-			t.Fatalf("buildDefaultOrchestrator returned error: %v", err)
+			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
 
-		if _, ok := defaultOrchestrator.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
-			t.Fatalf("expected LocalResourceRepository, got %T", defaultOrchestrator.RepositoryStore())
+		if _, ok := orch.RepositoryStore().(*fsstore.LocalResourceRepository); !ok {
+			t.Fatalf("expected LocalResourceRepository, got %T", orch.RepositoryStore())
 		}
-		if _, ok := defaultOrchestrator.SecretProvider().(*vaultsecrets.VaultSecretService); !ok {
-			t.Fatalf("expected VaultSecretService, got %T", defaultOrchestrator.SecretProvider())
+		if _, ok := orch.SecretProvider().(*vaultsecrets.VaultSecretService); !ok {
+			t.Fatalf("expected VaultSecretService, got %T", orch.SecretProvider())
 		}
 	})
 }
@@ -638,13 +638,13 @@ func TestEmitSecurityWarnings(t *testing.T) {
 	})
 }
 
-func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
+func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil_context_service", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := buildDefaultOrchestrator(context.Background(), nil, config.ContextSelection{})
+		_, err := buildOrchestrator(context.Background(), nil, config.ContextSelection{})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -658,7 +658,7 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 		expected := faults.NewTypedError(faults.NotFoundError, "context not found", nil)
 		contextService := &fakeContextService{resolveErr: expected}
 
-		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "missing"})
+		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "missing"})
 		if !errors.Is(err, expected) {
 			t.Fatalf("expected propagated error %v, got %v", expected, err)
 		}
@@ -674,12 +674,12 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid"})
 		if err != nil {
 			t.Fatalf("expected missing repository to be allowed, got error: %v", err)
 		}
-		if defaultOrchestrator.RepositoryStore() != nil {
-			t.Fatalf("expected nil repository manager, got %T", defaultOrchestrator.RepositoryStore())
+		if orch.RepositoryStore() != nil {
+			t.Fatalf("expected nil repository manager, got %T", orch.RepositoryStore())
 		}
 	})
 
@@ -708,7 +708,7 @@ func TestBuildDefaultOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := buildDefaultOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
+		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

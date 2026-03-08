@@ -37,13 +37,13 @@ func suppressMutation(attributes ...string) []metadata.PayloadMutationStep {
 	return []metadata.PayloadMutationStep{{SuppressAttributes: attributes}}
 }
 
-func TestNewHTTPManagedServerClientValidation(t *testing.T) {
+func TestNewClientValidation(t *testing.T) {
 	t.Parallel()
 
 	t.Run("missing_base_url", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			Auth: &config.HTTPAuth{
 				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
 			},
@@ -54,7 +54,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 	t.Run("oauth2_grant_type_not_supported", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
 				OAuth2: &config.OAuth2{
@@ -71,7 +71,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 	t.Run("tls_client_pair_must_be_complete", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
 				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
@@ -86,7 +86,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 	t.Run("openapi_http_url_not_allowed", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
 				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
@@ -99,7 +99,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 	t.Run("proxy_empty_block_disables_default", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
 				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
@@ -114,7 +114,7 @@ func TestNewHTTPManagedServerClientValidation(t *testing.T) {
 	t.Run("proxy_auth_rejects_embedded_credentials", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := NewHTTPManagedServerClient(config.HTTPServer{
+		_, err := NewClient(config.HTTPServer{
 			BaseURL: "https://example.com",
 			Auth: &config.HTTPAuth{
 				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
@@ -505,7 +505,7 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		"rundeck",
 		"metadata",
 	)
-	service := fsmetadata.NewFSMetadataService(metadataDir, "")
+	service := fsmetadata.NewFSMetadataService(metadataDir)
 	client := mustManagedServerClient(
 		t,
 		config.HTTPServer{
@@ -2656,13 +2656,13 @@ func writeTLSClientPairFiles(t *testing.T) (string, string, string) {
 func mustManagedServerClient(
 	t *testing.T,
 	cfg config.HTTPServer,
-	opts ...ManagedServerClientOption,
-) *HTTPManagedServerClient {
+	opts ...ClientOption,
+) *Client {
 	t.Helper()
 
-	client, err := NewHTTPManagedServerClient(cfg, opts...)
+	client, err := NewClient(cfg, opts...)
 	if err != nil {
-		t.Fatalf("NewHTTPManagedServerClient returned error: %v", err)
+		t.Fatalf("NewClient returned error: %v", err)
 	}
 	return client
 }

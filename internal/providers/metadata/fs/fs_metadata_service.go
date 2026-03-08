@@ -21,7 +21,7 @@ type FSMetadataService struct {
 	baseDir string
 }
 
-func NewFSMetadataService(baseDir string, _ ...string) *FSMetadataService {
+func NewFSMetadataService(baseDir string) *FSMetadataService {
 	return &FSMetadataService{
 		baseDir: filepath.Clean(baseDir),
 	}

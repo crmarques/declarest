@@ -10,7 +10,10 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
+	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 func TestEnsureCleanGitWorktreeForAutoCommitSkipsBootstrapWhenRepoNotInitialized(t *testing.T) {
@@ -25,7 +28,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitSkipsBootstrapWhenRepoNotInitialized
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -59,7 +62,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitStillFailsDirtyInitializedRepo(t *te
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -95,7 +98,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitSkipsDirtyFreshInitializedRepoWithou
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -129,7 +132,7 @@ func TestEnsureCleanGitWorktreeForAutoCommitStillChecksWhenAutoInitDisabled(t *t
 
 	err := ensureCleanGitWorktreeForAutoCommit(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -151,7 +154,7 @@ func TestCommitAndMaybeAutoSyncRepositoryPushesWhenAutoSyncIsUnset(t *testing.T)
 	sync := &stubRepositorySync{}
 	err := commitAndMaybeAutoSyncRepository(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -180,7 +183,7 @@ func TestCommitAndMaybeAutoSyncRepositorySkipsPushWhenAutoSyncIsFalse(t *testing
 	sync := &stubRepositorySync{}
 	err := commitAndMaybeAutoSyncRepository(
 		context.Background(),
-		cliutil.CommandDependencies{RepositorySync: sync},
+		cliutil.CommandDependencies{Services: &stubLocalEditServiceAccessor{sync: sync}},
 		configdomain.Context{
 			Repository: configdomain.Repository{
 				Git: &configdomain.GitRepository{
@@ -204,6 +207,16 @@ func TestCommitAndMaybeAutoSyncRepositorySkipsPushWhenAutoSyncIsFalse(t *testing
 		t.Fatalf("expected push to be skipped when auto-sync is false, got %d calls", sync.pushCalls)
 	}
 }
+
+type stubLocalEditServiceAccessor struct {
+	sync repository.RepositorySync
+}
+
+func (a *stubLocalEditServiceAccessor) RepositoryStore() repository.ResourceStore              { return nil }
+func (a *stubLocalEditServiceAccessor) RepositorySync() repository.RepositorySync              { return a.sync }
+func (a *stubLocalEditServiceAccessor) MetadataService() metadatadomain.MetadataService        { return nil }
+func (a *stubLocalEditServiceAccessor) SecretProvider() secretdomain.SecretProvider             { return nil }
+func (a *stubLocalEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient { return nil }
 
 type stubRepositorySync struct {
 	status          repository.SyncReport

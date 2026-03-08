@@ -38,7 +38,7 @@ func (info tlsDebugInfo) mTLSEnabled() bool {
 	return info.clientCertFile != "" && info.clientKeyFile != ""
 }
 
-func (g *HTTPManagedServerClient) doRequest(ctx context.Context, purpose string, request *http.Request) (*http.Response, error) {
+func (g *Client) doRequest(ctx context.Context, purpose string, request *http.Request) (*http.Response, error) {
 	debugctx.Printf(
 		ctx,
 		"http request purpose=%q method=%q url=%q tls_enabled=%t mtls_enabled=%t tls_insecure_skip_verify=%t tls_ca_cert_file=%q tls_client_cert_file=%q tls_client_key_file=%q",
@@ -80,7 +80,7 @@ func (g *HTTPManagedServerClient) doRequest(ctx context.Context, purpose string,
 	return response, nil
 }
 
-func (g *HTTPManagedServerClient) executeWithThrottle(
+func (g *Client) executeWithThrottle(
 	ctx context.Context,
 	purpose string,
 	request *http.Request,

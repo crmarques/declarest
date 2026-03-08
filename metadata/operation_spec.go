@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
 	"sort"
@@ -270,8 +271,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 
 func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (OperationSpec, error) {
 	rendered := OperationSpec{
-		Query:           cloneStringMap(spec.Query),
-		Headers:         cloneStringMap(spec.Headers),
+		Query:           maps.Clone(spec.Query),
+		Headers:         maps.Clone(spec.Headers),
 		Body:            spec.Body,
 		PayloadMutation: clonePayloadMutationSteps(spec.PayloadMutation),
 		Validate:        cloneOperationValidationSpec(spec.Validate),

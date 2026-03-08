@@ -94,8 +94,8 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				resourcesave.Dependencies{
 					Orchestrator: orchestratorService,
 					Repository:   repositoryService,
-					Metadata:     deps.Metadata,
-					Secrets:      deps.Secrets,
+					Metadata:     deps.Services.MetadataService(),
+					Secrets:      deps.Services.SecretProvider(),
 				},
 				resolvedPath,
 				value,

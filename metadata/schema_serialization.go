@@ -3,6 +3,7 @@ package metadata
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -340,7 +341,7 @@ func operationSpecFromWire(_ Operation, spec resourceOperationWire) OperationSpe
 	}
 
 	if spec.Query != nil {
-		decoded.Query = cloneStringMap(*spec.Query)
+		decoded.Query = maps.Clone(*spec.Query)
 	}
 	preserveExplicitEmptyHeaders := spec.HTTPHeaders != nil && len(*spec.HTTPHeaders) == 0
 	if spec.HTTPHeaders != nil {
@@ -473,7 +474,7 @@ func httpHeaderListToMap(values []httpHeaderWire) map[string]string {
 }
 
 func operationHeadersToWire(spec OperationSpec) map[string]string {
-	headers := cloneStringMap(spec.Headers)
+	headers := maps.Clone(spec.Headers)
 	headers = setOrReplaceHeader(headers, "Accept", spec.Accept)
 	headers = setOrReplaceHeader(headers, "Content-Type", spec.ContentType)
 	return headers

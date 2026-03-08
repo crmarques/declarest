@@ -111,7 +111,7 @@ func collectDiffEntries(entries *[]resource.DiffEntry, logicalPath string, point
 		sort.Strings(keys)
 
 		for _, key := range keys {
-			nextPointer := pointer + "/" + escapePointerToken(key)
+			nextPointer := pointer + "/" + resource.EscapeJSONPointerToken(key)
 			localValue, localFound := localObject[key]
 			remoteValue, remoteFound := remoteObject[key]
 
@@ -170,7 +170,3 @@ func appendDiffEntry(
 	})
 }
 
-func escapePointerToken(value string) string {
-	escaped := strings.ReplaceAll(value, "~", "~0")
-	return strings.ReplaceAll(escaped, "/", "~1")
-}

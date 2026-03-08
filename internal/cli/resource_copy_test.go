@@ -119,7 +119,7 @@ func TestResourceCopyRequiresOverwriteWhenTargetExists(t *testing.T) {
 		},
 	}
 	deps := testDepsWith(orchestratorService, metadataService)
-	repoService := deps.ResourceStore.(*testRepository)
+	repoService := deps.Services.RepositoryStore().(*testRepository)
 
 	_, err := executeForTest(
 		deps,
@@ -148,8 +148,8 @@ func TestResourceCopyGitContextCommitsRepositoryChange(t *testing.T) {
 	}
 	deps := testDepsWith(orchestratorService, metadataService)
 	repoService := &copyCommitTestRepository{}
-	deps.ResourceStore = repoService
-	deps.RepositorySync = repoService
+	deps.Services.(*testServiceAccessor).store = repoService
+	deps.Services.(*testServiceAccessor).sync = repoService
 
 	if _, err := executeForTest(
 		deps,
@@ -185,8 +185,8 @@ func TestResourceCopyMessageAppendsToDefaultCommitMessage(t *testing.T) {
 	}
 	deps := testDepsWith(orchestratorService, metadataService)
 	repoService := &copyCommitTestRepository{}
-	deps.ResourceStore = repoService
-	deps.RepositorySync = repoService
+	deps.Services.(*testServiceAccessor).store = repoService
+	deps.Services.(*testServiceAccessor).sync = repoService
 
 	if _, err := executeForTest(
 		deps,
@@ -219,7 +219,7 @@ func TestResourceCopyOverwriteAllowsReplacingExistingTargetAndCommits(t *testing
 		},
 	}
 	deps := testDepsWith(orchestratorService, metadataService)
-	repoService := deps.ResourceStore.(*testRepository)
+	repoService := deps.Services.RepositoryStore().(*testRepository)
 
 	if _, err := executeForTest(
 		deps,

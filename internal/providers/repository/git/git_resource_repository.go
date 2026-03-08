@@ -334,15 +334,6 @@ func matchesGitHistoryEntryFilter(entry repository.HistoryEntry, authorFilter st
 	return true
 }
 
-// Deprecated: Move is a concrete helper and is not part of the repository
-// interfaces. Prefer interface-based flows for new call sites.
-func (r *GitResourceRepository) Move(ctx context.Context, fromPath string, toPath string) error {
-	if err := r.ensureInitializedForOperation(ctx); err != nil {
-		return err
-	}
-	return r.local.Move(ctx, fromPath, toPath)
-}
-
 func (r *GitResourceRepository) Init(ctx context.Context) error {
 	if err := r.local.Init(ctx); err != nil {
 		return err

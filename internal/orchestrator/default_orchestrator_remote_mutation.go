@@ -10,7 +10,7 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func (r *DefaultOrchestrator) executeRemoteMutation(
+func (r *Orchestrator) executeRemoteMutation(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
@@ -54,7 +54,7 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 	return resourceInfo, nil
 }
 
-func (r *DefaultOrchestrator) resolvePayloadForRemote(
+func (r *Orchestrator) resolvePayloadForRemote(
 	ctx context.Context,
 	logicalPath string,
 	content resource.Content,

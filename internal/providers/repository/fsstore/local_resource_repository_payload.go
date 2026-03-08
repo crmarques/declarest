@@ -24,20 +24,9 @@ func firstMetadataBaseDir(values []string) string {
 		if trimmed == "" {
 			continue
 		}
-		if looksLikeLegacyPayloadTypeArg(trimmed) {
-			continue
-		}
 		return filepath.Clean(trimmed)
 	}
 	return ""
-}
-
-func looksLikeLegacyPayloadTypeArg(value string) bool {
-	if strings.ContainsRune(value, filepath.Separator) || strings.Contains(value, "/") {
-		return false
-	}
-	_, ok := resource.PayloadDescriptorForContentType(value)
-	return ok
 }
 
 func (r *LocalResourceRepository) discoverPayloadFile(logicalPath string) (*payloadFileInfo, error) {

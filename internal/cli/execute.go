@@ -15,6 +15,8 @@ import (
 
 type Dependencies = cliutil.CommandDependencies
 
+var NewDependencies = cliutil.NewCommandDependencies
+
 func Execute(deps Dependencies) error {
 	root := NewRootCommand(deps)
 	command, err := root.ExecuteC()

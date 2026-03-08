@@ -9,7 +9,7 @@ import (
 	"github.com/crmarques/declarest/metadata"
 )
 
-func (g *HTTPManagedServerClient) applyOpenAPIFallback(
+func (g *Client) applyOpenAPIFallback(
 	ctx context.Context,
 	requestPath string,
 	operation metadata.Operation,
@@ -60,7 +60,7 @@ func (g *HTTPManagedServerClient) applyOpenAPIFallback(
 	return nil
 }
 
-func (g *HTTPManagedServerClient) validateOpenAPIMethodSupport(ctx context.Context, requestPath string, method string) error {
+func (g *Client) validateOpenAPIMethodSupport(ctx context.Context, requestPath string, method string) error {
 	if strings.TrimSpace(g.openAPISource) == "" {
 		return nil
 	}

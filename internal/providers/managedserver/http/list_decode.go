@@ -61,7 +61,7 @@ func buildLogicalPath(collectionPath string, alias string) (string, error) {
 	return resource.JoinLogicalPath(collectionPath, alias)
 }
 
-func (g *HTTPManagedServerClient) decodeListResponse(
+func (g *Client) decodeListResponse(
 	ctx context.Context,
 	collectionPath string,
 	md metadata.ResourceMetadata,

@@ -9,13 +9,6 @@ func contentFromResource(value resource.Resource) resource.Content {
 	}
 }
 
-func contentWithDescriptor(value any, descriptor resource.PayloadDescriptor) resource.Content {
-	return resource.Content{
-		Value:      value,
-		Descriptor: descriptor,
-	}
-}
-
 func requestBodyPresent(body resource.Content) bool {
 	return body.Value != nil
 }

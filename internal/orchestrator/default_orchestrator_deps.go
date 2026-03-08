@@ -11,21 +11,21 @@ import (
 	"github.com/crmarques/declarest/repository"
 )
 
-func (r *DefaultOrchestrator) requireRepository() (repository.ResourceStore, error) {
+func (r *Orchestrator) requireRepository() (repository.ResourceStore, error) {
 	if r == nil || r.repository == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "repository store is not configured", nil)
 	}
 	return r.repository, nil
 }
 
-func (r *DefaultOrchestrator) requireServer() (managedserver.ManagedServerClient, error) {
+func (r *Orchestrator) requireServer() (managedserver.ManagedServerClient, error) {
 	if r == nil || r.server == nil {
 		return nil, faults.NewTypedError(faults.ValidationError, "managed server is not configured", nil)
 	}
 	return r.server, nil
 }
 
-func (r *DefaultOrchestrator) resolveMetadataForPath(
+func (r *Orchestrator) resolveMetadataForPath(
 	ctx context.Context,
 	normalizedPath string,
 	allowMissing bool,

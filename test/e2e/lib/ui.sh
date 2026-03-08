@@ -197,6 +197,13 @@ ui_step_line_render() {
     "${status_label}"
 }
 
+ui_step_duration_label() {
+  local step_state=$1
+  local elapsed=$2
+
+  printf '%s\n' "$(e2e_format_duration "${elapsed}")"
+}
+
 ui_print_step_line() {
   local step_number=$1
   local step_total=$2
@@ -205,10 +212,8 @@ ui_print_step_line() {
   local elapsed=$5
   local should_print_footer=${6:-0}
 
-  local duration=''
-  if [[ "${step_state}" != 'RUNNING' ]]; then
-    duration=$(e2e_format_duration "${elapsed}")
-  fi
+  local duration
+  duration=$(ui_step_duration_label "${step_state}" "${elapsed}")
 
   if ((E2E_UI_TTY == 1)); then
     local width
@@ -433,6 +438,7 @@ ui_spinner_start() {
   local step_number=$1
   local step_total=$2
   local step_title=$3
+  local step_start=$4
 
   ui_spinner_stop
 
@@ -440,8 +446,12 @@ ui_spinner_start() {
     local spin_index=0
     while true; do
       local spinner_char=${E2E_UI_SPINNER:spin_index:1}
+      local elapsed
+      local duration
       local line
-      line=$(ui_step_line_render "${step_number}" "${step_total}" "${step_title}" "RUNNING" "${spinner_char}" '')
+      elapsed=$(( $(e2e_epoch_now) - step_start ))
+      duration=$(ui_step_duration_label 'RUNNING' "${elapsed}")
+      line=$(ui_step_line_render "${step_number}" "${step_total}" "${step_title}" "RUNNING" "${spinner_char}" "${duration}")
       printf '\r%s' "${line}"
       spin_index=$(((spin_index + 1) % 4))
       sleep 0.1
@@ -497,7 +507,7 @@ ui_run_step() {
 
   if ((E2E_UI_TTY == 1)); then
     ui_print_step_table_header
-    ui_spinner_start "${step_number}" "${step_total}" "${step_title}"
+    ui_spinner_start "${step_number}" "${step_total}" "${step_title}" "${step_start}"
     set +e
     ui_run_step_body "${step_log}" "${step_fn}" "$@"
     rc=$?

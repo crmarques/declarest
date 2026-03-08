@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"path"
 	"strings"
@@ -43,7 +44,7 @@ func resolveOperationSpecTemplates(
 	return rendered, nil
 }
 
-func (g *HTTPManagedServerClient) metadataPayloadDescriptor(md metadata.ResourceMetadata) resource.PayloadDescriptor {
+func (g *Client) metadataPayloadDescriptor(md metadata.ResourceMetadata) resource.PayloadDescriptor {
 	if strings.TrimSpace(md.PayloadType) == "" {
 		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 	}
@@ -52,7 +53,7 @@ func (g *HTTPManagedServerClient) metadataPayloadDescriptor(md metadata.Resource
 	})
 }
 
-func (g *HTTPManagedServerClient) defaultResourceMediaType(descriptor resource.PayloadDescriptor) (string, error) {
+func (g *Client) defaultResourceMediaType(descriptor resource.PayloadDescriptor) (string, error) {
 	mediaType := resource.NormalizePayloadDescriptor(descriptor).MediaType
 	if strings.TrimSpace(mediaType) == "" {
 		return "", faults.NewValidationError("invalid payload media type", nil)
@@ -60,7 +61,7 @@ func (g *HTTPManagedServerClient) defaultResourceMediaType(descriptor resource.P
 	return mediaType, nil
 }
 
-func (g *HTTPManagedServerClient) requestFallbackDescriptor(
+func (g *Client) requestFallbackDescriptor(
 	ctx context.Context,
 	requestSpec managedserver.RequestSpec,
 	spec metadata.OperationSpec,
@@ -92,7 +93,7 @@ func (g *HTTPManagedServerClient) requestFallbackDescriptor(
 	return payloadDescriptorFromValue(spec.Body)
 }
 
-func (g *HTTPManagedServerClient) requestBodyDescriptor(
+func (g *Client) requestBodyDescriptor(
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
 ) resource.PayloadDescriptor {
@@ -106,7 +107,7 @@ func (g *HTTPManagedServerClient) requestBodyDescriptor(
 	}
 }
 
-func (g *HTTPManagedServerClient) genericRequestBodyDescriptor(requestSpec managedserver.RequestSpec) resource.PayloadDescriptor {
+func (g *Client) genericRequestBodyDescriptor(requestSpec managedserver.RequestSpec) resource.PayloadDescriptor {
 	switch {
 	case resource.IsPayloadDescriptorExplicit(requestSpec.Body.Descriptor):
 		return resource.NormalizePayloadDescriptor(requestSpec.Body.Descriptor)
@@ -121,7 +122,7 @@ func (g *HTTPManagedServerClient) genericRequestBodyDescriptor(requestSpec manag
 	}
 }
 
-func (g *HTTPManagedServerClient) payloadTemplateScopeDescriptor(
+func (g *Client) payloadTemplateScopeDescriptor(
 	md metadata.ResourceMetadata,
 	resourceInfo resource.Resource,
 ) resource.PayloadDescriptor {
@@ -146,8 +147,8 @@ func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.
 	explicitAccept := strings.TrimSpace(spec.Accept) != ""
 	explicitContentType := strings.TrimSpace(spec.ContentType) != ""
 
-	spec.Query = cloneStringMap(spec.Query)
-	spec.Headers = cloneStringMap(spec.Headers)
+	spec.Query = maps.Clone(spec.Query)
+	spec.Headers = maps.Clone(spec.Headers)
 	return spec, explicitPath, explicitMethod, explicitAccept, explicitContentType
 }
 

@@ -16,7 +16,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
+func (g *Client) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
 	doc, err := g.openAPIDocument(ctx)
 	if err != nil {
 		return resource.Content{}, err
@@ -50,7 +50,7 @@ func validateOpenAPISource(source string) error {
 	return nil
 }
 
-func (g *HTTPManagedServerClient) openAPIDocument(ctx context.Context) (map[string]any, error) {
+func (g *Client) openAPIDocument(ctx context.Context) (map[string]any, error) {
 	if strings.TrimSpace(g.openAPISource) == "" {
 		return nil, faults.NewValidationError("managed-server.http.openapi is not configured", nil)
 	}
@@ -72,7 +72,7 @@ func (g *HTTPManagedServerClient) openAPIDocument(ctx context.Context) (map[stri
 	return g.openapiDoc, nil
 }
 
-func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[string]any, error) {
+func (g *Client) loadOpenAPIDocument(ctx context.Context) (map[string]any, error) {
 	source := strings.TrimSpace(g.openAPISource)
 	parsed, err := url.Parse(source)
 	if err != nil {
@@ -147,7 +147,7 @@ func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[
 	return document, nil
 }
 
-func (g *HTTPManagedServerClient) openAPISourceDescriptor() resource.PayloadDescriptor {
+func (g *Client) openAPISourceDescriptor() resource.PayloadDescriptor {
 	source := strings.TrimSpace(g.openAPISource)
 	if descriptor, ok := resource.PayloadDescriptorForFileName(source); ok {
 		return descriptor

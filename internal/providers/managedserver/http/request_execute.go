@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"sort"
@@ -15,7 +16,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) Request(
+func (g *Client) Request(
 	ctx context.Context,
 	requestSpec managedserverdomain.RequestSpec,
 ) (resource.Content, error) {
@@ -33,8 +34,8 @@ func (g *HTTPManagedServerClient) Request(
 	spec := metadata.OperationSpec{
 		Method:      resolvedMethod,
 		Path:        resolvedPath,
-		Query:       cloneStringMap(requestSpec.Query),
-		Headers:     cloneStringMap(requestSpec.Headers),
+		Query:       maps.Clone(requestSpec.Query),
+		Headers:     maps.Clone(requestSpec.Headers),
 		Accept:      requestSpec.Accept,
 		ContentType: requestSpec.ContentType,
 		Body: resource.Content{
@@ -79,7 +80,7 @@ func (g *HTTPManagedServerClient) Request(
 	return decodeResponseBody(responseBody, responseHeaders, g.requestFallbackDescriptor(ctx, requestSpec, spec))
 }
 
-func (g *HTTPManagedServerClient) execute(ctx context.Context, spec metadata.OperationSpec) ([]byte, http.Header, error) {
+func (g *Client) execute(ctx context.Context, spec metadata.OperationSpec) ([]byte, http.Header, error) {
 	request, err := g.newRequest(ctx, spec)
 	if err != nil {
 		return nil, nil, err
@@ -105,7 +106,7 @@ func (g *HTTPManagedServerClient) execute(ctx context.Context, spec metadata.Ope
 	return body, response.Header.Clone(), nil
 }
 
-func (g *HTTPManagedServerClient) newRequest(ctx context.Context, spec metadata.OperationSpec) (*http.Request, error) {
+func (g *Client) newRequest(ctx context.Context, spec metadata.OperationSpec) (*http.Request, error) {
 	targetURL, err := g.resolveRequestURL(spec.Path, spec.Query)
 	if err != nil {
 		return nil, err
@@ -151,7 +152,7 @@ func (g *HTTPManagedServerClient) newRequest(ctx context.Context, spec metadata.
 	return request, nil
 }
 
-func (g *HTTPManagedServerClient) resolveRequestURL(requestPath string, query map[string]string) (string, error) {
+func (g *Client) resolveRequestURL(requestPath string, query map[string]string) (string, error) {
 	if parsed, err := url.Parse(requestPath); err == nil && parsed.Scheme != "" {
 		return "", faults.NewValidationError("operation path must be relative to managed-server.http.base-url", nil)
 	}

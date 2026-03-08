@@ -12,7 +12,7 @@ import (
 	"github.com/crmarques/declarest/resource/identity"
 )
 
-func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
+func (r *Orchestrator) fetchRemoteMetadataPathFallbackValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
@@ -62,7 +62,7 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 	return resource.Content{}, false, nil
 }
 
-func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
+func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	logicalPath string,

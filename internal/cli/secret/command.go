@@ -509,9 +509,9 @@ func newDetectCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 			}
 
 			result, err := detectapp.Execute(command.Context(), detectapp.Dependencies{
-				Orchestrator:   deps.Orchestrator,
-				Metadata:       deps.Metadata,
-				SecretProvider: secretProvider,
+				Orchestrator: deps.Orchestrator,
+				Metadata:     deps.Services.MetadataService(),
+				Secrets:      secretProvider,
 			}, detectapp.Request{
 				ResolvedPath:    resolvedPath,
 				Value:           value,

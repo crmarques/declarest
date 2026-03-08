@@ -10,7 +10,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+func (r *Orchestrator) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
 		return resource.Content{}, err
@@ -76,7 +76,7 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 	}
 }
 
-func (r *DefaultOrchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
+func (r *Orchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,

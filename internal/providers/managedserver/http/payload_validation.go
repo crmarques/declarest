@@ -14,7 +14,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) validateOperationPayload(
+func (g *Client) validateOperationPayload(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
@@ -164,7 +164,7 @@ func validateOperationRequiredAttributes(payload resource.Value, attributes []st
 	return nil
 }
 
-func (g *HTTPManagedServerClient) validateOperationAssertions(
+func (g *Client) validateOperationAssertions(
 	ctx context.Context,
 	payload resource.Value,
 	assertions []metadata.ValidationAssertion,
@@ -252,7 +252,7 @@ func jqValueTruthy(value any) bool {
 	return true
 }
 
-func (g *HTTPManagedServerClient) validateOperationSchemaRef(
+func (g *Client) validateOperationSchemaRef(
 	ctx context.Context,
 	payload resource.Value,
 	derivedFields map[string]any,
@@ -327,7 +327,7 @@ func augmentSchemaValidationPayload(
 	return merged
 }
 
-func (g *HTTPManagedServerClient) resolveOpenAPISchemaForValidation(
+func (g *Client) resolveOpenAPISchemaForValidation(
 	ctx context.Context,
 	requestPath string,
 	requestMethod string,

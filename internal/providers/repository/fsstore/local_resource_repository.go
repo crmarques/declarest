@@ -3,13 +3,11 @@ package fsstore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/repository"
-	"github.com/crmarques/declarest/resource"
 )
 
 var _ repository.ResourceStore = (*LocalResourceRepository)(nil)
@@ -27,44 +25,6 @@ func NewLocalResourceRepository(baseDir string, metadataBaseDir ...string) *Loca
 		baseDir:         filepath.Clean(baseDir),
 		metadataBaseDir: firstMetadataBaseDir(metadataBaseDir),
 	}
-}
-
-func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPath string) error {
-	fromNormalized, err := resource.NormalizeLogicalPath(fromPath)
-	if err != nil {
-		return err
-	}
-	toNormalized, err := resource.NormalizeLogicalPath(toPath)
-	if err != nil {
-		return err
-	}
-	if fromNormalized == "/" || toNormalized == "/" {
-		return faults.NewValidationError("move requires resource paths", nil)
-	}
-
-	fromInfo, err := r.discoverPayloadFile(fromNormalized)
-	if err != nil {
-		return err
-	}
-	if fromInfo == nil {
-		return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
-	}
-
-	toFile, err := r.canonicalPayloadFilePath(toNormalized, fromInfo.Descriptor.Extension)
-	if err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(filepath.Dir(toFile), 0o755); err != nil {
-		return internalError("failed to create destination directory", err)
-	}
-
-	if err := os.Rename(fromInfo.Path, toFile); err != nil {
-		return internalError("failed to move resource", err)
-	}
-
-	_ = r.cleanupEmptyParents(filepath.Dir(fromInfo.Path))
-	return nil
 }
 
 func (r *LocalResourceRepository) Init(_ context.Context) error {

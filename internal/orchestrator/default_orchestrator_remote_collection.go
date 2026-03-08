@@ -13,7 +13,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
+func (r *Orchestrator) fetchRemoteCollectionValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
@@ -51,11 +51,11 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 	}, true, nil
 }
 
-func (r *DefaultOrchestrator) withListJQResourceResolver(ctx context.Context) context.Context {
+func (r *Orchestrator) withListJQResourceResolver(ctx context.Context) context.Context {
 	return managedserver.WithListJQResourceResolver(ctx, r.resolveListJQResource)
 }
 
-func (r *DefaultOrchestrator) listRemoteResources(
+func (r *Orchestrator) listRemoteResources(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	collectionPath string,
@@ -64,7 +64,7 @@ func (r *DefaultOrchestrator) listRemoteResources(
 	return serverManager.List(r.withListJQResourceResolver(ctx), collectionPath, md)
 }
 
-func (r *DefaultOrchestrator) resolveListJQResource(
+func (r *Orchestrator) resolveListJQResource(
 	ctx context.Context,
 	logicalPath string,
 ) (resource.Value, error) {
@@ -75,7 +75,7 @@ func (r *DefaultOrchestrator) resolveListJQResource(
 	return content.Value, nil
 }
 
-func (r *DefaultOrchestrator) shouldTreatRemotePathAsCollection(
+func (r *Orchestrator) shouldTreatRemotePathAsCollection(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
@@ -87,7 +87,7 @@ func (r *DefaultOrchestrator) shouldTreatRemotePathAsCollection(
 	return r.collectionHintFromOpenAPI(ctx, serverManager, resourceInfo)
 }
 
-func (r *DefaultOrchestrator) listOperationTargetsLogicalPath(
+func (r *Orchestrator) listOperationTargetsLogicalPath(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
@@ -99,7 +99,7 @@ func (r *DefaultOrchestrator) listOperationTargetsLogicalPath(
 	return normalizedPath == resourceInfo.LogicalPath
 }
 
-func (r *DefaultOrchestrator) collectionHintFromRepository(
+func (r *Orchestrator) collectionHintFromRepository(
 	ctx context.Context,
 	logicalPath string,
 ) bool {
@@ -120,7 +120,7 @@ func (r *DefaultOrchestrator) collectionHintFromRepository(
 	return faults.IsCategory(err, faults.NotFoundError)
 }
 
-func (r *DefaultOrchestrator) collectionHintFromOpenAPI(
+func (r *Orchestrator) collectionHintFromOpenAPI(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
@@ -153,7 +153,7 @@ func (r *DefaultOrchestrator) collectionHintFromOpenAPI(
 	return r.openAPIInferenceHintsCollection(ctx, resourceInfo, collectionSelector, openAPISpec.Value)
 }
 
-func (r *DefaultOrchestrator) openAPIInferenceHintsCollection(
+func (r *Orchestrator) openAPIInferenceHintsCollection(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	logicalPath string,
@@ -182,7 +182,7 @@ func (r *DefaultOrchestrator) openAPIInferenceHintsCollection(
 	return isCollectionItemPath(hintInfo.LogicalPath, getPath)
 }
 
-func (r *DefaultOrchestrator) renderedOperationPath(
+func (r *Orchestrator) renderedOperationPath(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
@@ -313,7 +313,7 @@ func matchesOpenAPIPathSegments(candidate []string, target []string) bool {
 	return true
 }
 
-func (r *DefaultOrchestrator) isMissingParentForCollectionNotFound(
+func (r *Orchestrator) isMissingParentForCollectionNotFound(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
@@ -354,7 +354,7 @@ func isFallbackListPayloadShapeError(err error) bool {
 	return managedserver.IsListPayloadShapeError(err)
 }
 
-func (r *DefaultOrchestrator) renderOperationSpec(
+func (r *Orchestrator) renderOperationSpec(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,

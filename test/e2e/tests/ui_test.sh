@@ -41,6 +41,14 @@ test_step_state_labels_match_contract() {
   assert_contains "$(ui_step_state_label SKIP)" "[SKIP]"
 }
 
+test_running_step_line_shows_elapsed_span() {
+  load_ui_libs
+  local output
+  output=$(ui_print_step_line 1 7 'Initializing' 'RUNNING' 61)
+  assert_contains "${output}" "1m01s"
+  assert_contains "${output}" "[RUNNING]"
+}
+
 test_summary_includes_required_fields() {
   load_ui_libs
   E2E_START_EPOCH=$(e2e_epoch_now)
@@ -115,6 +123,7 @@ test_summary_marks_operator_profile_defaults() {
 
 test_step_table_header_format
 test_step_state_labels_match_contract
+test_running_step_line_shows_elapsed_span
 test_summary_includes_required_fields
 test_summary_marks_explicit_and_component_default_parameters
 test_summary_marks_operator_profile_defaults

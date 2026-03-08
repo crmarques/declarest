@@ -106,17 +106,25 @@ func (m *ManagedServer) ValidateSpec() error {
 	if m == nil {
 		return fmt.Errorf("managed server is required")
 	}
-	if err := validateHTTPURL(m.Spec.HTTP.BaseURL, "spec.http.baseURL"); err != nil {
+	return validateManagedServerSpec(&m.Spec)
+}
+
+func validateManagedServerSpec(spec *ManagedServerSpec) error {
+	if spec == nil {
+		return fmt.Errorf("spec is required")
+	}
+
+	if err := validateHTTPURL(spec.HTTP.BaseURL, "spec.http.baseURL"); err != nil {
 		return err
 	}
-	hasOAuth2 := m.Spec.HTTP.Auth.OAuth2 != nil
-	hasBasic := m.Spec.HTTP.Auth.BasicAuth != nil
-	hasHeaders := len(m.Spec.HTTP.Auth.CustomHeaders) > 0
+	hasOAuth2 := spec.HTTP.Auth.OAuth2 != nil
+	hasBasic := spec.HTTP.Auth.BasicAuth != nil
+	hasHeaders := len(spec.HTTP.Auth.CustomHeaders) > 0
 	if countTrue(hasOAuth2, hasBasic, hasHeaders) != 1 {
-		return fmt.Errorf("spec.http.auth must define exactly one of oauth2, basicAuth, customHeaders")
+		return fmt.Errorf("spec.http.auth must define exactly one of oauth2, basicAuth, or customHeaders")
 	}
 	if hasOAuth2 {
-		oauth2 := m.Spec.HTTP.Auth.OAuth2
+		oauth2 := spec.HTTP.Auth.OAuth2
 		if err := validateHTTPURL(oauth2.TokenURL, "spec.http.auth.oauth2.tokenURL"); err != nil {
 			return err
 		}
@@ -141,15 +149,15 @@ func (m *ManagedServer) ValidateSpec() error {
 		}
 	}
 	if hasBasic {
-		if err := validateSecretRef(m.Spec.HTTP.Auth.BasicAuth.UsernameRef, "spec.http.auth.basicAuth.usernameRef"); err != nil {
+		if err := validateSecretRef(spec.HTTP.Auth.BasicAuth.UsernameRef, "spec.http.auth.basicAuth.usernameRef"); err != nil {
 			return err
 		}
-		if err := validateSecretRef(m.Spec.HTTP.Auth.BasicAuth.PasswordRef, "spec.http.auth.basicAuth.passwordRef"); err != nil {
+		if err := validateSecretRef(spec.HTTP.Auth.BasicAuth.PasswordRef, "spec.http.auth.basicAuth.passwordRef"); err != nil {
 			return err
 		}
 	}
 	if hasHeaders {
-		for idx, item := range m.Spec.HTTP.Auth.CustomHeaders {
+		for idx, item := range spec.HTTP.Auth.CustomHeaders {
 			if strings.TrimSpace(item.Header) == "" {
 				return fmt.Errorf("spec.http.auth.customHeaders[%d].header is required", idx)
 			}
@@ -158,13 +166,13 @@ func (m *ManagedServer) ValidateSpec() error {
 			}
 		}
 	}
-	if strings.TrimSpace(m.Spec.OpenAPI.URL) != "" {
-		if err := validateHTTPURL(m.Spec.OpenAPI.URL, "spec.openapi.url"); err != nil {
+	if strings.TrimSpace(spec.OpenAPI.URL) != "" {
+		if err := validateHTTPURL(spec.OpenAPI.URL, "spec.openapi.url"); err != nil {
 			return err
 		}
 	}
-	metadataURL := strings.TrimSpace(m.Spec.Metadata.URL)
-	metadataBundle := strings.TrimSpace(m.Spec.Metadata.Bundle)
+	metadataURL := strings.TrimSpace(spec.Metadata.URL)
+	metadataBundle := strings.TrimSpace(spec.Metadata.Bundle)
 	if metadataURL != "" && metadataBundle != "" {
 		return fmt.Errorf("spec.metadata must define at most one of url or bundle")
 	}
@@ -173,23 +181,23 @@ func (m *ManagedServer) ValidateSpec() error {
 			return err
 		}
 	}
-	if m.Spec.HTTP.Proxy != nil {
-		hasHTTP := strings.TrimSpace(m.Spec.HTTP.Proxy.HTTPURL) != ""
-		hasHTTPS := strings.TrimSpace(m.Spec.HTTP.Proxy.HTTPSURL) != ""
+	if spec.HTTP.Proxy != nil {
+		hasHTTP := strings.TrimSpace(spec.HTTP.Proxy.HTTPURL) != ""
+		hasHTTPS := strings.TrimSpace(spec.HTTP.Proxy.HTTPSURL) != ""
 		if !hasHTTP && !hasHTTPS {
 			return fmt.Errorf("spec.http.proxy must define at least one of httpURL or httpsURL")
 		}
-		if m.Spec.HTTP.Proxy.Auth != nil {
-			if err := validateSecretRef(m.Spec.HTTP.Proxy.Auth.UsernameRef, "spec.http.proxy.auth.usernameRef"); err != nil {
+		if spec.HTTP.Proxy.Auth != nil {
+			if err := validateSecretRef(spec.HTTP.Proxy.Auth.UsernameRef, "spec.http.proxy.auth.usernameRef"); err != nil {
 				return err
 			}
-			if err := validateSecretRef(m.Spec.HTTP.Proxy.Auth.PasswordRef, "spec.http.proxy.auth.passwordRef"); err != nil {
+			if err := validateSecretRef(spec.HTTP.Proxy.Auth.PasswordRef, "spec.http.proxy.auth.passwordRef"); err != nil {
 				return err
 			}
 		}
 	}
-	if m.Spec.HTTP.RequestThrottling != nil {
-		throttling := m.Spec.HTTP.RequestThrottling
+	if spec.HTTP.RequestThrottling != nil {
+		throttling := spec.HTTP.RequestThrottling
 		if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
 			return fmt.Errorf("spec.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond")
 		}

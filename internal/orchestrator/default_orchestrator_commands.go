@@ -16,7 +16,7 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) (resource.Content, error) {
+func (r *Orchestrator) GetLocal(ctx context.Context, logicalPath string) (resource.Content, error) {
 	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		if faults.IsCategory(err, faults.NotFoundError) {
@@ -31,11 +31,11 @@ func (r *DefaultOrchestrator) GetLocal(ctx context.Context, logicalPath string) 
 	return contentFromResource(localResource), nil
 }
 
-func (r *DefaultOrchestrator) ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error) {
+func (r *Orchestrator) ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error) {
 	return r.resolveLocalResourceForRead(ctx, logicalPath)
 }
 
-func (r *DefaultOrchestrator) GetRemote(ctx context.Context, logicalPath string) (resource.Content, error) {
+func (r *Orchestrator) GetRemote(ctx context.Context, logicalPath string) (resource.Content, error) {
 	resourceInfo, resourceMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
 	if infoErr != nil {
 		debugctx.Printf(ctx, "orchestrator get remote preparation failed path=%q error=%v", logicalPath, infoErr)
@@ -52,7 +52,7 @@ func (r *DefaultOrchestrator) GetRemote(ctx context.Context, logicalPath string)
 	return remoteValue, nil
 }
 
-func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, content resource.Content) error {
+func (r *Orchestrator) Save(ctx context.Context, logicalPath string, content resource.Content) error {
 	manager, err := r.requireRepository()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (r *DefaultOrchestrator) Save(ctx context.Context, logicalPath string, cont
 	return r.saveLocalResource(ctx, manager, logicalPath, content)
 }
 
-func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
+func (r *Orchestrator) Apply(ctx context.Context, logicalPath string, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
 	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		return resource.Resource{}, err
@@ -69,7 +69,7 @@ func (r *DefaultOrchestrator) Apply(ctx context.Context, logicalPath string, pol
 	return r.applyDesiredState(ctx, localResource.LogicalPath, contentFromResource(localResource), policy)
 }
 
-func (r *DefaultOrchestrator) ApplyWithContent(
+func (r *Orchestrator) ApplyWithContent(
 	ctx context.Context,
 	logicalPath string,
 	content resource.Content,
@@ -78,7 +78,7 @@ func (r *DefaultOrchestrator) ApplyWithContent(
 	return r.applyDesiredState(ctx, logicalPath, content, policy)
 }
 
-func (r *DefaultOrchestrator) applyDesiredState(
+func (r *Orchestrator) applyDesiredState(
 	ctx context.Context,
 	logicalPath string,
 	content resource.Content,
@@ -133,7 +133,7 @@ func (r *DefaultOrchestrator) applyDesiredState(
 	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
 }
 
-func (r *DefaultOrchestrator) Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
+func (r *Orchestrator) Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
 	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
@@ -149,7 +149,7 @@ func (r *DefaultOrchestrator) Create(ctx context.Context, logicalPath string, co
 	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationCreate)
 }
 
-func (r *DefaultOrchestrator) Update(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
+func (r *Orchestrator) Update(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
 	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
@@ -165,9 +165,7 @@ func (r *DefaultOrchestrator) Update(ctx context.Context, logicalPath string, co
 	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
 }
 
-func (r *DefaultOrchestrator) Delete(ctx context.Context, logicalPath string, policy orchestrator.DeletePolicy) error {
-	_ = policy
-
+func (r *Orchestrator) Delete(ctx context.Context, logicalPath string, _ orchestrator.DeletePolicy) error {
 	serverManager, err := r.requireServer()
 	if err != nil {
 		return err
@@ -209,7 +207,7 @@ func (r *DefaultOrchestrator) Delete(ctx context.Context, logicalPath string, po
 	return serverManager.Delete(ctx, resourceInfo, resourceMd)
 }
 
-func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+func (r *Orchestrator) ListLocal(ctx context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	manager, err := r.requireRepository()
 	if err != nil {
 		return nil, err
@@ -236,7 +234,7 @@ func (r *DefaultOrchestrator) ListLocal(ctx context.Context, logicalPath string,
 	return items, nil
 }
 
-func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
+func (r *Orchestrator) ListRemote(ctx context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return nil, err
@@ -274,11 +272,7 @@ func (r *DefaultOrchestrator) ListRemote(ctx context.Context, logicalPath string
 	return direct, nil
 }
 
-func (r *DefaultOrchestrator) Explain(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
-	return r.Diff(ctx, logicalPath)
-}
-
-func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
+func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
 	if err != nil {
 		return nil, err
@@ -327,7 +321,7 @@ func (r *DefaultOrchestrator) Diff(ctx context.Context, logicalPath string) ([]r
 	return items, nil
 }
 
-func (r *DefaultOrchestrator) resolveComparedPayloads(
+func (r *Orchestrator) resolveComparedPayloads(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	resourceMd metadata.ResourceMetadata,
@@ -380,7 +374,7 @@ func (r *DefaultOrchestrator) resolveComparedPayloads(
 	return localTransformed, remoteTransformed, nil
 }
 
-func (r *DefaultOrchestrator) Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error) {
+func (r *Orchestrator) Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error) {
 	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Content{}, err

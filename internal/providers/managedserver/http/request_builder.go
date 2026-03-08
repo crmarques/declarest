@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
@@ -10,7 +11,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, error) {
+func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, error) {
 	spec, explicitPath, explicitMethod, explicitAccept, explicitContentType := operationSpecFromMetadata(md, operation)
 
 	var err error
@@ -51,7 +52,7 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 		return metadata.OperationSpec{}, faults.NewValidationError("resolved operation path is empty", nil)
 	}
 
-	spec.Query = cloneStringMap(spec.Query)
+	spec.Query = maps.Clone(spec.Query)
 	spec.Headers = mergeHeaders(g.defaultHeaders, spec.Headers)
 
 	if err := g.applyOpenAPIFallback(ctx, spec.Path, operation, &spec, explicitMethod, explicitAccept, explicitContentType); err != nil {

@@ -17,7 +17,7 @@ import (
 func TestFSMetadataGetSetUnset(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	resourceMetadata := metadatadomain.ResourceMetadata{
@@ -75,7 +75,7 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 func TestFSMetadataCollectionPathWithTrailingSlash(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
@@ -108,7 +108,7 @@ func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.json"), false, metadatadomain.ResourceMetadata{
@@ -141,7 +141,7 @@ func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
 func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
@@ -230,7 +230,7 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
@@ -257,7 +257,7 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_", metadatadomain.ResourceMetadata{
@@ -296,7 +296,7 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
@@ -325,7 +325,7 @@ func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *tes
 func TestFSMetadataHasCollectionWildcardChild(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/authentication/flows/_/executions/_", metadatadomain.ResourceMetadata{
@@ -356,7 +356,7 @@ func TestFSMetadataHasCollectionWildcardChild(t *testing.T) {
 func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
@@ -392,7 +392,7 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
@@ -439,7 +439,7 @@ func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testi
 func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "yaml")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
@@ -468,7 +468,7 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 func TestFSMetadataValidation(t *testing.T) {
 	t.Parallel()
 
-	service := NewFSMetadataService(t.TempDir(), "")
+	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	err := service.Set(ctx, "/customers/acme", metadatadomain.ResourceMetadata{
@@ -486,7 +486,7 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
@@ -533,7 +533,7 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
@@ -645,7 +645,7 @@ func TestFSMetadataSetWritesYAMLAndRemovesExistingJSON(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	jsonPath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
@@ -675,7 +675,7 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	service := NewFSMetadataService(baseDir, "")
+	service := NewFSMetadataService(baseDir)
 	ctx := context.Background()
 
 	filePath := filepath.Join(baseDir, "admin", "realms", "_", "user-registry", "_", "metadata.json")

@@ -64,12 +64,40 @@ step_initialize() {
   e2e_build_capabilities || return 1
   e2e_preflight_requirements || return 1
 
-  e2e_info 'execution parameters:'
-  while IFS= read -r line; do
-    e2e_info "  ${line}"
-  done < <(ui_execution_parameter_lines)
-
   return 0
+}
+
+e2e_print_startup_execution_parameters() {
+  local preview
+  local line
+
+  preview=$(
+    (
+      e2e_parse_args "${E2E_CLI_ARGS[@]}" || exit 1
+      e2e_apply_profile_defaults || exit 1
+      e2e_validate_platform || exit 1
+      e2e_validate_container_engine || exit 1
+      e2e_discover_components || exit 1
+
+      if ((E2E_VALIDATE_COMPONENTS == 0 && E2E_LIST_COMPONENTS == 0)); then
+        e2e_validate_selection || exit 1
+        e2e_validate_profile_rules || exit 1
+        e2e_build_selected_components || exit 1
+        e2e_validate_selected_component_dependencies || exit 1
+        e2e_build_capabilities || exit 1
+      fi
+
+      ui_execution_parameter_lines
+    ) 2>/dev/null
+  ) || return 1
+
+  printf '\n'
+  printf 'Execution Parameters\n'
+  printf '%s\n' '--------------------'
+  while IFS= read -r line; do
+    printf '  %s\n' "${line}"
+  done <<<"${preview}"
+  printf '\n'
 }
 
 step_prepare_runtime() {
@@ -427,6 +455,7 @@ main() {
   : >"${E2E_EXECUTION_LOG}"
 
   printf 'E2E execution log: %s\n' "${E2E_EXECUTION_LOG}"
+  e2e_print_startup_execution_parameters || true
 
   E2E_BOOTSTRAP_LOG_DIR=$(mktemp -d /tmp/declarest-e2e-bootstrap.XXXXXX)
   E2E_LOG_DIR="${E2E_BOOTSTRAP_LOG_DIR}"
@@ -516,4 +545,6 @@ main() {
   exit 0
 }
 
-main "$@"
+if [[ "${E2E_SOURCE_ONLY:-0}" != '1' ]]; then
+  main "$@"
+fi

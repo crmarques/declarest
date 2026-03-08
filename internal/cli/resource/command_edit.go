@@ -69,9 +69,9 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 				command.Context(),
 				resourcesave.Dependencies{
 					Orchestrator: deps.Orchestrator,
-					Repository:   deps.ResourceStore,
-					Metadata:     deps.Metadata,
-					Secrets:      deps.Secrets,
+					Repository:   deps.Services.RepositoryStore(),
+					Metadata:     deps.Services.MetadataService(),
+					Secrets:      deps.Services.SecretProvider(),
 				},
 				resolvedPath,
 				resourcedomain.Content{

@@ -8,31 +8,31 @@ import (
 )
 
 func NewContextService(opts BootstrapConfig) config.ContextService {
-	return configfile.NewFileContextService(opts.ContextCatalogPath)
+	return configfile.NewService(opts.ContextCatalogPath)
 }
 
 func NewSession(opts BootstrapConfig, selection config.ContextSelection) (Session, error) {
 	contextService := NewContextService(opts)
-	defaultOrchestrator, err := buildDefaultOrchestrator(context.Background(), contextService, selection)
+	orch, err := buildOrchestrator(context.Background(), contextService, selection)
 	if err != nil {
 		return Session{}, err
 	}
 
 	return Session{
 		Contexts:     contextService,
-		Orchestrator: defaultOrchestrator,
-		Services:     defaultOrchestrator,
+		Orchestrator: orch,
+		Services:     orch,
 	}, nil
 }
 
 func NewSessionFromResolvedContext(resolvedContext config.Context) (Session, error) {
-	defaultOrchestrator, err := buildDefaultOrchestratorFromResolvedContext(context.Background(), resolvedContext)
+	orch, err := buildOrchestratorFromResolvedContext(context.Background(), resolvedContext)
 	if err != nil {
 		return Session{}, err
 	}
 	return Session{
 		Contexts:     nil,
-		Orchestrator: defaultOrchestrator,
-		Services:     defaultOrchestrator,
+		Orchestrator: orch,
+		Services:     orch,
 	}, nil
 }

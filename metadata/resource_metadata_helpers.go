@@ -1,6 +1,9 @@
 package metadata
 
-import "sort"
+import (
+	"maps"
+	"sort"
+)
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
@@ -18,8 +21,8 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		cloned.Operations[key] = OperationSpec{
 			Method:          operationSpec.Method,
 			Path:            operationSpec.Path,
-			Query:           cloneStringMap(operationSpec.Query),
-			Headers:         cloneStringMap(operationSpec.Headers),
+			Query:           maps.Clone(operationSpec.Query),
+			Headers:         maps.Clone(operationSpec.Headers),
 			Accept:          operationSpec.Accept,
 			ContentType:     operationSpec.ContentType,
 			Body:            operationSpec.Body,
@@ -110,8 +113,8 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 	merged := OperationSpec{
 		Method:          base.Method,
 		Path:            base.Path,
-		Query:           cloneStringMap(base.Query),
-		Headers:         cloneStringMap(base.Headers),
+		Query:           maps.Clone(base.Query),
+		Headers:         maps.Clone(base.Headers),
 		Accept:          base.Accept,
 		ContentType:     base.ContentType,
 		Body:            base.Body,
@@ -187,8 +190,8 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 		cloned[key] = OperationSpec{
 			Method:          value.Method,
 			Path:            value.Path,
-			Query:           cloneStringMap(value.Query),
-			Headers:         cloneStringMap(value.Headers),
+			Query:           maps.Clone(value.Query),
+			Headers:         maps.Clone(value.Headers),
 			Accept:          value.Accept,
 			ContentType:     value.ContentType,
 			Body:            value.Body,
@@ -249,17 +252,6 @@ func mergeOperationValidationSpec(
 	}
 
 	return merged
-}
-
-func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
 }
 
 func cloneStringSlice(values []string) []string {

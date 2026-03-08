@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,10 +23,10 @@ const (
 	defaultMediaType   = "application/json"
 )
 
-var _ managedserver.ManagedServerClient = (*HTTPManagedServerClient)(nil)
-var _ managedserver.AccessTokenProvider = (*HTTPManagedServerClient)(nil)
+var _ managedserver.ManagedServerClient = (*Client)(nil)
+var _ managedserver.AccessTokenProvider = (*Client)(nil)
 
-type HTTPManagedServerClient struct {
+type Client struct {
 	baseURL          *url.URL
 	defaultHeaders   map[string]string
 	auth             authConfig
@@ -45,10 +46,10 @@ type HTTPManagedServerClient struct {
 	oauthExpiresAt   time.Time
 }
 
-type ManagedServerClientOption func(*HTTPManagedServerClient)
+type ClientOption func(*Client)
 
-func WithMetadataRenderer(renderer metadata.ResourceOperationSpecRenderer) ManagedServerClientOption {
-	return func(g *HTTPManagedServerClient) {
+func WithMetadataRenderer(renderer metadata.ResourceOperationSpecRenderer) ClientOption {
+	return func(g *Client) {
 		if g == nil {
 			return
 		}
@@ -56,7 +57,7 @@ func WithMetadataRenderer(renderer metadata.ResourceOperationSpecRenderer) Manag
 	}
 }
 
-func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClientOption) (*HTTPManagedServerClient, error) {
+func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 	baseURL, err := parseBaseURL(cfg.BaseURL)
 	if err != nil {
 		return nil, err
@@ -84,9 +85,9 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 		transport.Proxy = proxyFunc
 	}
 
-	client := &HTTPManagedServerClient{
+	client := &Client{
 		baseURL:        baseURL,
-		defaultHeaders: cloneStringMap(cfg.DefaultHeaders),
+		defaultHeaders: maps.Clone(cfg.DefaultHeaders),
 		auth:           auth,
 		client: &http.Client{
 			Timeout:   defaultHTTPTimeout,
@@ -109,7 +110,7 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 	return client, nil
 }
 
-func (g *HTTPManagedServerClient) Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+func (g *Client) Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationGet)
 	if err != nil {
 		return resource.Content{}, err
@@ -133,7 +134,7 @@ func (g *HTTPManagedServerClient) Get(ctx context.Context, resourceInfo resource
 	return content, nil
 }
 
-func (g *HTTPManagedServerClient) Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+func (g *Client) Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationCreate)
 	if err != nil {
 		return resource.Content{}, err
@@ -147,7 +148,7 @@ func (g *HTTPManagedServerClient) Create(ctx context.Context, resourceInfo resou
 	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
 }
 
-func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+func (g *Client) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationUpdate)
 	if err != nil {
 		return resource.Content{}, err
@@ -161,7 +162,7 @@ func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resou
 	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
 }
 
-func (g *HTTPManagedServerClient) Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error {
+func (g *Client) Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationDelete)
 	if err != nil {
 		return err
@@ -171,7 +172,7 @@ func (g *HTTPManagedServerClient) Delete(ctx context.Context, resourceInfo resou
 	return err
 }
 
-func (g *HTTPManagedServerClient) List(ctx context.Context, collectionPath string, md metadata.ResourceMetadata) ([]resource.Resource, error) {
+func (g *Client) List(ctx context.Context, collectionPath string, md metadata.ResourceMetadata) ([]resource.Resource, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resource.Resource{
 		LogicalPath:    collectionPath,
 		CollectionPath: collectionPath,
@@ -188,7 +189,7 @@ func (g *HTTPManagedServerClient) List(ctx context.Context, collectionPath strin
 	return g.decodeListResponse(ctx, collectionPath, md, spec, body, headers)
 }
 
-func (g *HTTPManagedServerClient) Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error) {
+func (g *Client) Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationGet)
 	if err != nil {
 		return false, err
@@ -204,7 +205,7 @@ func (g *HTTPManagedServerClient) Exists(ctx context.Context, resourceInfo resou
 	return false, err
 }
 
-func (g *HTTPManagedServerClient) GetAccessToken(ctx context.Context) (string, error) {
+func (g *Client) GetAccessToken(ctx context.Context) (string, error) {
 	if g == nil {
 		return "", faults.NewValidationError("managed server is not configured", nil)
 	}
@@ -242,14 +243,3 @@ func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
 	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-server.http")
 }
 
-func cloneStringMap(values map[string]string) map[string]string {
-	if len(values) == 0 {
-		return nil
-	}
-
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return cloned
-}

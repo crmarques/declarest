@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
@@ -184,7 +183,7 @@ func TestManagedServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ManagedServerClient = &testManagedServerClient{accessToken: "oauth-access-token"}
+		deps.Services.(*testServiceAccessor).server = &testManagedServerClient{accessToken: "oauth-access-token"}
 
 		output, err := executeForTest(deps, "", "managed-server", "get", "access-token")
 		if err != nil {
@@ -199,7 +198,7 @@ func TestManagedServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ManagedServerClient = &testManagedServerClient{
+		deps.Services.(*testServiceAccessor).server = &testManagedServerClient{
 			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil),
 		}
 
@@ -218,7 +217,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
 		output, err := executeForTest(deps, "", "managed-server", "check")
 		if err != nil {
@@ -239,7 +238,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
 		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "managed-server", "check")
 		if err != nil {
@@ -260,7 +259,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
 		_, err := executeForTest(deps, "", "--context", "health-check-relative", "managed-server", "check")
 		if err != nil {
@@ -278,7 +277,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.ManagedServerClient.(*testManagedServerClient)
+		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
 		output, err := executeForTest(deps, "", "--context", "health-check-base-path", "managed-server", "check")
 		if err != nil {
@@ -299,7 +298,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.ManagedServerClient.(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
+		deps.Services.ManagedServerClient().(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
 
 		_, err := executeForTest(deps, "", "managed-server", "check")
 		assertTypedCategory(t, err, faults.NotFoundError)
@@ -376,7 +375,7 @@ func TestMetadataDebugTraceIncludesLookupPath(t *testing.T) {
 	t.Parallel()
 
 	baseDir := t.TempDir()
-	metadataService := fsmetadata.NewFSMetadataService(baseDir, config.ResourceFormatJSON)
+	metadataService := fsmetadata.NewFSMetadataService(baseDir)
 	if err := metadataService.Set(context.Background(), "/admin/realms/_", metadatadomain.ResourceMetadata{
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationList): {Path: "/api/admin/realms"},
@@ -387,7 +386,7 @@ func TestMetadataDebugTraceIncludesLookupPath(t *testing.T) {
 
 	deps := Dependencies{
 		Contexts: &testContextService{},
-		Metadata: metadataService,
+		Services: &testServiceAccessor{metadata: metadataService},
 	}
 
 	output, debugOutput, err := executeForTestWithStreams(deps, "", "--debug", "metadata", "get", "/admin/realms/")
@@ -709,7 +708,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				},
 			},
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.collectionChildren["/admin/realms/master"] = []string{"user-registry"}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/admin/realms/master/user-registry")
@@ -767,7 +766,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				},
 			},
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.wildcardChildren["/projects"] = true
 
 		_, err := executeForTest(deps, "", "resource", "get", "/projects/asdfads")
@@ -802,7 +801,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				},
 			},
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.collectionChildren["/admin/realms/master/user-registry/AD PRD"] = []string{"mappers"}
 
 		output, err := executeForTest(
@@ -844,7 +843,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				"password": "plain-secret",
 			},
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"/password"},
 		}
@@ -870,7 +869,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"id":       "acme",
 			"password": "plain-secret",
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"/password"},
 		}
@@ -898,7 +897,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				"password": "plain-secret",
 			},
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"/password"},
 		}
@@ -935,7 +934,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			},
 		}
 
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 		if err := secretProvider.Store(context.Background(), "/customers/acme:/password", "stored-secret"); err != nil {
 			t.Fatalf("unexpected secret store setup error: %v", err)
 		}
@@ -971,7 +970,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 				"password": "{{secret .}}",
 			},
 		}
-		deps.Secrets = nil
+		deps.Services.(*testServiceAccessor).secrets = nil
 
 		_, err := executeForTest(
 			deps,
@@ -997,7 +996,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"id":       "acme",
 			"password": "plain-secret",
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			SecretsFromAttributes: []string{"/password"},
 		}
@@ -1031,7 +1030,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"id":    "acme",
 			"realm": "master",
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "/id",
 			Operations: map[string]metadatadomain.OperationSpec{
@@ -1116,7 +1115,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		orchestrator.getRemoteValue = map[string]any{
 			"id": "acme",
 		}
-		metadataService := deps.Metadata.(*testMetadata)
+		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
 			IDFromAttribute: "/id",
 		}
@@ -2173,7 +2172,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
 			`[{"id":"acme","secret":"plain-secret"}]`,
@@ -2208,7 +2207,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 		_, err := executeForTest(
 			deps,
 			`{"credentials":{"authValue":"plain-secret"}}`,
@@ -2247,7 +2246,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		deps.Secrets = nil
+		deps.Services.(*testServiceAccessor).secrets = nil
 		_, err := executeForTest(
 			deps,
 			`{"credentials":{"authValue":"plain-secret"}}`,
@@ -2340,7 +2339,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 
 		_, err := executeForTest(
 			deps,
@@ -2393,7 +2392,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 
 		_, err := executeForTest(
 			deps,
@@ -2437,7 +2436,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		deps.Secrets = nil
+		deps.Services.(*testServiceAccessor).secrets = nil
 
 		_, err := executeForTest(
 			deps,
@@ -2457,7 +2456,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 
 		_, err := executeForTest(
 			deps,
@@ -2514,7 +2513,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			},
 		}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 
 		_, err := executeForTest(
 			deps,
@@ -2616,7 +2615,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 
 		deps := newResourceSaveDeps(orchestrator, metadataService)
-		secretProvider := deps.Secrets.(*testSecretProvider)
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
 
 		_, err := executeForTest(
 			deps,
@@ -2785,7 +2784,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -2814,7 +2813,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -2841,7 +2840,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 		orchestratorService := deps.Orchestrator.(*testOrchestrator)
 
 		_, err := executeForTest(
@@ -2872,7 +2871,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 		orchestratorService := deps.Orchestrator.(*testOrchestrator)
 
 		_, err := executeForTest(
@@ -2904,7 +2903,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -2931,7 +2930,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -2958,7 +2957,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -3047,7 +3046,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.ResourceStore.(*testRepository)
+		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete")
 		if err != nil {
@@ -3066,7 +3065,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.ResourceStore.(*testRepository)
+		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "repository")
 		if err != nil {
@@ -3095,7 +3094,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		repositoryService := deps.ResourceStore.(*testRepository)
+		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "both")
 		if err != nil {
@@ -3199,7 +3198,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -3228,7 +3227,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -3255,7 +3254,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -3282,7 +3281,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -3305,7 +3304,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		repoService := deps.ResourceStore.(*testRepository)
+		repoService := deps.Services.RepositoryStore().(*testRepository)
 
 		_, err := executeForTest(
 			deps,
@@ -4513,8 +4512,8 @@ func TestRepoStatusOutput(t *testing.T) {
 			},
 		}
 		deps := testDeps()
-		deps.ResourceStore = repoService
-		deps.RepositorySync = repoService
+		deps.Services.(*testServiceAccessor).store = repoService
+		deps.Services.(*testServiceAccessor).sync = repoService
 
 		textOutput, err := executeForTest(deps, "", "--context", "git", "repository", "status", "--verbose")
 		if err != nil {
@@ -4550,8 +4549,8 @@ func TestRepoCommitCommand(t *testing.T) {
 
 		repoService := &testRepository{}
 		deps := testDeps()
-		deps.ResourceStore = repoService
-		deps.RepositorySync = repoService
+		deps.Services.(*testServiceAccessor).store = repoService
+		deps.Services.(*testServiceAccessor).sync = repoService
 
 		output, err := executeForTest(deps, "", "--context", "git", "repository", "commit", "--message", "manual changes")
 		if err != nil {
@@ -4581,8 +4580,8 @@ func TestRepoCommitCommand(t *testing.T) {
 		committed := false
 		repoService := &testRepository{commitCommitted: &committed}
 		deps := testDeps()
-		deps.ResourceStore = repoService
-		deps.RepositorySync = repoService
+		deps.Services.(*testServiceAccessor).store = repoService
+		deps.Services.(*testServiceAccessor).sync = repoService
 
 		output, err := executeForTest(deps, "", "--context", "git", "repository", "commit", "-m", "manual changes")
 		if err != nil {
@@ -4612,7 +4611,7 @@ func TestRepoPushTypeAwareValidation(t *testing.T) {
 
 		repoService := &testRepository{}
 		deps := testDeps()
-		deps.RepositorySync = repoService
+		deps.Services.(*testServiceAccessor).sync = repoService
 
 		if _, err := executeForTest(deps, "", "--context", "git", "repository", "push"); err != nil {
 			t.Fatalf("unexpected push error: %v", err)
@@ -4638,7 +4637,7 @@ func TestRepoCleanCallsRepositorySync(t *testing.T) {
 
 	repoService := &testRepository{}
 	deps := testDeps()
-	deps.RepositorySync = repoService
+	deps.Services.(*testServiceAccessor).sync = repoService
 
 	if _, err := executeForTest(deps, "", "repository", "clean"); err != nil {
 		t.Fatalf("unexpected clean error: %v", err)
@@ -4670,8 +4669,8 @@ func TestRepoTreeCommand(t *testing.T) {
 		},
 	}
 	deps := testDeps()
-	deps.RepositorySync = repoService
-	deps.ResourceStore = repoService
+	deps.Services.(*testServiceAccessor).sync = repoService
+	deps.Services.(*testServiceAccessor).store = repoService
 
 	output, err := executeForTest(deps, "", "repository", "tree")
 	if err != nil {
@@ -4732,8 +4731,8 @@ func TestRepoHistoryCommand(t *testing.T) {
 			},
 		}
 		deps := testDeps()
-		deps.RepositorySync = repoService
-		deps.ResourceStore = repoService
+		deps.Services.(*testServiceAccessor).sync = repoService
+		deps.Services.(*testServiceAccessor).store = repoService
 
 		output, err := executeForTest(
 			deps,
@@ -5671,7 +5670,7 @@ func TestResourceExplainTextOutputUsesJoinedResourceAndPointerPath(t *testing.T)
 
 	orchestrator := &testOrchestrator{
 		metadataService: newTestMetadata(),
-		explainValues: map[string][]resource.DiffEntry{
+		diffValues: map[string][]resource.DiffEntry{
 			targetPath: {
 				{ResourcePath: targetPath, Path: "", Operation: "replace"},
 				{ResourcePath: targetPath, Path: "/requirement", Operation: "replace"},

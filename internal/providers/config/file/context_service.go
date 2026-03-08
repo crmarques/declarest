@@ -12,18 +12,18 @@ import (
 	"github.com/crmarques/declarest/faults"
 )
 
-var _ config.ContextService = (*FileContextService)(nil)
-var _ config.ContextCatalogEditor = (*FileContextService)(nil)
+var _ config.ContextService = (*Service)(nil)
+var _ config.ContextCatalogEditor = (*Service)(nil)
 
-type FileContextService struct {
+type Service struct {
 	contextCatalogPath string
 }
 
-func NewFileContextService(path string) *FileContextService {
-	return &FileContextService{contextCatalogPath: path}
+func NewService(path string) *Service {
+	return &Service{contextCatalogPath: path}
 }
 
-func (m *FileContextService) Create(_ context.Context, cfg config.Context) error {
+func (m *Service) Create(_ context.Context, cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
 	if err := validateConfig(cfg); err != nil {
 		return err
@@ -46,7 +46,7 @@ func (m *FileContextService) Create(_ context.Context, cfg config.Context) error
 	return m.saveCatalog(contextCatalog)
 }
 
-func (m *FileContextService) Update(_ context.Context, cfg config.Context) error {
+func (m *Service) Update(_ context.Context, cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
 
 	contextCatalog, err := m.loadCatalog()
@@ -68,7 +68,7 @@ func (m *FileContextService) Update(_ context.Context, cfg config.Context) error
 	return m.saveCatalog(contextCatalog)
 }
 
-func (m *FileContextService) Delete(_ context.Context, name string) error {
+func (m *Service) Delete(_ context.Context, name string) error {
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func (m *FileContextService) Delete(_ context.Context, name string) error {
 	return m.saveCatalog(contextCatalog)
 }
 
-func (m *FileContextService) Rename(_ context.Context, fromName string, toName string) error {
+func (m *Service) Rename(_ context.Context, fromName string, toName string) error {
 	if toName == "" {
 		return faults.NewValidationError("context name must not be empty", nil)
 	}
@@ -118,7 +118,7 @@ func (m *FileContextService) Rename(_ context.Context, fromName string, toName s
 	return m.saveCatalog(contextCatalog)
 }
 
-func (m *FileContextService) List(_ context.Context) ([]config.Context, error) {
+func (m *Service) List(_ context.Context) ([]config.Context, error) {
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func (m *FileContextService) List(_ context.Context) ([]config.Context, error) {
 	return contexts, nil
 }
 
-func (m *FileContextService) SetCurrent(_ context.Context, name string) error {
+func (m *Service) SetCurrent(_ context.Context, name string) error {
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func (m *FileContextService) SetCurrent(_ context.Context, name string) error {
 	return m.saveCatalog(contextCatalog)
 }
 
-func (m *FileContextService) GetCurrent(_ context.Context) (config.Context, error) {
+func (m *Service) GetCurrent(_ context.Context) (config.Context, error) {
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return config.Context{}, err
@@ -160,7 +160,7 @@ func (m *FileContextService) GetCurrent(_ context.Context) (config.Context, erro
 	return contextCatalog.Contexts[idx], nil
 }
 
-func (m *FileContextService) ResolveContext(_ context.Context, selection config.ContextSelection) (config.Context, error) {
+func (m *Service) ResolveContext(_ context.Context, selection config.ContextSelection) (config.Context, error) {
 	contextCatalog, err := m.loadCatalog()
 	if err != nil {
 		return config.Context{}, err
@@ -191,19 +191,19 @@ func (m *FileContextService) ResolveContext(_ context.Context, selection config.
 	return resolved, nil
 }
 
-func (m *FileContextService) Validate(_ context.Context, cfg config.Context) error {
+func (m *Service) Validate(_ context.Context, cfg config.Context) error {
 	return validateConfig(normalizeConfig(cfg))
 }
 
-func (m *FileContextService) GetCatalog(_ context.Context) (config.ContextCatalog, error) {
+func (m *Service) GetCatalog(_ context.Context) (config.ContextCatalog, error) {
 	return m.loadCatalog()
 }
 
-func (m *FileContextService) ReplaceCatalog(_ context.Context, catalog config.ContextCatalog) error {
+func (m *Service) ReplaceCatalog(_ context.Context, catalog config.ContextCatalog) error {
 	return m.saveCatalog(catalog)
 }
 
-func (m *FileContextService) saveCatalog(contextCatalog config.ContextCatalog) error {
+func (m *Service) saveCatalog(contextCatalog config.ContextCatalog) error {
 	contextCatalog = compactContextCatalogForPersistence(contextCatalog)
 
 	if err := validateCatalog(contextCatalog); err != nil {
@@ -257,7 +257,7 @@ func (m *FileContextService) saveCatalog(contextCatalog config.ContextCatalog) e
 	return nil
 }
 
-func (m *FileContextService) loadCatalog() (config.ContextCatalog, error) {
+func (m *Service) loadCatalog() (config.ContextCatalog, error) {
 	resolvedPath, err := m.resolveCatalogPath()
 	if err != nil {
 		return config.ContextCatalog{}, err
@@ -281,7 +281,7 @@ func (m *FileContextService) loadCatalog() (config.ContextCatalog, error) {
 	return contextCatalog, nil
 }
 
-func (m *FileContextService) resolveCatalogPath() (string, error) {
+func (m *Service) resolveCatalogPath() (string, error) {
 	return resolveCatalogPath(m.contextCatalogPath)
 }
 

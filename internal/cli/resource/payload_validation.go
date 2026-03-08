@@ -23,7 +23,7 @@ func resolveExplicitMutationPayloadPath(
 	if err != nil {
 		return "", err
 	}
-	if deps.Metadata == nil {
+	if deps.Services == nil || deps.Services.MetadataService() == nil {
 		return normalizedPath, nil
 	}
 	payloadMap, ok := content.Value.(map[string]any)
@@ -31,7 +31,7 @@ func resolveExplicitMutationPayloadPath(
 		return normalizedPath, nil
 	}
 
-	md, err := deps.Metadata.ResolveForPath(ctx, normalizedPath)
+	md, err := deps.Services.MetadataService().ResolveForPath(ctx, normalizedPath)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +77,7 @@ func validateExplicitMutationPayloadIdentity(
 	if err != nil {
 		return err
 	}
-	if deps.Metadata == nil {
+	if deps.Services == nil || deps.Services.MetadataService() == nil {
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func validateExplicitMutationPayloadIdentity(
 		return nil
 	}
 
-	md, err := deps.Metadata.ResolveForPath(ctx, normalizedPath)
+	md, err := deps.Services.MetadataService().ResolveForPath(ctx, normalizedPath)
 	if err != nil {
 		return err
 	}
@@ -119,11 +119,11 @@ func canInferExplicitMutationChildPath(
 	deps cliutil.CommandDependencies,
 	normalizedPath string,
 ) (bool, error) {
-	if deps.Metadata == nil {
+	if deps.Services == nil || deps.Services.MetadataService() == nil {
 		return false, nil
 	}
 
-	wildcardResolver, ok := deps.Metadata.(metadatadomain.CollectionWildcardResolver)
+	wildcardResolver, ok := deps.Services.MetadataService().(metadatadomain.CollectionWildcardResolver)
 	if !ok {
 		return false, nil
 	}

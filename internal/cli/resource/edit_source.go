@@ -61,11 +61,11 @@ func resolveEditLocalSource(
 		return "", resourcedomain.Content{}, false, err
 	}
 
-	if deps.ResourceStore == nil {
+	if deps.Services == nil || deps.Services.RepositoryStore() == nil {
 		return "", resourcedomain.Content{}, false, nil
 	}
 
-	value, err := deps.ResourceStore.Get(ctx, normalizedPath)
+	value, err := deps.Services.RepositoryStore().Get(ctx, normalizedPath)
 	if err == nil {
 		return normalizedPath, value, true, nil
 	}

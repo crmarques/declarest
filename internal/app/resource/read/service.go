@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	configdomain "github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
@@ -24,12 +24,7 @@ const (
 	SourceManagedServer = "managed-server"
 )
 
-type Dependencies struct {
-	Orchestrator orchestrator.Orchestrator
-	Contexts     configdomain.ContextService
-	Metadata     metadatadomain.MetadataService
-	Secrets      secretdomain.SecretProvider
-}
+type Dependencies = appdeps.Dependencies
 
 type Request struct {
 	LogicalPath              string
@@ -52,7 +47,7 @@ type OutputWithMetadata struct {
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
-	orchestratorService, err := requireOrchestrator(deps)
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
 		return Result{}, err
 	}
@@ -117,7 +112,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	rawValue := content.Value
 	var metadataSnapshot *metadatadomain.ResourceMetadata
 	if req.ShowMetadata {
-		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, rawValue, req.ContextName)
+		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, rawValue)
 		if err != nil {
 			return Result{}, err
 		}
@@ -302,7 +297,6 @@ func renderMetadataSnapshot(
 	deps Dependencies,
 	logicalPath string,
 	rawValue resource.Value,
-	contextName string,
 ) (metadatadomain.ResourceMetadata, error) {
 	if deps.Metadata == nil {
 		return metadatadomain.ResourceMetadata{}, faults.NewValidationError("metadata service is not configured", nil)
@@ -317,15 +311,7 @@ func renderMetadataSnapshot(
 		resolvedMetadata,
 	)
 
-	_ = contextName
 	return metadataRender.RenderResourceMetadata(ctx, logicalPath, merged, rawValue)
-}
-
-func requireOrchestrator(deps Dependencies) (orchestrator.Orchestrator, error) {
-	if deps.Orchestrator == nil {
-		return nil, faults.NewValidationError("orchestrator is not configured", nil)
-	}
-	return deps.Orchestrator, nil
 }
 
 func isNotFoundError(err error) bool {

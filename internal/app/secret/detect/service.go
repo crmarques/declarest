@@ -6,18 +6,13 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
-	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
-	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
-type Dependencies struct {
-	Orchestrator   orchestratordomain.Orchestrator
-	Metadata       metadatadomain.MetadataService
-	SecretProvider secretdomain.SecretProvider
-}
+type Dependencies = appdeps.Dependencies
 
 type Request struct {
 	ResolvedPath    string
@@ -37,12 +32,12 @@ type DetectedResourceSecrets struct {
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
-	if deps.SecretProvider == nil {
+	if deps.Secrets == nil {
 		return Result{}, faults.NewValidationError("secret provider is not configured", nil)
 	}
 
 	if req.HasInput {
-		keys, err := deps.SecretProvider.DetectSecretCandidates(ctx, req.Value)
+		keys, err := deps.Secrets.DetectSecretCandidates(ctx, req.Value)
 		if err != nil {
 			return Result{}, err
 		}
@@ -119,7 +114,7 @@ func detectSecretCandidatesFromRepository(
 			return nil, err
 		}
 
-		keys, err := deps.SecretProvider.DetectSecretCandidates(ctx, content.Value)
+		keys, err := deps.Secrets.DetectSecretCandidates(ctx, content.Value)
 		if err != nil {
 			return nil, err
 		}

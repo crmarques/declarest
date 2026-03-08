@@ -570,7 +570,7 @@ Method families:
 5. `DetectSecretCandidates`.
 
 Composition:
-1. `secrets.SecretProvider` composes `secrets.SecretStore`, `secrets.PayloadSecretProcessor`, and `secrets.SecretCandidateDetector`.
+1. `secrets.SecretProvider` composes `secrets.SecretStore`, `secrets.PayloadProcessor`, and `secrets.Detector`.
 
 ### Interface: `secrets.SecretStore`
 Responsibilities:
@@ -580,7 +580,7 @@ Method families:
 1. `Init`.
 2. `Store/Get/Delete/List`.
 
-### Interface: `secrets.PayloadSecretProcessor`
+### Interface: `secrets.PayloadProcessor`
 Responsibilities:
 1. Mask, resolve, and normalize secret placeholders in payloads.
 
@@ -588,7 +588,7 @@ Method families:
 1. `MaskPayload/ResolvePayload`.
 2. `NormalizeSecretPlaceholders`.
 
-### Interface: `secrets.SecretCandidateDetector`
+### Interface: `secrets.Detector`
 Responsibilities:
 1. Detect likely plaintext secret candidates in payloads.
 

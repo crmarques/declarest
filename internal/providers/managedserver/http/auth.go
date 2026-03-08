@@ -93,7 +93,7 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 	}
 }
 
-func (g *HTTPManagedServerClient) applyAuth(ctx context.Context, request *http.Request) error {
+func (g *Client) applyAuth(ctx context.Context, request *http.Request) error {
 	switch g.auth.mode {
 	case authModeOAuth2:
 		token, err := g.oauthToken(ctx)
@@ -117,7 +117,7 @@ func (g *HTTPManagedServerClient) applyAuth(ctx context.Context, request *http.R
 	return nil
 }
 
-func (g *HTTPManagedServerClient) oauthToken(ctx context.Context) (string, error) {
+func (g *Client) oauthToken(ctx context.Context) (string, error) {
 	g.oauthMu.Lock()
 	defer g.oauthMu.Unlock()
 

@@ -14,18 +14,18 @@ type SecretStore interface {
 	List(ctx context.Context) ([]string, error)
 }
 
-type PayloadSecretProcessor interface {
+type PayloadProcessor interface {
 	MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error)
 	ResolvePayload(ctx context.Context, value resource.Value) (resource.Value, error)
 	NormalizeSecretPlaceholders(ctx context.Context, value resource.Value) (resource.Value, error)
 }
 
-type SecretCandidateDetector interface {
+type Detector interface {
 	DetectSecretCandidates(ctx context.Context, value resource.Value) ([]string, error)
 }
 
 type SecretProvider interface {
 	SecretStore
-	PayloadSecretProcessor
-	SecretCandidateDetector
+	PayloadProcessor
+	Detector
 }

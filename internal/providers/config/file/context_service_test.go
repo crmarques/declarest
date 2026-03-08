@@ -327,7 +327,7 @@ func TestResolveContextUnknownOverrideFails(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "dev",
 		Overrides: map[string]string{"unknown.key": "value"},
@@ -348,7 +348,7 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	t.Run("explicit_context_selected", func(t *testing.T) {
 		t.Parallel()
@@ -408,7 +408,7 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 	})
 }
 
-func TestFileContextServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) {
+func TestServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) {
 	t.Parallel()
 
 	if runtime.GOOS == "windows" {
@@ -416,7 +416,7 @@ func TestFileContextServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) 
 	}
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	err := contextService.Create(context.Background(), config.Context{
 		Name:          "dev",
@@ -436,7 +436,7 @@ func TestFileContextServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) 
 	}
 }
 
-func TestFileContextServiceLoadCatalogNormalizesPermissiveFileMode(t *testing.T) {
+func TestServiceLoadCatalogNormalizesPermissiveFileMode(t *testing.T) {
 	t.Parallel()
 
 	if runtime.GOOS == "windows" {
@@ -448,7 +448,7 @@ func TestFileContextServiceLoadCatalogNormalizesPermissiveFileMode(t *testing.T)
 		t.Fatalf("failed to write test catalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	if _, err := contextService.List(context.Background()); err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestContextServiceMissingCatalogBehaviors(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	items, err := contextService.List(context.Background())
 	if err != nil {
@@ -499,7 +499,7 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	dev := config.Context{
 		Name:          "dev",
@@ -608,7 +608,7 @@ func TestSetCurrentPreservesContextOrder(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	for _, name := range []string{"a", "b", "c"} {
 		if err := contextService.Create(context.Background(), config.Context{
@@ -642,7 +642,7 @@ func TestCreateDoesNotPersistRemovedRepositoryResourceFormat(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
 		Name:          "dev",
@@ -674,7 +674,7 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	if err := contextService.Create(context.Background(), config.Context{
 		Name:          "dev",
@@ -717,7 +717,7 @@ func TestResolveContextWithoutRepositoryResourceFormat(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
@@ -735,7 +735,7 @@ func TestResolveContextDefaultsMetadataBaseDirWhenMissing(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
@@ -770,7 +770,7 @@ currentCtx: dev
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
@@ -808,7 +808,7 @@ currentCtx: dev
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "dev"})
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
@@ -829,7 +829,7 @@ func TestResolveContextOverrideSupportsMetadataBundle(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
@@ -858,7 +858,7 @@ func TestResolveContextOverrideSupportsMetadataBundleFile(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
@@ -887,7 +887,7 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
 		Overrides: map[string]string{"managedServer.http.baseUrl": "https://override.example.com"},
@@ -911,7 +911,7 @@ func TestResolveContextOverrideSupportsManagedServerHealthCheckWhenConfigured(t 
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
 		Overrides: map[string]string{"managedServer.http.healthCheck": "https://override.example.com/healthz"},
@@ -935,7 +935,7 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
@@ -981,7 +981,7 @@ func TestResolveContextProxyInheritance(t *testing.T) {
 		t.Fatalf("failed to write proxy inheritance context catalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "shared"})
 	if err != nil {
 		t.Fatalf("expected proxy inheritance to succeed, got %v", err)
@@ -1001,7 +1001,7 @@ func TestResolveContextProxyExplicitDisable(t *testing.T) {
 		t.Fatalf("failed to write proxy disable context catalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "disable"})
 	if err != nil {
 		t.Fatalf("expected proxy disable scenario to succeed, got %v", err)
@@ -1030,7 +1030,7 @@ func TestUpdatePreservesProxyOmissionsFromStoredContext(t *testing.T) {
 		t.Fatalf("failed to write proxy persistence context catalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "persist"})
 	if err != nil {
 		t.Fatalf("expected resolve to succeed, got %v", err)
@@ -1111,7 +1111,7 @@ func TestResolveContextOverrideFailureIsDeterministic(t *testing.T) {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 	_, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
@@ -1131,7 +1131,7 @@ func TestMutationOnMissingCatalogReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
-	contextService := NewFileContextService(path)
+	contextService := NewService(path)
 
 	tests := []struct {
 		name string

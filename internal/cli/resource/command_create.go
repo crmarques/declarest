@@ -66,9 +66,9 @@ func newCreateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 
 			result, err := mutateapp.Execute(runCtx, mutateapp.Dependencies{
 				Orchestrator: deps.Orchestrator,
-				Repository:   deps.ResourceStore,
-				Metadata:     deps.Metadata,
-				Secrets:      deps.Secrets,
+				Repository:   deps.Services.RepositoryStore(),
+				Metadata:     deps.Services.MetadataService(),
+				Secrets:      deps.Services.SecretProvider(),
 			}, mutateapp.Request{
 				Operation:        mutateapp.OperationCreate,
 				LogicalPath:      mutationPath,

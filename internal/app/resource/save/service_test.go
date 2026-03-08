@@ -1323,7 +1323,6 @@ func (f *fakeSaveRepository) Exists(_ context.Context, logicalPath string) (bool
 	return found, nil
 }
 
-func (f *fakeSaveRepository) Move(context.Context, string, string) error { return nil }
 func (f *fakeSaveRepository) Init(context.Context) error                 { return nil }
 func (f *fakeSaveRepository) Refresh(context.Context) error              { return nil }
 func (f *fakeSaveRepository) Clean(context.Context) error                { return nil }

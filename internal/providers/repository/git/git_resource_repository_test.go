@@ -24,7 +24,6 @@ func TestGitRepositoryNoRemoteStatus(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 	if err := provider.Init(context.Background()); err != nil {
 		t.Fatalf("Init returned error: %v", err)
@@ -45,7 +44,6 @@ func TestGitRepositoryAutoInitOnSyncStatus(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 
 	status, err := provider.SyncStatus(context.Background())
@@ -65,7 +63,6 @@ func TestGitRepositoryAutoInitOnHistoryReturnsEmpty(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 
 	history, err := provider.History(context.Background(), repository.HistoryFilter{})
@@ -85,7 +82,6 @@ func TestGitRepositoryAutoInitOnCommitWithoutChanges(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 
 	committed, err := provider.Commit(context.Background(), "test commit")
@@ -105,7 +101,6 @@ func TestGitRepositoryAutoInitOnCheck(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 
 	if err := provider.Check(context.Background()); err != nil {
@@ -121,7 +116,6 @@ func TestGitRepositoryAutoInitOnTree(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 
 	paths, err := provider.Tree(context.Background())
@@ -143,7 +137,6 @@ func TestGitRepositoryAutoInitDisabledSyncStatusFailsWithoutInitialization(t *te
 		config.GitRepository{
 			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	_, err := provider.SyncStatus(context.Background())
@@ -159,7 +152,6 @@ func TestGitRepositoryAutoInitDisabledResourceOpsFailWithoutInitialization(t *te
 		config.GitRepository{
 			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	_, err := provider.Exists(context.Background(), "/customers/acme")
@@ -175,7 +167,6 @@ func TestGitRepositoryExplicitInitStillWorksWhenAutoInitDisabled(t *testing.T) {
 		config.GitRepository{
 			Local: config.GitLocal{BaseDir: repoDir, AutoInit: boolPtr(false)},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	if err := provider.Init(context.Background()); err != nil {
@@ -191,7 +182,6 @@ func TestGitRepositoryPushWithoutRemote(t *testing.T) {
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 	if err := provider.Init(context.Background()); err != nil {
 		t.Fatalf("Init returned error: %v", err)
@@ -207,7 +197,6 @@ func TestGitRepositoryCleanRemovesUncommittedTrackedAndUntrackedChanges(t *testi
 	repoDir := t.TempDir()
 	provider := NewGitResourceRepository(
 		config.GitRepository{Local: config.GitLocal{BaseDir: repoDir}},
-		config.ResourceFormatJSON,
 	)
 	if err := provider.Init(context.Background()); err != nil {
 		t.Fatalf("Init returned error: %v", err)
@@ -271,7 +260,6 @@ func TestGitRepositoryTargetBranchDefaultsToMain(t *testing.T) {
 			Local:  config.GitLocal{BaseDir: t.TempDir()},
 			Remote: &config.GitRemote{URL: "https://example.invalid/repo.git"},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	if got := provider.targetBranch(); got != "main" {
@@ -292,7 +280,6 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 				},
 			},
 		},
-		config.ResourceFormatJSON,
 	)
 	basicAuth, err := basicProvider.authMethod()
 	if err != nil {
@@ -312,7 +299,6 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 				},
 			},
 		},
-		config.ResourceFormatJSON,
 	)
 	tokenAuth, err := tokenProvider.authMethod()
 	if err != nil {
@@ -337,7 +323,6 @@ func TestGitRepositorySyncStatusStates(t *testing.T) {
 				Branch: "main",
 			},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	status, err := provider.SyncStatus(context.Background())
@@ -399,7 +384,6 @@ func TestGitRepositorySyncStatusStates(t *testing.T) {
 				Branch: "main",
 			},
 		},
-		config.ResourceFormatJSON,
 	)
 
 	commitFile(t, peerRepo, peerDir, "peer2.txt", "peer2", "peer second commit")

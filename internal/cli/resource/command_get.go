@@ -70,8 +70,8 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			result, err := readapp.Execute(runCtx, readapp.Dependencies{
 				Orchestrator: deps.Orchestrator,
 				Contexts:     deps.Contexts,
-				Metadata:     deps.Metadata,
-				Secrets:      deps.Secrets,
+				Metadata:     deps.Services.MetadataService(),
+				Secrets:      deps.Services.SecretProvider(),
 			}, readapp.Request{
 				LogicalPath:              resolvedPath,
 				Source:                   source,

@@ -8,22 +8,22 @@ import (
 	"github.com/crmarques/declarest/secrets"
 )
 
-var _ orchestrator.Orchestrator = (*DefaultOrchestrator)(nil)
+var _ orchestrator.Orchestrator = (*Orchestrator)(nil)
 
-type DefaultOrchestrator struct {
+type Orchestrator struct {
 	repository repository.ResourceStore
 	metadata   metadata.MetadataService
 	server     managedserver.ManagedServerClient
 	secrets    secrets.SecretProvider
 }
 
-func NewDefaultOrchestrator(
+func New(
 	repo repository.ResourceStore,
 	meta metadata.MetadataService,
 	srv managedserver.ManagedServerClient,
 	sec secrets.SecretProvider,
-) *DefaultOrchestrator {
-	return &DefaultOrchestrator{
+) *Orchestrator {
+	return &Orchestrator{
 		repository: repo,
 		metadata:   meta,
 		server:     srv,
@@ -31,14 +31,14 @@ func NewDefaultOrchestrator(
 	}
 }
 
-func (r *DefaultOrchestrator) RepositoryStore() repository.ResourceStore {
+func (r *Orchestrator) RepositoryStore() repository.ResourceStore {
 	if r == nil {
 		return nil
 	}
 	return r.repository
 }
 
-func (r *DefaultOrchestrator) RepositorySync() repository.RepositorySync {
+func (r *Orchestrator) RepositorySync() repository.RepositorySync {
 	if r == nil || r.repository == nil {
 		return nil
 	}
@@ -48,21 +48,21 @@ func (r *DefaultOrchestrator) RepositorySync() repository.RepositorySync {
 	return nil
 }
 
-func (r *DefaultOrchestrator) MetadataService() metadata.MetadataService {
+func (r *Orchestrator) MetadataService() metadata.MetadataService {
 	if r == nil {
 		return nil
 	}
 	return r.metadata
 }
 
-func (r *DefaultOrchestrator) ManagedServerClient() managedserver.ManagedServerClient {
+func (r *Orchestrator) ManagedServerClient() managedserver.ManagedServerClient {
 	if r == nil {
 		return nil
 	}
 	return r.server
 }
 
-func (r *DefaultOrchestrator) SecretProvider() secrets.SecretProvider {
+func (r *Orchestrator) SecretProvider() secrets.SecretProvider {
 	if r == nil {
 		return nil
 	}

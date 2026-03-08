@@ -5,19 +5,13 @@ import (
 	"fmt"
 
 	"github.com/crmarques/declarest/faults"
-	metadatadomain "github.com/crmarques/declarest/metadata"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
-	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
-type Dependencies struct {
-	Orchestrator orchestratordomain.Orchestrator
-	Repository   repository.ResourceStore
-	Metadata     metadatadomain.MetadataService
-	Secrets      secretdomain.SecretProvider
-}
+type Dependencies = appdeps.Dependencies
 
 type ExecuteOptions struct {
 	AsItems       bool
@@ -49,11 +43,11 @@ func Execute(
 		return faults.NewValidationError("flag --skip-items is not supported with --as-one-resource", nil)
 	}
 
-	orchestratorService, err := requireOrchestrator(deps)
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
 		return err
 	}
-	repositoryService, err := requireResourceStore(deps)
+	repositoryService, err := appdeps.RequireResourceStore(deps)
 	if err != nil {
 		return err
 	}
@@ -235,7 +229,7 @@ func saveResolvedPathPayload(
 		}
 
 		if len(selectedCandidates) > 0 {
-			secretProvider, err := requireSecretProvider(deps)
+			secretProvider, err := appdeps.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
@@ -297,30 +291,3 @@ func saveResolvedPathPayload(
 	return nil
 }
 
-func requireOrchestrator(deps Dependencies) (orchestratordomain.Orchestrator, error) {
-	if deps.Orchestrator == nil {
-		return nil, faults.NewValidationError("orchestrator is not configured", nil)
-	}
-	return deps.Orchestrator, nil
-}
-
-func requireResourceStore(deps Dependencies) (repository.ResourceStore, error) {
-	if deps.Repository == nil {
-		return nil, faults.NewValidationError("resource repository is not configured", nil)
-	}
-	return deps.Repository, nil
-}
-
-func requireMetadataService(deps Dependencies) (metadatadomain.MetadataService, error) {
-	if deps.Metadata == nil {
-		return nil, faults.NewValidationError("metadata service is not configured", nil)
-	}
-	return deps.Metadata, nil
-}
-
-func requireSecretProvider(deps Dependencies) (secretdomain.SecretProvider, error) {
-	if deps.Secrets == nil {
-		return nil, faults.NewValidationError("secret provider is not configured", nil)
-	}
-	return deps.Secrets, nil
-}

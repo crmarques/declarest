@@ -464,7 +464,7 @@ func TestPathCompletionUsesMetadataOnlyBranchWhenOpenAPIHasNoPath(t *testing.T) 
 	orchestrator.openAPISpec = map[string]any{
 		"paths": map[string]any{},
 	}
-	metadataService := deps.Metadata.(*testMetadata)
+	metadataService := deps.Services.MetadataService().(*testMetadata)
 	metadataService.collectionChildren["/admin/realms/master/user-registry/AD PRD"] = []string{"mappers"}
 
 	output, err := executeForTest(
@@ -493,7 +493,7 @@ func TestPathCompletionIncludesMetadataWildcardSelectorSegments(t *testing.T) {
 	orchestrator := deps.Orchestrator.(*testOrchestrator)
 	orchestrator.openAPISpec = map[string]any{"paths": map[string]any{}}
 
-	metadataService := deps.Metadata.(*testMetadata)
+	metadataService := deps.Services.MetadataService().(*testMetadata)
 	metadataService.collectionChildren["/admin/realms"] = []string{"_"}
 
 	output, err := executeForTest(

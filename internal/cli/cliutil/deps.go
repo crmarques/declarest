@@ -10,13 +10,21 @@ import (
 )
 
 type CommandDependencies struct {
-	Orchestrator        orchestrator.Orchestrator
-	Contexts            config.ContextService
-	ResourceStore       repository.ResourceStore
-	RepositorySync      repository.RepositorySync
-	Metadata            metadata.MetadataService
-	Secrets             secrets.SecretProvider
-	ManagedServerClient managedserver.ManagedServerClient
+	Orchestrator orchestrator.Orchestrator
+	Contexts     config.ContextService
+	Services     orchestrator.ServiceAccessor
+}
+
+func NewCommandDependencies(
+	orch orchestrator.Orchestrator,
+	contexts config.ContextService,
+	services orchestrator.ServiceAccessor,
+) CommandDependencies {
+	return CommandDependencies{
+		Orchestrator: orch,
+		Contexts:     contexts,
+		Services:     services,
+	}
 }
 
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
@@ -50,36 +58,56 @@ func RequireRemoteReader(deps CommandDependencies) (orchestrator.RemoteReader, e
 }
 
 func RequireResourceStore(deps CommandDependencies) (repository.ResourceStore, error) {
-	if deps.ResourceStore == nil {
+	if deps.Services == nil {
 		return nil, ValidationError("resource store is not configured", nil)
 	}
-	return deps.ResourceStore, nil
+	store := deps.Services.RepositoryStore()
+	if store == nil {
+		return nil, ValidationError("resource store is not configured", nil)
+	}
+	return store, nil
 }
 
 func RequireRepositorySync(deps CommandDependencies) (repository.RepositorySync, error) {
-	if deps.RepositorySync == nil {
+	if deps.Services == nil {
 		return nil, ValidationError("repository sync is not configured", nil)
 	}
-	return deps.RepositorySync, nil
+	sync := deps.Services.RepositorySync()
+	if sync == nil {
+		return nil, ValidationError("repository sync is not configured", nil)
+	}
+	return sync, nil
 }
 
 func RequireMetadataService(deps CommandDependencies) (metadata.MetadataService, error) {
-	if deps.Metadata == nil {
+	if deps.Services == nil {
 		return nil, ValidationError("metadata service is not configured", nil)
 	}
-	return deps.Metadata, nil
+	md := deps.Services.MetadataService()
+	if md == nil {
+		return nil, ValidationError("metadata service is not configured", nil)
+	}
+	return md, nil
 }
 
 func RequireSecretProvider(deps CommandDependencies) (secrets.SecretProvider, error) {
-	if deps.Secrets == nil {
+	if deps.Services == nil {
 		return nil, ValidationError("secret provider is not configured", nil)
 	}
-	return deps.Secrets, nil
+	sp := deps.Services.SecretProvider()
+	if sp == nil {
+		return nil, ValidationError("secret provider is not configured", nil)
+	}
+	return sp, nil
 }
 
 func RequireManagedServerClient(deps CommandDependencies) (managedserver.ManagedServerClient, error) {
-	if deps.ManagedServerClient == nil {
+	if deps.Services == nil {
 		return nil, ValidationError("managed server client is not configured", nil)
 	}
-	return deps.ManagedServerClient, nil
+	client := deps.Services.ManagedServerClient()
+	if client == nil {
+		return nil, ValidationError("managed server client is not configured", nil)
+	}
+	return client, nil
 }

@@ -52,7 +52,7 @@ Acceptance contracts:
 10. Remote operation construction: OpenAPI-assisted defaults with explicit metadata override precedence.
 10. Repository sync: conflict classes, actionable outcomes, `repository status` output contract, and verbose worktree-detail coverage for `repository status --verbose`.
 11. E2E profiles: `cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full` workload behavior, `smoke|main|operator-main|corner` case selection, `CASE_PROFILES` family filtering, deterministic step statuses, manual-profile managed-server access handoff details, and operator-profile installation/handoff/automation validation.
-12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`), actionable failure log pointers, and final-summary execution parameters that distinguish explicit selections from defaulted values (including profile defaults, component-elected defaults, and env-backed container engine selection).
+12. E2E runtime UX: grouped step reporting (`RUNNING|OK|FAIL|SKIP`), live `SPAN` elapsed-time updates for running steps, actionable failure log pointers, and final-summary execution parameters that distinguish explicit selections from defaulted values (including profile defaults, component-elected defaults, and env-backed container engine selection).
 13. Resource-server fixtures: metadata `resourceInfo` identity mapping (`idFromAttribute`/`aliasFromAttribute`) and intermediary `/_/` expansion for nested trees.
 14. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
 15. OAuth2 component auth: `client_credentials` token issuance and managed-server auth rejection when oauth2 config is missing or invalid.

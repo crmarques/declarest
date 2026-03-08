@@ -119,27 +119,48 @@ func testDeps() Dependencies {
 	)
 }
 
-func testDepsWith(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
+type testServiceAccessor struct {
+	store    repository.ResourceStore
+	sync     repository.RepositorySync
+	metadata metadatadomain.MetadataService
+	secrets  secretdomain.SecretProvider
+	server   managedserverdomain.ManagedServerClient
+}
+
+func (a *testServiceAccessor) RepositoryStore() repository.ResourceStore           { return a.store }
+func (a *testServiceAccessor) RepositorySync() repository.RepositorySync           { return a.sync }
+func (a *testServiceAccessor) MetadataService() metadatadomain.MetadataService     { return a.metadata }
+func (a *testServiceAccessor) SecretProvider() secretdomain.SecretProvider          { return a.secrets }
+func (a *testServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+	return a.server
+}
+
+func testDepsWith(orch *testOrchestrator, metadataService *testMetadata) Dependencies {
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
 	managedServerClient := &testManagedServerClient{accessToken: "test-access-token"}
 
+	services := &testServiceAccessor{
+		store:    repositoryService,
+		sync:     repositoryService,
+		metadata: metadataService,
+		secrets:  secretProvider,
+		server:   managedServerClient,
+	}
+
 	return Dependencies{
-		Orchestrator:        orchestrator,
-		Contexts:            &testContextService{},
-		ResourceStore:       repositoryService,
-		RepositorySync:      repositoryService,
-		Metadata:            metadataService,
-		Secrets:             secretProvider,
-		ManagedServerClient: managedServerClient,
+		Orchestrator: orch,
+		Contexts:     &testContextService{},
+		Services:     services,
 	}
 }
 
-func newResourceSaveDeps(orchestrator *testOrchestrator, metadataService *testMetadata) Dependencies {
-	deps := testDepsWith(orchestrator, metadataService)
+func newResourceSaveDeps(orch *testOrchestrator, metadataService *testMetadata) Dependencies {
+	deps := testDepsWith(orch, metadataService)
 	repositoryService := &resourceSaveTestRepository{}
-	deps.ResourceStore = repositoryService
-	deps.RepositorySync = repositoryService
+	accessor := deps.Services.(*testServiceAccessor)
+	accessor.store = repositoryService
+	accessor.sync = repositoryService
 	return deps
 }
 
@@ -261,12 +282,9 @@ type testOrchestrator struct {
 	applyValuePolicy []orchestrator.ApplyPolicy
 	createCalls      []savedResource
 	updateCalls      []savedResource
-	explainCalls     []string
-	diffCalls        []string
-	explainValues    map[string][]resource.DiffEntry
-	diffValues       map[string][]resource.DiffEntry
-	explainErr       error
-	diffErr          error
+	diffCalls  []string
+	diffValues map[string][]resource.DiffEntry
+	diffErr    error
 	getLocalValues   map[string]resource.Value
 	localList        []resource.Resource
 	remoteList       []resource.Resource
@@ -465,20 +483,6 @@ func (r *testOrchestrator) ListRemote(_ context.Context, logicalPath string, pol
 		RemoteID:    defaultAlias,
 		Payload:     map[string]any{"path": logicalPath},
 	}}, nil
-}
-func (r *testOrchestrator) Explain(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
-	r.explainCalls = append(r.explainCalls, logicalPath)
-	if r.explainErr != nil {
-		return nil, r.explainErr
-	}
-	if r.explainValues != nil {
-		if value, ok := r.explainValues[logicalPath]; ok {
-			items := make([]resource.DiffEntry, len(value))
-			copy(items, value)
-			return items, nil
-		}
-	}
-	return []resource.DiffEntry{{ResourcePath: logicalPath, Path: "", Operation: "noop"}}, nil
 }
 func (r *testOrchestrator) Diff(_ context.Context, logicalPath string) ([]resource.DiffEntry, error) {
 	r.diffCalls = append(r.diffCalls, logicalPath)
@@ -828,7 +832,6 @@ func (r *testRepository) List(_ context.Context, logicalPath string, policy repo
 	return []resource.Resource{{LogicalPath: logicalPath}}, nil
 }
 func (r *testRepository) Exists(context.Context, string) (bool, error) { return true, nil }
-func (r *testRepository) Move(context.Context, string, string) error   { return nil }
 func (r *testRepository) Init(context.Context) error                   { return nil }
 func (r *testRepository) Refresh(context.Context) error                { return nil }
 func (r *testRepository) Clean(context.Context) error {
@@ -941,7 +944,6 @@ func (r *resourceSaveTestRepository) Exists(context.Context, string) (bool, erro
 	return false, nil
 }
 
-func (r *resourceSaveTestRepository) Move(context.Context, string, string) error          { return nil }
 func (r *resourceSaveTestRepository) Init(context.Context) error                          { return nil }
 func (r *resourceSaveTestRepository) Refresh(context.Context) error                       { return nil }
 func (r *resourceSaveTestRepository) Clean(context.Context) error                         { return nil }

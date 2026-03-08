@@ -60,7 +60,6 @@ type ResourceMutator interface {
 }
 
 type DiffReader interface {
-	Explain(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error)
 	Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error)
 }
 

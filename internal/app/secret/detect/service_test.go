@@ -121,7 +121,7 @@ func TestExecuteRepositoryScanDefaultsToRootAndSortsResults(t *testing.T) {
 
 	result, err := Execute(context.Background(), Dependencies{
 		Orchestrator:   orch,
-		SecretProvider: secrets,
+		Secrets: secrets,
 	}, Request{})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -155,7 +155,7 @@ func TestExecuteInputModeFixRequiresPath(t *testing.T) {
 
 	secrets := &fakeSecretProvider{detected: map[string][]string{"": {"password"}}}
 	_, err := Execute(context.Background(), Dependencies{
-		SecretProvider: secrets,
+		Secrets: secrets,
 	}, Request{
 		HasInput: true,
 		Fix:      true,
@@ -186,7 +186,7 @@ func TestExecuteRepositoryScanRejectsUndetectedSecretAttributeFilter(t *testing.
 
 	_, err := Execute(context.Background(), Dependencies{
 		Orchestrator:   orch,
-		SecretProvider: secrets,
+		Secrets: secrets,
 	}, Request{
 		SecretAttribute: "token",
 	})
@@ -213,7 +213,7 @@ func TestExecuteFixPersistsDetectedAttributes(t *testing.T) {
 	_, err := Execute(context.Background(), Dependencies{
 		Orchestrator:   orch,
 		Metadata:       meta,
-		SecretProvider: secrets,
+		Secrets: secrets,
 	}, Request{Fix: true})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)

@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"maps"
 	"path"
 	"reflect"
 	"sort"
@@ -113,10 +114,10 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	}
 
 	if len(spec.Query) > 0 {
-		normalized.Query = cloneStringMap(spec.Query)
+		normalized.Query = maps.Clone(spec.Query)
 	}
 	if len(spec.Headers) > 0 {
-		normalized.Headers = cloneStringMap(spec.Headers)
+		normalized.Headers = maps.Clone(spec.Headers)
 	}
 	return normalized
 }

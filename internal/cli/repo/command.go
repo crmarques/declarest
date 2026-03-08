@@ -361,41 +361,49 @@ type repoCommitOutput struct {
 }
 
 func requireRepositoryHistoryReader(deps cliutil.CommandDependencies) (repository.RepositoryHistoryReader, error) {
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryHistoryReader); ok {
-		return candidate, nil
-	}
-	if candidate, ok := deps.ResourceStore.(repository.RepositoryHistoryReader); ok {
-		return candidate, nil
+	if deps.Services != nil {
+		if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryHistoryReader); ok {
+			return candidate, nil
+		}
+		if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryHistoryReader); ok {
+			return candidate, nil
+		}
 	}
 	return nil, cliutil.ValidationError("repository history is not supported by the active repository provider", nil)
 }
 
 func requireRepositoryStatusDetailsReader(deps cliutil.CommandDependencies) (repository.RepositoryStatusDetailsReader, error) {
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryStatusDetailsReader); ok {
-		return candidate, nil
-	}
-	if candidate, ok := deps.ResourceStore.(repository.RepositoryStatusDetailsReader); ok {
-		return candidate, nil
+	if deps.Services != nil {
+		if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryStatusDetailsReader); ok {
+			return candidate, nil
+		}
+		if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryStatusDetailsReader); ok {
+			return candidate, nil
+		}
 	}
 	return nil, cliutil.ValidationError("verbose repository status is not supported by the active repository provider", nil)
 }
 
 func requireRepositoryCommitter(deps cliutil.CommandDependencies) (repository.RepositoryCommitter, error) {
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryCommitter); ok {
-		return candidate, nil
-	}
-	if candidate, ok := deps.ResourceStore.(repository.RepositoryCommitter); ok {
-		return candidate, nil
+	if deps.Services != nil {
+		if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryCommitter); ok {
+			return candidate, nil
+		}
+		if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryCommitter); ok {
+			return candidate, nil
+		}
 	}
 	return nil, cliutil.ValidationError("git repository commit capability is not available", nil)
 }
 
 func requireRepositoryTreeReader(deps cliutil.CommandDependencies) (repository.RepositoryTreeReader, bool) {
-	if candidate, ok := deps.RepositorySync.(repository.RepositoryTreeReader); ok {
-		return candidate, true
-	}
-	if candidate, ok := deps.ResourceStore.(repository.RepositoryTreeReader); ok {
-		return candidate, true
+	if deps.Services != nil {
+		if candidate, ok := deps.Services.RepositorySync().(repository.RepositoryTreeReader); ok {
+			return candidate, true
+		}
+		if candidate, ok := deps.Services.RepositoryStore().(repository.RepositoryTreeReader); ok {
+			return candidate, true
+		}
 	}
 	return nil, false
 }
