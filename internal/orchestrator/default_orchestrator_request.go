@@ -14,15 +14,15 @@ import (
 func (r *DefaultOrchestrator) Request(
 	ctx context.Context,
 	requestSpec managedserver.RequestSpec,
-) (resource.Value, error) {
+) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	resolvedRequest, requestCtx, err := r.resolveRequestSpec(ctx, requestSpec)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	debugctx.Printf(
@@ -31,7 +31,7 @@ func (r *DefaultOrchestrator) Request(
 		requestSpec.Method,
 		requestSpec.Path,
 		resolvedRequest.Path,
-		resolvedRequest.Body != nil,
+		requestBodyPresent(resolvedRequest.Body),
 	)
 
 	value, err := serverManager.Request(requestCtx, resolvedRequest)
@@ -52,7 +52,7 @@ func (r *DefaultOrchestrator) Request(
 					resolvedRequest.Path,
 					fallbackErr,
 				)
-				return nil, fallbackErr
+				return resource.Content{}, fallbackErr
 			}
 			debugctx.Printf(
 				ctx,
@@ -81,7 +81,7 @@ func (r *DefaultOrchestrator) Request(
 						resolvedRequest.Path,
 						fallbackErr,
 					)
-					return nil, fallbackErr
+					return resource.Content{}, fallbackErr
 				}
 				debugctx.Printf(
 					ctx,
@@ -102,7 +102,7 @@ func (r *DefaultOrchestrator) Request(
 			resolvedRequest.Path,
 			err,
 		)
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	debugctx.Printf(
@@ -122,16 +122,16 @@ func (r *DefaultOrchestrator) retryRequestResolvedMutationWithLiteralPath(
 	original managedserver.RequestSpec,
 	resolved managedserver.RequestSpec,
 	requestErr error,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(original.Method))
 	if normalizedMethod != "PUT" && normalizedMethod != "PATCH" {
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
 	if !faults.IsCategory(requestErr, faults.NotFoundError) {
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
 	if sameNormalizedRequestPath(original.Path, resolved.Path) {
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
 
 	fallback := cloneRequestSpec(resolved)
@@ -144,7 +144,7 @@ func (r *DefaultOrchestrator) retryRequestNotFoundWithMetadata(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	requestSpec managedserver.RequestSpec,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 
 	switch normalizedMethod {
@@ -154,19 +154,20 @@ func (r *DefaultOrchestrator) retryRequestNotFoundWithMetadata(
 	case "DELETE":
 		resourceInfo, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
 		if err != nil {
-			return nil, true, err
+			return resource.Content{}, true, err
 		}
 
 		remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
 		if err != nil {
-			return nil, true, err
+			return resource.Content{}, true, err
 		}
 
-		normalizedPayload, err := resource.Normalize(remoteValue)
+		normalizedPayload, err := resource.Normalize(remoteValue.Value)
 		if err != nil {
-			return nil, true, err
+			return resource.Content{}, true, err
 		}
 		resourceInfo.Payload = normalizedPayload
+		resourceInfo.PayloadDescriptor = remoteValue.Descriptor
 
 		localAlias, remoteID, err := resolveResourceIdentity(
 			resourceInfo.LogicalPath,
@@ -174,21 +175,21 @@ func (r *DefaultOrchestrator) retryRequestNotFoundWithMetadata(
 			normalizedPayload,
 		)
 		if err != nil {
-			return nil, true, err
+			return resource.Content{}, true, err
 		}
 		resourceInfo.LocalAlias = localAlias
 		resourceInfo.RemoteID = remoteID
 
 		spec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationDelete, resourceInfo.Payload)
 		if err != nil {
-			return nil, true, err
+			return resource.Content{}, true, err
 		}
 
 		fallback := requestSpecFromOperationSpec(requestSpec, spec)
 		value, err := serverManager.Request(ctx, fallback)
 		return value, true, err
 	default:
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
 }
 
@@ -221,12 +222,13 @@ func (r *DefaultOrchestrator) resolveRequestSpec(
 		resourceInfo.CollectionPath = resourceInfo.LogicalPath
 	}
 
-	if requestSpec.Body != nil {
-		normalizedBody, normalizeErr := resource.Normalize(requestSpec.Body)
+	if requestBodyPresent(requestSpec.Body) {
+		normalizedBody, normalizeErr := resource.Normalize(requestSpec.Body.Value)
 		if normalizeErr != nil {
 			return managedserver.RequestSpec{}, ctx, normalizeErr
 		}
 		resourceInfo.Payload = normalizedBody
+		resourceInfo.PayloadDescriptor = requestSpec.Body.Descriptor
 	}
 
 	spec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, operation, resourceInfo.Payload)
@@ -314,7 +316,7 @@ func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.
 		Headers:     cloneRequestStringMap(spec.Headers),
 		Accept:      spec.Accept,
 		ContentType: spec.ContentType,
-		Body:        spec.Body,
+		Body:        requestBodyContent(spec.Body, spec.ContentType),
 	}
 	if resolved.Method == "" {
 		resolved.Method = strings.ToUpper(strings.TrimSpace(base.Method))
@@ -341,7 +343,7 @@ func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.
 			resolved.Headers[key] = value
 		}
 	}
-	if base.Body != nil && resolved.Body == nil {
+	if requestBodyPresent(base.Body) && !requestBodyPresent(resolved.Body) {
 		resolved.Body = base.Body
 	}
 	return resolved
@@ -385,10 +387,34 @@ func normalizeRequestPathForOrchestrator(value string) string {
 	return trimmed
 }
 
-func (r *DefaultOrchestrator) GetOpenAPISpec(ctx context.Context) (resource.Value, error) {
+func requestBodyContent(value any, contentType string) resource.Content {
+	if content, ok := value.(resource.Content); ok {
+		if !resource.IsPayloadDescriptorExplicit(content.Descriptor) && strings.TrimSpace(contentType) != "" {
+			content.Descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+				MediaType: contentType,
+			})
+		}
+		return content
+	}
+	if value == nil {
+		return resource.Content{}
+	}
+	descriptor := resource.PayloadDescriptor{}
+	if strings.TrimSpace(contentType) != "" {
+		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+			MediaType: contentType,
+		})
+	}
+	return resource.Content{
+		Value:      value,
+		Descriptor: descriptor,
+	}
+}
+
+func (r *DefaultOrchestrator) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	return serverManager.GetOpenAPISpec(ctx)
 }

@@ -7,6 +7,23 @@ e2e_operator_profile_enabled() {
   e2e_profile_is_operator
 }
 
+e2e_operator_should_defer_repository_webhook_registration() {
+  e2e_operator_profile_enabled || return 1
+  [[ -n "${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}" ]]
+}
+
+e2e_operator_configure_repository_webhook_if_needed() {
+  e2e_operator_should_defer_repository_webhook_registration || return 0
+  [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
+  [[ -n "${E2E_GIT_PROVIDER:-}" && "${E2E_GIT_PROVIDER}" != 'none' ]] || return 0
+
+  local git_provider_key
+  git_provider_key=$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}") || return 1
+
+  e2e_info "operator profile configuring repository webhook provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER} git-provider=${E2E_GIT_PROVIDER}"
+  e2e_components_run_hook_for_keys 'configure-auth' 'false' "${git_provider_key}"
+}
+
 e2e_operator_manifest_dir() {
   printf '%s/operator/manifests\n' "${E2E_RUN_DIR}"
 }
@@ -1073,7 +1090,6 @@ e2e_operator_write_manifests() {
 
   local repo_url=${GIT_REMOTE_URL:-}
   local repo_branch=${GIT_REMOTE_BRANCH:-main}
-  local repo_format=${REPO_RESOURCE_FORMAT:-json}
   [[ -n "${repo_url}" ]] || {
     e2e_die 'operator profile repository URL is empty'
     return 1
@@ -1136,7 +1152,6 @@ metadata:
 spec:
   type: git
   pollInterval: 30s
-  resourceFormat: ${repo_format}
   git:
     url: $(e2e_operator_yaml_quote "${repo_url}")
     branch: $(e2e_operator_yaml_quote "${repo_branch}")

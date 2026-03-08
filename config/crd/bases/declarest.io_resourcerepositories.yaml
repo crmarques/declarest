@@ -196,8 +196,6 @@ spec:
                 type: object
               pollInterval:
                 type: string
-              resourceFormat:
-                type: string
               storage:
                 properties:
                   existingPVC:

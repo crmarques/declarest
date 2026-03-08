@@ -19,7 +19,7 @@ func TestLocalResourceRepositoryTree(t *testing.T) {
 	writeTreeTestFile(t, filepath.Join(root, "admin", "realms", "acme", "user-registry", "AD PRD", "resource.yaml"), "ignored")
 	writeTreeTestFile(t, filepath.Join(root, "README.md"), "ignored")
 
-	repo := NewLocalResourceRepository(root, "yaml")
+	repo := NewLocalResourceRepository(root)
 	got, err := repo.Tree(context.Background())
 	if err != nil {
 		t.Fatalf("Tree returned error: %v", err)
@@ -42,7 +42,7 @@ func TestLocalResourceRepositoryTree(t *testing.T) {
 func TestLocalResourceRepositoryTreeMissingBaseDir(t *testing.T) {
 	t.Parallel()
 
-	repo := NewLocalResourceRepository(filepath.Join(t.TempDir(), "missing"), "json")
+	repo := NewLocalResourceRepository(filepath.Join(t.TempDir(), "missing"))
 	_, err := repo.Tree(context.Background())
 	if err == nil {
 		t.Fatal("expected error for missing base directory")

@@ -69,11 +69,11 @@ func (g *HTTPManagedServerClient) decodeListResponse(
 	body []byte,
 	headers http.Header,
 ) ([]resource.Resource, error) {
-	payload, err := decodeResponseBody(body, headers, g.metadataPayloadType(md))
+	content, err := decodeResponseBody(body, headers, g.metadataPayloadDescriptor(md))
 	if err != nil {
 		return nil, err
 	}
-	payload, err = g.applyListJQ(ctx, payload, spec.JQ)
+	payload, err := g.applyOperationPayloadTransforms(ctx, content.Value, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +122,12 @@ func (g *HTTPManagedServerClient) decodeListResponse(
 		}
 
 		list = append(list, resource.Resource{
-			LogicalPath:    logicalPath,
-			CollectionPath: normalizedCollectionPath,
-			LocalAlias:     alias,
-			RemoteID:       remoteID,
-			Payload:        payloadMap,
+			LogicalPath:       logicalPath,
+			CollectionPath:    normalizedCollectionPath,
+			LocalAlias:        alias,
+			RemoteID:          remoteID,
+			Payload:           payloadMap,
+			PayloadDescriptor: content.Descriptor,
 		})
 	}
 

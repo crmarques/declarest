@@ -15,8 +15,6 @@ type DefaultOrchestrator struct {
 	metadata   metadata.MetadataService
 	server     managedserver.ManagedServerClient
 	secrets    secrets.SecretProvider
-
-	resourceFormat string
 }
 
 func NewDefaultOrchestrator(
@@ -24,14 +22,12 @@ func NewDefaultOrchestrator(
 	meta metadata.MetadataService,
 	srv managedserver.ManagedServerClient,
 	sec secrets.SecretProvider,
-	resourceFormat string,
 ) *DefaultOrchestrator {
 	return &DefaultOrchestrator{
-		repository:     repo,
-		metadata:       meta,
-		server:         srv,
-		secrets:        sec,
-		resourceFormat: metadata.NormalizeResourceFormat(resourceFormat),
+		repository: repo,
+		metadata:   meta,
+		server:     srv,
+		secrets:    sec,
 	}
 }
 
@@ -71,11 +67,4 @@ func (r *DefaultOrchestrator) SecretProvider() secrets.SecretProvider {
 		return nil
 	}
 	return r.secrets
-}
-
-func (r *DefaultOrchestrator) effectiveResourceFormat() string {
-	if r == nil {
-		return metadata.NormalizeResourceFormat("")
-	}
-	return metadata.NormalizeResourceFormat(r.resourceFormat)
 }

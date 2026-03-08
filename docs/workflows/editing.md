@@ -19,7 +19,7 @@ Use `config resolve --set` to preview runtime overrides.
 ```bash
 declarest config resolve \
   --set managed-server.http.base-url=https://staging-api.example.com \
-  --set repository.resource-format=yaml
+  --set metadata.base-dir=/srv/declarest/staging-metadata
 ```
 
 This is the safest way to test environment-specific changes before editing the stored context.

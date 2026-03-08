@@ -133,6 +133,9 @@ if [[ -n "${webhook_url}" || -n "${webhook_secret}" || -n "${webhook_provider}" 
     exit 1
   fi
 
+  gitlab_api_put "${GITLAB_BASE_URL}/api/v4/application/settings" \
+    --data 'allow_local_requests_from_web_hooks_and_services=true' >/dev/null
+
   hooks_url="${GITLAB_BASE_URL}/api/v4/projects/${project_id}/hooks"
   hooks_response=$(gitlab_api_get "${hooks_url}")
   hook_id=$(jq -r --arg url "${webhook_url}" '.[] | select((.url // "") == $url) | .id' <<<"${hooks_response}" | head -n 1 || true)

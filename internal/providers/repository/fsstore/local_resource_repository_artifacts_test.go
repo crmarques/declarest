@@ -8,18 +8,24 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/repository"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestLocalResourceRepositorySaveResourceWithArtifactsWritesSidecarFiles(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	repo := NewLocalResourceRepository(root, "yaml")
+	repo := NewLocalResourceRepository(root)
 
 	err := repo.SaveResourceWithArtifacts(
 		context.Background(),
 		"/customers/acme",
-		map[string]any{"script": "{{include script.sh}}"},
+		resource.Content{
+			Value: map[string]any{"script": "{{include script.sh}}"},
+			Descriptor: resource.PayloadDescriptor{
+				Extension: ".yaml",
+			},
+		},
 		[]repository.ResourceArtifact{
 			{File: "script.sh", Content: []byte("echo hello")},
 		},
@@ -48,11 +54,13 @@ func TestLocalResourceRepositorySaveResourceWithArtifactsWritesSidecarFiles(t *t
 func TestLocalResourceRepositorySaveResourceWithArtifactsRejectsTraversal(t *testing.T) {
 	t.Parallel()
 
-	repo := NewLocalResourceRepository(t.TempDir(), "json")
+	repo := NewLocalResourceRepository(t.TempDir())
 	err := repo.SaveResourceWithArtifacts(
 		context.Background(),
 		"/customers/acme",
-		map[string]any{"script": "{{include script.sh}}"},
+		resource.Content{
+			Value: map[string]any{"script": "{{include script.sh}}"},
+		},
 		[]repository.ResourceArtifact{
 			{File: "../script.sh", Content: []byte("echo hello")},
 		},
@@ -78,11 +86,13 @@ func TestLocalResourceRepositorySaveResourceWithArtifactsRejectsSymlinkEscape(t 
 		t.Fatalf("failed to create symlink: %v", err)
 	}
 
-	repo := NewLocalResourceRepository(root, "json")
+	repo := NewLocalResourceRepository(root)
 	err := repo.SaveResourceWithArtifacts(
 		context.Background(),
 		"/customers/acme",
-		map[string]any{"script": "{{include scripts/script.sh}}"},
+		resource.Content{
+			Value: map[string]any{"script": "{{include scripts/script.sh}}"},
+		},
 		[]repository.ResourceArtifact{
 			{File: "scripts/script.sh", Content: []byte("echo hello")},
 		},

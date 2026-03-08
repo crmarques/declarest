@@ -64,7 +64,6 @@ func buildRuntimeContext(
 	resolvedContext := config.Context{
 		Name: policy.Name,
 		Repository: config.Repository{
-			ResourceFormat: normalizeResourceFormat(repo.Spec.ResourceFormat),
 			Filesystem: &config.FilesystemRepository{
 				BaseDir: repositoryPath,
 			},
@@ -97,14 +96,6 @@ func buildRuntimeContext(
 		ManagedServerMetadata: metadataSource,
 		Cleanup:               cleanup.run,
 	}, nil
-}
-
-func normalizeResourceFormat(raw string) string {
-	value := strings.ToLower(strings.TrimSpace(raw))
-	if value == "yaml" {
-		return config.ResourceFormatYAML
-	}
-	return config.ResourceFormatJSON
 }
 
 func readSecretValue(

@@ -25,15 +25,14 @@ func RenderResourceMetadata(
 	return RenderResourceMetadataWithFormat(ctx, logicalPath, metadataValue, payload, "json")
 }
 
-// RenderResourceMetadataWithFormat renders metadata using the provided
-// repository resource format for metadata template helpers such as
-// {{resource_format .}}.
+// RenderResourceMetadataWithFormat renders metadata using the provided payload
+// type for payload-aware template helpers.
 func RenderResourceMetadataWithFormat(
 	ctx context.Context,
 	logicalPath string,
 	metadataValue metadata.ResourceMetadata,
 	payload resource.Value,
-	resourceFormat string,
+	payloadType string,
 ) (metadata.ResourceMetadata, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -63,7 +62,10 @@ func RenderResourceMetadataWithFormat(
 	if err != nil {
 		return metadata.ResourceMetadata{}, err
 	}
-	scope["resourceFormat"] = metadata.NormalizeResourceFormat(resourceFormat)
+	descriptor := resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType})
+	scope["payloadType"] = descriptor.PayloadType
+	scope["payloadMediaType"] = descriptor.MediaType
+	scope["payloadExtension"] = descriptor.Extension
 
 	resolvedCollectionPath, err := resolveCollectionPath(metadataValue.CollectionPath, scope)
 	if err != nil {

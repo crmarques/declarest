@@ -33,7 +33,7 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 			operation,
 			spec,
 			resourceInfo,
-			g.effectiveResourceFormat(),
+			g.payloadTemplateScopeDescriptor(md, resourceInfo),
 		)
 		if err != nil {
 			return metadata.OperationSpec{}, err
@@ -66,9 +66,9 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 		return metadata.OperationSpec{}, faults.NewValidationError(fmt.Sprintf("operation %q has no HTTP method", operation), nil)
 	}
 
-	payloadType := g.metadataPayloadType(md)
+	bodyDescriptor := g.requestBodyDescriptor(resourceInfo, md)
 	if strings.TrimSpace(spec.Accept) == "" {
-		spec.Accept, err = g.defaultResourceMediaType(payloadType)
+		spec.Accept, err = g.defaultResourceMediaType(bodyDescriptor)
 		if err != nil {
 			return metadata.OperationSpec{}, err
 		}
@@ -76,19 +76,25 @@ func (g *HTTPManagedServerClient) BuildRequestFromMetadata(ctx context.Context, 
 
 	if operationRequiresBody(operation) {
 		if strings.TrimSpace(spec.ContentType) == "" {
-			spec.ContentType, err = g.defaultResourceMediaType(payloadType)
+			spec.ContentType, err = g.defaultResourceMediaType(bodyDescriptor)
 			if err != nil {
 				return metadata.OperationSpec{}, err
 			}
 		}
 		if spec.Body == nil {
-			spec.Body = resourceInfo.Payload
+			spec.Body = resource.Content{
+				Value:      resourceInfo.Payload,
+				Descriptor: bodyDescriptor,
+			}
 		}
 		transformedBody, err := g.applyOperationPayloadTransforms(ctx, spec.Body, spec)
 		if err != nil {
 			return metadata.OperationSpec{}, err
 		}
-		spec.Body = transformedBody
+		spec.Body = resource.Content{
+			Value:      transformedBody,
+			Descriptor: bodyDescriptor,
+		}
 	}
 
 	if err := g.validateOpenAPIMethodSupport(ctx, spec.Path, spec.Method); err != nil {

@@ -14,7 +14,8 @@ func (g *HTTPManagedServerClient) applyOperationPayloadTransforms(
 	payload any,
 	spec metadata.OperationSpec,
 ) (resource.Value, error) {
-	steps := metadata.OrderedPayloadTransformSteps(spec)
+	payload = unwrapContentValue(payload)
+	steps := metadata.OrderedPayloadMutationSteps(spec)
 	if len(steps) == 0 {
 		return payload, nil
 	}
@@ -26,15 +27,13 @@ func (g *HTTPManagedServerClient) applyOperationPayloadTransforms(
 
 	current := normalized
 	for _, step := range steps {
-		switch step {
-		case "filterAttributes":
-			current, err = applyPayloadFilterAttributes(current, spec.Filter)
+		switch metadata.PayloadMutationStepType(step) {
+		case "selectAttributes":
+			current, err = applyPayloadSelectAttributes(current, step.SelectAttributes)
 		case "suppressAttributes":
-			current, err = applyPayloadSuppressAttributes(current, spec.Suppress)
+			current, err = applyPayloadSuppressAttributes(current, step.SuppressAttributes)
 		case "jqExpression":
-			current, err = g.applyPayloadJQ(ctx, current, spec.JQ)
-		default:
-			continue
+			current, err = g.applyPayloadJQ(ctx, current, step.JQExpression)
 		}
 		if err != nil {
 			return nil, err
@@ -44,8 +43,8 @@ func (g *HTTPManagedServerClient) applyOperationPayloadTransforms(
 	return resource.Normalize(current)
 }
 
-func applyPayloadFilterAttributes(value resource.Value, attributes []string) (resource.Value, error) {
-	pointers, err := normalizePayloadAttributePointers("filterAttributes", attributes)
+func applyPayloadSelectAttributes(value resource.Value, attributes []string) (resource.Value, error) {
+	pointers, err := normalizePayloadAttributePointers("selectAttributes", attributes)
 	if err != nil {
 		return nil, err
 	}

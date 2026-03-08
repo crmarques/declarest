@@ -1,19 +1,23 @@
 # Resource Files
 
-A resource is a logical object stored in the repository as a JSON or YAML document.
+A resource is a logical object stored in the repository as `resource.<ext>`, using the trusted media type from the managed-server response or explicit payload input.
 
 ## File naming
 
-The active context controls the repository payload format:
+The payload filename is always `resource.<ext>`.
 
-- `repository.resource-format: json` -> `resource.json`
-- `repository.resource-format: yaml` -> `resource.yaml`
+Examples:
+
+- `application/json` -> `resource.json`
+- `application/yaml` -> `resource.yaml`
+- `application/xml` -> `resource.xml`
+- unknown media type from `blob.bin` -> `resource.bin` with internal media type `application/octet-stream`
 
 ## Repository layout
 
 Examples for logical path `/corporations/acme`:
 
-- payload: `customers/acme/resource.json`
+- payload: `customers/acme/resource.json` (or another `resource.<ext>`)
 - resource-only metadata (optional): `customers/acme/metadata.json`
 
 Collection metadata for `/customers/`:

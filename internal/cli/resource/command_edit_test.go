@@ -18,7 +18,7 @@ import (
 
 type editCommandSaveCall struct {
 	logicalPath string
-	value       resourcedomain.Value
+	value       resourcedomain.Content
 }
 
 func TestEditCommandSavesUsingCanonicalLocalPath(t *testing.T) {
@@ -127,15 +127,18 @@ func (f *fakeEditCommandOrchestrator) ResolveLocalResource(
 	return f.resolvedLocal, nil
 }
 
-func (f *fakeEditCommandOrchestrator) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+func (f *fakeEditCommandOrchestrator) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
 	f.remoteCalls = append(f.remoteCalls, logicalPath)
 	if f.remoteErr != nil {
-		return nil, f.remoteErr
+		return resourcedomain.Content{}, f.remoteErr
 	}
-	return f.remoteValue, nil
+	return resourcedomain.Content{
+		Value:      f.remoteValue,
+		Descriptor: resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON}),
+	}, nil
 }
 
-func (f *fakeEditCommandOrchestrator) Save(_ context.Context, logicalPath string, value resourcedomain.Value) error {
+func (f *fakeEditCommandOrchestrator) Save(_ context.Context, logicalPath string, value resourcedomain.Content) error {
 	f.saveCalls = append(f.saveCalls, editCommandSaveCall{
 		logicalPath: logicalPath,
 		value:       value,
@@ -175,7 +178,6 @@ func editTestContext() configdomain.Context {
 	return configdomain.Context{
 		Name: "edit-test",
 		Repository: configdomain.Repository{
-			ResourceFormat: configdomain.ResourceFormatJSON,
 			Filesystem: &configdomain.FilesystemRepository{
 				BaseDir: "/tmp",
 			},

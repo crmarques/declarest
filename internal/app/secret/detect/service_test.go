@@ -34,12 +34,15 @@ func (f *fakeOrchestrator) ListLocal(_ context.Context, logicalPath string, poli
 	return items, nil
 }
 
-func (f *fakeOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
+func (f *fakeOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Content, error) {
 	f.getRequests = append(f.getRequests, logicalPath)
 	if f.getErr != nil {
-		return nil, f.getErr
+		return resource.Content{}, f.getErr
 	}
-	return f.getValues[logicalPath], nil
+	return resource.Content{
+		Value:      f.getValues[logicalPath],
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}, nil
 }
 
 type fakeSecretProvider struct {

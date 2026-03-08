@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"go.yaml.in/yaml/v3"
 )
@@ -49,7 +48,6 @@ type BundleDeclarest struct {
 	MetadataRoot            string                        `yaml:"metadataRoot"`
 	OpenAPI                 string                        `yaml:"openapi,omitempty"`
 	MetadataFileName        string                        `yaml:"metadataFileName,omitempty"`
-	ResourceFormat          string                        `yaml:"resourceFormat,omitempty"`
 	CompatibleDeclarest     string                        `yaml:"compatibleDeclarest,omitempty"`
 	CompatibleManagedServer BundleCompatibleManagedServer `yaml:"compatibleManagedServer,omitempty"`
 }
@@ -127,12 +125,6 @@ func (m BundleManifest) Validate() error {
 	if fileName := strings.TrimSpace(m.Declarest.MetadataFileName); fileName != "" {
 		if strings.Contains(fileName, "/") || strings.Contains(fileName, string(filepath.Separator)) {
 			return faults.NewValidationError("bundle.yaml declarest.metadataFileName must be a file name", nil)
-		}
-	}
-
-	if format := strings.TrimSpace(m.Declarest.ResourceFormat); format != "" {
-		if format != config.ResourceFormatJSON && format != config.ResourceFormatYAML {
-			return faults.NewValidationError("bundle.yaml declarest.resourceFormat must be json or yaml", nil)
 		}
 	}
 

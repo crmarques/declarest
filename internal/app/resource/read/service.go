@@ -76,12 +76,12 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		)
 	}
 
-	var value resource.Value
+	var content resource.Content
 	switch req.Source {
 	case SourceRepository:
-		value, err = orchestratorService.GetLocal(ctx, req.LogicalPath)
+		content, err = orchestratorService.GetLocal(ctx, req.LogicalPath)
 	case SourceManagedServer:
-		value, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
+		content, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
 		return Result{}, faults.NewValidationError("invalid source: use --source repository|managed-server", nil)
 	}
@@ -112,9 +112,9 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		return Result{}, err
 	}
 
-	debugctx.Printf(ctx, "resource read succeeded path=%q value_type=%T source=%q", req.LogicalPath, value, req.Source)
+	debugctx.Printf(ctx, "resource read succeeded path=%q value_type=%T source=%q", req.LogicalPath, content.Value, req.Source)
 
-	rawValue := value
+	rawValue := content.Value
 	var metadataSnapshot *metadatadomain.ResourceMetadata
 	if req.ShowMetadata {
 		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, rawValue, req.ContextName)
@@ -317,16 +317,8 @@ func renderMetadataSnapshot(
 		resolvedMetadata,
 	)
 
-	resourceFormat := configdomain.ResourceFormatJSON
-	if deps.Contexts != nil {
-		resolvedContext, err := deps.Contexts.ResolveContext(ctx, configdomain.ContextSelection{Name: contextName})
-		if err != nil {
-			return metadatadomain.ResourceMetadata{}, err
-		}
-		resourceFormat = resolvedContext.Repository.ResourceFormat
-	}
-
-	return metadataRender.RenderResourceMetadataWithFormat(ctx, logicalPath, merged, rawValue, resourceFormat)
+	_ = contextName
+	return metadataRender.RenderResourceMetadata(ctx, logicalPath, merged, rawValue)
 }
 
 func requireOrchestrator(deps Dependencies) (orchestrator.Orchestrator, error) {

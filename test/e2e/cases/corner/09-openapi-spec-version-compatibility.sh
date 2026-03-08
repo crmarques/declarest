@@ -113,7 +113,7 @@ case_write_validation_metadata() {
 
   cat >"${metadata_file}" <<EOF
 {
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
       "path": "${operation_path}",
       "validate": {

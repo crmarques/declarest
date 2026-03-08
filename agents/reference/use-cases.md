@@ -67,7 +67,7 @@ Goal: fetch remote resource when direct path is stale.
 
 Inputs:
 1. Path `/customers/acme`.
-2. Resolved `operationInfo.getResource.path` targets stale remote identifier.
+2. Resolved `operationsInfo.getResource.path` targets stale remote identifier.
 
 Execution:
 1. Direct get returns 404.

@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const resourceFormatRemoteDefaultOption = "remote-default"
-
 func resolveCreateContextInput(
 	command *cobra.Command,
 	input cliutil.InputFlags,
@@ -54,29 +52,14 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 		}
 	}
 
-	resourceFormatSelection, err := prompter.Select(
-		command,
-		"Select resource format (optional; remote-default keeps remote resource format)",
-		[]string{resourceFormatRemoteDefaultOption, configdomain.ResourceFormatYAML, configdomain.ResourceFormatJSON},
-	)
-	if err != nil {
-		return configdomain.Context{}, err
-	}
-	resourceFormat := strings.TrimSpace(resourceFormatSelection)
-	if resourceFormat == resourceFormatRemoteDefaultOption {
-		resourceFormat = ""
-	}
-
 	repositoryType, err := prompter.Select(command, "Select repository type", []string{"filesystem", "git"})
 	if err != nil {
 		return configdomain.Context{}, err
 	}
 
 	contextCfg := configdomain.Context{
-		Name: name,
-		Repository: configdomain.Repository{
-			ResourceFormat: strings.TrimSpace(resourceFormat),
-		},
+		Name:       name,
+		Repository: configdomain.Repository{},
 	}
 
 	repositoryBaseDir, err := promptRepositoryConfig(command, prompter, &contextCfg, repositoryType)

@@ -68,7 +68,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateValue, metadata, s.resourceFormat)
+	applyPayloadTemplateScope(templateValue, metadata, resource.PayloadDescriptor{})
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, metadata, operation, templateValue)
 	if err != nil {
@@ -154,7 +154,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateScope, resolvedMetadata, s.resourceFormat)
+	applyPayloadTemplateScope(templateScope, resolvedMetadata, resourceInfo.PayloadDescriptor)
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
 	if err != nil {
@@ -258,28 +258,38 @@ func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
 		value.SecretsFromAttributes == nil &&
 		value.ExternalizedAttributes == nil &&
 		value.Operations == nil &&
-		value.Filter == nil &&
-		value.Suppress == nil &&
-		strings.TrimSpace(value.JQ) == ""
+		value.PayloadMutation == nil
 }
 
-func applyPayloadTemplateScope(scope map[string]any, metadata metadatadomain.ResourceMetadata, fallback string) {
+func applyPayloadTemplateScope(
+	scope map[string]any,
+	metadata metadatadomain.ResourceMetadata,
+	descriptor resource.PayloadDescriptor,
+) {
 	if scope == nil {
 		return
 	}
 
-	scope["resourceFormat"] = metadatadomain.NormalizeResourceFormat(fallback)
-
-	payloadType, err := metadatadomain.EffectivePayloadType(metadata, fallback)
-	if err != nil {
-		payloadType = metadatadomain.NormalizeResourceFormat(fallback)
+	activeDescriptor := descriptor
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
+		if strings.TrimSpace(metadata.PayloadType) != "" {
+			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: metadata.PayloadType})
+		} else {
+			activeDescriptor = payloadDescriptorFromScopeValue(scope["payload"])
+		}
 	}
-	scope["payloadType"] = payloadType
+	scope["payloadType"] = activeDescriptor.PayloadType
+	scope["payloadMediaType"] = activeDescriptor.MediaType
+	scope["payloadExtension"] = activeDescriptor.Extension
+}
 
-	if mediaType, mediaErr := metadatadomain.ResourceFormatMediaType(payloadType); mediaErr == nil {
-		scope["payloadMediaType"] = mediaType
-	}
-	if extension, extensionErr := metadatadomain.ResourceFormatExtension(payloadType); extensionErr == nil {
-		scope["payloadExtension"] = extension
+func payloadDescriptorFromScopeValue(value any) resource.PayloadDescriptor {
+	switch value.(type) {
+	case string:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
+	case resource.BinaryValue, *resource.BinaryValue:
+		return resource.DefaultOctetStreamDescriptor()
+	default:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 	}
 }

@@ -27,19 +27,30 @@ var (
 		OutputJSON,
 		OutputYAML,
 	}
-	inputFormatCompletionValues = []string{
+	inputContentTypeCompletionValues = []string{
 		OutputJSON,
 		OutputYAML,
+		"application/json",
+		"application/yaml",
 	}
-	resourceInputFormatCompletionValues = []string{
+	resourceInputContentTypeCompletionValues = []string{
 		OutputJSON,
 		OutputYAML,
+		"application/json",
+		"application/yaml",
 		resource.PayloadTypeXML,
+		"application/xml",
 		resource.PayloadTypeHCL,
+		"application/hcl",
 		resource.PayloadTypeINI,
+		"application/ini",
 		resource.PayloadTypeProperties,
+		"text/x-java-properties",
 		resource.PayloadTypeText,
+		"text/plain",
 		resource.PayloadTypeBinary,
+		resource.PayloadTypeOctetStream,
+		"application/octet-stream",
 	}
 )
 
@@ -250,12 +261,12 @@ func RegisterOutputFlagCompletion(command *cobra.Command) {
 	RegisterFlagValueCompletions(command, "output", outputCompletionValues)
 }
 
-func RegisterInputFormatFlagCompletion(command *cobra.Command) {
-	RegisterFlagValueCompletions(command, "format", inputFormatCompletionValues)
+func RegisterInputContentTypeFlagCompletion(command *cobra.Command) {
+	RegisterFlagValueCompletions(command, "content-type", inputContentTypeCompletionValues)
 }
 
-func RegisterResourceInputFormatFlagCompletion(command *cobra.Command) {
-	RegisterFlagValueCompletions(command, "format", resourceInputFormatCompletionValues)
+func RegisterResourceInputContentTypeFlagCompletion(command *cobra.Command) {
+	RegisterFlagValueCompletions(command, "content-type", resourceInputContentTypeCompletionValues)
 }
 
 func RegisterFlagValueCompletions(command *cobra.Command, flagName string, values []string) {
@@ -359,7 +370,7 @@ func CompleteLogicalPaths(
 	var openAPIAllowedMethods map[string]struct{}
 	shouldExpandOpenAPI := false
 	if err == nil {
-		openAPIEntries = parseOpenAPIPathEntries(openAPISpec)
+		openAPIEntries = parseOpenAPIPathEntries(openAPISpec.Value)
 		openAPIAllowedMethods = completionAllowedOpenAPIMethods(command)
 		addOpenAPISuggestions(suggestions, openAPIEntries, normalizedPrefix, openAPIAllowedMethods)
 		shouldExpandOpenAPI = len(openAPIEntries) > 0 && shouldRunSmartOpenAPISuggestions(suggestions, toComplete)

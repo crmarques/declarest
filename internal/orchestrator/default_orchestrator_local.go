@@ -27,18 +27,19 @@ func (r *DefaultOrchestrator) resolveLocalResourceForRead(
 		return resource.Resource{}, err
 	}
 
-	value, err := manager.Get(ctx, normalizedPath)
+	content, err := manager.Get(ctx, normalizedPath)
 	if err == nil {
-		normalizedValue, normalizeErr := resource.Normalize(value)
+		normalizedValue, normalizeErr := resource.Normalize(content.Value)
 		if normalizeErr != nil {
 			return resource.Resource{}, normalizeErr
 		}
 		return resource.Resource{
-			LogicalPath:    normalizedPath,
-			CollectionPath: collectionPathFor(normalizedPath),
-			LocalAlias:     logicalPathAlias(normalizedPath),
-			RemoteID:       logicalPathAlias(normalizedPath),
-			Payload:        normalizedValue,
+			LogicalPath:       normalizedPath,
+			CollectionPath:    collectionPathFor(normalizedPath),
+			LocalAlias:        logicalPathAlias(normalizedPath),
+			RemoteID:          logicalPathAlias(normalizedPath),
+			Payload:           normalizedValue,
+			PayloadDescriptor: content.Descriptor,
 		}, nil
 	}
 	if !faults.IsCategory(err, faults.NotFoundError) {
@@ -116,17 +117,17 @@ func (r *DefaultOrchestrator) hydrateLocalFallbackCandidate(
 	md metadata.ResourceMetadata,
 	candidate resource.Resource,
 ) (resource.Resource, error) {
-	candidateValue, getErr := manager.Get(ctx, candidate.LogicalPath)
+	candidateContent, getErr := manager.Get(ctx, candidate.LogicalPath)
 	if getErr != nil {
 		return resource.Resource{}, getErr
 	}
 
-	candidateValue, expandErr := r.expandExternalizedPayload(ctx, candidate.LogicalPath, md, candidateValue)
+	candidateContent, expandErr := r.expandExternalizedPayload(ctx, candidate.LogicalPath, md, candidateContent)
 	if expandErr != nil {
 		return resource.Resource{}, expandErr
 	}
 
-	candidatePayload, normalizeErr := resource.Normalize(candidateValue)
+	candidatePayload, normalizeErr := resource.Normalize(candidateContent.Value)
 	if normalizeErr != nil {
 		return resource.Resource{}, normalizeErr
 	}
@@ -141,11 +142,12 @@ func (r *DefaultOrchestrator) hydrateLocalFallbackCandidate(
 	}
 
 	return resource.Resource{
-		LogicalPath:    candidate.LogicalPath,
-		CollectionPath: collectionPathFor(candidate.LogicalPath),
-		LocalAlias:     candidateAlias,
-		RemoteID:       resolvedRemoteID,
-		Payload:        candidatePayload,
+		LogicalPath:       candidate.LogicalPath,
+		CollectionPath:    collectionPathFor(candidate.LogicalPath),
+		LocalAlias:        candidateAlias,
+		RemoteID:          resolvedRemoteID,
+		Payload:           candidatePayload,
+		PayloadDescriptor: candidateContent.Descriptor,
 	}, nil
 }
 

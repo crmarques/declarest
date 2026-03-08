@@ -55,9 +55,8 @@ Per-context fields:
 
 Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
-2. `repository.resourceFormat` allowed values: `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, or `octet-stream`.
-3. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
-4. `repository.git.remote.autoSync` defaults to `true` when omitted.
+2. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
+3. `repository.git.remote.autoSync` defaults to `true` when omitted.
 
 Resource server auth one-of contract:
 1. Exactly one of `oauth2`, `basicAuth`, or `customHeaders` MUST be set under `managedServer.http.auth`.
@@ -88,28 +87,24 @@ Context manager operations:
 4. `Validate`.
 
 Runtime override keys:
-1. `repository.resourceFormat`.
-2. `repository.git.local.baseDir`.
-3. `repository.filesystem.baseDir`.
-4. `managedServer.http.baseUrl`.
-5. `managedServer.http.healthCheck`.
-6. `managedServer.http.proxy.httpUrl`.
-7. `managedServer.http.proxy.httpsUrl`.
-8. `managedServer.http.proxy.noProxy`.
-9. `managedServer.http.proxy.auth.username`.
-10. `managedServer.http.proxy.auth.password`.
-11. `metadata.baseDir`.
-12. `metadata.bundle`.
-13. `metadata.bundleFile`.
+1. `repository.git.local.baseDir`.
+2. `repository.filesystem.baseDir`.
+3. `managedServer.http.baseUrl`.
+4. `managedServer.http.healthCheck`.
+5. `managedServer.http.proxy.httpUrl`.
+6. `managedServer.http.proxy.httpsUrl`.
+7. `managedServer.http.proxy.noProxy`.
+8. `managedServer.http.proxy.auth.username`.
+9. `managedServer.http.proxy.auth.password`.
+10. `metadata.baseDir`.
+11. `metadata.bundle`.
+12. `metadata.bundleFile`.
 
 ## Canonical YAML Template
 ```yaml
 contexts:
   - name: xxx
     repository:
-      # Optional default payload type: json, yaml, xml, hcl, ini, properties, text, or octet-stream.
-      # When omitted, declarest uses runtime inference before engine defaults.
-      # resourceFormat: json
       # Choose exactly one repository type: filesystem or git.
       git:
         local:
@@ -236,7 +231,6 @@ contexts:
 
   - name: yyy
     repository:
-      resourceFormat: yaml
       filesystem:
         baseDir: /other/repo
 

@@ -156,17 +156,17 @@ func resolveCopySourceValue(
 	ctx context.Context,
 	deps cliutil.CommandDependencies,
 	originPath string,
-) (resourcedomain.Value, error) {
+) (resourcedomain.Content, error) {
 	normalizedPath, err := resourcedomain.NormalizeLogicalPath(originPath)
 	if err != nil {
-		return nil, err
+		return resourcedomain.Content{}, err
 	}
 
 	orchestratorService := deps.Orchestrator
 	if orchestratorService == nil {
 		repositoryService, err := cliutil.RequireResourceStore(deps)
 		if err != nil {
-			return nil, err
+			return resourcedomain.Content{}, err
 		}
 		return repositoryService.Get(ctx, normalizedPath)
 	}
@@ -176,26 +176,33 @@ func resolveCopySourceValue(
 		return value, nil
 	}
 	if !faults.IsCategory(err, faults.NotFoundError) {
-		return nil, err
+		return resourcedomain.Content{}, err
 	}
 	return orchestratorService.GetRemote(ctx, normalizedPath)
 }
 
-func applyCopyOverrideAttributes(value resourcedomain.Value, overrideAttributes string) (resourcedomain.Value, error) {
+func applyCopyOverrideAttributes(value resourcedomain.Content, overrideAttributes string) (resourcedomain.Content, error) {
 	if strings.TrimSpace(overrideAttributes) == "" {
 		return value, nil
 	}
 
-	normalized, err := resourcedomain.Normalize(value)
+	normalized, err := resourcedomain.Normalize(value.Value)
 	if err != nil {
-		return nil, err
+		return resourcedomain.Content{}, err
 	}
 	payloadMap, ok := normalized.(map[string]any)
 	if !ok {
-		return nil, cliutil.ValidationError("--override-attributes requires an object payload", nil)
+		return resourcedomain.Content{}, cliutil.ValidationError("--override-attributes requires an object payload", nil)
 	}
 	if err := cliutil.ApplyPointerAssignmentsObject(payloadMap, overrideAttributes); err != nil {
-		return nil, err
+		return resourcedomain.Content{}, err
 	}
-	return resourcedomain.Normalize(payloadMap)
+	normalizedValue, err := resourcedomain.Normalize(payloadMap)
+	if err != nil {
+		return resourcedomain.Content{}, err
+	}
+	return resourcedomain.Content{
+		Value:      normalizedValue,
+		Descriptor: value.Descriptor,
+	}, nil
 }

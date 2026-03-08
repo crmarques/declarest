@@ -134,7 +134,47 @@ step_start_components() {
 }
 
 step_configure_access() {
-  e2e_components_run_hook_all 'configure-auth' 'true' || return 1
+  local deferred_webhook_provider=''
+  local deferred_webhook_url=''
+  local deferred_webhook_secret=''
+
+  if e2e_operator_should_defer_repository_webhook_registration; then
+    deferred_webhook_provider=${E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER:-}
+    deferred_webhook_url=${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL:-}
+    deferred_webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
+    unset E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
+    unset E2E_OPERATOR_REPOSITORY_WEBHOOK_URL
+    unset E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET
+  fi
+
+  if ! e2e_components_run_hook_all 'configure-auth' 'true'; then
+    if [[ -n "${deferred_webhook_provider}" ]]; then
+      E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=${deferred_webhook_provider}
+      export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
+    fi
+    if [[ -n "${deferred_webhook_url}" ]]; then
+      E2E_OPERATOR_REPOSITORY_WEBHOOK_URL=${deferred_webhook_url}
+      export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL
+    fi
+    if [[ -n "${deferred_webhook_secret}" ]]; then
+      E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=${deferred_webhook_secret}
+      export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET
+    fi
+    return 1
+  fi
+
+  if [[ -n "${deferred_webhook_provider}" ]]; then
+    E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=${deferred_webhook_provider}
+    export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
+  fi
+  if [[ -n "${deferred_webhook_url}" ]]; then
+    E2E_OPERATOR_REPOSITORY_WEBHOOK_URL=${deferred_webhook_url}
+    export E2E_OPERATOR_REPOSITORY_WEBHOOK_URL
+  fi
+  if [[ -n "${deferred_webhook_secret}" ]]; then
+    E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET=${deferred_webhook_secret}
+    export E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET
+  fi
 
   mkdir -p "${E2E_CONTEXT_DIR}" || return 1
   e2e_prepare_component_openapi_specs || return 1
@@ -163,6 +203,7 @@ step_operator_install() {
   e2e_profile_init_repo_if_needed || return 1
   e2e_operator_seed_remote_repo_if_git || return 1
   e2e_operator_install_stack || return 1
+  e2e_operator_configure_repository_webhook_if_needed || return 1
 }
 
 e2e_manual_collect_component_access_info() {

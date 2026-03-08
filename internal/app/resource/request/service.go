@@ -18,7 +18,7 @@ type Dependencies struct {
 type Request struct {
 	Method         string
 	LogicalPath    string
-	Body           resource.Value
+	Body           resource.Content
 	Headers        map[string]string
 	Accept         string
 	ContentType    string
@@ -27,7 +27,7 @@ type Request struct {
 }
 
 type Result struct {
-	Values []resource.Value
+	Values []resource.Content
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
@@ -50,7 +50,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		if err != nil {
 			return Result{}, err
 		}
-		return Result{Values: []resource.Value{value}}, nil
+		return Result{Values: []resource.Content{value}}, nil
 	}
 
 	targets, err := mutateapp.ListLocalTargetsOrFallbackPath(ctx, orchestratorService, req.LogicalPath, req.Recursive)
@@ -58,7 +58,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		return Result{}, err
 	}
 
-	results := make([]resource.Value, 0, len(targets))
+	results := make([]resource.Content, 0, len(targets))
 	for _, target := range targets {
 		spec := baseSpec
 		spec.Path = target.LogicalPath

@@ -3,7 +3,7 @@
     "idFromAttribute": "/id",
     "aliasFromAttribute": "/slug"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
       "httpMethod": "PUT",
       "path": "/api/projects/{{.project}}/widgets/{{.id}}"

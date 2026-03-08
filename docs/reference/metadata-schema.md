@@ -17,7 +17,7 @@ Common fields:
 
 Use when path/identity on the API differs from your logical path model.
 
-### `operationInfo`
+### `operationsInfo`
 
 Controls operation-specific request behavior.
 
@@ -37,23 +37,29 @@ Common operation fields:
 - `query`
 - `httpHeaders`
 - `body`
-- `payload.filterAttributes`
-- `payload.suppressAttributes`
-- `payload.jqExpression`
+- `payloadMutation`
 - `validate.requiredAttributes`
 - `validate.assertions`
 - `validate.schemaRef`
 
-### `operationInfo.defaults`
+Each `payloadMutation` entry must contain exactly one of:
+
+- `selectAttributes`
+- `suppressAttributes`
+- `jqExpression`
+
+DeclaREST applies `operationsInfo.defaults.payloadMutation` first and then the operation-specific pipeline.
+
+### `operationsInfo.defaults`
 
 Defines reusable defaults for transforms/compare behavior that operations can inherit.
 
 ## Quick field-to-impact map
 
 - Identity problems: check `resourceInfo.idFromAttribute` and `aliasFromAttribute`.
-- Wrong endpoint/method: check `operationInfo.<op>.path` and `httpMethod`.
-- Wrong payload shape: check `payload.*` transform fields.
-- Noisy drift: check `compareResources.*` suppression/filter settings.
+- Wrong endpoint/method: check `operationsInfo.<op>.path` and `httpMethod`.
+- Wrong payload shape: check the ordered `payloadMutation` pipeline.
+- Noisy drift: check `compareResources.payloadMutation`.
 - Secret handling gaps: check `resourceInfo.secretInAttributes`.
 
 ## Related docs

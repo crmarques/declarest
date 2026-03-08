@@ -22,7 +22,6 @@ source "${provider_state}"
 : "${GIT_REMOTE_URL:?git provider state missing GIT_REMOTE_URL}"
 
 e2e_write_state_value "${state_file}" REPO_BASE_DIR "${repo_dir}"
-e2e_write_state_value "${state_file}" REPO_RESOURCE_FORMAT "json"
 e2e_write_state_value "${state_file}" GIT_REMOTE_URL "${GIT_REMOTE_URL}"
 e2e_write_state_value "${state_file}" GIT_REMOTE_BRANCH "${GIT_REMOTE_BRANCH:-main}"
 e2e_write_state_value "${state_file}" GIT_REMOTE_PROVIDER "${E2E_GIT_PROVIDER}"

@@ -93,7 +93,7 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 		collectionTemplate = collectionPathForLogicalPath(logicalPath)
 	}
 	mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(collectionTemplate, logicalPath))
-	mergeTemplateFields(derived, deriveTemplateFieldsFromJQExpression(md.JQ, logicalPath))
+	mergeTemplateFields(derived, deriveTemplateFieldsFromPayloadMutation(md.PayloadMutation, logicalPath))
 
 	operationNames := make([]string, 0, len(md.Operations))
 	for operationName := range md.Operations {
@@ -103,7 +103,7 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 
 	for _, operationName := range operationNames {
 		spec := md.Operations[operationName]
-		mergeTemplateFields(derived, deriveTemplateFieldsFromJQExpression(spec.JQ, logicalPath))
+		mergeTemplateFields(derived, deriveTemplateFieldsFromPayloadMutation(spec.PayloadMutation, logicalPath))
 
 		templatePath := strings.TrimSpace(spec.Path)
 		if templatePath == "" {
@@ -115,6 +115,24 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 		mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(templatePath, logicalPath))
 	}
 
+	return derived
+}
+
+func deriveTemplateFieldsFromPayloadMutation(
+	steps []metadata.PayloadMutationStep,
+	logicalPath string,
+) map[string]string {
+	if len(steps) == 0 {
+		return nil
+	}
+
+	derived := map[string]string{}
+	for _, step := range steps {
+		mergeTemplateFields(derived, deriveTemplateFieldsFromJQExpression(step.JQExpression, logicalPath))
+	}
+	if len(derived) == 0 {
+		return nil
+	}
 	return derived
 }
 

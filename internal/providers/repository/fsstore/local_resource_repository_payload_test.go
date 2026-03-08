@@ -1,78 +1,83 @@
 package fsstore
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
-	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
-func TestLocalResourceRepositoryMetadataPayloadTypeSupportsJSONAndPrefersYAML(t *testing.T) {
+func TestLocalResourceRepositorySavePreservesKnownPayloadExtension(t *testing.T) {
 	t.Parallel()
 
-	metadataDir := filepath.Join(t.TempDir(), "metadata")
-	repo := NewLocalResourceRepository(t.TempDir(), resource.PayloadTypeJSON, metadataDir)
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
 
-	writeMetadataPayloadTypeFixture(
-		t,
-		filepath.Join(metadataDir, "customers", "acme", "metadata.json"),
-		false,
-		resource.PayloadTypeJSON,
-	)
-
-	payloadType, found, err := repo.metadataPayloadType("/customers/acme")
+	err := repo.Save(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{"name": "ACME"},
+		Descriptor: resource.PayloadDescriptor{
+			Extension: ".yml",
+		},
+	})
 	if err != nil {
-		t.Fatalf("metadataPayloadType returned error for json metadata: %v", err)
-	}
-	if !found || payloadType != resource.PayloadTypeJSON {
-		t.Fatalf("expected json payload type from json metadata, got found=%v payloadType=%q", found, payloadType)
+		t.Fatalf("Save returned error: %v", err)
 	}
 
-	writeMetadataPayloadTypeFixture(
-		t,
-		filepath.Join(metadataDir, "customers", "acme", "metadata.yaml"),
-		true,
-		resource.PayloadTypeYAML,
-	)
+	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "resource.yml")); err != nil {
+		t.Fatalf("expected resource.yml to be written: %v", err)
+	}
 
-	payloadType, found, err = repo.metadataPayloadType("/customers/acme")
+	content, err := repo.Get(context.Background(), "/customers/acme")
 	if err != nil {
-		t.Fatalf("metadataPayloadType returned error for yaml metadata: %v", err)
+		t.Fatalf("Get returned error: %v", err)
 	}
-	if !found || payloadType != resource.PayloadTypeYAML {
-		t.Fatalf("expected yaml payload type to take precedence, got found=%v payloadType=%q", found, payloadType)
+	if content.Descriptor.PayloadType != resource.PayloadTypeYAML {
+		t.Fatalf("expected yaml payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if content.Descriptor.MediaType != "application/yaml" {
+		t.Fatalf("expected application/yaml media type, got %q", content.Descriptor.MediaType)
+	}
+	if content.Descriptor.Extension != ".yml" {
+		t.Fatalf("expected .yml extension, got %q", content.Descriptor.Extension)
 	}
 }
 
-func writeMetadataPayloadTypeFixture(
-	t *testing.T,
-	filePath string,
-	useYAML bool,
-	payloadType string,
-) {
-	t.Helper()
+func TestLocalResourceRepositorySavePreservesUnknownPayloadExtensionAsOctetStream(t *testing.T) {
+	t.Parallel()
 
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		t.Fatalf("failed to create metadata directory %q: %v", filepath.Dir(filePath), err)
-	}
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
 
-	metadata := metadatadomain.ResourceMetadata{PayloadType: payloadType}
-	var (
-		encoded []byte
-		err     error
-	)
-	if useYAML {
-		encoded, err = metadatadomain.EncodeResourceMetadataYAML(metadata)
-	} else {
-		encoded, err = metadatadomain.EncodeResourceMetadataJSON(metadata, true)
-	}
+	err := repo.Save(context.Background(), "/customers/acme", resource.Content{
+		Value: resource.BinaryValue{Bytes: []byte("abc")},
+		Descriptor: resource.PayloadDescriptor{
+			Extension: ".cfg",
+		},
+	})
 	if err != nil {
-		t.Fatalf("failed to encode metadata fixture %q: %v", filePath, err)
+		t.Fatalf("Save returned error: %v", err)
 	}
 
-	if err := os.WriteFile(filePath, encoded, 0o644); err != nil {
-		t.Fatalf("failed to write metadata fixture %q: %v", filePath, err)
+	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "resource.cfg")); err != nil {
+		t.Fatalf("expected resource.cfg to be written: %v", err)
+	}
+
+	content, err := repo.Get(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeOctetStream {
+		t.Fatalf("expected octet-stream payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if content.Descriptor.MediaType != "application/octet-stream" {
+		t.Fatalf("expected octet-stream media type, got %q", content.Descriptor.MediaType)
+	}
+	if content.Descriptor.Extension != ".cfg" {
+		t.Fatalf("expected .cfg extension, got %q", content.Descriptor.Extension)
+	}
+	if _, ok := content.Value.(resource.BinaryValue); !ok {
+		t.Fatalf("expected binary value, got %T", content.Value)
 	}
 }

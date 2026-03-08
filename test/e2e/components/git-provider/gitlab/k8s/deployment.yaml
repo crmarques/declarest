@@ -39,6 +39,7 @@ spec:
                 gitlab_pages['enable'] = false
                 mattermost['enable'] = false
                 letsencrypt['enable'] = false
+                gitlab_rails['allow_local_requests_from_web_hooks_and_services'] = true
             - name: GITLAB_ROOT_PASSWORD
               value: "${GITLAB_ROOT_PASSWORD}"
           ports:

@@ -145,7 +145,9 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
-		Suppress: []string{"/root"},
+		PayloadMutation: []metadatadomain.PayloadMutationStep{
+			{SuppressAttributes: []string{"/root"}},
+		},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Headers: map[string]string{
@@ -157,7 +159,9 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	})
 
 	mustSetMetadata(t, service, ctx, "/customers/*", metadatadomain.ResourceMetadata{
-		Suppress: []string{"/wild-1"},
+		PayloadMutation: []metadatadomain.PayloadMutationStep{
+			{SuppressAttributes: []string{"/wild-1"}},
+		},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Headers: map[string]string{
@@ -180,7 +184,7 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	})
 
 	mustSetMetadata(t, service, ctx, "/customers/acme/_", metadatadomain.ResourceMetadata{
-		Suppress: []string{},
+		PayloadMutation: []metadatadomain.PayloadMutationStep{},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Headers: map[string]string{
@@ -207,8 +211,8 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
 
-	if len(resolved.Suppress) != 0 {
-		t.Fatalf("expected literal array replacement to clear suppress list, got %+v", resolved.Suppress)
+	if len(resolved.PayloadMutation) != 0 {
+		t.Fatalf("expected literal array replacement to clear payloadMutation list, got %+v", resolved.PayloadMutation)
 	}
 
 	headers := resolved.Operations[string(metadatadomain.OperationGet)].Headers
@@ -441,10 +445,11 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
 		IDFromAttribute:    "/id",
 		AliasFromAttribute: "/id",
+		PayloadType:        "yaml",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path:   "/api/customers/{{.id}}",
-				Accept: "application/{{resource_format .}}",
+				Accept: "{{payload_media_type .}}",
 			},
 		},
 	})
@@ -519,8 +524,8 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	if _, found := resourceInfo["secretInAttributes"]; !found {
 		t.Fatalf("expected secretInAttributes under resourceInfo, got %#v", resourceInfo)
 	}
-	if _, found := decoded["operationInfo"]; found {
-		t.Fatalf("expected operationInfo key to be omitted when nil, got %v", decoded["operationInfo"])
+	if _, found := decoded["operationsInfo"]; found {
+		t.Fatalf("expected operationsInfo key to be omitted when nil, got %v", decoded["operationsInfo"])
 	}
 }
 
@@ -534,15 +539,19 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	metadata := metadatadomain.ResourceMetadata{
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path:     "/api/customers/{{.id}}",
-				Query:    map[string]string{},
-				Headers:  map[string]string{},
-				Filter:   []string{},
-				Suppress: []string{},
+				Path:    "/api/customers/{{.id}}",
+				Query:   map[string]string{},
+				Headers: map[string]string{},
+				PayloadMutation: []metadatadomain.PayloadMutationStep{
+					{SelectAttributes: []string{}},
+					{SuppressAttributes: []string{}},
+				},
 			},
 		},
-		Filter:   []string{},
-		Suppress: []string{},
+		PayloadMutation: []metadatadomain.PayloadMutationStep{
+			{SelectAttributes: []string{}},
+			{SuppressAttributes: []string{}},
+		},
 	}
 
 	if err := service.Set(ctx, "/customers/acme", metadata); err != nil {
@@ -560,32 +569,43 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
-	operationInfo, hasOperationInfo := decoded["operationInfo"].(map[string]any)
-	if !hasOperationInfo {
-		t.Fatalf("expected operationInfo object, got %#v", decoded["operationInfo"])
+	operationsInfo, hasOperationsInfo := decoded["operationsInfo"].(map[string]any)
+	if !hasOperationsInfo {
+		t.Fatalf("expected operationsInfo object, got %#v", decoded["operationsInfo"])
 	}
 
-	defaults, hasDefaults := operationInfo["defaults"].(map[string]any)
+	defaults, hasDefaults := operationsInfo["defaults"].(map[string]any)
 	if !hasDefaults {
-		t.Fatalf("expected operationInfo defaults object, got %#v", operationInfo["defaults"])
+		t.Fatalf("expected operationsInfo defaults object, got %#v", operationsInfo["defaults"])
 	}
-	defaultPayload, hasDefaultPayload := defaults["payload"].(map[string]any)
+	defaultPayload, hasDefaultPayload := defaults["payloadMutation"].([]any)
 	if !hasDefaultPayload {
-		t.Fatalf("expected operationInfo.defaults.payload object, got %#v", defaults["payload"])
+		t.Fatalf("expected operationsInfo.defaults.payloadMutation array, got %#v", defaults["payloadMutation"])
 	}
 
-	filter, hasFilter := defaultPayload["filterAttributes"].([]any)
+	if len(defaultPayload) != 2 {
+		t.Fatalf("expected two default payloadMutation steps, got %#v", defaultPayload)
+	}
+	filterStep, ok := defaultPayload[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first payloadMutation step object, got %#v", defaultPayload[0])
+	}
+	filter, hasFilter := filterStep["selectAttributes"].([]any)
 	if !hasFilter || len(filter) != 0 {
-		t.Fatalf("expected explicit empty filter array, got %#v", defaultPayload["filterAttributes"])
+		t.Fatalf("expected explicit empty select array, got %#v", filterStep["selectAttributes"])
 	}
-	suppress, hasSuppress := defaultPayload["suppressAttributes"].([]any)
+	suppressStep, ok := defaultPayload[1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected second payloadMutation step object, got %#v", defaultPayload[1])
+	}
+	suppress, hasSuppress := suppressStep["suppressAttributes"].([]any)
 	if !hasSuppress || len(suppress) != 0 {
-		t.Fatalf("expected explicit empty suppress array, got %#v", defaultPayload["suppressAttributes"])
+		t.Fatalf("expected explicit empty suppress array, got %#v", suppressStep["suppressAttributes"])
 	}
 
-	getSpec, hasGet := operationInfo["getResource"].(map[string]any)
+	getSpec, hasGet := operationsInfo["getResource"].(map[string]any)
 	if !hasGet {
-		t.Fatalf("expected get operation metadata, got %#v", operationInfo["getResource"])
+		t.Fatalf("expected get operation metadata, got %#v", operationsInfo["getResource"])
 	}
 
 	query, hasQuery := getSpec["query"].(map[string]any)
@@ -596,17 +616,28 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	if !hasHeaders || len(headers) != 0 {
 		t.Fatalf("expected explicit empty httpHeaders array, got %#v", getSpec["httpHeaders"])
 	}
-	payload, hasPayload := getSpec["payload"].(map[string]any)
+	payload, hasPayload := getSpec["payloadMutation"].([]any)
 	if !hasPayload {
-		t.Fatalf("expected get operation payload object, got %#v", getSpec["payload"])
+		t.Fatalf("expected get operation payloadMutation array, got %#v", getSpec["payloadMutation"])
 	}
-	specFilter, hasSpecFilter := payload["filterAttributes"].([]any)
+	if len(payload) != 2 {
+		t.Fatalf("expected two operation payloadMutation steps, got %#v", payload)
+	}
+	specFilterStep, ok := payload[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first operation payloadMutation step object, got %#v", payload[0])
+	}
+	specFilter, hasSpecFilter := specFilterStep["selectAttributes"].([]any)
 	if !hasSpecFilter || len(specFilter) != 0 {
-		t.Fatalf("expected explicit empty operation filter array, got %#v", payload["filterAttributes"])
+		t.Fatalf("expected explicit empty operation select array, got %#v", specFilterStep["selectAttributes"])
 	}
-	specSuppress, hasSpecSuppress := payload["suppressAttributes"].([]any)
+	specSuppressStep, ok := payload[1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected second operation payloadMutation step object, got %#v", payload[1])
+	}
+	specSuppress, hasSpecSuppress := specSuppressStep["suppressAttributes"].([]any)
 	if !hasSpecSuppress || len(specSuppress) != 0 {
-		t.Fatalf("expected explicit empty operation suppress array, got %#v", payload["suppressAttributes"])
+		t.Fatalf("expected explicit empty operation suppress array, got %#v", specSuppressStep["suppressAttributes"])
 	}
 }
 
@@ -656,7 +687,7 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
   "resourceInfo": {
     "collectionPath": "/admin/realms/{{.realm}}/components"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "getResource": {
       "url": {
         "path": "./{{.id}}"
@@ -670,7 +701,7 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	}
 
 	if _, err := service.Get(ctx, "/admin/realms/_/user-registry"); err == nil {
-		t.Fatal("expected Get to reject operationInfo.getResource.url.path")
+		t.Fatal("expected Get to reject operationsInfo.getResource.url.path")
 	}
 }
 

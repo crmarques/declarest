@@ -9,8 +9,8 @@ import (
 )
 
 type resourceMetadataWire struct {
-	ResourceInfo  *resourceInfoWire  `json:"resourceInfo,omitempty" yaml:"resourceInfo,omitempty"`
-	OperationInfo *operationInfoWire `json:"operationInfo,omitempty" yaml:"operationInfo,omitempty"`
+	ResourceInfo   *resourceInfoWire   `json:"resourceInfo,omitempty" yaml:"resourceInfo,omitempty"`
+	OperationsInfo *operationsInfoWire `json:"operationsInfo,omitempty" yaml:"operationsInfo,omitempty"`
 }
 
 type resourceInfoWire struct {
@@ -32,7 +32,7 @@ type externalizedAttributeWire struct {
 	Enabled        *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
-type operationInfoWire struct {
+type operationsInfoWire struct {
 	Defaults         *operationDefaultsWire `json:"defaults,omitempty" yaml:"defaults,omitempty"`
 	GetResource      *resourceOperationWire `json:"getResource,omitempty" yaml:"getResource,omitempty"`
 	CreateResource   *resourceOperationWire `json:"createResource,omitempty" yaml:"createResource,omitempty"`
@@ -43,15 +43,13 @@ type operationInfoWire struct {
 }
 
 type operationDefaultsWire struct {
-	Payload *payloadTransformWire `json:"payload,omitempty" yaml:"payload,omitempty"`
+	PayloadMutation *[]payloadMutationStepWire `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
 }
 
-type payloadTransformWire struct {
-	FilterAttributes   *stringListWire `json:"filterAttributes,omitempty" yaml:"filterAttributes,omitempty"`
+type payloadMutationStepWire struct {
+	SelectAttributes   *stringListWire `json:"selectAttributes,omitempty" yaml:"selectAttributes,omitempty"`
 	SuppressAttributes *stringListWire `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
 	JQExpression       *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
-
-	Order []string `json:"-" yaml:"-"`
 }
 
 type validationAssertionWire struct {
@@ -71,17 +69,13 @@ type httpHeaderWire struct {
 }
 
 type resourceOperationWire struct {
-	HTTPMethod  string                   `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
-	Path        string                   `json:"path,omitempty" yaml:"path,omitempty"`
-	Query       *map[string]string       `json:"query,omitempty" yaml:"query,omitempty"`
-	HTTPHeaders *[]httpHeaderWire        `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
-	Body        any                      `json:"body,omitempty" yaml:"body,omitempty"`
-	Payload     *payloadTransformWire    `json:"payload,omitempty" yaml:"payload,omitempty"`
-	Validate    *operationValidationWire `json:"validate,omitempty" yaml:"validate,omitempty"`
-
-	FilterAttributes   *stringListWire `json:"filterAttributes,omitempty" yaml:"filterAttributes,omitempty"`
-	SuppressAttributes *stringListWire `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
-	JQExpression       *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
+	HTTPMethod      string                     `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
+	Path            string                     `json:"path,omitempty" yaml:"path,omitempty"`
+	Query           *map[string]string         `json:"query,omitempty" yaml:"query,omitempty"`
+	HTTPHeaders     *[]httpHeaderWire          `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
+	Body            any                        `json:"body,omitempty" yaml:"body,omitempty"`
+	PayloadMutation *[]payloadMutationStepWire `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
+	Validate        *operationValidationWire   `json:"validate,omitempty" yaml:"validate,omitempty"`
 }
 
 func (m ResourceMetadata) MarshalJSON() ([]byte, error) {
@@ -99,30 +93,6 @@ func (m *ResourceMetadata) UnmarshalJSON(data []byte) error {
 
 func (m ResourceMetadata) MarshalYAML() (any, error) {
 	return resourceMetadataToWire(m), nil
-}
-
-func (p *payloadTransformWire) UnmarshalJSON(data []byte) error {
-	type alias payloadTransformWire
-	decoded := alias{}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&decoded); err != nil {
-		return err
-	}
-	decoded.Order = payloadTransformOrderFromJSON(data)
-	*p = payloadTransformWire(decoded)
-	return nil
-}
-
-func (p *payloadTransformWire) UnmarshalYAML(value *yaml.Node) error {
-	type alias payloadTransformWire
-	decoded := alias{}
-	if err := value.Decode(&decoded); err != nil {
-		return err
-	}
-	decoded.Order = payloadTransformOrderFromYAMLNode(value)
-	*p = payloadTransformWire(decoded)
-	return nil
 }
 
 func (m *ResourceMetadata) UnmarshalYAML(value *yaml.Node) error {
@@ -198,35 +168,35 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		wire.ResourceInfo = &resourceInfo
 	}
 
-	operationInfo := operationInfoWire{}
-	if metadata.Filter != nil || metadata.Suppress != nil || strings.TrimSpace(metadata.JQ) != "" {
-		operationInfo.Defaults = &operationDefaultsWire{
-			Payload: payloadTransformToWire(metadata.Filter, metadata.Suppress, metadata.JQ),
+	operationsInfo := operationsInfoWire{}
+	if metadata.PayloadMutation != nil {
+		operationsInfo.Defaults = &operationDefaultsWire{
+			PayloadMutation: payloadMutationStepsWirePointer(metadata.PayloadMutation),
 		}
 	}
 	if metadata.Operations != nil {
 		if spec, exists := metadata.Operations[string(OperationGet)]; exists {
-			operationInfo.GetResource = operationSpecToWire(OperationGet, spec)
+			operationsInfo.GetResource = operationSpecToWire(OperationGet, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationCreate)]; exists {
-			operationInfo.CreateResource = operationSpecToWire(OperationCreate, spec)
+			operationsInfo.CreateResource = operationSpecToWire(OperationCreate, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationUpdate)]; exists {
-			operationInfo.UpdateResource = operationSpecToWire(OperationUpdate, spec)
+			operationsInfo.UpdateResource = operationSpecToWire(OperationUpdate, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationDelete)]; exists {
-			operationInfo.DeleteResource = operationSpecToWire(OperationDelete, spec)
+			operationsInfo.DeleteResource = operationSpecToWire(OperationDelete, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationList)]; exists {
-			operationInfo.ListCollection = operationSpecToWire(OperationList, spec)
+			operationsInfo.ListCollection = operationSpecToWire(OperationList, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationCompare)]; exists {
-			operationInfo.CompareResources = operationSpecToWire(OperationCompare, spec)
+			operationsInfo.CompareResources = operationSpecToWire(OperationCompare, spec)
 		}
 	}
 
-	if metadata.Operations != nil || hasOperationInfo(operationInfo) {
-		wire.OperationInfo = &operationInfo
+	if metadata.Operations != nil || hasOperationsInfo(operationsInfo) {
+		wire.OperationsInfo = &operationsInfo
 	}
 
 	return wire
@@ -257,8 +227,8 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		}
 	}
 
-	if wire.OperationInfo != nil {
-		if operationMap := operationInfoToMap(wire.OperationInfo); operationMap != nil {
+	if wire.OperationsInfo != nil {
+		if operationMap := operationsInfoToMap(wire.OperationsInfo); operationMap != nil {
 			if metadata.Operations == nil {
 				metadata.Operations = map[string]OperationSpec{}
 			}
@@ -266,24 +236,15 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 				metadata.Operations[key] = spec
 			}
 		}
-		if wire.OperationInfo.Defaults != nil {
-			defaults := wire.OperationInfo.Defaults
-			if defaults.Payload != nil {
-				metadata.PayloadTransformOrder = cloneStringSlice(defaults.Payload.Order)
-				if defaults.Payload.FilterAttributes != nil {
-					metadata.Filter = cloneStringListWire(defaults.Payload.FilterAttributes)
-				}
-				if defaults.Payload.SuppressAttributes != nil {
-					metadata.Suppress = cloneStringListWire(defaults.Payload.SuppressAttributes)
-				}
-				if defaults.Payload.JQExpression != nil {
-					metadata.JQ = *defaults.Payload.JQExpression
-				}
+		if wire.OperationsInfo.Defaults != nil {
+			defaults := wire.OperationsInfo.Defaults
+			if defaults.PayloadMutation != nil {
+				metadata.PayloadMutation = payloadMutationStepsFromWire(*defaults.PayloadMutation)
 			}
 		}
 		if metadata.Operations == nil &&
-			wire.OperationInfo.Defaults == nil &&
-			operationInfoIsExplicitEmpty(wire.OperationInfo) {
+			wire.OperationsInfo.Defaults == nil &&
+			operationsInfoIsExplicitEmpty(wire.OperationsInfo) {
 			metadata.Operations = map[string]OperationSpec{}
 		}
 	}
@@ -300,7 +261,7 @@ func hasResourceInfo(resourceInfo resourceInfoWire) bool {
 		resourceInfo.ExternalizedAttributes != nil
 }
 
-func hasOperationInfo(info operationInfoWire) bool {
+func hasOperationsInfo(info operationsInfoWire) bool {
 	return info.Defaults != nil ||
 		info.GetResource != nil ||
 		info.CreateResource != nil ||
@@ -310,7 +271,7 @@ func hasOperationInfo(info operationInfoWire) bool {
 		info.CompareResources != nil
 }
 
-func operationInfoIsExplicitEmpty(info *operationInfoWire) bool {
+func operationsInfoIsExplicitEmpty(info *operationsInfoWire) bool {
 	if info == nil {
 		return false
 	}
@@ -323,7 +284,7 @@ func operationInfoIsExplicitEmpty(info *operationInfoWire) bool {
 		info.CompareResources == nil
 }
 
-func operationInfoToMap(info *operationInfoWire) map[string]OperationSpec {
+func operationsInfoToMap(info *operationsInfoWire) map[string]OperationSpec {
 	if info == nil {
 		return nil
 	}
@@ -350,11 +311,12 @@ func operationInfoToMap(info *operationInfoWire) map[string]OperationSpec {
 	return result
 }
 
-func operationSpecToWire(operation Operation, spec OperationSpec) *resourceOperationWire {
+func operationSpecToWire(_ Operation, spec OperationSpec) *resourceOperationWire {
 	wire := &resourceOperationWire{
 		HTTPMethod: spec.Method,
 		Path:       spec.Path,
 		Body:       spec.Body,
+		Validate:   operationValidationToWire(spec.Validate),
 	}
 
 	if spec.Query != nil {
@@ -363,23 +325,14 @@ func operationSpecToWire(operation Operation, spec OperationSpec) *resourceOpera
 	if headers := operationHeadersToWire(spec); headers != nil {
 		wire.HTTPHeaders = httpHeaderListPointer(headers)
 	}
-	if operation == OperationCompare {
-		if spec.Filter != nil || spec.Suppress != nil || strings.TrimSpace(spec.JQ) != "" {
-			wire.FilterAttributes = stringListWirePointer(spec.Filter)
-			wire.SuppressAttributes = stringListWirePointer(spec.Suppress)
-			wire.JQExpression = stringPointer(spec.JQ)
-		}
-	} else {
-		wire.Payload = payloadTransformToWire(spec.Filter, spec.Suppress, spec.JQ)
-	}
-	if spec.Validate != nil {
-		wire.Validate = operationValidationToWire(spec.Validate)
+	if spec.PayloadMutation != nil {
+		wire.PayloadMutation = payloadMutationStepsWirePointer(spec.PayloadMutation)
 	}
 
 	return wire
 }
 
-func operationSpecFromWire(operation Operation, spec resourceOperationWire) OperationSpec {
+func operationSpecFromWire(_ Operation, spec resourceOperationWire) OperationSpec {
 	decoded := OperationSpec{
 		Method: spec.HTTPMethod,
 		Path:   spec.Path,
@@ -394,58 +347,12 @@ func operationSpecFromWire(operation Operation, spec resourceOperationWire) Oper
 		decoded.Headers = httpHeaderListToMap(*spec.HTTPHeaders)
 	}
 	promoteMediaHeadersFromOperationHeaders(&decoded, preserveExplicitEmptyHeaders)
-	applyOperationTransformsFromWire(&decoded, operation == OperationCompare, spec)
+	if spec.PayloadMutation != nil {
+		decoded.PayloadMutation = payloadMutationStepsFromWire(*spec.PayloadMutation)
+	}
 	decoded.Validate = operationValidationFromWire(spec.Validate)
 
 	return decoded
-}
-
-func applyOperationTransformsFromWire(target *OperationSpec, compare bool, spec resourceOperationWire) {
-	if target == nil {
-		return
-	}
-
-	if compare {
-		if spec.FilterAttributes != nil {
-			target.Filter = cloneStringListWire(spec.FilterAttributes)
-		}
-
-		if spec.SuppressAttributes != nil {
-			target.Suppress = cloneStringListWire(spec.SuppressAttributes)
-		}
-
-		if spec.JQExpression != nil {
-			target.JQ = *spec.JQExpression
-		}
-
-		return
-	}
-
-	if spec.Payload != nil {
-		target.PayloadTransformOrder = cloneStringSlice(spec.Payload.Order)
-		if spec.Payload.FilterAttributes != nil {
-			target.Filter = cloneStringListWire(spec.Payload.FilterAttributes)
-		}
-		if spec.Payload.SuppressAttributes != nil {
-			target.Suppress = cloneStringListWire(spec.Payload.SuppressAttributes)
-		}
-		if spec.Payload.JQExpression != nil {
-			target.JQ = *spec.Payload.JQExpression
-		}
-		return
-	}
-}
-
-func payloadTransformToWire(filter []string, suppress []string, jq string) *payloadTransformWire {
-	if filter == nil && suppress == nil && strings.TrimSpace(jq) == "" {
-		return nil
-	}
-
-	return &payloadTransformWire{
-		FilterAttributes:   stringListWireNullPointer(filter),
-		SuppressAttributes: stringListWirePointer(suppress),
-		JQExpression:       stringPointer(jq),
-	}
 }
 
 func operationValidationToWire(value *OperationValidationSpec) *operationValidationWire {
@@ -505,69 +412,40 @@ func validationAssertionFromWire(assertion validationAssertionWire) ValidationAs
 	return ValidationAssertion(assertion)
 }
 
-func payloadTransformOrderFromJSON(data []byte) []string {
-	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 || trimmed[0] != '{' {
+func payloadMutationStepsWirePointer(values []PayloadMutationStep) *[]payloadMutationStepWire {
+	if values == nil {
 		return nil
 	}
 
-	decoder := json.NewDecoder(bytes.NewReader(trimmed))
-	token, err := decoder.Token()
-	if err != nil {
-		return nil
+	items := make([]payloadMutationStepWire, len(values))
+	for idx, value := range values {
+		items[idx] = payloadMutationStepToWire(value)
 	}
-	delim, ok := token.(json.Delim)
-	if !ok || delim != '{' {
-		return nil
-	}
-
-	order := make([]string, 0, 3)
-	seen := map[string]struct{}{}
-	for decoder.More() {
-		keyToken, err := decoder.Token()
-		if err != nil {
-			return normalizePayloadTransformOrder(order)
-		}
-		key, _ := keyToken.(string)
-		var discard any
-		if err := decoder.Decode(&discard); err != nil {
-			return normalizePayloadTransformOrder(order)
-		}
-		if step, matched := payloadTransformStepForKey(key); matched {
-			if _, exists := seen[step]; !exists {
-				seen[step] = struct{}{}
-				order = append(order, step)
-			}
-		}
-	}
-
-	return normalizePayloadTransformOrder(order)
+	return &items
 }
 
-func payloadTransformOrderFromYAMLNode(node *yaml.Node) []string {
-	if node == nil {
-		return nil
+func payloadMutationStepsFromWire(values []payloadMutationStepWire) []PayloadMutationStep {
+	decoded := make([]PayloadMutationStep, len(values))
+	for idx, value := range values {
+		decoded[idx] = payloadMutationStepFromWire(value)
 	}
-	if node.Kind != yaml.MappingNode {
-		return nil
-	}
+	return decoded
+}
 
-	order := make([]string, 0, 3)
-	seen := map[string]struct{}{}
-	for idx := 0; idx+1 < len(node.Content); idx += 2 {
-		keyNode := node.Content[idx]
-		if keyNode == nil {
-			continue
-		}
-		if step, matched := payloadTransformStepForKey(strings.TrimSpace(keyNode.Value)); matched {
-			if _, exists := seen[step]; exists {
-				continue
-			}
-			seen[step] = struct{}{}
-			order = append(order, step)
-		}
+func payloadMutationStepToWire(value PayloadMutationStep) payloadMutationStepWire {
+	return payloadMutationStepWire{
+		SelectAttributes:   stringListWireNullPointer(value.SelectAttributes),
+		SuppressAttributes: stringListWireNullPointer(value.SuppressAttributes),
+		JQExpression:       stringPointer(value.JQExpression),
 	}
-	return normalizePayloadTransformOrder(order)
+}
+
+func payloadMutationStepFromWire(value payloadMutationStepWire) PayloadMutationStep {
+	return PayloadMutationStep{
+		SelectAttributes:   cloneStringListWire(value.SelectAttributes),
+		SuppressAttributes: cloneStringListWire(value.SuppressAttributes),
+		JQExpression:       stringValue(value.JQExpression),
+	}
 }
 
 func httpHeaderListPointer(values map[string]string) *[]httpHeaderWire {
@@ -651,6 +529,13 @@ func lookupHeaderCaseInsensitive(headers map[string]string, name string) (value 
 
 func stringPointer(value string) *string {
 	return &value
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func stringSlicePointer(values []string) *[]string {

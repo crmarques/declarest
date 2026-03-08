@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crmarques/declarest/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -50,11 +49,10 @@ type GitRepositoryWebhookSpec struct {
 }
 
 type ResourceRepositorySpec struct {
-	Type           ResourceRepositoryType `json:"type"`
-	PollInterval   metav1.Duration        `json:"pollInterval"`
-	ResourceFormat string                 `json:"resourceFormat,omitempty"`
-	Git            *GitRepositorySpec     `json:"git,omitempty"`
-	Storage        StorageSpec            `json:"storage"`
+	Type         ResourceRepositoryType `json:"type"`
+	PollInterval metav1.Duration        `json:"pollInterval"`
+	Git          *GitRepositorySpec     `json:"git,omitempty"`
+	Storage      StorageSpec            `json:"storage"`
 }
 
 type ResourceRepositoryStatus struct {
@@ -89,9 +87,6 @@ func (r *ResourceRepository) Default() {
 	if r.Spec.Git != nil && strings.TrimSpace(r.Spec.Git.Branch) == "" {
 		r.Spec.Git.Branch = "main"
 	}
-	if strings.TrimSpace(r.Spec.ResourceFormat) == "" {
-		r.Spec.ResourceFormat = "json"
-	}
 }
 
 func (r *ResourceRepository) ValidateSpec() error {
@@ -106,11 +101,6 @@ func (r *ResourceRepository) ValidateSpec() error {
 	}
 	if r.Spec.PollInterval.Duration < 30*time.Second {
 		return fmt.Errorf("spec.pollInterval must be at least 30s")
-	}
-	if strings.TrimSpace(r.Spec.ResourceFormat) != "" {
-		if _, err := resource.ValidatePayloadType(r.Spec.ResourceFormat); err != nil {
-			return fmt.Errorf("spec.resourceFormat must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream")
-		}
 	}
 	if r.Spec.Git == nil {
 		return fmt.Errorf("spec.git is required")

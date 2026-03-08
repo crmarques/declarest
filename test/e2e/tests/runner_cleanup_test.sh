@@ -17,7 +17,9 @@ write_runtime_state() {
   : >"${runtime_state}"
   local kv
   for kv in "$@"; do
-    printf '%s\n' "${kv}" >>"${runtime_state}"
+    local key=${kv%%=*}
+    local value=${kv#*=}
+    e2e_write_state_value "${runtime_state}" "${key}" "${value}"
   done
 }
 

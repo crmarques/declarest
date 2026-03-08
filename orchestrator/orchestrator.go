@@ -24,17 +24,17 @@ type ServiceAccessor interface {
 }
 
 type LocalReader interface {
-	GetLocal(ctx context.Context, logicalPath string) (resource.Value, error)
+	GetLocal(ctx context.Context, logicalPath string) (resource.Content, error)
 	ListLocal(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error)
 }
 
 type RemoteReader interface {
-	GetRemote(ctx context.Context, logicalPath string) (resource.Value, error)
+	GetRemote(ctx context.Context, logicalPath string) (resource.Content, error)
 	ListRemote(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error)
 }
 
 type OpenAPISpecReader interface {
-	GetOpenAPISpec(ctx context.Context) (resource.Value, error)
+	GetOpenAPISpec(ctx context.Context) (resource.Content, error)
 }
 
 type CompletionService interface {
@@ -44,18 +44,18 @@ type CompletionService interface {
 }
 
 type RequestExecutor interface {
-	Request(ctx context.Context, spec managedserver.RequestSpec) (resource.Value, error)
+	Request(ctx context.Context, spec managedserver.RequestSpec) (resource.Content, error)
 }
 
 type RepositoryWriter interface {
-	Save(ctx context.Context, logicalPath string, value resource.Value) error
+	Save(ctx context.Context, logicalPath string, content resource.Content) error
 }
 
 type ResourceMutator interface {
 	Apply(ctx context.Context, logicalPath string, policy ApplyPolicy) (resource.Resource, error)
-	ApplyWithValue(ctx context.Context, logicalPath string, value resource.Value, policy ApplyPolicy) (resource.Resource, error)
-	Create(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error)
-	Update(ctx context.Context, logicalPath string, value resource.Value) (resource.Resource, error)
+	ApplyWithContent(ctx context.Context, logicalPath string, content resource.Content, policy ApplyPolicy) (resource.Resource, error)
+	Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error)
+	Update(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error)
 	Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error
 }
 
@@ -65,7 +65,7 @@ type DiffReader interface {
 }
 
 type TemplateRenderer interface {
-	Template(ctx context.Context, logicalPath string, value resource.Value) (resource.Value, error)
+	Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error)
 }
 
 type Orchestrator interface {

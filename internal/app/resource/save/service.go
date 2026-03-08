@@ -34,7 +34,7 @@ func Execute(
 	ctx context.Context,
 	deps Dependencies,
 	resolvedPath string,
-	value resource.Value,
+	value resource.Content,
 	hasInput bool,
 	options ExecuteOptions,
 ) error {
@@ -146,7 +146,7 @@ func saveResolvedPathPayload(
 	orchestratorService orchestratordomain.Orchestrator,
 	repositoryService repository.ResourceStore,
 	resolvedPath string,
-	value resource.Value,
+	content resource.Content,
 	asItems bool,
 	asOneResource bool,
 	ignore bool,
@@ -155,7 +155,7 @@ func saveResolvedPathPayload(
 	force bool,
 	skipItems []string,
 ) error {
-	items, isListPayload, err := extractSaveListItems(value)
+	items, isListPayload, err := extractSaveListItems(content.Value)
 	if err != nil {
 		return err
 	}
@@ -164,6 +164,7 @@ func saveResolvedPathPayload(
 		if err := ensureSaveTargetAllowed(ctx, repositoryService, resolvedPath, force); err != nil {
 			return err
 		}
+		value := content.Value
 		if handleSecretsEnabled {
 			value, unhandled, err := handleSaveSecrets(
 				ctx,
@@ -184,7 +185,10 @@ func saveResolvedPathPayload(
 			if len(blockingCandidates) > 0 {
 				return saveSecretSafetyError(resolvedPath, blockingCandidates)
 			}
-			return orchestratorService.Save(ctx, resolvedPath, value)
+			return orchestratorService.Save(ctx, resolvedPath, resource.Content{
+				Value:      value,
+				Descriptor: content.Descriptor,
+			})
 		}
 		value, err = autoHandleDeclaredSaveSecrets(ctx, deps, resolvedPath, value)
 		if err != nil {
@@ -193,7 +197,10 @@ func saveResolvedPathPayload(
 		if err := enforceSaveSecretSafety(ctx, deps, resolvedPath, value, ignore); err != nil {
 			return err
 		}
-		return orchestratorService.Save(ctx, resolvedPath, value)
+		return orchestratorService.Save(ctx, resolvedPath, resource.Content{
+			Value:      value,
+			Descriptor: content.Descriptor,
+		})
 	}
 	if !isListPayload {
 		return faults.NewValidationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
@@ -202,6 +209,9 @@ func saveResolvedPathPayload(
 	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)
 	if err != nil {
 		return err
+	}
+	for idx := range entries {
+		entries[idx].Descriptor = content.Descriptor
 	}
 	entries = filterSaveEntriesForSkipItems(resolvedPath, entries, skipItems)
 	if len(entries) == 0 {
@@ -276,7 +286,10 @@ func saveResolvedPathPayload(
 		}
 	}
 	for _, entry := range entries {
-		if err := orchestratorService.Save(ctx, entry.LogicalPath, entry.Payload); err != nil {
+		if err := orchestratorService.Save(ctx, entry.LogicalPath, resource.Content{
+			Value:      entry.Payload,
+			Descriptor: entry.Descriptor,
+		}); err != nil {
 			return err
 		}
 	}

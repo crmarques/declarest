@@ -546,8 +546,8 @@ func decodeDetectInput(command *cobra.Command, flags cliutil.InputFlags) (resour
 	}
 
 	var value resource.Value
-	switch flags.Format {
-	case "", cliutil.OutputJSON:
+	switch resolveSecretInputPayloadType(flags.ContentType, flags.Payload) {
+	case cliutil.OutputJSON:
 		if err := json.Unmarshal(data, &value); err != nil {
 			return nil, false, cliutil.ValidationError("invalid json input", err)
 		}
@@ -556,10 +556,20 @@ func decodeDetectInput(command *cobra.Command, flags cliutil.InputFlags) (resour
 			return nil, false, cliutil.ValidationError("invalid yaml input", err)
 		}
 	default:
-		return nil, false, cliutil.ValidationError("invalid input format: use json or yaml", nil)
+		return nil, false, cliutil.ValidationError("invalid input content type: use json, yaml, application/json, or application/yaml", nil)
 	}
 
 	return value, true, nil
+}
+
+func resolveSecretInputPayloadType(contentType string, sourceName string) string {
+	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
+		return descriptor.PayloadType
+	}
+	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
+		return descriptor.PayloadType
+	}
+	return cliutil.OutputJSON
 }
 
 func isInputRequiredError(err error) bool {

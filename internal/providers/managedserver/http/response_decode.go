@@ -15,57 +15,76 @@ func encodeRequestBody(contentType string, body any) ([]byte, error) {
 		return nil, nil
 	}
 
-	payloadType, ok := resource.PayloadTypeForMediaType(contentType)
-	if !ok {
+	content := resource.Content{Value: body}
+	if typed, ok := body.(resource.Content); ok {
+		content = typed
+	}
+	if strings.TrimSpace(contentType) != "" {
+		content.Descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+			MediaType:   contentType,
+			PayloadType: content.Descriptor.PayloadType,
+			Extension:   content.Descriptor.Extension,
+		})
+	} else if !resource.IsPayloadDescriptorExplicit(content.Descriptor) {
 		switch {
-		case resource.IsBinaryValue(body):
-			payloadType = resource.PayloadTypeOctetStream
-		case strings.TrimSpace(contentType) == "":
-			payloadType = resource.PayloadTypeJSON
+		case resource.IsBinaryValue(content.Value):
+			content.Descriptor = resource.DefaultOctetStreamDescriptor()
 		default:
-			payloadType = resource.PayloadTypeText
+			content.Descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+				PayloadType: resource.PayloadTypeJSON,
+			})
 		}
 	}
 
-	encoded, err := resource.EncodePayload(body, payloadType)
+	encoded, err := resource.EncodeContent(content)
 	if err != nil {
 		return nil, err
 	}
 	return encoded, nil
 }
 
-func decodeResponseBody(body []byte, headers http.Header, fallbackPayloadType string) (resource.Value, error) {
+func decodeResponseBody(
+	body []byte,
+	headers http.Header,
+	fallback resource.PayloadDescriptor,
+) (resource.Content, error) {
 	if len(body) == 0 {
-		return nil, nil
+		return resource.Content{
+			Value:      nil,
+			Descriptor: normalizeResponseFallbackDescriptor(fallback, body),
+		}, nil
 	}
 
-	fallbackType := strings.TrimSpace(fallbackPayloadType)
-	headerType := ""
-	if headers != nil {
-		if contentType := strings.TrimSpace(headers.Get("Content-Type")); contentType != "" {
-			if inferred, ok := resource.PayloadTypeForMediaType(contentType); ok {
-				headerType = inferred
-			}
-		}
-	}
+	headerDescriptor, headerExplicit := responseHeaderDescriptor(headers)
+	fallbackDescriptor := normalizeResponseFallbackDescriptor(fallback, body)
+	fallbackExplicit := resource.IsPayloadDescriptorExplicit(fallback)
 
-	candidates := responseDecodeCandidates(headerType, fallbackType)
+	candidates := responseDecodeCandidates(headerDescriptor.PayloadType, fallbackDescriptor.PayloadType)
 	if len(candidates) == 0 {
 		candidates = []string{resource.PayloadTypeJSON}
 	}
 	if resource.IsStructuredPayloadType(candidates[0]) && len(bytes.TrimSpace(body)) == 0 {
-		return nil, nil
+		return resource.Content{Descriptor: fallbackDescriptor}, nil
 	}
 
 	var lastErr error
 	for _, candidate := range candidates {
 		decoded, err := resource.DecodePayload(body, candidate)
 		if err == nil {
-			return decoded, nil
+			return resource.Content{
+				Value: decoded,
+				Descriptor: descriptorForDecodedCandidate(
+					headerDescriptor,
+					headerExplicit,
+					fallbackDescriptor,
+					fallbackExplicit,
+					candidate,
+				),
+			}, nil
 		}
 		lastErr = err
 	}
-	return nil, lastErr
+	return resource.Content{}, lastErr
 }
 
 func responseDecodeCandidates(headerType string, fallbackType string) []string {
@@ -92,6 +111,53 @@ func responseDecodeCandidates(headerType string, fallbackType string) []string {
 		appendCandidate(fallbackType)
 	}
 	return candidates
+}
+
+func responseHeaderDescriptor(headers http.Header) (resource.PayloadDescriptor, bool) {
+	if headers == nil {
+		return resource.PayloadDescriptor{}, false
+	}
+	contentType := strings.TrimSpace(headers.Get("Content-Type"))
+	if contentType == "" {
+		return resource.PayloadDescriptor{}, false
+	}
+	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+		MediaType: contentType,
+	}), true
+}
+
+func normalizeResponseFallbackDescriptor(
+	fallback resource.PayloadDescriptor,
+	body []byte,
+) resource.PayloadDescriptor {
+	if resource.IsPayloadDescriptorExplicit(fallback) {
+		return resource.NormalizePayloadDescriptor(fallback)
+	}
+	if resource.StructuredLookingPayload(body) {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+			PayloadType: resource.PayloadTypeJSON,
+		})
+	}
+	return resource.DefaultOctetStreamDescriptor()
+}
+
+func descriptorForDecodedCandidate(
+	headerDescriptor resource.PayloadDescriptor,
+	headerExplicit bool,
+	fallbackDescriptor resource.PayloadDescriptor,
+	fallbackExplicit bool,
+	candidate string,
+) resource.PayloadDescriptor {
+	switch {
+	case headerExplicit && headerDescriptor.PayloadType == candidate:
+		return headerDescriptor
+	case fallbackExplicit && fallbackDescriptor.PayloadType == candidate:
+		return fallbackDescriptor
+	default:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+			PayloadType: candidate,
+		})
+	}
 }
 
 func classifyStatusError(statusCode int, body []byte) error {

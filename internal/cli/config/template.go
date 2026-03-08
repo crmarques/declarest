@@ -7,10 +7,6 @@ const contextTemplateYAML = `# Context catalog template for declarest.
 contexts:
   - name: my-context
     repository:
-      # Optional resource file format used by repository operations: json or yaml.
-      # If omitted, declarest uses the remote resource format default.
-      # resourceFormat: yaml
-
       # Mutually exclusive: choose exactly one repository backend.
       git:
         local:

@@ -36,9 +36,8 @@ type Context struct {
 }
 
 type Repository struct {
-	ResourceFormat string                `json:"resourceFormat,omitempty" yaml:"resourceFormat,omitempty"`
-	Git            *GitRepository        `json:"git,omitempty" yaml:"git,omitempty"`
-	Filesystem     *FilesystemRepository `json:"filesystem,omitempty" yaml:"filesystem,omitempty"`
+	Git        *GitRepository        `json:"git,omitempty" yaml:"git,omitempty"`
+	Filesystem *FilesystemRepository `json:"filesystem,omitempty" yaml:"filesystem,omitempty"`
 }
 
 type GitRepository struct {

@@ -76,7 +76,7 @@ func editContextCatalog(
 		return cliutil.ValidationError("context catalog edit is empty", nil)
 	}
 
-	decoded, err := decodeContextCatalogStrictFromData(edited, cliutil.OutputYAML)
+	decoded, err := decodeContextCatalogStrictFromData(edited, cliutil.OutputYAML, "contexts.yaml")
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func editSingleContext(
 		return cliutil.ValidationError("context edit is empty", nil)
 	}
 
-	decoded, err := decodeContextStrictFromData(edited, cliutil.OutputYAML)
+	decoded, err := decodeContextStrictFromData(edited, cliutil.OutputYAML, fmt.Sprintf("%s.yaml", name))
 	if err != nil {
 		return err
 	}

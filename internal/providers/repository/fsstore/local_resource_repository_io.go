@@ -12,7 +12,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, content resource.Content) error {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
 		return err
@@ -21,17 +21,19 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, va
 		return faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
-	targetInfo, existingInfo, err := r.resolvePayloadTarget(normalizedPath, value)
+	targetInfo, existingInfo, err := r.resolvePayloadTarget(normalizedPath, content)
 	if err != nil {
 		return err
 	}
 
-	normalizedValue, err := resource.Normalize(value)
+	normalizedValue, err := resource.Normalize(content.Value)
 	if err != nil {
 		return err
 	}
+	content.Value = normalizedValue
+	content.Descriptor = targetInfo.Descriptor
 
-	encoded, err := resource.EncodePayloadPretty(normalizedValue, targetInfo.PayloadType)
+	encoded, err := resource.EncodeContentPretty(content)
 	if err != nil {
 		return internalError("failed to encode payload", err)
 	}
@@ -51,7 +53,7 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, va
 func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 	_ context.Context,
 	logicalPath string,
-	value resource.Value,
+	content resource.Content,
 	artifacts []repository.ResourceArtifact,
 ) error {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
@@ -62,17 +64,19 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 		return faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
-	targetInfo, existingInfo, err := r.resolvePayloadTarget(normalizedPath, value)
+	targetInfo, existingInfo, err := r.resolvePayloadTarget(normalizedPath, content)
 	if err != nil {
 		return err
 	}
 
-	normalizedValue, err := resource.Normalize(value)
+	normalizedValue, err := resource.Normalize(content.Value)
 	if err != nil {
 		return err
 	}
+	content.Value = normalizedValue
+	content.Descriptor = targetInfo.Descriptor
 
-	encoded, err := resource.EncodePayloadPretty(normalizedValue, targetInfo.PayloadType)
+	encoded, err := resource.EncodeContentPretty(content)
 	if err != nil {
 		return internalError("failed to encode payload", err)
 	}
@@ -105,34 +109,34 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 	return nil
 }
 
-func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	if normalizedPath == "/" {
-		return nil, faults.NewValidationError("logical path must target a resource, not root", nil)
+		return resource.Content{}, faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
 	info, err := r.discoverPayloadFile(normalizedPath)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	if info == nil {
-		return nil, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+		return resource.Content{}, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
 	}
 
 	data, err := os.ReadFile(info.Path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+			return resource.Content{}, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
 		}
-		return nil, internalError("failed to read resource payload", err)
+		return resource.Content{}, internalError("failed to read resource payload", err)
 	}
 
-	decoded, err := resource.DecodePayload(data, info.PayloadType)
+	decoded, err := resource.DecodeContent(data, info.Descriptor)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	return decoded, nil
 }

@@ -19,22 +19,21 @@ func resolveOperationSpecTemplates(
 	operation metadata.Operation,
 	spec metadata.OperationSpec,
 	resourceInfo resource.Resource,
-	resourceFormat string,
+	descriptor resource.PayloadDescriptor,
 ) (metadata.OperationSpec, error) {
 	templateScope, err := templatescope.BuildResourceScope(resourceInfo, md)
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateScope, md, resourceFormat)
+	applyPayloadTemplateScope(templateScope, md, descriptor)
 
 	templateMetadata := metadata.ResourceMetadata{
 		CollectionPath: md.CollectionPath,
+		PayloadType:    md.PayloadType,
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},
-		Filter:   cloneStringSlice(md.Filter),
-		Suppress: cloneStringSlice(md.Suppress),
-		JQ:       md.JQ,
+		PayloadMutation: metadata.CloneResourceMetadata(metadata.ResourceMetadata{PayloadMutation: md.PayloadMutation}).PayloadMutation,
 	}
 
 	rendered, err := metadata.ResolveOperationSpecWithScope(ctx, templateMetadata, operation, templateScope)
@@ -44,53 +43,96 @@ func resolveOperationSpecTemplates(
 	return rendered, nil
 }
 
-func (g *HTTPManagedServerClient) effectiveResourceFormat() string {
-	if g == nil {
-		return metadata.NormalizeResourceFormat("")
+func (g *HTTPManagedServerClient) metadataPayloadDescriptor(md metadata.ResourceMetadata) resource.PayloadDescriptor {
+	if strings.TrimSpace(md.PayloadType) == "" {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 	}
-	return metadata.NormalizeResourceFormat(g.resourceFormat)
+	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+		PayloadType: md.PayloadType,
+	})
 }
 
-func (g *HTTPManagedServerClient) metadataPayloadType(md metadata.ResourceMetadata) string {
-	payloadType, err := metadata.EffectivePayloadType(md, g.effectiveResourceFormat())
-	if err != nil {
-		return g.effectiveResourceFormat()
-	}
-	return payloadType
-}
-
-func (g *HTTPManagedServerClient) defaultResourceMediaType(payloadType string) (string, error) {
-	mediaType, err := metadata.ResourceFormatMediaType(payloadType)
-	if err != nil {
-		return "", faults.NewValidationError("invalid repository resource format", err)
+func (g *HTTPManagedServerClient) defaultResourceMediaType(descriptor resource.PayloadDescriptor) (string, error) {
+	mediaType := resource.NormalizePayloadDescriptor(descriptor).MediaType
+	if strings.TrimSpace(mediaType) == "" {
+		return "", faults.NewValidationError("invalid payload media type", nil)
 	}
 	return mediaType, nil
 }
 
-func (g *HTTPManagedServerClient) requestFallbackPayloadType(
+func (g *HTTPManagedServerClient) requestFallbackDescriptor(
 	ctx context.Context,
 	requestSpec managedserver.RequestSpec,
 	spec metadata.OperationSpec,
-) string {
+) resource.PayloadDescriptor {
 	if _, resourceInput, _, ok := metadata.RequestOperationValidation(ctx); ok {
-		return g.metadataPayloadType(resourceInput.Metadata)
+		return g.metadataPayloadDescriptor(resourceInput.Metadata)
 	}
-	if payloadType, ok := resource.PayloadTypeForMediaType(requestSpec.Accept); ok {
-		return payloadType
+	if descriptor, ok := resource.PayloadDescriptorForContentType(requestSpec.Accept); ok {
+		return descriptor
 	}
-	if payloadType, ok := resource.PayloadTypeForMediaType(spec.Accept); ok {
-		return payloadType
+	if descriptor, ok := resource.PayloadDescriptorForContentType(spec.Accept); ok {
+		return descriptor
 	}
-	if payloadType, ok := resource.PayloadTypeForMediaType(requestSpec.ContentType); ok {
-		return payloadType
+	if descriptor, ok := resource.PayloadDescriptorForContentType(requestSpec.ContentType); ok {
+		return descriptor
 	}
-	if payloadType, ok := resource.PayloadTypeForMediaType(spec.ContentType); ok {
-		return payloadType
+	if descriptor, ok := resource.PayloadDescriptorForContentType(spec.ContentType); ok {
+		return descriptor
 	}
-	if resource.IsBinaryValue(spec.Body) {
-		return resource.PayloadTypeOctetStream
+	if resource.IsPayloadDescriptorExplicit(requestSpec.Body.Descriptor) {
+		return resource.NormalizePayloadDescriptor(requestSpec.Body.Descriptor)
 	}
-	return g.effectiveResourceFormat()
+	if resource.IsBinaryValue(requestSpec.Body.Value) || resource.IsBinaryValue(spec.Body) {
+		return resource.DefaultOctetStreamDescriptor()
+	}
+	if typed, ok := spec.Body.(resource.Content); ok && resource.IsPayloadDescriptorExplicit(typed.Descriptor) {
+		return resource.NormalizePayloadDescriptor(typed.Descriptor)
+	}
+	return payloadDescriptorFromValue(spec.Body)
+}
+
+func (g *HTTPManagedServerClient) requestBodyDescriptor(
+	resourceInfo resource.Resource,
+	md metadata.ResourceMetadata,
+) resource.PayloadDescriptor {
+	switch {
+	case resource.IsPayloadDescriptorExplicit(resourceInfo.PayloadDescriptor):
+		return resource.NormalizePayloadDescriptor(resourceInfo.PayloadDescriptor)
+	case strings.TrimSpace(md.PayloadType) != "":
+		return g.metadataPayloadDescriptor(md)
+	default:
+		return payloadDescriptorFromValue(resourceInfo.Payload)
+	}
+}
+
+func (g *HTTPManagedServerClient) genericRequestBodyDescriptor(requestSpec managedserver.RequestSpec) resource.PayloadDescriptor {
+	switch {
+	case resource.IsPayloadDescriptorExplicit(requestSpec.Body.Descriptor):
+		return resource.NormalizePayloadDescriptor(requestSpec.Body.Descriptor)
+	case strings.TrimSpace(requestSpec.ContentType) != "":
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+			MediaType: requestSpec.ContentType,
+		})
+	case resource.IsBinaryValue(requestSpec.Body.Value):
+		return resource.DefaultOctetStreamDescriptor()
+	default:
+		return payloadDescriptorFromValue(requestSpec.Body.Value)
+	}
+}
+
+func (g *HTTPManagedServerClient) payloadTemplateScopeDescriptor(
+	md metadata.ResourceMetadata,
+	resourceInfo resource.Resource,
+) resource.PayloadDescriptor {
+	switch {
+	case resource.IsPayloadDescriptorExplicit(resourceInfo.PayloadDescriptor):
+		return resource.NormalizePayloadDescriptor(resourceInfo.PayloadDescriptor)
+	case strings.TrimSpace(md.PayloadType) != "":
+		return g.metadataPayloadDescriptor(md)
+	default:
+		return payloadDescriptorFromValue(resourceInfo.Payload)
+	}
 }
 
 func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool, bool) {
@@ -182,24 +224,51 @@ func cloneStringSlice(values []string) []string {
 	return cloned
 }
 
-func applyPayloadTemplateScope(scope map[string]any, md metadata.ResourceMetadata, resourceFormat string) {
+func applyPayloadTemplateScope(scope map[string]any, md metadata.ResourceMetadata, descriptor resource.PayloadDescriptor) {
 	if scope == nil {
 		return
 	}
 
-	scope["resourceFormat"] = metadata.NormalizeResourceFormat(resourceFormat)
+	activeDescriptor := descriptor
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
+		if strings.TrimSpace(md.PayloadType) != "" {
+			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: md.PayloadType})
+		} else {
+			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+		}
+	}
+	scope["payloadType"] = activeDescriptor.PayloadType
+	scope["payloadMediaType"] = activeDescriptor.MediaType
+	scope["payloadExtension"] = activeDescriptor.Extension
+}
 
-	payloadType, err := metadata.EffectivePayloadType(md, resourceFormat)
+func payloadDescriptorFromValue(value any) resource.PayloadDescriptor {
+	value = unwrapContentValue(value)
+
+	switch typed := value.(type) {
+	case nil:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	case resource.BinaryValue:
+		return resource.DefaultOctetStreamDescriptor()
+	case *resource.BinaryValue:
+		if typed != nil {
+			return resource.DefaultOctetStreamDescriptor()
+		}
+	case string:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
+	}
+
+	normalized, err := resource.Normalize(value)
 	if err != nil {
-		payloadType = metadata.NormalizeResourceFormat(resourceFormat)
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 	}
-	scope["payloadType"] = payloadType
-
-	if mediaType, mediaErr := metadata.ResourceFormatMediaType(payloadType); mediaErr == nil {
-		scope["payloadMediaType"] = mediaType
-	}
-	if extension, extensionErr := metadata.ResourceFormatExtension(payloadType); extensionErr == nil {
-		scope["payloadExtension"] = extension
+	switch normalized.(type) {
+	case string:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
+	case resource.BinaryValue:
+		return resource.DefaultOctetStreamDescriptor()
+	default:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 	}
 }
 

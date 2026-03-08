@@ -35,7 +35,7 @@ type Request struct {
 	LogicalPath      string
 	Recursive        bool
 	Force            bool
-	Value            resource.Value
+	Value            resource.Content
 	HasExplicitInput bool
 	RefreshLocal     bool
 }
@@ -126,12 +126,12 @@ func runExplicitMutation(
 	orchestratorService orchestratordomain.Orchestrator,
 	operation Operation,
 	logicalPath string,
-	value resource.Value,
+	value resource.Content,
 	force bool,
 ) (resource.Resource, error) {
 	switch operation {
 	case OperationApply:
-		return orchestratorService.ApplyWithValue(ctx, logicalPath, value, orchestratordomain.ApplyPolicy{
+		return orchestratorService.ApplyWithContent(ctx, logicalPath, value, orchestratordomain.ApplyPolicy{
 			Force: force,
 		})
 	case OperationCreate:
@@ -160,8 +160,9 @@ func ListLocalTargets(
 		localValue, getErr := orchestratorService.GetLocal(ctx, logicalPath)
 		if getErr == nil {
 			items = []resource.Resource{{
-				LogicalPath: logicalPath,
-				Payload:     localValue,
+				LogicalPath:       logicalPath,
+				Payload:           localValue.Value,
+				PayloadDescriptor: localValue.Descriptor,
 			}}
 		} else if !faults.IsCategory(getErr, faults.NotFoundError) {
 			return nil, getErr
@@ -243,7 +244,7 @@ func refreshRepositoryForPaths(ctx context.Context, deps Dependencies, items []r
 			ctx,
 			saveDeps,
 			item.LogicalPath,
-			nil,
+			resource.Content{},
 			false,
 			resourcesave.ExecuteOptions{Force: true},
 		); err != nil {

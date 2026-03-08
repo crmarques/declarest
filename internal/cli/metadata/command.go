@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	configdomain "github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
@@ -70,25 +69,6 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			if !overridesOnly {
 				item = metadatadomain.MergeResourceMetadata(metadatadomain.DefaultResourceMetadata(), item)
 			}
-			resourceFormat := configdomain.ResourceFormatJSON
-			if deps.Contexts != nil {
-				selection := configdomain.ContextSelection{}
-				if globalFlags != nil {
-					selection.Name = globalFlags.Context
-				}
-				resolvedContext, ctxErr := deps.Contexts.ResolveContext(command.Context(), selection)
-				if ctxErr != nil {
-					debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, ctxErr)
-					return ctxErr
-				}
-				resourceFormat = resolvedContext.Repository.ResourceFormat
-			}
-			item, err = metadatadomain.ResolveResourceFormatTemplatesInMetadata(item, resourceFormat)
-			if err != nil {
-				debugctx.Printf(command.Context(), "metadata get failed path=%q error=%v", resolvedPath, err)
-				return err
-			}
-
 			debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
 
 			return cliutil.WriteOutput(command, outputFormat, item, nil)
@@ -475,9 +455,9 @@ func resolveOperationSpecWithoutRendering(
 	operation metadatadomain.Operation,
 ) (metadatadomain.OperationSpec, error) {
 	spec := metadatadomain.OperationSpec{
-		Filter:   cloneStringSlice(metadataValue.Filter),
-		Suppress: cloneStringSlice(metadataValue.Suppress),
-		JQ:       metadataValue.JQ,
+		PayloadMutation: metadatadomain.CloneResourceMetadata(
+			metadatadomain.ResourceMetadata{PayloadMutation: metadataValue.PayloadMutation},
+		).PayloadMutation,
 	}
 	if metadataValue.Operations != nil {
 		if operationSpec, found := metadataValue.Operations[string(operation)]; found {
@@ -609,7 +589,7 @@ func resolvedMetadataForGet(
 		return resolved, nil
 	}
 
-	// Preserve explicit empty metadata files (for example `operationInfo: {}`) as
+	// Preserve explicit empty metadata files (for example `operationsInfo: {}`) as
 	// a valid hit instead of forcing fallback inference.
 	explicit, err := service.Get(ctx, logicalPath)
 	if err == nil {
@@ -643,9 +623,7 @@ func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
 		strings.TrimSpace(item.CollectionPath) != "" ||
 		item.SecretsFromAttributes != nil ||
 		item.Operations != nil ||
-		item.Filter != nil ||
-		item.Suppress != nil ||
-		strings.TrimSpace(item.JQ) != ""
+		item.PayloadMutation != nil
 }
 
 func resolveOpenAPISpec(
@@ -658,7 +636,7 @@ func resolveOpenAPISpec(
 	}
 
 	openAPISpec, _ := orchestratorService.GetOpenAPISpec(ctx)
-	return orchestratorService, openAPISpec
+	return orchestratorService, openAPISpec.Value
 }
 
 type metadataPathProbe interface {

@@ -1,7 +1,6 @@
 package metadata
 
 import (
-	"regexp"
 	"strings"
 	"text/template"
 
@@ -9,25 +8,18 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-var resourceFormatTemplateTokenPattern = regexp.MustCompile(`\{\{\s*resource_format\s+\.\s*\}\}`)
-var payloadTypeTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_type\s+\.\s*\}\}`)
-var payloadMediaTypeTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_media_type\s+\.\s*\}\}`)
-var payloadExtensionTemplateTokenPattern = regexp.MustCompile(`\{\{\s*payload_extension\s+\.\s*\}\}`)
-
-// NormalizeResourceFormat trims and lowercases the configured repository
-// resource format and defaults empty values to json.
+// NormalizeResourceFormat normalizes payload types for internal callers that
+// still use the historical helper name.
 func NormalizeResourceFormat(value string) string {
 	return resource.NormalizePayloadType(value)
 }
 
-// ValidateResourceFormat returns the normalized repository resource format when
-// it is supported by the runtime.
+// ValidateResourceFormat validates payload types for internal callers that
+// still use the historical helper name.
 func ValidateResourceFormat(value string) (string, error) {
 	return resource.ValidatePayloadType(value)
 }
 
-// ResourceFormatMediaType returns the default media type used for metadata
-// operation requests based on the active repository resource format.
 func ResourceFormatMediaType(value string) (string, error) {
 	format, err := ValidateResourceFormat(value)
 	if err != nil {
@@ -51,50 +43,6 @@ func EffectivePayloadType(metadata ResourceMetadata, fallback string) (string, e
 	return ValidateResourceFormat(fallback)
 }
 
-// ResolveResourceFormatTemplatesInMetadata replaces metadata string template
-// tokens matching {{resource_format .}} with the provided repository resource
-// format while leaving other templates (for example {{.id}}) unchanged.
-func ResolveResourceFormatTemplatesInMetadata(value ResourceMetadata, resourceFormat string) (ResourceMetadata, error) {
-	resolvedFormat, err := ValidateResourceFormat(resourceFormat)
-	if err != nil {
-		return ResourceMetadata{}, err
-	}
-
-	cloned := CloneResourceMetadata(value)
-	cloned.CollectionPath = replaceResourceFormatTemplateTokens(cloned.CollectionPath, resolvedFormat)
-	cloned.JQ = replaceResourceFormatTemplateTokens(cloned.JQ, resolvedFormat)
-
-	if cloned.Operations != nil {
-		for key, spec := range cloned.Operations {
-			spec.Method = replaceResourceFormatTemplateTokens(spec.Method, resolvedFormat)
-			spec.Path = replaceResourceFormatTemplateTokens(spec.Path, resolvedFormat)
-			spec.Accept = replaceResourceFormatTemplateTokens(spec.Accept, resolvedFormat)
-			spec.ContentType = replaceResourceFormatTemplateTokens(spec.ContentType, resolvedFormat)
-			spec.JQ = replaceResourceFormatTemplateTokens(spec.JQ, resolvedFormat)
-			if spec.Query != nil {
-				for queryKey, queryValue := range spec.Query {
-					spec.Query[queryKey] = replaceResourceFormatTemplateTokens(queryValue, resolvedFormat)
-				}
-			}
-			if spec.Headers != nil {
-				for headerKey, headerValue := range spec.Headers {
-					spec.Headers[headerKey] = replaceResourceFormatTemplateTokens(headerValue, resolvedFormat)
-				}
-			}
-
-			bodyValue, bodyErr := resolveResourceFormatTemplateTokensInValue(spec.Body, resolvedFormat)
-			if bodyErr != nil {
-				return ResourceMetadata{}, bodyErr
-			}
-			spec.Body = bodyValue
-
-			cloned.Operations[key] = spec
-		}
-	}
-
-	return cloned, nil
-}
-
 // TemplateFuncMap returns metadata template helpers evaluated against the
 // provided render scope.
 func TemplateFuncMap(scope map[string]any) template.FuncMap {
@@ -111,24 +59,19 @@ func TemplateFuncMap(scope map[string]any) template.FuncMap {
 
 		candidate := scopeString(scopeValue(scope, "payloadType"))
 		if strings.TrimSpace(candidate) == "" {
-			candidate = scopeString(scopeValue(scope, "resourceFormat"))
+			if descriptor, ok := resource.PayloadDescriptorForContentType(scopeString(scopeValue(scope, "payloadMediaType"))); ok {
+				candidate = descriptor.PayloadType
+			}
+		}
+		if strings.TrimSpace(candidate) == "" {
+			if descriptor, ok := resource.PayloadDescriptorForExtension(scopeString(scopeValue(scope, "payloadExtension"))); ok {
+				candidate = descriptor.PayloadType
+			}
 		}
 		return ValidateResourceFormat(candidate)
 	}
 
 	return template.FuncMap{
-		"resource_format": func(arg any) (string, error) {
-			if arg != nil {
-				if _, ok := arg.(map[string]any); !ok {
-					return "", faults.NewTypedError(
-						faults.ValidationError,
-						"resource_format template function expects root scope argument (.)",
-						nil,
-					)
-				}
-			}
-			return ValidateResourceFormat(scopeString(scopeValue(scope, "resourceFormat")))
-		},
 		"payload_type": resolveScopePayloadType,
 		"payload_media_type": func(arg any) (string, error) {
 			payloadType, err := resolveScopePayloadType(arg)
@@ -152,51 +95,4 @@ func scopeValue(scope map[string]any, key string) any {
 		return nil
 	}
 	return scope[key]
-}
-
-func replaceResourceFormatTemplateTokens(value string, resourceFormat string) string {
-	if strings.TrimSpace(value) == "" {
-		return value
-	}
-
-	resolved := resourceFormatTemplateTokenPattern.ReplaceAllString(value, resourceFormat)
-	resolved = payloadTypeTemplateTokenPattern.ReplaceAllString(resolved, resourceFormat)
-
-	if mediaType, err := ResourceFormatMediaType(resourceFormat); err == nil {
-		resolved = payloadMediaTypeTemplateTokenPattern.ReplaceAllString(resolved, mediaType)
-	}
-	if extension, err := ResourceFormatExtension(resourceFormat); err == nil {
-		resolved = payloadExtensionTemplateTokenPattern.ReplaceAllString(resolved, extension)
-	}
-
-	return resolved
-}
-
-func resolveResourceFormatTemplateTokensInValue(value any, resourceFormat string) (any, error) {
-	switch typed := value.(type) {
-	case map[string]any:
-		result := make(map[string]any, len(typed))
-		for key, item := range typed {
-			resolved, err := resolveResourceFormatTemplateTokensInValue(item, resourceFormat)
-			if err != nil {
-				return nil, err
-			}
-			result[key] = resolved
-		}
-		return result, nil
-	case []any:
-		result := make([]any, len(typed))
-		for idx := range typed {
-			resolved, err := resolveResourceFormatTemplateTokensInValue(typed[idx], resourceFormat)
-			if err != nil {
-				return nil, err
-			}
-			result[idx] = resolved
-		}
-		return result, nil
-	case string:
-		return replaceResourceFormatTemplateTokens(typed, resourceFormat), nil
-	default:
-		return typed, nil
-	}
 }

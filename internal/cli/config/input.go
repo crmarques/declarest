@@ -8,6 +8,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -31,7 +32,7 @@ func decodeContextStrict(command *cobra.Command, flags cliutil.InputFlags) (conf
 		return configdomain.Context{}, err
 	}
 
-	return decodeContextStrictFromData(data, flags.Format)
+	return decodeContextStrictFromData(data, flags.ContentType, flags.Payload)
 }
 
 func decodeContextImportInputStrict(command *cobra.Command, flags cliutil.InputFlags) (contextImportInput, error) {
@@ -40,7 +41,7 @@ func decodeContextImportInputStrict(command *cobra.Command, flags cliutil.InputF
 		return contextImportInput{}, err
 	}
 
-	decodedContext, contextErr := decodeContextStrictFromData(data, flags.Format)
+	decodedContext, contextErr := decodeContextStrictFromData(data, flags.ContentType, flags.Payload)
 	if contextErr == nil {
 		return contextImportInput{
 			Kind:    contextImportInputContext,
@@ -48,7 +49,7 @@ func decodeContextImportInputStrict(command *cobra.Command, flags cliutil.InputF
 		}, nil
 	}
 
-	decodedCatalog, catalogErr := decodeContextCatalogStrictFromData(data, flags.Format)
+	decodedCatalog, catalogErr := decodeContextCatalogStrictFromData(data, flags.ContentType, flags.Payload)
 	if catalogErr == nil {
 		return contextImportInput{
 			Kind:    contextImportInputCatalog,
@@ -62,25 +63,25 @@ func decodeContextImportInputStrict(command *cobra.Command, flags cliutil.InputF
 	)
 }
 
-func decodeContextStrictFromData(data []byte, format string) (configdomain.Context, error) {
+func decodeContextStrictFromData(data []byte, contentType string, sourceName string) (configdomain.Context, error) {
 	var output configdomain.Context
-	if err := decodeInputStrict(data, format, &output); err != nil {
+	if err := decodeInputStrict(data, contentType, sourceName, &output); err != nil {
 		return configdomain.Context{}, err
 	}
 	return output, nil
 }
 
-func decodeContextCatalogStrictFromData(data []byte, format string) (configdomain.ContextCatalog, error) {
+func decodeContextCatalogStrictFromData(data []byte, contentType string, sourceName string) (configdomain.ContextCatalog, error) {
 	var output configdomain.ContextCatalog
-	if err := decodeInputStrict(data, format, &output); err != nil {
+	if err := decodeInputStrict(data, contentType, sourceName, &output); err != nil {
 		return configdomain.ContextCatalog{}, err
 	}
 	return output, nil
 }
 
-func decodeInputStrict(data []byte, format string, output any) error {
-	switch format {
-	case "", cliutil.OutputJSON:
+func decodeInputStrict(data []byte, contentType string, sourceName string, output any) error {
+	switch resolveConfigInputPayloadType(contentType, sourceName) {
+	case cliutil.OutputJSON:
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(output); err != nil {
@@ -111,8 +112,18 @@ func decodeInputStrict(data []byte, format string, output any) error {
 		}
 
 	default:
-		return cliutil.ValidationError("invalid input format: use json or yaml", nil)
+		return cliutil.ValidationError("invalid input content type: use json, yaml, application/json, or application/yaml", nil)
 	}
 
 	return nil
+}
+
+func resolveConfigInputPayloadType(contentType string, sourceName string) string {
+	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
+		return descriptor.PayloadType
+	}
+	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
+		return descriptor.PayloadType
+	}
+	return cliutil.OutputJSON
 }

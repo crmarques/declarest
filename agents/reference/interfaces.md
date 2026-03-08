@@ -129,7 +129,7 @@ Allowed shapes:
 Invariants:
 1. serialization MUST be deterministic.
 2. numeric handling MUST avoid implicit precision loss.
-3. exact placeholder directives (for example `{{secret .}}`, `{{resource_format .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
+3. exact placeholder directives (for example `{{secret .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
 4. opaque binary payloads MUST use `resource.BinaryValue` instead of raw `[]byte`.
 
 ### Type: `resource.BinaryValue`
@@ -149,10 +149,10 @@ Contract groups:
 1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`), optional `collectionPath` override, and optional `payloadType` override.
 2. `resourceInfo` secret mapping (`secretInAttributes`).
 3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
-4. `operationInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
-5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
-6. `operationInfo.defaults` transform defaults (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`) and compare transform fields (`compareResources.filterAttributes`, `compareResources.suppressAttributes`, `compareResources.jqExpression`).
-7. metadata template helper functions include `{{resource_format .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
+4. `operationsInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
+5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payloadMutation[*].{selectAttributes,suppressAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+6. `operationsInfo.defaults.payloadMutation` is an ordered pipeline applied before operation-specific `payloadMutation`.
+7. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
@@ -651,7 +651,7 @@ Propagation rules:
 2. Methods returning collections MUST specify ordering semantics.
 3. IO methods MUST declare whether they mutate local, remote, or both.
 4. Irreversible operations MUST support dry-run explanation mode at orchestrator boundary.
-5. `resource.json` directive placeholders MUST be exact-string matches (`{{secret ...}}`, `{{resource_format .}}`); embedded interpolation text remains unsupported unless a caller documents broader templating.
+5. `resource.<ext>` directive placeholders MUST be exact-string matches (`{{secret ...}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`); embedded interpolation text remains unsupported unless a caller documents broader templating.
 
 ## Failure Modes
 1. Context resolution failure due to missing or invalid config.

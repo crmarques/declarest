@@ -406,7 +406,7 @@ e2e_validate_managed_server_fixture_tree() {
   while IFS= read -r payload_file; do
     [[ -n "${payload_file}" ]] || continue
     payload_files+=("${payload_file}")
-  done < <(find "${template_dir}" -type f -name '*.json' ! -path '*/_/metadata.json' | sort)
+  done < <(find "${template_dir}" -type f -name 'resource.*' | sort)
 
   if ((${#payload_files[@]} == 0)); then
     e2e_die "managed-server ${component_name} repo-template has no resource payload files under ${template_dir}"
@@ -416,8 +416,8 @@ e2e_validate_managed_server_fixture_tree() {
   for payload_file in "${payload_files[@]}"; do
     local payload_rel
     payload_rel=${payload_file#${template_dir}/}
-    if [[ "$(basename -- "${payload_rel}")" != 'resource.json' ]]; then
-      e2e_die "managed-server ${component_name} has invalid resource payload fixture path: ${payload_rel} (expected */resource.json)"
+    if [[ "$(basename -- "${payload_rel}")" != resource.* || "$(basename -- "${payload_rel}")" == 'resource.' ]]; then
+      e2e_die "managed-server ${component_name} has invalid resource payload fixture path: ${payload_rel} (expected */resource.<ext>)"
       return 1
     fi
   done

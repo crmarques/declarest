@@ -31,7 +31,6 @@ type HTTPManagedServerClient struct {
 	auth             authConfig
 	client           *http.Client
 	throttle         *requestThrottleGate
-	resourceFormat   string
 	tlsDebug         tlsDebugInfo
 	openAPISource    string
 	metadataRenderer metadata.ResourceOperationSpecRenderer
@@ -54,15 +53,6 @@ func WithMetadataRenderer(renderer metadata.ResourceOperationSpecRenderer) Manag
 			return
 		}
 		g.metadataRenderer = renderer
-	}
-}
-
-func WithResourceFormat(format string) ManagedServerClientOption {
-	return func(g *HTTPManagedServerClient) {
-		if g == nil {
-			return
-		}
-		g.resourceFormat = metadata.NormalizeResourceFormat(format)
 	}
 }
 
@@ -102,9 +92,8 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 			Timeout:   defaultHTTPTimeout,
 			Transport: transport,
 		},
-		resourceFormat: config.ResourceFormatJSON,
-		tlsDebug:       newTLSDebugInfo(cfg.TLS),
-		openAPISource:  strings.TrimSpace(cfg.OpenAPI),
+		tlsDebug:      newTLSDebugInfo(cfg.TLS),
+		openAPISource: strings.TrimSpace(cfg.OpenAPI),
 	}
 	throttle, err := buildRequestThrottle(cfg.RequestThrottling)
 	if err != nil {
@@ -120,58 +109,56 @@ func NewHTTPManagedServerClient(cfg config.HTTPServer, opts ...ManagedServerClie
 	return client, nil
 }
 
-func (g *HTTPManagedServerClient) SetResourceFormat(format string) {
-	if g == nil {
-		return
-	}
-	g.resourceFormat = metadata.NormalizeResourceFormat(format)
-}
-
-func (g *HTTPManagedServerClient) Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error) {
+func (g *HTTPManagedServerClient) Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationGet)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
-	value, err := decodeResponseBody(body, headers, g.metadataPayloadType(md))
+	content, err := decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
-	return g.applyOperationPayloadTransforms(ctx, value, spec)
+	value, err := g.applyOperationPayloadTransforms(ctx, content.Value, spec)
+	if err != nil {
+		return resource.Content{}, err
+	}
+	content.Value = value
+	return content, nil
 }
 
-func (g *HTTPManagedServerClient) Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error) {
+func (g *HTTPManagedServerClient) Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationCreate)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
-	return decodeResponseBody(body, headers, g.metadataPayloadType(md))
+	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
 }
 
-func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error) {
+func (g *HTTPManagedServerClient) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationUpdate)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	body, headers, err := g.execute(ctx, spec)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
-	return decodeResponseBody(body, headers, g.metadataPayloadType(md))
+	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
 }
 
 func (g *HTTPManagedServerClient) Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error {

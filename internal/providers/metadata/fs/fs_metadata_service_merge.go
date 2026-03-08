@@ -31,7 +31,7 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	if err := validateAttributePointers("resourceInfo.secretInAttributes", metadata.SecretsFromAttributes); err != nil {
 		return err
 	}
-	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.Filter, metadata.Suppress, metadata.JQ, nil); err != nil {
+	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.PayloadMutation, nil); err != nil {
 		return err
 	}
 
@@ -45,9 +45,7 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		if err := validateStructuredPayloadDirectives(
 			fmt.Sprintf("operation %q", key),
 			resolvedPayloadType,
-			operationSpec.Filter,
-			operationSpec.Suppress,
-			operationSpec.JQ,
+			operationSpec.PayloadMutation,
 			operationSpec.Validate,
 		); err != nil {
 			return err
@@ -62,21 +60,32 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 func validateStructuredPayloadDirectives(
 	scope string,
 	payloadType string,
-	filter []string,
-	suppress []string,
-	jq string,
+	mutations []metadatadomain.PayloadMutationStep,
 	validate *metadatadomain.OperationValidationSpec,
 ) error {
-	if err := validateAttributePointers(scope+" filterAttributes", filter); err != nil {
-		return err
-	}
-	if err := validateAttributePointers(scope+" suppressAttributes", suppress); err != nil {
-		return err
+	for idx, step := range mutations {
+		stepType := metadatadomain.PayloadMutationStepType(step)
+		if stepType == "" {
+			return faults.NewValidationError(
+				fmt.Sprintf("%s payloadMutation[%d] must define exactly one of selectAttributes, suppressAttributes, or jqExpression", scope, idx),
+				nil,
+			)
+		}
+		switch stepType {
+		case "selectAttributes":
+			if err := validateAttributePointers(fmt.Sprintf("%s payloadMutation[%d].selectAttributes", scope, idx), step.SelectAttributes); err != nil {
+				return err
+			}
+		case "suppressAttributes":
+			if err := validateAttributePointers(fmt.Sprintf("%s payloadMutation[%d].suppressAttributes", scope, idx), step.SuppressAttributes); err != nil {
+				return err
+			}
+		}
 	}
 	if strings.TrimSpace(payloadType) == "" || payloadType == metadatadomain.NormalizeResourceFormat("json") || payloadType == metadatadomain.NormalizeResourceFormat("yaml") {
 		return nil
 	}
-	if len(filter) == 0 && len(suppress) == 0 && strings.TrimSpace(jq) == "" && validate == nil {
+	if len(mutations) == 0 && validate == nil {
 		return nil
 	}
 	return faults.NewValidationError(

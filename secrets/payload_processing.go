@@ -7,7 +7,6 @@ import (
 	"unicode"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -74,12 +73,12 @@ func ResolvePayloadForResource(
 }
 
 // ResolvePayloadDirectivesForResource resolves supported exact-placeholder
-// directives in resource payloads. It always resolves {{resource_format .}} and
-// resolves {{secret ...}} only when getFn is provided.
+// directives in resource payloads. It always resolves payload descriptor
+// placeholders and resolves {{secret ...}} only when getFn is provided.
 func ResolvePayloadDirectivesForResource(
 	value resource.Value,
 	logicalPath string,
-	resourceFormat string,
+	descriptor resource.PayloadDescriptor,
 	getFn func(key string) (string, error),
 ) (resource.Value, error) {
 	normalized, err := resource.Normalize(value)
@@ -87,22 +86,19 @@ func ResolvePayloadDirectivesForResource(
 		return nil, err
 	}
 
-	resolvedFormat, err := metadata.ValidateResourceFormat(resourceFormat)
-	if err != nil {
-		return nil, faults.NewValidationError("invalid repository resource format", err)
-	}
+	resolvedDescriptor := resource.NormalizePayloadDescriptor(descriptor)
 
-	withFormat, err := resolveResourceFormatDirectivesValue(normalized, resolvedFormat, 0)
+	withDescriptor, err := resolvePayloadDescriptorDirectivesValue(normalized, resolvedDescriptor, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	if getFn == nil {
-		return withFormat, nil
+		return withDescriptor, nil
 	}
 
 	cache := make(map[string]string)
-	output, err := resolvePayloadValue(withFormat, "", strings.TrimSpace(logicalPath), cache, getFn, 0)
+	output, err := resolvePayloadValue(withDescriptor, "", strings.TrimSpace(logicalPath), cache, getFn, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +127,11 @@ func resolvePayloadWithResourceScope(
 	return output, nil
 }
 
-func resolveResourceFormatDirectivesValue(value any, resourceFormat string, depth int) (any, error) {
+func resolvePayloadDescriptorDirectivesValue(
+	value any,
+	descriptor resource.PayloadDescriptor,
+	depth int,
+) (any, error) {
 	if depth > maxPayloadDepth {
 		return nil, faults.NewValidationError("secret payload exceeds maximum nesting depth", nil)
 	}
@@ -139,7 +139,7 @@ func resolveResourceFormatDirectivesValue(value any, resourceFormat string, dept
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for _, key := range sortedKeys(typed) {
-			child, err := resolveResourceFormatDirectivesValue(typed[key], resourceFormat, depth+1)
+			child, err := resolvePayloadDescriptorDirectivesValue(typed[key], descriptor, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -149,7 +149,7 @@ func resolveResourceFormatDirectivesValue(value any, resourceFormat string, dept
 	case []any:
 		result := make([]any, len(typed))
 		for idx := range typed {
-			child, err := resolveResourceFormatDirectivesValue(typed[idx], resourceFormat, depth+1)
+			child, err := resolvePayloadDescriptorDirectivesValue(typed[idx], descriptor, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -157,12 +157,12 @@ func resolveResourceFormatDirectivesValue(value any, resourceFormat string, dept
 		}
 		return result, nil
 	case string:
-		isDirective, err := parseResourceFormatPlaceholder(typed)
+		resolvedValue, isDirective, err := resolvePayloadDescriptorPlaceholder(typed, descriptor)
 		if err != nil {
 			return nil, err
 		}
 		if isDirective {
-			return resourceFormat, nil
+			return resolvedValue, nil
 		}
 		return typed, nil
 	default:
@@ -498,32 +498,52 @@ func parseSecretPlaceholder(value string) (key string, isCurrent bool, isPlaceho
 	return argument, false, true, nil
 }
 
-func parseResourceFormatPlaceholder(value string) (isPlaceholder bool, err error) {
+func resolvePayloadDescriptorPlaceholder(
+	value string,
+	descriptor resource.PayloadDescriptor,
+) (resolved string, isPlaceholder bool, err error) {
 	trimmed := strings.TrimSpace(value)
 	if !strings.HasPrefix(trimmed, "{{") || !strings.HasSuffix(trimmed, "}}") {
-		return false, nil
+		return "", false, nil
 	}
 
 	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}"))
-	if !strings.HasPrefix(inner, "resource_format") {
-		return false, nil
+	name := ""
+	switch {
+	case strings.HasPrefix(inner, "payload_type"):
+		name = "payload_type"
+	case strings.HasPrefix(inner, "payload_media_type"):
+		name = "payload_media_type"
+	case strings.HasPrefix(inner, "payload_extension"):
+		name = "payload_extension"
+	default:
+		return "", false, nil
 	}
-	if len(inner) > len("resource_format") {
-		next := rune(inner[len("resource_format")])
+	if len(inner) > len(name) {
+		next := rune(inner[len(name)])
 		if !unicode.IsSpace(next) {
-			return false, nil
+			return "", false, nil
 		}
 	}
 
-	argument := strings.TrimSpace(strings.TrimPrefix(inner, "resource_format"))
+	argument := strings.TrimSpace(strings.TrimPrefix(inner, name))
 	if argument == "" {
-		return true, faults.NewValidationError("resource_format placeholder argument is required", nil)
+		return "", true, faults.NewValidationError(name+" placeholder argument is required", nil)
 	}
 	if argument != "." {
-		return true, faults.NewValidationError("resource_format placeholder supports only {{resource_format .}}", nil)
+		return "", true, faults.NewValidationError(name+" placeholder supports only {{"+name+" .}}", nil)
 	}
 
-	return true, nil
+	switch name {
+	case "payload_type":
+		return descriptor.PayloadType, true, nil
+	case "payload_media_type":
+		return descriptor.MediaType, true, nil
+	case "payload_extension":
+		return descriptor.Extension, true, nil
+	default:
+		return "", false, nil
+	}
 }
 
 func resolvePlaceholderStoreKey(

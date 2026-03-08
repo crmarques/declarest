@@ -34,7 +34,7 @@ declarest resource save /corporations/acme
 This writes the payload to the repository base dir configured in your context, for example:
 
 - `<repo-base-dir>/corporations/acme/resource.json`
-- or `resource.yaml` when `repository.resource-format: yaml`
+- or another `resource.<ext>` when the managed server responds with a different media type
 
 ## 3. Inspect and edit locally
 

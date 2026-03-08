@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -44,10 +45,7 @@ func ResolveOperationSpecWithScope(
 	scopeCopy["collectionPath"] = collectionPath
 
 	spec := OperationSpec{
-		Filter:                cloneStringSlice(metadata.Filter),
-		Suppress:              cloneStringSlice(metadata.Suppress),
-		JQ:                    metadata.JQ,
-		PayloadTransformOrder: cloneStringSlice(metadata.PayloadTransformOrder),
+		PayloadMutation: nil,
 	}
 
 	if metadata.Operations != nil {
@@ -55,6 +53,7 @@ func ResolveOperationSpecWithScope(
 			spec = MergeOperationSpec(spec, operationSpec)
 		}
 	}
+	spec.PayloadMutation = combinePayloadMutationSteps(metadata.PayloadMutation, spec.PayloadMutation)
 
 	if strings.TrimSpace(spec.Path) == "" {
 		spec.Path = defaultOperationPathTemplate(operation)
@@ -252,9 +251,7 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 		SecretsFromAttributes:  cloneStringSlice(inferred.SecretsFromAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
-		Filter:                 cloneStringSlice(inferred.Filter),
-		Suppress:               cloneStringSlice(inferred.Suppress),
-		JQ:                     inferred.JQ,
+		PayloadMutation:        clonePayloadMutationSteps(inferred.PayloadMutation),
 	}
 
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
@@ -273,13 +270,11 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 
 func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (OperationSpec, error) {
 	rendered := OperationSpec{
-		Query:                 cloneStringMap(spec.Query),
-		Headers:               cloneStringMap(spec.Headers),
-		Body:                  spec.Body,
-		Filter:                cloneStringSlice(spec.Filter),
-		Suppress:              cloneStringSlice(spec.Suppress),
-		Validate:              cloneOperationValidationSpec(spec.Validate),
-		PayloadTransformOrder: cloneStringSlice(spec.PayloadTransformOrder),
+		Query:           cloneStringMap(spec.Query),
+		Headers:         cloneStringMap(spec.Headers),
+		Body:            spec.Body,
+		PayloadMutation: clonePayloadMutationSteps(spec.PayloadMutation),
+		Validate:        cloneOperationValidationSpec(spec.Validate),
 	}
 
 	var err error
@@ -299,11 +294,6 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 	if err != nil {
 		return OperationSpec{}, err
 	}
-	rendered.JQ, err = renderTemplateString("jq", spec.JQ, scope)
-	if err != nil {
-		return OperationSpec{}, err
-	}
-
 	for _, key := range sortedMapKeys(rendered.Query) {
 		value, renderErr := renderTemplateString("query."+key, rendered.Query[key], scope)
 		if renderErr != nil {
@@ -318,6 +308,20 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 			return OperationSpec{}, renderErr
 		}
 		rendered.Headers[key] = value
+	}
+
+	for idx := range rendered.PayloadMutation {
+		if strings.TrimSpace(rendered.PayloadMutation[idx].JQExpression) == "" {
+			continue
+		}
+		rendered.PayloadMutation[idx].JQExpression, err = renderTemplateString(
+			"payloadMutation["+strconv.Itoa(idx)+"].jqExpression",
+			rendered.PayloadMutation[idx].JQExpression,
+			scope,
+		)
+		if err != nil {
+			return OperationSpec{}, err
+		}
 	}
 
 	return rendered, nil

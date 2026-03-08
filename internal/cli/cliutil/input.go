@@ -35,14 +35,14 @@ func DecodeInput[T any](command *cobra.Command, flags InputFlags) (T, error) {
 		return output, err
 	}
 
-	return DecodeInputData[T](data, flags.Format)
+	return DecodeInputData[T](data, flags.ContentType, flags.Payload)
 }
 
-func DecodeInputData[T any](data []byte, format string) (T, error) {
+func DecodeInputData[T any](data []byte, contentType string, sourceName string) (T, error) {
 	var output T
 
-	switch format {
-	case "", OutputJSON:
+	switch resolveStructuredInputContentType(contentType, sourceName) {
+	case OutputJSON:
 		if err := json.Unmarshal(data, &output); err != nil {
 			return output, ValidationError("invalid json input", err)
 		}
@@ -51,22 +51,51 @@ func DecodeInputData[T any](data []byte, format string) (T, error) {
 			return output, ValidationError("invalid yaml input", err)
 		}
 	default:
-		return output, ValidationError("invalid input format: use json or yaml", nil)
+		return output, ValidationError("invalid input content type: use json, yaml, application/json, or application/yaml", nil)
 	}
 
 	return output, nil
 }
 
-func DecodeResourceValueInputData(data []byte, format string) (resource.Value, error) {
-	payloadType, err := resourceInputPayloadType(format)
+func DecodeResourceValueInputData(data []byte, contentType string) (resource.Value, error) {
+	content, err := DecodeResourceContentInputData(data, contentType, "")
 	if err != nil {
 		return nil, err
 	}
-	return resource.DecodePayload(data, payloadType)
+	return content.Value, nil
 }
 
-func IsBinaryInputFormat(format string) bool {
-	return strings.EqualFold(strings.TrimSpace(format), resource.PayloadTypeBinary)
+func DecodeResourceContentInputData(data []byte, contentType string, sourceName string) (resource.Content, error) {
+	descriptor, err := resourceInputPayloadDescriptor(data, contentType, sourceName)
+	if err != nil {
+		return resource.Content{}, err
+	}
+	content, err := resource.DecodeContent(data, descriptor)
+	if err != nil {
+		return resource.Content{}, err
+	}
+	return content, nil
+}
+
+func IsBinaryInputFormat(contentType string) bool {
+	descriptor, ok := resource.PayloadDescriptorForContentType(strings.TrimSpace(contentType))
+	if !ok {
+		return false
+	}
+	return descriptor.PayloadType == resource.PayloadTypeOctetStream
+}
+
+func resourceInputPayloadDescriptor(data []byte, contentType string, sourceName string) (resource.PayloadDescriptor, error) {
+	if trimmed := strings.TrimSpace(contentType); trimmed != "" {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{MediaType: trimmed}), nil
+	}
+	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
+		return descriptor, nil
+	}
+	if resource.StructuredLookingPayload(data) {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}), nil
+	}
+	return resource.DefaultOctetStreamDescriptor(), nil
 }
 
 func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte, error) {
@@ -83,7 +112,7 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 		if err != nil {
 			return nil, err
 		}
-		if len(data) == 0 && IsBinaryInputFormat(flags.Format) {
+		if len(data) == 0 && IsBinaryInputFormat(flags.ContentType) {
 			return data, nil
 		}
 		if len(bytes.TrimSpace(data)) == 0 {
@@ -107,7 +136,7 @@ func readInput(command *cobra.Command, flags InputFlags, required bool) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 && IsBinaryInputFormat(flags.Format) {
+	if len(data) == 0 && IsBinaryInputFormat(flags.ContentType) {
 		if required || flags.Payload == stdinFileIndicator {
 			return data, nil
 		}
@@ -134,9 +163,9 @@ func readAllWithLimit(reader io.Reader, maxBytes int64) ([]byte, error) {
 	return data, nil
 }
 
-func resourceInputPayloadType(format string) (string, error) {
-	switch strings.TrimSpace(format) {
-	case "", OutputJSON:
+func resourceInputPayloadType(contentType string) (string, error) {
+	switch resolveStructuredInputContentType(contentType, "") {
+	case OutputJSON:
 		return resource.PayloadTypeJSON, nil
 	case OutputYAML:
 		return resource.PayloadTypeYAML, nil
@@ -150,9 +179,19 @@ func resourceInputPayloadType(format string) (string, error) {
 		return resource.PayloadTypeProperties, nil
 	case resource.PayloadTypeText:
 		return resource.PayloadTypeText, nil
-	case resource.PayloadTypeBinary:
+	case resource.PayloadTypeBinary, resource.PayloadTypeOctetStream:
 		return resource.PayloadTypeOctetStream, nil
 	default:
-		return "", ValidationError("invalid input format: use json, yaml, xml, hcl, ini, properties, text, or binary", nil)
+		return "", ValidationError("invalid input content type", nil)
 	}
+}
+
+func resolveStructuredInputContentType(contentType string, sourceName string) string {
+	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
+		return descriptor.PayloadType
+	}
+	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
+		return descriptor.PayloadType
+	}
+	return OutputJSON
 }

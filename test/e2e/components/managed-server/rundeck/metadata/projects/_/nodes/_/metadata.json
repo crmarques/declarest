@@ -4,7 +4,7 @@
     "aliasFromAttribute": "/index",
     "collectionPath": "/projects/{{.project}}/nodes"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
       "httpMethod": "POST",
       "path": "/project/{{.project}}/source/{{.id}}/resources"
@@ -18,9 +18,11 @@
     },
     "listCollection": {
       "path": "/project/{{.project}}/sources",
-      "payload": {
-        "jqExpression": "map(. + {index: (.index | tostring), project: \"{{.project}}\"})"
-      }
+      "payloadMutation": [
+        {
+          "jqExpression": "map(. + {index: (.index | tostring), project: \"{{.project}}\"})"
+        }
+      ]
     },
     "compareResources": {
       "path": "/project/{{.project}}/source/{{.id}}/resources"

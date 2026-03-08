@@ -103,13 +103,13 @@ func operationSpecsEquivalent(left OperationSpec, right OperationSpec) bool {
 
 func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	normalized := OperationSpec{
-		Method:      strings.TrimSpace(spec.Method),
-		Path:        strings.TrimSpace(spec.Path),
-		Accept:      strings.TrimSpace(spec.Accept),
-		ContentType: strings.TrimSpace(spec.ContentType),
-		Body:        spec.Body,
-		JQ:          strings.TrimSpace(spec.JQ),
-		Validate:    normalizeOperationValidationSpecForComparison(spec.Validate),
+		Method:          strings.TrimSpace(spec.Method),
+		Path:            strings.TrimSpace(spec.Path),
+		Accept:          strings.TrimSpace(spec.Accept),
+		ContentType:     strings.TrimSpace(spec.ContentType),
+		Body:            spec.Body,
+		PayloadMutation: normalizePayloadMutationStepsForComparison(spec.PayloadMutation),
+		Validate:        normalizeOperationValidationSpecForComparison(spec.Validate),
 	}
 
 	if len(spec.Query) > 0 {
@@ -118,13 +118,22 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	if len(spec.Headers) > 0 {
 		normalized.Headers = cloneStringMap(spec.Headers)
 	}
-	if len(spec.Filter) > 0 {
-		normalized.Filter = cloneStringSlice(spec.Filter)
-	}
-	if len(spec.Suppress) > 0 {
-		normalized.Suppress = cloneStringSlice(spec.Suppress)
+	return normalized
+}
+
+func normalizePayloadMutationStepsForComparison(values []PayloadMutationStep) []PayloadMutationStep {
+	if len(values) == 0 {
+		return nil
 	}
 
+	normalized := make([]PayloadMutationStep, len(values))
+	for idx, value := range values {
+		normalized[idx] = PayloadMutationStep{
+			SelectAttributes:   cloneStringSlice(value.SelectAttributes),
+			SuppressAttributes: cloneStringSlice(value.SuppressAttributes),
+			JQExpression:       strings.TrimSpace(value.JQExpression),
+		}
+	}
 	return normalized
 }
 

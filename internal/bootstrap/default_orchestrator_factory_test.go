@@ -119,7 +119,7 @@ paths: {}
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
-		specMap, ok := openAPISpec.(map[string]any)
+		specMap, ok := openAPISpec.Value.(map[string]any)
 		if !ok {
 			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 		}
@@ -187,7 +187,7 @@ paths: {}
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
-		specMap, ok := openAPISpec.(map[string]any)
+		specMap, ok := openAPISpec.Value.(map[string]any)
 		if !ok {
 			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 		}
@@ -257,7 +257,7 @@ distribution:
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
 		}
-		specMap, ok := openAPISpec.(map[string]any)
+		specMap, ok := openAPISpec.Value.(map[string]any)
 		if !ok {
 			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 		}
@@ -326,7 +326,7 @@ distribution:
 		if openAPIErr != nil {
 			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
 		}
-		specMap, ok := openAPISpec.(map[string]any)
+		specMap, ok := openAPISpec.Value.(map[string]any)
 		if !ok {
 			t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 		}

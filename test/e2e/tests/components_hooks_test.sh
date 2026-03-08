@@ -273,7 +273,6 @@ test_repo_context_scripts_emit_metadata_bundle_when_set() {
 
   cat >"${state_file}" <<EOF
 REPO_BASE_DIR=${repo_dir}
-REPO_RESOURCE_FORMAT=json
 GIT_REMOTE_URL=https://example.com/acme/repo.git
 GIT_REMOTE_PROVIDER=github
 GIT_REMOTE_BRANCH=main

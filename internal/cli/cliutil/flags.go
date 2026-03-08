@@ -12,8 +12,8 @@ type GlobalFlags struct {
 }
 
 type InputFlags struct {
-	Payload string
-	Format  string
+	Payload     string
+	ContentType string
 }
 
 func BindGlobalFlags(command *cobra.Command, flags *GlobalFlags) {
@@ -32,20 +32,19 @@ func IsVerbose(flags *GlobalFlags) bool {
 
 func BindInputFlags(command *cobra.Command, flags *InputFlags) {
 	command.Flags().StringVarP(&flags.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVarP(&flags.Format, "format", "i", OutputJSON, "input format: json|yaml")
-	RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVar(&flags.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
+	RegisterInputContentTypeFlagCompletion(command)
 }
 
 func BindResourceInputFlags(command *cobra.Command, flags *InputFlags) {
 	command.Flags().StringVarP(&flags.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVarP(
-		&flags.Format,
-		"format",
-		"i",
-		OutputJSON,
-		"input format: json|yaml|xml|hcl|ini|properties|text|binary",
+	command.Flags().StringVar(
+		&flags.ContentType,
+		"content-type",
+		"",
+		"input content type: json|yaml|xml|hcl|ini|properties|text|binary|application/...",
 	)
-	RegisterResourceInputFormatFlagCompletion(command)
+	RegisterResourceInputContentTypeFlagCompletion(command)
 }
 
 func BindPathFlag(command *cobra.Command, path *string) {

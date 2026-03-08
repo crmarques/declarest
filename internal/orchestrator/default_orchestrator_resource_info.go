@@ -14,7 +14,7 @@ import (
 func (r *DefaultOrchestrator) buildResourceInfo(
 	ctx context.Context,
 	logicalPath string,
-	value resource.Value,
+	content resource.Content,
 ) (resource.Resource, metadata.ResourceMetadata, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -28,12 +28,12 @@ func (r *DefaultOrchestrator) buildResourceInfo(
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}
 
-	expandedPayload, err := r.expandExternalizedPayload(ctx, normalizedPath, resolvedMetadata, value)
+	expandedContent, err := r.expandExternalizedPayload(ctx, normalizedPath, resolvedMetadata, content)
 	if err != nil {
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}
 
-	normalizedPayload, err := resource.Normalize(expandedPayload)
+	normalizedPayload, err := resource.Normalize(expandedContent.Value)
 	if err != nil {
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}
@@ -44,11 +44,12 @@ func (r *DefaultOrchestrator) buildResourceInfo(
 	}
 
 	return resource.Resource{
-		LogicalPath:    normalizedPath,
-		CollectionPath: collectionPath,
-		LocalAlias:     localAlias,
-		RemoteID:       remoteID,
-		Payload:        normalizedPayload,
+		LogicalPath:       normalizedPath,
+		CollectionPath:    collectionPath,
+		LocalAlias:        localAlias,
+		RemoteID:          remoteID,
+		Payload:           normalizedPayload,
+		PayloadDescriptor: expandedContent.Descriptor,
 	}, resolvedMetadata, nil
 }
 
@@ -94,11 +95,17 @@ func (r *DefaultOrchestrator) buildResourceInfoForRemoteRead(
 		return resource.Resource{}, metadata.ResourceMetadata{}, err
 	}
 
+	descriptor := resource.PayloadDescriptor{}
+	if strings.TrimSpace(resolvedMetadata.PayloadType) != "" {
+		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resolvedMetadata.PayloadType})
+	}
+
 	return resource.Resource{
-		LogicalPath:    normalizedPath,
-		CollectionPath: collectionPathFor(normalizedPath),
-		LocalAlias:     localAlias,
-		RemoteID:       remoteID,
-		Payload:        normalizedPayload,
+		LogicalPath:       normalizedPath,
+		CollectionPath:    collectionPathFor(normalizedPath),
+		LocalAlias:        localAlias,
+		RemoteID:          remoteID,
+		Payload:           normalizedPayload,
+		PayloadDescriptor: descriptor,
 	}, resolvedMetadata, nil
 }

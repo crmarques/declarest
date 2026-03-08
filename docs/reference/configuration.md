@@ -49,15 +49,6 @@ Each context may include:
 
 ## Repository configuration
 
-### `repository.resource-format`
-
-Optional. Controls local payload file format:
-
-- `json`
-- `yaml`
-
-When omitted, DeclaREST uses the remote/default format behavior.
-
 ### Repository backend (one-of)
 
 Exactly one of these must be present:
@@ -69,7 +60,6 @@ Exactly one of these must be present:
 
 ```yaml
 repository:
-  resource-format: yaml
   filesystem:
     base-dir: /work/declarest/repo
 ```
@@ -87,7 +77,6 @@ repository:
 
 ```yaml
 repository:
-  resource-format: json
   git:
     local:
       base-dir: /work/declarest/repo
@@ -163,6 +152,8 @@ repository:
 ```
 
 `proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. When unset, the component inherits the first configured proxy from `managed-server.http.proxy`, `secret-store.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly skip the inherited proxy for this component.
+
+Repository payload files are not configured in the context. DeclaREST persists `resource.<ext>` using the managed-server response media type or the explicit payload input media type.
 
 ## Managed server configuration (`managed-server`)
 
@@ -399,7 +390,6 @@ preferences:
 contexts:
   - name: keycloak-prod
     repository:
-      resource-format: yaml
       git:
         local:
           base-dir: /srv/declarest/keycloak-prod
@@ -474,7 +464,6 @@ Effective config precedence is:
 
 The canonical override keys are:
 
-- `repository.resource-format`
 - `repository.git.local.base-dir`
 - `repository.filesystem.base-dir`
 - `managed-server.http.base-url`

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestLocalResourceRepositorySaveRejectsSymlinkEscape(t *testing.T) {
@@ -18,8 +20,10 @@ func TestLocalResourceRepositorySaveRejectsSymlinkEscape(t *testing.T) {
 		t.Fatalf("failed to create symlink: %v", err)
 	}
 
-	repo := NewLocalResourceRepository(root, "json")
-	err := repo.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"})
+	repo := NewLocalResourceRepository(root)
+	err := repo.Save(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{"name": "ACME"},
+	})
 	if err == nil {
 		t.Fatal("expected save to reject symlink escape path")
 	}

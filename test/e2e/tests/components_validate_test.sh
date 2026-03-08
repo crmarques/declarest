@@ -54,6 +54,7 @@ create_managed_server_component() {
   local include_compose_artifacts=${3:-true}
   local include_k8s_artifacts=${4:-true}
   local metadata_extension=${5:-json}
+  local payload_extension=${6:-json}
   local component_dir="${root}/components/managed-server/demo"
   local metadata_file="${component_dir}/repo-template/api/items/_/metadata.${metadata_extension}"
   create_component_common "${component_dir}"
@@ -75,7 +76,7 @@ EOF
   fi
   mkdir -p "${component_dir}/repo-template/api/items/alpha"
   mkdir -p "${component_dir}/repo-template/api/items/_"
-  cat >"${component_dir}/repo-template/api/items/alpha/resource.json" <<'EOF'
+  cat >"${component_dir}/repo-template/api/items/alpha/resource.${payload_extension}" <<'EOF'
 {"id":"alpha","name":"alpha"}
 EOF
   if [[ "${metadata_extension}" == 'yaml' ]]; then
@@ -178,6 +179,18 @@ test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity() {
 _test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
   create_managed_server_component "${E2E_DIR}" true true true yaml
+  e2e_discover_components
+  e2e_validate_all_discovered_component_contracts >/dev/null
+}
+
+test_validate_all_discovered_components_accepts_valid_yaml_resource_payload() {
+  load_components_libs
+  with_temp_e2e_dir _test_validate_all_discovered_components_accepts_valid_yaml_resource_payload_impl
+}
+
+_test_validate_all_discovered_components_accepts_valid_yaml_resource_payload_impl() {
+  create_repo_type_component "${E2E_DIR}" true
+  create_managed_server_component "${E2E_DIR}" true true true json yaml
   e2e_discover_components
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
@@ -316,5 +329,6 @@ test_managed_server_auth_type_defaults_prefer_oauth2
 test_managed_server_auth_type_rejects_unsupported_selection
 test_validate_all_discovered_components_rejects_missing_compose_artifacts
 test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity
+test_validate_all_discovered_components_accepts_valid_yaml_resource_payload
 test_validate_all_discovered_components_rejects_missing_k8s_artifacts
 test_validate_all_discovered_components_accepts_native_without_runtime_artifacts

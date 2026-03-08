@@ -11,26 +11,20 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		SecretsFromAttributes:  cloneStringSlice(value.SecretsFromAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
 		Operations:             make(map[string]OperationSpec, len(value.Operations)),
-		Filter:                 cloneStringSlice(value.Filter),
-		Suppress:               cloneStringSlice(value.Suppress),
-		JQ:                     value.JQ,
-		PayloadTransformOrder:  cloneStringSlice(value.PayloadTransformOrder),
+		PayloadMutation:        clonePayloadMutationSteps(value.PayloadMutation),
 	}
 
 	for key, operationSpec := range value.Operations {
 		cloned.Operations[key] = OperationSpec{
-			Method:                operationSpec.Method,
-			Path:                  operationSpec.Path,
-			Query:                 cloneStringMap(operationSpec.Query),
-			Headers:               cloneStringMap(operationSpec.Headers),
-			Accept:                operationSpec.Accept,
-			ContentType:           operationSpec.ContentType,
-			Body:                  operationSpec.Body,
-			Filter:                cloneStringSlice(operationSpec.Filter),
-			Suppress:              cloneStringSlice(operationSpec.Suppress),
-			JQ:                    operationSpec.JQ,
-			Validate:              cloneOperationValidationSpec(operationSpec.Validate),
-			PayloadTransformOrder: cloneStringSlice(operationSpec.PayloadTransformOrder),
+			Method:          operationSpec.Method,
+			Path:            operationSpec.Path,
+			Query:           cloneStringMap(operationSpec.Query),
+			Headers:         cloneStringMap(operationSpec.Headers),
+			Accept:          operationSpec.Accept,
+			ContentType:     operationSpec.ContentType,
+			Body:            operationSpec.Body,
+			PayloadMutation: clonePayloadMutationSteps(operationSpec.PayloadMutation),
+			Validate:        cloneOperationValidationSpec(operationSpec.Validate),
 		}
 	}
 
@@ -46,10 +40,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		SecretsFromAttributes:  cloneStringSlice(base.SecretsFromAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
 		Operations:             cloneOperationMap(base.Operations),
-		Filter:                 cloneStringSlice(base.Filter),
-		Suppress:               cloneStringSlice(base.Suppress),
-		JQ:                     base.JQ,
-		PayloadTransformOrder:  cloneStringSlice(base.PayloadTransformOrder),
+		PayloadMutation:        clonePayloadMutationSteps(base.PayloadMutation),
 	}
 
 	if overlay.IDFromAttribute != "" {
@@ -79,16 +70,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 			merged.Operations[key] = MergeOperationSpec(merged.Operations[key], overlay.Operations[key])
 		}
 	}
-	if overlay.Filter != nil {
-		merged.Filter = cloneStringSlice(overlay.Filter)
+	if overlay.PayloadMutation != nil {
+		merged.PayloadMutation = clonePayloadMutationSteps(overlay.PayloadMutation)
 	}
-	if overlay.Suppress != nil {
-		merged.Suppress = cloneStringSlice(overlay.Suppress)
-	}
-	if overlay.JQ != "" {
-		merged.JQ = overlay.JQ
-	}
-	merged.PayloadTransformOrder = mergePayloadTransformOrder(merged.PayloadTransformOrder, overlay.PayloadTransformOrder)
 
 	return merged
 }
@@ -124,18 +108,15 @@ func cloneBoolPointer(value *bool) *bool {
 
 func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec {
 	merged := OperationSpec{
-		Method:                base.Method,
-		Path:                  base.Path,
-		Query:                 cloneStringMap(base.Query),
-		Headers:               cloneStringMap(base.Headers),
-		Accept:                base.Accept,
-		ContentType:           base.ContentType,
-		Body:                  base.Body,
-		Filter:                cloneStringSlice(base.Filter),
-		Suppress:              cloneStringSlice(base.Suppress),
-		JQ:                    base.JQ,
-		Validate:              cloneOperationValidationSpec(base.Validate),
-		PayloadTransformOrder: cloneStringSlice(base.PayloadTransformOrder),
+		Method:          base.Method,
+		Path:            base.Path,
+		Query:           cloneStringMap(base.Query),
+		Headers:         cloneStringMap(base.Headers),
+		Accept:          base.Accept,
+		ContentType:     base.ContentType,
+		Body:            base.Body,
+		PayloadMutation: clonePayloadMutationSteps(base.PayloadMutation),
+		Validate:        cloneOperationValidationSpec(base.Validate),
 	}
 
 	if overlay.Method != "" {
@@ -179,17 +160,10 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 	if overlay.Body != nil {
 		merged.Body = overlay.Body
 	}
-	if overlay.Filter != nil {
-		merged.Filter = cloneStringSlice(overlay.Filter)
-	}
-	if overlay.Suppress != nil {
-		merged.Suppress = cloneStringSlice(overlay.Suppress)
-	}
-	if overlay.JQ != "" {
-		merged.JQ = overlay.JQ
+	if overlay.PayloadMutation != nil {
+		merged.PayloadMutation = clonePayloadMutationSteps(overlay.PayloadMutation)
 	}
 	merged.Validate = mergeOperationValidationSpec(merged.Validate, overlay.Validate)
-	merged.PayloadTransformOrder = mergePayloadTransformOrder(merged.PayloadTransformOrder, overlay.PayloadTransformOrder)
 
 	return merged
 }
@@ -211,18 +185,15 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 	cloned := make(map[string]OperationSpec, len(values))
 	for key, value := range values {
 		cloned[key] = OperationSpec{
-			Method:                value.Method,
-			Path:                  value.Path,
-			Query:                 cloneStringMap(value.Query),
-			Headers:               cloneStringMap(value.Headers),
-			Accept:                value.Accept,
-			ContentType:           value.ContentType,
-			Body:                  value.Body,
-			Filter:                cloneStringSlice(value.Filter),
-			Suppress:              cloneStringSlice(value.Suppress),
-			JQ:                    value.JQ,
-			Validate:              cloneOperationValidationSpec(value.Validate),
-			PayloadTransformOrder: cloneStringSlice(value.PayloadTransformOrder),
+			Method:          value.Method,
+			Path:            value.Path,
+			Query:           cloneStringMap(value.Query),
+			Headers:         cloneStringMap(value.Headers),
+			Accept:          value.Accept,
+			ContentType:     value.ContentType,
+			Body:            value.Body,
+			PayloadMutation: clonePayloadMutationSteps(value.PayloadMutation),
+			Validate:        cloneOperationValidationSpec(value.Validate),
 		}
 	}
 	return cloned

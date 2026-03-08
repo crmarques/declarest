@@ -16,6 +16,13 @@ import (
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
+func testSaveContent(value any) resourcedomain.Content {
+	return resourcedomain.Content{
+		Value:      value,
+		Descriptor: resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON}),
+	}
+}
+
 func TestExtractSaveListItems(t *testing.T) {
 	t.Parallel()
 
@@ -107,9 +114,9 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
 		}
-		items, ok := value.([]any)
+		items, ok := value.Value.([]any)
 		if !ok || len(items) != 1 {
-			t.Fatalf("expected one list payload item, got %#v", value)
+			t.Fatalf("expected one list payload item, got %#v", value.Value)
 		}
 		if len(remoteReader.getCalls) != 0 {
 			t.Fatalf("expected no remote get calls, got %#v", remoteReader.getCalls)
@@ -152,9 +159,9 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
 		}
-		items, ok := value.([]any)
+		items, ok := value.Value.([]any)
 		if !ok || len(items) != 2 {
-			t.Fatalf("expected two list payload items, got %#v", value)
+			t.Fatalf("expected two list payload items, got %#v", value.Value)
 		}
 		if !reflect.DeepEqual(remoteReader.getCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
 			t.Fatalf("expected one get call, got %#v", remoteReader.getCalls)
@@ -251,9 +258,9 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 			t.Fatalf("resolveSaveRemoteValue returned error: %v", err)
 		}
 
-		items, ok := value.([]any)
+		items, ok := value.Value.([]any)
 		if !ok || len(items) != 1 {
-			t.Fatalf("expected one filtered list payload item, got %#v", value)
+			t.Fatalf("expected one filtered list payload item, got %#v", value.Value)
 		}
 		payload, ok := items[0].(map[string]any)
 		if !ok {
@@ -1212,12 +1219,12 @@ type fakeSaveRemoteReader struct {
 	listCalls []string
 }
 
-func (f *fakeSaveRemoteReader) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+func (f *fakeSaveRemoteReader) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
 	f.getCalls = append(f.getCalls, logicalPath)
 	if f.getErr != nil {
-		return nil, f.getErr
+		return resourcedomain.Content{}, f.getErr
 	}
-	return f.getValue, nil
+	return testSaveContent(f.getValue), nil
 }
 
 func (f *fakeSaveRemoteReader) ListRemote(
@@ -1280,24 +1287,24 @@ type fakeSaveRepository struct {
 	err    error
 }
 
-func (f *fakeSaveRepository) Save(_ context.Context, logicalPath string, value resourcedomain.Value) error {
+func (f *fakeSaveRepository) Save(_ context.Context, logicalPath string, value resourcedomain.Content) error {
 	if f.values == nil {
 		f.values = map[string]resourcedomain.Value{}
 	}
-	f.values[logicalPath] = value
+	f.values[logicalPath] = value.Value
 	return nil
 }
 
-func (f *fakeSaveRepository) Get(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+func (f *fakeSaveRepository) Get(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
 	if f.err != nil {
-		return nil, f.err
+		return resourcedomain.Content{}, f.err
 	}
 	if f.values != nil {
 		if value, found := f.values[logicalPath]; found {
-			return value, nil
+			return testSaveContent(value), nil
 		}
 	}
-	return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
 }
 
 func (f *fakeSaveRepository) Delete(_ context.Context, _ string, _ repositorydomain.DeletePolicy) error {

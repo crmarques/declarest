@@ -14,7 +14,7 @@ func (r *DefaultOrchestrator) saveLocalResource(
 	ctx context.Context,
 	manager repository.ResourceStore,
 	logicalPath string,
-	value resource.Value,
+	content resource.Content,
 ) error {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -31,7 +31,7 @@ func (r *DefaultOrchestrator) saveLocalResource(
 		return err
 	}
 	if len(entries) == 0 {
-		return manager.Save(ctx, normalizedPath, value)
+		return manager.Save(ctx, normalizedPath, content)
 	}
 
 	artifactStore, ok := manager.(repository.ResourceArtifactStore)
@@ -43,26 +43,41 @@ func (r *DefaultOrchestrator) saveLocalResource(
 		)
 	}
 
-	extracted, err := resourceexternalization.Extract(value, entries)
+	extracted, err := resourceexternalization.Extract(content.Value, entries)
 	if err != nil {
 		return err
 	}
 
-	return artifactStore.SaveResourceWithArtifacts(ctx, normalizedPath, extracted.Payload, extracted.Artifacts)
+	return artifactStore.SaveResourceWithArtifacts(
+		ctx,
+		normalizedPath,
+		resource.Content{
+			Value:      extracted.Payload,
+			Descriptor: content.Descriptor,
+		},
+		extracted.Artifacts,
+	)
 }
 
 func (r *DefaultOrchestrator) expandExternalizedPayload(
 	ctx context.Context,
 	logicalPath string,
 	md metadata.ResourceMetadata,
-	value resource.Value,
-) (resource.Value, error) {
+	content resource.Content,
+) (resource.Content, error) {
 	entries, err := metadata.ResolveExternalizedAttributes(md)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	if len(entries) == 0 {
-		return resource.Normalize(value)
+		normalizedValue, normalizeErr := resource.Normalize(content.Value)
+		if normalizeErr != nil {
+			return resource.Content{}, normalizeErr
+		}
+		return resource.Content{
+			Value:      normalizedValue,
+			Descriptor: content.Descriptor,
+		}, nil
 	}
 
 	var artifactStore repository.ResourceArtifactStore
@@ -73,5 +88,12 @@ func (r *DefaultOrchestrator) expandExternalizedPayload(
 		}
 	}
 
-	return resourceexternalization.Expand(ctx, artifactStore, logicalPath, value, entries)
+	expanded, err := resourceexternalization.Expand(ctx, artifactStore, logicalPath, content.Value, entries)
+	if err != nil {
+		return resource.Content{}, err
+	}
+	return resource.Content{
+		Value:      expanded,
+		Descriptor: content.Descriptor,
+	}, nil
 }

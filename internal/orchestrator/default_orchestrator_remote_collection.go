@@ -18,9 +18,9 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
 	md metadata.ResourceMetadata,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	if !r.shouldTreatRemotePathAsCollection(ctx, serverManager, resourceInfo) {
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
 
 	items, err := r.listRemoteResources(ctx, serverManager, resourceInfo.LogicalPath, md)
@@ -28,17 +28,27 @@ func (r *DefaultOrchestrator) fetchRemoteCollectionValue(
 		// Some APIs incorrectly return 404 for empty collections.
 		if faults.IsCategory(err, faults.NotFoundError) {
 			if r.isMissingParentForCollectionNotFound(ctx, serverManager, resourceInfo) {
-				return nil, true, err
+				return resource.Content{}, true, err
 			}
-			return []any{}, true, nil
+			return resource.Content{
+				Value:      []any{},
+				Descriptor: resourceInfo.PayloadDescriptor,
+			}, true, nil
 		}
 		if isFallbackListPayloadShapeError(err) {
-			return nil, false, nil
+			return resource.Content{}, false, nil
 		}
-		return nil, true, err
+		return resource.Content{}, true, err
 	}
 
-	return listPayloadFromResources(items), true, nil
+	descriptor := resourceInfo.PayloadDescriptor
+	if len(items) > 0 && resource.IsPayloadDescriptorExplicit(items[0].PayloadDescriptor) {
+		descriptor = items[0].PayloadDescriptor
+	}
+	return resource.Content{
+		Value:      listPayloadFromResources(items),
+		Descriptor: descriptor,
+	}, true, nil
 }
 
 func (r *DefaultOrchestrator) withListJQResourceResolver(ctx context.Context) context.Context {
@@ -58,7 +68,11 @@ func (r *DefaultOrchestrator) resolveListJQResource(
 	ctx context.Context,
 	logicalPath string,
 ) (resource.Value, error) {
-	return r.GetRemote(ctx, logicalPath)
+	content, err := r.GetRemote(ctx, logicalPath)
+	if err != nil {
+		return nil, err
+	}
+	return content.Value, nil
 }
 
 func (r *DefaultOrchestrator) shouldTreatRemotePathAsCollection(
@@ -115,19 +129,19 @@ func (r *DefaultOrchestrator) collectionHintFromOpenAPI(
 	if err != nil {
 		return false
 	}
-	existsInOpenAPI, err := metadata.HasOpenAPIPath(resourceInfo.LogicalPath, openAPISpec)
+	existsInOpenAPI, err := metadata.HasOpenAPIPath(resourceInfo.LogicalPath, openAPISpec.Value)
 	if err != nil || !existsInOpenAPI {
 		return false
 	}
 
-	if r.openAPIInferenceHintsCollection(ctx, resourceInfo, resourceInfo.LogicalPath, openAPISpec) {
+	if r.openAPIInferenceHintsCollection(ctx, resourceInfo, resourceInfo.LogicalPath, openAPISpec.Value) {
 		return true
 	}
 
 	// Avoid treating concrete resource paths with child endpoints as collections
 	// (for example /admin/realms/{realm}) when probing a synthetic trailing-slash
 	// variant for collection hints.
-	if openAPIExactPathLooksLikeResource(openAPISpec, resourceInfo.LogicalPath) {
+	if openAPIExactPathLooksLikeResource(openAPISpec.Value, resourceInfo.LogicalPath) {
 		return false
 	}
 
@@ -136,7 +150,7 @@ func (r *DefaultOrchestrator) collectionHintFromOpenAPI(
 	}
 
 	collectionSelector := strings.TrimSuffix(resourceInfo.LogicalPath, "/") + "/"
-	return r.openAPIInferenceHintsCollection(ctx, resourceInfo, collectionSelector, openAPISpec)
+	return r.openAPIInferenceHintsCollection(ctx, resourceInfo, collectionSelector, openAPISpec.Value)
 }
 
 func (r *DefaultOrchestrator) openAPIInferenceHintsCollection(
@@ -373,7 +387,7 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	applyOrchestratorPayloadScope(scope, metadataCopy, r.effectiveResourceFormat())
+	applyOrchestratorPayloadScope(scope, metadataCopy, templateResource.PayloadDescriptor)
 
 	spec, err := metadata.ResolveOperationSpecWithScope(ctx, metadataCopy, operation, scope)
 	if err != nil {
@@ -385,23 +399,21 @@ func (r *DefaultOrchestrator) renderOperationSpec(
 	return spec, nil
 }
 
-func applyOrchestratorPayloadScope(scope map[string]any, md metadata.ResourceMetadata, fallback string) {
+func applyOrchestratorPayloadScope(
+	scope map[string]any,
+	md metadata.ResourceMetadata,
+	descriptor resource.PayloadDescriptor,
+) {
 	if scope == nil {
 		return
 	}
 
-	scope["resourceFormat"] = metadata.NormalizeResourceFormat(fallback)
+	activeDescriptor := resource.NormalizePayloadDescriptor(descriptor)
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) && strings.TrimSpace(md.PayloadType) != "" {
+		activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: md.PayloadType})
+	}
 
-	payloadType, err := metadata.EffectivePayloadType(md, fallback)
-	if err != nil {
-		payloadType = metadata.NormalizeResourceFormat(fallback)
-	}
-	scope["payloadType"] = payloadType
-
-	if mediaType, mediaErr := metadata.ResourceFormatMediaType(payloadType); mediaErr == nil {
-		scope["payloadMediaType"] = mediaType
-	}
-	if extension, extensionErr := metadata.ResourceFormatExtension(payloadType); extensionErr == nil {
-		scope["payloadExtension"] = extension
-	}
+	scope["payloadType"] = activeDescriptor.PayloadType
+	scope["payloadMediaType"] = activeDescriptor.MediaType
+	scope["payloadExtension"] = activeDescriptor.Extension
 }

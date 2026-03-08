@@ -37,11 +37,16 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 				Path: "/api/customers",
 			},
 			string(OperationCompare): {
-				Suppress: []string{"/updatedAt"},
+				PayloadMutation: []PayloadMutationStep{
+					{SuppressAttributes: []string{"/updatedAt"}},
+				},
 			},
 		},
-		Filter:   []string{},
-		Suppress: []string{"/updatedAt"},
+		PayloadMutation: []PayloadMutationStep{
+			{SelectAttributes: []string{}},
+			{SuppressAttributes: []string{"/updatedAt"}},
+			{JQExpression: ""},
+		},
 	}
 
 	encoded, err := json.Marshal(value)
@@ -76,22 +81,22 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 		t.Fatalf("expected resourceInfo.secretInAttributes, got %#v", resourceInfo["secretInAttributes"])
 	}
 
-	operationInfo, ok := decoded["operationInfo"].(map[string]any)
+	operationsInfo, ok := decoded["operationsInfo"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected operationInfo object, got %#v", decoded["operationInfo"])
+		t.Fatalf("expected operationsInfo object, got %#v", decoded["operationsInfo"])
 	}
-	if _, hasLegacyGet := operationInfo["get"]; hasLegacyGet {
-		t.Fatalf("expected canonical operationInfo keys, got %#v", operationInfo)
+	if _, hasLegacyGet := operationsInfo["get"]; hasLegacyGet {
+		t.Fatalf("expected canonical operationsInfo keys, got %#v", operationsInfo)
 	}
-	if _, hasGetResource := operationInfo["getResource"]; !hasGetResource {
-		t.Fatalf("expected getResource operation entry, got %#v", operationInfo)
+	if _, hasGetResource := operationsInfo["getResource"]; !hasGetResource {
+		t.Fatalf("expected getResource operation entry, got %#v", operationsInfo)
 	}
-	if _, hasListCollection := operationInfo["listCollection"]; !hasListCollection {
-		t.Fatalf("expected listCollection operation entry, got %#v", operationInfo)
+	if _, hasListCollection := operationsInfo["listCollection"]; !hasListCollection {
+		t.Fatalf("expected listCollection operation entry, got %#v", operationsInfo)
 	}
-	createResource, ok := operationInfo["createResource"].(map[string]any)
+	createResource, ok := operationsInfo["createResource"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected createResource operation entry, got %#v", operationInfo["createResource"])
+		t.Fatalf("expected createResource operation entry, got %#v", operationsInfo["createResource"])
 	}
 	if _, hasAccept := createResource["accept"]; hasAccept {
 		t.Fatalf("expected createResource.accept to be omitted, got %#v", createResource["accept"])
@@ -140,36 +145,56 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if validateValue["schemaRef"] != "openapi:request-body" {
 		t.Fatalf("expected validate.schemaRef openapi:request-body, got %#v", validateValue["schemaRef"])
 	}
-	compareResource, ok := operationInfo["compareResources"].(map[string]any)
+	compareResource, ok := operationsInfo["compareResources"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected compareResources operation entry, got %#v", operationInfo["compareResources"])
+		t.Fatalf("expected compareResources operation entry, got %#v", operationsInfo["compareResources"])
 	}
 	if _, hasIgnoreAttributes := compareResource["ignoreAttributes"]; hasIgnoreAttributes {
 		t.Fatalf("expected compareResources.ignoreAttributes to be omitted, got %#v", compareResource)
 	}
-	compareSuppress, ok := compareResource["suppressAttributes"].([]any)
+	compareMutation, ok := compareResource["payloadMutation"].([]any)
+	if !ok || len(compareMutation) != 1 {
+		t.Fatalf("expected compareResources.payloadMutation, got %#v", compareResource["payloadMutation"])
+	}
+	compareStep, ok := compareMutation[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected compareResources payloadMutation object, got %#v", compareMutation[0])
+	}
+	compareSuppress, ok := compareStep["suppressAttributes"].([]any)
 	if !ok || len(compareSuppress) != 1 || compareSuppress[0] != "/updatedAt" {
-		t.Fatalf("expected compareResources.suppressAttributes [/updatedAt], got %#v", compareResource["suppressAttributes"])
+		t.Fatalf("expected compareResources payloadMutation suppressAttributes [/updatedAt], got %#v", compareStep["suppressAttributes"])
 	}
 
-	defaults, ok := operationInfo["defaults"].(map[string]any)
+	defaults, ok := operationsInfo["defaults"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected operationInfo.defaults object, got %#v", operationInfo["defaults"])
+		t.Fatalf("expected operationsInfo.defaults object, got %#v", operationsInfo["defaults"])
 	}
-	payload, ok := defaults["payload"].(map[string]any)
+	payloadMutation, ok := defaults["payloadMutation"].([]any)
+	if !ok || len(payloadMutation) != 3 {
+		t.Fatalf("expected operationsInfo.defaults.payloadMutation array, got %#v", defaults["payloadMutation"])
+	}
+	filterStep, ok := payloadMutation[0].(map[string]any)
 	if !ok {
-		t.Fatalf("expected operationInfo.defaults.payload object, got %#v", defaults["payload"])
+		t.Fatalf("expected first payloadMutation step object, got %#v", payloadMutation[0])
 	}
-	filter, ok := payload["filterAttributes"].([]any)
+	filter, ok := filterStep["selectAttributes"].([]any)
 	if !ok || len(filter) != 0 {
-		t.Fatalf("expected explicit empty defaults.payload.filterAttributes array, got %#v", payload["filterAttributes"])
+		t.Fatalf("expected explicit empty defaults payloadMutation selectAttributes array, got %#v", filterStep["selectAttributes"])
 	}
-	suppress, ok := payload["suppressAttributes"].([]any)
+	suppressStep, ok := payloadMutation[1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected second payloadMutation step object, got %#v", payloadMutation[1])
+	}
+	suppress, ok := suppressStep["suppressAttributes"].([]any)
 	if !ok || len(suppress) != 1 || suppress[0] != "/updatedAt" {
-		t.Fatalf("expected defaults.payload.suppressAttributes [/updatedAt], got %#v", payload["suppressAttributes"])
+		t.Fatalf("expected defaults payloadMutation suppressAttributes [/updatedAt], got %#v", suppressStep["suppressAttributes"])
 	}
-	if jq, ok := payload["jqExpression"].(string); !ok || jq != "" {
-		t.Fatalf("expected explicit empty defaults.payload.jqExpression, got %#v", payload["jqExpression"])
+	jqStep, ok := payloadMutation[2].(map[string]any)
+	if !ok {
+		t.Fatalf("expected third payloadMutation step object, got %#v", payloadMutation[2])
+	}
+	if jq, ok := jqStep["jqExpression"].(string); !ok || jq != "" {
+		t.Fatalf("expected explicit empty defaults payloadMutation jqExpression, got %#v", jqStep["jqExpression"])
 	}
 }
 
@@ -208,13 +233,13 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		    "collectionPath": "/admin/realms",
 		    "secretInAttributes": []
 		  },
-		  "operationInfo": {
+		  "operationsInfo": {
 		    "defaults": {
-		      "payload": {
-		        "filterAttributes": [],
-		        "suppressAttributes": ["/updatedAt"],
-		        "jqExpression": ""
-		      }
+		      "payloadMutation": [
+		        {"selectAttributes": []},
+		        {"suppressAttributes": ["/updatedAt"]},
+		        {"jqExpression": ""}
+		      ]
 		    },
 		    "createResource": {
 		      "httpMethod": "POST",
@@ -238,12 +263,14 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		          }
 		        ]
 		      },
-		      "payload": {
-		        "filterAttributes": []
-		      }
+		      "payloadMutation": [
+		        {"selectAttributes": []}
+		      ]
 		    },
 		    "compareResources": {
-		      "suppressAttributes": ["/updatedAt"]
+		      "payloadMutation": [
+		        {"suppressAttributes": ["/updatedAt"]}
+		      ]
 		    }
 		  }
 		}`)
@@ -297,14 +324,17 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		if getValidate.Assertions[0].JQ == "" {
 			t.Fatal("expected get validate assertion jq to be populated")
 		}
-		if decoded.Filter == nil || len(decoded.Filter) != 0 {
-			t.Fatalf("expected explicit empty filter, got %#v", decoded.Filter)
+		if decoded.PayloadMutation == nil || len(decoded.PayloadMutation) != 3 {
+			t.Fatalf("expected explicit default payloadMutation pipeline, got %#v", decoded.PayloadMutation)
 		}
-		if !reflect.DeepEqual(decoded.Suppress, []string{"/updatedAt"}) {
-			t.Fatalf("unexpected suppress: %#v", decoded.Suppress)
+		if !reflect.DeepEqual(decoded.PayloadMutation[1].SuppressAttributes, []string{"/updatedAt"}) {
+			t.Fatalf("unexpected default payloadMutation suppress step: %#v", decoded.PayloadMutation)
 		}
-		if !reflect.DeepEqual(decoded.Operations[string(OperationCompare)].Suppress, []string{"/updatedAt"}) {
-			t.Fatalf("unexpected compare suppress: %#v", decoded.Operations[string(OperationCompare)].Suppress)
+		if !reflect.DeepEqual(
+			decoded.Operations[string(OperationCompare)].PayloadMutation,
+			[]PayloadMutationStep{{SuppressAttributes: []string{"/updatedAt"}}},
+		) {
+			t.Fatalf("unexpected compare payloadMutation: %#v", decoded.Operations[string(OperationCompare)].PayloadMutation)
 		}
 	})
 }
@@ -403,7 +433,7 @@ func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T
 	  "resourceInfo": {
 	    "collectionPath": "/admin/realms/{{.realm}}/components"
 	  },
-	  "operationInfo": {
+	  "operationsInfo": {
 	    "getResource": {
 	      "url": {
 	        "path": "./{{.id}}"
@@ -414,7 +444,7 @@ func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T
 
 	var decoded ResourceMetadata
 	if err := json.Unmarshal(payload, &decoded); err == nil {
-		t.Fatal("expected operationInfo.getResource.url.path to be rejected")
+		t.Fatal("expected operationsInfo.getResource.url.path to be rejected")
 	}
 }
 
@@ -422,7 +452,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacyCompareTransformAlias(t *test
 	t.Parallel()
 
 	payload := []byte(`{
-	  "operationInfo": {
+	  "operationsInfo": {
 	    "compareResources": {
 	      "ignoreAttributes": ["/updatedAt"]
 	    }
@@ -439,16 +469,16 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarPayloadTransformAttributes(t
 	t.Parallel()
 
 	payload := []byte(`{
-	  "operationInfo": {
+	  "operationsInfo": {
 	    "defaults": {
-	      "payload": {
-	        "filterAttributes": "/name"
-	      }
+	      "payloadMutation": [
+	        {"selectAttributes": "/name"}
+	      ]
 	    },
 	    "createResource": {
-	      "payload": {
-	        "suppressAttributes": "/secret"
-	      }
+	      "payloadMutation": [
+	        {"suppressAttributes": "/secret"}
+	      ]
 	    }
 	  }
 	}`)
@@ -458,12 +488,18 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarPayloadTransformAttributes(t
 		t.Fatalf("unmarshal returned error: %v", err)
 	}
 
-	if !reflect.DeepEqual(decoded.Filter, []string{"/name"}) {
-		t.Fatalf("expected scalar defaults payload filter to decode as single-item list, got %#v", decoded.Filter)
+	if !reflect.DeepEqual(
+		decoded.PayloadMutation,
+		[]PayloadMutationStep{{SelectAttributes: []string{"/name"}}},
+	) {
+		t.Fatalf("expected scalar defaults payloadMutation selectAttributes to decode as single-item list, got %#v", decoded.PayloadMutation)
 	}
 	createSpec := decoded.Operations[string(OperationCreate)]
-	if !reflect.DeepEqual(createSpec.Suppress, []string{"/secret"}) {
-		t.Fatalf("expected scalar create payload suppress to decode as single-item list, got %#v", createSpec.Suppress)
+	if !reflect.DeepEqual(
+		createSpec.PayloadMutation,
+		[]PayloadMutationStep{{SuppressAttributes: []string{"/secret"}}},
+	) {
+		t.Fatalf("expected scalar create payloadMutation suppressAttributes to decode as single-item list, got %#v", createSpec.PayloadMutation)
 	}
 }
 
@@ -471,7 +507,7 @@ func TestResourceMetadataUnmarshalJSONSupportsScalarValidateRequiredAttributes(t
 	t.Parallel()
 
 	payload := []byte(`{
-	  "operationInfo": {
+	  "operationsInfo": {
 	    "createResource": {
 	      "validate": {
 	        "requiredAttributes": "/realm"
@@ -498,7 +534,7 @@ func TestResourceMetadataUnmarshalJSONPromotesMediaHeadersFromHTTPHeaders(t *tes
 	t.Parallel()
 
 	payload := []byte(`{
-	  "operationInfo": {
+	  "operationsInfo": {
 	    "createResource": {
 	      "httpMethod": "POST",
 	      "path": "/api/customers",

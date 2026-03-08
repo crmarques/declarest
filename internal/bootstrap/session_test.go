@@ -10,6 +10,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
 	configfile "github.com/crmarques/declarest/internal/providers/config/file"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestNewSession(t *testing.T) {
@@ -61,7 +62,7 @@ func TestNewSessionUsesContextCatalogPathAndSelection(t *testing.T) {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 
-	if err := session.Orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"name": "ACME"}); err != nil {
+	if err := session.Orchestrator.Save(context.Background(), "/customers/acme", resource.Content{Value: map[string]any{"name": "ACME"}}); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
@@ -247,7 +248,7 @@ currentCtx: bundled
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
 	}
-	specMap, ok := openAPISpec.(map[string]any)
+	specMap, ok := openAPISpec.Value.(map[string]any)
 	if !ok {
 		t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 	}
@@ -321,7 +322,7 @@ currentCtx: bundled-file
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundleFile, got error: %v", openAPIErr)
 	}
-	specMap, ok := openAPISpec.(map[string]any)
+	specMap, ok := openAPISpec.Value.(map[string]any)
 	if !ok {
 		t.Fatalf("expected OpenAPI map payload, got %T", openAPISpec)
 	}
@@ -338,7 +339,6 @@ func TestNewSessionFromResolvedContext(t *testing.T) {
 	session, err := NewSessionFromResolvedContext(config.Context{
 		Name: "operator",
 		Repository: config.Repository{
-			ResourceFormat: config.ResourceFormatJSON,
 			Filesystem: &config.FilesystemRepository{
 				BaseDir: repoDir,
 			},

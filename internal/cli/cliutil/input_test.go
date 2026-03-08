@@ -56,7 +56,7 @@ func TestReadOptionalInputWithFileDashEmptyInputReturnsNil(t *testing.T) {
 func TestReadOptionalInputWithFileDashEmptyBinaryReturnsEmptySlice(t *testing.T) {
 	command := newCommandWithStdin("")
 
-	data, err := ReadOptionalInput(command, InputFlags{Payload: stdinFileIndicator, Format: resource.PayloadTypeBinary})
+	data, err := ReadOptionalInput(command, InputFlags{Payload: stdinFileIndicator, ContentType: resource.PayloadTypeBinary})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

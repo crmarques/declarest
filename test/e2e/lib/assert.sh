@@ -7,6 +7,22 @@ CASE_LAST_STATUS=0
 
 case_run_declarest() {
   local stdout_file stderr_file stdout stderr
+  local -a declarest_args=()
+  local arg
+
+  while (($# > 0)); do
+    arg=$1
+    shift
+    if [[ "${arg}" == '-i' ]]; then
+      declarest_args+=('--content-type')
+      if (($# > 0)); then
+        declarest_args+=("$1")
+        shift
+      fi
+      continue
+    fi
+    declarest_args+=("${arg}")
+  done
 
   stdout_file=$(mktemp "${TMPDIR:-/tmp}/declarest-e2e-stdout.XXXXXX") || {
     printf 'failed to allocate stdout temp file\n' >&2
@@ -19,7 +35,7 @@ case_run_declarest() {
   }
 
   set +e
-  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" "$@" >"${stdout_file}" 2>"${stderr_file}"
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" "${declarest_args[@]}" >"${stdout_file}" 2>"${stderr_file}"
   CASE_LAST_STATUS=$?
   set -e
 
@@ -336,16 +352,18 @@ case_repo_template_resource_logical_path() {
   local template_root
   local rel_path
   local logical_path
+  local base_name
 
   template_root=$(case_repo_template_root "${component_name}") || return 1
   rel_path=${resource_file#${template_root}/}
+  base_name=$(basename -- "${rel_path}")
 
-  if [[ "$(basename -- "${rel_path}")" != 'resource.json' ]]; then
-    printf 'resource file must be named resource.json in repo-template: %s\n' "${rel_path}" >&2
+  if [[ "${base_name}" != resource.* || "${base_name}" == 'resource.' ]]; then
+    printf 'resource file must be named resource.<ext> in repo-template: %s\n' "${rel_path}" >&2
     return 1
   fi
 
-  logical_path=/${rel_path%/resource.json}
+  logical_path=/${rel_path%/"${base_name}"}
   logical_path=${logical_path%/}
   if [[ -z "${logical_path}" ]]; then
     logical_path='/'
@@ -363,21 +381,33 @@ case_repo_template_resource_file_for_path() {
   local logical_path=$1
   local component_name=${2:-}
   local template_root
+  local search_dir
+  local -a matches=()
   local resource_file
 
   template_root=$(case_repo_template_root "${component_name}") || return 1
   if [[ "${logical_path}" == '/' ]]; then
-    resource_file="${template_root}/resource.json"
+    search_dir="${template_root}"
   else
-    resource_file="${template_root}/${logical_path#/}/resource.json"
+    search_dir="${template_root}/${logical_path#/}"
   fi
 
-  if [[ ! -f "${resource_file}" ]]; then
-    printf 'repo-template resource file not found for %s: %s\n' "${logical_path}" "${resource_file}" >&2
+  while IFS= read -r resource_file; do
+    [[ -n "${resource_file}" ]] || continue
+    matches+=("${resource_file}")
+  done < <(find "${search_dir}" -maxdepth 1 -type f -name 'resource.*' | sort)
+
+  if ((${#matches[@]} == 0)); then
+    printf 'repo-template resource file not found for %s under %s\n' "${logical_path}" "${search_dir}" >&2
     return 1
   fi
 
-  printf '%s\n' "${resource_file}"
+  if ((${#matches[@]} > 1)); then
+    printf 'repo-template resource path is ambiguous for %s under %s\n' "${logical_path}" "${search_dir}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${matches[0]}"
 }
 
 case_repo_template_collection_path_for_resource() {
@@ -413,7 +443,7 @@ case_repo_template_resource_files() {
     rel_path=${resource_file#${template_root}/}
     depth=$(tr -cd '/' <<<"${rel_path}" | wc -c)
     printf '%04d\t%s\n' "${depth}" "${resource_file}"
-  done < <(find "${template_root}" -type f -name 'resource.json' | sort) \
+  done < <(find "${template_root}" -type f -name 'resource.*' | sort) \
     | sort -k1,1n -k2,2 \
     | cut -f2-
 }

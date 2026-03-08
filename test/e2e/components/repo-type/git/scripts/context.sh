@@ -12,7 +12,6 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 
 {
   printf 'repository:\n'
-  printf '  resourceFormat: %s\n' "${REPO_RESOURCE_FORMAT:-json}"
   printf '  git:\n'
   printf '    local:\n'
   printf '      baseDir: %s\n' "${REPO_BASE_DIR}"

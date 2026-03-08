@@ -11,4 +11,3 @@ repo_dir="${E2E_RUN_DIR}/repo-filesystem"
 mkdir -p "${repo_dir}"
 
 e2e_write_state_value "${state_file}" REPO_BASE_DIR "${repo_dir}"
-e2e_write_state_value "${state_file}" REPO_RESOURCE_FORMAT "json"

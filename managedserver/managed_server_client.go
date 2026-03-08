@@ -14,18 +14,18 @@ type RequestSpec struct {
 	Headers     map[string]string
 	Accept      string
 	ContentType string
-	Body        resource.Value
+	Body        resource.Content
 }
 
 type ManagedServerClient interface {
-	Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error)
-	Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error)
-	Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error)
+	Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error)
+	Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error)
+	Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error)
 	Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error
 	List(ctx context.Context, collectionPath string, metadata metadata.ResourceMetadata) ([]resource.Resource, error)
 	Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error)
-	Request(ctx context.Context, spec RequestSpec) (resource.Value, error)
-	GetOpenAPISpec(ctx context.Context) (resource.Value, error)
+	Request(ctx context.Context, spec RequestSpec) (resource.Content, error)
+	GetOpenAPISpec(ctx context.Context) (resource.Content, error)
 }
 
 // AccessTokenProvider is an optional managed-server capability used by CLI

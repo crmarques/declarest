@@ -48,7 +48,6 @@ metadata:
 spec:
   type: git
   pollInterval: 1m
-  resourceFormat: json
   git:
     url: https://github.com/example/declarest-resources.git
     branch: main

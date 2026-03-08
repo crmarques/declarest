@@ -36,11 +36,11 @@ Inspired by:
     "collectionPath": "/admin/realms/{{.realm}}/components",
     "secretInAttributes": ["config.bindCredential[0]"]
   },
-  "operationInfo": {
+  "operationsInfo": {
     "listCollection": {
-      "payload": {
-        "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]"
-      }
+      "payloadMutation": [
+        { "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]" }
+      ]
     }
   }
 }
@@ -95,13 +95,13 @@ A deeper metadata file for `executions` overrides specific operations and payloa
     "idFromAttribute": "id",
     "aliasFromAttribute": "displayName"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
       "path": "./execution",
-      "payload": {
-        "jqExpression": ". | .provider = .providerId",
-        "suppressAttributes": ["providerId"]
-      }
+      "payloadMutation": [
+        { "jqExpression": ". | .provider = .providerId" },
+        { "suppressAttributes": ["providerId"] }
+      ]
     },
     "updateResource": {
       "path": "./"
@@ -154,7 +154,7 @@ This is an advanced pattern for APIs that flatten nested resources internally.
 2. Add high-level selector metadata with `collectionPath` and identity fields.
 3. Add list `jq` filters to isolate the logical collection.
 4. Render operations with `metadata render` for concrete paths.
-5. Add per-operation overrides only where the API deviates.
+5. Add per-operation overrides and ordered `payloadMutation` steps only where the API deviates.
 6. Use `resource explain` to validate reconciliation behavior end-to-end.
 7. Save/apply one resource before scaling to a whole collection.
 

@@ -54,10 +54,9 @@ func newRequestMethodCommand(
 	cfg requestMethodConfig,
 ) *cobra.Command {
 	var pathFlag string
-	var inputFormat string
 	var payloadInputs []string
 	var headerInputs []string
-	var accept string
+	var acceptType string
 	var contentType string
 	var confirmDelete bool
 	var recursive bool
@@ -88,12 +87,12 @@ func newRequestMethodCommand(
 				return cliutil.ValidationError("flag --recursive is only supported for resource request delete", nil)
 			}
 
-			body, hasBody, err := decodeOptionalRequestPayload(command, inputFormat, payloadInputs, cfg.allowInlinePayload)
+			body, hasBody, err := decodeOptionalRequestPayload(command, contentType, payloadInputs, cfg.allowInlinePayload)
 			if err != nil {
 				return err
 			}
 			if !hasBody {
-				body = nil
+				body = resource.Content{}
 			}
 			headers, err := parseRequestHeaders(headerInputs)
 			if err != nil {
@@ -107,7 +106,7 @@ func newRequestMethodCommand(
 				LogicalPath:    normalizedPath,
 				Body:           body,
 				Headers:        headers,
-				Accept:         accept,
+				Accept:         acceptType,
 				ContentType:    contentType,
 				ResolveTargets: cfg.requireDeleteConfirm,
 				Recursive:      recursive,
@@ -127,7 +126,7 @@ func newRequestMethodCommand(
 				return nil
 			}
 			if len(result.Values) == 0 {
-				return writeRequestOutput(command, deps, globalFlags, resource.Value(nil))
+				return writeRequestOutput(command, deps, globalFlags, resource.Content{})
 			}
 			return writeRequestOutput(command, deps, globalFlags, result.Values[0])
 		},
@@ -144,17 +143,10 @@ func newRequestMethodCommand(
 		nil,
 		"payload file path (use '-' for stdin); post/put/patch also accept inline payload; binary requires file or stdin",
 	)
-	command.Flags().StringVarP(
-		&inputFormat,
-		"format",
-		"i",
-		cliutil.OutputJSON,
-		"input format: json|yaml|xml|hcl|ini|properties|text|binary",
-	)
-	cliutil.RegisterResourceInputFormatFlagCompletion(command)
 	command.Flags().StringArrayVarP(&headerInputs, "header", "H", nil, "request header in 'Name: Value' or 'Name=Value' form")
-	command.Flags().StringVar(&accept, "accept", "", "explicit Accept header override")
-	command.Flags().StringVar(&contentType, "content-type", "", "explicit Content-Type header override")
+	command.Flags().StringVar(&acceptType, "accept-type", "", "explicit Accept header override")
+	command.Flags().StringVar(&contentType, "content-type", "", "request Content-Type override and payload decode hint")
+	cliutil.RegisterResourceInputContentTypeFlagCompletion(command)
 
 	if cfg.requireDeleteConfirm {
 		command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
@@ -166,71 +158,71 @@ func newRequestMethodCommand(
 
 func decodeOptionalRequestPayload(
 	command *cobra.Command,
-	inputFormat string,
+	inputContentType string,
 	payloadInputs []string,
 	allowInlinePayload bool,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	if len(payloadInputs) > 1 {
-		return nil, false, cliutil.ValidationError("flag --payload cannot be provided more than once", nil)
+		return resource.Content{}, false, cliutil.ValidationError("flag --payload cannot be provided more than once", nil)
 	}
 
 	if len(payloadInputs) == 0 {
-		data, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{Format: inputFormat})
+		data, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{ContentType: inputContentType})
 		if err != nil {
-			return nil, false, err
+			return resource.Content{}, false, err
 		}
 		if data == nil {
-			return nil, false, nil
+			return resource.Content{}, false, nil
 		}
-		value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
+		value, err := cliutil.DecodeResourceContentInputData(data, inputContentType, "")
 		if err != nil {
-			return nil, false, err
+			return resource.Content{}, false, err
 		}
 		return value, true, nil
 	}
 
 	payloadArg := strings.TrimSpace(payloadInputs[0])
 	if payloadArg == "" {
-		return nil, false, cliutil.ValidationError("input is empty", nil)
+		return resource.Content{}, false, cliutil.ValidationError("input is empty", nil)
 	}
 	if payloadArg == "-" {
-		data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: "-", Format: inputFormat})
+		data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: "-", ContentType: inputContentType})
 		if err != nil {
-			return nil, false, err
+			return resource.Content{}, false, err
 		}
-		value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
+		value, err := cliutil.DecodeResourceContentInputData(data, inputContentType, "")
 		if err != nil {
-			return nil, false, err
+			return resource.Content{}, false, err
 		}
 		return value, true, nil
 	}
 
-	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{Format: inputFormat})
+	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{ContentType: inputContentType})
 	if err != nil {
-		return nil, false, err
+		return resource.Content{}, false, err
 	}
 	if len(stdinData) > 0 {
-		return nil, false, cliutil.ValidationError("flag --payload cannot be combined with stdin input", nil)
+		return resource.Content{}, false, cliutil.ValidationError("flag --payload cannot be combined with stdin input", nil)
 	}
 
 	if allowInlinePayload && !requestPayloadLooksLikeExistingFile(payloadArg) {
-		if cliutil.IsBinaryInputFormat(inputFormat) {
-			return nil, false, cliutil.ValidationError("binary request payload requires --payload <path|-> or stdin", nil)
+		if cliutil.IsBinaryInputFormat(inputContentType) {
+			return resource.Content{}, false, cliutil.ValidationError("binary request payload requires --payload <path|-> or stdin", nil)
 		}
-		value, err := cliutil.DecodeResourceValueInputData([]byte(payloadArg), inputFormat)
+		value, err := cliutil.DecodeResourceContentInputData([]byte(payloadArg), inputContentType, "")
 		if err != nil {
-			return nil, false, err
+			return resource.Content{}, false, err
 		}
 		return value, true, nil
 	}
 
-	data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: payloadArg, Format: inputFormat})
+	data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: payloadArg, ContentType: inputContentType})
 	if err != nil {
-		return nil, false, err
+		return resource.Content{}, false, err
 	}
-	value, err := cliutil.DecodeResourceValueInputData(data, inputFormat)
+	value, err := cliutil.DecodeResourceContentInputData(data, inputContentType, payloadArg)
 	if err != nil {
-		return nil, false, err
+		return resource.Content{}, false, err
 	}
 	return value, true, nil
 }

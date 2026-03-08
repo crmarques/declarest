@@ -3,7 +3,6 @@ package fsmetadata
 import (
 	"path/filepath"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
@@ -19,19 +18,12 @@ const (
 )
 
 type FSMetadataService struct {
-	baseDir        string
-	resourceFormat string
+	baseDir string
 }
 
-func NewFSMetadataService(baseDir string, resourceFormat string) *FSMetadataService {
-	format := resourceFormat
-	if format == "" {
-		format = config.ResourceFormatJSON
-	}
-
+func NewFSMetadataService(baseDir string, _ ...string) *FSMetadataService {
 	return &FSMetadataService{
-		baseDir:        filepath.Clean(baseDir),
-		resourceFormat: format,
+		baseDir: filepath.Clean(baseDir),
 	}
 }
 

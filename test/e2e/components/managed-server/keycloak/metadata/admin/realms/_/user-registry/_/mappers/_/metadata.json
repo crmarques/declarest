@@ -4,11 +4,13 @@
     "aliasFromAttribute": "/name",
     "collectionPath": "/admin/realms/{{.realm}}/components"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "listCollection": {
-      "payload": {
-        "jqExpression": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.name}}/\") | .id)) ]"
-      }
+      "payloadMutation": [
+        {
+          "jqExpression": "[ .[] | select(.parentId == (resource(\"/admin/realms/{{.realm}}/user-registry/{{.name}}/\") | .id)) ]"
+        }
+      ]
     }
   }
 }

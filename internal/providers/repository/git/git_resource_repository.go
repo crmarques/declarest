@@ -50,13 +50,13 @@ type GitResourceRepository struct {
 	autoInit bool
 }
 
-func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat string, metadataBaseDir ...string) *GitResourceRepository {
+func NewGitResourceRepository(repoConfig config.GitRepository, metadataBaseDir ...string) *GitResourceRepository {
 	var remoteProxy *config.HTTPProxy
 	if repoConfig.Remote != nil {
 		remoteProxy = proxyhelper.Clone(repoConfig.Remote.Proxy)
 	}
 	return &GitResourceRepository{
-		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, resourceFormat, metadataBaseDir...),
+		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, metadataBaseDir...),
 		baseDir:  repoConfig.Local.BaseDir,
 		remote:   repoConfig.Remote,
 		proxy:    remoteProxy,
@@ -64,28 +64,28 @@ func NewGitResourceRepository(repoConfig config.GitRepository, resourceFormat st
 	}
 }
 
-func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, value resource.Value) error {
+func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, content resource.Content) error {
 	if err := r.ensureInitializedForOperation(ctx); err != nil {
 		return err
 	}
-	return r.local.Save(ctx, logicalPath, value)
+	return r.local.Save(ctx, logicalPath, content)
 }
 
 func (r *GitResourceRepository) SaveResourceWithArtifacts(
 	ctx context.Context,
 	logicalPath string,
-	value resource.Value,
+	content resource.Content,
 	artifacts []repository.ResourceArtifact,
 ) error {
 	if err := r.ensureInitializedForOperation(ctx); err != nil {
 		return err
 	}
-	return r.local.SaveResourceWithArtifacts(ctx, logicalPath, value, artifacts)
+	return r.local.SaveResourceWithArtifacts(ctx, logicalPath, content, artifacts)
 }
 
-func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (resource.Value, error) {
+func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (resource.Content, error) {
 	if err := r.ensureInitializedForOperation(ctx); err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	return r.local.Get(ctx, logicalPath)
 }

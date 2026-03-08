@@ -10,7 +10,6 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
-	"github.com/crmarques/declarest/resource"
 )
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
@@ -75,9 +74,6 @@ func validateConfig(cfg config.Context) error {
 }
 
 func normalizeConfig(cfg config.Context) config.Context {
-	if cfg.Repository.ResourceFormat == "" {
-		cfg.Repository.ResourceFormat = config.ResourceFormatJSON
-	}
 	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
 		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
 	}
@@ -237,17 +233,6 @@ func contextRepositoryBaseDir(cfg config.Context) string {
 }
 
 func validateRepository(repository config.Repository) error {
-	if repository.ResourceFormat != "" {
-		if _, err := resource.ValidatePayloadType(repository.ResourceFormat); err != nil {
-			return faults.NewValidationError(
-				"repository.resourceFormat must be one of: json, yaml, xml, hcl, ini, properties, text, octet-stream",
-				nil,
-			)
-		}
-	}
-	if repository.ResourceFormat == "" {
-		repository.ResourceFormat = config.ResourceFormatJSON
-	}
 	if repository.Git == nil && repository.Filesystem == nil {
 		return nil
 	}
@@ -486,8 +471,6 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 	for _, key := range sortedOverrideKeys(overrides) {
 		value := overrides[key]
 		switch key {
-		case "repository.resourceFormat":
-			cfg.Repository.ResourceFormat = value
 		case "repository.git.local.baseDir":
 			if cfg.Repository.Git == nil {
 				return config.Context{}, faults.NewValidationError("override repository.git.local.baseDir requires repository.git to be configured", nil)

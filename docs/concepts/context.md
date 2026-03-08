@@ -8,7 +8,7 @@ A context is the combination of repository backend, managed server, secrets, and
 - The catalog YAML MUST contain `contexts` (a list of complete context objects) and `current-ctx` (the active context name). An optional `default-editor` value MAY be provided and defaults to `vi` when absent.
 - Context names MUST be unique, non-empty, and appear exactly once in the `contexts` list. Duplicate names fail validation before any CLI operation mutates remote state.
 - Each context object MUST include `repository` plus `managed-server`. Optional blocks are `secret-store`, `metadata`, and `preferences`.
-- The repository block MUST set exactly one of `git` or `filesystem` and may optionally declare `resource-format` (`json` or `yaml`).
+- The repository block MUST set exactly one of `git` or `filesystem`. Repository payload filenames are derived at runtime from managed-server responses or explicit payload input.
 - The managed server block MUST include an `http` section that in turn defines `base-url` and an `auth` section. Under `auth`, exactly one of `oauth2`, `basic-auth`, or `custom-headers` MUST be present, and custom headers entries MUST include both `header` and `value` (with an optional `prefix`). `managed-server.http.health-check` is optional and defines the probe target used by `managed-server check`.
 - `managed-server.http.proxy` MAY be configured. If present, it MUST define at least one of `http-url` or `https-url`. When proxy auth is set, both `username` and `password` are REQUIRED.
 - The optional `secret-store` block MUST define exactly one of `file` or `vault`. File-based stores require one of `key`, `key-file`, `passphrase`, or `passphrase-file`.

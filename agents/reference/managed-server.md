@@ -22,11 +22,11 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 5. HTTP response errors MUST preserve status code and response body context.
 6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
 7. List responses MUST be normalized into deterministic `resource.Resource` ordering.
-8. `operationInfo.listCollection.jq` (or resolved list-operation `jq`) MUST be executed against decoded list payload before list-shape extraction and identity mapping.
+8. Resolved `operationsInfo.listCollection.payloadMutation[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
 9. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
-12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload type media mapping (`application/octet-stream` for `octet-stream`, `text/plain` for text-like codecs, and repository-default mapping when payload type cannot be inferred); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
+12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
 13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
 14. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
 15. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseUrl`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
@@ -84,7 +84,7 @@ Request throttling fields:
 9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
 
 ## Examples
-1. `Get` operation uses `operationInfo.getResource.path` plus payload-type-aware default `Accept`.
+1. `Get` operation uses `operationsInfo.getResource.path` plus payload-type-aware default `Accept`.
 2. `Update` operation resolves `ContentType` from metadata or payload-type defaults and sends structured or opaque payload body accordingly.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).

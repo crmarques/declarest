@@ -17,7 +17,7 @@ func resolveExplicitMutationPayloadPath(
 	commandPath string,
 	deps cliutil.CommandDependencies,
 	logicalPath string,
-	value resourcedomain.Value,
+	content resourcedomain.Content,
 ) (string, error) {
 	normalizedPath, err := resourcedomain.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -26,7 +26,7 @@ func resolveExplicitMutationPayloadPath(
 	if deps.Metadata == nil {
 		return normalizedPath, nil
 	}
-	payloadMap, ok := value.(map[string]any)
+	payloadMap, ok := content.Value.(map[string]any)
 	if !ok {
 		return normalizedPath, nil
 	}
@@ -71,7 +71,7 @@ func validateExplicitMutationPayloadIdentity(
 	commandPath string,
 	deps cliutil.CommandDependencies,
 	logicalPath string,
-	value resourcedomain.Value,
+	content resourcedomain.Content,
 ) error {
 	normalizedPath, err := resourcedomain.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -81,7 +81,7 @@ func validateExplicitMutationPayloadIdentity(
 		return nil
 	}
 
-	payloadMap, ok := value.(map[string]any)
+	payloadMap, ok := content.Value.(map[string]any)
 	if !ok {
 		return nil
 	}

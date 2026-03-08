@@ -16,6 +16,14 @@ import (
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
+func jqMutation(expression string) []metadatadomain.PayloadMutationStep {
+	return []metadatadomain.PayloadMutationStep{{JQExpression: expression}}
+}
+
+func suppressMutation(attributes ...string) []metadatadomain.PayloadMutationStep {
+	return []metadatadomain.PayloadMutationStep{{SuppressAttributes: attributes}}
+}
+
 func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	t.Parallel()
 
@@ -34,11 +42,11 @@ func TestDefaultOrchestratorDelegatesRepositoryMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLocal returned error: %v", err)
 	}
-	if value == nil {
+	if value.Value == nil {
 		t.Fatal("expected non-nil value")
 	}
 
-	if err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{"x": 1}); err != nil {
+	if err := orchestrator.Save(context.Background(), "/customers/acme", testContent(map[string]any{"x": 1})); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
 
@@ -80,10 +88,10 @@ func TestDefaultOrchestratorSaveExternalizesConfiguredAttributes(t *testing.T) {
 		},
 	}
 
-	err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{
+	err := orchestrator.Save(context.Background(), "/customers/acme", testContent(map[string]any{
 		"name":   "ACME",
 		"script": "echo hello",
-	})
+	}))
 	if err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
@@ -121,7 +129,7 @@ func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T
 		},
 	}
 
-	err := orchestrator.Save(context.Background(), "/customers/acme", map[string]any{
+	err := orchestrator.Save(context.Background(), "/customers/acme", testContent(map[string]any{
 		"name": "ACME",
 		"sequence": map[string]any{
 			"commands": []any{
@@ -130,7 +138,7 @@ func TestDefaultOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T
 				map[string]any{"script": "echo third"},
 			},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}
@@ -217,8 +225,8 @@ func TestDefaultOrchestratorGetRemoteNormalizesCollectionPath(t *testing.T) {
 	if got := serverManager.lastResource.CollectionPath; got != "/admin" {
 		t.Fatalf("expected remote collection path /admin, got %q", got)
 	}
-	if !reflect.DeepEqual(value, map[string]any{"realm": "master"}) {
-		t.Fatalf("unexpected remote payload: %#v", value)
+	if !reflect.DeepEqual(value.Value, map[string]any{"realm": "master"}) {
+		t.Fatalf("unexpected remote payload: %#v", value.Value)
 	}
 }
 
@@ -399,9 +407,9 @@ func TestDefaultOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing
 	if !foundCollectionFallback {
 		t.Fatalf("expected fallback list to include /admin/realms/master/clients, got %#v", serverManager.listPaths)
 	}
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload from fallback list item, got %T", value)
+		t.Fatalf("expected map payload from fallback list item, got %T", value.Value)
 	}
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected alias-matched payload, got %#v", payload)
@@ -447,7 +455,7 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
-						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+						PayloadMutation: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
 					},
 				},
 			},
@@ -474,9 +482,9 @@ func TestDefaultOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *te
 		t.Fatalf("expected fallback list call for /admin/realms/publico-br, got %#v", serverManager.listPaths)
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload, got %T", value)
+		t.Fatalf("expected map payload, got %T", value.Value)
 	}
 	if payload["id"] != "13de4420-7c8d-4db7-b8f7-2d2a26f2053e" {
 		t.Fatalf("unexpected payload %#v", payload)
@@ -515,7 +523,7 @@ func TestDefaultOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCa
 				CollectionPath:     "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
-						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+						PayloadMutation: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
 					},
 				},
 			},
@@ -644,9 +652,9 @@ func TestDefaultOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollecti
 		}
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload from resolved id read, got %T", value)
+		t.Fatalf("expected map payload from resolved id read, got %T", value.Value)
 	}
 	if payload["id"] != "71ba388d-9f95-4a4d-b674-a632f697b732" || payload["alias"] != "teste" {
 		t.Fatalf("unexpected payload from metadata id fallback: %#v", payload)
@@ -742,9 +750,9 @@ func TestDefaultOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t
 		)
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload, got %T", value)
+		t.Fatalf("expected map payload, got %T", value.Value)
 	}
 	if payload["id"] != "org-1" || payload["alias"] != "teste" {
 		t.Fatalf("unexpected recursively-resolved payload: %#v", payload)
@@ -832,9 +840,9 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenOpenAPIH
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
-	items, ok := value.([]any)
+	items, ok := value.Value.([]any)
 	if !ok {
-		t.Fatalf("expected empty list payload, got %T", value)
+		t.Fatalf("expected empty list payload, got %T", value.Value)
 	}
 	if len(items) != 0 {
 		t.Fatalf("expected empty list payload, got %#v", items)
@@ -876,9 +884,9 @@ func TestDefaultOrchestratorGetRemoteTreatsCollectionNotFoundAsEmptyWhenReposito
 		t.Fatalf("GetRemote returned error: %v", err)
 	}
 
-	items, ok := value.([]any)
+	items, ok := value.Value.([]any)
 	if !ok {
-		t.Fatalf("expected empty list payload, got %T", value)
+		t.Fatalf("expected empty list payload, got %T", value.Value)
 	}
 	if len(items) != 0 {
 		t.Fatalf("expected empty list payload, got %#v", items)
@@ -1074,9 +1082,9 @@ func TestDefaultOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *tes
 		t.Fatalf("expected literal and fallback get calls, got %#v", repositoryManager.getCalls)
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload from local fallback, got %T", value)
+		t.Fatalf("expected map payload from local fallback, got %T", value.Value)
 	}
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected id-based local fallback payload, got %#v", payload)
@@ -1113,9 +1121,9 @@ func TestDefaultOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUses
 		t.Fatalf("GetLocal returned error: %v", err)
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload from local fallback, got %T", value)
+		t.Fatalf("expected map payload from local fallback, got %T", value.Value)
 	}
 	if payload["clientId"] != "web-console" || payload["id"] != "client-0002" {
 		t.Fatalf("expected common-id fallback payload, got %#v", payload)
@@ -1170,9 +1178,9 @@ func TestDefaultOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t 
 		t.Fatalf("expected second get call to hydrate matched alias candidate, got %#v", repositoryManager.getCalls)
 	}
 
-	payload, ok := value.(map[string]any)
+	payload, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected map payload from local fallback, got %T", value)
+		t.Fatalf("expected map payload from local fallback, got %T", value.Value)
 	}
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected alias-matched fallback payload, got %#v", payload)
@@ -1285,7 +1293,7 @@ func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
 		server: serverManager,
 	}
 
-	body := resource.Value(map[string]any{"id": "a"})
+	body := testContent(map[string]any{"id": "a"})
 	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
 		Method: "POST",
 		Path:   "/test",
@@ -1307,8 +1315,8 @@ func TestDefaultOrchestratorRequestDelegatesToServer(t *testing.T) {
 	if !reflect.DeepEqual(serverManager.requestBody, body) {
 		t.Fatalf("unexpected request body: %#v", serverManager.requestBody)
 	}
-	if !reflect.DeepEqual(value, map[string]any{"ok": true}) {
-		t.Fatalf("unexpected request response: %#v", value)
+	if !reflect.DeepEqual(value.Value, map[string]any{"ok": true}) {
+		t.Fatalf("unexpected request response: %#v", value.Value)
 	}
 }
 
@@ -1330,7 +1338,7 @@ func TestDefaultOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 		metadata: metadataService,
 	}
 
-	body := resource.Value(map[string]any{
+	body := testContent(map[string]any{
 		"providerId": "ldap",
 		"name":       "AD Production",
 	})
@@ -1367,7 +1375,7 @@ func TestDefaultOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(
 			CollectionPath:     "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
-					JQ: "[ .[] | select(.providerId == \"ldap\") ]",
+					PayloadMutation: jqMutation("[ .[] | select(.providerId == \"ldap\") ]"),
 				},
 			},
 		},
@@ -1432,9 +1440,9 @@ func TestDefaultOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNot
 	if len(serverManager.requestPaths) != 1 || serverManager.requestPaths[0] != "/admin/realms/master/clients/account" {
 		t.Fatalf("expected one literal request GET attempt before fallback, got %#v", serverManager.requestPaths)
 	}
-	got, ok := value.(map[string]any)
+	got, ok := value.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected fallback GET payload object, got %T", value)
+		t.Fatalf("expected fallback GET payload object, got %T", value.Value)
 	}
 	if got["clientId"] != "account" {
 		t.Fatalf("expected fallback GET payload to include resolved clientId, got %#v", got)
@@ -1512,7 +1520,7 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 		},
 	}
 
-	body := resource.Value(map[string]any{
+	body := testContent(map[string]any{
 		"id":          "bd43239f-2111-4c03-83b6-c0902df38ec9",
 		"requirement": "ALTERNATIVE",
 	})
@@ -1535,8 +1543,8 @@ func TestDefaultOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedN
 	if got := serverManager.requestPaths[1]; got != "/admin/realms/acme/authentication/flows/test/executions" {
 		t.Fatalf("expected second PUT attempt to retry literal collection path, got %q", got)
 	}
-	if !reflect.DeepEqual(value, map[string]any{"ok": true}) {
-		t.Fatalf("unexpected request response: %#v", value)
+	if !reflect.DeepEqual(value.Value, map[string]any{"ok": true}) {
+		t.Fatalf("unexpected request response: %#v", value.Value)
 	}
 }
 
@@ -1574,20 +1582,31 @@ type fakeRepository struct {
 	listPolicy   repository.ListPolicy
 }
 
-func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func testContent(value any) resource.Content {
+	return testContentWithType(value, resource.PayloadTypeJSON)
+}
+
+func testContentWithType(value any, payloadType string) resource.Content {
+	return resource.Content{
+		Value:      value,
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
+	}
+}
+
+func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resource.Content) error {
 	f.savedPath = logicalPath
-	f.savedValue = value
+	f.savedValue = value.Value
 	return nil
 }
 
 func (f *fakeRepository) SaveResourceWithArtifacts(
 	_ context.Context,
 	logicalPath string,
-	value resource.Value,
+	value resource.Content,
 	artifacts []repository.ResourceArtifact,
 ) error {
 	f.savedPath = logicalPath
-	f.savedValue = value
+	f.savedValue = value.Value
 	f.savedArtifacts = append([]repository.ResourceArtifact(nil), artifacts...)
 	if f.artifactFiles == nil {
 		f.artifactFiles = map[string][]byte{}
@@ -1598,21 +1617,21 @@ func (f *fakeRepository) SaveResourceWithArtifacts(
 	return nil
 }
 
-func (f *fakeRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+func (f *fakeRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
 	f.getCalls = append(f.getCalls, logicalPath)
 
 	if f.getErr != nil {
-		return nil, f.getErr
+		return resource.Content{}, f.getErr
 	}
 
 	if f.getValues != nil {
 		if value, found := f.getValues[logicalPath]; found {
-			return value, nil
+			return testContent(value), nil
 		}
-		return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 
-	return f.getValue, nil
+	return testContent(f.getValue), nil
 }
 
 func (f *fakeRepository) Delete(_ context.Context, _ string, policy repository.DeletePolicy) error {
@@ -1755,7 +1774,7 @@ type fakeServer struct {
 	requestMethod   string
 	requestPath     string
 	requestPaths    []string
-	requestBody     resource.Value
+	requestBody     resource.Content
 	lastResource    resource.Resource
 	lastListPath    string
 	listPaths       []string
@@ -1764,37 +1783,37 @@ type fakeServer struct {
 	deleteResources []resource.Resource
 }
 
-func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (f *fakeServer) Get(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Content, error) {
 	f.getCalled = true
 	f.lastResource = resourceInfo
 	f.getPaths = append(f.getPaths, resourceInfo.LogicalPath)
 	if f.getValues != nil {
 		if value, found := f.getValues[resourceInfo.LogicalPath]; found {
-			return value, nil
+			return testContent(value), nil
 		}
 	}
 	if f.getErr != nil {
-		return nil, f.getErr
+		return resource.Content{}, f.getErr
 	}
-	return f.getValue, nil
+	return testContent(f.getValue), nil
 }
 
-func (f *fakeServer) Create(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (f *fakeServer) Create(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Content, error) {
 	f.createCalled = true
 	f.lastResource = resourceInfo
 	if f.createErr != nil {
-		return nil, f.createErr
+		return resource.Content{}, f.createErr
 	}
-	return f.createValue, nil
+	return testContent(f.createValue), nil
 }
 
-func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Value, error) {
+func (f *fakeServer) Update(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) (resource.Content, error) {
 	f.updateCalled = true
 	f.lastResource = resourceInfo
 	if f.updateErr != nil {
-		return nil, f.updateErr
+		return resource.Content{}, f.updateErr
 	}
-	return f.updateValue, nil
+	return testContent(f.updateValue), nil
 }
 
 func (f *fakeServer) Delete(_ context.Context, resourceInfo resource.Resource, _ metadatadomain.ResourceMetadata) error {
@@ -1839,7 +1858,7 @@ func (f *fakeServer) Exists(context.Context, resource.Resource, metadatadomain.R
 	return f.existsValue, nil
 }
 
-func (f *fakeServer) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
+func (f *fakeServer) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
 	f.requestCalled = true
 	f.requestMethod = spec.Method
 	f.requestPath = spec.Path
@@ -1849,20 +1868,20 @@ func (f *fakeServer) Request(_ context.Context, spec managedserverdomain.Request
 		err := f.requestErrs[0]
 		f.requestErrs = f.requestErrs[1:]
 		if err != nil {
-			return nil, err
+			return resource.Content{}, err
 		}
 	}
 	if f.requestErr != nil {
-		return nil, f.requestErr
+		return resource.Content{}, f.requestErr
 	}
-	return f.requestValue, nil
+	return testContent(f.requestValue), nil
 }
 
-func (f *fakeServer) GetOpenAPISpec(context.Context) (resource.Value, error) {
+func (f *fakeServer) GetOpenAPISpec(context.Context) (resource.Content, error) {
 	if f.openAPIErr != nil {
-		return nil, f.openAPIErr
+		return resource.Content{}, f.openAPIErr
 	}
-	return f.openAPISpec, nil
+	return testContent(f.openAPISpec), nil
 }
 
 func (f *fakeServer) BuildRequestFromMetadata(context.Context, resource.Resource, metadatadomain.Operation) (metadatadomain.OperationSpec, error) {
@@ -2072,7 +2091,7 @@ func TestDefaultOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T
 		IDFromAttribute:    "/id",
 		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
+			string(metadatadomain.OperationCompare): {PayloadMutation: suppressMutation("/updatedAt")},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
 		},
 	}
@@ -2119,7 +2138,7 @@ func TestDefaultOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.
 		IDFromAttribute:    "/id",
 		AliasFromAttribute: "/alias",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
+			string(metadatadomain.OperationCompare): {PayloadMutation: suppressMutation("/updatedAt")},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
 		},
 	}
@@ -2222,7 +2241,7 @@ func TestDefaultOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
-			string(metadatadomain.OperationCompare): {Suppress: []string{"/updatedAt"}},
+			string(metadatadomain.OperationCompare): {PayloadMutation: suppressMutation("/updatedAt")},
 		},
 	}
 
@@ -2288,7 +2307,7 @@ func TestDefaultOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 		AliasFromAttribute: "/name",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {
-				JQ: `if type == "object" and has("config") then {name: .name, config: (.config + {"project.name": .name})} else . end`,
+				PayloadMutation: jqMutation(`if type == "object" and has("config") then {name: .name, config: (.config + {"project.name": .name})} else . end`),
 			},
 		},
 	}
@@ -2508,7 +2527,7 @@ func TestDefaultOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.
 				AliasFromAttribute: "/name",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
-						JQ: `[ .[] | select(.providerId == "ldap") ]`,
+						PayloadMutation: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
 					},
 				},
 			},
@@ -2627,28 +2646,27 @@ func TestDefaultOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 			},
 		},
 	}
-	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
-	templated, err := orchestrator.Template(context.Background(), "/customers/acme", map[string]any{
+	templated, err := orchestrator.Template(context.Background(), "/customers/acme", testContentWithType(map[string]any{
 		"id":     "42",
 		"name":   "ACME",
 		"count":  float64(2),
-		"format": "{{resource_format .}}",
+		"format": "{{payload_type .}}",
 		"token":  "{{secret .}}",
-	})
+	}, resource.PayloadTypeYAML))
 	if err != nil {
 		t.Fatalf("Template returned error: %v", err)
 	}
 
-	output, ok := templated.(map[string]any)
+	output, ok := templated.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected templated map output, got %T", templated)
+		t.Fatalf("expected templated map output, got %T", templated.Value)
 	}
 	if got := output["name"]; got != "ACME" {
 		t.Fatalf("expected templated payload to preserve values, got %#v", got)
 	}
 	if got := output["format"]; got != "yaml" {
-		t.Fatalf("expected resource_format placeholder to resolve to yaml, got %#v", got)
+		t.Fatalf("expected payload_type placeholder to resolve to yaml, got %#v", got)
 	}
 	if got := output["token"]; got != "{{secret .}}" {
 		t.Fatalf("expected secret placeholder to remain unresolved in template output, got %#v", got)
@@ -2697,37 +2715,36 @@ func TestDefaultOrchestratorDiffUsesExpandedExternalizedAttributes(t *testing.T)
 	}
 }
 
-func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithoutSecrets(t *testing.T) {
+func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithoutSecrets(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{}
-	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	resolved, err := orchestrator.resolvePayloadForRemote(
 		context.Background(),
 		"/customers/acme",
-		map[string]any{
-			"format": "{{resource_format .}}",
+		testContentWithType(map[string]any{
+			"format": "{{payload_type .}}",
 			"token":  "{{secret .}}",
-		},
+		}, resource.PayloadTypeYAML),
 	)
 	if err != nil {
 		t.Fatalf("resolvePayloadForRemote returned error: %v", err)
 	}
 
-	output, ok := resolved.(map[string]any)
+	output, ok := resolved.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected resolved payload map, got %T", resolved)
+		t.Fatalf("expected resolved payload map, got %T", resolved.Value)
 	}
 	if got := output["format"]; got != "yaml" {
-		t.Fatalf("expected resource_format placeholder to resolve to yaml, got %#v", got)
+		t.Fatalf("expected payload_type placeholder to resolve to yaml, got %#v", got)
 	}
 	if got := output["token"]; got != "{{secret .}}" {
 		t.Fatalf("expected secret placeholder to remain unresolved without secret provider, got %#v", got)
 	}
 }
 
-func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithSecrets(t *testing.T) {
+func TestDefaultOrchestratorResolvePayloadForRemoteSupportsPayloadDescriptorWithSecrets(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{
@@ -2737,26 +2754,25 @@ func TestDefaultOrchestratorResolvePayloadForRemoteSupportsResourceFormatWithSec
 			},
 		},
 	}
-	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	resolved, err := orchestrator.resolvePayloadForRemote(
 		context.Background(),
 		"/customers/acme",
-		map[string]any{
-			"format": "{{resource_format .}}",
+		testContentWithType(map[string]any{
+			"format": "{{payload_type .}}",
 			"token":  "{{secret .}}",
-		},
+		}, resource.PayloadTypeYAML),
 	)
 	if err != nil {
 		t.Fatalf("resolvePayloadForRemote returned error: %v", err)
 	}
 
-	output, ok := resolved.(map[string]any)
+	output, ok := resolved.Value.(map[string]any)
 	if !ok {
-		t.Fatalf("expected resolved payload map, got %T", resolved)
+		t.Fatalf("expected resolved payload map, got %T", resolved.Value)
 	}
 	if got := output["format"]; got != "yaml" {
-		t.Fatalf("expected resource_format placeholder to resolve to yaml, got %#v", got)
+		t.Fatalf("expected payload_type placeholder to resolve to yaml, got %#v", got)
 	}
 	if got := output["token"]; got != "super-secret" {
 		t.Fatalf("expected secret placeholder to resolve, got %#v", got)
@@ -2819,11 +2835,10 @@ func TestDefaultOrchestratorRenderOperationSpecCreateUsesCollectionPathFallback(
 	}
 }
 
-func TestDefaultOrchestratorRenderOperationSpecSupportsResourceFormatTemplateFunc(t *testing.T) {
+func TestDefaultOrchestratorRenderOperationSpecSupportsPayloadTemplateFunc(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &DefaultOrchestrator{}
-	orchestrator.resourceFormat = metadatadomain.NormalizeResourceFormat("yaml")
 
 	spec, err := orchestrator.renderOperationSpec(
 		context.Background(),
@@ -2831,12 +2846,15 @@ func TestDefaultOrchestratorRenderOperationSpecSupportsResourceFormatTemplateFun
 			LogicalPath:    "/customers/acme",
 			CollectionPath: "/customers",
 			Payload:        map[string]any{"id": "42"},
+			PayloadDescriptor: resource.NormalizePayloadDescriptor(
+				resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML},
+			),
 		},
 		metadatadomain.ResourceMetadata{
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {
 					Path:   "/api/customers/{{.id}}",
-					Accept: "application/{{resource_format .}}",
+					Accept: "{{payload_media_type .}}",
 				},
 			},
 		},

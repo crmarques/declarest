@@ -96,7 +96,8 @@ declarest resource template /corporations/acme --payload resource.json
 Useful flags for mutation and payload-driven workflows:
 
 - `--payload <path|->` for file/stdin payloads and inline JSON/YAML or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
-- `--format <json|yaml>` for payload decoding
+- `--content-type <json|yaml|xml|hcl|ini|properties|text|binary|application/...>` for payload decoding overrides
+- `--accept-type <mime|shortname>` on `resource request <method>` for explicit response media negotiation
 - `--recursive` for collection recursion on supported commands
 - `--force` on `resource apply` to execute update even when compare output has no drift
 - `--refresh-repository` (apply/create/update)

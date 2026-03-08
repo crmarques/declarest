@@ -10,28 +10,28 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Value, error) {
+func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	remoteValue, err := serverManager.Get(ctx, resourceInfo, md)
 	if err == nil {
 		ambiguityErr := r.detectRemoteIdentityAmbiguityAfterDirectGet(ctx, serverManager, resourceInfo, md)
 		if ambiguityErr != nil {
-			return nil, ambiguityErr
+			return resource.Content{}, ambiguityErr
 		}
 		return remoteValue, nil
 	}
 	if !faults.IsCategory(err, faults.NotFoundError) {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	metadataFallbackValue, metadataHandled, metadataErr := r.fetchRemoteMetadataPathFallbackValue(ctx, serverManager, resourceInfo)
 	if metadataHandled {
 		if metadataErr != nil {
-			return nil, metadataErr
+			return resource.Content{}, metadataErr
 		}
 		return metadataFallbackValue, nil
 	}
@@ -39,7 +39,7 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 	collectionValue, handled, collectionErr := r.fetchRemoteCollectionValue(ctx, serverManager, resourceInfo, md)
 	if handled {
 		if collectionErr != nil {
-			return nil, collectionErr
+			return resource.Content{}, collectionErr
 		}
 		return collectionValue, nil
 	}
@@ -47,9 +47,9 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 	candidates, listErr := r.listRemoteResources(ctx, serverManager, resourceInfo.CollectionPath, md)
 	if listErr != nil {
 		if faults.IsCategory(listErr, faults.NotFoundError) || isFallbackListPayloadShapeError(listErr) {
-			return nil, err
+			return resource.Content{}, err
 		}
-		return nil, listErr
+		return resource.Content{}, listErr
 	}
 
 	matched := make([]resource.Resource, 0, len(candidates))
@@ -62,13 +62,13 @@ func (r *DefaultOrchestrator) fetchRemoteValue(ctx context.Context, resourceInfo
 	switch len(matched) {
 	case 0:
 		if allowsSingletonListIdentityFallback(resourceInfo.LogicalPath, md, candidates) {
-			return candidates[0].Payload, nil
+			return contentFromResource(candidates[0]), nil
 		}
-		return nil, err
+		return resource.Content{}, err
 	case 1:
-		return matched[0].Payload, nil
+		return contentFromResource(matched[0]), nil
 	default:
-		return nil, faults.NewTypedError(
+		return resource.Content{}, faults.NewTypedError(
 			faults.ConflictError,
 			fmt.Sprintf("remote fallback for %q is ambiguous", resourceInfo.LogicalPath),
 			nil,

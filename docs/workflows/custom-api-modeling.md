@@ -45,7 +45,7 @@ Use per-operation overrides:
 
 ```json
 {
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": { "path": "./execution" },
     "updateResource": { "path": "./" }
   }
@@ -63,12 +63,12 @@ Use payload transforms:
 
 ```json
 {
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
-      "payload": {
-        "jqExpression": ". | .provider = .providerId",
-        "suppressAttributes": ["providerId"]
-      }
+      "payloadMutation": [
+        { "jqExpression": ". | .provider = .providerId" },
+        { "suppressAttributes": ["providerId"] }
+      ]
     }
   }
 }
@@ -81,15 +81,15 @@ Problem:
 - one endpoint returns many object categories
 - your logical collection should contain only one category
 
-Use `listCollection.payload.jqExpression` to filter deterministically.
+Use `listCollection.payloadMutation` to filter deterministically.
 
 ```json
 {
-  "operationInfo": {
+  "operationsInfo": {
     "listCollection": {
-      "payload": {
-        "jqExpression": "[ .[] | select(.type == \"desired\") ]"
-      }
+      "payloadMutation": [
+        { "jqExpression": "[ .[] | select(.type == \"desired\") ]" }
+      ]
     }
   }
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"mime"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
@@ -106,37 +105,11 @@ func PayloadTypeForExtension(extension string) (string, bool) {
 }
 
 func PayloadTypeForMediaType(value string) (string, bool) {
-	normalizedMediaType := strings.TrimSpace(value)
-	if normalizedMediaType == "" {
+	descriptor, ok := PayloadDescriptorForContentType(value)
+	if !ok {
 		return "", false
 	}
-
-	mediaType, _, err := mime.ParseMediaType(normalizedMediaType)
-	if err == nil {
-		normalizedMediaType = mediaType
-	}
-	normalizedMediaType = strings.ToLower(strings.TrimSpace(normalizedMediaType))
-
-	switch {
-	case normalizedMediaType == "application/json",
-		strings.HasSuffix(normalizedMediaType, "+json"):
-		return PayloadTypeJSON, true
-	case normalizedMediaType == "application/yaml",
-		normalizedMediaType == "application/x-yaml",
-		normalizedMediaType == "text/yaml",
-		normalizedMediaType == "text/x-yaml":
-		return PayloadTypeYAML, true
-	case normalizedMediaType == "application/xml",
-		normalizedMediaType == "text/xml",
-		strings.HasSuffix(normalizedMediaType, "+xml"):
-		return PayloadTypeXML, true
-	case normalizedMediaType == "application/octet-stream":
-		return PayloadTypeOctetStream, true
-	case normalizedMediaType == "text/plain":
-		return PayloadTypeText, true
-	default:
-		return "", false
-	}
+	return descriptor.PayloadType, true
 }
 
 func PayloadMediaType(value string) (string, error) {
@@ -206,6 +179,25 @@ func DecodePayload(data []byte, payloadType string) (Value, error) {
 			nil,
 		)
 	}
+}
+
+func EncodeContent(content Content) ([]byte, error) {
+	descriptor := NormalizePayloadDescriptor(content.Descriptor)
+	return EncodePayload(content.Value, descriptor.PayloadType)
+}
+
+func EncodeContentPretty(content Content) ([]byte, error) {
+	descriptor := NormalizePayloadDescriptor(content.Descriptor)
+	return EncodePayloadPretty(content.Value, descriptor.PayloadType)
+}
+
+func DecodeContent(data []byte, descriptor PayloadDescriptor) (Content, error) {
+	resolved := NormalizePayloadDescriptor(descriptor)
+	value, err := DecodePayload(data, resolved.PayloadType)
+	if err != nil {
+		return Content{}, err
+	}
+	return Content{Value: value, Descriptor: resolved}, nil
 }
 
 func encodePayload(value Value, payloadType string, pretty bool) ([]byte, error) {

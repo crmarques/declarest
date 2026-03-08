@@ -16,7 +16,7 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
 	resourceInfo resource.Resource,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	visited := map[string]struct{}{
 		resourceInfo.LogicalPath: {},
 	}
@@ -30,7 +30,7 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 			currentInfo, currentMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, currentPath)
 			if infoErr != nil {
 				if faults.IsCategory(infoErr, faults.ConflictError) {
-					return nil, true, infoErr
+					return resource.Content{}, true, infoErr
 				}
 				continue
 			}
@@ -41,13 +41,13 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 			}
 			// Candidate lookups are best-effort and must not override the original NotFound.
 			if faults.IsCategory(currentErr, faults.ConflictError) {
-				return nil, true, currentErr
+				return resource.Content{}, true, currentErr
 			}
 		}
 
 		nextPaths, nextErr := r.resolveNextRemoteMetadataFallbackPaths(ctx, serverManager, currentPath)
 		if nextErr != nil {
-			return nil, true, nextErr
+			return resource.Content{}, true, nextErr
 		}
 
 		for _, nextPath := range nextPaths {
@@ -59,7 +59,7 @@ func (r *DefaultOrchestrator) fetchRemoteMetadataPathFallbackValue(
 		}
 	}
 
-	return nil, false, nil
+	return resource.Content{}, false, nil
 }
 
 func (r *DefaultOrchestrator) resolveNextRemoteMetadataFallbackPaths(
@@ -226,7 +226,7 @@ func allowsSingletonListIdentityFallback(
 		return false
 	}
 
-	if strings.TrimSpace(md.JQ) != "" {
+	if metadata.HasPayloadMutationJQ(md.PayloadMutation) {
 		return true
 	}
 	if md.Operations == nil {
@@ -237,7 +237,7 @@ func allowsSingletonListIdentityFallback(
 	if !hasListSpec {
 		return false
 	}
-	return strings.TrimSpace(listSpec.JQ) != ""
+	return metadata.HasPayloadMutationJQ(listSpec.PayloadMutation)
 }
 
 func singletonFallbackWithinSelectorDepth(logicalPath string, md metadata.ResourceMetadata) bool {

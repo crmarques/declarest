@@ -1,47 +1,54 @@
 package metadata
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
-func TestResolveResourceFormatTemplatesInMetadata(t *testing.T) {
+func TestResolveOperationSpecWithScopeResolvesPayloadTemplateHelpers(t *testing.T) {
 	t.Parallel()
 
-	input := ResourceMetadata{
-		CollectionPath: "/api/{{resource_format .}}/customers",
-		Operations: map[string]OperationSpec{
-			string(OperationGet): {
-				Path:        "/api/customers/{{.id}}",
-				Accept:      "{{payload_media_type .}}",
-				ContentType: "application/{{resource_format .}}",
-				Query: map[string]string{
-					"format":    "{{resource_format .}}",
-					"extension": "{{payload_extension .}}",
+	spec, err := ResolveOperationSpecWithScope(
+		context.Background(),
+		ResourceMetadata{
+			CollectionPath: "/api/{{payload_type .}}/customers",
+			Operations: map[string]OperationSpec{
+				string(OperationGet): {
+					Path:        "/api/customers/{{.id}}",
+					Accept:      "{{payload_media_type .}}",
+					ContentType: "application/{{payload_type .}}",
+					Query: map[string]string{
+						"format":    "{{payload_type .}}",
+						"extension": "{{payload_extension .}}",
+					},
 				},
 			},
 		},
-	}
-
-	resolved, err := ResolveResourceFormatTemplatesInMetadata(input, "yaml")
+		OperationGet,
+		map[string]any{
+			"id":               "acme",
+			"payloadType":      "yaml",
+			"payloadMediaType": "application/yaml",
+			"payloadExtension": ".yaml",
+		},
+	)
 	if err != nil {
-		t.Fatalf("ResolveResourceFormatTemplatesInMetadata returned error: %v", err)
+		t.Fatalf("ResolveOperationSpecWithScope returned error: %v", err)
 	}
 
-	if resolved.CollectionPath != "/api/yaml/customers" {
-		t.Fatalf("expected collectionPath to resolve resource_format token, got %q", resolved.CollectionPath)
+	if spec.Path != "/api/customers/acme" {
+		t.Fatalf("expected rendered path, got %q", spec.Path)
 	}
-	getSpec := resolved.Operations[string(OperationGet)]
-	if getSpec.Path != "/api/customers/{{.id}}" {
-		t.Fatalf("expected non-resource_format template to be preserved, got %q", getSpec.Path)
+	if spec.Accept != "application/yaml" {
+		t.Fatalf("expected accept to resolve, got %q", spec.Accept)
 	}
-	if getSpec.Accept != "application/yaml" {
-		t.Fatalf("expected accept to resolve, got %q", getSpec.Accept)
+	if spec.ContentType != "application/yaml" {
+		t.Fatalf("expected contentType to resolve, got %q", spec.ContentType)
 	}
-	if getSpec.ContentType != "application/yaml" {
-		t.Fatalf("expected contentType to resolve, got %q", getSpec.ContentType)
+	if spec.Query["format"] != "yaml" {
+		t.Fatalf("expected query.format to resolve, got %q", spec.Query["format"])
 	}
-	if getSpec.Query["format"] != "yaml" {
-		t.Fatalf("expected query.format to resolve, got %q", getSpec.Query["format"])
-	}
-	if getSpec.Query["extension"] != ".yaml" {
-		t.Fatalf("expected query.extension to resolve, got %q", getSpec.Query["extension"])
+	if spec.Query["extension"] != ".yaml" {
+		t.Fatalf("expected query.extension to resolve, got %q", spec.Query["extension"])
 	}
 }

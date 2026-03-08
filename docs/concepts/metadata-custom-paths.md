@@ -11,9 +11,9 @@ Metadata bridges the two.
 The main tools are:
 
 - `resourceInfo.collectionPath`
-- `operationInfo.<operation>.path`
-- `operationInfo.<operation>.httpMethod`
-- payload transforms (`jqExpression`, suppress/filter attributes)
+- `operationsInfo.<operation>.path`
+- `operationsInfo.<operation>.httpMethod`
+- ordered `payloadMutation` steps (`jqExpression`, `selectAttributes`, `suppressAttributes`)
 
 ## `resourceInfo.collectionPath`
 
@@ -65,11 +65,11 @@ Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.jso
     "collectionPath": "/admin/realms/{{.realm}}/components",
     "secretInAttributes": ["config.bindCredential[0]"]
   },
-  "operationInfo": {
+  "operationsInfo": {
     "listCollection": {
-      "payload": {
-        "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]"
-      }
+      "payloadMutation": [
+        { "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]" }
+      ]
     }
   }
 }
@@ -91,7 +91,7 @@ Key patterns:
 - create uses `./execution` instead of the normal `.`
 - update uses `./` (API-specific behavior)
 - delete uses a different absolute endpoint and explicit `DELETE`
-- payload `jqExpression` and `suppressAttributes` reshape the request body
+- `payloadMutation` reshapes the request body
 
 This is exactly the kind of API drift metadata is designed to absorb.
 
@@ -130,5 +130,5 @@ declarest resource explain /admin/realms/prod/user-registry/ldap-main
 - Use `collectionPath` to point at the real backend endpoint.
 - Prefer relative operation paths to minimize duplication.
 - Use list `jq` filters to split mixed-type endpoints into logical collections.
-- Use payload transforms to adapt request/response schema drift.
+- Use `payloadMutation` pipelines to adapt request/response schema drift.
 - Keep overrides minimal and layered; avoid copy-pasting full metadata blocks.

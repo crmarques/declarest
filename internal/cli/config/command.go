@@ -208,10 +208,10 @@ func newAddCommand(
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
+	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
 	command.Flags().StringVar(&contextName, "context-name", "", "context name to import (catalog) or assign (single context)")
 	command.Flags().BoolVar(&setCurrent, "set-current", false, "set imported context as current")
-	cliutil.RegisterInputFormatFlagCompletion(command)
+	cliutil.RegisterInputContentTypeFlagCompletion(command)
 	return command
 }
 
@@ -354,8 +354,8 @@ func newUpdateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
-	cliutil.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
+	cliutil.RegisterInputContentTypeFlagCompletion(command)
 	return command
 }
 
@@ -626,8 +626,8 @@ func newValidateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 
 	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVarP(&input.Format, "format", "i", cliutil.OutputYAML, "input format: json|yaml")
-	cliutil.RegisterInputFormatFlagCompletion(command)
+	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
+	cliutil.RegisterInputContentTypeFlagCompletion(command)
 	return command
 }
 

@@ -3,7 +3,7 @@
     "idFromAttribute": "/name",
     "aliasFromAttribute": "/name"
   },
-  "operationInfo": {
+  "operationsInfo": {
     "createResource": {
       "httpMethod": "PUT",
       "path": "/v1/sys/policies/acl/{{.name}}"

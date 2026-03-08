@@ -7,11 +7,13 @@
       "/config/bindCredential/0"
     ]
   },
-  "operationInfo": {
+  "operationsInfo": {
     "listCollection": {
-      "payload": {
-        "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]"
-      }
+      "payloadMutation": [
+        {
+          "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]"
+        }
+      ]
     }
   }
 }

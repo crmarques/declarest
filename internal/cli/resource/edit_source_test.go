@@ -32,8 +32,8 @@ func TestResolveEditSourceUsesCanonicalLocalPath(t *testing.T) {
 	if resolvedPath != "/projects/canonical-test" {
 		t.Fatalf("expected canonical local path, got %q", resolvedPath)
 	}
-	if !reflect.DeepEqual(value, orch.resolvedLocal.Payload) {
-		t.Fatalf("expected local payload %#v, got %#v", orch.resolvedLocal.Payload, value)
+	if !reflect.DeepEqual(value.Value, orch.resolvedLocal.Payload) {
+		t.Fatalf("expected local payload %#v, got %#v", orch.resolvedLocal.Payload, value.Value)
 	}
 	if want := []string{"/projects/test"}; !reflect.DeepEqual(orch.resolveLocalCalls, want) {
 		t.Fatalf("expected local resolution calls %#v, got %#v", want, orch.resolveLocalCalls)
@@ -62,8 +62,8 @@ func TestResolveEditSourceFallsBackToRemoteOnLocalMiss(t *testing.T) {
 	if resolvedPath != "/projects/test" {
 		t.Fatalf("expected requested path after remote bootstrap, got %q", resolvedPath)
 	}
-	if !reflect.DeepEqual(value, orch.remoteValue) {
-		t.Fatalf("expected remote payload %#v, got %#v", orch.remoteValue, value)
+	if !reflect.DeepEqual(value.Value, orch.remoteValue) {
+		t.Fatalf("expected remote payload %#v, got %#v", orch.remoteValue, value.Value)
 	}
 	if want := []string{"/projects/test"}; !reflect.DeepEqual(orch.resolveLocalCalls, want) {
 		t.Fatalf("expected local resolution calls %#v, got %#v", want, orch.resolveLocalCalls)
@@ -116,10 +116,13 @@ func (f *fakeEditSourceOrchestrator) ResolveLocalResource(
 	return f.resolvedLocal, nil
 }
 
-func (f *fakeEditSourceOrchestrator) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Value, error) {
+func (f *fakeEditSourceOrchestrator) GetRemote(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
 	f.remoteCalls = append(f.remoteCalls, logicalPath)
 	if f.remoteErr != nil {
-		return nil, f.remoteErr
+		return resourcedomain.Content{}, f.remoteErr
 	}
-	return f.remoteValue, nil
+	return resourcedomain.Content{
+		Value:      f.remoteValue,
+		Descriptor: resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON}),
+	}, nil
 }

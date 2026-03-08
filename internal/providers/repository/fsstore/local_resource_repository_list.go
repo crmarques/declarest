@@ -25,7 +25,7 @@ func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, po
 		return nil, err
 	}
 	if info != nil {
-		return []resource.Resource{buildListedResource(normalizedPath)}, nil
+		return []resource.Resource{buildListedResource(normalizedPath, info)}, nil
 	}
 
 	collectionPath, err := r.collectionDirPath(normalizedPath)
@@ -92,7 +92,7 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 				return nil, infoErr
 			}
 			if info != nil {
-				itemsByPath[logicalPath] = buildListedResource(logicalPath)
+				itemsByPath[logicalPath] = buildListedResource(logicalPath, info)
 			}
 			continue
 		}
@@ -144,7 +144,7 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 			return infoErr
 		}
 		if info != nil {
-			itemsByPath[logicalPath] = buildListedResource(logicalPath)
+			itemsByPath[logicalPath] = buildListedResource(logicalPath, info)
 		}
 		return nil
 	})
@@ -166,7 +166,7 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 	return items, nil
 }
 
-func buildListedResource(logicalPath string) resource.Resource {
+func buildListedResource(logicalPath string, info *payloadFileInfo) resource.Resource {
 	collectionPath := path.Dir(logicalPath)
 	if collectionPath == "." {
 		collectionPath = "/"
@@ -174,10 +174,15 @@ func buildListedResource(logicalPath string) resource.Resource {
 	if collectionPath == "" {
 		collectionPath = "/"
 	}
+	descriptor := resource.PayloadDescriptor{}
+	if info != nil {
+		descriptor = info.Descriptor
+	}
 	return resource.Resource{
-		LogicalPath:    logicalPath,
-		CollectionPath: collectionPath,
-		LocalAlias:     path.Base(logicalPath),
+		LogicalPath:       logicalPath,
+		CollectionPath:    collectionPath,
+		LocalAlias:        path.Base(logicalPath),
+		PayloadDescriptor: descriptor,
 	}
 }
 

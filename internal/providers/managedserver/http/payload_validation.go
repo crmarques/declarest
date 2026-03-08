@@ -24,7 +24,10 @@ func (g *HTTPManagedServerClient) validateOperationPayload(
 		return nil
 	}
 
-	payloadType := g.metadataPayloadType(md)
+	payloadType := g.metadataPayloadDescriptor(md).PayloadType
+	if descriptor := unwrapContentDescriptor(spec.Body); resource.IsPayloadDescriptorExplicit(descriptor) {
+		payloadType = resource.NormalizePayloadDescriptor(descriptor).PayloadType
+	}
 	if strings.TrimSpace(md.PayloadType) == "" {
 		if inferred, ok := resource.PayloadTypeForMediaType(spec.ContentType); ok {
 			payloadType = inferred
@@ -37,7 +40,7 @@ func (g *HTTPManagedServerClient) validateOperationPayload(
 		)
 	}
 
-	normalizedBody, err := resource.Normalize(spec.Body)
+	normalizedBody, err := resource.Normalize(unwrapContentValue(spec.Body))
 	if err != nil {
 		return err
 	}

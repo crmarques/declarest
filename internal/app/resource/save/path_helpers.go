@@ -38,7 +38,7 @@ func resolveSaveRemoteValue(
 	logicalPath string,
 	explicitCollectionTarget bool,
 	skipItems []string,
-) (resource.Value, error) {
+) (resource.Content, error) {
 	if explicitCollectionTarget {
 		items, err := remoteReader.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{})
 		if err == nil {
@@ -46,7 +46,7 @@ func resolveSaveRemoteValue(
 			return saveListPayloadFromResources(items), nil
 		}
 		if !isCollectionListShapeError(err) {
-			return nil, err
+			return resource.Content{}, err
 		}
 	}
 
@@ -55,24 +55,27 @@ func resolveSaveRemoteValue(
 		return remoteValue, nil
 	}
 	if !faults.IsCategory(err, faults.NotFoundError) {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	items, listErr := remoteReader.ListRemote(ctx, logicalPath, orchestratordomain.ListPolicy{})
 	if listErr != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	if !explicitCollectionTarget && !pathfallback.ShouldUseMetadataCollectionFallback(ctx, metadataService, logicalPath, items) {
-		return nil, err
+		return resource.Content{}, err
 	}
 	items = resource.FilterCollectionItems(logicalPath, items, skipItems)
 
 	return saveListPayloadFromResources(items), nil
 }
 
-func saveListPayloadFromResources(items []resource.Resource) resource.Value {
+func saveListPayloadFromResources(items []resource.Resource) resource.Content {
 	if len(items) == 0 {
-		return []any{}
+		return resource.Content{
+			Value:      []any{},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		}
 	}
 
 	sorted := make([]resource.Resource, len(items))
@@ -85,7 +88,14 @@ func saveListPayloadFromResources(items []resource.Resource) resource.Value {
 	for _, item := range sorted {
 		payload = append(payload, item.Payload)
 	}
-	return payload
+	descriptor := sorted[0].PayloadDescriptor
+	if !resource.IsPayloadDescriptorExplicit(descriptor) {
+		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	}
+	return resource.Content{
+		Value:      payload,
+		Descriptor: descriptor,
+	}
 }
 
 func isCollectionListShapeError(err error) bool {

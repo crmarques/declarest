@@ -15,7 +15,7 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 - `resourceInfo.secretInAttributes`
 - `resourceInfo.externalizedAttributes`
 
-### Operation behavior (`operationInfo.*`)
+### Operation behavior (`operationsInfo.*`)
 
 For each operation (`getResource`, `createResource`, `updateResource`, `deleteResource`, `listCollection`, `compareResources`) you can control:
 
@@ -24,11 +24,11 @@ For each operation (`getResource`, `createResource`, `updateResource`, `deleteRe
 - `query`
 - `httpHeaders`
 - `body`
-- payload transforms (`payload.filterAttributes`, `payload.suppressAttributes`, `payload.jqExpression`)
+- ordered payload mutation pipeline (`payloadMutation`)
 
 ### Compare/diff normalization
 
-Use `compareResources` transforms to suppress noisy fields before diffing (timestamps, server-generated versions, etc.).
+Use `compareResources.payloadMutation` to suppress noisy fields before diffing (timestamps, server-generated versions, etc.).
 
 ## Metadata files are overrides, not full schema dumps
 

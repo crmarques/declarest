@@ -42,8 +42,8 @@ func newTemplateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.G
 			if err != nil {
 				return err
 			}
-			return cliutil.WriteOutput(command, outputFormat, templated, func(w io.Writer, item resource.Value) error {
-				_, writeErr := fmt.Fprintln(w, item)
+			return cliutil.WriteOutput(command, outputFormat, templated, func(w io.Writer, item resource.Content) error {
+				_, writeErr := fmt.Fprintln(w, item.Value)
 				return writeErr
 			})
 		},

@@ -52,8 +52,7 @@ A named configuration that combines:
 
 A logical object stored locally as:
 
-- `resource.json`, or
-- `resource.yaml` when `repository.resource-format: yaml`
+- `resource.<ext>` based on the trusted source media type
 
 ### Collection
 

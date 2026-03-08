@@ -11,17 +11,17 @@ import (
 func DecodeOptionalPayloadInput(
 	command *cobra.Command,
 	flags cliutil.InputFlags,
-) (resource.Value, bool, error) {
+) (resource.Content, bool, error) {
 	data, err := cliutil.ReadOptionalInput(command, flags)
 	if err != nil {
-		return nil, false, err
+		return resource.Content{}, false, err
 	}
 	if data == nil {
-		return nil, false, nil
+		return resource.Content{}, false, nil
 	}
-	value, err := cliutil.DecodeResourceValueInputData(data, flags.Format)
+	value, err := cliutil.DecodeResourceContentInputData(data, flags.ContentType, flags.Payload)
 	if err != nil {
-		return nil, false, err
+		return resource.Content{}, false, err
 	}
 	return value, true, nil
 }
@@ -30,13 +30,13 @@ func DecodeOptionalPayloadInput(
 func DecodeRequiredPayloadInput(
 	command *cobra.Command,
 	flags cliutil.InputFlags,
-) (resource.Value, error) {
+) (resource.Content, error) {
 	value, hasInput, err := DecodeOptionalPayloadInput(command, flags)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 	if !hasInput {
-		return nil, cliutil.ValidationError(cliutil.MissingInputMessage, nil)
+		return resource.Content{}, cliutil.ValidationError(cliutil.MissingInputMessage, nil)
 	}
 	return value, nil
 }

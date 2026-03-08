@@ -15,6 +15,7 @@ import (
 type saveEntry struct {
 	LogicalPath string
 	Payload     resource.Value
+	Descriptor  resource.PayloadDescriptor
 }
 
 func extractSaveListItems(value resource.Value) ([]any, bool, error) {
@@ -99,6 +100,7 @@ func resolveSaveEntriesForItems(
 			entry = saveEntry{
 				LogicalPath: logicalPath,
 				Payload:     itemMap,
+				Descriptor:  resource.PayloadDescriptor{},
 			}
 		}
 
@@ -175,6 +177,7 @@ func resolveSaveEntryFromResourceShape(item map[string]any) (saveEntry, bool, er
 	return saveEntry{
 		LogicalPath: normalizedPath,
 		Payload:     normalizedPayload,
+		Descriptor:  resource.PayloadDescriptor{},
 	}, true, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestNormalizePlaceholders(t *testing.T) {
@@ -260,18 +261,19 @@ func TestResolvePayloadForResourceRejectsAbsolutePlaceholderKeys(t *testing.T) {
 func TestResolvePayloadDirectivesForResource(t *testing.T) {
 	t.Parallel()
 
-	t.Run("resolves_resource_format_and_secrets", func(t *testing.T) {
+	t.Run("resolves_payload_descriptor_and_secrets", func(t *testing.T) {
 		t.Parallel()
 
 		input := map[string]any{
-			"format": "{{resource_format .}}",
-			"token":  "{{secret .}}",
+			"format":    "{{payload_type .}}",
+			"mediaType": "{{payload_media_type .}}",
+			"token":     "{{secret .}}",
 		}
 
 		resolved, err := ResolvePayloadDirectivesForResource(
 			input,
 			"/customers/acme",
-			"yaml",
+			resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}),
 			func(key string) (string, error) {
 				if key != "/customers/acme:/token" {
 					return "", faults.NewTypedError(faults.NotFoundError, "missing", nil)
@@ -284,53 +286,61 @@ func TestResolvePayloadDirectivesForResource(t *testing.T) {
 		}
 
 		expected := map[string]any{
-			"format": "yaml",
-			"token":  "secret-value",
+			"format":    "yaml",
+			"mediaType": "application/yaml",
+			"token":     "secret-value",
 		}
 		if !reflect.DeepEqual(resolved, expected) {
 			t.Fatalf("expected %#v, got %#v", expected, resolved)
 		}
 	})
 
-	t.Run("resolves_resource_format_without_secret_getter", func(t *testing.T) {
+	t.Run("resolves_payload_descriptor_without_secret_getter", func(t *testing.T) {
 		t.Parallel()
 
 		input := map[string]any{
-			"format":  "{{resource_format .}}",
-			"token":   "{{secret .}}",
-			"literal": "prefix {{resource_format .}}",
+			"format":    "{{payload_type .}}",
+			"extension": "{{payload_extension .}}",
+			"token":     "{{secret .}}",
+			"literal":   "prefix {{payload_type .}}",
 		}
 
-		resolved, err := ResolvePayloadDirectivesForResource(input, "/customers/acme", "", nil)
+		resolved, err := ResolvePayloadDirectivesForResource(
+			input,
+			"/customers/acme",
+			resource.PayloadDescriptor{},
+			nil,
+		)
 		if err != nil {
 			t.Fatalf("ResolvePayloadDirectivesForResource returned error: %v", err)
 		}
 
 		expected := map[string]any{
-			"format":  "json",
-			"token":   "{{secret .}}",
-			"literal": "prefix {{resource_format .}}",
+			"format":    "octet-stream",
+			"extension": ".bin",
+			"token":     "{{secret .}}",
+			"literal":   "prefix {{payload_type .}}",
 		}
 		if !reflect.DeepEqual(resolved, expected) {
 			t.Fatalf("expected %#v, got %#v", expected, resolved)
 		}
 	})
 
-	t.Run("rejects_invalid_resource_format_placeholder_arguments", func(t *testing.T) {
+	t.Run("rejects_invalid_payload_descriptor_placeholder_arguments", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := ResolvePayloadDirectivesForResource(
-			map[string]any{"format": "{{resource_format}}"},
+			map[string]any{"format": "{{payload_type}}"},
 			"/customers/acme",
-			"json",
+			resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 			nil,
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 
 		_, err = ResolvePayloadDirectivesForResource(
-			map[string]any{"format": "{{resource_format \"yaml\"}}"},
+			map[string]any{"format": "{{payload_type \"yaml\"}}"},
 			"/customers/acme",
-			"json",
+			resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 			nil,
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -491,7 +501,12 @@ func TestPayloadDepthLimit(t *testing.T) {
 
 	t.Run("resolve_directives_rejects_deep_nesting", func(t *testing.T) {
 		t.Parallel()
-		_, err := ResolvePayloadDirectivesForResource(deepMap, "/path", "json", nil)
+		_, err := ResolvePayloadDirectivesForResource(
+			deepMap,
+			"/path",
+			resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+			nil,
+		)
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }

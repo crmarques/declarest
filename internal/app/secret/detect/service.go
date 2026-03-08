@@ -114,12 +114,12 @@ func detectSecretCandidatesFromRepository(
 			continue
 		}
 
-		value, err := deps.Orchestrator.GetLocal(ctx, item.LogicalPath)
+		content, err := deps.Orchestrator.GetLocal(ctx, item.LogicalPath)
 		if err != nil {
 			return nil, err
 		}
 
-		keys, err := deps.SecretProvider.DetectSecretCandidates(ctx, value)
+		keys, err := deps.SecretProvider.DetectSecretCandidates(ctx, content.Value)
 		if err != nil {
 			return nil, err
 		}

@@ -53,10 +53,7 @@ func buildDefaultOrchestratorFromResolvedContext(
 
 	var metadataService metadata.MetadataService
 	if metadataSource.BaseDir != "" {
-		metadataService = fsmetadata.NewFSMetadataService(
-			metadataSource.BaseDir,
-			resolvedContext.Repository.ResourceFormat,
-		)
+		metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
 		if strings.TrimSpace(metadataSource.DeprecatedWarning) != "" {
 			_, _ = fmt.Fprintf(os.Stderr, "warning: %s\n", metadataSource.DeprecatedWarning)
 		}
@@ -67,13 +64,11 @@ func buildDefaultOrchestratorFromResolvedContext(
 	case resolvedContext.Repository.Filesystem != nil:
 		repo = fsstore.NewLocalResourceRepository(
 			resolvedContext.Repository.Filesystem.BaseDir,
-			resolvedContext.Repository.ResourceFormat,
 			metadataSource.BaseDir,
 		)
 	case resolvedContext.Repository.Git != nil:
 		repo = gitrepository.NewGitResourceRepository(
 			*resolvedContext.Repository.Git,
-			resolvedContext.Repository.ResourceFormat,
 			metadataSource.BaseDir,
 		)
 	}
@@ -87,13 +82,7 @@ func buildDefaultOrchestratorFromResolvedContext(
 		serverConfig := *resolvedContext.ManagedServer.HTTP
 		serverConfig.OpenAPI = effectiveOpenAPISource(serverConfig.OpenAPI, metadataSource.OpenAPI)
 
-		serverFormat := resolvedContext.Repository.ResourceFormat
-		if serverFormat == "" {
-			serverFormat = config.ResourceFormatJSON
-		}
-		serverOptions := []httpmanagedserver.ManagedServerClientOption{
-			httpmanagedserver.WithResourceFormat(serverFormat),
-		}
+		serverOptions := []httpmanagedserver.ManagedServerClientOption{}
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
 			serverOptions = append(serverOptions, httpmanagedserver.WithMetadataRenderer(renderer))
 		}
@@ -132,7 +121,6 @@ func buildDefaultOrchestratorFromResolvedContext(
 		metadataService,
 		srv,
 		sec,
-		resolvedContext.Repository.ResourceFormat,
 	), nil
 }
 

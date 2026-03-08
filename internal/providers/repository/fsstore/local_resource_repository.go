@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -20,19 +19,12 @@ var _ repository.ResourceArtifactStore = (*LocalResourceRepository)(nil)
 
 type LocalResourceRepository struct {
 	baseDir         string
-	resourceFormat  string
 	metadataBaseDir string
 }
 
-func NewLocalResourceRepository(baseDir string, resourceFormat string, metadataBaseDir ...string) *LocalResourceRepository {
-	format := resourceFormat
-	if format == "" {
-		format = config.ResourceFormatJSON
-	}
-
+func NewLocalResourceRepository(baseDir string, metadataBaseDir ...string) *LocalResourceRepository {
 	return &LocalResourceRepository{
 		baseDir:         filepath.Clean(baseDir),
-		resourceFormat:  format,
 		metadataBaseDir: firstMetadataBaseDir(metadataBaseDir),
 	}
 }
@@ -58,25 +50,9 @@ func (r *LocalResourceRepository) Move(_ context.Context, fromPath string, toPat
 		return notFoundError(fmt.Sprintf("resource %q not found", fromNormalized))
 	}
 
-	targetPayloadType := fromInfo.PayloadType
-	if metadataPayloadType, found, metadataErr := r.metadataPayloadType(toNormalized); metadataErr != nil {
-		return metadataErr
-	} else if found {
-		targetPayloadType = metadataPayloadType
-	}
-
-	var toFile string
-	if fromInfo.PreserveExistingName && targetPayloadType == fromInfo.PayloadType {
-		destinationDir, err := r.collectionDirPath(toNormalized)
-		if err != nil {
-			return err
-		}
-		toFile = filepath.Join(destinationDir, fromInfo.Name)
-	} else {
-		toFile, err = r.canonicalPayloadFilePath(toNormalized, targetPayloadType)
-		if err != nil {
-			return err
-		}
+	toFile, err := r.canonicalPayloadFilePath(toNormalized, fromInfo.Descriptor.Extension)
+	if err != nil {
+		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(toFile), 0o755); err != nil {

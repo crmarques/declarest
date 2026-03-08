@@ -18,17 +18,18 @@ import (
 func (g *HTTPManagedServerClient) Request(
 	ctx context.Context,
 	requestSpec managedserverdomain.RequestSpec,
-) (resource.Value, error) {
+) (resource.Content, error) {
 	resolvedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 	if resolvedMethod == "" {
-		return nil, faults.NewValidationError("request method is required", nil)
+		return resource.Content{}, faults.NewValidationError("request method is required", nil)
 	}
 
 	resolvedPath := normalizeRequestPath(requestSpec.Path)
 	if resolvedPath == "" {
-		return nil, faults.NewValidationError("request path is required", nil)
+		return resource.Content{}, faults.NewValidationError("request path is required", nil)
 	}
 
+	bodyDescriptor := g.genericRequestBodyDescriptor(requestSpec)
 	spec := metadata.OperationSpec{
 		Method:      resolvedMethod,
 		Path:        resolvedPath,
@@ -36,17 +37,16 @@ func (g *HTTPManagedServerClient) Request(
 		Headers:     cloneStringMap(requestSpec.Headers),
 		Accept:      requestSpec.Accept,
 		ContentType: requestSpec.ContentType,
-		Body:        requestSpec.Body,
+		Body: resource.Content{
+			Value:      requestSpec.Body.Value,
+			Descriptor: bodyDescriptor,
+		},
 	}
 	if strings.TrimSpace(spec.Accept) == "" {
-		spec.Accept = defaultMediaType
+		spec.Accept = bodyDescriptor.MediaType
 	}
-	if spec.Body != nil && strings.TrimSpace(spec.ContentType) == "" {
-		if resource.IsBinaryValue(spec.Body) {
-			spec.ContentType = "application/octet-stream"
-		} else {
-			spec.ContentType = defaultMediaType
-		}
+	if requestSpec.Body.Value != nil && strings.TrimSpace(spec.ContentType) == "" {
+		spec.ContentType = bodyDescriptor.MediaType
 	}
 
 	_, hasOperation := requestMethodOperation(resolvedMethod)
@@ -56,26 +56,27 @@ func (g *HTTPManagedServerClient) Request(
 		hasOperation = true
 		spec.Validate = validateSpec
 		validationResource = resource.Resource{
-			LogicalPath:    resourceInput.LogicalPath,
-			CollectionPath: resourceInput.CollectionPath,
-			LocalAlias:     resourceInput.LocalAlias,
-			RemoteID:       resourceInput.RemoteID,
-			Payload:        resourceInput.Payload,
+			LogicalPath:       resourceInput.LogicalPath,
+			CollectionPath:    resourceInput.CollectionPath,
+			LocalAlias:        resourceInput.LocalAlias,
+			RemoteID:          resourceInput.RemoteID,
+			Payload:           resourceInput.Payload,
+			PayloadDescriptor: bodyDescriptor,
 		}
 		validationMd = resourceInput.Metadata
 	}
 	if hasOperation && spec.Validate != nil {
 		if err := g.validateOperationPayload(ctx, validationResource, validationMd, spec); err != nil {
-			return nil, err
+			return resource.Content{}, err
 		}
 	}
 
 	responseBody, responseHeaders, err := g.execute(ctx, spec)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
-	return decodeResponseBody(responseBody, responseHeaders, g.requestFallbackPayloadType(ctx, requestSpec, spec))
+	return decodeResponseBody(responseBody, responseHeaders, g.requestFallbackDescriptor(ctx, requestSpec, spec))
 }
 
 func (g *HTTPManagedServerClient) execute(ctx context.Context, spec metadata.OperationSpec) ([]byte, http.Header, error) {

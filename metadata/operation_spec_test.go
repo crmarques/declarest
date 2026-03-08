@@ -13,8 +13,10 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 	t.Parallel()
 
 	resolved, err := ResolveOperationSpec(context.Background(), ResourceMetadata{
-		Filter:   []string{"/root"},
-		Suppress: []string{"/internal"},
+		PayloadMutation: []PayloadMutationStep{
+			{SelectAttributes: []string{"/root"}},
+			{SuppressAttributes: []string{"/internal"}},
+		},
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
 				Path:    "/api/customers/{{.id}}",
@@ -40,11 +42,18 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 	if resolved.Query["expand"] != "true" {
 		t.Fatalf("expected rendered query, got %+v", resolved.Query)
 	}
-	if len(resolved.Filter) != 1 || resolved.Filter[0] != "/root" {
-		t.Fatalf("expected inherited filter, got %+v", resolved.Filter)
+	if len(resolved.PayloadMutation) != 2 {
+		t.Fatalf("expected inherited payloadMutation pipeline, got %+v", resolved.PayloadMutation)
 	}
-	if len(resolved.Suppress) != 1 || resolved.Suppress[0] != "/internal" {
-		t.Fatalf("expected inherited suppress, got %+v", resolved.Suppress)
+	if PayloadMutationStepType(resolved.PayloadMutation[0]) != "selectAttributes" ||
+		len(resolved.PayloadMutation[0].SelectAttributes) != 1 ||
+		resolved.PayloadMutation[0].SelectAttributes[0] != "/root" {
+		t.Fatalf("expected first payloadMutation step to select /root, got %+v", resolved.PayloadMutation[0])
+	}
+	if PayloadMutationStepType(resolved.PayloadMutation[1]) != "suppressAttributes" ||
+		len(resolved.PayloadMutation[1].SuppressAttributes) != 1 ||
+		resolved.PayloadMutation[1].SuppressAttributes[0] != "/internal" {
+		t.Fatalf("expected second payloadMutation step to suppress /internal, got %+v", resolved.PayloadMutation[1])
 	}
 }
 
@@ -124,15 +133,15 @@ func TestResolveOperationSpecWithScopeDefaultsOperationPathTemplates(t *testing.
 	}
 }
 
-func TestResolveOperationSpecWithScopeSupportsResourceFormatTemplateFunc(t *testing.T) {
+func TestResolveOperationSpecWithScopeSupportsPayloadTemplateFunc(t *testing.T) {
 	t.Parallel()
 
 	md := ResourceMetadata{
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
 				Path:        "/api/customers/{{.id}}",
-				Accept:      "application/{{resource_format .}}",
-				ContentType: "application/{{resource_format .}}",
+				Accept:      "{{payload_media_type .}}",
+				ContentType: "application/{{payload_type .}}",
 			},
 		},
 	}
@@ -158,8 +167,8 @@ func TestResolveOperationSpecWithScopeSupportsResourceFormatTemplateFunc(t *test
 		t.Parallel()
 
 		spec, err := ResolveOperationSpecWithScope(context.Background(), md, OperationGet, map[string]any{
-			"id":             "acme",
-			"resourceFormat": "yaml",
+			"id":          "acme",
+			"payloadType": "yaml",
 		})
 		if err != nil {
 			t.Fatalf("ResolveOperationSpecWithScope returned error: %v", err)
@@ -170,19 +179,19 @@ func TestResolveOperationSpecWithScopeSupportsResourceFormatTemplateFunc(t *test
 	})
 }
 
-func TestResolveOperationSpecWithScopeRejectsInvalidResourceFormatTemplateUsage(t *testing.T) {
+func TestResolveOperationSpecWithScopeRejectsInvalidPayloadTemplateUsage(t *testing.T) {
 	t.Parallel()
 
 	_, err := ResolveOperationSpecWithScope(context.Background(), ResourceMetadata{
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
 				Path:   "/api/customers/{{.id}}",
-				Accept: "application/{{resource_format \"yaml\"}}",
+				Accept: "application/{{payload_type \"yaml\"}}",
 			},
 		},
 	}, OperationGet, map[string]any{
-		"id":             "acme",
-		"resourceFormat": "yaml",
+		"id":          "acme",
+		"payloadType": "yaml",
 	})
 	assertValidationError(t, err)
 }

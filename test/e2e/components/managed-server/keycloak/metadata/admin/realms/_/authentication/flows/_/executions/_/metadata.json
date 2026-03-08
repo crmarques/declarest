@@ -3,15 +3,19 @@
 		"idFromAttribute": "/id",
 		"aliasFromAttribute": "/displayName"
 	},
-	"operationInfo": {
+	"operationsInfo": {
 		"createResource": {
 			"path": "./execution",
-			"payload": {
-				"jqExpression": ". | .provider = .providerId",
-				"suppressAttributes": [
-					"/providerId"
-				]
-			}
+			"payloadMutation": [
+				{
+					"jqExpression": ". | .provider = .providerId"
+				},
+				{
+					"suppressAttributes": [
+						"/providerId"
+					]
+				}
+			]
 		},
 		"updateResource": {
 			"path": "./"

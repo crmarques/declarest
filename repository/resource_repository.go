@@ -8,8 +8,8 @@ import (
 
 // ResourceStore manages deterministic local resource persistence operations.
 type ResourceStore interface {
-	Save(ctx context.Context, logicalPath string, value resource.Value) error
-	Get(ctx context.Context, logicalPath string) (resource.Value, error)
+	Save(ctx context.Context, logicalPath string, content resource.Content) error
+	Get(ctx context.Context, logicalPath string) (resource.Content, error)
 	Delete(ctx context.Context, logicalPath string, policy DeletePolicy) error
 	List(ctx context.Context, logicalPath string, policy ListPolicy) ([]resource.Resource, error)
 	Exists(ctx context.Context, logicalPath string) (bool, error)
@@ -23,7 +23,7 @@ type ResourceArtifact struct {
 // ResourceArtifactStore is an optional repository capability used by workflows
 // that persist or read sidecar files associated with one logical resource.
 type ResourceArtifactStore interface {
-	SaveResourceWithArtifacts(ctx context.Context, logicalPath string, value resource.Value, artifacts []ResourceArtifact) error
+	SaveResourceWithArtifacts(ctx context.Context, logicalPath string, content resource.Content, artifacts []ResourceArtifact) error
 	ReadResourceArtifact(ctx context.Context, logicalPath string, file string) ([]byte, error)
 }
 

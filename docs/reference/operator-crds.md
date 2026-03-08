@@ -18,11 +18,12 @@ Key fields:
 
 - `spec.type` (`git`)
 - `spec.pollInterval`
-- `spec.resourceFormat` (`json|yaml`)
 - `spec.git.url`
 - `spec.git.branch` (defaults to `main`)
 - `spec.git.auth.tokenSecretRef` or `spec.git.auth.sshSecretRef`
 - `spec.storage` (`existingPVC` or `pvc`)
+
+Repository payload files preserve the managed-server response media type or the explicit payload input media type. The CRD no longer exposes a repository payload-format default.
 
 Minimal example:
 

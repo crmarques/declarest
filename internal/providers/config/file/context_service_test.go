@@ -516,8 +516,7 @@ func TestContextServiceCRUDLifecycle(t *testing.T) {
 		Name:          "prod",
 		ManagedServer: validManagedServer(),
 		Repository: config.Repository{
-			ResourceFormat: config.ResourceFormatYAML,
-			Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/prod"},
+			Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/prod"},
 		},
 	}
 	if err := contextService.Create(context.Background(), prod); err != nil {
@@ -639,7 +638,7 @@ func TestSetCurrentPreservesContextOrder(t *testing.T) {
 	}
 }
 
-func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
+func TestCreateDoesNotPersistRemovedRepositoryResourceFormat(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -662,8 +661,12 @@ func TestResourceFormatDefaultsToJSONOnCreate(t *testing.T) {
 	if len(contextCatalog.Contexts) != 1 {
 		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
 	}
-	if contextCatalog.Contexts[0].Repository.ResourceFormat != config.ResourceFormatJSON {
-		t.Fatalf("expected default resourceFormat json, got %q", contextCatalog.Contexts[0].Repository.ResourceFormat)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved context catalog: %v", err)
+	}
+	if strings.Contains(string(raw), "resourceFormat:") {
+		t.Fatalf("expected resourceFormat to be omitted, got:\n%s", string(raw))
 	}
 }
 
@@ -706,7 +709,7 @@ func TestMetadataBaseDirMatchingRepositoryIsNotPersisted(t *testing.T) {
 	}
 }
 
-func TestResolveContextDefaultsResourceFormatWhenMissing(t *testing.T) {
+func TestResolveContextWithoutRepositoryResourceFormat(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
@@ -719,8 +722,8 @@ func TestResolveContextDefaultsResourceFormatWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
-	if resolved.Repository.ResourceFormat != config.ResourceFormatJSON {
-		t.Fatalf("expected resolved default resourceFormat json, got %q", resolved.Repository.ResourceFormat)
+	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected filesystem repository to resolve, got %#v", resolved.Repository.Filesystem)
 	}
 }
 
@@ -1186,8 +1189,7 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 
 func validFilesystemRepository() config.Repository {
 	return config.Repository{
-		ResourceFormat: config.ResourceFormatJSON,
-		Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+		Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 	}
 }
 
@@ -1206,7 +1208,6 @@ const validContextCatalogYAML = `
 contexts:
   - name: dev
     repository:
-      resourceFormat: json
       filesystem:
         baseDir: /tmp/repo
     managedServer:
@@ -1230,7 +1231,6 @@ const providerSelectionContextCatalogYAML = `
 contexts:
   - name: fs
     repository:
-      resourceFormat: json
       filesystem:
         baseDir: /tmp/repo
     managedServer:
@@ -1244,7 +1244,6 @@ contexts:
 
   - name: git
     repository:
-      resourceFormat: json
       git:
         local:
           baseDir: /tmp/repo
@@ -1259,7 +1258,6 @@ contexts:
 
   - name: http
     repository:
-      resourceFormat: json
       filesystem:
         baseDir: /tmp/repo
     managedServer:
@@ -1273,7 +1271,6 @@ contexts:
 
   - name: file-secret
     repository:
-      resourceFormat: json
       filesystem:
         baseDir: /tmp/repo
     managedServer:
@@ -1291,7 +1288,6 @@ contexts:
 
   - name: vault-secret
     repository:
-      resourceFormat: json
       filesystem:
         baseDir: /tmp/repo
     managedServer:
@@ -1332,7 +1328,6 @@ const proxyInheritanceContextCatalogYAML = `
 contexts:
   - name: shared
     repository:
-      resourceFormat: json
       git:
         local:
           baseDir: /tmp/repo
@@ -1371,7 +1366,6 @@ const proxyDisableContextCatalogYAML = `
 contexts:
   - name: disable
     repository:
-      resourceFormat: json
       git:
         local:
           baseDir: /tmp/repo
@@ -1411,7 +1405,6 @@ const proxyPersistenceContextCatalogYAML = `
 contexts:
   - name: persist
     repository:
-      resourceFormat: json
       git:
         local:
           baseDir: /tmp/repo

@@ -43,13 +43,14 @@ func resourcePayloadEditType(
 	logicalPath string,
 	value resourcedomain.Value,
 ) (string, error) {
+	_ = cfg
 	if deps.Metadata != nil {
 		md, err := deps.Metadata.ResolveForPath(ctx, logicalPath)
 		if err != nil {
 			return "", err
 		}
 		if strings.TrimSpace(md.PayloadType) != "" {
-			return metadata.EffectivePayloadType(md, cfg.Repository.ResourceFormat)
+			return metadata.EffectivePayloadType(md, resourcedomain.PayloadTypeJSON)
 		}
 	}
 
@@ -57,28 +58,10 @@ func resourcePayloadEditType(
 		return resourcedomain.PayloadTypeOctetStream, nil
 	}
 	if _, ok := value.(string); ok {
-		candidate := metadata.NormalizeResourceFormat(cfg.Repository.ResourceFormat)
-		if resourcedomain.IsTextPayloadType(candidate) {
-			return candidate, nil
-		}
 		return resourcedomain.PayloadTypeText, nil
 	}
 
-	candidate := metadata.NormalizeResourceFormat(cfg.Repository.ResourceFormat)
-	if resourcedomain.IsStructuredPayloadType(candidate) {
-		return candidate, nil
-	}
-	switch candidate {
-	case resourcedomain.PayloadTypeXML,
-		resourcedomain.PayloadTypeHCL,
-		resourcedomain.PayloadTypeINI,
-		resourcedomain.PayloadTypeProperties,
-		resourcedomain.PayloadTypeText,
-		resourcedomain.PayloadTypeOctetStream:
-		return resourcedomain.PayloadTypeJSON, nil
-	default:
-		return candidate, nil
-	}
+	return resourcedomain.PayloadTypeJSON, nil
 }
 
 func resourcePayloadEditFilename(payloadType string) string {

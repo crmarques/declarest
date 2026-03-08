@@ -169,14 +169,8 @@ func (s *testContextService) ResolveContext(_ context.Context, selection config.
 func (s *testContextService) Validate(context.Context, config.Context) error { return nil }
 
 func buildTestContext(name string) config.Context {
-	format := config.ResourceFormatJSON
-	if name == "yaml" {
-		format = config.ResourceFormatYAML
-	}
-
 	repositoryConfig := config.Repository{
-		ResourceFormat: format,
-		Filesystem:     &config.FilesystemRepository{BaseDir: "/tmp/repo"},
+		Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 	}
 	if name == "git" || name == "git-no-remote" || name == "git-auto-sync-disabled" {
 		gitRepo := &config.GitRepository{
@@ -193,10 +187,7 @@ func buildTestContext(name string) config.Context {
 				gitRepo.Remote.AutoSync = &autoSyncFalse
 			}
 		}
-		repositoryConfig = config.Repository{
-			ResourceFormat: format,
-			Git:            gitRepo,
-		}
+		repositoryConfig = config.Repository{Git: gitRepo}
 	}
 
 	resourceServerAuth := &config.HTTPAuth{
@@ -306,59 +297,59 @@ type requestCall struct {
 	contentType string
 }
 
-func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *testOrchestrator) GetLocal(_ context.Context, logicalPath string) (resource.Content, error) {
 	r.getLocalCalls = append(r.getLocalCalls, logicalPath)
 	if r.getLocalErr != nil {
-		return nil, r.getLocalErr
+		return resource.Content{}, r.getLocalErr
 	}
 	if r.getLocalValues != nil {
 		if value, ok := r.getLocalValues[logicalPath]; ok {
-			return value, nil
+			return testContent(value), nil
 		}
 	}
-	return map[string]any{"path": logicalPath, "source": "local"}, nil
+	return testContent(map[string]any{"path": logicalPath, "source": "local"}), nil
 }
-func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (resource.Content, error) {
 	r.getRemoteCalls = append(r.getRemoteCalls, logicalPath)
 	if r.getRemoteErr != nil {
-		return nil, r.getRemoteErr
+		return resource.Content{}, r.getRemoteErr
 	}
 	if r.getRemoteValues != nil {
 		if value, ok := r.getRemoteValues[logicalPath]; ok {
-			return value, nil
+			return testContent(value), nil
 		}
-		return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
 	}
 	if r.getRemoteValue != nil {
-		return r.getRemoteValue, nil
+		return testContent(r.getRemoteValue), nil
 	}
-	return map[string]any{"path": logicalPath, "source": "remote"}, nil
+	return testContent(map[string]any{"path": logicalPath, "source": "remote"}), nil
 }
-func (r *testOrchestrator) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
+func (r *testOrchestrator) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
 	r.requestCalls = append(r.requestCalls, requestCall{
 		method:      spec.Method,
 		path:        spec.Path,
-		body:        spec.Body,
+		body:        spec.Body.Value,
 		headers:     cloneTestStringMap(spec.Headers),
 		accept:      spec.Accept,
 		contentType: spec.ContentType,
 	})
 	if r.requestErr != nil {
-		return nil, r.requestErr
+		return resource.Content{}, r.requestErr
 	}
-	return map[string]any{
+	return testContent(map[string]any{
 		"method": spec.Method,
 		"path":   spec.Path,
-		"body":   spec.Body,
-	}, nil
+		"body":   spec.Body.Value,
+	}), nil
 }
-func (r *testOrchestrator) GetOpenAPISpec(_ context.Context) (resource.Value, error) {
-	return r.openAPISpec, nil
+func (r *testOrchestrator) GetOpenAPISpec(_ context.Context) (resource.Content, error) {
+	return testContent(r.openAPISpec), nil
 }
-func (r *testOrchestrator) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (r *testOrchestrator) Save(_ context.Context, logicalPath string, content resource.Content) error {
 	r.saveCalls = append(r.saveCalls, savedResource{
 		logicalPath: logicalPath,
-		value:       value,
+		value:       content.Value,
 	})
 	return r.saveErr
 }
@@ -367,25 +358,25 @@ func (r *testOrchestrator) Apply(_ context.Context, logicalPath string, policy o
 	r.applyPolicies = append(r.applyPolicies, policy)
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testOrchestrator) ApplyWithValue(_ context.Context, logicalPath string, value resource.Value, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
+func (r *testOrchestrator) ApplyWithContent(_ context.Context, logicalPath string, content resource.Content, policy orchestrator.ApplyPolicy) (resource.Resource, error) {
 	r.applyValueCalls = append(r.applyValueCalls, savedResource{
 		logicalPath: logicalPath,
-		value:       value,
+		value:       content.Value,
 	})
 	r.applyValuePolicy = append(r.applyValuePolicy, policy)
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testOrchestrator) Create(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *testOrchestrator) Create(_ context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
 	r.createCalls = append(r.createCalls, savedResource{
 		logicalPath: logicalPath,
-		value:       value,
+		value:       content.Value,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
-func (r *testOrchestrator) Update(_ context.Context, logicalPath string, value resource.Value) (resource.Resource, error) {
+func (r *testOrchestrator) Update(_ context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
 	r.updateCalls = append(r.updateCalls, savedResource{
 		logicalPath: logicalPath,
-		value:       value,
+		value:       content.Value,
 	})
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
@@ -503,8 +494,8 @@ func (r *testOrchestrator) Diff(_ context.Context, logicalPath string) ([]resour
 	}
 	return []resource.DiffEntry{{ResourcePath: logicalPath, Path: "", Operation: "noop"}}, nil
 }
-func (r *testOrchestrator) Template(_ context.Context, _ string, value resource.Value) (resource.Value, error) {
-	return value, nil
+func (r *testOrchestrator) Template(_ context.Context, _ string, content resource.Content) (resource.Content, error) {
+	return content, nil
 }
 
 func isDirectChildPath(basePath string, candidatePath string) bool {
@@ -743,16 +734,16 @@ type testManagedServerClient struct {
 	requests    []requestCall
 }
 
-func (s *testManagedServerClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return map[string]any{"ok": true}, nil
+func (s *testManagedServerClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return map[string]any{"ok": true}, nil
+func (s *testManagedServerClient) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return map[string]any{"ok": true}, nil
+func (s *testManagedServerClient) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return testContent(map[string]any{"ok": true}), nil
 }
 
 func (s *testManagedServerClient) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
@@ -767,23 +758,23 @@ func (s *testManagedServerClient) Exists(context.Context, resource.Resource, met
 	return true, nil
 }
 
-func (s *testManagedServerClient) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Value, error) {
+func (s *testManagedServerClient) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
 	s.requests = append(s.requests, requestCall{
 		method:      spec.Method,
 		path:        spec.Path,
-		body:        spec.Body,
+		body:        spec.Body.Value,
 		headers:     cloneTestStringMap(spec.Headers),
 		accept:      spec.Accept,
 		contentType: spec.ContentType,
 	})
 	if s.requestErr != nil {
-		return nil, s.requestErr
+		return resource.Content{}, s.requestErr
 	}
-	return map[string]any{"ok": true}, nil
+	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) GetOpenAPISpec(context.Context) (resource.Value, error) {
-	return nil, nil
+func (s *testManagedServerClient) GetOpenAPISpec(context.Context) (resource.Content, error) {
+	return resource.Content{}, nil
 }
 
 func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error) {
@@ -796,9 +787,9 @@ func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error
 	return s.accessToken, nil
 }
 
-func (r *testRepository) Save(context.Context, string, resource.Value) error { return nil }
-func (r *testRepository) Get(context.Context, string) (resource.Value, error) {
-	return map[string]any{"id": "acme"}, nil
+func (r *testRepository) Save(context.Context, string, resource.Content) error { return nil }
+func (r *testRepository) Get(context.Context, string) (resource.Content, error) {
+	return testContent(map[string]any{"id": "acme"}), nil
 }
 
 func cloneTestStringMap(values map[string]string) map[string]string {
@@ -812,6 +803,17 @@ func cloneTestStringMap(values map[string]string) map[string]string {
 	}
 	return cloned
 }
+
+func testContent(value resource.Value) resource.Content {
+	if value == nil {
+		return resource.Content{}
+	}
+	return resource.Content{
+		Value:      value,
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+}
+
 func (r *testRepository) Delete(_ context.Context, logicalPath string, policy repository.DeletePolicy) error {
 	r.deleteCalls = append(r.deleteCalls, deleteCall{
 		logicalPath: logicalPath,
@@ -910,21 +912,21 @@ type resourceSaveTestRepository struct {
 	values map[string]resource.Value
 }
 
-func (r *resourceSaveTestRepository) Save(_ context.Context, logicalPath string, value resource.Value) error {
+func (r *resourceSaveTestRepository) Save(_ context.Context, logicalPath string, content resource.Content) error {
 	if r.values == nil {
 		r.values = map[string]resource.Value{}
 	}
-	r.values[logicalPath] = value
+	r.values[logicalPath] = content.Value
 	return nil
 }
 
-func (r *resourceSaveTestRepository) Get(_ context.Context, logicalPath string) (resource.Value, error) {
+func (r *resourceSaveTestRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
 	if r.values != nil {
 		if value, found := r.values[logicalPath]; found {
-			return value, nil
+			return testContent(value), nil
 		}
 	}
-	return nil, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
 }
 
 func (r *resourceSaveTestRepository) Delete(_ context.Context, _ string, _ repository.DeletePolicy) error {

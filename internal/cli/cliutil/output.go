@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 
-	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
@@ -52,29 +51,15 @@ func ValidateOutputFormatForCommandPath(commandPath string, format string) error
 }
 
 func ResolveContextOutputFormat(ctx context.Context, deps CommandDependencies, globalFlags *GlobalFlags) (string, error) {
+	_ = ctx
+	_ = deps
 	if globalFlags == nil || globalFlags.Output == "" {
 		return OutputJSON, nil
 	}
 	if globalFlags.Output != OutputAuto {
 		return globalFlags.Output, nil
 	}
-	if deps.Contexts == nil {
-		return OutputJSON, nil
-	}
-
-	resolvedContext, err := deps.Contexts.ResolveContext(ctx, configdomain.ContextSelection{Name: globalFlags.Context})
-	if err != nil {
-		return "", err
-	}
-
-	switch resolvedContext.Repository.ResourceFormat {
-	case "", configdomain.ResourceFormatJSON:
-		return OutputJSON, nil
-	case configdomain.ResourceFormatYAML:
-		return OutputYAML, nil
-	default:
-		return OutputJSON, nil
-	}
+	return OutputJSON, nil
 }
 
 func WriteOutput[T any](command *cobra.Command, format string, value T, renderText func(io.Writer, T) error) error {
@@ -164,6 +149,17 @@ func ResolvePayloadAwareOutputFormat(
 	}
 	if globalFlags == nil || globalFlags.Output != OutputAuto {
 		return format, nil
+	}
+	if content, ok := value.(resource.Content); ok {
+		switch content.Descriptor.PayloadType {
+		case resource.PayloadTypeYAML:
+			return OutputYAML, nil
+		case resource.PayloadTypeJSON:
+			return OutputJSON, nil
+		case resource.PayloadTypeText, resource.PayloadTypeOctetStream:
+			return OutputAuto, nil
+		}
+		value = content.Value
 	}
 	if _, ok := resource.BinaryBytes(value); ok {
 		return OutputAuto, nil

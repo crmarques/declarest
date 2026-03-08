@@ -38,11 +38,11 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			payloadType, err := resourcePayloadEditType(command.Context(), deps, cfg, resolvedPath, currentValue)
+			payloadType, err := resourcePayloadEditType(command.Context(), deps, cfg, resolvedPath, currentValue.Value)
 			if err != nil {
 				return err
 			}
-			encoded, err := encodeResourcePayloadForEdit(payloadType, currentValue)
+			encoded, err := encodeResourcePayloadForEdit(payloadType, currentValue.Value)
 			if err != nil {
 				return err
 			}
@@ -74,7 +74,10 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 					Secrets:      deps.Secrets,
 				},
 				resolvedPath,
-				editedValue,
+				resourcedomain.Content{
+					Value:      editedValue,
+					Descriptor: currentValue.Descriptor,
+				},
 				true,
 				resourcesave.ExecuteOptions{
 					AsOneResource: true,

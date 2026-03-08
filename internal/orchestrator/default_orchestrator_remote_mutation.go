@@ -21,7 +21,7 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 		return resource.Resource{}, err
 	}
 
-	var remotePayload resource.Value
+	var remotePayload resource.Content
 	switch operation {
 	case metadata.OperationCreate:
 		remotePayload, err = serverManager.Create(ctx, resourceInfo, md)
@@ -39,8 +39,10 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 	}
 
 	payload := resourceInfo.Payload
-	if remotePayload != nil {
-		payload = remotePayload
+	descriptor := resourceInfo.PayloadDescriptor
+	if remotePayload.Value != nil {
+		payload = remotePayload.Value
+		descriptor = remotePayload.Descriptor
 	}
 	normalizedPayload, err := resource.Normalize(payload)
 	if err != nil {
@@ -48,21 +50,22 @@ func (r *DefaultOrchestrator) executeRemoteMutation(
 	}
 
 	resourceInfo.Payload = normalizedPayload
+	resourceInfo.PayloadDescriptor = descriptor
 	return resourceInfo, nil
 }
 
 func (r *DefaultOrchestrator) resolvePayloadForRemote(
 	ctx context.Context,
 	logicalPath string,
-	value resource.Value,
-) (resource.Value, error) {
-	if value == nil {
-		return nil, nil
+	content resource.Content,
+) (resource.Content, error) {
+	if content.Value == nil {
+		return content, nil
 	}
 
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
 
 	var getSecret func(string) (string, error)
@@ -72,10 +75,17 @@ func (r *DefaultOrchestrator) resolvePayloadForRemote(
 		}
 	}
 
-	return secrets.ResolvePayloadDirectivesForResource(
-		value,
+	resolved, err := secrets.ResolvePayloadDirectivesForResource(
+		content.Value,
 		normalizedPath,
-		r.effectiveResourceFormat(),
+		content.Descriptor,
 		getSecret,
 	)
+	if err != nil {
+		return resource.Content{}, err
+	}
+	return resource.Content{
+		Value:      resolved,
+		Descriptor: content.Descriptor,
+	}, nil
 }

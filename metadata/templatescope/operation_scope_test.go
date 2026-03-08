@@ -128,7 +128,9 @@ func TestDerivePathTemplateFieldsFromListJQResourcePathTemplate(t *testing.T) {
 			CollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
-					JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
+					PayloadMutation: []metadata.PayloadMutationStep{
+						{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`},
+					},
 				},
 			},
 		},
@@ -188,7 +190,9 @@ func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 		CollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
-				JQ: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`,
+				PayloadMutation: []metadata.PayloadMutationStep{
+					{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`},
+				},
 			},
 		},
 	})

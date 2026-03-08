@@ -49,8 +49,8 @@ Global flags:
 
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
-2. `--format`, `-i` with allowed formats `json|yaml|xml|hcl|ini|properties|text|binary`; `binary` maps to `application/octet-stream`.
-3. `--payload` as a command-specific inline payload flag for `resource request post` and `resource request put`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured formats, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. Inline payload text and JSON Pointer assignments MUST NOT be accepted for `--format binary`.
+2. `--content-type`, `-i` with accepted values including full MIME types and shortnames such as `json|yaml|xml|hcl|ini|properties|text|binary|octet-stream`; unknown values normalize to `application/octet-stream`.
+3. `--payload` as a command-specific inline payload flag for `resource request post`, `resource request put`, and `resource request patch`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured or text codecs, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. Inline payload text and JSON Pointer assignments MUST NOT be accepted for binary content types.
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
 5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation.
 6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation.
@@ -123,7 +123,7 @@ Interactive config commands:
 5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
 6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
 7. Interactive `config add` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
-8. For interactive `config add`, repository `resource-format` SHOULD be optional with an explicit remote-default selection.
+8. For interactive `config add`, repository payload-format prompts MUST NOT be shown; managed-server media signals are the default source for repository payload formats.
 9. `config edit` SHOULD open the context catalog in an editor, validate the edited YAML on save/exit, and persist only validated changes.
 10. `config edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
 
@@ -145,7 +145,7 @@ Interactive config commands:
 15. `resource get` MUST default to `--source managed-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
 16. `resource get` MUST redact values for metadata-declared `resourceInfo.secretInAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
-18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operationInfo.*` directives under the metadata section.
+18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operationsInfo.*` directives under the metadata section.
 19. `resource get|list` MUST support `--skip-items <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
 20. `resource list` MUST support `--source <managed-server|repository>`.
 21. `resource list` MUST default to `--source managed-server`.
@@ -190,14 +190,14 @@ Interactive config commands:
 52. `secret get --key` MUST require `--path`.
 49. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 50. `config show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
-51. `config add` MUST default `--format` to `yaml` while continuing to accept explicit `json`.
+51. `config add` MUST accept `--content-type <json|yaml|application/json|application/yaml>` for stdin or extension-less payloads, infer JSON or YAML from the payload file extension when present, and otherwise default extension-less input decoding to JSON.
 52. `config add` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
 53. `config add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
 54. `config resolve`, `config check`, and `config init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
 55. `config init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
 56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
-57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--format`; `binary` input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
-58. `resource request post` and `resource request put` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--format`, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
+57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--content-type` when provided, otherwise by trusted file extension, otherwise by content heuristics (`JSON` for structured-looking input, `application/octet-stream` otherwise); binary input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
+58. `resource request post`, `resource request put`, and `resource request patch` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--content-type` when provided, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
 59. `config add` MUST accept input from `--payload <path|->` or stdin.
 57. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
 58. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
@@ -205,8 +205,8 @@ Interactive config commands:
 60. When `config add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
 61. `config add --set-current` MUST set current context to the imported context when exactly one context is imported.
 62. `config add --set-current` with multiple imported contexts MUST require catalog `current-ctx` or fail with `ValidationError`.
-63. `config add` SHOULD default `--format` to `yaml` while continuing to accept explicit `json`.
-64. `config update` and `config validate` SHOULD default `--format` to `yaml` while continuing to accept explicit `json`.
+63. `config add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
+64. `config update` and `config validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `config add`.
 65. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
 67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
@@ -226,7 +226,7 @@ Interactive config commands:
 81. `repository commit` on a clean git worktree MUST succeed as a no-op and report that no commit was created.
 82. `repository status --verbose` (global `--verbose`) MUST include deterministic local worktree change details for git repositories.
 79. Context-catalog mutations (`config add|edit|update|validate`) MUST fail validation when `managed-server` is omitted.
-80. Interactive `config add` MUST offer a `resource-format` remote-default option that omits explicit `repository.resource-format`.
+80. Interactive `config add` MUST NOT prompt for repository payload format; repository payload files follow the managed-server response media type or explicit payload input media type at runtime.
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
@@ -235,7 +235,7 @@ Interactive config commands:
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
 87. `resource edit` MUST reject resources whose resolved payload type is `octet-stream` with `ValidationError`.
-88. `resource request <method>` MUST support optional `--accept` and `--content-type` overrides for direct managed-server requests; when omitted, payload-type-aware defaults MAY be resolved from metadata, request format, or response headers.
+88. `resource request <method>` MUST support optional `--accept-type` and `--content-type` overrides for direct managed-server requests; when omitted, payload-type-aware defaults MAY be resolved from metadata, request content type, or response headers.
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source managed-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
@@ -346,7 +346,7 @@ Interactive config commands:
 22. `config print-template` works without a configured current context and still renders the full template.
 23. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
 24. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
-24. Interactive `config add` with `resource-format=remote-default` stores no explicit `repository.resource-format` value.
+24. Interactive `config add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
 26. `managed-server get tokenUrl` or `managed-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
@@ -410,14 +410,14 @@ Interactive config commands:
 41. `declarest config show --context dev` prints the selected context configuration as YAML.
 42. `declarest resource request get /health` executes a direct managed-server GET request.
 43. `declarest resource request post /customers --payload payload.json` executes a direct managed-server POST request with JSON body.
-44. `declarest resource request put /files/blob --payload blob.bin --format binary --content-type application/octet-stream` executes a direct binary upload request.
+44. `declarest resource request put /files/blob --payload blob.bin --content-type application/octet-stream` executes a direct binary upload request.
 44. `declarest resource request post /customers --payload '{"id":"acme"}'` executes a direct managed-server POST request with inline JSON payload.
 45. `echo '{"id":"acme"}' | declarest resource request put /customers/acme` executes a direct managed-server PUT request from stdin.
 46. `declarest resource request delete /customers/a --path /customers/b` fails with `ValidationError` due to path mismatch.
 47. `declarest config add` opens interactive prompts to build one context configuration when `--payload`/stdin input is not provided.
-48. `declarest config add --payload contexts.yaml --format yaml` imports all contexts defined in a catalog file.
-49. `declarest config add --payload contexts.yaml --format yaml --context-name prod --set-current` imports only `prod` and sets it as current.
-50. `declarest config add --payload contexts.yaml --format yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
+48. `declarest config add --payload contexts.yaml` imports all contexts defined in a catalog file.
+49. `declarest config add --payload contexts.yaml --context-name prod --set-current` imports only `prod` and sets it as current.
+50. `declarest config add --payload contexts.yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
 51. `declarest resource save --help` prints help text even when no current context is configured.
 52. `declarest secret detect` scans the whole local repository for secret candidates when no payload input is provided.
 53. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resourceInfo.secretInAttributes` for detected resource paths.
@@ -449,7 +449,7 @@ Interactive config commands:
 78. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
 79. `declarest repository push` fails with `ValidationError` when the active context repository type is `filesystem`.
 80. `declarest repository status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
-81. `declarest config add` interactive flow always prompts `managed-server` fields and allows `resource-format` to remain unset via remote-default selection.
+81. `declarest config add` interactive flow always prompts `managed-server` fields and never asks for a repository payload format override.
 82. `declarest config edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
 83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
 84. `declarest resource edit /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c --editor "vi"` resolves the existing alias-based repository entry first; if no local resource matches, it bootstraps the editor from one remote read and saves the edited payload to the requested logical path.

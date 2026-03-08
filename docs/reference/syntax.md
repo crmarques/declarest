@@ -37,7 +37,7 @@ This means metadata rules can apply to any realm/client path matching that struc
 
 - Resource metadata: `<logical-path>/metadata.json` (or `.yaml`)
 - Collection/subtree metadata: `<collection-path>/_/metadata.json` (or `.yaml`)
-- Resource payload: `<logical-path>/resource.json` (or `.yaml`)
+- Resource payload: `<logical-path>/resource.<ext>`
 
 ## Secret placeholder syntax
 

@@ -32,7 +32,7 @@ func TestCreateUpdateValidateRejectUnknownFields(t *testing.T) {
   "name": "dev",
   "repository": {"filesystem": {"baseDir": "/tmp/repo"}},
   "unknown": true
-}`, "add", "--format", "json")
+}`, "add", "--content-type", "json")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.createCalled {
 			t.Fatal("expected create service call to be skipped on decode failure")
@@ -49,7 +49,7 @@ repository:
   filesystem:
     baseDir: /tmp/repo
 unknown: true
-`, "update", "--format", "yaml")
+`, "update", "--content-type", "yaml")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.updateCalled {
 			t.Fatal("expected update service call to be skipped on decode failure")
@@ -176,7 +176,7 @@ metadata:
   baseDir: /tmp/meta
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--context-name", "dev-imported",
 	)
 	if err != nil {
@@ -209,6 +209,7 @@ repository:
     baseDir: /tmp/dev
 `,
 		"add",
+		"--content-type", "yaml",
 	)
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
@@ -237,6 +238,7 @@ repository:
     baseDir: /tmp/dev
 `,
 		"add",
+		"--content-type", "yaml",
 		"from-arg",
 	)
 	if err != nil {
@@ -272,6 +274,7 @@ contexts:
 currentCtx: prod
 `,
 		"add",
+		"--content-type", "yaml",
 	)
 	if err != nil {
 		t.Fatalf("add returned error: %v", err)
@@ -300,7 +303,7 @@ repository:
     baseDir: /tmp/dev
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--context-name", "dev-active",
 		"--set-current",
 	)
@@ -340,7 +343,7 @@ contexts:
 currentCtx: prod
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--context-name", "prod",
 		"--set-current",
 	)
@@ -380,7 +383,7 @@ contexts:
 currentCtx: prod
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--set-current",
 	)
 	if err != nil {
@@ -415,7 +418,7 @@ contexts:
         baseDir: /tmp/prod
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--set-current",
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
@@ -440,7 +443,7 @@ contexts:
         baseDir: /tmp/dev
 `,
 		"add",
-		"--format", "yaml",
+		"--content-type", "yaml",
 		"--context-name", "prod",
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
@@ -469,7 +472,7 @@ repository:
     baseDir: /tmp/dev
 `,
 			"add",
-			"--format", "yaml",
+			"--content-type", "yaml",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.createCalled {
@@ -497,7 +500,7 @@ contexts:
         baseDir: /tmp/dev2
 `,
 			"add",
-			"--format", "yaml",
+			"--content-type", "yaml",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if service.createCalled {
@@ -516,8 +519,7 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 			resolveValue: configdomain.Context{
 				Name: "dev",
 				Repository: configdomain.Repository{
-					ResourceFormat: configdomain.ResourceFormatJSON,
-					Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
 				},
 			},
 		}
@@ -535,7 +537,6 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 			"--set", "metadata.baseDir=/tmp/meta",
 			"--set", "metadata.bundle=keycloak-bundle:0.0.1",
 			"--set", "metadata.bundleFile=/tmp/keycloak-bundle-0.0.1.tar.gz",
-			"--set", "repository.resourceFormat=yaml",
 		)
 		if err != nil {
 			t.Fatalf("resolve returned error: %v", err)
@@ -552,9 +553,6 @@ func TestResolveParsesOverridesAndRejectsInvalidTokens(t *testing.T) {
 		}
 		if got := service.resolveSelection.Overrides["metadata.bundleFile"]; got != "/tmp/keycloak-bundle-0.0.1.tar.gz" {
 			t.Fatalf("expected metadata bundleFile override to be forwarded, got %q", got)
-		}
-		if got := service.resolveSelection.Overrides["repository.resourceFormat"]; got != "yaml" {
-			t.Fatalf("expected resource format override to be forwarded, got %q", got)
 		}
 	})
 
@@ -577,8 +575,7 @@ func TestResolveUsesPositionalContextNameWhenProvided(t *testing.T) {
 		resolveValue: configdomain.Context{
 			Name: "prod",
 			Repository: configdomain.Repository{
-				ResourceFormat: configdomain.ResourceFormatYAML,
-				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 			},
 		},
 	}
@@ -650,8 +647,7 @@ func TestConfigOutputAcrossFormats(t *testing.T) {
 				resolveValue: configdomain.Context{
 					Name: "prod",
 					Repository: configdomain.Repository{
-						ResourceFormat: configdomain.ResourceFormatYAML,
-						Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 					},
 				},
 			}
@@ -1023,7 +1019,7 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
+		selects:     []string{"filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1044,9 +1040,6 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.Name != "dev" {
 		t.Fatalf("expected context name dev, got %q", service.createdContext.Name)
 	}
-	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatYAML {
-		t.Fatalf("expected yaml resource format, got %q", service.createdContext.Repository.ResourceFormat)
-	}
 	if service.createdContext.Repository.Filesystem == nil || service.createdContext.Repository.Filesystem.BaseDir != "/tmp/repo" {
 		t.Fatalf("unexpected repository config: %#v", service.createdContext.Repository)
 	}
@@ -1056,8 +1049,8 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
 		t.Fatal("expected managedServer configuration")
 	}
-	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select resource format (optional; remote-default keeps remote resource format)" {
-		t.Fatalf("expected optional resource format prompt, got %#v", prompter.selectPrompts)
+	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select repository type" {
+		t.Fatalf("expected repository type prompt first, got %#v", prompter.selectPrompts)
 	}
 }
 
@@ -1068,7 +1061,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
+		selects:     []string{"filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1086,9 +1079,6 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 
 	if service.createdContext.Metadata.BaseDir != "/tmp/repo" {
 		t.Fatalf("expected metadata baseDir to default to repository baseDir /tmp/repo, got %q", service.createdContext.Metadata.BaseDir)
-	}
-	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatYAML {
-		t.Fatalf("expected yaml resource format, got %q", service.createdContext.Repository.ResourceFormat)
 	}
 	if len(prompter.inputPrompts) < 3 {
 		t.Fatalf("expected at least 3 input prompts, got %d", len(prompter.inputPrompts))
@@ -1120,7 +1110,6 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 			"token-dev",
 		},
 		selects: []string{
-			configdomain.ResourceFormatYAML,
 			"filesystem",
 			"customHeaders",
 		},
@@ -1179,7 +1168,7 @@ func TestCreateInteractivePromptFlowUsesPositionalName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
+		selects:     []string{"filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1217,7 +1206,7 @@ func TestCreateInteractivePromptFlowUsesContextFlagName(t *testing.T) {
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "filesystem", "customHeaders"},
+		selects:     []string{"filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1265,14 +1254,14 @@ func TestCreateRejectsContextNameConflictBetweenPositionalAndFlag(t *testing.T) 
 	}
 }
 
-func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing.T) {
+func TestCreateInteractivePromptFlowOmitsRepositoryResourceFormat(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{}
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{resourceFormatRemoteDefaultOption, "filesystem", "customHeaders"},
+		selects:     []string{"filesystem", "customHeaders"},
 		confirms:    []bool{false, false, false, false, false, false},
 	}
 
@@ -1287,8 +1276,8 @@ func TestCreateInteractivePromptFlowAllowsRemoteDefaultResourceFormat(t *testing
 	if err != nil {
 		t.Fatalf("create returned error: %v", err)
 	}
-	if service.createdContext.Repository.ResourceFormat != "" {
-		t.Fatalf("expected empty resource format for remote-default selection, got %q", service.createdContext.Repository.ResourceFormat)
+	if service.createdContext.Repository.Filesystem == nil {
+		t.Fatalf("expected filesystem repository config, got %#v", service.createdContext.Repository)
 	}
 }
 
@@ -1299,7 +1288,7 @@ func TestCreateInteractivePromptFlowGitLocalAutoInitCanBeDisabled(t *testing.T) 
 	prompter := &mockPrompter{
 		interactive: true,
 		inputs:      []string{"dev", "/tmp/repo-git", "/tmp/meta", "https://api.example.com", "", "Authorization", "Bearer", "token-dev"},
-		selects:     []string{configdomain.ResourceFormatYAML, "git", "customHeaders"},
+		selects:     []string{"git", "customHeaders"},
 		confirms: []bool{
 			false,
 			false,
@@ -1367,7 +1356,6 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"",
 		},
 		selects: []string{
-			configdomain.ResourceFormatJSON,
 			"filesystem",
 			"oauth2",
 			"file",
@@ -1402,9 +1390,6 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 
 	if service.createdContext.Name != "full-context" {
 		t.Fatalf("expected context name full-context, got %q", service.createdContext.Name)
-	}
-	if service.createdContext.Repository.ResourceFormat != configdomain.ResourceFormatJSON {
-		t.Fatalf("expected repository format json, got %q", service.createdContext.Repository.ResourceFormat)
 	}
 	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
 		t.Fatal("expected managedServer http configuration")
@@ -1485,8 +1470,7 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 		listValue: []configdomain.Context{{
 			Name: "prod",
 			Repository: configdomain.Repository{
-				ResourceFormat: configdomain.ResourceFormatYAML,
-				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 			},
 		}},
 	}
@@ -1506,9 +1490,6 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	if !strings.Contains(output, "name: prod") {
 		t.Fatalf("expected YAML output with context name prod, got %q", output)
 	}
-	if !strings.Contains(output, "resourceFormat: yaml") {
-		t.Fatalf("expected YAML output for full context config, got %q", output)
-	}
 }
 
 func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
@@ -1518,8 +1499,7 @@ func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
 		listValue: []configdomain.Context{{
 			Name: "prod",
 			Repository: configdomain.Repository{
-				ResourceFormat: configdomain.ResourceFormatYAML,
-				Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 			},
 		}},
 	}
@@ -1574,15 +1554,13 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 			{
 				Name: "dev",
 				Repository: configdomain.Repository{
-					ResourceFormat: configdomain.ResourceFormatJSON,
-					Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/dev"},
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/dev"},
 				},
 			},
 			{
 				Name: "prod",
 				Repository: configdomain.Repository{
-					ResourceFormat: configdomain.ResourceFormatYAML,
-					Filesystem:     &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
 				},
 			},
 		},
@@ -1602,9 +1580,6 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	}
 	if !strings.Contains(output, "name: dev") {
 		t.Fatalf("expected YAML output with context name dev, got %q", output)
-	}
-	if !strings.Contains(output, "resourceFormat: json") {
-		t.Fatalf("expected YAML output for full context config, got %q", output)
 	}
 }
 
@@ -1938,9 +1913,9 @@ type testRepositoryService struct {
 	syncStatus    repository.SyncReport
 }
 
-func (s *testRepositoryService) Save(context.Context, string, resource.Value) error { return nil }
-func (s *testRepositoryService) Get(context.Context, string) (resource.Value, error) {
-	return map[string]any{}, nil
+func (s *testRepositoryService) Save(context.Context, string, resource.Content) error { return nil }
+func (s *testRepositoryService) Get(context.Context, string) (resource.Content, error) {
+	return testConfigContent(map[string]any{}), nil
 }
 func (s *testRepositoryService) Delete(context.Context, string, repository.DeletePolicy) error {
 	return nil
@@ -2009,31 +1984,31 @@ type testOrchestratorService struct {
 	listRemoteErr error
 }
 
-func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Value, error) {
-	return nil, nil
+func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Value, error) {
-	return nil, nil
+func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testOrchestratorService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Value, error) {
-	return nil, nil
+func (s *testOrchestratorService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Value, error) {
-	return nil, nil
+func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testOrchestratorService) Save(context.Context, string, resource.Value) error {
+func (s *testOrchestratorService) Save(context.Context, string, resource.Content) error {
 	return nil
 }
 func (s *testOrchestratorService) Apply(context.Context, string, orchestratordomain.ApplyPolicy) (resource.Resource, error) {
 	return resource.Resource{}, nil
 }
-func (s *testOrchestratorService) ApplyWithValue(context.Context, string, resource.Value, orchestratordomain.ApplyPolicy) (resource.Resource, error) {
+func (s *testOrchestratorService) ApplyWithContent(context.Context, string, resource.Content, orchestratordomain.ApplyPolicy) (resource.Resource, error) {
 	return resource.Resource{}, nil
 }
-func (s *testOrchestratorService) Create(context.Context, string, resource.Value) (resource.Resource, error) {
+func (s *testOrchestratorService) Create(context.Context, string, resource.Content) (resource.Resource, error) {
 	return resource.Resource{}, nil
 }
-func (s *testOrchestratorService) Update(context.Context, string, resource.Value) (resource.Resource, error) {
+func (s *testOrchestratorService) Update(context.Context, string, resource.Content) (resource.Resource, error) {
 	return resource.Resource{}, nil
 }
 func (s *testOrchestratorService) Delete(context.Context, string, orchestratordomain.DeletePolicy) error {
@@ -2051,22 +2026,22 @@ func (s *testOrchestratorService) Explain(context.Context, string) ([]resource.D
 func (s *testOrchestratorService) Diff(context.Context, string) ([]resource.DiffEntry, error) {
 	return nil, nil
 }
-func (s *testOrchestratorService) Template(context.Context, string, resource.Value) (resource.Value, error) {
-	return nil, nil
+func (s *testOrchestratorService) Template(context.Context, string, resource.Content) (resource.Content, error) {
+	return resource.Content{}, nil
 }
 
 type testManagedServerClientService struct {
 	requestErr error
 }
 
-func (s *testManagedServerClientService) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return nil, nil
+func (s *testManagedServerClientService) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testManagedServerClientService) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return nil, nil
+func (s *testManagedServerClientService) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return resource.Content{}, nil
 }
-func (s *testManagedServerClientService) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Value, error) {
-	return nil, nil
+func (s *testManagedServerClientService) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+	return resource.Content{}, nil
 }
 func (s *testManagedServerClientService) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
 	return nil
@@ -2077,16 +2052,26 @@ func (s *testManagedServerClientService) List(context.Context, string, metadatad
 func (s *testManagedServerClientService) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
 	return false, nil
 }
-func (s *testManagedServerClientService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Value, error) {
-	return nil, s.requestErr
+func (s *testManagedServerClientService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Content, error) {
+	return resource.Content{}, s.requestErr
 }
-func (s *testManagedServerClientService) GetOpenAPISpec(context.Context) (resource.Value, error) {
-	return nil, nil
+func (s *testManagedServerClientService) GetOpenAPISpec(context.Context) (resource.Content, error) {
+	return resource.Content{}, nil
 }
 
 type testSecretProviderService struct {
 	listErr error
 	keys    []string
+}
+
+func testConfigContent(value resource.Value) resource.Content {
+	if value == nil {
+		return resource.Content{}
+	}
+	return resource.Content{
+		Value:      value,
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
 }
 
 func (s *testSecretProviderService) Init(context.Context) error { return nil }

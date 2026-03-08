@@ -180,6 +180,48 @@ test_operator_prepare_repository_webhook_derives_namespace_when_unset() {
   assert_contains "${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}" "/webhooks/repository/${expected_namespace}/"
 }
 
+test_operator_repository_webhook_registration_deferred_only_for_operator_profiles() {
+  load_operator_libs
+
+  E2E_PROFILE='operator-full'
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER='gitlab'
+  if ! e2e_operator_should_defer_repository_webhook_registration; then
+    fail 'expected operator profile webhook registration to be deferred'
+  fi
+
+  E2E_PROFILE='cli-full'
+  if e2e_operator_should_defer_repository_webhook_registration; then
+    fail 'expected non-operator profile webhook registration not to be deferred'
+  fi
+
+  E2E_PROFILE='operator-full'
+  unset E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER
+  if e2e_operator_should_defer_repository_webhook_registration; then
+    fail 'expected empty webhook provider not to trigger deferred registration'
+  fi
+}
+
+test_operator_configure_repository_webhook_if_needed_runs_git_provider_hook() {
+  load_operator_libs
+
+  local recorded=''
+  e2e_component_key() {
+    printf '%s:%s\n' "$1" "$2"
+  }
+  e2e_components_run_hook_for_keys() {
+    recorded="$*"
+  }
+
+  E2E_PROFILE='operator-full'
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER='gitlab'
+  E2E_REPO_TYPE='git'
+  E2E_GIT_PROVIDER='gitlab'
+
+  e2e_operator_configure_repository_webhook_if_needed
+
+  assert_eq "${recorded}" "configure-auth false git-provider:gitlab"
+}
+
 test_operator_rewrites_local_urls_for_cluster_services() {
   load_operator_libs
 
@@ -269,7 +311,6 @@ EOF
   cat >"${repo_state}" <<'EOF'
 GIT_REMOTE_URL=https://example.com/acme/declarest-e2e.git
 GIT_REMOTE_BRANCH=main
-REPO_RESOURCE_FORMAT=json
 GIT_AUTH_MODE=access-key
 GIT_AUTH_TOKEN=test-token
 EOF
@@ -434,7 +475,6 @@ EOF
   cat >"${repo_state}" <<'EOF'
 GIT_REMOTE_URL=https://example.com/acme/declarest-e2e.git
 GIT_REMOTE_BRANCH=main
-REPO_RESOURCE_FORMAT=json
 GIT_AUTH_MODE=access-key
 GIT_AUTH_TOKEN=test-token
 EOF
@@ -467,6 +507,8 @@ test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
 test_operator_prepare_repository_webhook_builds_scoped_url
 test_operator_prepare_repository_webhook_derives_namespace_when_unset
+test_operator_repository_webhook_registration_deferred_only_for_operator_profiles
+test_operator_configure_repository_webhook_if_needed_runs_git_provider_hook
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
 test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path

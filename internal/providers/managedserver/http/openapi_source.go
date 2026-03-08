@@ -16,12 +16,15 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *HTTPManagedServerClient) GetOpenAPISpec(ctx context.Context) (resource.Value, error) {
+func (g *HTTPManagedServerClient) GetOpenAPISpec(ctx context.Context) (resource.Content, error) {
 	doc, err := g.openAPIDocument(ctx)
 	if err != nil {
-		return nil, err
+		return resource.Content{}, err
 	}
-	return cloneValue(doc), nil
+	return resource.Content{
+		Value:      cloneValue(doc),
+		Descriptor: g.openAPISourceDescriptor(),
+	}, nil
 }
 
 func validateOpenAPISource(source string) error {
@@ -142,6 +145,16 @@ func (g *HTTPManagedServerClient) loadOpenAPIDocument(ctx context.Context) (map[
 	}
 	document = normalizeOpenAPIDocument(document)
 	return document, nil
+}
+
+func (g *HTTPManagedServerClient) openAPISourceDescriptor() resource.PayloadDescriptor {
+	source := strings.TrimSpace(g.openAPISource)
+	if descriptor, ok := resource.PayloadDescriptorForFileName(source); ok {
+		return descriptor
+	}
+	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+		PayloadType: resource.PayloadTypeJSON,
+	})
 }
 
 func sameURLOffsetOrigin(a *url.URL, b *url.URL) bool {

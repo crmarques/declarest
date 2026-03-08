@@ -15,9 +15,12 @@ func (r *LocalResourceRepository) canonicalPayloadFilePath(logicalPath string, p
 		return "", faults.NewValidationError("repository base directory must not be empty", nil)
 	}
 
-	extension, err := resource.PayloadExtension(payloadType)
-	if err != nil {
-		return "", err
+	extension := strings.TrimSpace(payloadType)
+	if extension == "" {
+		extension = resource.DefaultOctetStreamDescriptor().Extension
+	}
+	if !strings.HasPrefix(extension, ".") {
+		extension = "." + extension
 	}
 
 	relative := strings.TrimPrefix(logicalPath, "/")
