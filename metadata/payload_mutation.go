@@ -51,10 +51,6 @@ func PayloadMutationStepType(step PayloadMutationStep) string {
 	return payloadMutationStepType(step)
 }
 
-func hasPayloadMutationSteps(values []PayloadMutationStep) bool {
-	return values != nil
-}
-
 func combinePayloadMutationSteps(defaults []PayloadMutationStep, operation []PayloadMutationStep) []PayloadMutationStep {
 	if defaults == nil && operation == nil {
 		return nil
