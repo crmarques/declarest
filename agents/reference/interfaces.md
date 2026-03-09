@@ -146,7 +146,7 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`idAttribute`, `aliasAttribute`), optional `collectionPath` override, and optional `payloadType` override.
+1. `resource` identity mapping (`idAttribute`, `aliasAttribute`), optional `remoteCollectionPath` override, and optional `payloadType` override.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
 3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).

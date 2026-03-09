@@ -19,8 +19,9 @@ type InferenceRequest struct {
 type ResourceMetadata struct {
 	IDAttribute            string                   `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
 	AliasAttribute         string                   `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
-	CollectionPath         string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	RemoteCollectionPath   string                   `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
+	PreferredFormat        string                   `json:"preferredFormat,omitempty" yaml:"preferredFormat,omitempty"`
 	Secret                 *bool                    `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       []string                 `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`

@@ -77,6 +77,6 @@ The metadata wildcard defines behavior; the command wildcard expands concrete ta
 ## Why selectors matter for non-REST APIs
 
 Selectors let you keep a clean logical hierarchy even when the API endpoint is different.
-Later, metadata can remap selector-based logical paths to the real HTTP endpoint using `resource.collectionPath` and operation overrides.
+Later, metadata can remap selector-based logical paths to the real HTTP endpoint using `resource.remoteCollectionPath` and operation overrides.
 
 See [Custom Paths](metadata-custom-paths.md).

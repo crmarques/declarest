@@ -272,7 +272,7 @@ func requestMetadataOperation(method string) (metadata.Operation, bool) {
 }
 
 func shouldResolveRequestGetAsList(resolvedResource resource.Resource, md metadata.ResourceMetadata) bool {
-	if strings.TrimSpace(md.CollectionPath) == "" {
+	if strings.TrimSpace(md.RemoteCollectionPath) == "" {
 		return false
 	}
 
@@ -282,7 +282,7 @@ func shouldResolveRequestGetAsList(resolvedResource resource.Resource, md metada
 		}
 	}
 
-	templateDepth := len(resource.SplitRawPathSegments(md.CollectionPath))
+	templateDepth := len(resource.SplitRawPathSegments(md.RemoteCollectionPath))
 	if templateDepth == 0 {
 		return false
 	}
@@ -293,7 +293,7 @@ func shouldResolveRequestGetAsList(resolvedResource resource.Resource, md metada
 	}
 
 	// Selector-depth logical paths (for example /.../user-registry) often map to
-	// remote collection endpoints via metadata collectionPath overrides. For
+	// remote collection endpoints via metadata remoteCollectionPath overrides. For
 	// request GET, prefer the list path in this case so the raw request targets
 	// the correct collection endpoint (for example /components) before fallback.
 	return logicalDepth <= templateDepth

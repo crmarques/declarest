@@ -32,7 +32,7 @@ Problem:
 - backend endpoint is generic (`/components`)
 - you want logical paths by intent (`/user-registry/`, `/mappers/`)
 
-Use `resource.collectionPath` to point logical collections to the shared backend endpoint, then apply list `jq` filters to split types.
+Use `resource.remoteCollectionPath` to point logical collections to the shared backend endpoint, then apply list `jq` filters to split types.
 
 ## Recipe 3: Create endpoint differs from update endpoint
 

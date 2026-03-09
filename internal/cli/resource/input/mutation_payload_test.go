@@ -104,3 +104,119 @@ func TestDecodeOptionalMutationPayloadInputAcceptsPointerAssignments(t *testing.
 		t.Fatalf("expected decoded pointer assignment object, got %#v", content.Value)
 	}
 }
+
+func TestDecodeOptionalMutationPayloadInputAcceptsDotNotationAssignments(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload: "name=test,metadata.labels.env=prod",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+
+	expected := map[string]any{
+		"name": "test",
+		"metadata": map[string]any{
+			"labels": map[string]any{
+				"env": "prod",
+			},
+		},
+	}
+	if !reflect.DeepEqual(content.Value, expected) {
+		t.Fatalf("expected decoded dot-notation object, got %#v", content.Value)
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeJSON {
+		t.Fatalf("expected json payload type, got %q", content.Descriptor.PayloadType)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputDotNotationRespectsContentType(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload:     "name=test",
+		ContentType: "yaml",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeYAML {
+		t.Fatalf("expected yaml payload type, got %q", content.Descriptor.PayloadType)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputPointerAssignmentsRespectStructuredContentType(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload:     "/name=test",
+		ContentType: "yaml",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeYAML {
+		t.Fatalf("expected yaml payload type, got %q", content.Descriptor.PayloadType)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputPointerAssignmentsFallbackToJSONForNonStructuredContentType(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload:     "/name=test",
+		ContentType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeJSON {
+		t.Fatalf("expected json payload type fallback, got %q", content.Descriptor.PayloadType)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputDotNotationWithQuotedKeys(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload: `testA."testB.testC"=bla`,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+
+	expected := map[string]any{
+		"testA": map[string]any{
+			"testB.testC": "bla",
+		},
+	}
+	if !reflect.DeepEqual(content.Value, expected) {
+		t.Fatalf("expected decoded dot-notation object with quoted key, got %#v", content.Value)
+	}
+}

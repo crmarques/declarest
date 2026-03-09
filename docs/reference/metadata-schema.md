@@ -12,7 +12,7 @@ Common fields:
 
 - `idAttribute`
 - `aliasAttribute`
-- `collectionPath`
+- `remoteCollectionPath`
 - `secretAttributes`
 
 Use when path/identity on the API differs from your logical path model.

@@ -72,14 +72,14 @@ func RenderResourceMetadataWithFormat(
 		}
 	}
 
-	resolvedCollectionPath, err := resolveCollectionPath(metadataValue.CollectionPath, scope)
+	resolvedCollectionPath, err := resolveCollectionPath(metadataValue.RemoteCollectionPath, scope)
 	if err != nil {
 		return metadata.ResourceMetadata{}, err
 	}
-	scope["collectionPath"] = resolvedCollectionPath
+	scope["remoteCollectionPath"] = resolvedCollectionPath
 
 	rendered := metadataValue
-	rendered.CollectionPath = resolvedCollectionPath
+	rendered.RemoteCollectionPath = resolvedCollectionPath
 
 	opKeys := operationKeys(metadataValue.Operations)
 	renderedOperations := make(map[string]metadata.OperationSpec, len(opKeys))
@@ -111,13 +111,13 @@ func defaultCollectionPath(logicalPath string) string {
 func resolveCollectionPath(rawCollectionPath string, scope map[string]any) (string, error) {
 	candidate := strings.TrimSpace(rawCollectionPath)
 	if candidate == "" {
-		candidate = scopeString(scope["collectionPath"])
+		candidate = scopeString(scope["remoteCollectionPath"])
 	}
 	if candidate == "" {
 		return "", nil
 	}
 
-	rendered, err := metadata.RenderTemplateString("collectionPath", candidate, scope)
+	rendered, err := metadata.RenderTemplateString("remoteCollectionPath", candidate, scope)
 	if err != nil {
 		return "", err
 	}

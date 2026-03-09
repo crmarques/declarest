@@ -166,6 +166,62 @@ func TestOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T) {
 	}
 }
 
+func TestOrchestratorSaveAppliesPreferredFormatBeforePersisting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		orchestratorFormat  string
+		metadataFormat      string
+		content             resource.Content
+		expectedPayloadType string
+	}{
+		{
+			name:                "orchestrator default used for implicit descriptor",
+			orchestratorFormat:  resource.PayloadTypeYAML,
+			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
+			expectedPayloadType: resource.PayloadTypeYAML,
+		},
+		{
+			name:                "metadata overrides orchestrator default",
+			orchestratorFormat:  resource.PayloadTypeJSON,
+			metadataFormat:      resource.PayloadTypeYAML,
+			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
+			expectedPayloadType: resource.PayloadTypeYAML,
+		},
+		{
+			name:                "explicit descriptor remains unchanged",
+			orchestratorFormat:  resource.PayloadTypeYAML,
+			metadataFormat:      resource.PayloadTypeYAML,
+			content:             testContentWithType(map[string]any{"name": "ACME"}, resource.PayloadTypeJSON),
+			expectedPayloadType: resource.PayloadTypeJSON,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := &fakeRepository{}
+			orchestrator := New(
+				repo,
+				&fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{PreferredFormat: tc.metadataFormat}},
+				nil,
+				nil,
+				WithPreferredFormat(tc.orchestratorFormat),
+			)
+
+			if err := orchestrator.Save(context.Background(), "/customers/acme", tc.content); err != nil {
+				t.Fatalf("Save returned error: %v", err)
+			}
+			if repo.savedDescriptor.PayloadType != tc.expectedPayloadType {
+				t.Fatalf("expected saved payload type %q, got %q", tc.expectedPayloadType, repo.savedDescriptor.PayloadType)
+			}
+		})
+	}
+}
+
 func TestOrchestratorDeleteDelegatesToServer(t *testing.T) {
 	t.Parallel()
 
@@ -450,9 +506,9 @@ func TestOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
-				CollectionPath: "/admin/realms/{{.realm}}/components",
+				IDAttribute:          "/id",
+				AliasAttribute:       "/name",
+				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -518,9 +574,9 @@ func TestOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
-				CollectionPath: "/admin/realms/{{.realm}}/components",
+				IDAttribute:          "/id",
+				AliasAttribute:       "/name",
+				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -567,9 +623,9 @@ func TestOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *test
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
-				CollectionPath: "/admin/realms/{{.realm}}/components",
+				IDAttribute:          "/id",
+				AliasAttribute:       "/name",
+				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			},
 		},
 		server: serverManager,
@@ -1328,9 +1384,9 @@ func TestOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDAttribute:    "/id",
-			AliasAttribute: "/name",
-			CollectionPath: "/admin/realms/{{.realm}}/components",
+			IDAttribute:          "/id",
+			AliasAttribute:       "/name",
+			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		},
 	}
 	orchestrator := &Orchestrator{
@@ -1370,9 +1426,9 @@ func TestOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *test
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDAttribute:    "/id",
-			AliasAttribute: "/name",
-			CollectionPath: "/admin/realms/{{.realm}}/components",
+			IDAttribute:          "/id",
+			AliasAttribute:       "/name",
+			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
 					Transforms: jqMutation("[ .[] | select(.providerId == \"ldap\") ]"),
@@ -1570,13 +1626,14 @@ type fakeRepository struct {
 	existsErr    error
 	statusValue  repository.SyncReport
 
-	savedPath      string
-	savedValue     resource.Value
-	savedArtifacts []repository.ResourceArtifact
-	getCalls       []string
-	listCalls      []string
-	existsCalls    []string
-	artifactFiles  map[string][]byte
+	savedPath       string
+	savedValue      resource.Value
+	savedDescriptor resource.PayloadDescriptor
+	savedArtifacts  []repository.ResourceArtifact
+	getCalls        []string
+	listCalls       []string
+	existsCalls     []string
+	artifactFiles   map[string][]byte
 
 	deletePolicy repository.DeletePolicy
 	listPolicy   repository.ListPolicy
@@ -1596,6 +1653,7 @@ func testContentWithType(value any, payloadType string) resource.Content {
 func (f *fakeRepository) Save(_ context.Context, logicalPath string, value resource.Content) error {
 	f.savedPath = logicalPath
 	f.savedValue = value.Value
+	f.savedDescriptor = value.Descriptor
 	return nil
 }
 
@@ -1607,6 +1665,7 @@ func (f *fakeRepository) SaveResourceWithArtifacts(
 ) error {
 	f.savedPath = logicalPath
 	f.savedValue = value.Value
+	f.savedDescriptor = value.Descriptor
 	f.savedArtifacts = append([]repository.ResourceArtifact(nil), artifacts...)
 	if f.artifactFiles == nil {
 		f.artifactFiles = map[string][]byte{}

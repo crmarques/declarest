@@ -36,7 +36,7 @@ func inferFallbackMetadata(target inferTarget) ResourceMetadata {
 		}
 
 		return ResourceMetadata{
-			CollectionPath: collectionPath,
+			RemoteCollectionPath: collectionPath,
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
 					Method: "GET",
@@ -81,8 +81,8 @@ func inferFallbackMetadata(target inferTarget) ResourceMetadata {
 	}
 
 	return ResourceMetadata{
-		CollectionPath: collectionPath,
-		Operations:     operations,
+		RemoteCollectionPath: collectionPath,
+		Operations:           operations,
 	}
 }
 
@@ -193,9 +193,9 @@ func inferMetadataFromOpenAPISpec(
 	}
 	payloadType := inferOpenAPIMetadataPayloadType(collectionCandidate, resourceCandidate, pathItems, openAPISpec)
 	return ResourceMetadata{
-		CollectionPath: collectionPath,
-		Operations:     operations,
-		PayloadType:    payloadType,
+		RemoteCollectionPath: collectionPath,
+		Operations:           operations,
+		PayloadType:          payloadType,
 	}, resourceIdentityAttribute, resourceSchemaAttributes
 }
 

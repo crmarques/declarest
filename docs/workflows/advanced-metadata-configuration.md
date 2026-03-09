@@ -33,7 +33,7 @@ Inspired by:
   "resource": {
     "idAttribute": "id",
     "aliasAttribute": "name",
-    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "secretAttributes": ["config.bindCredential[0]"]
   },
   "operations": {
@@ -151,7 +151,7 @@ This is an advanced pattern for APIs that flatten nested resources internally.
 ## Authoring workflow (recommended)
 
 1. Model the logical path tree you want users to operate on.
-2. Add high-level selector metadata with `collectionPath` and identity fields.
+2. Add high-level selector metadata with `remoteCollectionPath` and identity fields.
 3. Add list `jq` filters to isolate the logical collection.
 4. Render operations with `metadata render` for concrete paths.
 5. Add per-operation overrides and ordered `transforms` steps only where the API deviates.

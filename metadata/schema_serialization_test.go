@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	t.Parallel()
 
 	value := ResourceMetadata{
-		IDAttribute:      "/id",
-		AliasAttribute:   "/name",
-		CollectionPath:   "/api/customers",
-		Secret:           boolPointer(true),
-		SecretAttributes: []string{"/credentials/password"},
+		IDAttribute:          "/id",
+		AliasAttribute:       "/name",
+		RemoteCollectionPath: "/api/customers",
+		Secret:               boolPointer(true),
+		SecretAttributes:     []string{"/credentials/password"},
 		Operations: map[string]OperationSpec{
 			string(OperationCreate): {
 				Path:        "/api/customers",
@@ -74,8 +76,11 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if resource["aliasAttribute"] != "/name" {
 		t.Fatalf("expected resource.aliasAttribute=name, got %#v", resource["aliasAttribute"])
 	}
-	if resource["collectionPath"] != "/api/customers" {
-		t.Fatalf("expected resource.collectionPath=/api/customers, got %#v", resource["collectionPath"])
+	if resource["remoteCollectionPath"] != "/api/customers" {
+		t.Fatalf("expected resource.remoteCollectionPath=/api/customers, got %#v", resource["remoteCollectionPath"])
+	}
+	if _, found := resource["collectionPath"]; found {
+		t.Fatalf("expected legacy resource.collectionPath to be omitted, got %#v", resource["collectionPath"])
 	}
 	if resource["secret"] != true {
 		t.Fatalf("expected resource.secret=true, got %#v", resource["secret"])
@@ -244,7 +249,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		  "resource": {
 		    "idAttribute": "/realm",
 		    "aliasAttribute": "/realm",
-		    "collectionPath": "/admin/realms",
+		    "remoteCollectionPath": "/admin/realms",
 		    "secretAttributes": []
 		  },
 		  "operations": {
@@ -297,8 +302,8 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		if decoded.IDAttribute != "/realm" || decoded.AliasAttribute != "/realm" {
 			t.Fatalf("unexpected identity fields: %+v", decoded)
 		}
-		if decoded.CollectionPath != "/admin/realms" {
-			t.Fatalf("unexpected collectionPath: %q", decoded.CollectionPath)
+		if decoded.RemoteCollectionPath != "/admin/realms" {
+			t.Fatalf("unexpected remoteCollectionPath: %q", decoded.RemoteCollectionPath)
 		}
 		if decoded.SecretAttributes == nil || len(decoded.SecretAttributes) != 0 {
 			t.Fatalf("expected explicit empty secret attributes, got %#v", decoded.SecretAttributes)
@@ -351,6 +356,35 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 			t.Fatalf("unexpected compare transforms: %#v", decoded.Operations[string(OperationCompare)].Transforms)
 		}
 	})
+}
+
+func TestResourceMetadataUnmarshalJSONRejectsLegacyCollectionPathField(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{
+	  "resource": {
+	    "collectionPath": "/admin/realms/{{.realm}}/components"
+	  }
+	}`)
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(payload, &decoded); err == nil {
+		t.Fatal("expected resource.collectionPath to be rejected")
+	}
+}
+
+func TestResourceMetadataUnmarshalYAMLRejectsLegacyCollectionPathField(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`
+resource:
+  collectionPath: /admin/realms/{{.realm}}/components
+`)
+
+	var decoded ResourceMetadata
+	if err := yaml.Unmarshal(payload, &decoded); err == nil {
+		t.Fatal("expected resource.collectionPath to be rejected")
+	}
 }
 
 func TestResourceMetadataMarshalJSONIncludesExternalizedAttributes(t *testing.T) {
@@ -445,7 +479,7 @@ func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T
 
 	payload := []byte(`{
 	  "resource": {
-	    "collectionPath": "/admin/realms/{{.realm}}/components"
+	    "remoteCollectionPath": "/admin/realms/{{.realm}}/components"
 	  },
 	  "operations": {
 	    "get": {
@@ -575,5 +609,57 @@ func TestResourceMetadataUnmarshalJSONPromotesMediaHeadersFromHTTPHeaders(t *tes
 	}
 	if !reflect.DeepEqual(createSpec.Headers, map[string]string{"X-Tenant": "platform"}) {
 		t.Fatalf("expected non-media headers to remain in Headers, got %#v", createSpec.Headers)
+	}
+}
+
+func TestResourceMetadataPreferredFormatJSONRoundtrip(t *testing.T) {
+	t.Parallel()
+
+	original := ResourceMetadata{
+		IDAttribute:     "/id",
+		PreferredFormat: "yaml",
+	}
+
+	encoded, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal returned error: %v", err)
+	}
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+
+	if decoded.PreferredFormat != "yaml" {
+		t.Fatalf("expected preferredFormat=yaml, got %q", decoded.PreferredFormat)
+	}
+	if decoded.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute=/id, got %q", decoded.IDAttribute)
+	}
+}
+
+func TestResourceMetadataPreferredFormatOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	original := ResourceMetadata{
+		IDAttribute: "/id",
+	}
+
+	encoded, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal returned error: %v", err)
+	}
+
+	raw := map[string]any{}
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+
+	resourceObj, ok := raw["resource"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected resource object, got %#v", raw["resource"])
+	}
+	if _, found := resourceObj["preferredFormat"]; found {
+		t.Fatalf("expected preferredFormat to be omitted when empty, got %#v", resourceObj)
 	}
 }

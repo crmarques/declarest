@@ -27,8 +27,11 @@ func TestBuildOperationScopePreservesPayloadBinding(t *testing.T) {
 	if scope["logicalPath"] != "/customers/acme" {
 		t.Fatalf("unexpected logicalPath: %#v", scope["logicalPath"])
 	}
-	if scope["collectionPath"] != "/customers" {
-		t.Fatalf("unexpected collectionPath: %#v", scope["collectionPath"])
+	if scope["logicalCollectionPath"] != "/customers" {
+		t.Fatalf("unexpected logicalCollectionPath: %#v", scope["logicalCollectionPath"])
+	}
+	if scope["remoteCollectionPath"] != "/customers" {
+		t.Fatalf("unexpected remoteCollectionPath: %#v", scope["remoteCollectionPath"])
 	}
 	if scope["alias"] != "acme" {
 		t.Fatalf("unexpected alias: %#v", scope["alias"])
@@ -105,7 +108,7 @@ func TestDerivePathTemplateFieldsFromCollectionTemplatePrefix(t *testing.T) {
 	fields := DerivePathTemplateFields(
 		"/admin/realms/platform/user-registry",
 		metadata.ResourceMetadata{
-			CollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationGet): {
 					Path: "./{{.id}}",
@@ -125,7 +128,7 @@ func TestDerivePathTemplateFieldsFromListJQResourcePathTemplate(t *testing.T) {
 	fields := DerivePathTemplateFields(
 		"/admin/realms/aaa/user-registry/bbb/mappers/ccc",
 		metadata.ResourceMetadata{
-			CollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: []metadata.TransformStep{
@@ -154,7 +157,7 @@ func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 		RemoteID:       "123",
 		Payload:        map[string]any{"id": "123"},
 	}, metadata.ResourceMetadata{
-		CollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationGet): {
 				Path: "./{{.id}}",
@@ -177,6 +180,39 @@ func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 	}
 }
 
+func TestBuildResourceScopeInjectsPluralLogicalCollectionFields(t *testing.T) {
+	t.Parallel()
+
+	scope, err := BuildResourceScope(resource.Resource{
+		LogicalPath:    "/projects/platform/secrets/db-password",
+		CollectionPath: "/projects/platform/secrets",
+		LocalAlias:     "db-password",
+		RemoteID:       "db-password",
+		Payload:        map[string]any{"name": "db-password"},
+	}, metadata.ResourceMetadata{
+		RemoteCollectionPath: "/storage/keys/project/{{.project}}",
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationGet): {
+				Path: "./{{.id}}",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildResourceScope returned error: %v", err)
+	}
+
+	if scope["project"] != "platform" {
+		t.Fatalf("expected derived project in scope, got %#v", scope["project"])
+	}
+	payloadMap, ok := scope["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload map in scope, got %T", scope["payload"])
+	}
+	if payloadMap["project"] != "platform" {
+		t.Fatalf("expected derived project in payload map, got %#v", payloadMap["project"])
+	}
+}
+
 func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 	t.Parallel()
 
@@ -187,7 +223,7 @@ func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 		RemoteID:       "mapper-id",
 		Payload:        map[string]any{"id": "mapper-id"},
 	}, metadata.ResourceMetadata{
-		CollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
 				Transforms: []metadata.TransformStep{

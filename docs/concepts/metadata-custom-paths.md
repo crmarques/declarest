@@ -10,14 +10,15 @@ Metadata bridges the two.
 
 The main tools are:
 
-- `resource.collectionPath`
+- `resource.remoteCollectionPath`
 - `operations.<operation>.path`
 - `operations.<operation>.method`
 - ordered `transforms` steps (`jqExpression`, `selectAttributes`, `excludeAttributes`)
 
-## `resource.collectionPath`
+## `resource.remoteCollectionPath`
 
-`collectionPath` defines the real API collection endpoint for a logical collection.
+`remoteCollectionPath` defines the managed-server collection endpoint for a logical collection.
+When omitted, DeclaREST defaults it to the logical collection path.
 It can be templated.
 
 Example:
@@ -25,7 +26,7 @@ Example:
 ```json
 {
   "resource": {
-    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "idAttribute": "id",
     "aliasAttribute": "name"
   }
@@ -36,7 +37,7 @@ This lets a logical path like `/admin/realms/prod/user-registry/ldap-main` map t
 
 ## Relative operation paths (recommended)
 
-Operation `path` values can be relative to the rendered `collectionPath`:
+Operation `path` values can be relative to the rendered effective collection path:
 
 - `.` -> collection endpoint itself
 - {% raw %}`./{{.id}}`{% endraw %} -> child resource under the collection
@@ -62,7 +63,7 @@ Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.yam
   "resource": {
     "idAttribute": "id",
     "aliasAttribute": "name",
-    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "secretAttributes": ["config.bindCredential[0]"]
   },
   "operations": {
@@ -103,7 +104,8 @@ Templates can resolve values from:
 - ancestor resource payload fields
 - logical path context (`realm`, aliases, IDs, etc.)
 
-This means `collectionPath` templates can still work even when the current payload does not include a field directly, as long as the logical path/ancestor context provides it.
+This means `remoteCollectionPath` templates can still work even when the current payload does not include a field directly, as long as the logical path/ancestor context provides it.
+Plural logical collection segments such as `/projects/<project>/...` also remain available as fallback template fields.
 
 ## Validation loop for custom path modeling
 
@@ -127,7 +129,7 @@ declarest resource explain /admin/realms/prod/user-registry/ldap-main
 ## Modeling guidelines for best-practices-drifting APIs
 
 - Keep logical paths stable and human-friendly.
-- Use `collectionPath` to point at the real backend endpoint.
+- Use `remoteCollectionPath` to point at the real backend endpoint.
 - Prefer relative operation paths to minimize duplication.
 - Use list `jq` filters to split mixed-type endpoints into logical collections.
 - Use `transforms` pipelines to adapt request/response schema drift.

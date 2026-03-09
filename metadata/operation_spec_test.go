@@ -68,13 +68,13 @@ func TestResolveOperationSpecValidation(t *testing.T) {
 	assertValidationError(t, err)
 }
 
-func TestResolveOperationSpecWithScopeSupportsCollectionPathIndirection(t *testing.T) {
+func TestResolveOperationSpecWithScopeSupportsRemoteCollectionPathIndirection(t *testing.T) {
 	t.Parallel()
 
 	resolved, err := ResolveOperationSpecWithScope(
 		context.Background(),
 		ResourceMetadata{
-			CollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
 					Path: "./{{.id}}",
@@ -83,9 +83,10 @@ func TestResolveOperationSpecWithScopeSupportsCollectionPathIndirection(t *testi
 		},
 		OperationGet,
 		map[string]any{
-			"realm":          "platform",
-			"id":             "123456",
-			"collectionPath": "/admin/realms/platform/user-registry",
+			"realm":                 "platform",
+			"id":                    "123456",
+			"logicalCollectionPath": "/admin/realms/platform/user-registry",
+			"remoteCollectionPath":  "/admin/realms/platform/user-registry",
 		},
 	)
 	if err != nil {
@@ -101,7 +102,7 @@ func TestResolveOperationSpecWithScopeDefaultsOperationPathTemplates(t *testing.
 	t.Parallel()
 
 	metadata := ResourceMetadata{
-		CollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 	}
 	scope := map[string]any{
 		"realm": "platform",
@@ -913,6 +914,20 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIPayloadTypeDefaults(t *testi
 
 	if compact.PayloadType != "" {
 		t.Fatalf("expected inferred payloadType default to be omitted, got %q", compact.PayloadType)
+	}
+}
+
+func TestCompactInferredMetadataDefaultsPreservesPreferredFormat(t *testing.T) {
+	t.Parallel()
+
+	compact, err := CompactInferredMetadataDefaults("/admin/realms", ResourceMetadata{
+		PreferredFormat: "yaml",
+	}, nil)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+	if compact.PreferredFormat != "yaml" {
+		t.Fatalf("expected preferredFormat yaml, got %#v", compact.PreferredFormat)
 	}
 }
 

@@ -39,11 +39,11 @@ func ResolveOperationSpecWithScope(
 	}
 
 	scopeCopy := cloneScopeMap(scope)
-	collectionPath, err := resolveEffectiveCollectionPath(metadata.CollectionPath, scopeCopy)
+	collectionPath, err := resolveEffectiveRemoteCollectionPath(metadata.RemoteCollectionPath, scopeCopy)
 	if err != nil {
 		return OperationSpec{}, err
 	}
-	scopeCopy["collectionPath"] = collectionPath
+	scopeCopy["remoteCollectionPath"] = collectionPath
 
 	spec := OperationSpec{
 		Transforms: nil,
@@ -94,16 +94,16 @@ func cloneScopeMap(scope map[string]any) map[string]any {
 	return cloned
 }
 
-func resolveEffectiveCollectionPath(rawCollectionPath string, scope map[string]any) (string, error) {
+func resolveEffectiveRemoteCollectionPath(rawCollectionPath string, scope map[string]any) (string, error) {
 	candidate := strings.TrimSpace(rawCollectionPath)
 	if candidate == "" {
-		candidate = strings.TrimSpace(scopeString(scope["collectionPath"]))
+		candidate = strings.TrimSpace(scopeString(scope["remoteCollectionPath"]))
 	}
 	if candidate == "" {
 		return "", nil
 	}
 
-	rendered, err := renderTemplateString("collectionPath", candidate, scope)
+	rendered, err := renderTemplateString("remoteCollectionPath", candidate, scope)
 	if err != nil {
 		return "", err
 	}
@@ -126,7 +126,7 @@ func resolveRenderedOperationPath(rawPath string, collectionPath string) (string
 	if normalizedCollectionPath == "" {
 		return "", faults.NewTypedError(
 			faults.ValidationError,
-			"relative metadata path requires collectionPath context",
+			"relative metadata path requires remote collection path context",
 			nil,
 		)
 	}
@@ -247,8 +247,9 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	compact := ResourceMetadata{
 		IDAttribute:            inferred.IDAttribute,
 		AliasAttribute:         inferred.AliasAttribute,
-		CollectionPath:         inferred.CollectionPath,
+		RemoteCollectionPath:   inferred.RemoteCollectionPath,
 		PayloadType:            inferred.PayloadType,
+		PreferredFormat:        inferred.PreferredFormat,
 		SecretAttributes:       cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
@@ -259,8 +260,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	if len(compact.Operations) == 0 {
 		compact.Operations = nil
 	}
-	if strings.TrimSpace(compact.CollectionPath) == strings.TrimSpace(defaults.CollectionPath) {
-		compact.CollectionPath = ""
+	if strings.TrimSpace(compact.RemoteCollectionPath) == strings.TrimSpace(defaults.RemoteCollectionPath) {
+		compact.RemoteCollectionPath = ""
 	}
 	if strings.TrimSpace(compact.PayloadType) == strings.TrimSpace(defaults.PayloadType) {
 		compact.PayloadType = ""

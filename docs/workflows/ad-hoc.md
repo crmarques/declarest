@@ -40,7 +40,7 @@ declarest metadata render /corporations/acme update
 declarest metadata render /customers/ list
 ```
 
-This is the fastest way to verify custom `collectionPath`, relative `path`, methods, headers, and query behavior.
+This is the fastest way to verify custom `remoteCollectionPath`, relative `path`, methods, headers, and query behavior.
 
 ## 4. Explain the planned resource operation
 
@@ -86,7 +86,7 @@ declarest -d resource get /corporations/acme
 
 ## Common diagnosis checklist
 
-- Wrong endpoint: check `resource.collectionPath` and operation `path`
+- Wrong endpoint: check `resource.remoteCollectionPath` and operation `path`
 - Wrong ID/alias segment: check `idAttribute` and `aliasAttribute`
 - List returns extra objects: add `list.payload.jqExpression`
 - Diff noise: tune `compare` suppress/filter rules

@@ -454,6 +454,86 @@ func TestEffectiveOpenAPISource(t *testing.T) {
 	}
 }
 
+func TestResolvePreferredFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source metadataSourceResolution
+		ctx    config.Context
+		want   string
+	}{
+		{
+			name:   "context preference overrides bundle manifest",
+			source: metadataSourceResolution{PreferredFormat: "json"},
+			ctx:    config.Context{Preferences: map[string]string{"preferredFormat": "yaml"}},
+			want:   "yaml",
+		},
+		{
+			name:   "bundle manifest used when context preference missing",
+			source: metadataSourceResolution{PreferredFormat: "yaml"},
+			ctx:    config.Context{},
+			want:   "yaml",
+		},
+		{
+			name:   "whitespace is trimmed",
+			source: metadataSourceResolution{PreferredFormat: "  yaml  "},
+			ctx:    config.Context{Preferences: map[string]string{"preferredFormat": "  json  "}},
+			want:   "json",
+		},
+		{
+			name:   "empty when neither source sets a format",
+			source: metadataSourceResolution{},
+			ctx:    config.Context{},
+			want:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := resolvePreferredFormat(tt.source, tt.ctx)
+			if got != tt.want {
+				t.Fatalf("expected preferred format %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestResolveMetadataSourceIncludesBundlePreferredFormat(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.14.tar.gz")
+	writeBundleArchiveForTest(t, archivePath, map[string]string{
+		"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.0.14
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+  preferredFormat: yaml
+distribution:
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
+`,
+		"metadata/admin/realms/_/metadata.json": `{}`,
+	})
+
+	resolved, err := resolveMetadataSource(context.Background(), config.Context{
+		Metadata: config.Metadata{Bundle: archivePath},
+	})
+	if err != nil {
+		t.Fatalf("resolveMetadataSource returned error: %v", err)
+	}
+	if resolved.PreferredFormat != "yaml" {
+		t.Fatalf("expected preferred format yaml, got %q", resolved.PreferredFormat)
+	}
+}
+
 func TestEmitSecurityWarnings(t *testing.T) {
 	t.Parallel()
 

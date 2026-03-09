@@ -11,7 +11,7 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 
 - `resource.idAttribute`
 - `resource.aliasAttribute`
-- `resource.collectionPath`
+- `resource.remoteCollectionPath`
 - `resource.secretAttributes`
 - `resource.externalizedAttributes`
 

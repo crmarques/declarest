@@ -116,11 +116,17 @@ func buildOrchestratorFromResolvedContext(
 		}
 	}
 
+	var orchestratorOpts []internalorchestrator.Option
+	if preferredFormat := resolvePreferredFormat(metadataSource, resolvedContext); preferredFormat != "" {
+		orchestratorOpts = append(orchestratorOpts, internalorchestrator.WithPreferredFormat(preferredFormat))
+	}
+
 	return internalorchestrator.New(
 		repo,
 		metadataService,
 		srv,
 		sec,
+		orchestratorOpts...,
 	), nil
 }
 
@@ -134,7 +140,18 @@ func effectiveOpenAPISource(configOpenAPI string, metadataOpenAPI string) string
 type metadataSourceResolution struct {
 	BaseDir           string
 	OpenAPI           string
+	PreferredFormat   string
 	DeprecatedWarning string
+}
+
+// resolvePreferredFormat returns the effective preferred format for the
+// orchestrator. Context preferences override the bundle manifest value.
+func resolvePreferredFormat(metadataSource metadataSourceResolution, ctx config.Context) string {
+	candidate := strings.TrimSpace(metadataSource.PreferredFormat)
+	if contextPref := strings.TrimSpace(ctx.Preferences["preferredFormat"]); contextPref != "" {
+		candidate = contextPref
+	}
+	return candidate
 }
 
 func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
@@ -185,6 +202,7 @@ func resolveMetadataSource(ctx context.Context, context config.Context) (metadat
 		return metadataSourceResolution{
 			BaseDir:           resolution.MetadataDir,
 			OpenAPI:           resolution.OpenAPI,
+			PreferredFormat:   strings.TrimSpace(resolution.Manifest.Declarest.PreferredFormat),
 			DeprecatedWarning: resolution.DeprecatedWarning,
 		}, nil
 	}

@@ -52,3 +52,24 @@ func TestMergeResourceMetadataOverlaysWholeResourceSecretPointer(t *testing.T) {
 		t.Fatalf("expected base metadata to remain unchanged, got %#v", base)
 	}
 }
+
+func TestCloneResourceMetadataPreservesPreferredFormat(t *testing.T) {
+	t.Parallel()
+
+	cloned := CloneResourceMetadata(ResourceMetadata{PreferredFormat: "yaml"})
+	if cloned.PreferredFormat != "yaml" {
+		t.Fatalf("expected cloned preferredFormat yaml, got %#v", cloned)
+	}
+}
+
+func TestMergeResourceMetadataOverlaysPreferredFormat(t *testing.T) {
+	t.Parallel()
+
+	merged := MergeResourceMetadata(
+		ResourceMetadata{PreferredFormat: "json"},
+		ResourceMetadata{PreferredFormat: "yaml"},
+	)
+	if merged.PreferredFormat != "yaml" {
+		t.Fatalf("expected merged preferredFormat yaml, got %#v", merged)
+	}
+}

@@ -1,7 +1,7 @@
 resource:
   idAttribute: /id
   aliasAttribute: /name
-  collectionPath: /projects/{{.project}}/jobs
+  remoteCollectionPath: /project/{{.project}}/jobs
   externalizedAttributes:
   - path: /sequence/commands/*/script
     file: script.sh

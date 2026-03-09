@@ -620,7 +620,7 @@ func metadataPathContainsReservedSegment(logicalPath string) bool {
 func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
 	return strings.TrimSpace(item.IDAttribute) != "" ||
 		strings.TrimSpace(item.AliasAttribute) != "" ||
-		strings.TrimSpace(item.CollectionPath) != "" ||
+		strings.TrimSpace(item.RemoteCollectionPath) != "" ||
 		item.Secret != nil ||
 		item.SecretAttributes != nil ||
 		item.Operations != nil ||

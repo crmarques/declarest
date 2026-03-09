@@ -241,7 +241,7 @@ func allowsSingletonListIdentityFallback(
 }
 
 func singletonFallbackWithinSelectorDepth(logicalPath string, md metadata.ResourceMetadata) bool {
-	trimmedTemplate := strings.TrimSpace(md.CollectionPath)
+	trimmedTemplate := strings.TrimSpace(md.RemoteCollectionPath)
 	if trimmedTemplate == "" {
 		return true
 	}

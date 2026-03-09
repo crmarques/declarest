@@ -1071,8 +1071,8 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected metadata.resource, got %#v", metadataValue["resource"])
 		}
-		if resource["collectionPath"] != "/customers" {
-			t.Fatalf("expected collectionPath /customers, got %v", resource["collectionPath"])
+		if resource["remoteCollectionPath"] != "/customers" {
+			t.Fatalf("expected remoteCollectionPath /customers, got %v", resource["remoteCollectionPath"])
 		}
 
 		operations, ok := metadataValue["operations"].(map[string]any)

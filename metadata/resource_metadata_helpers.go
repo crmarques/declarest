@@ -9,8 +9,9 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
 		IDAttribute:            value.IDAttribute,
 		AliasAttribute:         value.AliasAttribute,
-		CollectionPath:         value.CollectionPath,
+		RemoteCollectionPath:   value.RemoteCollectionPath,
 		PayloadType:            value.PayloadType,
+		PreferredFormat:        value.PreferredFormat,
 		Secret:                 cloneBoolPointer(value.Secret),
 		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
@@ -39,8 +40,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	merged := ResourceMetadata{
 		IDAttribute:            base.IDAttribute,
 		AliasAttribute:         base.AliasAttribute,
-		CollectionPath:         base.CollectionPath,
+		RemoteCollectionPath:   base.RemoteCollectionPath,
 		PayloadType:            base.PayloadType,
+		PreferredFormat:        base.PreferredFormat,
 		Secret:                 cloneBoolPointer(base.Secret),
 		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
@@ -54,11 +56,14 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	if overlay.AliasAttribute != "" {
 		merged.AliasAttribute = overlay.AliasAttribute
 	}
-	if overlay.CollectionPath != "" {
-		merged.CollectionPath = overlay.CollectionPath
+	if overlay.RemoteCollectionPath != "" {
+		merged.RemoteCollectionPath = overlay.RemoteCollectionPath
 	}
 	if overlay.PayloadType != "" {
 		merged.PayloadType = overlay.PayloadType
+	}
+	if overlay.PreferredFormat != "" {
+		merged.PreferredFormat = overlay.PreferredFormat
 	}
 	if overlay.Secret != nil {
 		merged.Secret = cloneBoolPointer(overlay.Secret)

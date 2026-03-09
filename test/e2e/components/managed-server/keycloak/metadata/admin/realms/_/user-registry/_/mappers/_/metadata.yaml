@@ -1,7 +1,7 @@
 resource:
   idAttribute: /id
   aliasAttribute: /name
-  collectionPath: /admin/realms/{{.realm}}/components
+  remoteCollectionPath: /admin/realms/{{.realm}}/components
 operations:
   list:
     transforms:

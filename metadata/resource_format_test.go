@@ -11,7 +11,7 @@ func TestResolveOperationSpecWithScopeResolvesPayloadTemplateHelpers(t *testing.
 	spec, err := ResolveOperationSpecWithScope(
 		context.Background(),
 		ResourceMetadata{
-			CollectionPath: "/api/{{payload_type .}}/customers",
+			RemoteCollectionPath: "/api/{{payload_type .}}/customers",
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
 					Path:        "/api/customers/{{.id}}",

@@ -27,12 +27,13 @@ func BuildOperationScope(
 	}
 
 	scope := map[string]any{
-		"logicalPath":    logicalPath,
-		"collectionPath": collectionPath,
-		"alias":          alias,
-		"remoteID":       remoteID,
-		"payload":        normalizedPayload,
-		"value":          normalizedPayload,
+		"logicalPath":           logicalPath,
+		"logicalCollectionPath": collectionPath,
+		"remoteCollectionPath":  collectionPath,
+		"alias":                 alias,
+		"remoteID":              remoteID,
+		"payload":               normalizedPayload,
+		"value":                 normalizedPayload,
 	}
 
 	if strings.TrimSpace(remoteID) != "" {
@@ -82,13 +83,27 @@ func BuildResourceScope(resource resource.Resource, md metadata.ResourceMetadata
 			payloadMap[trimmedKey] = trimmedValue
 		}
 	}
+	for key, value := range deriveFieldsFromLogicalCollectionPath(collectionPath) {
+		trimmedKey := strings.TrimSpace(key)
+		trimmedValue := strings.TrimSpace(value)
+		if trimmedKey == "" || trimmedValue == "" {
+			continue
+		}
+		if _, exists := scope[trimmedKey]; exists {
+			continue
+		}
+		scope[trimmedKey] = trimmedValue
+		if payloadMap != nil {
+			payloadMap[trimmedKey] = trimmedValue
+		}
+	}
 
 	return scope, nil
 }
 
 func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) map[string]string {
 	derived := map[string]string{}
-	collectionTemplate := strings.TrimSpace(md.CollectionPath)
+	collectionTemplate := strings.TrimSpace(md.RemoteCollectionPath)
 	if collectionTemplate == "" {
 		collectionTemplate = collectionPathForLogicalPath(logicalPath)
 	}
@@ -218,6 +233,70 @@ func mergeTemplateFields(destination map[string]string, source map[string]string
 		}
 		destination[key] = value
 	}
+}
+
+func deriveFieldsFromLogicalCollectionPath(collectionPath string) map[string]string {
+	segments := splitPathSegments(collectionPath)
+	if len(segments) < 2 {
+		return nil
+	}
+
+	derived := map[string]string{}
+	for idx := 0; idx < len(segments)-1; idx++ {
+		collectionSegment := strings.TrimSpace(segments[idx])
+		if !looksPluralCollectionSegment(collectionSegment) {
+			continue
+		}
+
+		key := singularizeCollectionToken(collectionSegment)
+		value := strings.TrimSpace(segments[idx+1])
+		if key == "" || value == "" {
+			continue
+		}
+		if _, exists := derived[key]; exists {
+			continue
+		}
+		derived[key] = value
+	}
+
+	if len(derived) == 0 {
+		return nil
+	}
+	return derived
+}
+
+func looksPluralCollectionSegment(segment string) bool {
+	lower := strings.ToLower(strings.TrimSpace(segment))
+	if lower == "" {
+		return false
+	}
+	return strings.HasSuffix(lower, "s") || strings.HasSuffix(lower, "ies")
+}
+
+func singularizeCollectionToken(token string) string {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return ""
+	}
+
+	separatorNormalized := strings.ReplaceAll(strings.ReplaceAll(trimmed, "-", "_"), ".", "_")
+	parts := strings.Split(separatorNormalized, "_")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	last := strings.TrimSpace(parts[len(parts)-1])
+	if last == "" {
+		return ""
+	}
+	lower := strings.ToLower(last)
+	if strings.HasSuffix(lower, "ies") && len(last) > 3 {
+		return last[:len(last)-3] + "y"
+	}
+	if strings.HasSuffix(lower, "s") && len(last) > 1 {
+		return last[:len(last)-1]
+	}
+	return last
 }
 
 func joinTemplatePaths(collectionPath string, operationPath string) string {

@@ -48,6 +48,7 @@ type BundleDeclarest struct {
 	MetadataRoot            string                        `yaml:"metadataRoot"`
 	OpenAPI                 string                        `yaml:"openapi,omitempty"`
 	MetadataFileName        string                        `yaml:"metadataFileName,omitempty"`
+	PreferredFormat         string                        `yaml:"preferredFormat,omitempty"`
 	CompatibleDeclarest     string                        `yaml:"compatibleDeclarest,omitempty"`
 	CompatibleManagedServer BundleCompatibleManagedServer `yaml:"compatibleManagedServer,omitempty"`
 }

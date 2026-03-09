@@ -1,7 +1,7 @@
 resource:
   idAttribute: /index
   aliasAttribute: /index
-  collectionPath: /projects/{{.project}}/nodes
+  remoteCollectionPath: /project/{{.project}}/sources
 operations:
   create:
     method: POST

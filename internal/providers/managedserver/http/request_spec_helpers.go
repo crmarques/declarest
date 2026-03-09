@@ -29,8 +29,8 @@ func resolveOperationSpecTemplates(
 	applyPayloadTemplateScope(templateScope, md, descriptor)
 
 	templateMetadata := metadata.ResourceMetadata{
-		CollectionPath: md.CollectionPath,
-		PayloadType:    md.PayloadType,
+		RemoteCollectionPath: md.RemoteCollectionPath,
+		PayloadType:          md.PayloadType,
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},

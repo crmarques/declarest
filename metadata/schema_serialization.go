@@ -17,8 +17,9 @@ type resourceMetadataWire struct {
 type resourceWire struct {
 	IDAttribute            string                       `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
 	AliasAttribute         string                       `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
-	CollectionPath         string                       `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
+	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
+	PreferredFormat        string                       `json:"preferredFormat,omitempty" yaml:"preferredFormat,omitempty"`
 	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       *[]string                    `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
@@ -121,12 +122,20 @@ func (m ResourceMetadata) MarshalYAML() (any, error) {
 }
 
 func (m *ResourceMetadata) UnmarshalYAML(value *yaml.Node) error {
-	wire := resourceMetadataWire{}
-	if err := value.Decode(&wire); err != nil {
+	var buffer bytes.Buffer
+	encoder := yaml.NewEncoder(&buffer)
+	if err := encoder.Encode(value); err != nil {
+		return err
+	}
+	if err := encoder.Close(); err != nil {
 		return err
 	}
 
-	*m = resourceMetadataFromWire(wire)
+	decoded, err := DecodeResourceMetadataYAML(buffer.Bytes())
+	if err != nil {
+		return err
+	}
+	*m = decoded
 	return nil
 }
 
@@ -139,7 +148,7 @@ func DecodeResourceMetadataJSON(data []byte) (ResourceMetadata, error) {
 		return ResourceMetadata{}, err
 	}
 
-	return resourceMetadataFromWire(wire), nil
+	return resourceMetadataFromWire(wire)
 }
 
 func DecodeResourceMetadataYAML(data []byte) (ResourceMetadata, error) {
@@ -151,7 +160,7 @@ func DecodeResourceMetadataYAML(data []byte) (ResourceMetadata, error) {
 		return ResourceMetadata{}, err
 	}
 
-	return resourceMetadataFromWire(wire), nil
+	return resourceMetadataFromWire(wire)
 }
 
 func EncodeResourceMetadataJSON(metadata ResourceMetadata, pretty bool) ([]byte, error) {
@@ -166,8 +175,8 @@ func EncodeResourceMetadataYAML(metadata ResourceMetadata) ([]byte, error) {
 	return yaml.Marshal(resourceMetadataToWire(metadata))
 }
 
-func EffectiveCollectionPath(md ResourceMetadata, fallback string) string {
-	if override := strings.TrimSpace(md.CollectionPath); override != "" {
+func EffectiveRemoteCollectionPath(md ResourceMetadata, fallback string) string {
+	if override := strings.TrimSpace(md.RemoteCollectionPath); override != "" {
 		return override
 	}
 	return fallback
@@ -177,11 +186,12 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	wire := resourceMetadataWire{}
 
 	resource := resourceWire{
-		IDAttribute:    metadata.IDAttribute,
-		AliasAttribute: metadata.AliasAttribute,
-		CollectionPath: metadata.CollectionPath,
-		PayloadType:    metadata.PayloadType,
-		Secret:         cloneBoolPointer(metadata.Secret),
+		IDAttribute:          metadata.IDAttribute,
+		AliasAttribute:       metadata.AliasAttribute,
+		RemoteCollectionPath: metadata.RemoteCollectionPath,
+		PayloadType:          metadata.PayloadType,
+		PreferredFormat:      metadata.PreferredFormat,
+		Secret:               cloneBoolPointer(metadata.Secret),
 	}
 	if metadata.SecretAttributes != nil {
 		resource.SecretAttributes = stringSlicePointer(metadata.SecretAttributes)
@@ -228,7 +238,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	return wire
 }
 
-func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
+func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, error) {
 	metadata := ResourceMetadata{}
 
 	if wire.Resource != nil {
@@ -239,11 +249,15 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		if resource.AliasAttribute != "" {
 			metadata.AliasAttribute = resource.AliasAttribute
 		}
-		if resource.CollectionPath != "" {
-			metadata.CollectionPath = resource.CollectionPath
+		remoteCollectionPath := strings.TrimSpace(resource.RemoteCollectionPath)
+		if remoteCollectionPath != "" {
+			metadata.RemoteCollectionPath = remoteCollectionPath
 		}
 		if resource.PayloadType != "" {
 			metadata.PayloadType = resource.PayloadType
+		}
+		if resource.PreferredFormat != "" {
+			metadata.PreferredFormat = resource.PreferredFormat
 		}
 		if resource.Secret != nil {
 			metadata.Secret = cloneBoolPointer(resource.Secret)
@@ -278,14 +292,15 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		}
 	}
 
-	return metadata
+	return metadata, nil
 }
 
 func hasResourceInfo(resource resourceWire) bool {
 	return strings.TrimSpace(resource.IDAttribute) != "" ||
 		strings.TrimSpace(resource.AliasAttribute) != "" ||
-		strings.TrimSpace(resource.CollectionPath) != "" ||
+		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(resource.PayloadType) != "" ||
+		strings.TrimSpace(resource.PreferredFormat) != "" ||
 		resource.Secret != nil ||
 		resource.SecretAttributes != nil ||
 		resource.ExternalizedAttributes != nil

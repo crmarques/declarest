@@ -38,9 +38,22 @@ func DecodeOptionalMutationPayloadInput(
 	}
 
 	if objectValue, err := cliutil.ParsePointerAssignmentsObject(payloadArg); err == nil {
+		payloadType := assignmentPayloadType(flags.ContentType)
 		return resource.Content{
 			Value:      objectValue,
-			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
+		}, true, nil
+	}
+
+	if cliutil.IsDotNotationAssignment(payloadArg) {
+		objectValue, err := cliutil.ParseDotNotationAssignmentsObject(payloadArg)
+		if err != nil {
+			return resource.Content{}, false, err
+		}
+		payloadType := assignmentPayloadType(flags.ContentType)
+		return resource.Content{
+			Value:      objectValue,
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
 		}, true, nil
 	}
 
@@ -86,6 +99,21 @@ func payloadArgLooksLikeFilePath(value string) bool {
 		return true
 	}
 	return filepath.Ext(trimmed) != ""
+}
+
+// assignmentPayloadType returns the payload type to use for key=value
+// assignment payloads based on the --content-type flag. When no content type is
+// specified the default is JSON.
+func assignmentPayloadType(contentType string) string {
+	trimmed := strings.TrimSpace(contentType)
+	if trimmed == "" {
+		return resource.PayloadTypeJSON
+	}
+	descriptor, ok := resource.PayloadDescriptorForContentType(trimmed)
+	if !ok || !resource.IsStructuredPayloadType(descriptor.PayloadType) {
+		return resource.PayloadTypeJSON
+	}
+	return descriptor.PayloadType
 }
 
 func mutationPayloadAllowsInlineLiteral(contentType string, payloadArg string) bool {
