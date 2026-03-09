@@ -315,17 +315,11 @@ func shouldSkipCleanGitWorktreeCheckForFreshBootstrapRepo(
 	return len(entries) == 0
 }
 
-func bindRepositoryCommitMessageFlags(command *cobra.Command, message *string, messageOverride *string) {
+func bindRepositoryCommitMessageFlags(command *cobra.Command, message *string) {
 	command.Flags().StringVarP(
 		message,
 		"message",
 		"m",
-		"",
-		"append text to the default git commit message (git repositories only)",
-	)
-	command.Flags().StringVar(
-		messageOverride,
-		"message-override",
 		"",
 		"override the default git commit message (git repositories only)",
 	)
@@ -334,35 +328,16 @@ func bindRepositoryCommitMessageFlags(command *cobra.Command, message *string, m
 func resolveRepositoryCommitMessage(
 	command *cobra.Command,
 	defaultMessage string,
-	messageAppend string,
-	messageOverride string,
+	message string,
 ) (string, error) {
-	appendChanged := command.Flags().Changed("message")
-	overrideChanged := command.Flags().Changed("message-override")
-
-	if appendChanged && overrideChanged {
-		return "", cliutil.ValidationError("flags --message and --message-override cannot be used together", nil)
-	}
-
-	if overrideChanged {
-		resolved := strings.TrimSpace(messageOverride)
-		if resolved == "" {
-			return "", cliutil.ValidationError("flag --message-override cannot be empty", nil)
-		}
-		return resolved, nil
-	}
-
 	base := strings.TrimSpace(defaultMessage)
-	if !appendChanged {
+	if !command.Flags().Changed("message") {
 		return base, nil
 	}
 
-	appendValue := strings.TrimSpace(messageAppend)
-	if appendValue == "" {
+	resolved := strings.TrimSpace(message)
+	if resolved == "" {
 		return "", cliutil.ValidationError("flag --message cannot be empty", nil)
 	}
-	if base == "" {
-		return appendValue, nil
-	}
-	return base + " - " + appendValue, nil
+	return resolved, nil
 }

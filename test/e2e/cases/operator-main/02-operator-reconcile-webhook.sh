@@ -27,7 +27,7 @@ case_run() {
   cat >"${create_file}" <<'EOF'
 {"id":"operator-webhook","name":"operator-webhook","displayName":"Operator Webhook","owner":"operator-webhook-initial"}
 EOF
-  case_run_declarest resource save "${resource_path}" -f "${create_file}" -i json --overwrite
+  case_run_declarest resource save "${resource_path}" -f "${create_file}" -i json --force
   case_expect_success
 
   case_run_declarest repository commit -m 'operator webhook create'
@@ -39,7 +39,7 @@ EOF
   case_wait_until 180 3 "operator webhook create sync for ${resource_path}" operator_wait_remote_owner "${resource_path}" 'operator-webhook-initial'
 
   jq -c '.owner = "operator-webhook-updated" | .displayName = "Operator Webhook Updated"' <"${create_file}" >"${update_file}"
-  case_run_declarest resource save "${resource_path}" -f "${update_file}" -i json --overwrite
+  case_run_declarest resource save "${resource_path}" -f "${update_file}" -i json --force
   case_expect_success
 
   case_run_declarest repository commit -m 'operator webhook update'

@@ -33,7 +33,7 @@ keycloak_get_client_uuid() {
 
   curl -fsS \
     -H "Authorization: Bearer ${admin_token}" \
-    "${KEYCLOAK_BASE_URL}/admin/realms/${realm}/clients?clientId=${client_id}" \
+    "${KEYCLOAK_BASE_URL}/admin/realms/${realm}/clients?clientID=${client_id}" \
     | jq -r '.[0].id // empty'
 }
 
@@ -82,7 +82,7 @@ client_payload=$(jq -nc \
   --arg client_id "${KEYCLOAK_CLIENT_ID}" \
   --arg client_secret "${KEYCLOAK_CLIENT_SECRET}" \
   '{
-    clientId:$client_id,
+    clientID:$client_id,
     enabled:true,
     serviceAccountsEnabled:true,
     publicClient:false,

@@ -127,7 +127,7 @@ spec:
                           user:
                             type: string
                         type: object
-                      tokenSecretRef:
+                      tokenRef:
                         description: SecretKeySelector selects a key of a Secret.
                         properties:
                           key:

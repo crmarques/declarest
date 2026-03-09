@@ -20,7 +20,7 @@ func TestWebhookValidationResourceRepositoryCreate(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{
+					TokenRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
 						Key:                  "token",
 					},
@@ -34,6 +34,35 @@ func TestWebhookValidationResourceRepositoryCreate(t *testing.T) {
 
 	v := &resourceRepositoryValidator{}
 	warnings, err := v.ValidateCreate(context.Background(), repo.DeepCopy())
+	if err != nil {
+		t.Fatalf("ValidateCreate() unexpected error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("ValidateCreate() returned unexpected warnings: %v", warnings)
+	}
+}
+
+func TestWebhookValidationSecretStoreCreate(t *testing.T) {
+	t.Parallel()
+
+	secretStore := &SecretStore{
+		Spec: SecretStoreSpec{
+			Vault: &SecretStoreVaultSpec{
+				Address: "https://vault.example.com",
+				Auth: SecretStoreVaultAuth{
+					Token: &SecretStoreVaultTokenAuth{
+						SecretRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "vault-auth"},
+							Key:                  "token",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v := &secretStoreValidator{}
+	warnings, err := v.ValidateCreate(context.Background(), secretStore.DeepCopy())
 	if err != nil {
 		t.Fatalf("ValidateCreate() unexpected error: %v", err)
 	}

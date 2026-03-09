@@ -42,7 +42,7 @@ func TestCollectSecretNamesIncludesRepositoryWebhookSecret(t *testing.T) {
 		Spec: declarestv1alpha1.ResourceRepositorySpec{
 			Git: &declarestv1alpha1.GitRepositorySpec{
 				Auth: declarestv1alpha1.ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{
+					TokenRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
 						Key:                  "token",
 					},
@@ -58,11 +58,27 @@ func TestCollectSecretNamesIncludesRepositoryWebhookSecret(t *testing.T) {
 		},
 	}
 
-	names := collectSecretNames(repo, &declarestv1alpha1.ManagedServer{}, &declarestv1alpha1.SecretStore{})
-	if len(names) != 2 {
+	secretStore := &declarestv1alpha1.SecretStore{
+		Spec: declarestv1alpha1.SecretStoreSpec{
+			Vault: &declarestv1alpha1.SecretStoreVaultSpec{
+				Address: "https://vault.example.com",
+				Auth: declarestv1alpha1.SecretStoreVaultAuth{
+					Token: &declarestv1alpha1.SecretStoreVaultTokenAuth{
+						SecretRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "vault-auth"},
+							Key:                  "token",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	names := collectSecretNames(repo, &declarestv1alpha1.ManagedServer{}, secretStore)
+	if len(names) != 3 {
 		t.Fatalf("expected 2 secret names, got %#v", names)
 	}
-	if names[0] != "git-auth" || names[1] != "repo-webhook" {
+	if names[0] != "git-auth" || names[1] != "repo-webhook" || names[2] != "vault-auth" {
 		t.Fatalf("unexpected secret names: %#v", names)
 	}
 }

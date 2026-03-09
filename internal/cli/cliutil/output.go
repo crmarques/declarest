@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/term"
 )
 
 const (
@@ -72,6 +74,9 @@ func WriteOutput[T any](command *cobra.Command, format string, value T, renderTe
 		if bytesValue, ok := resource.BinaryBytes(any(value)); ok {
 			_, err := command.OutOrStdout().Write(bytesValue)
 			return err
+		}
+		if shouldAutoRenderAsJSON(command.OutOrStdout(), any(value)) {
+			return WriteOutput(command, OutputJSON, value, nil)
 		}
 		if containsNestedBinaryValue(any(value)) {
 			return ValidationError("binary collections require --output json or yaml", nil)
@@ -135,6 +140,24 @@ func WriteOutput[T any](command *cobra.Command, format string, value T, renderTe
 	default:
 		return ValidationError("invalid output format: use auto, text, json, or yaml", nil)
 	}
+}
+
+func shouldAutoRenderAsJSON(writer io.Writer, value any) bool {
+	if isTerminalWriter(writer) {
+		return false
+	}
+	if _, ok := value.(string); ok {
+		return false
+	}
+	return true
+}
+
+func isTerminalWriter(writer io.Writer) bool {
+	file, ok := writer.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(file.Fd()))
 }
 
 func ResolvePayloadAwareOutputFormat(

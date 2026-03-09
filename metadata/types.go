@@ -17,15 +17,15 @@ type InferenceRequest struct {
 }
 
 type ResourceMetadata struct {
-	IDFromAttribute        string                   `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute     string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+	IDAttribute            string                   `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
+	AliasAttribute         string                   `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
 	CollectionPath         string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	Secret                 *bool                    `json:"secret,omitempty" yaml:"secret,omitempty"`
-	SecretsFromAttributes  []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
+	SecretAttributes       []string                 `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 	Operations             map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`
-	PayloadMutation        []PayloadMutationStep    `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
+	Transforms             []TransformStep          `json:"transforms,omitempty" yaml:"transforms,omitempty"`
 }
 
 func (m ResourceMetadata) IsWholeResourceSecret() bool {
@@ -53,21 +53,21 @@ type ResolvedExternalizedAttribute struct {
 }
 
 type OperationSpec struct {
-	Method          string                `json:"method,omitempty" yaml:"method,omitempty"`
-	Path            string                `json:"path,omitempty" yaml:"path,omitempty"`
-	Query           map[string]string     `json:"query,omitempty" yaml:"query,omitempty"`
-	Headers         map[string]string     `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Accept          string                `json:"accept,omitempty" yaml:"accept,omitempty"`
-	ContentType     string                `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Body            any                   `json:"body,omitempty" yaml:"body,omitempty"`
-	PayloadMutation []PayloadMutationStep `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
-	Validate        *OperationValidationSpec
+	Method      string            `json:"method,omitempty" yaml:"method,omitempty"`
+	Path        string            `json:"path,omitempty" yaml:"path,omitempty"`
+	Query       map[string]string `json:"query,omitempty" yaml:"query,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Accept      string            `json:"accept,omitempty" yaml:"accept,omitempty"`
+	ContentType string            `json:"contentType,omitempty" yaml:"contentType,omitempty"`
+	Body        any               `json:"body,omitempty" yaml:"body,omitempty"`
+	Transforms  []TransformStep   `json:"transforms,omitempty" yaml:"transforms,omitempty"`
+	Validate    *OperationValidationSpec
 }
 
-type PayloadMutationStep struct {
-	SelectAttributes   []string `json:"selectAttributes,omitempty" yaml:"selectAttributes,omitempty"`
-	SuppressAttributes []string `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
-	JQExpression       string   `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
+type TransformStep struct {
+	SelectAttributes  []string `json:"selectAttributes,omitempty" yaml:"selectAttributes,omitempty"`
+	ExcludeAttributes []string `json:"excludeAttributes,omitempty" yaml:"excludeAttributes,omitempty"`
+	JQExpression      string   `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
 }
 
 type OperationValidationSpec struct {

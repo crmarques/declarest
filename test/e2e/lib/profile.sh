@@ -726,7 +726,7 @@ Shell scripts:
 
 To use it in your current shell:
   source ${setup_script@Q}
-  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" config show
+  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" context show
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository status -o json
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource list / --source repository -o json
 EOFH

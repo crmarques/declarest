@@ -11,34 +11,35 @@ Examples:
 - `application/json` -> `resource.json`
 - `application/yaml` -> `resource.yaml`
 - `application/xml` -> `resource.xml`
-- opaque input file `private.key` -> `resource.key` with internal media type `application/octet-stream`
-- unknown payload with no usable suffix hint -> `resource.bin` with internal media type `application/octet-stream`
+- opaque input file `private.key` -> `resource.key` with internal media type `binary`
+- unknown payload with no usable suffix hint -> `resource.bin` with internal media type `binary`
 
 ## Repository layout
 
 Examples for logical path `/corporations/acme`:
 
 - payload: `customers/acme/resource.json` (or another `resource.<ext>`)
-- resource-only metadata (optional): `customers/acme/metadata.json`
+- resource-only metadata (optional): `customers/acme/metadata.yaml`
 
 Collection metadata for `/customers/`:
 
-- `customers/_/metadata.json`
+- `customers/_/metadata.yaml`
 
 ## Resource payloads vs collection payloads
 
-DeclaREST can persist collection responses in two ways with `resource save`:
+DeclaREST can persist collection responses in three modes with `resource save`:
 
-- `--as-items` (default for list payloads): each item becomes its own resource directory
-- `--as-one-resource`: stores the collection payload as one resource file
+- `--mode auto` (default): non-list payloads save as one resource; list payloads fan out into one resource directory per item
+- `--mode items`: each item becomes its own resource directory
+- `--mode single`: stores the collection payload as one resource file
 
-Use `--as-items` for normal GitOps/reconciliation. Use `--as-one-resource` for opaque list endpoints or snapshots.
+Use `--mode auto` or `--mode items` for normal GitOps/reconciliation. Use `--mode single` for opaque list endpoints or snapshots.
 
 ## Includes inside resource payloads
 
 Resource files support the literal include directive:
 
-- `{{include file.ext}}`
+- {% raw %}`{{include file.ext}}`{% endraw %}
 
 The included file path is resolved relative to the current resource directory.
 Structured JSON/YAML content is merged as data; non-JSON/YAML content is included as text.
@@ -47,8 +48,8 @@ Example:
 
 ```yaml
 service:
-  config: "{{include config.json}}"
-  script: "{{include deploy.sh}}"
+  config: "{% raw %}{{include config.json}}{% endraw %}"
+  script: "{% raw %}{{include deploy.sh}}{% endraw %}"
 ```
 
 This is useful when a resource embeds long scripts, policy documents, or nested config fragments.
@@ -57,8 +58,8 @@ This is useful when a resource embeds long scripts, policy documents, or nested 
 
 Sensitive attributes should be stored as placeholders, not plaintext:
 
-- `{{secret .}}`
-- `{{secret custom-key}}`
+- {% raw %}`{{secret .}}`{% endraw %}
+- {% raw %}`{{secret custom-key}}`{% endraw %}
 
 The secret values live in the configured secret store, and the placeholder stays in Git.
 See [Secrets](secrets.md).

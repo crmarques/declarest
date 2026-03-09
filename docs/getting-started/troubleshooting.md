@@ -5,7 +5,7 @@ Common issues for both CLI and Operator mode.
 ## 1. No active context (CLI)
 
 - Symptom: commands fail before any API call; messages mention missing current context.
-- Fix: run `declarest config add` or `declarest config use <name>`, then `declarest config check`.
+- Fix: run `declarest context add` or `declarest context use <name>`, then `declarest context check`.
 
 ## 2. Path rejected as invalid
 
@@ -15,7 +15,7 @@ Common issues for both CLI and Operator mode.
 ## 3. `resource get` returns not found, but resource exists
 
 - Symptom: direct read fails for alias-style paths.
-- Fix: confirm metadata identity mapping (`idFromAttribute` / `aliasFromAttribute`) and run `declarest metadata render <path> get`.
+- Fix: confirm metadata identity mapping (`idAttribute` / `aliasAttribute`) and run `declarest metadata render <path> get`.
 
 ## 4. Diff shows unexpected drift every run
 
@@ -25,7 +25,7 @@ Common issues for both CLI and Operator mode.
 ## 5. Plaintext secret warning on save
 
 - Symptom: `resource save` fails due to detected plaintext secret candidates.
-- Fix: use `--handle-secrets` (recommended), or declare `resourceInfo.secretInAttributes` first.
+- Fix: use `--secret-attributes` (recommended), or declare `resource.secretAttributes` first.
 
 ## 6. `repository push` fails
 
@@ -58,9 +58,9 @@ Common issues for both CLI and Operator mode.
 
 ```bash
 # CLI side
-declarest config current
-declarest config check
-declarest managed-server check
+declarest context current
+declarest context check
+declarest server check
 
 # Operator side
 kubectl -n declarest-system get resourcerepositories,managedservers,secretstores,syncpolicies

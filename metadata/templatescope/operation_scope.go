@@ -50,25 +50,25 @@ func BuildOperationScope(
 	return scope, nil
 }
 
-func BuildResourceScope(resourceInfo resource.Resource, md metadata.ResourceMetadata) (map[string]any, error) {
-	collectionPath := resourceInfo.CollectionPath
+func BuildResourceScope(resource resource.Resource, md metadata.ResourceMetadata) (map[string]any, error) {
+	collectionPath := resource.CollectionPath
 	if strings.TrimSpace(collectionPath) == "" {
-		collectionPath = collectionPathForLogicalPath(resourceInfo.LogicalPath)
+		collectionPath = collectionPathForLogicalPath(resource.LogicalPath)
 	}
 
 	scope, err := BuildOperationScope(
-		resourceInfo.LogicalPath,
+		resource.LogicalPath,
 		collectionPath,
-		resourceInfo.LocalAlias,
-		resourceInfo.RemoteID,
-		resourceInfo.Payload,
+		resource.LocalAlias,
+		resource.RemoteID,
+		resource.Payload,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	payloadMap, _ := scope["payload"].(map[string]any)
-	for key, value := range DerivePathTemplateFields(resourceInfo.LogicalPath, md) {
+	for key, value := range DerivePathTemplateFields(resource.LogicalPath, md) {
 		trimmedKey := strings.TrimSpace(key)
 		trimmedValue := strings.TrimSpace(value)
 		if trimmedKey == "" || trimmedValue == "" {
@@ -93,7 +93,7 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 		collectionTemplate = collectionPathForLogicalPath(logicalPath)
 	}
 	mergeTemplateFields(derived, deriveTemplateFieldsFromPathTemplate(collectionTemplate, logicalPath))
-	mergeTemplateFields(derived, deriveTemplateFieldsFromPayloadMutation(md.PayloadMutation, logicalPath))
+	mergeTemplateFields(derived, deriveTemplateFieldsFromTransforms(md.Transforms, logicalPath))
 
 	operationNames := make([]string, 0, len(md.Operations))
 	for operationName := range md.Operations {
@@ -103,7 +103,7 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 
 	for _, operationName := range operationNames {
 		spec := md.Operations[operationName]
-		mergeTemplateFields(derived, deriveTemplateFieldsFromPayloadMutation(spec.PayloadMutation, logicalPath))
+		mergeTemplateFields(derived, deriveTemplateFieldsFromTransforms(spec.Transforms, logicalPath))
 
 		templatePath := strings.TrimSpace(spec.Path)
 		if templatePath == "" {
@@ -118,8 +118,8 @@ func DerivePathTemplateFields(logicalPath string, md metadata.ResourceMetadata) 
 	return derived
 }
 
-func deriveTemplateFieldsFromPayloadMutation(
-	steps []metadata.PayloadMutationStep,
+func deriveTemplateFieldsFromTransforms(
+	steps []metadata.TransformStep,
 	logicalPath string,
 ) map[string]string {
 	if len(steps) == 0 {

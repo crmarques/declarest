@@ -58,7 +58,7 @@ pip install -r docs/requirements.txt
 mkdocs serve
 mkdocs build --strict
 ```
-After installing the dependencies, `make docs` also runs `mkdocs build --strict` so you can rebuild the site via the Makefile.
+`make docs` prepares `.venv`, installs or refreshes `docs/requirements.txt`, and then runs `mkdocs build --strict --clean --site-dir .docs`.
 
 Files:
 

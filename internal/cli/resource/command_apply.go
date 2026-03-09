@@ -16,7 +16,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 	var recursive bool
 	var force bool
 	var httpMethod string
-	var refreshRepository bool
+	var refresh bool
 
 	command := &cobra.Command{
 		Use:   "apply [path]",
@@ -27,7 +27,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			"Apply uses upsert behavior for remote writes: create when the resource does not exist, update when it differs.",
 			"When remote and desired state are equal after metadata compare transforms, apply skips updates unless --force is set.",
 			"This explicit-input mode is useful for direct remote operations when no repository is configured.",
-			"Use --refresh-repository to fetch the remote state after each mutation and persist it back into the repository.",
+			"Use --refresh to fetch the remote state after each mutation and persist it back into the repository.",
 		}, " "),
 		Example: strings.Join([]string{
 			"  declarest resource apply /customers/acme",
@@ -35,7 +35,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			"  declarest resource apply /customers/acme --payload payload.json",
 			"  cat payload.json | declarest resource apply /customers/acme --payload -",
 			"  declarest resource apply /customers/acme --force",
-			"  declarest resource apply /customers/acme --refresh-repository",
+			"  declarest resource apply /customers/acme --refresh",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -85,7 +85,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 				Force:            force,
 				Value:            value,
 				HasExplicitInput: hasExplicitInput,
-				RefreshLocal:     refreshRepository,
+				RefreshLocal:     refresh,
 			})
 			if err != nil {
 				return err
@@ -113,7 +113,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 	}
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "walk collection recursively")
 	command.Flags().BoolVar(&force, "force", false, "force update even when compare output has no drift")
-	command.Flags().BoolVar(&refreshRepository, "refresh-repository", false, "re-fetch remote mutation results into the repository")
+	command.Flags().BoolVar(&refresh, "refresh", false, "re-fetch remote mutation results into the repository")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command
 }

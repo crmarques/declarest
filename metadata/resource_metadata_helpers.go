@@ -7,28 +7,28 @@ import (
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
-		IDFromAttribute:        value.IDFromAttribute,
-		AliasFromAttribute:     value.AliasFromAttribute,
+		IDAttribute:            value.IDAttribute,
+		AliasAttribute:         value.AliasAttribute,
 		CollectionPath:         value.CollectionPath,
 		PayloadType:            value.PayloadType,
 		Secret:                 cloneBoolPointer(value.Secret),
-		SecretsFromAttributes:  cloneStringSlice(value.SecretsFromAttributes),
+		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
 		Operations:             make(map[string]OperationSpec, len(value.Operations)),
-		PayloadMutation:        clonePayloadMutationSteps(value.PayloadMutation),
+		Transforms:             cloneTransformSteps(value.Transforms),
 	}
 
 	for key, operationSpec := range value.Operations {
 		cloned.Operations[key] = OperationSpec{
-			Method:          operationSpec.Method,
-			Path:            operationSpec.Path,
-			Query:           maps.Clone(operationSpec.Query),
-			Headers:         maps.Clone(operationSpec.Headers),
-			Accept:          operationSpec.Accept,
-			ContentType:     operationSpec.ContentType,
-			Body:            operationSpec.Body,
-			PayloadMutation: clonePayloadMutationSteps(operationSpec.PayloadMutation),
-			Validate:        cloneOperationValidationSpec(operationSpec.Validate),
+			Method:      operationSpec.Method,
+			Path:        operationSpec.Path,
+			Query:       maps.Clone(operationSpec.Query),
+			Headers:     maps.Clone(operationSpec.Headers),
+			Accept:      operationSpec.Accept,
+			ContentType: operationSpec.ContentType,
+			Body:        operationSpec.Body,
+			Transforms:  cloneTransformSteps(operationSpec.Transforms),
+			Validate:    cloneOperationValidationSpec(operationSpec.Validate),
 		}
 	}
 
@@ -37,22 +37,22 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 
 func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) ResourceMetadata {
 	merged := ResourceMetadata{
-		IDFromAttribute:        base.IDFromAttribute,
-		AliasFromAttribute:     base.AliasFromAttribute,
+		IDAttribute:            base.IDAttribute,
+		AliasAttribute:         base.AliasAttribute,
 		CollectionPath:         base.CollectionPath,
 		PayloadType:            base.PayloadType,
 		Secret:                 cloneBoolPointer(base.Secret),
-		SecretsFromAttributes:  cloneStringSlice(base.SecretsFromAttributes),
+		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
 		Operations:             cloneOperationMap(base.Operations),
-		PayloadMutation:        clonePayloadMutationSteps(base.PayloadMutation),
+		Transforms:             cloneTransformSteps(base.Transforms),
 	}
 
-	if overlay.IDFromAttribute != "" {
-		merged.IDFromAttribute = overlay.IDFromAttribute
+	if overlay.IDAttribute != "" {
+		merged.IDAttribute = overlay.IDAttribute
 	}
-	if overlay.AliasFromAttribute != "" {
-		merged.AliasFromAttribute = overlay.AliasFromAttribute
+	if overlay.AliasAttribute != "" {
+		merged.AliasAttribute = overlay.AliasAttribute
 	}
 	if overlay.CollectionPath != "" {
 		merged.CollectionPath = overlay.CollectionPath
@@ -63,8 +63,8 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	if overlay.Secret != nil {
 		merged.Secret = cloneBoolPointer(overlay.Secret)
 	}
-	if overlay.SecretsFromAttributes != nil {
-		merged.SecretsFromAttributes = cloneStringSlice(overlay.SecretsFromAttributes)
+	if overlay.SecretAttributes != nil {
+		merged.SecretAttributes = cloneStringSlice(overlay.SecretAttributes)
 	}
 	if overlay.ExternalizedAttributes != nil {
 		merged.ExternalizedAttributes = cloneExternalizedAttributes(overlay.ExternalizedAttributes)
@@ -78,8 +78,8 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 			merged.Operations[key] = MergeOperationSpec(merged.Operations[key], overlay.Operations[key])
 		}
 	}
-	if overlay.PayloadMutation != nil {
-		merged.PayloadMutation = clonePayloadMutationSteps(overlay.PayloadMutation)
+	if overlay.Transforms != nil {
+		merged.Transforms = cloneTransformSteps(overlay.Transforms)
 	}
 
 	return merged
@@ -116,15 +116,15 @@ func cloneBoolPointer(value *bool) *bool {
 
 func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec {
 	merged := OperationSpec{
-		Method:          base.Method,
-		Path:            base.Path,
-		Query:           maps.Clone(base.Query),
-		Headers:         maps.Clone(base.Headers),
-		Accept:          base.Accept,
-		ContentType:     base.ContentType,
-		Body:            base.Body,
-		PayloadMutation: clonePayloadMutationSteps(base.PayloadMutation),
-		Validate:        cloneOperationValidationSpec(base.Validate),
+		Method:      base.Method,
+		Path:        base.Path,
+		Query:       maps.Clone(base.Query),
+		Headers:     maps.Clone(base.Headers),
+		Accept:      base.Accept,
+		ContentType: base.ContentType,
+		Body:        base.Body,
+		Transforms:  cloneTransformSteps(base.Transforms),
+		Validate:    cloneOperationValidationSpec(base.Validate),
 	}
 
 	if overlay.Method != "" {
@@ -168,8 +168,8 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 	if overlay.Body != nil {
 		merged.Body = overlay.Body
 	}
-	if overlay.PayloadMutation != nil {
-		merged.PayloadMutation = clonePayloadMutationSteps(overlay.PayloadMutation)
+	if overlay.Transforms != nil {
+		merged.Transforms = cloneTransformSteps(overlay.Transforms)
 	}
 	merged.Validate = mergeOperationValidationSpec(merged.Validate, overlay.Validate)
 
@@ -193,15 +193,15 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 	cloned := make(map[string]OperationSpec, len(values))
 	for key, value := range values {
 		cloned[key] = OperationSpec{
-			Method:          value.Method,
-			Path:            value.Path,
-			Query:           maps.Clone(value.Query),
-			Headers:         maps.Clone(value.Headers),
-			Accept:          value.Accept,
-			ContentType:     value.ContentType,
-			Body:            value.Body,
-			PayloadMutation: clonePayloadMutationSteps(value.PayloadMutation),
-			Validate:        cloneOperationValidationSpec(value.Validate),
+			Method:      value.Method,
+			Path:        value.Path,
+			Query:       maps.Clone(value.Query),
+			Headers:     maps.Clone(value.Headers),
+			Accept:      value.Accept,
+			ContentType: value.ContentType,
+			Body:        value.Body,
+			Transforms:  cloneTransformSteps(value.Transforms),
+			Validate:    cloneOperationValidationSpec(value.Validate),
 		}
 	}
 	return cloned

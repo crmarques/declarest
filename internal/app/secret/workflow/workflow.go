@@ -45,7 +45,7 @@ func ResolveDeclaredAttributes(
 	if err != nil {
 		return nil, err
 	}
-	return DedupeAndSortAttributes(resolvedMetadata.SecretsFromAttributes), nil
+	return DedupeAndSortAttributes(resolvedMetadata.SecretAttributes), nil
 }
 
 func DedupeAndSortAttributes(values []string) []string {
@@ -223,8 +223,8 @@ func PersistDetectedAttributes(
 		currentMetadata = metadatadomain.ResourceMetadata{}
 	}
 
-	currentMetadata.SecretsFromAttributes = MergeAttributes(
-		currentMetadata.SecretsFromAttributes,
+	currentMetadata.SecretAttributes = MergeAttributes(
+		currentMetadata.SecretAttributes,
 		detected,
 	)
 

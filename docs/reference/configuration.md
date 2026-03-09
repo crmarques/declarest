@@ -2,7 +2,7 @@
 
 This page documents the user-facing context catalog schema used by DeclaREST.
 
-Use `declarest config print-template` to generate the full commented template, and use `declarest config validate` before importing changes.
+Use `declarest context print-template` to generate the full commented template, and use `declarest context validate` before importing changes.
 
 ## Quick facts
 
@@ -10,7 +10,7 @@ Use `declarest config print-template` to generate the full commented template, a
 - Override catalog path with `DECLAREST_CONTEXTS_FILE`
 - YAML keys use `kebab-case`
 - Unknown keys fail validation (strict decode)
-- `managed-server` (managed server settings) is required in every context
+- `managedServer` (managed server settings) is required in every context
 
 ## Top-level catalog shape
 
@@ -19,22 +19,22 @@ contexts:
   - name: prod
     repository:
       filesystem:
-        base-dir: /srv/declarest/prod
+        baseDir: /srv/declarest/prod
     managed-server:
       http:
-        base-url: https://api.example.com
+        baseURL: https://api.example.com
         auth:
-          custom-headers:
+          customHeaders:
             - header: Authorization
               prefix: Bearer
               value: ${API_TOKEN}
-current-ctx: prod
+currentContext: prod
 ```
 
 Top-level fields:
 
 - `contexts`: list of context objects
-- `current-ctx`: active context name
+- `currentContext`: active context name
 
 ## Context object (high level)
 
@@ -42,8 +42,8 @@ Each context may include:
 
 - `name` (required)
 - `repository` (required)
-- `managed-server` (required managed server settings)
-- `secret-store` (optional)
+- `managedServer` (required managed server settings)
+- `secretStore` (optional)
 - `metadata` (optional)
 - `preferences` (optional free-form map)
 
@@ -61,7 +61,7 @@ Exactly one of these must be present:
 ```yaml
 repository:
   filesystem:
-    base-dir: /work/declarest/repo
+    baseDir: /work/declarest/repo
 ```
 
 ### Git repository (local only)
@@ -70,7 +70,7 @@ repository:
 repository:
   git:
     local:
-      base-dir: /work/declarest/repo
+      baseDir: /work/declarest/repo
 ```
 
 ### Git repository with remote
@@ -79,33 +79,33 @@ repository:
 repository:
   git:
     local:
-      base-dir: /work/declarest/repo
+      baseDir: /work/declarest/repo
     remote:
       url: https://github.com/example/config-repo.git
       branch: main
       provider: github
-      auto-sync: true
+      autoSync: true
       auth:
         access-key:
           token: ${GIT_TOKEN}
       tls:
-        insecure-skip-verify: false
+        insecureSkipVerify: false
 ```
 
 #### `repository.git.remote.auth` (one-of)
 
 Exactly one auth method when `auth` is present:
 
-- `basic-auth`
+- `basicAuth`
 - `ssh`
 - `access-key`
 
 Examples:
 
 ```yaml
-# basic-auth
+# basicAuth
 auth:
-  basic-auth:
+  basicAuth:
     username: git-user
     password: ${GIT_PASSWORD}
 ```
@@ -115,7 +115,7 @@ auth:
 auth:
   ssh:
     user: git
-    private-key-file: /home/me/.ssh/id_rsa
+    privateKeyFile: /home/me/.ssh/id_rsa
     known-hosts-file: /home/me/.ssh/known_hosts
 ```
 
@@ -130,10 +130,10 @@ auth:
 
 ```yaml
 tls:
-  ca-cert-file: /path/to/ca.pem
+  caCertFile: /path/to/ca.pem
   client-cert-file: /path/to/client.pem
-  client-key-file: /path/to/client-key.pem
-  insecure-skip-verify: false
+  clientKeyFile: /path/to/client-key.pem
+  insecureSkipVerify: false
 ```
 
 #### Git remote proxy (optional)
@@ -143,51 +143,51 @@ repository:
   git:
     remote:
       proxy:
-        http-url: http://proxy.example.com:3128
-        https-url: http://proxy.example.com:3128
+        httpURL: http://proxy.example.com:3128
+        httpsURL: http://proxy.example.com:3128
         no-proxy: localhost,127.0.0.1
         auth:
           username: proxy-user
           password: proxy-pass
 ```
 
-`proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. When unset, the component inherits the first configured proxy from `managed-server.http.proxy`, `secret-store.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly skip the inherited proxy for this component.
+`proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. When unset, the component inherits the first configured proxy from `managedServer.http.proxy`, `secretStore.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly skip the inherited proxy for this component.
 
 Repository payload files are not configured in the context. DeclaREST persists `resource.<ext>` using the managed-server response media type or the explicit payload input media type.
 
-## Managed server configuration (`managed-server`)
+## Managed server configuration (`managedServer`)
 
 `managed-server.http` is required.
 
 ```yaml
 managed-server:
   http:
-    base-url: https://api.example.com
-    health-check: /health
+    baseURL: https://api.example.com
+    healthCheck: /health
     openapi: /path/to/openapi.yaml
     default-headers:
       X-Env: prod
     auth:
       oauth2:
-        token-url: https://auth.example.com/oauth/token
-        grant-type: client_credentials
-        client-id: declarest
-        client-secret: ${OAUTH_CLIENT_SECRET}
+        tokenURL: https://auth.example.com/oauth/token
+        grantType: client_credentials
+        clientID: declarest
+        clientSecret: ${OAUTH_CLIENT_SECRET}
     tls:
-      ca-cert-file: /path/to/ca.pem
+      caCertFile: /path/to/ca.pem
       client-cert-file: /path/to/client.pem
-      client-key-file: /path/to/client-key.pem
-      insecure-skip-verify: false
+      clientKeyFile: /path/to/client-key.pem
+      insecureSkipVerify: false
 ```
 
-Define any of the `managed-server.http.proxy`, `repository.git.remote.proxy`, `secret-store.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited proxy for that component.
+Define any of the `managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited proxy for that component.
 
-### Health check (`managed-server.http.health-check`)
+### Health check (`managedServer.http.healthCheck`)
 
-Optional probe target used by `declarest managed-server check`.
+Optional probe target used by `declarest server check`.
 
-- when omitted, `managed-server check` probes `/` relative to `managed-server.http.base-url`
-- relative values (for example `/health`) are resolved against `managed-server.http.base-url`
+- when omitted, `server check` probes `/` relative to `managedServer.http.baseURL`
+- relative values (for example `/health`) are resolved against `managedServer.http.baseURL`
 - absolute values (for example `https://api.example.com/health`) are allowed when scheme/host match the base URL
 - query parameters are not supported in this field
 
@@ -196,18 +196,18 @@ Optional probe target used by `declarest managed-server check`.
 Exactly one auth method must be configured:
 
 - `oauth2`
-- `basic-auth`
-- `custom-headers`
+- `basicAuth`
+- `customHeaders`
 
 #### OAuth2 example
 
 ```yaml
 auth:
   oauth2:
-    token-url: https://auth.example.com/oauth/token
-    grant-type: client_credentials
-    client-id: declarest
-    client-secret: ${OAUTH_CLIENT_SECRET}
+    tokenURL: https://auth.example.com/oauth/token
+    grantType: client_credentials
+    clientID: declarest
+    clientSecret: ${OAUTH_CLIENT_SECRET}
     # optional depending on flow/provider:
     # username: alice
     # password: secret
@@ -219,7 +219,7 @@ auth:
 
 ```yaml
 auth:
-  basic-auth:
+  basicAuth:
     username: alice
     password: ${API_PASSWORD}
 ```
@@ -228,7 +228,7 @@ auth:
 
 ```yaml
 auth:
-  custom-headers:
+  customHeaders:
     - header: Authorization
       prefix: Bearer
       value: ${API_TOKEN}
@@ -238,7 +238,7 @@ auth:
 
 Each entry requires `header` and `value`; `prefix` is optional. When set, DeclaREST sends `<prefix> <value>` in the configured header.
 
-### OpenAPI (`managed-server.http.openapi`)
+### OpenAPI (`managedServer.http.openapi`)
 
 Optional but recommended.
 
@@ -250,16 +250,16 @@ When configured, DeclaREST can:
 
 Explicit metadata overrides still win.
 
-When omitted, and `metadata.bundle` or `metadata.bundle-file` is configured, DeclaREST attempts OpenAPI fallback from the bundle:
+When omitted, and `metadata.bundle` or `metadata.bundleFile` is configured, DeclaREST attempts OpenAPI fallback from the bundle:
 
 - `bundle.yaml` `declarest.openapi` (URL or relative path inside the bundle)
 - bundled `openapi.yaml` at bundle root (peer of `bundle.yaml`)
 
-Precedence is deterministic: context `managed-server.http.openapi` overrides bundle-provided OpenAPI sources.
+Precedence is deterministic: context `managedServer.http.openapi` overrides bundle-provided OpenAPI sources.
 
-## Secret store configuration (`secret-store`, optional)
+## Secret store configuration (`secretStore`, optional)
 
-Exactly one provider when `secret-store` is configured:
+Exactly one provider when `secretStore` is configured:
 
 - `file`
 - `vault`
@@ -267,62 +267,62 @@ Exactly one provider when `secret-store` is configured:
 ### File secret store
 
 ```yaml
-secret-store:
+secretStore:
   file:
     path: /work/declarest/secrets.json
     passphrase: ${DECLAREST_SECRET_PASSPHRASE}
     # or exactly one of the following key sources instead of passphrase:
     # key: <base64-encoded-32-byte-key>
-    # key-file: /path/to/key.txt
-    # passphrase-file: /path/to/passphrase.txt
+    # keyFile: /path/to/key.txt
+    # passphraseFile: /path/to/passphrase.txt
     # kdf:
     #   time: 1
     #   memory: 65536
     #   threads: 4
 ```
 
-`secret-store.file` key source is also a one-of:
+`secretStore.file` key source is also a one-of:
 
 - `key`
-- `key-file`
+- `keyFile`
 - `passphrase`
-- `passphrase-file`
+- `passphraseFile`
 
 ### Vault secret store (KV)
 
 ```yaml
-secret-store:
+secretStore:
   vault:
     address: https://vault.example.com
     mount: secret
-    path-prefix: declarest
-    kv-version: 2
+    pathPrefix: declarest
+    kvVersion: 2
     auth:
       token: ${VAULT_TOKEN}
-      # or password / approle blocks
+      # or password / appRole blocks
     tls:
-      ca-cert-file: /path/to/ca.pem
+      caCertFile: /path/to/ca.pem
       client-cert-file: /path/to/client.pem
-      client-key-file: /path/to/client-key.pem
-      insecure-skip-verify: false
+      clientKeyFile: /path/to/client-key.pem
+      insecureSkipVerify: false
 ```
 
-Vault auth under `secret-store.vault.auth` is also one-of:
+Vault auth under `secretStore.vault.auth` is also one-of:
 
 - token (`token`)
 - password (`password` block)
-- approle (`approle` block)
+- appRole (`appRole` block)
 
-### `secret-store.vault.proxy` (optional)
+### `secretStore.vault.proxy` (optional)
 
 Configure Vault HTTP proxy settings when connecting to the secret store:
 
 ```yaml
-secret-store:
+secretStore:
   vault:
     proxy:
-      http-url: http://proxy.example.com:3128
-      https-url: http://proxy.example.com:3128
+      httpURL: http://proxy.example.com:3128
+      httpsURL: http://proxy.example.com:3128
       no-proxy: localhost
       auth:
         username: proxy-user
@@ -338,29 +338,29 @@ Choose at most one metadata source:
 ```yaml
 metadata:
   # local metadata tree
-  # base-dir: /path/to/metadata
+  # baseDir: /path/to/metadata
   #
   # or bundle reference (shorthand or URL)
   # bundle: keycloak-bundle:{{ declarest_version() }}
   # bundle: https://github.com/crmarques/declarest-bundle-keycloak/releases/download/{{ declarest_tag() }}/keycloak-bundle-{{ declarest_version() }}.tar.gz
   #
   # or local bundle archive
-  # bundle-file: /path/to/keycloak-bundle-{{ declarest_version() }}.tar.gz
+  # bundleFile: /path/to/keycloak-bundle-{{ declarest_version() }}.tar.gz
 ```
 
-When all metadata sources are omitted, `metadata.base-dir` defaults to the selected repository base dir.
+When all metadata sources are omitted, `metadata.baseDir` defaults to the selected repository base dir.
 
-Use `metadata.base-dir` when you want metadata files stored separately from resource payload files.
+Use `metadata.baseDir` when you want metadata files stored separately from resource payload files.
 Use `metadata.bundle` when you want metadata definitions to be consumed from a shorthand or URL bundle reference.
-Use `metadata.bundle-file` when you want metadata definitions to be consumed from a local bundle archive file.
+Use `metadata.bundleFile` when you want metadata definitions to be consumed from a local bundle archive file.
 
 ### `metadata.proxy` (optional)
 
 ```yaml
 metadata:
   proxy:
-    http-url: http://proxy.example.com:3128
-    https-url: http://proxy.example.com:3128
+    httpURL: http://proxy.example.com:3128
+    httpsURL: http://proxy.example.com:3128
     no-proxy: localhost,127.0.0.1
     auth:
       username: proxy-user
@@ -369,7 +369,7 @@ metadata:
 
 `metadata.proxy` configures the HTTP proxy used when downloading metadata bundles. It follows the same inheritance rules as other proxy blocks, and an empty `proxy:` block disables any inherited proxy for metadata.
 
-Bundle OpenAPI hints (when present) can also supply `managed-server.http.openapi` automatically if context OpenAPI is not set.
+Bundle OpenAPI hints (when present) can also supply `managedServer.http.openapi` automatically if context OpenAPI is not set.
 
 ## Preferences (optional)
 
@@ -392,63 +392,63 @@ contexts:
     repository:
       git:
         local:
-          base-dir: /srv/declarest/keycloak-prod
+          baseDir: /srv/declarest/keycloak-prod
         remote:
           url: git@github.com:acme/keycloak-config.git
           branch: main
           provider: github
-          auto-sync: true
+          autoSync: true
           auth:
             ssh:
               user: git
-              private-key-file: /home/declarest/.ssh/id_ed25519
+              privateKeyFile: /home/declarest/.ssh/id_ed25519
               known-hosts-file: /home/declarest/.ssh/known_hosts
     managed-server:
       http:
-        base-url: https://sso.example.com/admin
+        baseURL: https://sso.example.com/admin
         openapi: /srv/declarest/openapi/keycloak-admin.json
         auth:
           oauth2:
-            token-url: https://sso.example.com/realms/master/protocol/openid-connect/token
-            grant-type: client_credentials
-            client-id: declarest
-            client-secret: ${KEYCLOAK_CLIENT_SECRET}
+            tokenURL: https://sso.example.com/realms/master/protocol/openid-connect/token
+            grantType: client_credentials
+            clientID: declarest
+            clientSecret: ${KEYCLOAK_CLIENT_SECRET}
         tls:
-          ca-cert-file: /etc/ssl/certs/internal-ca.pem
-    secret-store:
+          caCertFile: /etc/ssl/certs/internal-ca.pem
+    secretStore:
       vault:
         address: https://vault.example.com
         mount: secret
-        path-prefix: declarest/keycloak-prod
-        kv-version: 2
+        pathPrefix: declarest/keycloak-prod
+        kvVersion: 2
         auth:
-          approle:
-            role-id: ${VAULT_ROLE_ID}
-            secret-id: ${VAULT_SECRET_ID}
-            mount: approle
+          appRole:
+            roleID: ${VAULT_ROLE_ID}
+            secretID: ${VAULT_SECRET_ID}
+            mount: appRole
     metadata:
-      base-dir: /srv/declarest/keycloak-metadata
+      baseDir: /srv/declarest/keycloak-metadata
     preferences:
       env: prod
       service: keycloak
 
-current-ctx: keycloak-prod
+currentContext: keycloak-prod
 ```
 
 ## Validation and editing workflow
 
 ```bash
 # generate a commented template
-declarest config print-template > /tmp/contexts.yaml
+declarest context print-template > /tmp/contexts.yaml
 
 # validate before import
-declarest config validate --payload /tmp/contexts.yaml
+declarest context validate --payload /tmp/contexts.yaml
 
 # import and set current
-declarest config add --payload /tmp/contexts.yaml --set-current
+declarest context add --payload /tmp/contexts.yaml --set-current
 
 # inspect resolved context
-declarest config resolve
+declarest context resolve
 ```
 
 ## Runtime override precedence
@@ -460,23 +460,23 @@ Effective config precedence is:
 3. persisted context values
 4. engine defaults
 
-### `config resolve --set` overrides (supported keys)
+### `context resolve --set` overrides (supported keys)
 
 The canonical override keys are:
 
-- `repository.git.local.base-dir`
-- `repository.filesystem.base-dir`
-- `managed-server.http.base-url`
-- `managed-server.http.health-check`
-- `metadata.base-dir`
+- `repository.git.local.baseDir`
+- `repository.filesystem.baseDir`
+- `managedServer.http.baseURL`
+- `managedServer.http.healthCheck`
+- `metadata.baseDir`
 - `metadata.bundle`
-- `metadata.bundle-file`
+- `metadata.bundleFile`
 
 Example:
 
 ```bash
-declarest config resolve \
-  --set managed-server.http.base-url=https://staging-api.example.com \
+declarest context resolve \
+  --set managedServer.http.baseURL=https://staging-api.example.com \
   --set metadata.bundle=keycloak-bundle:{{ declarest_version() }}
 ```
 
@@ -490,16 +490,16 @@ Example:
 
 ```bash
 export DECLAREST_CONTEXTS_FILE=/work/declarest/configs/contexts.yaml
-declarest config list
+declarest context list
 ```
 
 ## Failure modes to expect (and validate early)
 
 - both `repository.git` and `repository.filesystem` set
-- missing `managed-server`
+- missing `managedServer`
 - missing/ambiguous `managed-server.http.auth` method
-- invalid `managed-server.http.health-check` (query parameters or unsupported URL form)
+- invalid `managedServer.http.healthCheck` (query parameters or unsupported URL form)
 - unknown YAML key (strict decoding)
-- `current-ctx` points to a non-existent context name
-- invalid secret-store one-of configuration
-- multiple metadata sources set in the same context (`metadata.base-dir`, `metadata.bundle`, `metadata.bundle-file`)
+- `currentContext` points to a non-existent context name
+- invalid secretStore one-of configuration
+- multiple metadata sources set in the same context (`metadata.baseDir`, `metadata.bundle`, `metadata.bundleFile`)

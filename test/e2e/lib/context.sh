@@ -17,7 +17,7 @@ e2e_context_build() {
     sed 's/^/    /' "${fragment}" >>"${context_file}"
   done < <(find "${E2E_CONTEXT_DIR}" -type f -name '*.yaml' | sort)
 
-  printf 'currentCtx: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
+  printf 'currentContext: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
   e2e_context_insert_managed_server_openapi "${context_file}"
   e2e_context_insert_managed_server_proxy "${context_file}"
 }
@@ -86,7 +86,7 @@ for idx, line in enumerate(lines):
         has_openapi = True
         break
 
-    if stripped.startswith('baseUrl:'):
+    if stripped.startswith('baseURL:'):
         base_url_idx = idx
 
 if has_openapi or base_url_idx is None:
@@ -204,7 +204,7 @@ for idx, line in enumerate(lines):
         if stripped.startswith("proxy:"):
             has_proxy = True
             break
-        if stripped.startswith("baseUrl:") or stripped.startswith("openapi:"):
+        if stripped.startswith("baseURL:") or stripped.startswith("openapi:"):
             insert_idx = idx + 1
         continue
 
@@ -218,9 +218,9 @@ auth_field_indent = nested_indent + 2
 
 block = [" " * proxy_indent + "proxy:"]
 if http_url:
-    block.append(" " * nested_indent + f"httpUrl: {y(http_url)}")
+    block.append(" " * nested_indent + f"httpURL: {y(http_url)}")
 if https_url:
-    block.append(" " * nested_indent + f"httpsUrl: {y(https_url)}")
+    block.append(" " * nested_indent + f"httpsURL: {y(https_url)}")
 if no_proxy:
     block.append(" " * nested_indent + f"noProxy: {y(no_proxy)}")
 if auth_username or auth_password:

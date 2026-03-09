@@ -12,7 +12,7 @@ import (
 
 func (r *Orchestrator) executeRemoteMutation(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 	operation metadata.Operation,
 ) (resource.Resource, error) {
@@ -24,9 +24,9 @@ func (r *Orchestrator) executeRemoteMutation(
 	var remotePayload resource.Content
 	switch operation {
 	case metadata.OperationCreate:
-		remotePayload, err = serverManager.Create(ctx, resourceInfo, md)
+		remotePayload, err = serverManager.Create(ctx, resolvedResource, md)
 	case metadata.OperationUpdate:
-		remotePayload, err = serverManager.Update(ctx, resourceInfo, md)
+		remotePayload, err = serverManager.Update(ctx, resolvedResource, md)
 	default:
 		return resource.Resource{}, faults.NewTypedError(
 			faults.ValidationError,
@@ -38,8 +38,8 @@ func (r *Orchestrator) executeRemoteMutation(
 		return resource.Resource{}, err
 	}
 
-	payload := resourceInfo.Payload
-	descriptor := resourceInfo.PayloadDescriptor
+	payload := resolvedResource.Payload
+	descriptor := resolvedResource.PayloadDescriptor
 	if remotePayload.Value != nil {
 		payload = remotePayload.Value
 		descriptor = remotePayload.Descriptor
@@ -49,9 +49,9 @@ func (r *Orchestrator) executeRemoteMutation(
 		return resource.Resource{}, err
 	}
 
-	resourceInfo.Payload = normalizedPayload
-	resourceInfo.PayloadDescriptor = descriptor
-	return resourceInfo, nil
+	resolvedResource.Payload = normalizedPayload
+	resolvedResource.PayloadDescriptor = descriptor
+	return resolvedResource, nil
 }
 
 func (r *Orchestrator) resolvePayloadForRemote(

@@ -16,7 +16,7 @@ import (
 func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
-	var skipItemsFlag string
+	var excludeItemsFlag []string
 	var showSecrets bool
 	var showMetadata bool
 	var httpMethod string
@@ -27,7 +27,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 		Example: strings.Join([]string{
 			"  declarest resource get /customers/acme",
 			"  declarest resource get --source repository /customers/acme",
-			"  declarest resource get /admin/realms --skip-items master,realm1",
+			"  declarest resource get /admin/realms --exclude master --exclude realm1",
 			"  declarest resource get /customers/acme --show-metadata",
 			"  declarest resource get /customers/acme --show-secrets",
 		}, "\n"),
@@ -47,7 +47,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			if err != nil {
 				return err
 			}
-			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
+			excludeItems, err := parseExcludeFlag(command, excludeItemsFlag)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			}, readapp.Request{
 				LogicalPath:              resolvedPath,
 				Source:                   source,
-				SkipItems:                skipItems,
+				SkipItems:                excludeItems,
 				ExplicitCollectionTarget: readapp.HasCollectionTargetMarker(requestedPath),
 				ShowSecrets:              showSecrets,
 				ShowMetadata:             showMetadata,
@@ -115,7 +115,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
-	bindSkipItemsFlag(command, &skipItemsFlag)
+	bindExcludeFlag(command, &excludeItemsFlag)
 	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "reveal masked secret values (both attribute-level and whole-resource secrets)")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")
 	bindHTTPMethodFlag(command, &httpMethod)

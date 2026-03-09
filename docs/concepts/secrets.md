@@ -4,7 +4,7 @@ DeclaREST keeps sensitive values out of repository payload files by using metada
 
 ## How the model works
 
-1. Metadata declares which attributes are secrets (`resourceInfo.secretInAttributes`).
+1. Metadata declares which attributes are secrets (`resource.secretAttributes`).
 2. Resource payload files store placeholders instead of plaintext.
 3. Secret values are stored in a configured secret store (file or Vault).
 4. Remote workflows resolve placeholders before sending requests.
@@ -15,8 +15,8 @@ Example metadata:
 
 ```json
 {
-  "resourceInfo": {
-    "secretInAttributes": [
+  "resource": {
+    "secretAttributes": [
       "credentials.password",
       "config.bindCredential[0]"
     ]
@@ -30,8 +30,8 @@ Attribute paths use dot notation and optional array indexes.
 
 Supported forms:
 
-- `{{secret .}}` -> uses the attribute path as the key suffix
-- `{{secret custom-key}}` -> uses a custom key suffix
+- {% raw %}`{{secret .}}`{% endraw %} -> uses the attribute path as the key suffix
+- {% raw %}`{{secret custom-key}}`{% endraw %} -> uses a custom key suffix
 
 Secrets are scoped by logical path, so the effective key is path-aware.
 
@@ -40,14 +40,14 @@ Secrets are scoped by logical path, so the effective key is path-aware.
 When importing from a remote API, let DeclaREST detect/store/mask secrets during save:
 
 ```bash
-declarest resource save /corporations/acme --handle-secrets
+declarest resource save /corporations/acme --secret-attributes
 ```
 
 Options:
 
-- `--handle-secrets` (all detected secret candidates)
-- `--handle-secrets=attr1,attr2` (selected attributes)
-- `--ignore` (bypass plaintext-secret guard; use carefully)
+- `--secret-attributes` (all detected secret candidates)
+- `--secret-attributes attr1,attr2` (selected attributes)
+- `--allow-plaintext` (bypass plaintext-secret guard; use carefully)
 
 ## Detecting and fixing secret metadata on existing repositories
 
@@ -85,7 +85,7 @@ See [Configuration reference](../reference/configuration.md) for setup details.
 
 ## Operational tips
 
-- Keep `secretInAttributes` defined at the widest safe metadata scope.
-- Prefer `{{secret .}}` unless you need a stable custom key name.
+- Keep `secretAttributes` defined at the widest safe metadata scope.
+- Prefer {% raw %}`{{secret .}}`{% endraw %} unless you need a stable custom key name.
 - Use `resource get --show-secrets` only when you explicitly need plaintext output.
-- Do not commit plaintext secrets with `--ignore` except for throwaway local testing.
+- Do not commit plaintext secrets with `--allow-plaintext` except for throwaway local testing.

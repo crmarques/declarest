@@ -153,12 +153,12 @@ func (r *Orchestrator) retryRequestNotFoundWithMetadata(
 		value, err := r.GetRemote(ctx, requestSpec.Path)
 		return value, true, err
 	case "DELETE":
-		resourceInfo, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
+		resolvedResource, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
 		if err != nil {
 			return resource.Content{}, true, err
 		}
 
-		remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+		remoteValue, err := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 		if err != nil {
 			return resource.Content{}, true, err
 		}
@@ -167,21 +167,21 @@ func (r *Orchestrator) retryRequestNotFoundWithMetadata(
 		if err != nil {
 			return resource.Content{}, true, err
 		}
-		resourceInfo.Payload = normalizedPayload
-		resourceInfo.PayloadDescriptor = remoteValue.Descriptor
+		resolvedResource.Payload = normalizedPayload
+		resolvedResource.PayloadDescriptor = remoteValue.Descriptor
 
 		localAlias, remoteID, err := resolveResourceIdentity(
-			resourceInfo.LogicalPath,
+			resolvedResource.LogicalPath,
 			resourceMd,
 			normalizedPayload,
 		)
 		if err != nil {
 			return resource.Content{}, true, err
 		}
-		resourceInfo.LocalAlias = localAlias
-		resourceInfo.RemoteID = remoteID
+		resolvedResource.LocalAlias = localAlias
+		resolvedResource.RemoteID = remoteID
 
-		spec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationDelete, resourceInfo.Payload)
+		spec, err := r.renderOperationSpec(ctx, resolvedResource, resourceMd, metadata.OperationDelete, resolvedResource.Payload)
 		if err != nil {
 			return resource.Content{}, true, err
 		}
@@ -208,19 +208,19 @@ func (r *Orchestrator) resolveRequestSpec(
 		return resolved, ctx, nil
 	}
 
-	resourceInfo, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
+	resolvedResource, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
 	if err != nil {
 		return managedserver.RequestSpec{}, ctx, err
 	}
 
-	if normalizedMethod == "GET" && shouldResolveRequestGetAsList(resourceInfo, resourceMd) {
+	if normalizedMethod == "GET" && shouldResolveRequestGetAsList(resolvedResource, resourceMd) {
 		operation = metadata.OperationList
 	}
 
 	// Collection-target operations should preserve the requested logical path as
 	// the default collection path when metadata does not override it.
 	if operation == metadata.OperationCreate || operation == metadata.OperationList {
-		resourceInfo.CollectionPath = resourceInfo.LogicalPath
+		resolvedResource.CollectionPath = resolvedResource.LogicalPath
 	}
 
 	if requestBodyPresent(requestSpec.Body) {
@@ -228,11 +228,11 @@ func (r *Orchestrator) resolveRequestSpec(
 		if normalizeErr != nil {
 			return managedserver.RequestSpec{}, ctx, normalizeErr
 		}
-		resourceInfo.Payload = normalizedBody
-		resourceInfo.PayloadDescriptor = requestSpec.Body.Descriptor
+		resolvedResource.Payload = normalizedBody
+		resolvedResource.PayloadDescriptor = requestSpec.Body.Descriptor
 	}
 
-	spec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, operation, resourceInfo.Payload)
+	spec, err := r.renderOperationSpec(ctx, resolvedResource, resourceMd, operation, resolvedResource.Payload)
 	if err != nil {
 		return managedserver.RequestSpec{}, ctx, err
 	}
@@ -243,12 +243,12 @@ func (r *Orchestrator) resolveRequestSpec(
 		ctx,
 		operation,
 		metadata.ResourceOperationSpecInput{
-			LogicalPath:    resourceInfo.LogicalPath,
-			CollectionPath: resourceInfo.CollectionPath,
-			LocalAlias:     resourceInfo.LocalAlias,
-			RemoteID:       resourceInfo.RemoteID,
+			LogicalPath:    resolvedResource.LogicalPath,
+			CollectionPath: resolvedResource.CollectionPath,
+			LocalAlias:     resolvedResource.LocalAlias,
+			RemoteID:       resolvedResource.RemoteID,
 			Metadata:       resourceMd,
-			Payload:        resourceInfo.Payload,
+			Payload:        resolvedResource.Payload,
 		},
 		spec.Validate,
 	)
@@ -271,7 +271,7 @@ func requestMetadataOperation(method string) (metadata.Operation, bool) {
 	}
 }
 
-func shouldResolveRequestGetAsList(resourceInfo resource.Resource, md metadata.ResourceMetadata) bool {
+func shouldResolveRequestGetAsList(resolvedResource resource.Resource, md metadata.ResourceMetadata) bool {
 	if strings.TrimSpace(md.CollectionPath) == "" {
 		return false
 	}
@@ -287,7 +287,7 @@ func shouldResolveRequestGetAsList(resourceInfo resource.Resource, md metadata.R
 		return false
 	}
 
-	logicalDepth := len(resource.SplitRawPathSegments(resourceInfo.LogicalPath))
+	logicalDepth := len(resource.SplitRawPathSegments(resolvedResource.LogicalPath))
 	if logicalDepth == 0 {
 		return false
 	}

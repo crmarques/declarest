@@ -67,6 +67,7 @@ Thumbs.db
 
 # mkdocs
 .docs
+docs/__pycache__/
 
 # E2E runtime artifacts
 test/e2e/.runs/

@@ -10,12 +10,12 @@ Metadata bridges the two.
 
 The main tools are:
 
-- `resourceInfo.collectionPath`
-- `operationsInfo.<operation>.path`
-- `operationsInfo.<operation>.httpMethod`
-- ordered `payloadMutation` steps (`jqExpression`, `selectAttributes`, `suppressAttributes`)
+- `resource.collectionPath`
+- `operations.<operation>.path`
+- `operations.<operation>.method`
+- ordered `transforms` steps (`jqExpression`, `selectAttributes`, `excludeAttributes`)
 
-## `resourceInfo.collectionPath`
+## `resource.collectionPath`
 
 `collectionPath` defines the real API collection endpoint for a logical collection.
 It can be templated.
@@ -24,10 +24,10 @@ Example:
 
 ```json
 {
-  "resourceInfo": {
-    "collectionPath": "/admin/realms/{{.realm}}/components",
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name"
+  "resource": {
+    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "idAttribute": "id",
+    "aliasAttribute": "name"
   }
 }
 ```
@@ -39,7 +39,7 @@ This lets a logical path like `/admin/realms/prod/user-registry/ldap-main` map t
 Operation `path` values can be relative to the rendered `collectionPath`:
 
 - `.` -> collection endpoint itself
-- `./{{.id}}` -> child resource under the collection
+- {% raw %}`./{{.id}}`{% endraw %} -> child resource under the collection
 - `./execution` -> nested sub-endpoint under the collection
 
 This keeps metadata readable and avoids repeating long API paths.
@@ -49,7 +49,7 @@ This keeps metadata readable and avoids repeating long API paths.
 When you omit an operation `path`, DeclaREST uses safe defaults:
 
 - `create` and `list`: `.`
-- `get`, `update`, `delete`, `compare`: `./{{.id}}`
+- `get`, `update`, `delete`, `compare`: {% raw %}`./{{.id}}`{% endraw %}
 
 That means you often only override paths for the operations that truly differ.
 
@@ -59,15 +59,15 @@ Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.yam
 
 ```json
 {
-  "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name",
-    "collectionPath": "/admin/realms/{{.realm}}/components",
-    "secretInAttributes": ["config.bindCredential[0]"]
+  "resource": {
+    "idAttribute": "id",
+    "aliasAttribute": "name",
+    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "secretAttributes": ["config.bindCredential[0]"]
   },
-  "operationsInfo": {
-    "listCollection": {
-      "payloadMutation": [
+  "operations": {
+    "list": {
+      "transforms": [
         { "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]" }
       ]
     }
@@ -91,7 +91,7 @@ Key patterns:
 - create uses `./execution` instead of the normal `.`
 - update uses `./` (API-specific behavior)
 - delete uses a different absolute endpoint and explicit `DELETE`
-- `payloadMutation` reshapes the request body
+- `transforms` reshapes the request body
 
 This is exactly the kind of API drift metadata is designed to absorb.
 
@@ -130,5 +130,5 @@ declarest resource explain /admin/realms/prod/user-registry/ldap-main
 - Use `collectionPath` to point at the real backend endpoint.
 - Prefer relative operation paths to minimize duplication.
 - Use list `jq` filters to split mixed-type endpoints into logical collections.
-- Use `payloadMutation` pipelines to adapt request/response schema drift.
+- Use `transforms` pipelines to adapt request/response schema drift.
 - Keep overrides minimal and layered; avoid copy-pasting full metadata blocks.

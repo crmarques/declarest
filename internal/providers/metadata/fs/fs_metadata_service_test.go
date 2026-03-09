@@ -21,7 +21,7 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 	ctx := context.Background()
 
 	resourceMetadata := metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"/credentials/authValue"},
+		SecretAttributes: []string{"/credentials/authValue"},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {Path: "/api/customers/{{.id}}"},
 		},
@@ -112,28 +112,28 @@ func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
 	ctx := context.Background()
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.json"), false, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/json-id",
-		AliasFromAttribute: "/json-alias",
+		IDAttribute:    "/json-id",
+		AliasAttribute: "/json-alias",
 	})
 
 	gotJSON, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get json metadata returned error: %v", err)
 	}
-	if gotJSON.IDFromAttribute != "/json-id" || gotJSON.AliasFromAttribute != "/json-alias" {
+	if gotJSON.IDAttribute != "/json-id" || gotJSON.AliasAttribute != "/json-alias" {
 		t.Fatalf("expected json metadata fallback, got %+v", gotJSON)
 	}
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.yaml"), true, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/yaml-id",
-		AliasFromAttribute: "/yaml-alias",
+		IDAttribute:    "/yaml-id",
+		AliasAttribute: "/yaml-alias",
 	})
 
 	gotYAML, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get yaml metadata returned error: %v", err)
 	}
-	if gotYAML.IDFromAttribute != "/yaml-id" || gotYAML.AliasFromAttribute != "/yaml-alias" {
+	if gotYAML.IDAttribute != "/yaml-id" || gotYAML.AliasAttribute != "/yaml-alias" {
 		t.Fatalf("expected yaml metadata to take precedence, got %+v", gotYAML)
 	}
 }
@@ -145,8 +145,8 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
-		PayloadMutation: []metadatadomain.PayloadMutationStep{
-			{SuppressAttributes: []string{"/root"}},
+		Transforms: []metadatadomain.TransformStep{
+			{ExcludeAttributes: []string{"/root"}},
 		},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
@@ -159,8 +159,8 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	})
 
 	mustSetMetadata(t, service, ctx, "/customers/*", metadatadomain.ResourceMetadata{
-		PayloadMutation: []metadatadomain.PayloadMutationStep{
-			{SuppressAttributes: []string{"/wild-1"}},
+		Transforms: []metadatadomain.TransformStep{
+			{ExcludeAttributes: []string{"/wild-1"}},
 		},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
@@ -184,7 +184,7 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	})
 
 	mustSetMetadata(t, service, ctx, "/customers/acme/_", metadatadomain.ResourceMetadata{
-		PayloadMutation: []metadatadomain.PayloadMutationStep{},
+		Transforms: []metadatadomain.TransformStep{},
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Headers: map[string]string{
@@ -211,8 +211,8 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
 
-	if len(resolved.PayloadMutation) != 0 {
-		t.Fatalf("expected literal array replacement to clear payloadMutation list, got %+v", resolved.PayloadMutation)
+	if len(resolved.Transforms) != 0 {
+		t.Fatalf("expected literal array replacement to clear transforms list, got %+v", resolved.Transforms)
 	}
 
 	headers := resolved.Operations[string(metadatadomain.OperationGet)].Headers
@@ -227,20 +227,20 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	}
 }
 
-func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
+func TestFSMetadataResolveForPathSecretAttributesLayering(t *testing.T) {
 	t.Parallel()
 
 	service := NewFSMetadataService(t.TempDir())
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/_", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"/credentials/rootSecret"},
+		SecretAttributes: []string{"/credentials/rootSecret"},
 	})
 	mustSetMetadata(t, service, ctx, "/customers/*", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"/credentials/wildcardSecret"},
+		SecretAttributes: []string{"/credentials/wildcardSecret"},
 	})
 	mustSetMetadata(t, service, ctx, "/customers/acme/_", metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"/credentials/literalSecret"},
+		SecretAttributes: []string{"/credentials/literalSecret"},
 	})
 
 	resolved, err := service.ResolveForPath(ctx, "/customers/acme")
@@ -248,8 +248,8 @@ func TestFSMetadataResolveForPathSecretsFromAttributesLayering(t *testing.T) {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
 	expected := []string{"/credentials/literalSecret"}
-	if !reflect.DeepEqual(expected, resolved.SecretsFromAttributes) {
-		t.Fatalf("expected literal layer to replace secret attributes, got %#v", resolved.SecretsFromAttributes)
+	if !reflect.DeepEqual(expected, resolved.SecretAttributes) {
+		t.Fatalf("expected literal layer to replace secret attributes, got %#v", resolved.SecretAttributes)
 	}
 }
 
@@ -261,12 +261,12 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/realm",
-		AliasFromAttribute: "/realm",
+		IDAttribute:    "/realm",
+		AliasAttribute: "/realm",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/clients", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/clientId",
+		IDAttribute:    "/id",
+		AliasAttribute: "/clientId",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCreate): {
 				Path: "/admin/realms/{{.realm}}/clients",
@@ -278,13 +278,13 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
-	if resolved.IDFromAttribute != "/id" {
-		t.Fatalf("expected clients idFromAttribute from intermediary placeholder metadata, got %q", resolved.IDFromAttribute)
+	if resolved.IDAttribute != "/id" {
+		t.Fatalf("expected clients idAttribute from intermediary placeholder metadata, got %q", resolved.IDAttribute)
 	}
-	if resolved.AliasFromAttribute != "/clientId" {
+	if resolved.AliasAttribute != "/clientId" {
 		t.Fatalf(
-			"expected clients aliasFromAttribute from intermediary placeholder metadata, got %q",
-			resolved.AliasFromAttribute,
+			"expected clients aliasAttribute from intermediary placeholder metadata, got %q",
+			resolved.AliasAttribute,
 		)
 	}
 	createPath := resolved.Operations[string(metadatadomain.OperationCreate)].Path
@@ -300,14 +300,14 @@ func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *tes
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/name",
-		CollectionPath:     "/admin/realms/{{.realm}}/components",
+		IDAttribute:    "/id",
+		AliasAttribute: "/name",
+		CollectionPath: "/admin/realms/{{.realm}}/components",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/name",
-		CollectionPath:     "/admin/realms/{{.realm}}/components",
+		IDAttribute:    "/id",
+		AliasAttribute: "/name",
+		CollectionPath: "/admin/realms/{{.realm}}/components",
 	})
 
 	children, err := service.ResolveCollectionChildren(
@@ -329,8 +329,8 @@ func TestFSMetadataHasCollectionWildcardChild(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/authentication/flows/_/executions/_", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/displayName",
+		IDAttribute:    "/id",
+		AliasAttribute: "/displayName",
 	})
 
 	ok, err := service.HasCollectionWildcardChild(
@@ -360,8 +360,8 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/slug",
+		IDAttribute:    "/id",
+		AliasAttribute: "/slug",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path: "/api{{.collectionPath}}/{{.alias}}/{{.remoteID}}",
@@ -396,8 +396,8 @@ func TestFSMetadataRenderOperationSpecSupportsCollectionPathIndirection(t *testi
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
-		IDFromAttribute: "/id",
-		CollectionPath:  "/admin/realms/{{.realm}}/components",
+		IDAttribute:    "/id",
+		CollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path: "./{{.id}}",
@@ -443,9 +443,9 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/id",
-		AliasFromAttribute: "/id",
-		PayloadType:        "yaml",
+		IDAttribute:    "/id",
+		AliasAttribute: "/id",
+		PayloadType:    "yaml",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path:   "/api/customers/{{.id}}",
@@ -496,28 +496,28 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 		{
 			name: "id_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:     "text",
-				IDFromAttribute: "/id",
+				PayloadType: "text",
+				IDAttribute: "/id",
 			},
-			want: "resourceInfo.idFromAttribute requires structured payload type (json, yaml)",
+			want: "resource.idAttribute requires structured payload type (json, yaml)",
 		},
 		{
 			name: "alias_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:        "text",
-				AliasFromAttribute: "/name",
+				PayloadType:    "text",
+				AliasAttribute: "/name",
 			},
-			want: "resourceInfo.aliasFromAttribute requires structured payload type (json, yaml)",
+			want: "resource.aliasAttribute requires structured payload type (json, yaml)",
 		},
 		{
 			name: "secret_in_attributes_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:           "text",
-				SecretsFromAttributes: []string{"/password"},
+				PayloadType:      "text",
+				SecretAttributes: []string{"/password"},
 			},
 			wantAll: []string{
-				"resourceInfo.secretInAttributes requires structured payload type (json, yaml)",
-				"resourceInfo.secret: true",
+				"resource.secretAttributes requires structured payload type (json, yaml)",
+				"resource.secret: true",
 			},
 		},
 		{
@@ -528,15 +528,15 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 					{Path: "/script", File: "script.sh"},
 				},
 			},
-			want: "resourceInfo.externalizedAttributes requires structured payload type (json, yaml)",
+			want: "resource.externalizedAttributes requires structured payload type (json, yaml)",
 		},
 		{
 			name: "whole_resource_secret_and_secret_attributes_are_mutually_exclusive",
 			meta: metadatadomain.ResourceMetadata{
-				Secret:                &wholeSecret,
-				SecretsFromAttributes: []string{"/password"},
+				Secret:           &wholeSecret,
+				SecretAttributes: []string{"/password"},
 			},
-			want: "resourceInfo.secret: true and resourceInfo.secretInAttributes are mutually exclusive",
+			want: "resource.secret: true and resource.secretAttributes are mutually exclusive",
 		},
 	}
 
@@ -569,9 +569,9 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
-		IDFromAttribute:       "/id",
-		AliasFromAttribute:    "/clientId",
-		SecretsFromAttributes: []string{"/secret"},
+		IDAttribute:      "/id",
+		AliasAttribute:   "/clientId",
+		SecretAttributes: []string{"/secret"},
 	}
 
 	if err := service.Set(ctx, "/admin/realms/_/clients/_", metadata); err != nil {
@@ -596,15 +596,15 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
-	resourceInfo, hasResourceInfo := decoded["resourceInfo"].(map[string]any)
+	resource, hasResourceInfo := decoded["resource"].(map[string]any)
 	if !hasResourceInfo {
-		t.Fatalf("expected resourceInfo object, got %#v", decoded["resourceInfo"])
+		t.Fatalf("expected resource object, got %#v", decoded["resource"])
 	}
-	if _, found := resourceInfo["secretInAttributes"]; !found {
-		t.Fatalf("expected secretInAttributes under resourceInfo, got %#v", resourceInfo)
+	if _, found := resource["secretAttributes"]; !found {
+		t.Fatalf("expected secretAttributes under resource, got %#v", resource)
 	}
-	if _, found := decoded["operationsInfo"]; found {
-		t.Fatalf("expected operationsInfo key to be omitted when nil, got %v", decoded["operationsInfo"])
+	if _, found := decoded["operations"]; found {
+		t.Fatalf("expected operations key to be omitted when nil, got %v", decoded["operations"])
 	}
 }
 
@@ -621,15 +621,15 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 				Path:    "/api/customers/{{.id}}",
 				Query:   map[string]string{},
 				Headers: map[string]string{},
-				PayloadMutation: []metadatadomain.PayloadMutationStep{
+				Transforms: []metadatadomain.TransformStep{
 					{SelectAttributes: []string{}},
-					{SuppressAttributes: []string{}},
+					{ExcludeAttributes: []string{}},
 				},
 			},
 		},
-		PayloadMutation: []metadatadomain.PayloadMutationStep{
+		Transforms: []metadatadomain.TransformStep{
 			{SelectAttributes: []string{}},
-			{SuppressAttributes: []string{}},
+			{ExcludeAttributes: []string{}},
 		},
 	}
 
@@ -648,26 +648,26 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 		t.Fatalf("failed to decode metadata file: %v", err)
 	}
 
-	operationsInfo, hasOperationsInfo := decoded["operationsInfo"].(map[string]any)
+	operations, hasOperationsInfo := decoded["operations"].(map[string]any)
 	if !hasOperationsInfo {
-		t.Fatalf("expected operationsInfo object, got %#v", decoded["operationsInfo"])
+		t.Fatalf("expected operations object, got %#v", decoded["operations"])
 	}
 
-	defaults, hasDefaults := operationsInfo["defaults"].(map[string]any)
+	defaults, hasDefaults := operations["defaults"].(map[string]any)
 	if !hasDefaults {
-		t.Fatalf("expected operationsInfo defaults object, got %#v", operationsInfo["defaults"])
+		t.Fatalf("expected operations defaults object, got %#v", operations["defaults"])
 	}
-	defaultPayload, hasDefaultPayload := defaults["payloadMutation"].([]any)
+	defaultPayload, hasDefaultPayload := defaults["transforms"].([]any)
 	if !hasDefaultPayload {
-		t.Fatalf("expected operationsInfo.defaults.payloadMutation array, got %#v", defaults["payloadMutation"])
+		t.Fatalf("expected operations.defaults.transforms array, got %#v", defaults["transforms"])
 	}
 
 	if len(defaultPayload) != 2 {
-		t.Fatalf("expected two default payloadMutation steps, got %#v", defaultPayload)
+		t.Fatalf("expected two default transforms steps, got %#v", defaultPayload)
 	}
 	filterStep, ok := defaultPayload[0].(map[string]any)
 	if !ok {
-		t.Fatalf("expected first payloadMutation step object, got %#v", defaultPayload[0])
+		t.Fatalf("expected first transforms step object, got %#v", defaultPayload[0])
 	}
 	filter, hasFilter := filterStep["selectAttributes"].([]any)
 	if !hasFilter || len(filter) != 0 {
@@ -675,36 +675,36 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	}
 	suppressStep, ok := defaultPayload[1].(map[string]any)
 	if !ok {
-		t.Fatalf("expected second payloadMutation step object, got %#v", defaultPayload[1])
+		t.Fatalf("expected second transforms step object, got %#v", defaultPayload[1])
 	}
-	suppress, hasSuppress := suppressStep["suppressAttributes"].([]any)
+	suppress, hasSuppress := suppressStep["excludeAttributes"].([]any)
 	if !hasSuppress || len(suppress) != 0 {
-		t.Fatalf("expected explicit empty suppress array, got %#v", suppressStep["suppressAttributes"])
+		t.Fatalf("expected explicit empty suppress array, got %#v", suppressStep["excludeAttributes"])
 	}
 
-	getSpec, hasGet := operationsInfo["getResource"].(map[string]any)
+	getSpec, hasGet := operations["get"].(map[string]any)
 	if !hasGet {
-		t.Fatalf("expected get operation metadata, got %#v", operationsInfo["getResource"])
+		t.Fatalf("expected get operation metadata, got %#v", operations["get"])
 	}
 
 	query, hasQuery := getSpec["query"].(map[string]any)
 	if !hasQuery || len(query) != 0 {
 		t.Fatalf("expected explicit empty query object, got %#v", getSpec["query"])
 	}
-	headers, hasHeaders := getSpec["httpHeaders"].([]any)
+	headers, hasHeaders := getSpec["headers"].(map[string]any)
 	if !hasHeaders || len(headers) != 0 {
-		t.Fatalf("expected explicit empty httpHeaders array, got %#v", getSpec["httpHeaders"])
+		t.Fatalf("expected explicit empty headers object, got %#v", getSpec["headers"])
 	}
-	payload, hasPayload := getSpec["payloadMutation"].([]any)
+	payload, hasPayload := getSpec["transforms"].([]any)
 	if !hasPayload {
-		t.Fatalf("expected get operation payloadMutation array, got %#v", getSpec["payloadMutation"])
+		t.Fatalf("expected get operation transforms array, got %#v", getSpec["transforms"])
 	}
 	if len(payload) != 2 {
-		t.Fatalf("expected two operation payloadMutation steps, got %#v", payload)
+		t.Fatalf("expected two operation transforms steps, got %#v", payload)
 	}
 	specFilterStep, ok := payload[0].(map[string]any)
 	if !ok {
-		t.Fatalf("expected first operation payloadMutation step object, got %#v", payload[0])
+		t.Fatalf("expected first operation transforms step object, got %#v", payload[0])
 	}
 	specFilter, hasSpecFilter := specFilterStep["selectAttributes"].([]any)
 	if !hasSpecFilter || len(specFilter) != 0 {
@@ -712,11 +712,11 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	}
 	specSuppressStep, ok := payload[1].(map[string]any)
 	if !ok {
-		t.Fatalf("expected second operation payloadMutation step object, got %#v", payload[1])
+		t.Fatalf("expected second operation transforms step object, got %#v", payload[1])
 	}
-	specSuppress, hasSpecSuppress := specSuppressStep["suppressAttributes"].([]any)
+	specSuppress, hasSpecSuppress := specSuppressStep["excludeAttributes"].([]any)
 	if !hasSpecSuppress || len(specSuppress) != 0 {
-		t.Fatalf("expected explicit empty operation suppress array, got %#v", specSuppressStep["suppressAttributes"])
+		t.Fatalf("expected explicit empty operation suppress array, got %#v", specSuppressStep["excludeAttributes"])
 	}
 }
 
@@ -729,13 +729,13 @@ func TestFSMetadataSetWritesYAMLAndRemovesExistingJSON(t *testing.T) {
 
 	jsonPath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
 	writeMetadataFixture(t, jsonPath, false, metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/legacy-id",
-		AliasFromAttribute: "/legacy-alias",
+		IDAttribute:    "/legacy-id",
+		AliasAttribute: "/legacy-alias",
 	})
 
 	updated := metadatadomain.ResourceMetadata{
-		IDFromAttribute:    "/yaml-id",
-		AliasFromAttribute: "/yaml-alias",
+		IDAttribute:    "/yaml-id",
+		AliasAttribute: "/yaml-alias",
 	}
 	if err := service.Set(ctx, "/customers/acme", updated); err != nil {
 		t.Fatalf("Set metadata returned error: %v", err)
@@ -763,11 +763,11 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	}
 
 	payload := `{
-  "resourceInfo": {
+  "resource": {
     "collectionPath": "/admin/realms/{{.realm}}/components"
   },
-  "operationsInfo": {
-    "getResource": {
+  "operations": {
+    "get": {
       "url": {
         "path": "./{{.id}}"
       }
@@ -780,7 +780,7 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 	}
 
 	if _, err := service.Get(ctx, "/admin/realms/_/user-registry"); err == nil {
-		t.Fatal("expected Get to reject operationsInfo.getResource.url.path")
+		t.Fatal("expected Get to reject operations.get.url.path")
 	}
 }
 

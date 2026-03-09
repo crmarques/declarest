@@ -8,21 +8,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type SecretStoreProvider string
+type SecretStoreVaultTokenAuth struct {
+	SecretRef *corev1.SecretKeySelector `json:"secretRef,omitempty"`
+}
 
-const (
-	SecretStoreProviderVault SecretStoreProvider = "vault"
-	SecretStoreProviderFile  SecretStoreProvider = "file"
-)
+type SecretStoreVaultUserpassAuth struct {
+	UsernameRef *corev1.SecretKeySelector `json:"usernameRef,omitempty"`
+	PasswordRef *corev1.SecretKeySelector `json:"passwordRef,omitempty"`
+	Mount       string                    `json:"mount,omitempty"`
+}
+
+type SecretStoreVaultAppRoleAuth struct {
+	RoleIDRef   *corev1.SecretKeySelector `json:"roleIDRef,omitempty"`
+	SecretIDRef *corev1.SecretKeySelector `json:"secretIDRef,omitempty"`
+	Mount       string                    `json:"mount,omitempty"`
+}
 
 type SecretStoreVaultAuth struct {
-	TokenRef           *corev1.SecretKeySelector `json:"tokenRef,omitempty"`
-	UsernameRef        *corev1.SecretKeySelector `json:"usernameRef,omitempty"`
-	PasswordRef        *corev1.SecretKeySelector `json:"passwordRef,omitempty"`
-	UserpassMount      string                    `json:"userpassMount,omitempty"`
-	AppRoleRoleIDRef   *corev1.SecretKeySelector `json:"appRoleRoleIDRef,omitempty"`
-	AppRoleSecretIDRef *corev1.SecretKeySelector `json:"appRoleSecretIDRef,omitempty"`
-	AppRoleMount       string                    `json:"appRoleMount,omitempty"`
+	Token    *SecretStoreVaultTokenAuth    `json:"token,omitempty"`
+	Userpass *SecretStoreVaultUserpassAuth `json:"userpass,omitempty"`
+	AppRole  *SecretStoreVaultAppRoleAuth  `json:"appRole,omitempty"`
 }
 
 type SecretStoreVaultSpec struct {
@@ -47,9 +52,8 @@ type SecretStoreFileSpec struct {
 }
 
 type SecretStoreSpec struct {
-	Provider SecretStoreProvider   `json:"provider"`
-	Vault    *SecretStoreVaultSpec `json:"vault,omitempty"`
-	File     *SecretStoreFileSpec  `json:"file,omitempty"`
+	Vault *SecretStoreVaultSpec `json:"vault,omitempty"`
+	File  *SecretStoreFileSpec  `json:"file,omitempty"`
 }
 
 type SecretStoreStatus struct {
@@ -60,8 +64,7 @@ type SecretStoreStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=ss
-// +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.provider"
+// +kubebuilder:resource:scope=Namespaced,shortName=sst
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
 type SecretStore struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -82,57 +85,55 @@ func (s *SecretStore) ValidateSpec() error {
 	if s == nil {
 		return fmt.Errorf("secret store is required")
 	}
-	if s.Spec.Provider != SecretStoreProviderVault && s.Spec.Provider != SecretStoreProviderFile {
-		return fmt.Errorf("spec.provider must be one of: vault, file")
+	hasVault := s.Spec.Vault != nil
+	hasFile := s.Spec.File != nil
+	if hasVault == hasFile {
+		return fmt.Errorf("spec must define exactly one of file or vault")
 	}
-	if s.Spec.Provider == SecretStoreProviderVault {
-		if s.Spec.Vault == nil {
-			return fmt.Errorf("spec.vault is required when provider=vault")
-		}
-		if s.Spec.File != nil {
-			return fmt.Errorf("spec.file must not be set when provider=vault")
-		}
-		if err := validateHTTPURL(s.Spec.Vault.Address, "spec.vault.address"); err != nil {
+
+	if hasVault {
+		vault := s.Spec.Vault
+		if err := validateHTTPURL(vault.Address, "spec.vault.address"); err != nil {
 			return err
 		}
-		hasToken := s.Spec.Vault.Auth.TokenRef != nil
-		hasUserPass := s.Spec.Vault.Auth.UsernameRef != nil || s.Spec.Vault.Auth.PasswordRef != nil
-		hasAppRole := s.Spec.Vault.Auth.AppRoleRoleIDRef != nil || s.Spec.Vault.Auth.AppRoleSecretIDRef != nil
+		hasToken := vault.Auth.Token != nil
+		hasUserPass := vault.Auth.Userpass != nil
+		hasAppRole := vault.Auth.AppRole != nil
 		if countTrue(hasToken, hasUserPass, hasAppRole) != 1 {
-			return fmt.Errorf("spec.vault.auth must define exactly one of tokenRef, username/password refs, or appRole refs")
+			return fmt.Errorf("spec.vault.auth must define exactly one of token, userpass, or appRole")
 		}
 		if hasToken {
-			if err := validateSecretRef(s.Spec.Vault.Auth.TokenRef, "spec.vault.auth.tokenRef"); err != nil {
+			if err := validateSecretRef(vault.Auth.Token.SecretRef, "spec.vault.auth.token.secretRef"); err != nil {
 				return err
 			}
 		}
 		if hasUserPass {
-			if err := validateSecretRef(s.Spec.Vault.Auth.UsernameRef, "spec.vault.auth.usernameRef"); err != nil {
+			if err := validateSecretRef(vault.Auth.Userpass.UsernameRef, "spec.vault.auth.userpass.usernameRef"); err != nil {
 				return err
 			}
-			if err := validateSecretRef(s.Spec.Vault.Auth.PasswordRef, "spec.vault.auth.passwordRef"); err != nil {
+			if err := validateSecretRef(vault.Auth.Userpass.PasswordRef, "spec.vault.auth.userpass.passwordRef"); err != nil {
 				return err
 			}
 		}
 		if hasAppRole {
-			if err := validateSecretRef(s.Spec.Vault.Auth.AppRoleRoleIDRef, "spec.vault.auth.appRoleRoleIDRef"); err != nil {
+			if err := validateSecretRef(vault.Auth.AppRole.RoleIDRef, "spec.vault.auth.appRole.roleIDRef"); err != nil {
 				return err
 			}
-			if err := validateSecretRef(s.Spec.Vault.Auth.AppRoleSecretIDRef, "spec.vault.auth.appRoleSecretIDRef"); err != nil {
+			if err := validateSecretRef(vault.Auth.AppRole.SecretIDRef, "spec.vault.auth.appRole.secretIDRef"); err != nil {
 				return err
 			}
 		}
-		if s.Spec.Vault.Proxy != nil {
-			hasHTTP := strings.TrimSpace(s.Spec.Vault.Proxy.HTTPURL) != ""
-			hasHTTPS := strings.TrimSpace(s.Spec.Vault.Proxy.HTTPSURL) != ""
+		if vault.Proxy != nil {
+			hasHTTP := strings.TrimSpace(vault.Proxy.HTTPURL) != ""
+			hasHTTPS := strings.TrimSpace(vault.Proxy.HTTPSURL) != ""
 			if !hasHTTP && !hasHTTPS {
 				return fmt.Errorf("spec.vault.proxy must define at least one of httpURL or httpsURL")
 			}
-			if s.Spec.Vault.Proxy.Auth != nil {
-				if err := validateSecretRef(s.Spec.Vault.Proxy.Auth.UsernameRef, "spec.vault.proxy.auth.usernameRef"); err != nil {
+			if vault.Proxy.Auth != nil {
+				if err := validateSecretRef(vault.Proxy.Auth.UsernameRef, "spec.vault.proxy.auth.usernameRef"); err != nil {
 					return err
 				}
-				if err := validateSecretRef(s.Spec.Vault.Proxy.Auth.PasswordRef, "spec.vault.proxy.auth.passwordRef"); err != nil {
+				if err := validateSecretRef(vault.Proxy.Auth.PasswordRef, "spec.vault.proxy.auth.passwordRef"); err != nil {
 					return err
 				}
 			}
@@ -140,12 +141,6 @@ func (s *SecretStore) ValidateSpec() error {
 		return nil
 	}
 
-	if s.Spec.File == nil {
-		return fmt.Errorf("spec.file is required when provider=file")
-	}
-	if s.Spec.Vault != nil {
-		return fmt.Errorf("spec.vault must not be set when provider=file")
-	}
 	if strings.TrimSpace(s.Spec.File.Path) == "" {
 		return fmt.Errorf("spec.file.path is required")
 	}

@@ -82,23 +82,23 @@ EOF
   if [[ "${metadata_extension}" == 'yaml' ]]; then
     if [[ "${include_identity_fields}" == 'true' ]]; then
       cat >"${metadata_file}" <<'EOF'
-resourceInfo:
-  idFromAttribute: id
-  aliasFromAttribute: name
+resource:
+  idAttribute: id
+  aliasAttribute: name
 EOF
     else
       cat >"${metadata_file}" <<'EOF'
-resourceInfo:
-  idFromAttribute: id
+resource:
+  idAttribute: id
 EOF
     fi
   elif [[ "${include_identity_fields}" == 'true' ]]; then
     cat >"${metadata_file}" <<'EOF'
-{"resourceInfo":{"idFromAttribute":"id","aliasFromAttribute":"name"}}
+{"resource":{"idAttribute":"id","aliasAttribute":"name"}}
 EOF
   else
     cat >"${metadata_file}" <<'EOF'
-{"resourceInfo":{"idFromAttribute":"id"}}
+{"resource":{"idAttribute":"id"}}
 EOF
   fi
   {
@@ -229,7 +229,7 @@ _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl()
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute"
+  assert_contains "${output}" "metadata fixture missing resource.idAttribute or resource.aliasAttribute"
 }
 
 test_managed_server_auth_type_defaults_prefer_oauth2() {

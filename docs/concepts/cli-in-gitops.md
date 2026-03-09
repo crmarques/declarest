@@ -20,7 +20,7 @@ After merge, Operator reconciliation updates real state.
 - Prefer small, path-scoped commits.
 - Always run `resource diff <path>` before push.
 - Use metadata compare suppression for noisy fields.
-- Use secret-safe flows (`resource save --handle-secrets`).
+- Use secret-safe flows (`resource save --secret-attributes`).
 - Avoid direct production API edits that bypass Git.
 
 ## CI usage patterns

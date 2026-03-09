@@ -96,7 +96,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 	input metadatadomain.ResourceOperationSpecInput,
 	operation metadatadomain.Operation,
 ) (metadatadomain.OperationSpec, error) {
-	resourceInfo := resource.Resource{
+	resolvedResource := resource.Resource{
 		LogicalPath:    input.LogicalPath,
 		CollectionPath: input.CollectionPath,
 		LocalAlias:     input.LocalAlias,
@@ -107,17 +107,17 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 	debugctx.Printf(
 		ctx,
 		"metadata fs render-resource start logical_path=%q operation=%q payload_type=%T",
-		resourceInfo.LogicalPath,
+		resolvedResource.LogicalPath,
 		operation,
-		resourceInfo.Payload,
+		resolvedResource.Payload,
 	)
 
-	targetPath, err := normalizeResolvePath(resourceInfo.LogicalPath)
+	targetPath, err := normalizeResolvePath(resolvedResource.LogicalPath)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
 			"metadata fs render-resource invalid logical_path=%q operation=%q error=%v",
-			resourceInfo.LogicalPath,
+			resolvedResource.LogicalPath,
 			operation,
 			err,
 		)
@@ -143,7 +143,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		}
 	}
 
-	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resourceInfo)
+	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resolvedResource)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -154,7 +154,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateScope, resolvedMetadata, resourceInfo.PayloadDescriptor)
+	applyPayloadTemplateScope(templateScope, resolvedMetadata, resolvedResource.PayloadDescriptor)
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
 	if err != nil {
@@ -205,15 +205,15 @@ func buildTemplateValue(
 func buildTemplateScopeForResource(
 	logicalPath string,
 	resolvedMetadata metadatadomain.ResourceMetadata,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) (map[string]any, error) {
-	normalizedPayload, err := resource.Normalize(resourceInfo.Payload)
+	normalizedPayload, err := resource.Normalize(resolvedResource.Payload)
 	if err != nil {
 		return nil, err
 	}
 
-	localAlias := strings.TrimSpace(resourceInfo.LocalAlias)
-	remoteID := strings.TrimSpace(resourceInfo.RemoteID)
+	localAlias := strings.TrimSpace(resolvedResource.LocalAlias)
+	remoteID := strings.TrimSpace(resolvedResource.RemoteID)
 	if localAlias == "" || remoteID == "" {
 		derivedAlias, derivedRemoteID, identityErr := identity.ResolveAliasAndRemoteID(
 			logicalPath,
@@ -231,7 +231,7 @@ func buildTemplateScopeForResource(
 		}
 	}
 
-	collectionPath := strings.TrimSpace(resourceInfo.CollectionPath)
+	collectionPath := strings.TrimSpace(resolvedResource.CollectionPath)
 	if collectionPath == "" {
 		collectionPath = collectionPathForLogicalPath(logicalPath)
 	} else {
@@ -251,15 +251,15 @@ func buildTemplateScopeForResource(
 }
 
 func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
-	return strings.TrimSpace(value.IDFromAttribute) == "" &&
-		strings.TrimSpace(value.AliasFromAttribute) == "" &&
+	return strings.TrimSpace(value.IDAttribute) == "" &&
+		strings.TrimSpace(value.AliasAttribute) == "" &&
 		strings.TrimSpace(value.CollectionPath) == "" &&
 		strings.TrimSpace(value.PayloadType) == "" &&
 		value.Secret == nil &&
-		value.SecretsFromAttributes == nil &&
+		value.SecretAttributes == nil &&
 		value.ExternalizedAttributes == nil &&
 		value.Operations == nil &&
-		value.PayloadMutation == nil
+		value.Transforms == nil
 }
 
 func applyPayloadTemplateScope(

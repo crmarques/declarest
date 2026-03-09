@@ -89,7 +89,7 @@ func resolveSaveEntriesForItems(
 			alias, err := resolveSaveListItemAlias(itemMap, resolvedMetadata)
 			if err != nil {
 				return nil, faults.NewValidationError(
-					"list item alias could not be resolved; configure metadata alias/id attributes or use --as-one-resource",
+					"list item alias could not be resolved; configure metadata alias/id attributes or use --mode single",
 					err,
 				)
 			}

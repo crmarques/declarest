@@ -57,34 +57,40 @@ func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string) {
 	cliutil.RegisterFlagValueCompletions(command, "source", deleteSourceCompletionValues)
 }
 
-func bindSkipItemsFlag(command *cobra.Command, skipItemsFlag *string) {
-	command.Flags().StringVar(skipItemsFlag, "skip-items", "", "comma-separated collection items to exclude by alias, id, or path segment")
+func bindExcludeFlag(command *cobra.Command, excludeItems *[]string) {
+	command.Flags().StringSliceVar(
+		excludeItems,
+		"exclude",
+		nil,
+		"repeatable or comma-separated collection items to exclude by alias, id, or path segment",
+	)
 }
 
-func parseSkipItemsFlag(command *cobra.Command, rawValue string) ([]string, error) {
-	flag := command.Flags().Lookup("skip-items")
+func parseExcludeFlag(command *cobra.Command, rawValues []string) ([]string, error) {
+	flag := command.Flags().Lookup("exclude")
 	if flag == nil || !flag.Changed {
 		return nil, nil
 	}
 
-	trimmed := strings.TrimSpace(rawValue)
-	if trimmed == "" {
-		return nil, cliutil.ValidationError("flag --skip-items requires at least one collection item", nil)
-	}
+	items := make([]string, 0, len(rawValues))
+	seen := make(map[string]struct{}, len(rawValues))
+	for _, rawValue := range rawValues {
+		trimmed := strings.TrimSpace(rawValue)
+		if trimmed == "" {
+			return nil, cliutil.ValidationError("flag --exclude requires at least one collection item", nil)
+		}
 
-	parts := strings.Split(trimmed, ",")
-	items := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, rawItem := range parts {
-		item := strings.TrimSpace(rawItem)
-		if item == "" {
-			return nil, cliutil.ValidationError("flag --skip-items contains an empty collection item", nil)
+		for _, rawItem := range strings.Split(trimmed, ",") {
+			item := strings.TrimSpace(rawItem)
+			if item == "" {
+				return nil, cliutil.ValidationError("flag --exclude contains an empty collection item", nil)
+			}
+			if _, found := seen[item]; found {
+				continue
+			}
+			seen[item] = struct{}{}
+			items = append(items, item)
 		}
-		if _, found := seen[item]; found {
-			continue
-		}
-		seen[item] = struct{}{}
-		items = append(items, item)
 	}
 
 	return items, nil

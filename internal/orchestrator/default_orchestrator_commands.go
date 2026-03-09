@@ -36,19 +36,19 @@ func (r *Orchestrator) ResolveLocalResource(ctx context.Context, logicalPath str
 }
 
 func (r *Orchestrator) GetRemote(ctx context.Context, logicalPath string) (resource.Content, error) {
-	resourceInfo, resourceMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
+	resolvedResource, resourceMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
 	if infoErr != nil {
 		debugctx.Printf(ctx, "orchestrator get remote preparation failed path=%q error=%v", logicalPath, infoErr)
 		return resource.Content{}, infoErr
 	}
 
-	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+	remoteValue, err := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 	if err != nil {
-		debugctx.Printf(ctx, "orchestrator get remote error path=%q error=%v", resourceInfo.LogicalPath, err)
+		debugctx.Printf(ctx, "orchestrator get remote error path=%q error=%v", resolvedResource.LogicalPath, err)
 		return resource.Content{}, err
 	}
 
-	debugctx.Printf(ctx, "orchestrator get remote hit path=%q", resourceInfo.LogicalPath)
+	debugctx.Printf(ctx, "orchestrator get remote hit path=%q", resolvedResource.LogicalPath)
 	return remoteValue, nil
 }
 
@@ -84,46 +84,46 @@ func (r *Orchestrator) applyDesiredState(
 	content resource.Content,
 	policy orchestrator.ApplyPolicy,
 ) (resource.Resource, error) {
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, contentFromResource(resourceInfo))
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
 	if err != nil {
 		return resource.Resource{}, err
 	}
-	resourceInfo.Payload = resolvedPayload.Value
-	resourceInfo.PayloadDescriptor = resolvedPayload.Descriptor
+	resolvedResource.Payload = resolvedPayload.Value
+	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
-	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+	remoteValue, err := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 	if err != nil {
 		if !faults.IsCategory(err, faults.NotFoundError) {
 			return resource.Resource{}, err
 		}
 
-		item, mutationErr := r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationCreate)
+		item, mutationErr := r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationCreate)
 		if mutationErr == nil {
 			return item, nil
 		}
 		if faults.IsCategory(mutationErr, faults.ConflictError) {
-			return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
+			return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationUpdate)
 		}
 		return resource.Resource{}, mutationErr
 	}
 
 	localForCompare, remoteForCompare, err := r.resolveComparedPayloads(
 		ctx,
-		resourceInfo,
+		resolvedResource,
 		resourceMd,
-		contentFromResource(resourceInfo),
+		contentFromResource(resolvedResource),
 		remoteValue,
 	)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 	if resolvedRemoteID, ok := resolvedRemoteIDFromPayload(resourceMd, remoteValue.Value); ok {
-		resourceInfo.RemoteID = resolvedRemoteID
+		resolvedResource.RemoteID = resolvedRemoteID
 	}
 
 	if reflect.DeepEqual(localForCompare, remoteForCompare) && !policy.Force {
@@ -131,44 +131,44 @@ func (r *Orchestrator) applyDesiredState(
 		if normalizeErr != nil {
 			return resource.Resource{}, normalizeErr
 		}
-		resourceInfo.Payload = normalizedRemote
-		resourceInfo.PayloadDescriptor = remoteValue.Descriptor
-		return resourceInfo, nil
+		resolvedResource.Payload = normalizedRemote
+		resolvedResource.PayloadDescriptor = remoteValue.Descriptor
+		return resolvedResource, nil
 	}
 
-	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
+	return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationUpdate)
 }
 
 func (r *Orchestrator) Create(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, contentFromResource(resourceInfo))
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
 	if err != nil {
 		return resource.Resource{}, err
 	}
-	resourceInfo.Payload = resolvedPayload.Value
-	resourceInfo.PayloadDescriptor = resolvedPayload.Descriptor
+	resolvedResource.Payload = resolvedPayload.Value
+	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
-	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationCreate)
+	return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationCreate)
 }
 
 func (r *Orchestrator) Update(ctx context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Resource{}, err
 	}
 
-	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, contentFromResource(resourceInfo))
+	resolvedPayload, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
 	if err != nil {
 		return resource.Resource{}, err
 	}
-	resourceInfo.Payload = resolvedPayload.Value
-	resourceInfo.PayloadDescriptor = resolvedPayload.Descriptor
+	resolvedResource.Payload = resolvedPayload.Value
+	resolvedResource.PayloadDescriptor = resolvedPayload.Descriptor
 
-	return r.executeRemoteMutation(ctx, resourceInfo, resourceMd, metadata.OperationUpdate)
+	return r.executeRemoteMutation(ctx, resolvedResource, resourceMd, metadata.OperationUpdate)
 }
 
 func (r *Orchestrator) Delete(ctx context.Context, logicalPath string, _ orchestrator.DeletePolicy) error {
@@ -177,17 +177,17 @@ func (r *Orchestrator) Delete(ctx context.Context, logicalPath string, _ orchest
 		return err
 	}
 
-	resourceInfo, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
+	resolvedResource, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, logicalPath)
 	if err != nil {
 		return err
 	}
 
-	deleteErr := serverManager.Delete(ctx, resourceInfo, resourceMd)
+	deleteErr := serverManager.Delete(ctx, resolvedResource, resourceMd)
 	if deleteErr == nil || !faults.IsCategory(deleteErr, faults.NotFoundError) {
 		return deleteErr
 	}
 
-	remoteValue, fetchErr := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+	remoteValue, fetchErr := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 	if fetchErr != nil {
 		return fetchErr
 	}
@@ -196,21 +196,21 @@ func (r *Orchestrator) Delete(ctx context.Context, logicalPath string, _ orchest
 	if normalizeErr != nil {
 		return normalizeErr
 	}
-	resourceInfo.Payload = normalizedPayload
-	resourceInfo.PayloadDescriptor = remoteValue.Descriptor
+	resolvedResource.Payload = normalizedPayload
+	resolvedResource.PayloadDescriptor = remoteValue.Descriptor
 
 	localAlias, remoteID, identityErr := resolveResourceIdentity(
-		resourceInfo.LogicalPath,
+		resolvedResource.LogicalPath,
 		resourceMd,
 		normalizedPayload,
 	)
 	if identityErr != nil {
 		return identityErr
 	}
-	resourceInfo.LocalAlias = localAlias
-	resourceInfo.RemoteID = remoteID
+	resolvedResource.LocalAlias = localAlias
+	resolvedResource.RemoteID = remoteID
 
-	return serverManager.Delete(ctx, resourceInfo, resourceMd)
+	return serverManager.Delete(ctx, resolvedResource, resourceMd)
 }
 
 func (r *Orchestrator) ListLocal(ctx context.Context, logicalPath string, policy orchestrator.ListPolicy) ([]resource.Resource, error) {
@@ -284,19 +284,19 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 		return nil, err
 	}
 
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, localResource.LogicalPath, contentFromResource(localResource))
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, localResource.LogicalPath, contentFromResource(localResource))
 	if err != nil {
 		return nil, err
 	}
 
-	localForCompare, err := r.resolvePayloadForRemote(ctx, resourceInfo.LogicalPath, contentFromResource(resourceInfo))
+	localForCompare, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
 	if err != nil {
 		return nil, err
 	}
-	resourceInfo.Payload = localForCompare.Value
-	resourceInfo.PayloadDescriptor = localForCompare.Descriptor
+	resolvedResource.Payload = localForCompare.Value
+	resolvedResource.PayloadDescriptor = localForCompare.Descriptor
 
-	remoteValue, err := r.fetchRemoteValue(ctx, resourceInfo, resourceMd)
+	remoteValue, err := r.fetchRemoteValue(ctx, resolvedResource, resourceMd)
 	if err != nil {
 		if faults.IsCategory(err, faults.NotFoundError) {
 			remoteValue = resource.Content{}
@@ -311,7 +311,7 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 	}
 	localTransformed, remoteTransformed, err := r.resolveComparedPayloads(
 		ctx,
-		resourceInfo,
+		resolvedResource,
 		resourceMd,
 		localForCompare,
 		resource.Content{Value: remotePayload, Descriptor: remoteValue.Descriptor},
@@ -320,7 +320,7 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 		return nil, err
 	}
 
-	items := buildDiffEntries(resourceInfo.LogicalPath, localTransformed, remoteTransformed)
+	items := buildDiffEntries(resolvedResource.LogicalPath, localTransformed, remoteTransformed)
 	sort.Slice(items, func(i int, j int) bool {
 		if items[i].ResourcePath == items[j].ResourcePath {
 			if items[i].Path == items[j].Path {
@@ -335,19 +335,19 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 
 func (r *Orchestrator) resolveComparedPayloads(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	resourceMd metadata.ResourceMetadata,
 	localContent resource.Content,
 	remoteContent resource.Content,
 ) (resource.Value, resource.Value, error) {
-	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localContent.Value)
+	compareSpec, err := r.renderOperationSpec(ctx, resolvedResource, resourceMd, metadata.OperationCompare, localContent.Value)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	payloadType := strings.TrimSpace(localContent.Descriptor.PayloadType)
 	if payloadType == "" {
-		payloadType = strings.TrimSpace(resourceInfo.PayloadDescriptor.PayloadType)
+		payloadType = strings.TrimSpace(resolvedResource.PayloadDescriptor.PayloadType)
 	}
 	if payloadType == "" {
 		payloadType = strings.TrimSpace(resourceMd.PayloadType)
@@ -360,7 +360,7 @@ func (r *Orchestrator) resolveComparedPayloads(
 		return nil, nil, payloadTypeErr
 	}
 	if !resource.IsStructuredPayloadType(payloadType) {
-		if len(compareSpec.PayloadMutation) > 0 {
+		if len(compareSpec.Transforms) > 0 {
 			if !resourceMd.IsWholeResourceSecret() {
 				return nil, nil, faults.NewValidationError(
 					fmt.Sprintf("compare transforms require structured payloads, got %q", payloadType),
@@ -368,7 +368,7 @@ func (r *Orchestrator) resolveComparedPayloads(
 				)
 			}
 
-			localInput := compareInputForWholeResourceOpaquePayload(resourceInfo, resourceMd, localContent.Descriptor)
+			localInput := compareInputForWholeResourceOpaquePayload(resolvedResource, resourceMd, localContent.Descriptor)
 			localTransformed, err := applyCompareTransforms(localInput, compareSpec)
 			if err != nil {
 				return nil, nil, err
@@ -380,7 +380,7 @@ func (r *Orchestrator) resolveComparedPayloads(
 
 			remoteInput := remoteContent.Value
 			if !isStructuredCompareValue(remoteInput) {
-				remoteInput = compareInputForWholeResourceOpaquePayload(resourceInfo, resourceMd, remoteContent.Descriptor)
+				remoteInput = compareInputForWholeResourceOpaquePayload(resolvedResource, resourceMd, remoteContent.Descriptor)
 			}
 			remoteTransformed, err := applyCompareTransforms(remoteInput, compareSpec)
 			if err != nil {
@@ -413,7 +413,7 @@ func (r *Orchestrator) resolveComparedPayloads(
 }
 
 func compareInputForWholeResourceOpaquePayload(
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	resourceMd metadata.ResourceMetadata,
 	descriptor resource.PayloadDescriptor,
 ) resource.Value {
@@ -424,10 +424,10 @@ func compareInputForWholeResourceOpaquePayload(
 	resolved = resource.NormalizePayloadDescriptor(resolved)
 	input := map[string]any{}
 
-	if id := strings.TrimSpace(resourceInfo.RemoteID); id != "" {
+	if id := strings.TrimSpace(resolvedResource.RemoteID); id != "" {
 		input["id"] = id
 	}
-	if alias := strings.TrimSpace(resourceInfo.LocalAlias); alias != "" {
+	if alias := strings.TrimSpace(resolvedResource.LocalAlias); alias != "" {
 		input["alias"] = alias
 		input["name"] = alias
 	}
@@ -454,12 +454,12 @@ func isStructuredCompareValue(value resource.Value) bool {
 }
 
 func (r *Orchestrator) Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error) {
-	resourceInfo, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
+	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, logicalPath, content)
 	if err != nil {
 		return resource.Content{}, err
 	}
 
-	spec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationUpdate, resourceInfo.Payload)
+	spec, err := r.renderOperationSpec(ctx, resolvedResource, resourceMd, metadata.OperationUpdate, resolvedResource.Payload)
 	if err != nil {
 		return resource.Content{}, err
 	}
@@ -473,13 +473,13 @@ func (r *Orchestrator) Template(ctx context.Context, logicalPath string, content
 		if normalizeErr != nil {
 			return resource.Content{}, normalizeErr
 		}
-		return resource.Content{Value: normalizedBody, Descriptor: resourceInfo.PayloadDescriptor}, nil
+		return resource.Content{Value: normalizedBody, Descriptor: resolvedResource.PayloadDescriptor}, nil
 	}
 
 	resolvedPayload, err := secrets.ResolvePayloadDirectivesForResource(
-		resourceInfo.Payload,
-		resourceInfo.LogicalPath,
-		resourceInfo.PayloadDescriptor,
+		resolvedResource.Payload,
+		resolvedResource.LogicalPath,
+		resolvedResource.PayloadDescriptor,
 		nil,
 	)
 	if err != nil {
@@ -490,5 +490,5 @@ func (r *Orchestrator) Template(ctx context.Context, logicalPath string, content
 	if err != nil {
 		return resource.Content{}, err
 	}
-	return resource.Content{Value: normalizedPayload, Descriptor: resourceInfo.PayloadDescriptor}, nil
+	return resource.Content{Value: normalizedPayload, Descriptor: resolvedResource.PayloadDescriptor}, nil
 }

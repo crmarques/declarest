@@ -13,7 +13,7 @@ import (
 )
 
 func applyCompareTransforms(value resource.Value, operationSpec metadata.OperationSpec) (resource.Value, error) {
-	steps := metadata.OrderedPayloadMutationSteps(operationSpec)
+	steps := metadata.OrderedTransformSteps(operationSpec)
 	if len(steps) == 0 {
 		return resource.Normalize(value)
 	}
@@ -24,11 +24,11 @@ func applyCompareTransforms(value resource.Value, operationSpec metadata.Operati
 	}
 
 	for _, step := range steps {
-		switch metadata.PayloadMutationStepType(step) {
+		switch metadata.TransformStepType(step) {
 		case "selectAttributes":
 			current, err = applyFilterPointers(current, step.SelectAttributes)
-		case "suppressAttributes":
-			current, err = applySuppressPointers(current, step.SuppressAttributes)
+		case "excludeAttributes":
+			current, err = applySuppressPointers(current, step.ExcludeAttributes)
 		case "jqExpression":
 			current, err = applyCompareJQ(current, step.JQExpression)
 		}

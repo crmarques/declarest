@@ -7,22 +7,22 @@ This is a happy-flow walkthrough: one context, one resource, one edit, one apply
 Interactive (recommended for first use):
 
 ```bash
-declarest config add
+declarest context add
 ```
 
 If you prefer file-based setup:
 
 ```bash
-declarest config print-template > /tmp/contexts.yaml
+declarest context print-template > /tmp/contexts.yaml
 # edit /tmp/contexts.yaml
-declarest config add --payload /tmp/contexts.yaml --set-current
+declarest context add --payload /tmp/contexts.yaml --set-current
 ```
 
 Check the active configuration:
 
 ```bash
-declarest config current
-declarest config check
+declarest context current
+declarest context check
 ```
 
 ## 2. Save one resource from the API into the repository

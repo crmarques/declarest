@@ -45,20 +45,20 @@ Use placeholders in payload files, not plaintext secrets.
 
 Supported forms:
 
-- `{{secret .}}`
-- `{{secret custom-key}}`
+- {% raw %}`{{secret .}}`{% endraw %}
+- {% raw %}`{{secret custom-key}}`{% endraw %}
 
 Behavior summary:
 
-- `{{secret .}}`: key is derived from logical path + attribute path.
-- `{{secret custom-key}}`: key uses logical path + custom key suffix.
+- {% raw %}`{{secret .}}`{% endraw %}: key is derived from logical path + attribute path.
+- {% raw %}`{{secret custom-key}}`{% endraw %}: key uses logical path + custom key suffix.
 
 Examples:
 
 ```yaml
 credentials:
-  password: "{{secret .}}"
-apiToken: "{{secret service-api-token}}"
+  password: "{% raw %}{{secret .}}{% endraw %}"
+apiToken: "{% raw %}{{secret service-api-token}}{% endraw %}"
 ```
 
 See [Secrets](../concepts/secrets.md) for end-to-end workflows.

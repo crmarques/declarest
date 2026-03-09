@@ -65,8 +65,8 @@ If you set an array in a deeper layer, it replaces the previous array entirely.
 
 This is especially important for:
 
-- `secretInAttributes`
-- `payload.suppressAttributes`
+- `secretAttributes`
+- `payload.excludeAttributes`
 - `payload.filterAttributes`
 
 ## Explicit empty arrays/maps are meaningful

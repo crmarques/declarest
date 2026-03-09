@@ -15,7 +15,7 @@ func (g *Client) applyOperationPayloadTransforms(
 	spec metadata.OperationSpec,
 ) (resource.Value, error) {
 	payload = unwrapContentValue(payload)
-	steps := metadata.OrderedPayloadMutationSteps(spec)
+	steps := metadata.OrderedTransformSteps(spec)
 	if len(steps) == 0 {
 		return payload, nil
 	}
@@ -27,11 +27,11 @@ func (g *Client) applyOperationPayloadTransforms(
 
 	current := normalized
 	for _, step := range steps {
-		switch metadata.PayloadMutationStepType(step) {
+		switch metadata.TransformStepType(step) {
 		case "selectAttributes":
 			current, err = applyPayloadSelectAttributes(current, step.SelectAttributes)
-		case "suppressAttributes":
-			current, err = applyPayloadSuppressAttributes(current, step.SuppressAttributes)
+		case "excludeAttributes":
+			current, err = applyPayloadExcludeAttributes(current, step.ExcludeAttributes)
 		case "jqExpression":
 			current, err = g.applyPayloadJQ(ctx, current, step.JQExpression)
 		}
@@ -85,8 +85,8 @@ func applyPayloadSelectAttributes(value resource.Value, attributes []string) (re
 	return filtered, nil
 }
 
-func applyPayloadSuppressAttributes(value resource.Value, attributes []string) (resource.Value, error) {
-	pointers, err := normalizePayloadAttributePointers("suppressAttributes", attributes)
+func applyPayloadExcludeAttributes(value resource.Value, attributes []string) (resource.Value, error) {
+	pointers, err := normalizePayloadAttributePointers("excludeAttributes", attributes)
 	if err != nil {
 		return nil, err
 	}

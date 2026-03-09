@@ -84,8 +84,8 @@ Optional fields:
 1. `SecretStore` typed secret store configuration object.
 2. `Preferences` settings map.
 3. `Metadata` typed metadata configuration object.
-4. `managedServer.http.healthCheck` optional probe target used by `managed-server check`.
-5. Metadata attribute references (`idFromAttribute`, `aliasFromAttribute`, `secretInAttributes[*]`, `externalizedAttributes[*].path`, payload `filterAttributes`/`suppressAttributes`, compare suppress/filter fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
+4. `managedServer.http.healthCheck` optional probe target used by `server check`.
+5. Metadata attribute references (`idAttribute`, `aliasAttribute`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
@@ -97,7 +97,7 @@ One-of invariants:
 3. `secretStore` MUST define exactly one of `file` or `vault`.
 4. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
 5. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
-6. `managedServer.http.proxy` MUST define at least one of `httpUrl` or `httpsUrl` when configured.
+6. `managedServer.http.proxy` MUST define at least one of `httpURL` or `httpsURL` when configured.
 7. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
 8. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
 9. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
@@ -108,14 +108,14 @@ Represents persisted context catalog in one YAML file.
 
 Required fields:
 1. `Contexts`: list of full `config.Context` objects.
-2. `CurrentCtx`: active context name mapped to persisted key `currentCtx`.
+2. `CurrentContext`: active context name mapped to persisted key `currentContext`.
 
 Optional fields:
 1. `DefaultEditor`: default editor command mapped to persisted key `defaultEditor`.
 
 Invariants:
 1. context names MUST be unique and non-empty.
-2. `CurrentCtx` MUST reference an existing context when contexts are present.
+2. `CurrentContext` MUST reference an existing context when contexts are present.
 
 ### Type: `resource.Value`
 Represents structured or opaque resource content.
@@ -147,12 +147,12 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`), optional `collectionPath` override, and optional `payloadType` override.
-2. `resourceInfo` secret mapping (`secret`, `secretInAttributes`).
-3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
-4. `operationsInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
-5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payloadMutation[*].{selectAttributes,suppressAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
-6. `operationsInfo.defaults.payloadMutation` is an ordered pipeline applied before operation-specific `payloadMutation`.
+1. `resource` identity mapping (`idAttribute`, `aliasAttribute`), optional `collectionPath` override, and optional `payloadType` override.
+2. `resource` secret mapping (`secret`, `secretAttributes`).
+3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
+4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
+5. operation wire fields (`path`, `method`, `query`, `headers`, `body`, `transforms[*].{selectAttributes,excludeAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `headers` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+6. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
 7. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
 
 ### Type: `metadata.OperationSpec`

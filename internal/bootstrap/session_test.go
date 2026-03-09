@@ -88,7 +88,7 @@ contexts:
         baseDir: ` + devRepo + `
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -100,13 +100,13 @@ contexts:
         baseDir: ` + prodRepo + `
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: prod-token
-currentCtx: dev
+currentContext: dev
 `)
 	if err := os.WriteFile(path, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -148,7 +148,7 @@ contexts:
   - name: remote-only
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -156,7 +156,7 @@ contexts:
               value: dev-token
     metadata:
       baseDir: ` + metadataDir + `
-currentCtx: remote-only
+currentContext: remote-only
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -217,7 +217,7 @@ contexts:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -225,7 +225,7 @@ contexts:
               value: dev-token
     metadata:
       bundle: ` + bundlePath + `
-currentCtx: bundled
+currentContext: bundled
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -291,7 +291,7 @@ contexts:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -299,7 +299,7 @@ contexts:
               value: dev-token
     metadata:
       bundleFile: ` + bundlePath + `
-currentCtx: bundled-file
+currentContext: bundled-file
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)

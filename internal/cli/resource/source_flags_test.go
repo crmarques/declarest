@@ -85,17 +85,17 @@ func TestNormalizeDeleteSourceSelection(t *testing.T) {
 	}
 }
 
-func TestParseSkipItemsFlag(t *testing.T) {
+func TestParseExcludeFlag(t *testing.T) {
 	t.Parallel()
 
 	t.Run("unset_flag_returns_nil", func(t *testing.T) {
 		t.Parallel()
 
 		command := &cobra.Command{Use: "test"}
-		var raw string
-		bindSkipItemsFlag(command, &raw)
+		var raw []string
+		bindExcludeFlag(command, &raw)
 
-		got, err := parseSkipItemsFlag(command, raw)
+		got, err := parseExcludeFlag(command, raw)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -108,13 +108,13 @@ func TestParseSkipItemsFlag(t *testing.T) {
 		t.Parallel()
 
 		command := &cobra.Command{Use: "test"}
-		var raw string
-		bindSkipItemsFlag(command, &raw)
-		if err := command.Flags().Set("skip-items", " master, realm1 ,master "); err != nil {
+		var raw []string
+		bindExcludeFlag(command, &raw)
+		if err := command.Flags().Set("exclude", " master, realm1 ,master "); err != nil {
 			t.Fatalf("unexpected set error: %v", err)
 		}
 
-		got, err := parseSkipItemsFlag(command, raw)
+		got, err := parseExcludeFlag(command, raw)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -133,18 +133,46 @@ func TestParseSkipItemsFlag(t *testing.T) {
 		t.Parallel()
 
 		command := &cobra.Command{Use: "test"}
-		var raw string
-		bindSkipItemsFlag(command, &raw)
-		if err := command.Flags().Set("skip-items", "master,,realm1"); err != nil {
+		var raw []string
+		bindExcludeFlag(command, &raw)
+		if err := command.Flags().Set("exclude", "master,,realm1"); err != nil {
 			t.Fatalf("unexpected set error: %v", err)
 		}
 
-		_, err := parseSkipItemsFlag(command, raw)
+		_, err := parseExcludeFlag(command, raw)
 		if err == nil {
 			t.Fatal("expected validation error")
 		}
 		if !faults.IsCategory(err, faults.ValidationError) {
 			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("supports_repeatable_flag_values", func(t *testing.T) {
+		t.Parallel()
+
+		command := &cobra.Command{Use: "test"}
+		var raw []string
+		bindExcludeFlag(command, &raw)
+		if err := command.Flags().Set("exclude", "master"); err != nil {
+			t.Fatalf("unexpected set error: %v", err)
+		}
+		if err := command.Flags().Set("exclude", "realm1"); err != nil {
+			t.Fatalf("unexpected set error: %v", err)
+		}
+
+		got, err := parseExcludeFlag(command, raw)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{"master", "realm1"}
+		if len(got) != len(want) {
+			t.Fatalf("unexpected parsed items: got=%#v want=%#v", got, want)
+		}
+		for idx := range want {
+			if got[idx] != want[idx] {
+				t.Fatalf("unexpected parsed item at %d: got=%q want=%q", idx, got[idx], want[idx])
+			}
 		}
 	})
 }

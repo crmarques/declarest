@@ -1,8 +1,8 @@
-resourceInfo:
-  idFromAttribute: /id
-  aliasFromAttribute: /name
+resource:
+  idAttribute: /id
+  aliasAttribute: /name
   collectionPath: /admin/realms/{{.realm}}/components
-operationsInfo:
-  listCollection:
-    payloadMutation:
+operations:
+  list:
+    transforms:
     - jqExpression: '[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.name}}/") | .id)) ]'

@@ -24,9 +24,9 @@ const (
 func RequiresContextBootstrapPath(commandPath string) bool {
 	normalized := strings.TrimSpace(commandPath)
 	switch {
-	case normalized == "declarest config check":
+	case normalized == "declarest context check":
 		return true
-	case normalized == "declarest config init":
+	case normalized == "declarest context init":
 		return true
 	case strings.HasPrefix(normalized, "declarest resource "):
 		return true
@@ -36,7 +36,7 @@ func RequiresContextBootstrapPath(commandPath string) bool {
 		return true
 	case strings.HasPrefix(normalized, "declarest secret "):
 		return true
-	case strings.HasPrefix(normalized, "declarest managed-server "):
+	case strings.HasPrefix(normalized, "declarest server "):
 		return true
 	}
 
@@ -61,15 +61,15 @@ func EmitsExecutionStatusPath(path string) bool {
 
 func OutputPolicyForPath(path string) OutputPolicy {
 	switch strings.TrimSpace(path) {
-	case "declarest config show":
+	case "declarest context show":
 		return OutputPolicyYAMLDefaultTextOrYAML
-	case "declarest config print-template",
+	case "declarest context print-template",
 		"declarest secret get",
 		"declarest repository tree",
-		"declarest managed-server check",
-		"declarest managed-server get base-url",
-		"declarest managed-server get token-url",
-		"declarest managed-server get access-token",
+		"declarest server check",
+		"declarest server get base-url",
+		"declarest server get token-url",
+		"declarest server get access-token",
 		"declarest completion bash",
 		"declarest completion zsh",
 		"declarest completion fish",

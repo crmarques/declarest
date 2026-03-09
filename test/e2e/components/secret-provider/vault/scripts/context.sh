@@ -31,8 +31,8 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
       ;;
     approle)
       printf '      appRole:\n'
-      printf '        roleId: %s\n' "${VAULT_ROLE_ID}"
-      printf '        secretId: %s\n' "${VAULT_SECRET_ID}"
+      printf '        roleID: %s\n' "${VAULT_ROLE_ID}"
+      printf '        secretID: %s\n' "${VAULT_SECRET_ID}"
       printf '        mount: %s\n' "${VAULT_AUTH_MOUNT:-approle}"
       ;;
   esac

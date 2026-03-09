@@ -20,7 +20,7 @@ Key fields:
 - `spec.pollInterval`
 - `spec.git.url`
 - `spec.git.branch` (defaults to `main`)
-- `spec.git.auth.tokenSecretRef` or `spec.git.auth.sshSecretRef`
+- `spec.git.auth.tokenRef` or `spec.git.auth.sshSecretRef`
 - `spec.storage` (`existingPVC` or `pvc`)
 
 Repository payload files preserve the managed-server response media type or the explicit payload input media type. The CRD no longer exposes a repository payload-format default.
@@ -38,7 +38,7 @@ spec:
   git:
     url: https://github.com/example/declarest-resources.git
     auth:
-      tokenSecretRef:
+      tokenRef:
         name: repository-credentials
         key: token
   storage:
@@ -85,9 +85,10 @@ Purpose: define where DeclaREST resolves/stores secrets during workflows.
 
 Key fields:
 
-- `spec.provider` (`file` or `vault`)
-- `spec.file.path`, `spec.file.encryption`, `spec.file.storage` (for file provider)
-- `spec.vault.address`, `spec.vault.auth` (for vault provider)
+- `spec.file` or `spec.vault` (exactly one)
+- `spec.file.path`, `spec.file.encryption`, `spec.file.storage`
+- `spec.vault.address`, `spec.vault.auth.token.secretRef`
+- optional `spec.vault.auth.userpass.*` or `spec.vault.auth.appRole.*`
 
 Minimal file-provider example:
 
@@ -97,7 +98,6 @@ kind: SecretStore
 metadata:
   name: example-secret-store
 spec:
-  provider: file
   file:
     path: /var/lib/declarest/secrets/secrets.json
     encryption:

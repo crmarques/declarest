@@ -2,6 +2,7 @@ package cliutil
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 
@@ -53,9 +54,9 @@ func TestValidateOutputFormatForCommandPath(t *testing.T) {
 		{name: "text only command auto", path: "declarest secret get", format: OutputAuto, wantErr: false},
 		{name: "text only command text", path: "declarest secret get", format: OutputText, wantErr: false},
 		{name: "text only command json rejected", path: "declarest secret get", format: OutputJSON, wantErr: true},
-		{name: "yaml default command yaml", path: "declarest config show", format: OutputYAML, wantErr: false},
-		{name: "yaml default command text", path: "declarest config show", format: OutputText, wantErr: false},
-		{name: "yaml default command json rejected", path: "declarest config show", format: OutputJSON, wantErr: true},
+		{name: "yaml default command yaml", path: "declarest context show", format: OutputYAML, wantErr: false},
+		{name: "yaml default command text", path: "declarest context show", format: OutputText, wantErr: false},
+		{name: "yaml default command json rejected", path: "declarest context show", format: OutputJSON, wantErr: true},
 	}
 
 	for _, testCase := range testCases {
@@ -85,6 +86,29 @@ func TestWriteOutputAutoWritesBinaryBytesWithoutNewline(t *testing.T) {
 	}
 }
 
+func TestWriteOutputAutoUsesJSONForStructuredValuesWhenStdoutIsNotTTY(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
+
+	if err := WriteOutput(command, OutputAuto, map[string]any{"ok": true}, func(w io.Writer, value map[string]any) error {
+		_, err := io.WriteString(w, "text\n")
+		return err
+	}); err != nil {
+		t.Fatalf("WriteOutput returned error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "\"ok\": true") {
+		t.Fatalf("expected structured auto output to default to json, got %q", output)
+	}
+	if strings.Contains(output, "text") {
+		t.Fatalf("expected json auto output instead of text renderer, got %q", output)
+	}
+}
+
 func TestWriteOutputJSONWrapsBinaryPayload(t *testing.T) {
 	t.Parallel()
 
@@ -105,18 +129,18 @@ func TestWriteOutputJSONWrapsBinaryPayload(t *testing.T) {
 	}
 }
 
-func TestWriteOutputAutoRejectsBinaryCollections(t *testing.T) {
+func TestWriteOutputAutoUsesJSONForBinaryCollectionsWhenStdoutIsNotTTY(t *testing.T) {
 	t.Parallel()
 
 	command := &cobra.Command{}
 	stdout := &bytes.Buffer{}
 	command.SetOut(stdout)
 
-	err := WriteOutput(command, OutputAuto, []any{resource.BinaryValue{Bytes: []byte("abc")}}, nil)
-	if err == nil {
-		t.Fatal("expected binary collection validation error")
+	if err := WriteOutput(command, OutputAuto, []any{resource.BinaryValue{Bytes: []byte("abc")}}, nil); err != nil {
+		t.Fatalf("WriteOutput returned error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "binary collections require") {
-		t.Fatalf("unexpected error: %v", err)
+	output := stdout.String()
+	if !strings.Contains(output, "\"encoding\": \"base64\"") {
+		t.Fatalf("expected binary collection auto output to default to json, got %q", output)
 	}
 }

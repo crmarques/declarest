@@ -569,7 +569,7 @@ func newTestMetadata() *testMetadata {
 	return &testMetadata{
 		items: map[string]metadatadomain.ResourceMetadata{
 			"/customers/acme": {
-				IDFromAttribute: "/id",
+				IDAttribute: "/id",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationGet):     {Path: "/api/customers/acme"},
 					string(metadatadomain.OperationCompare): {Path: "/api/customers/acme"},
@@ -982,24 +982,40 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 func assertOperationHTTPHeaderValue(t *testing.T, operation map[string]any, headerName string, expectedValue string) {
 	t.Helper()
 
-	rawHeaders, found := operation["httpHeaders"]
+	rawHeaders, found := operation["headers"]
 	if !found {
-		t.Fatalf("expected httpHeaders list, got %#v", operation)
-	}
-	headers, ok := rawHeaders.([]any)
-	if !ok {
-		t.Fatalf("expected httpHeaders array, got %#v", rawHeaders)
+		t.Fatalf("expected headers field, got %#v", operation)
 	}
 
-	for _, item := range headers {
-		entry, ok := item.(map[string]any)
-		if !ok {
-			continue
+	if headers, ok := rawHeaders.(map[string]any); ok {
+		value, found := headers[headerName]
+		if found && value == expectedValue {
+			return
 		}
-		if entry["name"] == headerName && entry["value"] == expectedValue {
+		t.Fatalf("expected headers to contain %q=%q, got %#v", headerName, expectedValue, rawHeaders)
+	}
+
+	if headers, ok := rawHeaders.([]any); ok {
+		for _, item := range headers {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if entry[headerName] == expectedValue {
+				return
+			}
+			if entry["name"] == headerName && entry["value"] == expectedValue {
+				return
+			}
+		}
+		t.Fatalf("expected headers to contain %q=%q, got %#v", headerName, expectedValue, rawHeaders)
+	}
+
+	if headers, ok := rawHeaders.(map[string]string); ok {
+		if value, found := headers[headerName]; found && value == expectedValue {
 			return
 		}
 	}
 
-	t.Fatalf("expected httpHeaders to contain %q=%q, got %#v", headerName, expectedValue, rawHeaders)
+	t.Fatalf("expected headers to contain %q=%q, got %#v", headerName, expectedValue, rawHeaders)
 }

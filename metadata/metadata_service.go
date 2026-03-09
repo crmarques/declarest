@@ -29,7 +29,7 @@ type ResourceOperationSpecInput struct {
 // orchestrator/server adapters to render operation specs with fully derived
 // resource identity/context.
 type ResourceOperationSpecRenderer interface {
-	RenderOperationSpecForResource(ctx context.Context, resourceInfo ResourceOperationSpecInput, operation Operation) (OperationSpec, error)
+	RenderOperationSpecForResource(ctx context.Context, resource ResourceOperationSpecInput, operation Operation) (OperationSpec, error)
 }
 
 type MetadataService interface {

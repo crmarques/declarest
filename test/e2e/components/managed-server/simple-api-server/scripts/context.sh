@@ -52,7 +52,7 @@ esac
 {
   printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    baseUrl: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
+  printf '    baseURL: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
@@ -72,9 +72,9 @@ esac
   printf '    auth:\n'
   if [[ "${enable_oauth2}" == 'true' ]]; then
     printf '      oauth2:\n'
-    printf '        tokenUrl: %s\n' "${SIMPLE_API_SERVER_TOKEN_URL}"
+    printf '        tokenURL: %s\n' "${SIMPLE_API_SERVER_TOKEN_URL}"
     printf '        grantType: client_credentials\n'
-    printf '        clientId: %s\n' "${SIMPLE_API_SERVER_CLIENT_ID}"
+    printf '        clientID: %s\n' "${SIMPLE_API_SERVER_CLIENT_ID}"
     printf '        clientSecret: %s\n' "${SIMPLE_API_SERVER_CLIENT_SECRET}"
 
     if [[ -n "${SIMPLE_API_SERVER_SCOPE:-}" ]]; then

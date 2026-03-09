@@ -33,7 +33,7 @@ func TestResourceSaveFilePayloadPreservesOpaqueExtensionAndBytes(t *testing.T) {
 		"/projects/platform/secrets/private-key",
 		"--payload",
 		payloadFile,
-		"--overwrite",
+		"--force",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -59,7 +59,7 @@ func TestResourceSaveSecretStoresWholePayloadInSecretStore(t *testing.T) {
 
 	metadataService := newTestMetadata()
 	metadataService.items["/projects/platform/secrets/private-key"] = metadatadomain.ResourceMetadata{
-		SecretsFromAttributes: []string{"/password"},
+		SecretAttributes: []string{"/password"},
 	}
 	orchestrator := &testOrchestrator{metadataService: metadataService}
 	deps := newResourceSaveDeps(orchestrator, metadataService)
@@ -78,7 +78,7 @@ func TestResourceSaveSecretStoresWholePayloadInSecretStore(t *testing.T) {
 		"--payload",
 		payloadFile,
 		"--secret",
-		"--overwrite",
+		"--force",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -106,8 +106,8 @@ func TestResourceSaveSecretStoresWholePayloadInSecretStore(t *testing.T) {
 	if !savedMetadata.IsWholeResourceSecret() {
 		t.Fatalf("expected metadata secret declaration to be persisted, got %#v", savedMetadata)
 	}
-	if savedMetadata.SecretsFromAttributes != nil {
-		t.Fatalf("expected attribute-level secret metadata to be cleared, got %#v", savedMetadata.SecretsFromAttributes)
+	if savedMetadata.SecretAttributes != nil {
+		t.Fatalf("expected attribute-level secret metadata to be cleared, got %#v", savedMetadata.SecretAttributes)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestResourceSaveAutoSecretFromMetadataStoresWholePayloadInSecretStore(t *te
 		"/projects/platform/secrets/private-key",
 		"--payload",
 		payloadFile,
-		"--overwrite",
+		"--force",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -173,7 +173,7 @@ func TestResourceSaveRejectsMissingPathLikePayload(t *testing.T) {
 		"/projects/platform/secrets/private-key",
 		"--payload",
 		"test/e2e/.runs/20260308-170415-3098387/private.key",
-		"--overwrite",
+		"--force",
 	)
 	if err == nil {
 		t.Fatal("expected missing payload file error")

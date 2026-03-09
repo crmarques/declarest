@@ -280,7 +280,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "/alias"},
+				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/alias"},
 			},
 		}
 
@@ -324,7 +324,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "/alias"},
+				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/alias"},
 			},
 		}
 
@@ -368,7 +368,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasFromAttribute: "/clientId"},
+				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/clientId"},
 			},
 		}
 
@@ -405,7 +405,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/credentials/authValue"},
+					SecretAttributes: []string{"/credentials/authValue"},
 				},
 			},
 			Secrets: &fakeSaveSecretProvider{},
@@ -429,7 +429,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/credentials/authValue"},
+					SecretAttributes: []string{"/credentials/authValue"},
 				},
 			},
 			Secrets: &fakeSaveSecretProvider{},
@@ -452,7 +452,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/credentials/authValue"},
+					SecretAttributes: []string{"/credentials/authValue"},
 				},
 			},
 			Secrets: &fakeSaveSecretProvider{},
@@ -475,7 +475,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{
+					SecretAttributes: []string{
 						"/actionTokenGeneratedByUserLifespan/idp-verify-account-via-email",
 						"/actionTokenGeneratedByUserLifespan/reset-credentials",
 						"/actionTokenGeneratedByUserLifespan/verify-email",
@@ -506,7 +506,7 @@ func TestDetectSaveSecretCandidates(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{
+					SecretAttributes: []string{
 						"/access/token/claim",
 						"/access/token/header/type/rfc9068",
 						"/client/secret/creation/time",
@@ -625,7 +625,7 @@ func TestDetectSaveSecretCandidatesForCollection(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/credentials/authValue"},
+					SecretAttributes: []string{"/credentials/authValue"},
 				},
 			},
 		}
@@ -705,7 +705,7 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/password"},
+					SecretAttributes: []string{"/password"},
 				},
 			},
 		}
@@ -733,7 +733,7 @@ func TestAutoHandleDeclaredSaveSecrets(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/credentials/authValue"},
+					SecretAttributes: []string{"/credentials/authValue"},
 				},
 			},
 			Secrets: secretProvider,
@@ -776,7 +776,7 @@ func TestAutoHandleDeclaredSaveSecrets(t *testing.T) {
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
 				resolved: metadatadomain.ResourceMetadata{
-					SecretsFromAttributes: []string{"/password"},
+					SecretAttributes: []string{"/password"},
 				},
 			},
 		}
@@ -802,12 +802,12 @@ func TestHandleSaveSecrets(t *testing.T) {
 
 		metadataService := &fakeSaveMetadataService{
 			resolved: metadatadomain.ResourceMetadata{
-				SecretsFromAttributes: []string{"/credentials/authValue"},
+				SecretAttributes: []string{"/credentials/authValue"},
 			},
 			items: map[string]metadatadomain.ResourceMetadata{
 				"/customers/acme": {
-					IDFromAttribute:       "/id",
-					SecretsFromAttributes: []string{"/existingSecret"},
+					IDAttribute:       "/id",
+					SecretAttributes: []string{"/existingSecret"},
 				},
 			},
 		}
@@ -863,10 +863,10 @@ func TestHandleSaveSecrets(t *testing.T) {
 
 		updatedMetadata := metadataService.items["/customers/acme"]
 		expectedAttributes := []string{"/apiToken", "/credentials/authValue", "/existingSecret"}
-		if !reflect.DeepEqual(updatedMetadata.SecretsFromAttributes, expectedAttributes) {
-			t.Fatalf("expected merged metadata attributes %#v, got %#v", expectedAttributes, updatedMetadata.SecretsFromAttributes)
+		if !reflect.DeepEqual(updatedMetadata.SecretAttributes, expectedAttributes) {
+			t.Fatalf("expected merged metadata attributes %#v, got %#v", expectedAttributes, updatedMetadata.SecretAttributes)
 		}
-		if updatedMetadata.IDFromAttribute != "/id" {
+		if updatedMetadata.IDAttribute != "/id" {
 			t.Fatalf("expected existing metadata fields to be preserved, got %#v", updatedMetadata)
 		}
 	})
@@ -1033,8 +1033,8 @@ func TestHandleSaveSecrets(t *testing.T) {
 		}
 
 		metadata := metadataService.items["/admin/realms/_/clients"]
-		if !reflect.DeepEqual(metadata.SecretsFromAttributes, []string{"/secret"}) {
-			t.Fatalf("expected metadata override path to be updated, got %#v", metadata.SecretsFromAttributes)
+		if !reflect.DeepEqual(metadata.SecretAttributes, []string{"/secret"}) {
+			t.Fatalf("expected metadata override path to be updated, got %#v", metadata.SecretAttributes)
 		}
 	})
 }
@@ -1088,8 +1088,8 @@ func TestEnsureSaveTargetAllowed(t *testing.T) {
 
 	err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", false)
 	assertTypedCategory(t, err, faults.ValidationError)
-	if !strings.Contains(err.Error(), "--overwrite") {
-		t.Fatalf("expected --overwrite hint, got %v", err)
+	if !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("expected --force hint, got %v", err)
 	}
 
 	if err := ensureSaveTargetAllowed(context.Background(), repo, "/customers/acme", true); err != nil {

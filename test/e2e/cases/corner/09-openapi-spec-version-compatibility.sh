@@ -113,8 +113,8 @@ case_write_validation_metadata() {
 
   cat >"${metadata_file}" <<EOF
 {
-  "operationsInfo": {
-    "createResource": {
+  "operations": {
+    "create": {
       "path": "${operation_path}",
       "validate": {
         "schemaRef": "openapi:request-body"

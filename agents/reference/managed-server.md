@@ -22,15 +22,15 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 5. HTTP response errors MUST preserve status code and response body context.
 6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
 7. List responses MUST be normalized into deterministic `resource.Resource` ordering.
-8. Resolved `operationsInfo.listCollection.payloadMutation[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
+8. Resolved `operations.list.transforms[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
 9. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
 12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
 13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
-14. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `payloadMutation` processing and preserve the original payload bytes/text.
+14. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
 15. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
-16. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseUrl`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+16. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
 17. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
 18. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
 19. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
@@ -86,7 +86,7 @@ Request throttling fields:
 10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
 
 ## Examples
-1. `Get` operation uses `operationsInfo.getResource.path` plus payload-type-aware default `Accept`.
+1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.
 2. `Update` operation resolves `ContentType` from metadata or payload-type defaults and sends structured or opaque payload body accordingly.
 3. `List` operation hydrates `resource.Resource` for each item with inferred alias and remote ID.
 4. `List` operation `jq` can filter by parent references (for example `.parentId == (resource("/admin/realms/platform/user-registry/ldap-test") | .id)`).

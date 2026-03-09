@@ -289,7 +289,7 @@ func detectSaveSecretCandidatesForCollection(
 			candidates[candidate] = struct{}{}
 		}
 
-		for _, candidate := range detectMetadataSecretCandidates(normalizedValue, resolvedMetadata.SecretsFromAttributes) {
+		for _, candidate := range detectMetadataSecretCandidates(normalizedValue, resolvedMetadata.SecretAttributes) {
 			candidates[candidate] = struct{}{}
 		}
 	}
@@ -353,7 +353,7 @@ func resolveDeclaredSaveSecretAttributes(
 		return nil, err
 	}
 
-	return dedupeAndSortSaveSecretAttributes(resolvedMetadata.SecretsFromAttributes), nil
+	return dedupeAndSortSaveSecretAttributes(resolvedMetadata.SecretAttributes), nil
 }
 
 func filterSaveSecretCandidatesForSafety(candidates []string, declared []string, allowPlaintext bool) []string {
@@ -416,7 +416,7 @@ func detectSaveSecretCandidates(
 	if err != nil {
 		return nil, err
 	}
-	for _, candidate := range detectMetadataSecretCandidates(normalizedValue, resolvedMetadata.SecretsFromAttributes) {
+	for _, candidate := range detectMetadataSecretCandidates(normalizedValue, resolvedMetadata.SecretAttributes) {
 		candidates[candidate] = struct{}{}
 	}
 

@@ -22,26 +22,26 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 	t.Parallel()
 
 	requiredPaths := []string{
-		"config",
-		"config print-template",
-		"config add",
-		"config edit",
-		"config init",
-		"config use",
-		"config current",
-		"config check",
-		"config resolve",
+		"context",
+		"context print-template",
+		"context add",
+		"context edit",
+		"context init",
+		"context use",
+		"context current",
+		"context check",
+		"context resolve",
 		"resource",
 		"resource get",
 		"resource delete",
 		"resource edit",
 		"resource copy",
-		"managed-server",
-		"managed-server get",
-		"managed-server get base-url",
-		"managed-server get token-url",
-		"managed-server get access-token",
-		"managed-server check",
+		"server",
+		"server get",
+		"server get base-url",
+		"server get token-url",
+		"server get access-token",
+		"server check",
 		"metadata",
 		"metadata resolve",
 		"metadata render",
@@ -148,7 +148,7 @@ func TestManagedServerGet(t *testing.T) {
 	t.Run("prints_base_url", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "managed-server", "get", "base-url")
+		output, err := executeForTest(testDeps(), "", "server", "get", "base-url")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -160,7 +160,7 @@ func TestManagedServerGet(t *testing.T) {
 	t.Run("prints_token_url", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "managed-server", "get", "token-url")
+		output, err := executeForTest(testDeps(), "", "server", "get", "token-url")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -172,7 +172,7 @@ func TestManagedServerGet(t *testing.T) {
 	t.Run("token_url_fails_when_oauth2_not_configured", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "--context", "bearer", "managed-server", "get", "token-url")
+		_, err := executeForTest(testDeps(), "", "--context", "bearer", "server", "get", "token-url")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "oauth2") {
 			t.Fatalf("expected oauth2 validation error, got %v", err)
@@ -185,7 +185,7 @@ func TestManagedServerGet(t *testing.T) {
 		deps := testDeps()
 		deps.Services.(*testServiceAccessor).server = &testManagedServerClient{accessToken: "oauth-access-token"}
 
-		output, err := executeForTest(deps, "", "managed-server", "get", "access-token")
+		output, err := executeForTest(deps, "", "server", "get", "access-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestManagedServerGet(t *testing.T) {
 			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil),
 		}
 
-		_, err := executeForTest(deps, "", "managed-server", "get", "access-token")
+		_, err := executeForTest(deps, "", "server", "get", "access-token")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "oauth2") {
 			t.Fatalf("expected oauth2 validation error, got %v", err)
@@ -219,11 +219,11 @@ func TestManagedServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "managed-server", "check")
+		output, err := executeForTest(deps, "", "server", "check")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "managed-server check: OK") {
+		if !strings.Contains(output, "server check: OK") {
 			t.Fatalf("expected success output, got %q", output)
 		}
 		if len(managedServerClient.requests) != 1 {
@@ -240,7 +240,7 @@ func TestManagedServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "managed-server", "check")
+		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "server", "check")
 		if err != nil {
 			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
@@ -261,7 +261,7 @@ func TestManagedServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
-		_, err := executeForTest(deps, "", "--context", "health-check-relative", "managed-server", "check")
+		_, err := executeForTest(deps, "", "--context", "health-check-relative", "server", "check")
 		if err != nil {
 			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
@@ -279,7 +279,7 @@ func TestManagedServerCheck(t *testing.T) {
 		deps := testDeps()
 		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
 
-		output, err := executeForTest(deps, "", "--context", "health-check-base-path", "managed-server", "check")
+		output, err := executeForTest(deps, "", "--context", "health-check-base-path", "server", "check")
 		if err != nil {
 			t.Fatalf("expected base-url fallback probe to succeed, got %v", err)
 		}
@@ -300,7 +300,7 @@ func TestManagedServerCheck(t *testing.T) {
 		deps := testDeps()
 		deps.Services.ManagedServerClient().(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
 
-		_, err := executeForTest(deps, "", "managed-server", "check")
+		_, err := executeForTest(deps, "", "server", "check")
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 }
@@ -310,7 +310,7 @@ func TestOutputPolicyValidation(t *testing.T) {
 
 	t.Run("managed_server_plain_text_commands_reject_structured_output", func(t *testing.T) {
 		t.Parallel()
-		_, err := executeForTest(testDeps(), "", "--output", "json", "managed-server", "get", "base-url")
+		_, err := executeForTest(testDeps(), "", "--output", "json", "server", "get", "base-url")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -320,15 +320,15 @@ func TestOutputPolicyValidation(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("config_show_rejects_json_output", func(t *testing.T) {
+	t.Run("context_show_rejects_json_output", func(t *testing.T) {
 		t.Parallel()
-		_, err := executeForTest(testDeps(), "", "--output", "json", "config", "show")
+		_, err := executeForTest(testDeps(), "", "--output", "json", "context", "show")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("config_show_allows_yaml_output", func(t *testing.T) {
+	t.Run("context_show_allows_yaml_output", func(t *testing.T) {
 		t.Parallel()
-		output, err := executeForTest(testDeps(), "", "--context", "dev", "--output", "yaml", "config", "show")
+		output, err := executeForTest(testDeps(), "", "--context", "dev", "--output", "yaml", "context", "show")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -607,7 +607,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/admin/realms/",
-			"--skip-items",
+			"--exclude",
 			"master,realm1",
 		)
 		if err != nil {
@@ -650,7 +650,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"/customers",
 			"--source",
 			"repository",
-			"--skip-items",
+			"--exclude",
 			"acme",
 		)
 		if err != nil {
@@ -845,7 +845,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/password"},
+			SecretAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "repository")
@@ -871,7 +871,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/password"},
+			SecretAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-server")
@@ -899,7 +899,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/password"},
+			SecretAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(
@@ -998,7 +998,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/password"},
+			SecretAttributes: []string{"/password"},
 		}
 
 		output, err := executeForTest(
@@ -1032,7 +1032,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {
 					Path: "/api/customers/acme",
@@ -1067,41 +1067,41 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected metadata section, got %#v", parsed["metadata"])
 		}
-		resourceInfo, ok := metadataValue["resourceInfo"].(map[string]any)
+		resource, ok := metadataValue["resource"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected metadata.resourceInfo, got %#v", metadataValue["resourceInfo"])
+			t.Fatalf("expected metadata.resource, got %#v", metadataValue["resource"])
 		}
-		if resourceInfo["collectionPath"] != "/customers" {
-			t.Fatalf("expected collectionPath /customers, got %v", resourceInfo["collectionPath"])
+		if resource["collectionPath"] != "/customers" {
+			t.Fatalf("expected collectionPath /customers, got %v", resource["collectionPath"])
 		}
 
-		operationsInfo, ok := metadataValue["operationsInfo"].(map[string]any)
+		operations, ok := metadataValue["operations"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected operationsInfo map, got %#v", metadataValue["operationsInfo"])
+			t.Fatalf("expected operations map, got %#v", metadataValue["operations"])
 		}
-		getOp, ok := operationsInfo["getResource"].(map[string]any)
+		getOp, ok := operations["get"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected getResource operation, got %#v", operationsInfo["getResource"])
+			t.Fatalf("expected get operation, got %#v", operations["get"])
 		}
 		if getOp["path"] != "/api/customers/acme" {
 			t.Fatalf("expected get path override, got %v", getOp["path"])
 		}
 		if _, hasAccept := getOp["accept"]; hasAccept {
-			t.Fatalf("expected getResource.accept to be omitted from metadata output, got %#v", getOp["accept"])
+			t.Fatalf("expected get.accept to be omitted from metadata output, got %#v", getOp["accept"])
 		}
 		assertOperationHTTPHeaderValue(t, getOp, "Accept", "application/json")
-		createOp, ok := operationsInfo["createResource"].(map[string]any)
+		createOp, ok := operations["create"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected createResource operation, got %#v", operationsInfo["createResource"])
+			t.Fatalf("expected create operation, got %#v", operations["create"])
 		}
 		if createOp["path"] != "/customers" {
 			t.Fatalf("expected create default path, got %v", createOp["path"])
 		}
 		if _, hasAccept := createOp["accept"]; hasAccept {
-			t.Fatalf("expected createResource.accept to be omitted from metadata output, got %#v", createOp["accept"])
+			t.Fatalf("expected create.accept to be omitted from metadata output, got %#v", createOp["accept"])
 		}
 		if _, hasContentType := createOp["contentType"]; hasContentType {
-			t.Fatalf("expected createResource.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
+			t.Fatalf("expected create.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
 		}
 		assertOperationHTTPHeaderValue(t, createOp, "Accept", "application/json")
 		assertOperationHTTPHeaderValue(t, createOp, "Content-Type", "application/json")
@@ -1117,7 +1117,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		metadataService := deps.Services.MetadataService().(*testMetadata)
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 
 		output, err := executeForTest(
@@ -1145,24 +1145,24 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected metadata section, got %#v", parsed["metadata"])
 		}
-		operationsInfo, ok := metadataValue["operationsInfo"].(map[string]any)
+		operations, ok := metadataValue["operations"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected operationsInfo map, got %#v", metadataValue["operationsInfo"])
+			t.Fatalf("expected operations map, got %#v", metadataValue["operations"])
 		}
-		getOp, ok := operationsInfo["getResource"].(map[string]any)
+		getOp, ok := operations["get"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected getResource operation, got %#v", operationsInfo["getResource"])
+			t.Fatalf("expected get operation, got %#v", operations["get"])
 		}
 		if _, hasAccept := getOp["accept"]; hasAccept {
-			t.Fatalf("expected getResource.accept to be omitted from metadata output, got %#v", getOp["accept"])
+			t.Fatalf("expected get.accept to be omitted from metadata output, got %#v", getOp["accept"])
 		}
 		assertOperationHTTPHeaderValue(t, getOp, "Accept", "application/json")
-		createOp, ok := operationsInfo["createResource"].(map[string]any)
+		createOp, ok := operations["create"].(map[string]any)
 		if !ok {
-			t.Fatalf("expected createResource operation, got %#v", operationsInfo["createResource"])
+			t.Fatalf("expected create operation, got %#v", operations["create"])
 		}
 		if _, hasContentType := createOp["contentType"]; hasContentType {
-			t.Fatalf("expected createResource.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
+			t.Fatalf("expected create.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
 		}
 		assertOperationHTTPHeaderValue(t, createOp, "Content-Type", "application/json")
 	})
@@ -1320,8 +1320,8 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 			"/items",
 			"--payload", "-",
 			"--header", "X-Test: value",
-			"--accept-type", "application/octet-stream",
-			"--content-type", "application/octet-stream",
+			"--accept-type", "binary",
+			"--content-type", "binary",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1334,10 +1334,10 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		}
 
 		call := orchestrator.requestCalls[0]
-		if call.accept != "application/octet-stream" {
+		if call.accept != "binary" {
 			t.Fatalf("expected Accept override to be forwarded, got %#v", call)
 		}
-		if call.contentType != "application/octet-stream" {
+		if call.contentType != "binary" {
 			t.Fatalf("expected Content-Type override to be forwarded, got %#v", call)
 		}
 		if call.headers["X-Test"] != "value" {
@@ -1361,7 +1361,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 			"resource", "request", "post",
 			"/items",
 			"--payload", "abc",
-			"--content-type", "application/octet-stream",
+			"--content-type", "binary",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "binary request payload requires") {
@@ -1639,8 +1639,8 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 
 				metadataService := newTestMetadata()
 				metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
-					IDFromAttribute:    "/realm",
-					AliasFromAttribute: "/realm",
+					IDAttribute:    "/realm",
+					AliasAttribute: "/realm",
 				}
 				metadataService.wildcardChildren["/admin/realms"] = true
 
@@ -1687,8 +1687,8 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/test"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "/realm",
-			AliasFromAttribute: "/realm",
+			IDAttribute:    "/realm",
+			AliasAttribute: "/realm",
 		}
 		metadataService.wildcardChildren["/admin/realms"] = true
 		orchestrator := &testOrchestrator{metadataService: metadataService}
@@ -1752,7 +1752,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", "/id=acme,/name=Acme,/spec/tier=gold",
-			"--overwrite",
+			"--force",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -1769,7 +1769,7 @@ func TestResourceMutationExplicitPayloadInlineInputs(t *testing.T) {
 		}
 		spec, ok := body["spec"].(map[string]any)
 		if !ok || spec["tier"] != "gold" {
-			t.Fatalf("expected dotted assignments to build nested object for save, got %#v", body)
+			t.Fatalf("expected pointer assignments to build nested object for save, got %#v", body)
 		}
 	})
 }
@@ -1788,10 +1788,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--overwrite",
+			"--force",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --overwrite: %v", err)
+			t.Fatalf("unexpected error with --force: %v", err)
 		}
 	})
 
@@ -1828,7 +1828,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("without_input_collection_marker_reads_remote_list_when_resource_get_is_not_found", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/user-registry/AD PRD/mappers"] = metadatadomain.ResourceMetadata{
-			AliasFromAttribute: "/name",
+			AliasAttribute: "/name",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -1882,7 +1882,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("without_input_remote_list_falls_back_to_common_item_identity_attributes", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			AliasFromAttribute: "/clientId",
+			AliasAttribute: "/clientId",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -1929,7 +1929,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("default_list_payload_saves_as_items", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -1959,7 +1959,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("skip_items_filters_remote_collection_before_save", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms"] = metadatadomain.ResourceMetadata{
-			AliasFromAttribute: "/realm",
+			AliasAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -1992,7 +1992,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/",
-			"--skip-items",
+			"--exclude",
 			"master,realm1",
 		)
 		if err != nil {
@@ -2054,7 +2054,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"/customers/acme",
 			"--payload",
 			payloadFile,
-			"--overwrite",
+			"--force",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -2073,10 +2073,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("as_one_resource_overrides_list_item_save", func(t *testing.T) {
+	t.Run("mode_single_saves_list_as_one_resource", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2087,7 +2087,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers",
-			"--as-one-resource",
+			"--mode",
+			"single",
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -2104,7 +2105,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 	})
 
-	t.Run("as_items_requires_list_payload", func(t *testing.T) {
+	t.Run("mode_items_requires_list_payload", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2115,12 +2116,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--as-items",
+			"--mode",
+			"items",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("as_items_and_as_one_resource_conflict", func(t *testing.T) {
+	t.Run("invalid_mode_is_rejected", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2131,13 +2133,16 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers",
-			"--as-items",
-			"--as-one-resource",
+			"--mode",
+			"invalid",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--mode") {
+			t.Fatalf("expected mode validation error, got %v", err)
+		}
 	})
 
-	t.Run("skip_items_conflicts_with_as_one_resource", func(t *testing.T) {
+	t.Run("exclude_conflicts_with_mode_single", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2148,12 +2153,13 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers",
-			"--as-one-resource",
-			"--skip-items",
+			"--mode",
+			"single",
+			"--exclude",
 			"acme",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if err == nil || !strings.Contains(err.Error(), "--skip-items") {
+		if err == nil || !strings.Contains(err.Error(), "--exclude") {
 			t.Fatalf("expected skip-items validation error, got %v", err)
 		}
 	})
@@ -2182,7 +2188,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("list_save_blocks_all_items_before_any_write_when_plaintext_secret_is_detected", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2203,8 +2209,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("list_save_metadata_declared_plaintext_secret_is_auto_masked_and_stored", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "/id",
-			SecretsFromAttributes: []string{"/secret"},
+			IDAttribute:      "/id",
+			SecretAttributes: []string{"/secret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2239,7 +2245,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_auto_masks_and_stores_plaintext", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/credentials/authValue"},
+			SecretAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2278,7 +2284,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_requires_secret_provider", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/credentials/authValue"},
+			SecretAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2303,7 +2309,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("metadata_secrets_from_attributes_accepts_placeholders", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/credentials/authValue"},
+			SecretAttributes: []string{"/credentials/authValue"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2347,7 +2353,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("ignore_flag_allows_metadata_declared_secret", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			SecretsFromAttributes: []string{"/password"},
+			SecretAttributes: []string{"/password"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -2371,8 +2377,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("handle_secrets_masks_payload_updates_metadata_and_stores_secret_values", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "/id",
-			SecretsFromAttributes: []string{"/credentials/authValue", "/existingSecret"},
+			IDAttribute:      "/id",
+			SecretAttributes: []string{"/credentials/authValue", "/existingSecret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
@@ -2417,15 +2423,15 @@ func TestResourceSaveInputModes(t *testing.T) {
 
 		updatedMetadata := metadataService.items["/customers/acme"]
 		expected := []string{"/apiToken", "/credentials/authValue", "/existingSecret"}
-		if !reflect.DeepEqual(updatedMetadata.SecretsFromAttributes, expected) {
-			t.Fatalf("expected merged metadata attributes %#v, got %#v", expected, updatedMetadata.SecretsFromAttributes)
+		if !reflect.DeepEqual(updatedMetadata.SecretAttributes, expected) {
+			t.Fatalf("expected merged metadata attributes %#v, got %#v", expected, updatedMetadata.SecretAttributes)
 		}
 	})
 
 	t.Run("handle_secrets_list_payload_uses_path_scoped_secret_keys", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/customers"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 		deps := newResourceSaveDeps(orchestrator, metadataService)
@@ -2540,7 +2546,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("remote_list_handle_secrets_subset_updates_wildcard_metadata_then_fails_on_unhandled", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2569,8 +2575,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
-		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"/secret"}) {
-			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
+		if !reflect.DeepEqual(wildcardMetadata.SecretAttributes, []string{"/secret"}) {
+			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretAttributes)
 		}
 		if secretProvider.values["/admin/realms/master/clients/app-a:/secret"] != "sec-a" {
 			t.Fatalf("expected app-a secret to be stored, got %#v", secretProvider.values)
@@ -2583,7 +2589,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 	t.Run("remote_list_handle_secrets_subset_with_ignore_saves_items", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2622,18 +2628,18 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 
 		wildcardMetadata := metadataService.items["/admin/realms/_/clients"]
-		if !reflect.DeepEqual(wildcardMetadata.SecretsFromAttributes, []string{"/secret"}) {
-			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretsFromAttributes)
+		if !reflect.DeepEqual(wildcardMetadata.SecretAttributes, []string{"/secret"}) {
+			t.Fatalf("expected wildcard metadata secretsFromAttributes to include secret, got %#v", wildcardMetadata.SecretAttributes)
 		}
 	})
 
 	t.Run("wildcard_handle_secrets_requested_attribute_skips_collections_without_candidate", func(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/master/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		metadataService.items["/admin/realms/tenant-a/clients"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute: "/id",
+			IDAttribute: "/id",
 		}
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
@@ -2830,7 +2836,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme","name":"Acme"}`,
-			"--overwrite",
+			"--force",
 		)
 		if err != nil {
 			t.Fatalf("unexpected save error: %v", err)
@@ -2859,7 +2865,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme","name":"Acme"}`,
-			"--overwrite",
+			"--force",
 			"--push",
 		)
 		if err != nil {
@@ -2886,7 +2892,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme"}`,
-			"--overwrite",
+			"--force",
 			"--push",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -2918,7 +2924,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme"}`,
-			"--overwrite",
+			"--force",
 			"--push",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -2936,7 +2942,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("message_appends_to_default_commit_message", func(t *testing.T) {
+	t.Run("message_overrides_default_commit_message", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -2949,7 +2955,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme"}`,
-			"--overwrite",
+			"--force",
 			"--message", "ticket-123",
 		)
 		if err != nil {
@@ -2958,8 +2964,8 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		if len(repoService.commitCalls) != 1 {
 			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
 		}
-		if repoService.commitCalls[0] != "declarest: save resource /customers/acme - ticket-123" {
-			t.Fatalf("unexpected appended commit message: %q", repoService.commitCalls[0])
+		if repoService.commitCalls[0] != "ticket-123" {
+			t.Fatalf("unexpected commit message override: %q", repoService.commitCalls[0])
 		}
 	})
 
@@ -2976,8 +2982,8 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme"}`,
-			"--overwrite",
-			"--message-override", "custom commit",
+			"--force",
+			"--message", "custom commit",
 		)
 		if err != nil {
 			t.Fatalf("unexpected save error: %v", err)
@@ -2990,7 +2996,7 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("message_flags_are_mutually_exclusive", func(t *testing.T) {
+	t.Run("empty_message_is_rejected", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -3003,9 +3009,8 @@ func TestResourceSaveGitCommitMessages(t *testing.T) {
 			"resource", "save",
 			"/customers/acme",
 			"--payload", `{"id":"acme"}`,
-			"--overwrite",
-			"--message", "suffix",
-			"--message-override", "override",
+			"--force",
+			"--message", "",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--message") {
@@ -3260,7 +3265,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("message_appends_to_default_commit_message", func(t *testing.T) {
+	t.Run("message_overrides_default_commit_message", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -3282,8 +3287,8 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		if len(repoService.commitCalls) != 1 {
 			t.Fatalf("expected one commit call, got %d", len(repoService.commitCalls))
 		}
-		if repoService.commitCalls[0] != "declarest: delete resource /customers/acme - ticket-456" {
-			t.Fatalf("unexpected appended commit message: %q", repoService.commitCalls[0])
+		if repoService.commitCalls[0] != "ticket-456" {
+			t.Fatalf("unexpected override commit message: %q", repoService.commitCalls[0])
 		}
 	})
 
@@ -3301,7 +3306,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"/customers/acme",
 			"--confirm-delete",
 			"--source", "repository",
-			"--message-override", "custom delete commit",
+			"--message", "custom delete commit",
 		)
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
@@ -3337,7 +3342,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("message_flags_are_mutually_exclusive", func(t *testing.T) {
+	t.Run("empty_message_is_rejected", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -3351,8 +3356,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"/customers/acme",
 			"--confirm-delete",
 			"--source", "repository",
-			"--message", "suffix",
-			"--message-override", "override",
+			"--message", "",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--message") {
@@ -3374,7 +3378,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected resolve error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
+		if !strings.Contains(output, "\"idAttribute\": \"/id\"") {
 			t.Fatalf("expected resolved metadata output, got %q", output)
 		}
 	})
@@ -3562,14 +3566,14 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer selector error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
-			t.Fatalf("expected inferred idFromAttribute, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/id\"") {
+			t.Fatalf("expected inferred idAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"/clientId\"") {
-			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
+		if !strings.Contains(output, "\"aliasAttribute\": \"/clientId\"") {
+			t.Fatalf("expected inferred aliasAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"/secret\"\n    ]") {
-			t.Fatalf("expected inferred secretInAttributes, got %q", output)
+		if !strings.Contains(output, "\"secretAttributes\": [\n      \"/secret\"\n    ]") {
+			t.Fatalf("expected inferred secretAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\": null") ||
 			strings.Contains(output, "\"filter\": null") ||
@@ -3612,14 +3616,14 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer selector error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") {
-			t.Fatalf("expected inferred idFromAttribute, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/id\"") {
+			t.Fatalf("expected inferred idAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"/clientId\"") {
-			t.Fatalf("expected inferred aliasFromAttribute, got %q", output)
+		if !strings.Contains(output, "\"aliasAttribute\": \"/clientId\"") {
+			t.Fatalf("expected inferred aliasAttribute, got %q", output)
 		}
-		if !strings.Contains(output, "\"secretInAttributes\": [\n      \"/secret\"\n    ]") {
-			t.Fatalf("expected inferred secretInAttributes, got %q", output)
+		if !strings.Contains(output, "\"secretAttributes\": [\n      \"/secret\"\n    ]") {
+			t.Fatalf("expected inferred secretAttributes, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
 			t.Fatalf("expected openapi-default operations to be omitted from infer output, got %q", output)
@@ -3657,11 +3661,11 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected infer collection-path error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected inferred idFromAttribute=realm, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/realm\"") {
+			t.Fatalf("expected inferred idAttribute=realm, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected inferred aliasFromAttribute=realm, got %q", output)
+		if !strings.Contains(output, "\"aliasAttribute\": \"/realm\"") {
+			t.Fatalf("expected inferred aliasAttribute=realm, got %q", output)
 		}
 		if strings.Contains(output, "\"operations\"") {
 			t.Fatalf("expected default operations to be omitted from infer output, got %q", output)
@@ -3673,9 +3677,9 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/_/clients/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "/id",
-			AliasFromAttribute:    "/clientId",
-			SecretsFromAttributes: []string{"/secret"},
+			IDAttribute:      "/id",
+			AliasAttribute:   "/clientId",
+			SecretAttributes: []string{"/secret"},
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3702,8 +3706,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		metadataService := newTestMetadata()
 		metadataService.rejectSelectorPathInResolve = true
 		metadataService.items["/admin/realms/_/user-registry"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "/id",
-			AliasFromAttribute: "/name",
+			IDAttribute:    "/id",
+			AliasAttribute: "/name",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3717,8 +3721,8 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected selector metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/id\"") ||
-			!strings.Contains(output, "\"aliasFromAttribute\": \"/name\"") {
+		if !strings.Contains(output, "\"idAttribute\": \"/id\"") ||
+			!strings.Contains(output, "\"aliasAttribute\": \"/name\"") {
 			t.Fatalf("expected selector metadata payload in output, got %q", output)
 		}
 	})
@@ -3728,8 +3732,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "/realm",
-			AliasFromAttribute: "/realm",
+			IDAttribute:    "/realm",
+			AliasAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3743,24 +3747,23 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected idFromAttribute override in metadata get output, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/realm\"") {
+			t.Fatalf("expected idAttribute override in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"getResource\"") ||
-			!strings.Contains(output, "\"listCollection\"") {
+		if !strings.Contains(output, "\"get\"") ||
+			!strings.Contains(output, "\"list\"") {
 			t.Fatalf("expected default operation entries in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"httpMethod\": \"GET\"") {
-			t.Fatalf("expected canonical httpMethod field in metadata get output, got %q", output)
+		if !strings.Contains(output, "\"method\": \"GET\"") {
+			t.Fatalf("expected canonical method field in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"httpHeaders\": [") {
-			t.Fatalf("expected canonical httpHeaders field in metadata get output, got %q", output)
+		if !strings.Contains(output, "\"headers\": {") {
+			t.Fatalf("expected canonical headers field in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"name\": \"Accept\"") ||
-			!strings.Contains(output, "\"value\": \"{{payload_media_type .}}\"") {
+		if !strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
 			t.Fatalf("expected payload-aware Accept header placeholder in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"name\": \"Content-Type\"") {
+		if !strings.Contains(output, "\"Content-Type\": \"{{payload_media_type .}}\"") {
 			t.Fatalf("expected Content-Type header in metadata get output, got %q", output)
 		}
 		if strings.Contains(output, "\"accept\":") {
@@ -3770,7 +3773,7 @@ func TestMetadataPathCommands(t *testing.T) {
 			t.Fatalf("expected metadata get output without contentType field, got %q", output)
 		}
 		if strings.Contains(output, "\"ignoreAttributes\":") {
-			t.Fatalf("expected metadata get output without compareResources ignoreAttributes alias, got %q", output)
+			t.Fatalf("expected metadata get output without compare ignoreAttributes alias, got %q", output)
 		}
 		if !strings.Contains(output, "\"path\": \"./{{.id}}\"") {
 			t.Fatalf("expected default get resource path in metadata get output, got %q", output)
@@ -3782,8 +3785,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "/realm",
-			AliasFromAttribute: "/realm",
+			IDAttribute:    "/realm",
+			AliasAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3801,11 +3804,10 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"name\": \"Accept\"") ||
-			!strings.Contains(output, "\"value\": \"{{payload_media_type .}}\"") {
+		if !strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
 			t.Fatalf("expected payload-aware Accept header placeholder in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"name\": \"Content-Type\"") {
+		if !strings.Contains(output, "\"Content-Type\": \"{{payload_media_type .}}\"") {
 			t.Fatalf("expected payload-aware Content-Type header placeholder in metadata get output, got %q", output)
 		}
 		if strings.Contains(output, "\"accept\":") || strings.Contains(output, "\"contentType\":") {
@@ -3818,8 +3820,8 @@ func TestMetadataPathCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/admin/realms/"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "/realm",
-			AliasFromAttribute: "/realm",
+			IDAttribute:    "/realm",
+			AliasAttribute: "/realm",
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
@@ -3834,10 +3836,10 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get overrides-only error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected idFromAttribute override in metadata get overrides-only output, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/realm\"") {
+			t.Fatalf("expected idAttribute override in metadata get overrides-only output, got %q", output)
 		}
-		if strings.Contains(output, "\"getResource\"") || strings.Contains(output, "\"listCollection\"") {
+		if strings.Contains(output, "\"get\"") || strings.Contains(output, "\"list\"") {
 			t.Fatalf("expected overrides-only output without default operation entries, got %q", output)
 		}
 	})
@@ -3874,17 +3876,17 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get fallback error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected inferred idFromAttribute in metadata get fallback output, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/realm\"") {
+			t.Fatalf("expected inferred idAttribute in metadata get fallback output, got %q", output)
 		}
-		if !strings.Contains(output, "\"aliasFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected inferred aliasFromAttribute in metadata get fallback output, got %q", output)
+		if !strings.Contains(output, "\"aliasAttribute\": \"/realm\"") {
+			t.Fatalf("expected inferred aliasAttribute in metadata get fallback output, got %q", output)
 		}
-		if !strings.Contains(output, "\"getResource\"") || !strings.Contains(output, "\"listCollection\"") {
+		if !strings.Contains(output, "\"get\"") || !strings.Contains(output, "\"list\"") {
 			t.Fatalf("expected merged default operations in metadata get fallback output, got %q", output)
 		}
-		if !strings.Contains(output, "\"httpMethod\": \"GET\"") ||
-			!strings.Contains(output, "\"value\": \"{{payload_media_type .}}\"") {
+		if !strings.Contains(output, "\"method\": \"GET\"") ||
+			!strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
 			t.Fatalf("expected canonical metadata operation fields in fallback output, got %q", output)
 		}
 	})
@@ -3922,10 +3924,10 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get overrides-only fallback error: %v", err)
 		}
-		if !strings.Contains(output, "\"idFromAttribute\": \"/realm\"") {
-			t.Fatalf("expected inferred idFromAttribute in metadata get overrides-only fallback output, got %q", output)
+		if !strings.Contains(output, "\"idAttribute\": \"/realm\"") {
+			t.Fatalf("expected inferred idAttribute in metadata get overrides-only fallback output, got %q", output)
 		}
-		if strings.Contains(output, "\"getResource\"") || strings.Contains(output, "\"listCollection\"") {
+		if strings.Contains(output, "\"get\"") || strings.Contains(output, "\"list\"") {
 			t.Fatalf("expected compact inferred metadata in overrides-only fallback output, got %q", output)
 		}
 	})
@@ -3998,7 +4000,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if !found {
 			t.Fatal("expected inferred metadata to be persisted")
 		}
-		if stored.IDFromAttribute != "/realm" || stored.AliasFromAttribute != "/realm" {
+		if stored.IDAttribute != "/realm" || stored.AliasAttribute != "/realm" {
 			t.Fatalf("expected persisted compact identity attributes, got %#v", stored)
 		}
 		if len(stored.Operations) != 0 {
@@ -4288,11 +4290,11 @@ func TestSecretCommands(t *testing.T) {
 
 		updated := metadataService.items["/customers/acme"]
 		expected := []string{"/apiToken", "/password"}
-		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
-			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
+		if !reflect.DeepEqual(updated.SecretAttributes, expected) {
+			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretAttributes)
 		}
-		if updated.IDFromAttribute != "/id" {
-			t.Fatalf("expected existing idFromAttribute to be preserved, got %q", updated.IDFromAttribute)
+		if updated.IDAttribute != "/id" {
+			t.Fatalf("expected existing idAttribute to be preserved, got %q", updated.IDAttribute)
 		}
 	})
 
@@ -4317,8 +4319,8 @@ func TestSecretCommands(t *testing.T) {
 
 		updated := metadataService.items["/customers/acme"]
 		expected := []string{"/password"}
-		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
-			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
+		if !reflect.DeepEqual(updated.SecretAttributes, expected) {
+			t.Fatalf("expected secretsFromAttributes %#v, got %#v", expected, updated.SecretAttributes)
 		}
 	})
 
@@ -4343,11 +4345,11 @@ func TestSecretCommands(t *testing.T) {
 			t.Fatalf("detect --fix without input returned error: %v", err)
 		}
 
-		if !reflect.DeepEqual(metadataService.items["/customers/acme"].SecretsFromAttributes, []string{"/password"}) {
-			t.Fatalf("expected /customers/acme metadata update, got %#v", metadataService.items["/customers/acme"].SecretsFromAttributes)
+		if !reflect.DeepEqual(metadataService.items["/customers/acme"].SecretAttributes, []string{"/password"}) {
+			t.Fatalf("expected /customers/acme metadata update, got %#v", metadataService.items["/customers/acme"].SecretAttributes)
 		}
-		if !reflect.DeepEqual(metadataService.items["/customers/beta"].SecretsFromAttributes, []string{"/apiToken"}) {
-			t.Fatalf("expected /customers/beta metadata update, got %#v", metadataService.items["/customers/beta"].SecretsFromAttributes)
+		if !reflect.DeepEqual(metadataService.items["/customers/beta"].SecretAttributes, []string{"/apiToken"}) {
+			t.Fatalf("expected /customers/beta metadata update, got %#v", metadataService.items["/customers/beta"].SecretAttributes)
 		}
 	})
 
@@ -4377,8 +4379,8 @@ func TestSecretCommands(t *testing.T) {
 
 		metadataService := newTestMetadata()
 		metadataService.items["/customers/acme"] = metadatadomain.ResourceMetadata{
-			IDFromAttribute:       "/id",
-			SecretsFromAttributes: []string{"/password"},
+			IDAttribute:      "/id",
+			SecretAttributes: []string{"/password"},
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {Path: "/api/customers/acme"},
 			},
@@ -4403,8 +4405,8 @@ func TestSecretCommands(t *testing.T) {
 
 		updated := metadataService.items["/customers/acme"]
 		expected := []string{"/apiToken", "/password"}
-		if !reflect.DeepEqual(updated.SecretsFromAttributes, expected) {
-			t.Fatalf("expected merged secretsFromAttributes %#v, got %#v", expected, updated.SecretsFromAttributes)
+		if !reflect.DeepEqual(updated.SecretAttributes, expected) {
+			t.Fatalf("expected merged secretsFromAttributes %#v, got %#v", expected, updated.SecretAttributes)
 		}
 	})
 
@@ -4817,16 +4819,16 @@ func TestResourceListRecursiveFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected direct list error: %v", err)
 	}
-	if !strings.Contains(directOutput, "customers (customers)") {
-		t.Fatalf("expected direct list text output, got %q", directOutput)
+	if !strings.Contains(directOutput, "\"path\": \"/customers\"") {
+		t.Fatalf("expected direct list json output, got %q", directOutput)
 	}
 
 	recursiveOutput, err := executeForTest(testDeps(), "", "resource", "list", "/customers", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive list error: %v", err)
 	}
-	if !strings.Contains(recursiveOutput, "nested (nested)") {
-		t.Fatalf("expected recursive list text output, got %q", recursiveOutput)
+	if !strings.Contains(recursiveOutput, "\"path\": \"/customers/nested\"") {
+		t.Fatalf("expected recursive list json output, got %q", recursiveOutput)
 	}
 }
 
@@ -4925,10 +4927,10 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected managed-server text output by default, got %q", output)
+		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected managed-server json output by default, got %q", output)
 		}
-		if strings.Contains(output, "repo-only (repo-only)") {
+		if strings.Contains(output, "\"id\": \"repo-only\"") {
 			t.Fatalf("expected repository output to be absent by default, got %q", output)
 		}
 	})
@@ -4962,10 +4964,10 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "remote-only (remote-only)") {
-			t.Fatalf("expected managed-server output with --source managed-server, got %q", output)
+		if !strings.Contains(output, "\"id\": \"remote-only\"") {
+			t.Fatalf("expected managed-server json output with --source managed-server, got %q", output)
 		}
-		if strings.Contains(output, "repo-only (repo-only)") {
+		if strings.Contains(output, "\"id\": \"repo-only\"") {
 			t.Fatalf("expected repository output to be absent with --source managed-server, got %q", output)
 		}
 	})
@@ -4982,10 +4984,10 @@ func TestResourceListSourceFlags(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if !strings.Contains(output, "repo-only (repo-only)") {
-			t.Fatalf("expected repository output, got %q", output)
+		if !strings.Contains(output, "\"id\": \"repo-only\"") {
+			t.Fatalf("expected repository json output, got %q", output)
 		}
-		if strings.Contains(output, "remote-only (remote-only)") {
+		if strings.Contains(output, "\"id\": \"remote-only\"") {
 			t.Fatalf("expected remote output to be absent with --source repository, got %q", output)
 		}
 	})
@@ -5025,16 +5027,16 @@ func TestResourceListSourceFlags(t *testing.T) {
 			"resource",
 			"list",
 			"/admin/realms",
-			"--skip-items",
+			"--exclude",
 			"master,realm1",
 		)
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
-		if strings.Contains(output, "master (master)") || strings.Contains(output, "realm1 (realm1)") {
+		if strings.Contains(output, "\"id\": \"master\"") || strings.Contains(output, "\"id\": \"realm1\"") {
 			t.Fatalf("expected skipped items to be absent, got %q", output)
 		}
-		if !strings.Contains(output, "realm2 (realm2)") {
+		if !strings.Contains(output, "\"id\": \"realm2\"") {
 			t.Fatalf("expected non-skipped item to remain, got %q", output)
 		}
 	})
@@ -5164,7 +5166,7 @@ func TestResourceApplyRefreshesRepositoryExplicitInput(t *testing.T) {
 	orchestrator := &testOrchestrator{metadataService: newTestMetadata()}
 	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-	_, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "apply", "/customers/acme", "--refresh-repository")
+	_, err := executeForTest(deps, `{"id":"acme","tier":"pro"}`, "resource", "apply", "/customers/acme", "--refresh")
 	if err != nil {
 		t.Fatalf("unexpected apply refresh error: %v", err)
 	}
@@ -5189,7 +5191,7 @@ func TestResourceApplyRefreshesRepositoryRecursive(t *testing.T) {
 	}
 	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-	_, err := executeForTest(deps, "", "resource", "apply", "/customers", "--recursive", "--refresh-repository")
+	_, err := executeForTest(deps, "", "resource", "apply", "/customers", "--recursive", "--refresh")
 	if err != nil {
 		t.Fatalf("unexpected recursive apply refresh error: %v", err)
 	}
@@ -5797,7 +5799,7 @@ func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 		args            []string
 		expectedSnippet string
 	}{
-		{name: "config", args: []string{"config"}, expectedSnippet: "Manage contexts"},
+		{name: "context", args: []string{"context"}, expectedSnippet: "Manage contexts"},
 		{name: "metadata", args: []string{"metadata"}, expectedSnippet: "Manage metadata"},
 		{name: "repository", args: []string{"repository"}, expectedSnippet: "Manage local repository state"},
 		{name: "resource", args: []string{"resource"}, expectedSnippet: "Manage resources"},
@@ -5877,14 +5879,14 @@ func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
 	if !strings.Contains(output, "use '-' to read object from stdin") {
 		t.Fatalf("expected --payload description to mention '-' stdin hint, got %q", output)
 	}
-	if !strings.Contains(output, "--overwrite") {
-		t.Fatalf("expected --overwrite in resource save help output, got %q", output)
+	if !strings.Contains(output, "--force") {
+		t.Fatalf("expected --force in resource save help output, got %q", output)
 	}
 	if !strings.Contains(output, "--push") {
 		t.Fatalf("expected --push in resource save help output, got %q", output)
 	}
-	if strings.Contains(output, "--force ") {
-		t.Fatalf("expected legacy --force alias to be hidden from resource save help output, got %q", output)
+	if strings.Contains(output, "--overwrite") {
+		t.Fatalf("expected legacy --overwrite flag to be hidden from resource save help output, got %q", output)
 	}
 }
 

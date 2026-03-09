@@ -2,7 +2,7 @@
 
 ## Context
 
-A critical UX audit of all user-facing surfaces in the DeclaREST project: CLI commands/flags, metadata file format (wire schema), context configuration files, and K8S Operator CRDs. The audit found naming inconsistencies across surfaces, verbose/confusing field names in metadata files, non-standard CLI flag patterns, and structural issues in CRD schemas. No backward compatibility is required — all changes target a clean break (CLI major version bump + CRD `v1beta1`).
+A critical UX audit of all user-facing surfaces in the DeclaREST project: CLI commands/flags, metadata file format (wire schema), context configuration files, and K8S Operator CRDs. The audit found naming inconsistencies across surfaces, verbose/confusing field names in metadata files, non-standard CLI flag patterns, and structural issues in CRD schemas. No backward compatibility is required — all changes target a clean break (CLI major version bump + CRD `v1alpha1`).
 
 ---
 
@@ -87,7 +87,9 @@ Current wire format forces `[{"name":"X-Foo","value":"bar"}]`. Users should writ
 
 | Before | After |
 |--------|-------|
-| `"httpHeaders": [{"name": "X-Foo", "value": "bar"}]` | `"headers": {"X-Foo": "bar"}` |
+| `"httpHeaders": [{"name": "X-Foo", "value": "bar"}]` | `"headers": [{"X-Foo": "bar"}]` |
+
+should support one or a list of headers
 
 **Files:** `metadata/schema_serialization.go` — remove `httpHeaderWire` struct (lines 68-71), `httpHeaderListPointer`, `httpHeaderListToMap`
 
@@ -119,47 +121,23 @@ Drop the `From` preposition.
 
 **Files:** `metadata/types.go` (line 69), `metadata/schema_serialization.go`
 
-### 2.8 `externalizedAttributes` to `externalFiles` [Low]
-
-More concise and clearer intent.
-
-**Files:** `metadata/types.go` (line 26), `metadata/schema_serialization.go`, `metadata/resource_metadata_helpers.go`
-
 ---
 
 ## Category 3: CLI Flags
 
-### 3.1 `--payload` to `--file` [High]
-
-The `-f` shorthand is intuitive for `--file` (matches kubectl), not `--payload`.
-
-**Files:** `internal/cli/cliutil/flags.go`, all command files with `BindInputFlags`/`BindResourceInputFlags`, all example strings
-
-### 3.2 `--confirm-delete` to Interactive Prompt + `--yes`/`-y` [High]
-
-Standard pattern: prompt interactively, `--yes`/`-y` to skip in scripts. When stdin is not a TTY, require `--yes`.
-
-**Files:** `internal/cli/resource/command_delete.go`, `internal/cli/resource/command_request.go`
-
-### 3.3 `--force-push`/`-y` to `--force`/`-f` [Medium]
-
-`-y` shorthand for "force" is unintuitive.
-
-**Files:** `internal/cli/repo/command.go`
-
-### 3.4 Unify `--overwrite` and `--force` [Medium]
+### 3.1 Unify `--overwrite` and `--force` [Medium]
 
 `resource save --overwrite` and `resource apply --force` mean the same thing. Standardize on `--force`.
 
 **Files:** `internal/cli/resource/command_save.go` (line 136)
 
-### 3.5 `--as-items` + `--as-one-resource` to `--mode` [Medium]
+### 3.2 `--as-items` + `--as-one-resource` to `--mode` [Medium]
 
 Replace two mutually exclusive booleans with `--mode items|single|auto`.
 
 **Files:** `internal/cli/resource/command_save.go` (lines 131-132)
 
-### 3.6 Simplify Commit Message Flags [Medium]
+### 3.4 Simplify Commit Message Flags [Medium]
 
 | Before | After |
 |--------|-------|
@@ -167,19 +145,19 @@ Replace two mutually exclusive booleans with `--mode items|single|auto`.
 
 **Files:** `internal/cli/resource/local_edit_helpers.go`, `command_save.go`, `command_delete.go`, `command_copy.go`
 
-### 3.7 `--skip-items` to `--exclude` [Low]
+### 3.5 `--skip-items` to `--exclude` [Low]
 
 Shorter, standard term. Also make repeatable in addition to comma-separated.
 
 **Files:** `internal/cli/resource/command.go`
 
-### 3.8 `--refresh-repository` to `--refresh` [Low]
+### 3.6 `--refresh-repository` to `--refresh` [Low]
 
 Context makes it clear what is being refreshed.
 
 **Files:** `internal/cli/resource/command_apply.go`, `command_create.go`, `command_update.go`
 
-### 3.9 `--content-type` Short Forms Only [Low]
+### 3.7 `--content-type` Short Forms Only [Low]
 
 Accept only `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, `binary` — auto-map to MIME types internally.
 
@@ -212,16 +190,6 @@ Verbose hyphenated name. "Server" is sufficient in context.
 | `declarest managed-server get base-url` | `declarest server get base-url` |
 
 **Files:** `internal/cli/managedserver/command.go`
-
-### 4.3 `repository` Primary to `repo` [Low]
-
-The alias `repo` exists but isn't primary. Swap.
-
-| Before | After |
-|--------|-------|
-| `Use: "repository"`, `Aliases: ["repo"]` | `Use: "repo"`, `Aliases: ["repository"]` |
-
-**Files:** `internal/cli/repo/command.go`
 
 ---
 
@@ -271,13 +239,7 @@ Don't abbreviate in config files.
 
 **Files:** `config/types.go` (line 17), `config/context_service.go`
 
-### 6.2 `managedServer` Config Section [Medium]
-
-Align with CLI command rename (4.2): `"managedServer"` to `"server"` in YAML tags.
-
-**Files:** `config/types.go` (line 24)
-
-### 6.3 Sync State Casing [Low]
+### 6.2 Sync State Casing [Low]
 
 `in_sync` uses snake_case while everything else is camelCase.
 
@@ -310,7 +272,7 @@ Standardize on Go convention: lowercase-start for all error strings. Audit all `
 | **1** | Cross-cutting naming (1.1-1.3, 6.1) | Foundation — other changes depend on stable naming |
 | **2** | Metadata wire format (2.1-2.8) | Highest user-facing impact for bundle authors |
 | **3** | CLI commands + flags (3.1-3.9, 4.1-4.3) | User-facing CLI surface improvements |
-| **4** | K8S CRD schema (5.1-5.4) | CRD version bump to `v1beta1` |
+| **4** | K8S CRD schema (5.1-5.4) | CRD version bump to `v1alpha1` |
 | **5** | Config + output polish (6.2-6.3, 7.1-7.2) | Final polish |
 
 ---

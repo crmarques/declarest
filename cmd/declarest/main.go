@@ -76,7 +76,7 @@ func contextNameFromPositionalContextArg(args []string) string {
 	}
 
 	switch resolvedCommand.commandPath {
-	case "declarest config check", "declarest config init":
+	case "declarest context check", "declarest context init":
 		if len(resolvedCommand.positionalArgs) > 0 {
 			return strings.TrimSpace(resolvedCommand.positionalArgs[0])
 		}

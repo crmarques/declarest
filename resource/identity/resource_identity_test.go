@@ -34,7 +34,7 @@ func TestResolveAliasAndRemoteIDJSONPointers(t *testing.T) {
 
 	alias, remoteID, err := ResolveAliasAndRemoteID(
 		"/customers/acme",
-		metadata.ResourceMetadata{AliasFromAttribute: "/spec/slug", IDFromAttribute: "/spec/id"},
+		metadata.ResourceMetadata{AliasAttribute: "/spec/slug", IDAttribute: "/spec/id"},
 		map[string]any{"spec": map[string]any{"slug": "new-alias", "id": "42"}},
 	)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestResolveAliasAndRemoteIDForListItemRequiresAlias(t *testing.T) {
 
 	_, _, err := ResolveAliasAndRemoteIDForListItem(
 		map[string]any{"name": "x"},
-		metadata.ResourceMetadata{AliasFromAttribute: "/missing", IDFromAttribute: "/missing2"},
+		metadata.ResourceMetadata{AliasAttribute: "/missing", IDAttribute: "/missing2"},
 	)
 	if err == nil {
 		t.Fatal("expected error when list item alias cannot be resolved")

@@ -16,7 +16,7 @@ type requestOperationValidationContext struct {
 func WithRequestOperationValidation(
 	ctx context.Context,
 	operation Operation,
-	resourceInfo ResourceOperationSpecInput,
+	resource ResourceOperationSpecInput,
 	validate *OperationValidationSpec,
 ) context.Context {
 	if ctx == nil || !operation.IsValid() || validate == nil {
@@ -25,7 +25,7 @@ func WithRequestOperationValidation(
 
 	stored := requestOperationValidationContext{
 		Operation: operation,
-		Resource:  requestOperationSpecInputClone(resourceInfo),
+		Resource:  requestOperationSpecInputClone(resource),
 		Validate:  cloneOperationValidationSpec(validate),
 	}
 	return context.WithValue(ctx, requestOperationValidationContextKey{}, stored)

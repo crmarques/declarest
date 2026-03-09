@@ -140,8 +140,8 @@ func explicitMutationPayloadIdentitySegment(
 	md metadatadomain.ResourceMetadata,
 ) (string, bool) {
 	candidates := []string{
-		strings.TrimSpace(md.AliasFromAttribute),
-		strings.TrimSpace(md.IDFromAttribute),
+		strings.TrimSpace(md.AliasAttribute),
+		strings.TrimSpace(md.IDAttribute),
 	}
 
 	for _, attributeName := range candidates {
@@ -170,10 +170,10 @@ func validatePayloadIdentityAttributeMatch(
 	md metadatadomain.ResourceMetadata,
 	checkAlias bool,
 ) error {
-	attributeName := strings.TrimSpace(md.IDFromAttribute)
+	attributeName := strings.TrimSpace(md.IDAttribute)
 	identityKind := "id"
 	if checkAlias {
-		attributeName = strings.TrimSpace(md.AliasFromAttribute)
+		attributeName = strings.TrimSpace(md.AliasAttribute)
 		identityKind = "alias"
 	}
 	if attributeName == "" {
@@ -182,7 +182,7 @@ func validatePayloadIdentityAttributeMatch(
 
 	// When alias and id attributes are distinct, the logical path segment is
 	// expected to follow alias semantics, not remote-id semantics.
-	if !checkAlias && strings.TrimSpace(md.AliasFromAttribute) != "" && strings.TrimSpace(md.AliasFromAttribute) != attributeName {
+	if !checkAlias && strings.TrimSpace(md.AliasAttribute) != "" && strings.TrimSpace(md.AliasAttribute) != attributeName {
 		return nil
 	}
 

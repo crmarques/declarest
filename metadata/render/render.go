@@ -50,7 +50,7 @@ func RenderResourceMetadataWithFormat(
 	}
 
 	defaultCollection := defaultCollectionPath(normalizedPath)
-	resourceInfo := resource.Resource{
+	resolvedResource := resource.Resource{
 		LogicalPath:    normalizedPath,
 		CollectionPath: defaultCollection,
 		LocalAlias:     alias,
@@ -58,7 +58,7 @@ func RenderResourceMetadataWithFormat(
 		Payload:        normalizedPayload,
 	}
 
-	scope, err := templatescope.BuildResourceScope(resourceInfo, metadataValue)
+	scope, err := templatescope.BuildResourceScope(resolvedResource, metadataValue)
 	if err != nil {
 		return metadata.ResourceMetadata{}, err
 	}

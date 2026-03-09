@@ -3,42 +3,42 @@ package metadata
 import "strings"
 
 const (
-	payloadMutationSelect   = "selectAttributes"
-	payloadMutationSuppress = "suppressAttributes"
-	payloadMutationJQ       = "jqExpression"
+	transformSelect  = "selectAttributes"
+	transformExclude = "excludeAttributes"
+	transformJQ      = "jqExpression"
 )
 
-func clonePayloadMutationSteps(values []PayloadMutationStep) []PayloadMutationStep {
+func cloneTransformSteps(values []TransformStep) []TransformStep {
 	if values == nil {
 		return nil
 	}
 
-	cloned := make([]PayloadMutationStep, len(values))
+	cloned := make([]TransformStep, len(values))
 	for idx, value := range values {
-		cloned[idx] = PayloadMutationStep{
-			SelectAttributes:   cloneStringSlice(value.SelectAttributes),
-			SuppressAttributes: cloneStringSlice(value.SuppressAttributes),
-			JQExpression:       value.JQExpression,
+		cloned[idx] = TransformStep{
+			SelectAttributes:  cloneStringSlice(value.SelectAttributes),
+			ExcludeAttributes: cloneStringSlice(value.ExcludeAttributes),
+			JQExpression:      value.JQExpression,
 		}
 	}
 	return cloned
 }
 
-func payloadMutationStepType(step PayloadMutationStep) string {
+func transformStepType(step TransformStep) string {
 	selected := 0
 	kind := ""
 
 	if step.SelectAttributes != nil {
 		selected++
-		kind = payloadMutationSelect
+		kind = transformSelect
 	}
-	if step.SuppressAttributes != nil {
+	if step.ExcludeAttributes != nil {
 		selected++
-		kind = payloadMutationSuppress
+		kind = transformExclude
 	}
 	if strings.TrimSpace(step.JQExpression) != "" {
 		selected++
-		kind = payloadMutationJQ
+		kind = transformJQ
 	}
 
 	if selected != 1 {
@@ -47,28 +47,28 @@ func payloadMutationStepType(step PayloadMutationStep) string {
 	return kind
 }
 
-func PayloadMutationStepType(step PayloadMutationStep) string {
-	return payloadMutationStepType(step)
+func TransformStepType(step TransformStep) string {
+	return transformStepType(step)
 }
 
-func combinePayloadMutationSteps(defaults []PayloadMutationStep, operation []PayloadMutationStep) []PayloadMutationStep {
+func combineTransformSteps(defaults []TransformStep, operation []TransformStep) []TransformStep {
 	if defaults == nil && operation == nil {
 		return nil
 	}
 
-	combined := make([]PayloadMutationStep, 0, len(defaults)+len(operation))
-	combined = append(combined, clonePayloadMutationSteps(defaults)...)
-	combined = append(combined, clonePayloadMutationSteps(operation)...)
+	combined := make([]TransformStep, 0, len(defaults)+len(operation))
+	combined = append(combined, cloneTransformSteps(defaults)...)
+	combined = append(combined, cloneTransformSteps(operation)...)
 	return combined
 }
 
-func OrderedPayloadMutationSteps(spec OperationSpec) []PayloadMutationStep {
-	return clonePayloadMutationSteps(spec.PayloadMutation)
+func OrderedTransformSteps(spec OperationSpec) []TransformStep {
+	return cloneTransformSteps(spec.Transforms)
 }
 
-func HasPayloadMutationJQ(values []PayloadMutationStep) bool {
+func HasTransformJQ(values []TransformStep) bool {
 	for _, value := range values {
-		if payloadMutationStepType(value) == payloadMutationJQ {
+		if transformStepType(value) == transformJQ {
 			return true
 		}
 	}

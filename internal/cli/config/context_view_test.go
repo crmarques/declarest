@@ -63,7 +63,7 @@ func TestCompactContextCatalogForViewCompactsEntries(t *testing.T) {
 				Metadata: configdomain.Metadata{BaseDir: "/tmp/repo"},
 			},
 		},
-		CurrentCtx: "dev",
+		CurrentContext: "dev",
 	}
 
 	compacted := compactContextCatalogForView(catalog)

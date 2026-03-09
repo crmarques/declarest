@@ -1,38 +1,38 @@
-resourceInfo:
-  idFromAttribute: /id
-  aliasFromAttribute: /name
+resource:
+  idAttribute: /id
+  aliasAttribute: /name
   collectionPath: /projects/{{.project}}/jobs
   externalizedAttributes:
   - path: /sequence/commands/*/script
     file: script.sh
-operationsInfo:
-  createResource:
-    httpMethod: POST
+operations:
+  create:
+    method: POST
     path: /project/{{.project}}/jobs/import
     query:
       dupeOption: create
       uuidOption: preserve
-    payloadMutation:
+    transforms:
     - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
-  getResource:
+  get:
     path: /job/{{.id}}
-    payloadMutation:
+    transforms:
     - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'
-  updateResource:
-    httpMethod: POST
+  update:
+    method: POST
     path: /project/{{.project}}/jobs/import
     query:
       dupeOption: update
       uuidOption: preserve
-    payloadMutation:
+    transforms:
     - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
-  deleteResource:
+  delete:
     path: /job/{{.id}}
-  listCollection:
+  list:
     path: /project/{{.project}}/jobs
-    payloadMutation:
+    transforms:
     - jqExpression: 'map({id: (.id // .uuid // .name), name: (.name // (.id // "")), project: (.project // "{{.project}}"), description: (.description // "")})'
-  compareResources:
+  compare:
     path: /job/{{.id}}
-    payloadMutation:
+    transforms:
     - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'

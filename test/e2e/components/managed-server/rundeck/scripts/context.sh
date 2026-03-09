@@ -17,7 +17,7 @@ selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-custom-header}
 {
   printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    baseUrl: %s\n' "${base_url}"
+  printf '    baseURL: %s\n' "${base_url}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi

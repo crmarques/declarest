@@ -20,7 +20,7 @@ func populateSecretStoreConfig(
 ) error {
 	resolvedContext.SecretStore = &config.SecretStore{}
 
-	if secretStore.Spec.Provider == declarestv1alpha1.SecretStoreProviderFile {
+	if secretStore.Spec.File != nil {
 		fileConfig := &config.FileSecretStore{
 			Path: secretStore.Spec.File.Path,
 		}
@@ -50,34 +50,34 @@ func populateSecretStoreConfig(
 		KVVersion:  vault.KVVersion,
 	}
 	vaultAuth := &config.VaultAuth{}
-	if vault.Auth.TokenRef != nil {
-		token, err := readSecretValue(ctx, reader, namespace, vault.Auth.TokenRef)
+	if vault.Auth.Token != nil && vault.Auth.Token.SecretRef != nil {
+		token, err := readSecretValue(ctx, reader, namespace, vault.Auth.Token.SecretRef)
 		if err != nil {
 			return err
 		}
 		vaultAuth.Token = token
 	}
-	if vault.Auth.UsernameRef != nil || vault.Auth.PasswordRef != nil {
-		username, err := readSecretValue(ctx, reader, namespace, vault.Auth.UsernameRef)
+	if vault.Auth.Userpass != nil {
+		username, err := readSecretValue(ctx, reader, namespace, vault.Auth.Userpass.UsernameRef)
 		if err != nil {
 			return err
 		}
-		password, err := readSecretValue(ctx, reader, namespace, vault.Auth.PasswordRef)
+		password, err := readSecretValue(ctx, reader, namespace, vault.Auth.Userpass.PasswordRef)
 		if err != nil {
 			return err
 		}
-		vaultAuth.Password = &config.VaultUserPasswordAuth{Username: username, Password: password, Mount: vault.Auth.UserpassMount}
+		vaultAuth.Password = &config.VaultUserPasswordAuth{Username: username, Password: password, Mount: vault.Auth.Userpass.Mount}
 	}
-	if vault.Auth.AppRoleRoleIDRef != nil || vault.Auth.AppRoleSecretIDRef != nil {
-		roleID, err := readSecretValue(ctx, reader, namespace, vault.Auth.AppRoleRoleIDRef)
+	if vault.Auth.AppRole != nil {
+		roleID, err := readSecretValue(ctx, reader, namespace, vault.Auth.AppRole.RoleIDRef)
 		if err != nil {
 			return err
 		}
-		secretID, err := readSecretValue(ctx, reader, namespace, vault.Auth.AppRoleSecretIDRef)
+		secretID, err := readSecretValue(ctx, reader, namespace, vault.Auth.AppRole.SecretIDRef)
 		if err != nil {
 			return err
 		}
-		vaultAuth.AppRole = &config.VaultAppRoleAuth{RoleID: roleID, SecretID: secretID, Mount: vault.Auth.AppRoleMount}
+		vaultAuth.AppRole = &config.VaultAppRoleAuth{RoleID: roleID, SecretID: secretID, Mount: vault.Auth.AppRole.Mount}
 	}
 	vaultConfig.Auth = vaultAuth
 

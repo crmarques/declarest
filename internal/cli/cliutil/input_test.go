@@ -136,7 +136,7 @@ func TestDecodeResourceContentInputDataPreservesUnknownFileExtensionForOpaquePay
 func TestDecodeResourceContentInputDataPreservesUnknownFileExtensionForExplicitOctetStream(t *testing.T) {
 	t.Parallel()
 
-	content, err := DecodeResourceContentInputData([]byte("opaque"), "application/octet-stream", "private.key")
+	content, err := DecodeResourceContentInputData([]byte("opaque"), "binary", "private.key")
 	if err != nil {
 		t.Fatalf("DecodeResourceContentInputData returned error: %v", err)
 	}

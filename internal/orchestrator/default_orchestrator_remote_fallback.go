@@ -15,18 +15,18 @@ import (
 func (r *Orchestrator) fetchRemoteMetadataPathFallbackValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) (resource.Content, bool, error) {
 	visited := map[string]struct{}{
-		resourceInfo.LogicalPath: {},
+		resolvedResource.LogicalPath: {},
 	}
-	queue := []string{resourceInfo.LogicalPath}
+	queue := []string{resolvedResource.LogicalPath}
 
 	for len(queue) > 0 {
 		currentPath := queue[0]
 		queue = queue[1:]
 
-		if currentPath != resourceInfo.LogicalPath {
+		if currentPath != resolvedResource.LogicalPath {
 			currentInfo, currentMd, infoErr := r.buildResourceInfoForRemoteRead(ctx, currentPath)
 			if infoErr != nil {
 				if faults.IsCategory(infoErr, faults.ConflictError) {
@@ -188,30 +188,30 @@ func replaceLogicalPathSegment(
 }
 
 func hasRemoteFallbackIdentityMetadata(md metadata.ResourceMetadata) bool {
-	return strings.TrimSpace(md.IDFromAttribute) != "" || strings.TrimSpace(md.AliasFromAttribute) != ""
+	return strings.TrimSpace(md.IDAttribute) != "" || strings.TrimSpace(md.AliasAttribute) != ""
 }
 
-func shouldCheckRemoteIdentityAmbiguity(resourceInfo resource.Resource, md metadata.ResourceMetadata) bool {
-	if strings.TrimSpace(md.IDFromAttribute) == "" {
+func shouldCheckRemoteIdentityAmbiguity(resolvedResource resource.Resource, md metadata.ResourceMetadata) bool {
+	if strings.TrimSpace(md.IDAttribute) == "" {
 		return false
 	}
-	if strings.TrimSpace(md.AliasFromAttribute) == "" {
+	if strings.TrimSpace(md.AliasAttribute) == "" {
 		return false
 	}
 
-	alias := strings.TrimSpace(resourceInfo.LocalAlias)
-	remoteID := strings.TrimSpace(resourceInfo.RemoteID)
+	alias := strings.TrimSpace(resolvedResource.LocalAlias)
+	remoteID := strings.TrimSpace(resolvedResource.RemoteID)
 	if alias == "" || remoteID == "" {
 		return false
 	}
 	return alias != remoteID
 }
 
-func matchesRemoteFallbackCandidate(resourceInfo resource.Resource, candidate resource.Resource) bool {
-	if candidate.LocalAlias == resourceInfo.LocalAlias {
+func matchesRemoteFallbackCandidate(resolvedResource resource.Resource, candidate resource.Resource) bool {
+	if candidate.LocalAlias == resolvedResource.LocalAlias {
 		return true
 	}
-	return resourceInfo.RemoteID != "" && candidate.RemoteID == resourceInfo.RemoteID
+	return resolvedResource.RemoteID != "" && candidate.RemoteID == resolvedResource.RemoteID
 }
 
 func allowsSingletonListIdentityFallback(
@@ -226,7 +226,7 @@ func allowsSingletonListIdentityFallback(
 		return false
 	}
 
-	if metadata.HasPayloadMutationJQ(md.PayloadMutation) {
+	if metadata.HasTransformJQ(md.Transforms) {
 		return true
 	}
 	if md.Operations == nil {
@@ -237,7 +237,7 @@ func allowsSingletonListIdentityFallback(
 	if !hasListSpec {
 		return false
 	}
-	return metadata.HasPayloadMutationJQ(listSpec.PayloadMutation)
+	return metadata.HasTransformJQ(listSpec.Transforms)
 }
 
 func singletonFallbackWithinSelectorDepth(logicalPath string, md metadata.ResourceMetadata) bool {

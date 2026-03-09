@@ -11,18 +11,18 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, error) {
+func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, error) {
 	spec, explicitPath, explicitMethod, explicitAccept, explicitContentType := operationSpecFromMetadata(md, operation)
 
 	var err error
 	if g.metadataRenderer != nil {
 		spec, err = g.metadataRenderer.RenderOperationSpecForResource(ctx, metadata.ResourceOperationSpecInput{
-			LogicalPath:    resourceInfo.LogicalPath,
-			CollectionPath: resourceInfo.CollectionPath,
-			LocalAlias:     resourceInfo.LocalAlias,
-			RemoteID:       resourceInfo.RemoteID,
+			LogicalPath:    resolvedResource.LogicalPath,
+			CollectionPath: resolvedResource.CollectionPath,
+			LocalAlias:     resolvedResource.LocalAlias,
+			RemoteID:       resolvedResource.RemoteID,
 			Metadata:       md,
-			Payload:        resourceInfo.Payload,
+			Payload:        resolvedResource.Payload,
 		}, operation)
 		if err != nil {
 			return metadata.OperationSpec{}, err
@@ -33,15 +33,15 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo reso
 			md,
 			operation,
 			spec,
-			resourceInfo,
-			g.payloadTemplateScopeDescriptor(md, resourceInfo),
+			resolvedResource,
+			g.payloadTemplateScopeDescriptor(md, resolvedResource),
 		)
 		if err != nil {
 			return metadata.OperationSpec{}, err
 		}
 	}
-	if !explicitPath && strings.TrimSpace(resourceInfo.ResolvedRemotePath) != "" {
-		spec.Path = resourceInfo.ResolvedRemotePath
+	if !explicitPath && strings.TrimSpace(resolvedResource.ResolvedRemotePath) != "" {
+		spec.Path = resolvedResource.ResolvedRemotePath
 	}
 	if overrideMethod, ok := metadata.OperationHTTPMethodOverride(ctx, operation); ok {
 		spec.Method = overrideMethod
@@ -67,7 +67,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo reso
 		return metadata.OperationSpec{}, faults.NewValidationError(fmt.Sprintf("operation %q has no HTTP method", operation), nil)
 	}
 
-	bodyDescriptor := g.requestBodyDescriptor(resourceInfo, md)
+	bodyDescriptor := g.requestBodyDescriptor(resolvedResource, md)
 	if strings.TrimSpace(spec.Accept) == "" {
 		spec.Accept, err = g.defaultResourceMediaType(bodyDescriptor)
 		if err != nil {
@@ -84,7 +84,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo reso
 		}
 		if spec.Body == nil {
 			spec.Body = resource.Content{
-				Value:      resourceInfo.Payload,
+				Value:      resolvedResource.Payload,
 				Descriptor: bodyDescriptor,
 			}
 		}
@@ -104,7 +104,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resourceInfo reso
 	if err := g.validateOpenAPIMethodSupport(ctx, spec.Path, spec.Method); err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	if err := g.validateOperationPayload(ctx, resourceInfo, md, spec); err != nil {
+	if err := g.validateOperationPayload(ctx, resolvedResource, md, spec); err != nil {
 		return metadata.OperationSpec{}, err
 	}
 

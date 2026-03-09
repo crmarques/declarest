@@ -88,7 +88,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 
 	requiredSnippets := []string{
 		"contexts:",
-		"currentCtx:",
+		"currentContext:",
 		"repository:",
 		"git:",
 		"filesystem:",
@@ -96,8 +96,8 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"healthCheck:",
 		"auth:",
 		"proxy:",
-		"httpUrl:",
-		"httpsUrl:",
+		"httpURL:",
+		"httpsURL:",
 		"noProxy:",
 		"oauth2:",
 		"basicAuth:",
@@ -144,7 +144,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected baseUrl fallback to succeed, got %v", err)
+		t.Fatalf("expected baseURL fallback to succeed, got %v", err)
 	}
 	if probePath != "/admin/api/45" {
 		t.Fatalf("expected probe path /admin/api/45, got %q", probePath)
@@ -156,7 +156,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 			},
 		},
 	}); got != "https://api.example.invalid/admin/api/45" {
-		t.Fatalf("expected rendered target to use baseUrl fallback, got %q", got)
+		t.Fatalf("expected rendered target to use baseURL fallback, got %q", got)
 	}
 }
 
@@ -272,7 +272,7 @@ contexts:
     repository:
       filesystem:
         baseDir: /tmp/prod
-currentCtx: prod
+currentContext: prod
 `,
 		"add",
 		"--content-type", "yaml",
@@ -341,7 +341,7 @@ contexts:
     repository:
       filesystem:
         baseDir: /tmp/prod
-currentCtx: prod
+currentContext: prod
 `,
 		"add",
 		"--content-type", "yaml",
@@ -363,7 +363,7 @@ currentCtx: prod
 	}
 }
 
-func TestAddSetCurrentFromCatalogCurrentCtxForMultiImport(t *testing.T) {
+func TestAddSetCurrentFromCatalogCurrentContextForMultiImport(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{}
@@ -381,7 +381,7 @@ contexts:
     repository:
       filesystem:
         baseDir: /tmp/prod
-currentCtx: prod
+currentContext: prod
 `,
 		"add",
 		"--content-type", "yaml",
@@ -395,7 +395,7 @@ currentCtx: prod
 		t.Fatalf("expected two created contexts, got %d", len(service.createdContexts))
 	}
 	if service.setCurrentName != "prod" {
-		t.Fatalf("expected set current prod from catalog currentCtx, got %q", service.setCurrentName)
+		t.Fatalf("expected set current prod from catalog currentContext, got %q", service.setCurrentName)
 	}
 }
 
@@ -1162,10 +1162,10 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 
 	proxy := service.createdContext.ManagedServer.HTTP.Proxy
 	if proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpUrl, got %q", proxy.HTTPURL)
+		t.Fatalf("expected proxy httpURL, got %q", proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != "" {
-		t.Fatalf("expected empty proxy httpsUrl, got %q", proxy.HTTPSURL)
+		t.Fatalf("expected empty proxy httpsURL, got %q", proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != "localhost,127.0.0.1" {
 		t.Fatalf("expected proxy noProxy, got %q", proxy.NoProxy)
@@ -1357,7 +1357,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 			"",
 			"https://idp.example.com/token",
 			"",
-			"clientId",
+			"clientID",
 			"clientSecret",
 			"",
 			"",

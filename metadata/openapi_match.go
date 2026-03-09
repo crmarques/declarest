@@ -109,7 +109,7 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 		Accept:          strings.TrimSpace(spec.Accept),
 		ContentType:     strings.TrimSpace(spec.ContentType),
 		Body:            spec.Body,
-		PayloadMutation: normalizePayloadMutationStepsForComparison(spec.PayloadMutation),
+		Transforms: normalizeTransformStepsForComparison(spec.Transforms),
 		Validate:        normalizeOperationValidationSpecForComparison(spec.Validate),
 	}
 
@@ -122,16 +122,16 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	return normalized
 }
 
-func normalizePayloadMutationStepsForComparison(values []PayloadMutationStep) []PayloadMutationStep {
+func normalizeTransformStepsForComparison(values []TransformStep) []TransformStep {
 	if len(values) == 0 {
 		return nil
 	}
 
-	normalized := make([]PayloadMutationStep, len(values))
+	normalized := make([]TransformStep, len(values))
 	for idx, value := range values {
-		normalized[idx] = PayloadMutationStep{
+		normalized[idx] = TransformStep{
 			SelectAttributes:   cloneStringSlice(value.SelectAttributes),
-			SuppressAttributes: cloneStringSlice(value.SuppressAttributes),
+			ExcludeAttributes: cloneStringSlice(value.ExcludeAttributes),
 			JQExpression:       strings.TrimSpace(value.JQExpression),
 		}
 	}

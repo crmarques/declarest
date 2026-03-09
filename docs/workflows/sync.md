@@ -5,15 +5,15 @@ This page shows practical save/diff/apply flows, from one resource to larger col
 ## Prerequisites
 
 - `declarest` installed
-- an active context (`declarest config current`)
-- a reachable managed server (`declarest managed-server check`)
+- an active context (`declarest context current`)
+- a reachable managed server (`declarest server check`)
 
 ## 1. Confirm context and connectivity
 
 ```bash
-declarest config current
-declarest config check
-declarest managed-server check
+declarest context current
+declarest context check
+declarest server check
 ```
 
 ## 2. Save one remote resource into the repository
@@ -26,10 +26,10 @@ Useful variants:
 
 ```bash
 # overwrite an existing local resource
-declarest resource save /corporations/acme --overwrite
+declarest resource save /corporations/acme --force
 
 # import and safely handle plaintext secrets during save
-declarest resource save /corporations/acme --handle-secrets
+declarest resource save /corporations/acme --secret-attributes
 
 # save from explicit payload instead of remote read
 cat payload.json | declarest resource save /corporations/acme --payload -
@@ -59,7 +59,7 @@ declarest resource apply /corporations/acme
 Optional refresh after mutation (useful when the server adds defaults or generated fields):
 
 ```bash
-declarest resource apply /corporations/acme --refresh-repository
+declarest resource apply /corporations/acme --refresh
 ```
 
 ## Collection workflows
@@ -73,7 +73,7 @@ declarest resource save /customers/
 ### Save a collection as one file (snapshot/opaque endpoints)
 
 ```bash
-declarest resource save /customers/ --as-one-resource
+declarest resource save /customers/ --mode single
 ```
 
 ### Apply/update/create a collection recursively

@@ -4,6 +4,7 @@ MAKEFLAGS += --warn-undefined-variables
 
 GO ?= go
 GOFLAGS ?= -mod=readonly
+PYTHON ?= python3
 GO_VERSION := $(shell awk '/^go /{print $$2; exit}' go.mod)
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/declarest
@@ -15,12 +16,16 @@ TEST_FLAGS ?= -race
 E2E_FLAGS ?=
 DOCS_SITE_DIRS := site docs/site .docs
 DOCS_VENV_DIR := .venv
+DOCS_REQUIREMENTS := docs/requirements.txt
+DOCS_VENV_PYTHON := $(DOCS_VENV_DIR)/bin/python
+DOCS_VENV_MKDOCS := $(DOCS_VENV_DIR)/bin/mkdocs
+DOCS_VENV_STAMP := $(DOCS_VENV_DIR)/.requirements.stamp
 E2E_RUNS_DIR := test/e2e/.runs
 E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test docs e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
+.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -55,8 +60,17 @@ e2e-validate-components: ## Validate all e2e component contracts and fixtures
 
 check: fmt lint test ## Run formatting, linting, and tests
 
-docs: ## Build the MkDocs documentation site locally
-	@mkdocs build --strict --clean --site-dir .docs
+$(DOCS_VENV_PYTHON):
+	$(PYTHON) -m venv $(DOCS_VENV_DIR)
+
+$(DOCS_VENV_STAMP): $(DOCS_VENV_PYTHON) $(DOCS_REQUIREMENTS)
+	$(DOCS_VENV_PYTHON) -m pip install --requirement $(DOCS_REQUIREMENTS)
+	@touch $(DOCS_VENV_STAMP)
+
+docs-deps: $(DOCS_VENV_STAMP) ## Create or refresh the MkDocs virtualenv dependencies
+
+docs: docs-deps ## Build the MkDocs documentation site locally
+	@$(DOCS_VENV_MKDOCS) build --strict --clean --site-dir .docs
 
 build: ## Compile the declarest binary into $(BIN_DIR)/
 	@mkdir -p $(BIN_DIR)

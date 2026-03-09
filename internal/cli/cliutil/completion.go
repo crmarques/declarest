@@ -30,27 +30,16 @@ var (
 	inputContentTypeCompletionValues = []string{
 		OutputJSON,
 		OutputYAML,
-		"application/json",
-		"application/yaml",
 	}
 	resourceInputContentTypeCompletionValues = []string{
 		OutputJSON,
 		OutputYAML,
-		"application/json",
-		"application/yaml",
 		resource.PayloadTypeXML,
-		"application/xml",
 		resource.PayloadTypeHCL,
-		"application/hcl",
 		resource.PayloadTypeINI,
-		"application/ini",
 		resource.PayloadTypeProperties,
-		"text/x-java-properties",
 		resource.PayloadTypeText,
-		"text/plain",
 		resource.PayloadTypeBinary,
-		resource.PayloadTypeOctetStream,
-		"application/octet-stream",
 	}
 )
 

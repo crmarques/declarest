@@ -52,7 +52,7 @@ func DecodeInputData[T any](data []byte, contentType string, sourceName string) 
 			return output, ValidationError("invalid yaml input", err)
 		}
 	default:
-		return output, ValidationError("invalid input content type: use json, yaml, application/json, or application/yaml", nil)
+		return output, ValidationError("invalid input content type: use json or yaml", nil)
 	}
 
 	return output, nil
@@ -79,7 +79,11 @@ func DecodeResourceContentInputData(data []byte, contentType string, sourceName 
 }
 
 func IsBinaryInputFormat(contentType string) bool {
-	descriptor, ok := resource.PayloadDescriptorForContentType(strings.TrimSpace(contentType))
+	normalized, err := normalizeCLIInputContentType(contentType)
+	if err != nil {
+		return false
+	}
+	descriptor, ok := resource.PayloadDescriptorForContentType(normalized)
 	if !ok {
 		return false
 	}
@@ -88,11 +92,15 @@ func IsBinaryInputFormat(contentType string) bool {
 
 func resourceInputPayloadDescriptor(data []byte, contentType string, sourceName string) (resource.PayloadDescriptor, error) {
 	if trimmed := strings.TrimSpace(contentType); trimmed != "" {
-		descriptor := resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{MediaType: trimmed})
+		normalized, err := normalizeCLIInputContentType(trimmed)
+		if err != nil {
+			return resource.PayloadDescriptor{}, err
+		}
+		descriptor := resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{MediaType: normalized})
 		if descriptor.PayloadType == resource.PayloadTypeOctetStream {
 			if extension := strings.TrimSpace(filepath.Ext(sourceName)); extension != "" {
 				descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
-					MediaType: trimmed,
+					MediaType: normalized,
 					Extension: extension,
 				})
 			}
@@ -200,11 +208,44 @@ func resourceInputPayloadType(contentType string) (string, error) {
 }
 
 func resolveStructuredInputContentType(contentType string, sourceName string) string {
-	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
-		return descriptor.PayloadType
+	if normalized, err := normalizeCLIInputContentType(contentType); err == nil {
+		if descriptor, ok := resource.PayloadDescriptorForContentType(normalized); ok {
+			return descriptor.PayloadType
+		}
+	}
+	if strings.TrimSpace(contentType) != "" {
+		return ""
 	}
 	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
 		return descriptor.PayloadType
 	}
 	return OutputJSON
+}
+
+func normalizeCLIInputContentType(contentType string) (string, error) {
+	switch strings.TrimSpace(contentType) {
+	case "":
+		return "", nil
+	case OutputJSON:
+		return "application/json", nil
+	case OutputYAML:
+		return "application/yaml", nil
+	case resource.PayloadTypeXML:
+		return "application/xml", nil
+	case resource.PayloadTypeHCL:
+		return "application/hcl", nil
+	case resource.PayloadTypeINI:
+		return "application/ini", nil
+	case resource.PayloadTypeProperties:
+		return "text/x-java-properties", nil
+	case resource.PayloadTypeText:
+		return "text/plain", nil
+	case resource.PayloadTypeBinary:
+		return "application/octet-stream", nil
+	default:
+		return "", ValidationError(
+			"invalid input content type: use json, yaml, xml, hcl, ini, properties, text, or binary",
+			nil,
+		)
+	}
 }

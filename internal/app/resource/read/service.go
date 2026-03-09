@@ -269,7 +269,7 @@ func maskSecretsForOutput(
 		return secretworkflow.PlaceholderValue(), nil
 	}
 
-	secretAttributes := secretworkflow.DedupeAndSortAttributes(resolvedMetadata.SecretsFromAttributes)
+	secretAttributes := secretworkflow.DedupeAndSortAttributes(resolvedMetadata.SecretAttributes)
 	if len(secretAttributes) == 0 {
 		return value, nil
 	}

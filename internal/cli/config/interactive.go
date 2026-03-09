@@ -288,7 +288,7 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 }
 
 func promptManagedServer(command *cobra.Command, prompter configPrompter) (*configdomain.ManagedServer, error) {
-	baseURL, err := promptRequiredInput(command, prompter, "Managed-server baseUrl: ", "managedServer baseUrl")
+	baseURL, err := promptRequiredInput(command, prompter, "Managed-server baseURL: ", "managedServer baseURL")
 	if err != nil {
 		return nil, err
 	}
@@ -348,18 +348,18 @@ func promptManagedServer(command *cobra.Command, prompter configPrompter) (*conf
 }
 
 func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdomain.HTTPProxy, error) {
-	httpURL, err := promptOptionalInput(command, prompter, "Proxy httpUrl (optional): ")
+	httpURL, err := promptOptionalInput(command, prompter, "Proxy httpURL (optional): ")
 	if err != nil {
 		return nil, err
 	}
 
-	httpsURL, err := promptOptionalInput(command, prompter, "Proxy httpsUrl (optional): ")
+	httpsURL, err := promptOptionalInput(command, prompter, "Proxy httpsURL (optional): ")
 	if err != nil {
 		return nil, err
 	}
 
 	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
-		return nil, cliutil.ValidationError("managedServer proxy requires at least one of httpUrl or httpsUrl", nil)
+		return nil, cliutil.ValidationError("managedServer proxy requires at least one of httpURL or httpsURL", nil)
 	}
 
 	noProxy, err := promptOptionalInput(command, prompter, "Proxy noProxy list (optional): ")
@@ -411,8 +411,8 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		tokenURL, inputErr := promptRequiredInput(
 			command,
 			prompter,
-			"OAuth2 tokenUrl: ",
-			"oauth2 tokenUrl",
+			"OAuth2 tokenURL: ",
+			"oauth2 tokenURL",
 		)
 		if inputErr != nil {
 			return nil, inputErr
@@ -428,7 +428,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 		if grantType == "" {
 			grantType = configdomain.OAuthClientCreds
 		}
-		clientID, inputErr := promptRequiredInput(command, prompter, "OAuth2 clientId: ", "oauth2 clientId")
+		clientID, inputErr := promptRequiredInput(command, prompter, "OAuth2 clientID: ", "oauth2 clientID")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -721,11 +721,11 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 			Mount:    mount,
 		}
 	case "appRole":
-		roleID, inputErr := promptRequiredInput(command, prompter, "Vault appRole roleId: ", "vault appRole roleId")
+		roleID, inputErr := promptRequiredInput(command, prompter, "Vault appRole roleID: ", "vault appRole roleID")
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		secretID, inputErr := promptRequiredInput(command, prompter, "Vault appRole secretId: ", "vault appRole secretId")
+		secretID, inputErr := promptRequiredInput(command, prompter, "Vault appRole secretID: ", "vault appRole secretID")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -872,7 +872,7 @@ func selectContextForAction(
 		return "", cliutil.ValidationError("no contexts available", nil)
 	}
 	if !prompter.IsInteractive(command) {
-		return "", cliutil.ValidationError(fmt.Sprintf("context name is required: declarest config %s <name>", actionLabel), nil)
+		return "", cliutil.ValidationError(fmt.Sprintf("context name is required: declarest context %s <name>", actionLabel), nil)
 	}
 
 	options := make([]string, 0, len(items))

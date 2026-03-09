@@ -110,8 +110,8 @@ func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 	return client, nil
 }
 
-func (g *Client) Get(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
-	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationGet)
+func (g *Client) Get(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+	spec, err := g.BuildRequestFromMetadata(ctx, resolvedResource, md, metadata.OperationGet)
 	if err != nil {
 		return resource.Content{}, err
 	}
@@ -121,7 +121,7 @@ func (g *Client) Get(ctx context.Context, resourceInfo resource.Resource, md met
 		return resource.Content{}, err
 	}
 
-	content, err := decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
+	content, err := decodeResponseBody(body, headers, g.requestBodyDescriptor(resolvedResource, md))
 	if err != nil {
 		return resource.Content{}, err
 	}
@@ -134,8 +134,8 @@ func (g *Client) Get(ctx context.Context, resourceInfo resource.Resource, md met
 	return content, nil
 }
 
-func (g *Client) Create(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
-	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationCreate)
+func (g *Client) Create(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+	spec, err := g.BuildRequestFromMetadata(ctx, resolvedResource, md, metadata.OperationCreate)
 	if err != nil {
 		return resource.Content{}, err
 	}
@@ -145,11 +145,11 @@ func (g *Client) Create(ctx context.Context, resourceInfo resource.Resource, md 
 		return resource.Content{}, err
 	}
 
-	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
+	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resolvedResource, md))
 }
 
-func (g *Client) Update(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
-	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationUpdate)
+func (g *Client) Update(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata) (resource.Content, error) {
+	spec, err := g.BuildRequestFromMetadata(ctx, resolvedResource, md, metadata.OperationUpdate)
 	if err != nil {
 		return resource.Content{}, err
 	}
@@ -159,11 +159,11 @@ func (g *Client) Update(ctx context.Context, resourceInfo resource.Resource, md 
 		return resource.Content{}, err
 	}
 
-	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resourceInfo, md))
+	return decodeResponseBody(body, headers, g.requestBodyDescriptor(resolvedResource, md))
 }
 
-func (g *Client) Delete(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) error {
-	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationDelete)
+func (g *Client) Delete(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata) error {
+	spec, err := g.BuildRequestFromMetadata(ctx, resolvedResource, md, metadata.OperationDelete)
 	if err != nil {
 		return err
 	}
@@ -189,8 +189,8 @@ func (g *Client) List(ctx context.Context, collectionPath string, md metadata.Re
 	return g.decodeListResponse(ctx, collectionPath, md, spec, body, headers)
 }
 
-func (g *Client) Exists(ctx context.Context, resourceInfo resource.Resource, md metadata.ResourceMetadata) (bool, error) {
-	spec, err := g.BuildRequestFromMetadata(ctx, resourceInfo, md, metadata.OperationGet)
+func (g *Client) Exists(ctx context.Context, resolvedResource resource.Resource, md metadata.ResourceMetadata) (bool, error) {
+	spec, err := g.BuildRequestFromMetadata(ctx, resolvedResource, md, metadata.OperationGet)
 	if err != nil {
 		return false, err
 	}

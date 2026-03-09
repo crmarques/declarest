@@ -25,13 +25,13 @@ contexts:
   - name: e2e-basic
     managedServer:
       http:
-        baseUrl: http://127.0.0.1:8080
+        baseURL: http://127.0.0.1:8080
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: token-dev
-currentCtx: e2e-basic
+currentContext: e2e-basic
 EOF
 }
 
@@ -53,8 +53,8 @@ test_inserts_proxy_block_when_managed_server_proxy_enabled() {
   e2e_context_insert_managed_server_proxy "${context_file}"
 
   assert_file_contains "${context_file}" "proxy:"
-  assert_file_contains "${context_file}" "httpUrl: 'http://proxy.example.com:3128'"
-  assert_file_contains "${context_file}" "httpsUrl: 'https://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "httpURL: 'http://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "httpsURL: 'https://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "noProxy: 'localhost,127.0.0.1'"
   assert_file_contains "${context_file}" "username: 'proxy-user'"
   assert_file_contains "${context_file}" "password: 'proxy-pass'"

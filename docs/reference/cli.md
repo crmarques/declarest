@@ -14,11 +14,11 @@ declarest <group> <command> --help
 
 ### Basic commands
 
-- `config` - manage contexts and validation
+- `context` - manage contexts and validation
 - `metadata` - inspect, infer, render, set, unset, and resolve metadata
 - `repository` - manage local repository state
 - `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, plus raw requests and template rendering
-- `managed-server` - inspect managed server connectivity and auth-derived values
+- `server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
 ### Utility commands
@@ -65,11 +65,12 @@ declarest resource diff /corporations/acme
 
 ```bash
 declarest resource save /corporations/acme
-declarest resource save /corporations/acme --overwrite
-declarest resource save /corporations/acme --payload '{"id":"acme","name":"Acme"}' --overwrite
-declarest resource save /corporations/acme --payload 'id=acme,name=Acme,spec.tier=gold' --overwrite --message ticket-123
-declarest resource save /corporations/acme --handle-secrets
-declarest resource save /customers/ --as-one-resource
+declarest resource save /corporations/acme --force
+declarest resource save /corporations/acme --payload '{"id":"acme","name":"Acme"}' --force
+declarest resource save /corporations/acme --payload '/id=acme,/name=Acme,/spec/tier=gold' --force --message ticket-123
+declarest resource save /corporations/acme --secret-attributes
+declarest resource save /customers/ --mode auto
+declarest resource save /customers/ --mode single
 ```
 
 ### Mutate remote state
@@ -80,9 +81,9 @@ declarest resource apply /corporations/acme --force
 declarest resource create /corporations/acme
 declarest resource update /corporations/acme
 declarest resource delete /corporations/acme --confirm-delete
-declarest resource delete /corporations/acme --confirm-delete --source repository --message-override "cleanup customer"
+declarest resource delete /corporations/acme --confirm-delete --source repository --message "cleanup customer"
 declarest resource edit /corporations/acme --editor "vi"
-declarest resource copy /corporations/acme /corporations/acme-copy --override-attributes name=acme-copy
+declarest resource copy /corporations/acme /corporations/acme-copy --override-attributes /name=acme-copy
 ```
 
 ### Raw HTTP and templates
@@ -95,14 +96,15 @@ declarest resource template /corporations/acme --payload resource.json
 
 Useful flags for mutation and payload-driven workflows:
 
-- `--payload <path|->` for file/stdin payloads and inline JSON/YAML or dotted assignments (`a=b,c=d,e.f.g=h`) on `resource apply|create|update|save`
-- `--content-type <json|yaml|xml|hcl|ini|properties|text|binary|application/...>` for payload decoding overrides
+- `--payload <path|->` for file/stdin payloads and inline JSON/YAML or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) on `resource apply|create|update|save`
+- `--content-type <json|yaml|xml|hcl|ini|properties|text|binary>` for payload decoding overrides
 - `--accept-type <mime|shortname>` on `resource request <method>` for explicit response media negotiation
 - `--recursive` for collection recursion on supported commands
 - `--force` on `resource apply` to execute update even when compare output has no drift
-- `--refresh-repository` (apply/create/update)
+- `--mode <auto|items|single>` on `resource save` to choose between automatic list fan-out, forced item fan-out, or single-resource persistence
+- `--refresh` (apply/create/update)
 - `--http-method <METHOD>` override for remote calls
-- `--message <text>` / `--message-override <text>` for git commit messages on `resource save` and repository-backed `resource delete`
+- `--message <text>` overrides the default git commit message on `resource save`, `resource copy`, and repository-backed `resource delete`
 
 ## `metadata` command family (advanced API modeling)
 
@@ -122,27 +124,27 @@ declarest metadata set /customers/ --payload metadata.json
 declarest metadata unset /customers/
 ```
 
-## `config` command family (context management)
+## `context` command family
 
 ```bash
-declarest config add
-declarest config add dev
-declarest config edit
-declarest config edit dev
-declarest config edit dev --editor "vi"
-declarest config print-template
-declarest config validate --payload contexts.yaml
-declarest config add --payload contexts.yaml --set-current
-declarest config current
-declarest config show
-declarest config resolve
-declarest config check
+declarest context add
+declarest context add dev
+declarest context edit
+declarest context edit dev
+declarest context edit dev --editor "vi"
+declarest context print-template
+declarest context validate --payload contexts.yaml
+declarest context add --payload contexts.yaml --set-current
+declarest context current
+declarest context show
+declarest context resolve
+declarest context check
 ```
 
 Useful for environment-specific testing without editing stored config:
 
 ```bash
-declarest config resolve --set managed-server.http.base-url=https://staging-api.example.com
+declarest context resolve --set managedServer.http.baseURL=https://staging-api.example.com
 ```
 
 ## `repository` command family (git/filesystem backends)
@@ -181,15 +183,15 @@ declarest secret get /corporations/acme
 declarest secret get /corporations/acme apiToken
 ```
 
-Use `secret detect --fix` plus `resource save --handle-secrets` for the safest onboarding flow.
+Use `secret detect --fix` plus `resource save --secret-attributes` for the safest onboarding flow.
 
-## `managed-server` command family
+## `server` command family
 
 ```bash
-declarest managed-server check
-declarest managed-server get base-url
-declarest managed-server get token-url
-declarest managed-server get access-token
+declarest server check
+declarest server get base-url
+declarest server get token-url
+declarest server get access-token
 ```
 
 These commands are useful when debugging auth or connectivity independently from resource reconciliation.
@@ -198,7 +200,7 @@ These commands are useful when debugging auth or connectivity independently from
 
 - Prefer `-o json` or `-o yaml` for automation.
 - `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
-- `repository tree`, `secret get`, `managed-server get`, `managed-server check`, and completion/config-template commands are text-only outputs.
+- `repository tree`, `secret get`, `server get`, `server check`, `completion`, and `context print-template` are text-only outputs.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.

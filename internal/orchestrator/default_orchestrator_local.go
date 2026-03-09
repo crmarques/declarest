@@ -50,8 +50,8 @@ func (r *Orchestrator) resolveLocalResourceForRead(
 	if infoErr != nil {
 		return resource.Resource{}, infoErr
 	}
-	if strings.TrimSpace(requestedMd.IDFromAttribute) == "" &&
-		strings.TrimSpace(requestedMd.AliasFromAttribute) == "" {
+	if strings.TrimSpace(requestedMd.IDAttribute) == "" &&
+		strings.TrimSpace(requestedMd.AliasAttribute) == "" {
 		return resource.Resource{}, err
 	}
 
@@ -218,8 +218,8 @@ func identityAttributeCandidates(md metadata.ResourceMetadata) []string {
 		candidates = append(candidates, trimmed)
 	}
 
-	addCandidate(md.IDFromAttribute)
-	addCandidate(md.AliasFromAttribute)
+	addCandidate(md.IDAttribute)
+	addCandidate(md.AliasAttribute)
 
 	// Keep local fallback usable when repository metadata points at aliases only.
 	for _, fallback := range []string{
@@ -261,7 +261,7 @@ func resolveResourceIdentity(
 }
 
 func resolvedRemoteIDFromPayload(md metadata.ResourceMetadata, value resource.Value) (string, bool) {
-	idAttribute := strings.TrimSpace(md.IDFromAttribute)
+	idAttribute := strings.TrimSpace(md.IDAttribute)
 	if idAttribute == "" {
 		return "", false
 	}

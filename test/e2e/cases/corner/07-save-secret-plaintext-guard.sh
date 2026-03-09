@@ -41,8 +41,8 @@ case_run() {
   fi
 
   case_write_json "${metadata_file}" '{
-    "resourceInfo": {
-      "secretInAttributes": ["/credentials/authValue"]
+    "resource": {
+      "secretAttributes": ["/credentials/authValue"]
     }
   }'
 
@@ -69,7 +69,7 @@ case_run() {
     }
   }'
 
-  case_run_declarest resource save "${metadata_path}" -f "${metadata_placeholder_payload_file}" -i json --overwrite
+  case_run_declarest resource save "${metadata_path}" -f "${metadata_placeholder_payload_file}" -i json --force
   case_expect_success
 
   case_run_declarest resource get "${metadata_path}" --source repository -o json

@@ -16,8 +16,8 @@ const (
 )
 
 type ResourceRepositoryAuth struct {
-	TokenSecretRef *corev1.SecretKeySelector `json:"tokenSecretRef,omitempty"`
-	SSHSecretRef   *GitSSHSecretRef          `json:"sshSecretRef,omitempty"`
+	TokenRef     *corev1.SecretKeySelector `json:"tokenRef,omitempty"`
+	SSHSecretRef *GitSSHSecretRef          `json:"sshSecretRef,omitempty"`
 }
 
 type GitSSHSecretRef struct {
@@ -111,13 +111,13 @@ func (r *ResourceRepository) ValidateSpec() error {
 	if strings.TrimSpace(r.Spec.Git.Branch) == "" {
 		return fmt.Errorf("spec.git.branch is required")
 	}
-	hasToken := r.Spec.Git.Auth.TokenSecretRef != nil
+	hasToken := r.Spec.Git.Auth.TokenRef != nil
 	hasSSH := r.Spec.Git.Auth.SSHSecretRef != nil
 	if hasToken == hasSSH {
-		return fmt.Errorf("spec.git.auth must define exactly one of tokenSecretRef or sshSecretRef")
+		return fmt.Errorf("spec.git.auth must define exactly one of tokenRef or sshSecretRef")
 	}
 	if hasToken {
-		if err := validateSecretRef(r.Spec.Git.Auth.TokenSecretRef, "spec.git.auth.tokenSecretRef"); err != nil {
+		if err := validateSecretRef(r.Spec.Git.Auth.TokenRef, "spec.git.auth.tokenRef"); err != nil {
 			return err
 		}
 	}

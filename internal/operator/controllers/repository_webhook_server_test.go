@@ -46,7 +46,7 @@ func TestRepositoryWebhookServerAcceptsValidGiteaWebhook(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: declarestv1alpha1.ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{
+					TokenRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
 						Key:                  "token",
 					},
@@ -115,7 +115,7 @@ func TestRepositoryWebhookServerRejectsInvalidSignature(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: declarestv1alpha1.ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{
+					TokenRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
 						Key:                  "token",
 					},

@@ -26,7 +26,7 @@ func newCommandWithPrompter(
 	prompter configPrompter,
 ) *cobra.Command {
 	command := &cobra.Command{
-		Use:   "config",
+		Use:   "context",
 		Short: "Manage contexts",
 		Args:  cobra.NoArgs,
 	}
@@ -68,9 +68,9 @@ func newInitCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 		Use:   "init [name]",
 		Short: "Initialize repository and metadata dependencies",
 		Example: strings.Join([]string{
-			"  declarest config init",
-			"  declarest config init prod",
-			"  declarest config init --context prod",
+			"  declarest context init",
+			"  declarest context init prod",
+			"  declarest context init --context prod",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -109,8 +109,8 @@ func newInitCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 }
 
 type addContextSelection struct {
-	Contexts   []configdomain.Context
-	CurrentCtx string
+	Contexts       []configdomain.Context
+	CurrentContext string
 }
 
 func newAddCommand(
@@ -126,10 +126,10 @@ func newAddCommand(
 		Use:   "add [new-context-name]",
 		Short: "Add contexts from input or create one interactively",
 		Example: strings.Join([]string{
-			"  declarest config add --payload context.yaml",
-			"  declarest config add --payload contexts.yaml --context-name prod",
-			"  cat contexts.yaml | declarest config add --set-current",
-			"  declarest config add dev",
+			"  declarest context add --payload context.yaml",
+			"  declarest context add --payload contexts.yaml --context-name prod",
+			"  cat contexts.yaml | declarest context add --set-current",
+			"  declarest context add dev",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -235,8 +235,8 @@ func selectContextsForAdd(input contextImportInput, contextName string) (addCont
 			contexts := make([]configdomain.Context, len(input.Catalog.Contexts))
 			copy(contexts, input.Catalog.Contexts)
 			return addContextSelection{
-				Contexts:   contexts,
-				CurrentCtx: strings.TrimSpace(input.Catalog.CurrentCtx),
+				Contexts:       contexts,
+				CurrentContext: strings.TrimSpace(input.Catalog.CurrentContext),
 			}, nil
 		}
 
@@ -262,20 +262,20 @@ func resolveSetCurrentContext(selection addContextSelection) (string, error) {
 		return selection.Contexts[0].Name, nil
 	}
 
-	if selection.CurrentCtx != "" {
+	if selection.CurrentContext != "" {
 		for _, item := range selection.Contexts {
-			if item.Name == selection.CurrentCtx {
-				return selection.CurrentCtx, nil
+			if item.Name == selection.CurrentContext {
+				return selection.CurrentContext, nil
 			}
 		}
 		return "", cliutil.ValidationError(
-			fmt.Sprintf("input currentCtx %q is not present in imported contexts", selection.CurrentCtx),
+			fmt.Sprintf("input currentContext %q is not present in imported contexts", selection.CurrentContext),
 			nil,
 		)
 	}
 
 	return "", cliutil.ValidationError(
-		"set-current requires a single imported context or a catalog currentCtx value",
+		"set-current requires a single imported context or a catalog currentContext value",
 		nil,
 	)
 }
@@ -564,10 +564,10 @@ func newResolveCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 		Use:   "resolve [name]",
 		Short: "Resolve active context with overrides",
 		Example: strings.Join([]string{
-			"  declarest config resolve",
-			"  declarest config resolve prod",
-			"  declarest config resolve --context prod",
-			"  declarest config resolve --set managedServer.http.baseUrl=https://api.example.com",
+			"  declarest context resolve",
+			"  declarest context resolve prod",
+			"  declarest context resolve --context prod",
+			"  declarest context resolve --set managedServer.http.baseURL=https://api.example.com",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -636,9 +636,9 @@ func newCheckCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 		Use:   "check [name]",
 		Short: "Check configured component availability and connectivity",
 		Example: strings.Join([]string{
-			"  declarest config check",
-			"  declarest config check prod",
-			"  declarest --context prod config check --output json",
+			"  declarest context check",
+			"  declarest context check prod",
+			"  declarest --context prod context check --output json",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -665,7 +665,7 @@ func newCheckCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 
 			if report.Summary.Fail > 0 {
 				return cliutil.ValidationError(
-					fmt.Sprintf("config check failed for context %q: %d component(s) unavailable", report.Context, report.Summary.Fail),
+					fmt.Sprintf("context check failed for context %q: %d component(s) unavailable", report.Context, report.Summary.Fail),
 					nil,
 				)
 			}
@@ -906,7 +906,7 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 		}
 		parsed, err := url.Parse(baseURL)
 		if err != nil {
-			return "", cliutil.ValidationError("managedServer.http.baseUrl is invalid", err)
+			return "", cliutil.ValidationError("managedServer.http.baseURL is invalid", err)
 		}
 		basePath := strings.TrimSpace(parsed.Path)
 		if basePath == "" {
@@ -943,11 +943,11 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 	}
 	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL))
 	if err != nil {
-		return "", cliutil.ValidationError("managedServer.http.baseUrl is invalid", err)
+		return "", cliutil.ValidationError("managedServer.http.baseURL is invalid", err)
 	}
 	if !strings.EqualFold(parsed.Scheme, baseParsed.Scheme) || !strings.EqualFold(parsed.Host, baseParsed.Host) {
 		return "", cliutil.ValidationError(
-			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.baseUrl",
+			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.baseURL",
 			nil,
 		)
 	}

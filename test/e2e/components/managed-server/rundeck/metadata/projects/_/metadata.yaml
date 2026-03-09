@@ -1,26 +1,26 @@
-resourceInfo:
-    idFromAttribute: /name
-    aliasFromAttribute: /name
-operationsInfo:
-    getResource:
+resource:
+    idAttribute: /name
+    aliasAttribute: /name
+operations:
+    get:
         path: /project/{{.id}}/config
-        payloadMutation:
+        transforms:
             - jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), description: (.description // (.config["project.description"] // "")), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", description: (."project.description" // ""), config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'
-    createResource:
-        httpMethod: POST
+    create:
+        method: POST
         path: /projects
-        payloadMutation:
+        transforms:
             - jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'
-    updateResource:
-        httpMethod: PUT
+    update:
+        method: PUT
         path: /project/{{.id}}/config
-        payloadMutation:
+        transforms:
             - jqExpression: 'if type == "object" and has("config") then (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end)) else (. + {"project.name": (."project.name" // "{{.id}}")}) end'
-    deleteResource:
+    delete:
         path: /project/{{.id}}
-    listCollection:
+    list:
         path: /projects
-    compareResources:
+    compare:
         path: /project/{{.id}}/config
-        payloadMutation:
+        transforms:
             - jqExpression: 'if type == "object" and has("config") then {name: (.name // "{{.id}}"), description: (.description // (.config["project.description"] // "")), config: (.config + {"project.name": (.name // "{{.id}}") } + (if has("description") and (.description | type == "string") then {"project.description": .description} else {} end))} else {name: "{{.id}}", description: (."project.description" // ""), config: (. + {"project.name": (."project.name" // "{{.id}}")})} end'

@@ -13,8 +13,8 @@ func TestRenderResourceMetadataWithFormatRendersResourceFormatTemplate(t *testin
 	md := metadatadomain.MergeResourceMetadata(
 		metadatadomain.DefaultResourceMetadata(),
 		metadatadomain.ResourceMetadata{
-			IDFromAttribute:    "id",
-			AliasFromAttribute: "id",
+			IDAttribute:    "id",
+			AliasAttribute: "id",
 		},
 	)
 

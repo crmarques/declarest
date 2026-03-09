@@ -1,5 +1,5 @@
-resourceInfo:
-  idFromAttribute: /id
-  aliasFromAttribute: /clientId
-  secretInAttributes:
+resource:
+  idAttribute: /id
+  aliasAttribute: /clientID
+  secretAttributes:
   - /secret

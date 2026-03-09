@@ -52,7 +52,7 @@ spec:
     url: https://github.com/example/declarest-resources.git
     branch: main
     auth:
-      tokenSecretRef:
+      tokenRef:
         name: repository-credentials
         key: token
   storage:
@@ -83,7 +83,6 @@ metadata:
   name: demo-secret-store
   namespace: declarest-system
 spec:
-  provider: file
   file:
     path: /var/lib/declarest/secrets/secrets.json
     encryption:

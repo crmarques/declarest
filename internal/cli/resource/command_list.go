@@ -15,7 +15,7 @@ import (
 func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
-	var skipItemsFlag string
+	var excludeItemsFlag []string
 	var recursive bool
 	var httpMethod string
 
@@ -32,7 +32,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
+			excludeItems, err := parseExcludeFlag(command, excludeItemsFlag)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			items = resource.FilterCollectionItems(resolvedPath, items, skipItems)
+			items = resource.FilterCollectionItems(resolvedPath, items, excludeItems)
 
 			payloads := make([]resource.Value, 0, len(items))
 			for _, item := range items {
@@ -92,7 +92,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
-	bindSkipItemsFlag(command, &skipItemsFlag)
+	bindExcludeFlag(command, &excludeItemsFlag)
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "list recursively")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command

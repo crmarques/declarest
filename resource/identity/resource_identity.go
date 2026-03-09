@@ -30,13 +30,13 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 		return alias, remoteID, nil
 	}
 
-	if attr := strings.TrimSpace(md.AliasFromAttribute); attr != "" {
+	if attr := strings.TrimSpace(md.AliasAttribute); attr != "" {
 		if value, found := LookupScalarAttribute(payloadMap, attr); found && strings.TrimSpace(value) != "" {
 			alias = strings.TrimSpace(value)
 		}
 	}
 
-	if attr := strings.TrimSpace(md.IDFromAttribute); attr != "" {
+	if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
 		if value, found := LookupScalarAttribute(payloadMap, attr); found && strings.TrimSpace(value) != "" {
 			remoteID = strings.TrimSpace(value)
 		}
@@ -56,11 +56,11 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 
 func ResolveAliasAndRemoteIDForListItem(payload map[string]any, md metadata.ResourceMetadata) (string, string, error) {
 	var alias string
-	if attr := strings.TrimSpace(md.AliasFromAttribute); attr != "" {
+	if attr := strings.TrimSpace(md.AliasAttribute); attr != "" {
 		alias, _ = LookupScalarAttribute(payload, attr)
 	}
 	if alias == "" {
-		if attr := strings.TrimSpace(md.IDFromAttribute); attr != "" {
+		if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
 			alias, _ = LookupScalarAttribute(payload, attr)
 		}
 	}
@@ -73,7 +73,7 @@ func ResolveAliasAndRemoteIDForListItem(payload map[string]any, md metadata.Reso
 	}
 
 	remoteID := alias
-	if attr := strings.TrimSpace(md.IDFromAttribute); attr != "" {
+	if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
 		if value, ok := LookupScalarAttribute(payload, attr); ok && strings.TrimSpace(value) != "" {
 			remoteID = strings.TrimSpace(value)
 		}

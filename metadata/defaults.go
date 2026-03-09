@@ -30,13 +30,13 @@ func DefaultResourceMetadata() ResourceMetadata {
 			Headers:         map[string]string{},
 			Accept:          defaultAccept,
 			ContentType:     defaultContentType,
-			PayloadMutation: nil,
+			Transforms: nil,
 		}
 	}
 
 	return ResourceMetadata{
 		Operations:      operations,
-		PayloadMutation: nil,
+		Transforms: nil,
 	}
 }
 

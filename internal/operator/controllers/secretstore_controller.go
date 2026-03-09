@@ -62,7 +62,7 @@ func (r *SecretStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	resolvedPath := ""
-	if secretStore.Spec.Provider == declarestv1alpha1.SecretStoreProviderFile {
+	if secretStore.Spec.File != nil {
 		if err := r.ensureFilePVC(ctx, secretStore); err != nil {
 			emitEventf(r.Recorder, secretStore, corev1.EventTypeWarning, "DependencyInvalid", "dependency validation failed: %v", err)
 			return returnAfterSetNotReady(

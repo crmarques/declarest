@@ -16,23 +16,23 @@ import (
 func (r *Orchestrator) fetchRemoteCollectionValue(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) (resource.Content, bool, error) {
-	if !r.shouldTreatRemotePathAsCollection(ctx, serverManager, resourceInfo) {
+	if !r.shouldTreatRemotePathAsCollection(ctx, serverManager, resolvedResource) {
 		return resource.Content{}, false, nil
 	}
 
-	items, err := r.listRemoteResources(ctx, serverManager, resourceInfo.LogicalPath, md)
+	items, err := r.listRemoteResources(ctx, serverManager, resolvedResource.LogicalPath, md)
 	if err != nil {
 		// Some APIs incorrectly return 404 for empty collections.
 		if faults.IsCategory(err, faults.NotFoundError) {
-			if r.isMissingParentForCollectionNotFound(ctx, serverManager, resourceInfo) {
+			if r.isMissingParentForCollectionNotFound(ctx, serverManager, resolvedResource) {
 				return resource.Content{}, true, err
 			}
 			return resource.Content{
 				Value:      []any{},
-				Descriptor: resourceInfo.PayloadDescriptor,
+				Descriptor: resolvedResource.PayloadDescriptor,
 			}, true, nil
 		}
 		if isFallbackListPayloadShapeError(err) {
@@ -41,7 +41,7 @@ func (r *Orchestrator) fetchRemoteCollectionValue(
 		return resource.Content{}, true, err
 	}
 
-	descriptor := resourceInfo.PayloadDescriptor
+	descriptor := resolvedResource.PayloadDescriptor
 	if len(items) > 0 && resource.IsPayloadDescriptorExplicit(items[0].PayloadDescriptor) {
 		descriptor = items[0].PayloadDescriptor
 	}
@@ -78,25 +78,25 @@ func (r *Orchestrator) resolveListJQResource(
 func (r *Orchestrator) shouldTreatRemotePathAsCollection(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) bool {
-	if r.collectionHintFromRepository(ctx, resourceInfo.LogicalPath) {
+	if r.collectionHintFromRepository(ctx, resolvedResource.LogicalPath) {
 		return true
 	}
 
-	return r.collectionHintFromOpenAPI(ctx, serverManager, resourceInfo)
+	return r.collectionHintFromOpenAPI(ctx, serverManager, resolvedResource)
 }
 
 func (r *Orchestrator) listOperationTargetsLogicalPath(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) bool {
-	normalizedPath, ok := r.renderedOperationPath(ctx, resourceInfo, md, metadata.OperationList)
+	normalizedPath, ok := r.renderedOperationPath(ctx, resolvedResource, md, metadata.OperationList)
 	if !ok {
 		return false
 	}
-	return normalizedPath == resourceInfo.LogicalPath
+	return normalizedPath == resolvedResource.LogicalPath
 }
 
 func (r *Orchestrator) collectionHintFromRepository(
@@ -123,39 +123,39 @@ func (r *Orchestrator) collectionHintFromRepository(
 func (r *Orchestrator) collectionHintFromOpenAPI(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) bool {
 	openAPISpec, err := serverManager.GetOpenAPISpec(ctx)
 	if err != nil {
 		return false
 	}
-	existsInOpenAPI, err := metadata.HasOpenAPIPath(resourceInfo.LogicalPath, openAPISpec.Value)
+	existsInOpenAPI, err := metadata.HasOpenAPIPath(resolvedResource.LogicalPath, openAPISpec.Value)
 	if err != nil || !existsInOpenAPI {
 		return false
 	}
 
-	if r.openAPIInferenceHintsCollection(ctx, resourceInfo, resourceInfo.LogicalPath, openAPISpec.Value) {
+	if r.openAPIInferenceHintsCollection(ctx, resolvedResource, resolvedResource.LogicalPath, openAPISpec.Value) {
 		return true
 	}
 
 	// Avoid treating concrete resource paths with child endpoints as collections
 	// (for example /admin/realms/{realm}) when probing a synthetic trailing-slash
 	// variant for collection hints.
-	if openAPIExactPathLooksLikeResource(openAPISpec.Value, resourceInfo.LogicalPath) {
+	if openAPIExactPathLooksLikeResource(openAPISpec.Value, resolvedResource.LogicalPath) {
 		return false
 	}
 
-	if resourceInfo.LogicalPath == "/" {
+	if resolvedResource.LogicalPath == "/" {
 		return false
 	}
 
-	collectionSelector := strings.TrimSuffix(resourceInfo.LogicalPath, "/") + "/"
-	return r.openAPIInferenceHintsCollection(ctx, resourceInfo, collectionSelector, openAPISpec.Value)
+	collectionSelector := strings.TrimSuffix(resolvedResource.LogicalPath, "/") + "/"
+	return r.openAPIInferenceHintsCollection(ctx, resolvedResource, collectionSelector, openAPISpec.Value)
 }
 
 func (r *Orchestrator) openAPIInferenceHintsCollection(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	logicalPath string,
 	openAPISpec any,
 ) bool {
@@ -164,8 +164,8 @@ func (r *Orchestrator) openAPIInferenceHintsCollection(
 		return false
 	}
 
-	hintInfo := resourceInfo
-	hintInfo.Payload = buildCollectionHintPayload(resourceInfo.Payload, resourceInfo.LogicalPath, inferred)
+	hintInfo := resolvedResource
+	hintInfo.Payload = buildCollectionHintPayload(resolvedResource.Payload, resolvedResource.LogicalPath, inferred)
 
 	if !r.listOperationTargetsLogicalPath(ctx, hintInfo, inferred) {
 		return false
@@ -184,11 +184,11 @@ func (r *Orchestrator) openAPIInferenceHintsCollection(
 
 func (r *Orchestrator) renderedOperationPath(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 	operation metadata.Operation,
 ) (string, bool) {
-	spec, err := r.renderOperationSpec(ctx, resourceInfo, md, operation, resourceInfo.Payload)
+	spec, err := r.renderOperationSpec(ctx, resolvedResource, md, operation, resolvedResource.Payload)
 	if err != nil {
 		return "", false
 	}
@@ -316,9 +316,9 @@ func matchesOpenAPIPathSegments(candidate []string, target []string) bool {
 func (r *Orchestrator) isMissingParentForCollectionNotFound(
 	ctx context.Context,
 	serverManager managedserver.ManagedServerClient,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) bool {
-	parentPath := path.Dir(strings.TrimSuffix(resourceInfo.LogicalPath, "/"))
+	parentPath := path.Dir(strings.TrimSuffix(resolvedResource.LogicalPath, "/"))
 	if parentPath == "." || parentPath == "" || parentPath == "/" {
 		return false
 	}
@@ -356,13 +356,13 @@ func isFallbackListPayloadShapeError(err error) bool {
 
 func (r *Orchestrator) renderOperationSpec(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 	operation metadata.Operation,
 	value resource.Value,
 ) (metadata.OperationSpec, error) {
 	metadataCopy := metadata.CloneResourceMetadata(md)
-	templateResource := resourceInfo
+	templateResource := resolvedResource
 	templateResource.Payload = value
 
 	if renderer, ok := r.metadata.(metadata.ResourceOperationSpecRenderer); ok {

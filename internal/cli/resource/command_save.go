@@ -13,19 +13,23 @@ import (
 
 const secretAttributesAllSentinel = "__all__"
 
+const (
+	saveModeAuto   = "auto"
+	saveModeItems  = "items"
+	saveModeSingle = "single"
+)
+
 func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var input cliutil.InputFlags
-	var skipItemsFlag string
-	var asItems bool
-	var asOneResource bool
+	var excludeItemsFlag []string
+	var mode string
 	var secret bool
 	var allowPlaintext bool
 	var secretAttributes string
-	var overwrite bool
+	var force bool
 	var push bool
-	var commitMessageAppend string
-	var commitMessageOverride string
+	var commitMessage string
 
 	command := &cobra.Command{
 		Use:   "save [path]",
@@ -33,13 +37,13 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		Example: strings.Join([]string{
 			"  declarest resource save /customers/acme",
 			"  declarest resource save /customers/acme --payload payload.json",
-			"  declarest resource save /admin/realms --skip-items master,realm1",
+			"  declarest resource save /admin/realms --exclude master --exclude realm1",
 			"  cat payload.json | declarest resource save /customers/acme --payload -",
-			"  declarest resource save /customers/ --as-items < customers.json",
+			"  declarest resource save /customers/ --mode items < customers.json",
 			"  declarest resource save /customers/acme --secret-attributes",
 			"  declarest resource save /projects/platform/secrets/private-key --payload private.key --secret",
-			"  declarest resource save /customers/acme --overwrite",
-			"  declarest --context git resource save /customers/acme --payload payload.json --overwrite --push",
+			"  declarest resource save /customers/acme --force",
+			"  declarest --context git resource save /customers/acme --payload payload.json --force --push",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -57,7 +61,11 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			skipItems, err := parseSkipItemsFlag(command, skipItemsFlag)
+			asItems, asOneResource, err := parseSaveMode(mode)
+			if err != nil {
+				return err
+			}
+			excludeItems, err := parseExcludeFlag(command, excludeItemsFlag)
 			if err != nil {
 				return err
 			}
@@ -75,8 +83,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			commitMessage, err := resolveRepositoryCommitMessage(
 				command,
 				fmt.Sprintf("declarest: save resource %s", resolvedPath),
-				commitMessageAppend,
-				commitMessageOverride,
+				commitMessage,
 			)
 			if err != nil {
 				return err
@@ -107,10 +114,10 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 					AsOneResource:             asOneResource,
 					Secret:                    secret,
 					AllowPlaintext:            allowPlaintext,
-					Force:                     overwrite,
+					Force:                     force,
 					SecretAttributesEnabled:   secretAttributesEnabled,
 					RequestedSecretAttributes: requestedSecretAttributes,
-					SkipItems:                 skipItems,
+					SkipItems:                 excludeItems,
 				},
 			); err != nil {
 				return err
@@ -124,21 +131,34 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	cliutil.BindResourceInputFlags(command, &input)
-	bindSkipItemsFlag(command, &skipItemsFlag)
+	bindExcludeFlag(command, &excludeItemsFlag)
 	if flag := command.Flags().Lookup("payload"); flag != nil {
 		flag.Usage = "payload file path (use '-' to read object from stdin); also accepts inline JSON/YAML or JSON Pointer assignments (/a=b,/c/d=e); binary requires file or stdin"
 	}
-	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
-	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
+	command.Flags().StringVar(&mode, "mode", saveModeAuto, "save mode: auto, items, or single")
+	cliutil.RegisterFlagValueCompletions(command, "mode", []string{saveModeAuto, saveModeItems, saveModeSingle})
 	command.Flags().BoolVar(&secret, "secret", false, "store the whole resource payload in the secret store and persist only a placeholder")
 	command.Flags().BoolVar(&allowPlaintext, "allow-plaintext", false, "acknowledge saving resources that may contain plaintext secrets")
 	command.Flags().StringVar(&secretAttributes, "secret-attributes", "", "detect, store, and mask individual secret attributes (optional comma-separated JSON pointers; structured payloads only)")
-	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")
+	command.Flags().BoolVar(&force, "force", false, "override existing repository resources")
 	command.Flags().BoolVar(&push, "push", false, "push git repository changes after save (git repositories with remote only)")
-	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
+	bindRepositoryCommitMessageFlags(command, &commitMessage)
 	secretAttributesFlag := command.Flags().Lookup("secret-attributes")
 	secretAttributesFlag.NoOptDefVal = secretAttributesAllSentinel
 	return command
+}
+
+func parseSaveMode(rawValue string) (bool, bool, error) {
+	switch strings.TrimSpace(rawValue) {
+	case "", saveModeAuto:
+		return false, false, nil
+	case saveModeItems:
+		return true, false, nil
+	case saveModeSingle:
+		return false, true, nil
+	default:
+		return false, false, cliutil.ValidationError("flag --mode must be one of: auto, items, single", nil)
+	}
 }
 
 func parseSaveSecretAttributesFlag(command *cobra.Command, rawValue string) (bool, []string, error) {

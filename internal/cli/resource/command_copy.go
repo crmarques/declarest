@@ -16,15 +16,15 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	var pathFlag string
 	var targetPathFlag string
 	var overrideAttributes string
-	var overwrite bool
-	var commitMessageAppend string
+	var force bool
+	var commitMessage string
 
 	command := &cobra.Command{
 		Use:   "copy [path] [target-path]",
 		Short: "Copy a repository resource to another local path (repo-only)",
 		Example: strings.Join([]string{
 			"  declarest resource copy /a/b/c /x/y/z",
-			"  declarest resource copy /a/b/c /x/y/z --overwrite",
+			"  declarest resource copy /a/b/c /x/y/z --force",
 			"  declarest resource copy /a/b/c /x/y/z --message ticket-123",
 			"  declarest resource copy /a/b/c /x/y/z --override-attributes /a=b,/c=d,/e/f/g=h",
 			"  declarest resource copy --path /a/b/c --target-path /x/y/z --override-attributes /a=b",
@@ -76,19 +76,19 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 				true,
 				resourcesave.ExecuteOptions{
 					AsOneResource: true,
-					Force:         overwrite,
+					Force:         force,
 				},
 			); err != nil {
 				return err
 			}
 
-			commitMessage := fmt.Sprintf("declarest: copy resource %s to %s", originPath, targetPath)
-			if command.Flags().Changed("message") {
-				appendValue := strings.TrimSpace(commitMessageAppend)
-				if appendValue == "" {
-					return cliutil.ValidationError("flag --message cannot be empty", nil)
-				}
-				commitMessage = commitMessage + " - " + appendValue
+			commitMessage, err = resolveRepositoryCommitMessage(
+				command,
+				fmt.Sprintf("declarest: copy resource %s to %s", originPath, targetPath),
+				commitMessage,
+			)
+			if err != nil {
+				return err
 			}
 
 			return commitAndMaybeAutoSyncRepository(
@@ -110,8 +110,8 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 	) ([]string, cobra.ShellCompDirective) {
 		return cliutil.CompleteLogicalPaths(cmd, deps, toComplete)
 	})
-	command.Flags().BoolVar(&overwrite, "overwrite", false, "allow replacing the target resource when it already exists")
-	command.Flags().StringVarP(&commitMessageAppend, "message", "m", "", "append text to the default git commit message (git repositories only)")
+	command.Flags().BoolVar(&force, "force", false, "allow replacing the target resource when it already exists")
+	bindRepositoryCommitMessageFlags(command, &commitMessage)
 	command.Flags().StringVar(&overrideAttributes, "override-attributes", "", "comma-separated JSON-pointer=value attribute overrides for the copied payload")
 	command.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= 2 {

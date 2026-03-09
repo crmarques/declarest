@@ -351,14 +351,14 @@ e2e_metadata_fixture_has_identity_fields() {
         return 1
       fi
 
-      jq -e '((.resourceInfo.idFromAttribute // "") | (type == "string" and length > 0)) and ((.resourceInfo.aliasFromAttribute // "") | (type == "string" and length > 0))' \
+      jq -e '((.resource.idAttribute // "") | (type == "string" and length > 0)) and ((.resource.aliasAttribute // "") | (type == "string" and length > 0))' \
         "${metadata_file}" >/dev/null 2>&1
       return $?
       ;;
     *.yaml)
-      grep -Eq '^[[:space:]]*resourceInfo:[[:space:]]*$' "${metadata_file}" \
-        && grep -Eq '^[[:space:]]*idFromAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}" \
-        && grep -Eq '^[[:space:]]*aliasFromAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}"
+      grep -Eq '^[[:space:]]*resource:[[:space:]]*$' "${metadata_file}" \
+        && grep -Eq '^[[:space:]]*idAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}" \
+        && grep -Eq '^[[:space:]]*aliasAttribute:[[:space:]]*[^[:space:]#]' "${metadata_file}"
       return $?
       ;;
     *)
@@ -431,7 +431,7 @@ e2e_validate_managed_server_fixture_tree() {
     fi
 
     if ! e2e_metadata_fixture_has_identity_fields "${metadata_file}"; then
-      e2e_die "managed-server ${component_name} metadata fixture missing resourceInfo.idFromAttribute or resourceInfo.aliasFromAttribute: ${rel}"
+      e2e_die "managed-server ${component_name} metadata fixture missing resource.idAttribute or resource.aliasAttribute: ${rel}"
       return 1
     fi
   done

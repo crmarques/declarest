@@ -307,8 +307,8 @@ func (r *ResourceRepositoryReconciler) gitAuthMethod(
 	resourceRepository *declarestv1alpha1.ResourceRepository,
 ) (transport.AuthMethod, func(), error) {
 	cleanup := func() {}
-	if resourceRepository.Spec.Git.Auth.TokenSecretRef != nil {
-		token, err := readSecretValueFromClient(ctx, r.Client, resourceRepository.Namespace, resourceRepository.Spec.Git.Auth.TokenSecretRef)
+	if resourceRepository.Spec.Git.Auth.TokenRef != nil {
+		token, err := readSecretValueFromClient(ctx, r.Client, resourceRepository.Namespace, resourceRepository.Spec.Git.Auth.TokenRef)
 		if err != nil {
 			return nil, cleanup, err
 		}

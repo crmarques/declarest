@@ -128,8 +128,8 @@ func TestResourceCopyRequiresOverwriteWhenTargetExists(t *testing.T) {
 		"/admin/realms/test", "/admin/realms/test-copy",
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
-	if err == nil || !strings.Contains(err.Error(), "--overwrite") {
-		t.Fatalf("expected --overwrite guidance error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("expected --force guidance error, got %v", err)
 	}
 	if len(repoService.commitCalls) != 0 {
 		t.Fatalf("expected no commit calls on overwrite guard failure, got %#v", repoService.commitCalls)
@@ -173,7 +173,7 @@ func TestResourceCopyGitContextCommitsRepositoryChange(t *testing.T) {
 	}
 }
 
-func TestResourceCopyMessageAppendsToDefaultCommitMessage(t *testing.T) {
+func TestResourceCopyMessageOverridesDefaultCommitMessage(t *testing.T) {
 	t.Parallel()
 
 	metadataService := newTestMetadata()
@@ -203,7 +203,7 @@ func TestResourceCopyMessageAppendsToDefaultCommitMessage(t *testing.T) {
 	if len(repoService.commitCalls) != 1 {
 		t.Fatalf("expected one commit call, got %#v", repoService.commitCalls)
 	}
-	if repoService.commitCalls[0] != "declarest: copy resource /admin/realms/test to /admin/realms/test-copy - ticket-123" {
+	if repoService.commitCalls[0] != "ticket-123" {
 		t.Fatalf("unexpected commit message: %q", repoService.commitCalls[0])
 	}
 }
@@ -227,7 +227,7 @@ func TestResourceCopyOverwriteAllowsReplacingExistingTargetAndCommits(t *testing
 		"--context", "git",
 		"resource", "copy",
 		"/admin/realms/test", "/admin/realms/test-copy",
-		"--overwrite",
+		"--force",
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

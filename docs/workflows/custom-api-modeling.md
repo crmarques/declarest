@@ -13,9 +13,9 @@ Use:
 
 ```json
 {
-  "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name"
+  "resource": {
+    "idAttribute": "id",
+    "aliasAttribute": "name"
   }
 }
 ```
@@ -32,7 +32,7 @@ Problem:
 - backend endpoint is generic (`/components`)
 - you want logical paths by intent (`/user-registry/`, `/mappers/`)
 
-Use `resourceInfo.collectionPath` to point logical collections to the shared backend endpoint, then apply list `jq` filters to split types.
+Use `resource.collectionPath` to point logical collections to the shared backend endpoint, then apply list `jq` filters to split types.
 
 ## Recipe 3: Create endpoint differs from update endpoint
 
@@ -45,9 +45,9 @@ Use per-operation overrides:
 
 ```json
 {
-  "operationsInfo": {
-    "createResource": { "path": "./execution" },
-    "updateResource": { "path": "./" }
+  "operations": {
+    "create": { "path": "./execution" },
+    "update": { "path": "./" }
   }
 }
 ```
@@ -63,11 +63,11 @@ Use payload transforms:
 
 ```json
 {
-  "operationsInfo": {
-    "createResource": {
-      "payloadMutation": [
+  "operations": {
+    "create": {
+      "transforms": [
         { "jqExpression": ". | .provider = .providerId" },
-        { "suppressAttributes": ["providerId"] }
+        { "excludeAttributes": ["providerId"] }
       ]
     }
   }
@@ -81,13 +81,13 @@ Problem:
 - one endpoint returns many object categories
 - your logical collection should contain only one category
 
-Use `listCollection.payloadMutation` to filter deterministically.
+Use `list.transforms` to filter deterministically.
 
 ```json
 {
-  "operationsInfo": {
-    "listCollection": {
-      "payloadMutation": [
+  "operations": {
+    "list": {
+      "transforms": [
         { "jqExpression": "[ .[] | select(.type == \"desired\") ]" }
       ]
     }

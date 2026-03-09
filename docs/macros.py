@@ -11,8 +11,8 @@ DEFAULT_VERSION = "dev"
 
 
 def define_env(env: Any) -> None:
-    env.macro("declarest_version", declarest_version)
-    env.macro("declarest_tag", declarest_tag)
+    env.macro(declarest_version)
+    env.macro(declarest_tag)
 
 
 def declarest_version() -> str:

@@ -19,7 +19,7 @@ func TestResourceRepositoryValidateSpec(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
+					TokenRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
 				},
 			},
 			Storage: StorageSpec{
@@ -44,8 +44,8 @@ func TestResourceRepositoryValidateSpecAuthOneOf(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
-					SSHSecretRef:   &GitSSHSecretRef{PrivateKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "ssh"}, Key: "privateKey"}},
+					TokenRef:     &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
+					SSHSecretRef: &GitSSHSecretRef{PrivateKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "ssh"}, Key: "privateKey"}},
 				},
 			},
 			Storage: StorageSpec{ExistingPVC: &corev1.LocalObjectReference{Name: "repo-pvc"}},
@@ -68,7 +68,7 @@ func TestResourceRepositoryValidateSpecWebhook(t *testing.T) {
 				URL:    "https://example.com/org/repo.git",
 				Branch: "main",
 				Auth: ResourceRepositoryAuth{
-					TokenSecretRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
+					TokenRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"}, Key: "token"},
 				},
 				Webhook: &GitRepositoryWebhookSpec{
 					Provider:  GitWebhookProviderGitea,

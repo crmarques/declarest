@@ -16,7 +16,7 @@ import (
 
 func (g *Client) validateOperationPayload(
 	ctx context.Context,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 	spec metadata.OperationSpec,
 ) error {
@@ -44,7 +44,7 @@ func (g *Client) validateOperationPayload(
 	if err != nil {
 		return err
 	}
-	derivedFields := deriveValidationPathFields(resourceInfo, md)
+	derivedFields := deriveValidationPathFields(resolvedResource, md)
 
 	payloadView := normalizedBody
 	if len(derivedFields) > 0 {
@@ -99,10 +99,10 @@ func mergeValidationPayloadFields(normalizedBody resource.Value, derivedFields m
 	return merged
 }
 
-func deriveValidationPathFields(resourceInfo resource.Resource, md metadata.ResourceMetadata) map[string]any {
+func deriveValidationPathFields(resolvedResource resource.Resource, md metadata.ResourceMetadata) map[string]any {
 	fields := map[string]any{}
 
-	for key, value := range templatescope.DerivePathTemplateFields(resourceInfo.LogicalPath, md) {
+	for key, value := range templatescope.DerivePathTemplateFields(resolvedResource.LogicalPath, md) {
 		trimmedKey := strings.TrimSpace(key)
 		trimmedValue := strings.TrimSpace(value)
 		if trimmedKey == "" || trimmedValue == "" {
@@ -111,17 +111,17 @@ func deriveValidationPathFields(resourceInfo resource.Resource, md metadata.Reso
 		fields[resource.JSONPointerForObjectKey(trimmedKey)] = trimmedValue
 	}
 
-	if aliasAttribute := strings.TrimSpace(md.AliasFromAttribute); aliasAttribute != "" {
-		if strings.TrimSpace(resourceInfo.LocalAlias) != "" {
+	if aliasAttribute := strings.TrimSpace(md.AliasAttribute); aliasAttribute != "" {
+		if strings.TrimSpace(resolvedResource.LocalAlias) != "" {
 			if _, exists := fields[aliasAttribute]; !exists {
-				fields[aliasAttribute] = strings.TrimSpace(resourceInfo.LocalAlias)
+				fields[aliasAttribute] = strings.TrimSpace(resolvedResource.LocalAlias)
 			}
 		}
 	}
-	if idAttribute := strings.TrimSpace(md.IDFromAttribute); idAttribute != "" {
-		if strings.TrimSpace(resourceInfo.RemoteID) != "" {
+	if idAttribute := strings.TrimSpace(md.IDAttribute); idAttribute != "" {
+		if strings.TrimSpace(resolvedResource.RemoteID) != "" {
 			if _, exists := fields[idAttribute]; !exists {
-				fields[idAttribute] = strings.TrimSpace(resourceInfo.RemoteID)
+				fields[idAttribute] = strings.TrimSpace(resolvedResource.RemoteID)
 			}
 		}
 	}

@@ -9,26 +9,26 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 
 ### Resource identity and path mapping
 
-- `resourceInfo.idFromAttribute`
-- `resourceInfo.aliasFromAttribute`
-- `resourceInfo.collectionPath`
-- `resourceInfo.secretInAttributes`
-- `resourceInfo.externalizedAttributes`
+- `resource.idAttribute`
+- `resource.aliasAttribute`
+- `resource.collectionPath`
+- `resource.secretAttributes`
+- `resource.externalizedAttributes`
 
-### Operation behavior (`operationsInfo.*`)
+### Operation behavior (`operations.*`)
 
-For each operation (`getResource`, `createResource`, `updateResource`, `deleteResource`, `listCollection`, `compareResources`) you can control:
+For each operation (`get`, `create`, `update`, `delete`, `list`, `compare`) you can control:
 
 - `path`
-- `httpMethod`
+- `method`
 - `query`
-- `httpHeaders`
+- `headers`
 - `body`
-- ordered payload mutation pipeline (`payloadMutation`)
+- ordered payload mutation pipeline (`transforms`)
 
 ### Compare/diff normalization
 
-Use `compareResources.payloadMutation` to suppress noisy fields before diffing (timestamps, server-generated versions, etc.).
+Use `compare.transforms` to suppress noisy fields before diffing (timestamps, server-generated versions, etc.).
 
 ## Metadata files are overrides, not full schema dumps
 
@@ -62,12 +62,12 @@ Use inference as a starting point, then refine manually for edge cases.
 
 ## Externalized text attributes
 
-Use `resourceInfo.externalizedAttributes` when one or more string fields should live in sibling files instead of inline in `resource.yaml`.
+Use `resource.externalizedAttributes` when one or more string fields should live in sibling files instead of inline in `resource.yaml`.
 
 Example metadata:
 
 ```yaml
-resourceInfo:
+resource:
   externalizedAttributes:
     - path: ["script"]
       file: "script.sh"
@@ -77,14 +77,14 @@ resourceInfo:
 
 Save flow:
 
-1. `declarest resource save /projects/platform` writes `resource.yaml` with `script: '{{include script.sh}}'`.
+1. {% raw %}`declarest resource save /projects/platform` writes `resource.yaml` with `script: '{{include script.sh}}'`.{% endraw %}
 2. The original string content is written to `script.sh` next to `resource.yaml`.
 
 Resulting files:
 
 ```yaml
 # resource.yaml
-script: '{{include script.sh}}'
+script: '{% raw %}{{include script.sh}}{% endraw %}'
 ```
 
 ```bash

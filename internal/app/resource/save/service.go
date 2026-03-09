@@ -38,16 +38,16 @@ func Execute(
 		return err
 	}
 	if options.AsItems && options.AsOneResource {
-		return faults.NewValidationError("flags --as-items and --as-one-resource cannot be used together", nil)
+		return faults.NewValidationError("flag --mode must choose a single save mode", nil)
 	}
 	if options.Secret && options.AsItems {
-		return faults.NewValidationError("flags --secret and --as-items cannot be used together", nil)
+		return faults.NewValidationError("flags --secret and --mode items cannot be used together", nil)
 	}
 	if options.AsOneResource && len(options.SkipItems) > 0 {
-		return faults.NewValidationError("flag --skip-items is not supported with --as-one-resource", nil)
+		return faults.NewValidationError("flag --exclude is not supported with --mode single", nil)
 	}
 	if options.Secret && len(options.SkipItems) > 0 {
-		return faults.NewValidationError("flag --skip-items is not supported with --secret", nil)
+		return faults.NewValidationError("flag --exclude is not supported with --secret", nil)
 	}
 	if options.Secret && options.SecretAttributesEnabled {
 		return faults.NewValidationError("flags --secret and --secret-attributes cannot be used together", nil)
@@ -250,7 +250,7 @@ func saveResolvedPathPayload(
 		})
 	}
 	if !isListPayload {
-		return faults.NewValidationError("input payload is not a list; use --as-one-resource to save a single resource", nil)
+		return faults.NewValidationError("input payload is not a list; use --mode single to save a single resource", nil)
 	}
 
 	entries, err := resolveSaveEntriesForItems(ctx, deps, resolvedPath, items)

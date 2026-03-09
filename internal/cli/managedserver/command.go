@@ -17,8 +17,8 @@ import (
 
 func NewCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command := &cobra.Command{
-		Use:   "managed-server",
-		Short: "Inspect managed-server connectivity and auth",
+		Use:   "server",
+		Short: "Inspect server connectivity and auth",
 		Args:  cobra.NoArgs,
 	}
 
@@ -33,7 +33,7 @@ func NewCommand(deps cliutil.CommandDependencies) *cobra.Command {
 func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "get",
-		Short: "Read managed-server configuration or auth values",
+		Short: "Read server configuration or auth values",
 		Args:  cobra.NoArgs,
 	}
 
@@ -105,7 +105,7 @@ func newGetAccessTokenCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			provider, ok := managedServerClient.(managedserverdomain.AccessTokenProvider)
 			if !ok {
 				return cliutil.ValidationError(
-					"managed-server get access-token requires managed-server.http.auth.oauth2 configuration",
+					"server get access-token requires managed-server.http.auth.oauth2 configuration",
 					nil,
 				)
 			}
@@ -170,7 +170,7 @@ func newCheckCommand(deps cliutil.CommandDependencies) *cobra.Command {
 
 			_, writeErr := io.WriteString(
 				command.OutOrStdout(),
-				fmt.Sprintf("managed-server check: OK (probe succeeded: GET %s)\n", renderHealthCheckTarget(httpConfig)),
+				fmt.Sprintf("server check: OK (probe succeeded: GET %s)\n", renderHealthCheckTarget(httpConfig)),
 			)
 			return writeErr
 		},

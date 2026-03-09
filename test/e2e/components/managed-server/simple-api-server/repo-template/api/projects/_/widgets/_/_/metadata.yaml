@@ -1,18 +1,18 @@
-resourceInfo:
-  idFromAttribute: /id
-  aliasFromAttribute: /slug
-operationsInfo:
-  createResource:
-    httpMethod: PUT
+resource:
+  idAttribute: /id
+  aliasAttribute: /slug
+operations:
+  create:
+    method: PUT
     path: /api/projects/{{.project}}/widgets/{{.id}}
-  getResource:
+  get:
     path: /api/projects/{{.project}}/widgets/{{.id}}
-  updateResource:
-    httpMethod: PUT
+  update:
+    method: PUT
     path: /api/projects/{{.project}}/widgets/{{.id}}
-  deleteResource:
+  delete:
     path: /api/projects/{{.project}}/widgets/{{.id}}
-  listCollection:
-    httpMethod: GET
-  compareResources:
+  list:
+    method: GET
+  compare:
     path: /api/projects/{{.project}}/widgets/{{.id}}

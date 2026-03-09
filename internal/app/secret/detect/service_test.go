@@ -224,7 +224,7 @@ func TestExecuteFixPersistsDetectedAttributes(t *testing.T) {
 	if meta.setCalls[0].path != "/a" {
 		t.Fatalf("expected metadata set for /a, got %q", meta.setCalls[0].path)
 	}
-	if !reflect.DeepEqual(meta.setCalls[0].meta.SecretsFromAttributes, []string{"token"}) {
-		t.Fatalf("unexpected metadata secret attributes: %#v", meta.setCalls[0].meta.SecretsFromAttributes)
+	if !reflect.DeepEqual(meta.setCalls[0].meta.SecretAttributes, []string{"token"}) {
+		t.Fatalf("unexpected metadata secret attributes: %#v", meta.setCalls[0].meta.SecretAttributes)
 	}
 }

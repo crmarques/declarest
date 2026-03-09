@@ -37,8 +37,8 @@ case_run() {
   case_expect_success
 
   case_write_json "${secret_metadata_file}" '{
-    "resourceInfo": {
-      "secretInAttributes": ["/content"]
+    "resource": {
+      "secretAttributes": ["/content"]
     }
   }'
 
@@ -145,7 +145,7 @@ Hf9gVwB1g5B6Yq3N9mM2vByP0rG4Hk4F3m5k7lR8mWwJpB9Qxw7m0cS1d2e3f4g5
 -----END PRIVATE KEY-----
 EOF
 
-  case_run_declarest resource save "${private_key_path}" --payload "${private_key_file}" --secret --overwrite
+  case_run_declarest resource save "${private_key_path}" --payload "${private_key_file}" --secret --force
   case_expect_success
 
   case_run_declarest resource apply "${private_key_path}"

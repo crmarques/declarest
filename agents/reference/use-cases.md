@@ -67,7 +67,7 @@ Goal: fetch remote resource when direct path is stale.
 
 Inputs:
 1. Path `/customers/acme`.
-2. Resolved `operationsInfo.getResource.path` targets stale remote identifier.
+2. Resolved `operations.get.path` targets stale remote identifier.
 
 Execution:
 1. Direct get returns 404.
@@ -163,7 +163,7 @@ Goal: validate fixture-tree sync against API-facing identifiers and nested metad
 
 Inputs:
 1. Selected managed-server fixture tree under `repo-template/`.
-2. Metadata using `idFromAttribute`/`aliasFromAttribute` and intermediary placeholder paths (for example `/x/_/y/_/_`).
+2. Metadata using `idAttribute`/`aliasAttribute` and intermediary placeholder paths (for example `/x/_/y/_/_`).
 
 Execution:
 1. Loader expands metadata placeholders into concrete collection targets.
@@ -201,21 +201,21 @@ Goal: persist collection payloads as one file per resource by default.
 Inputs:
 1. Path `/customers`.
 2. Input payload list (array or object containing `items` array).
-3. Optional flags `--as-items` and `--as-one-resource`.
+3. Optional flag `--mode <auto|items|single>`.
 
 Execution:
 1. `declarest resource save /customers` receives a list payload.
 2. CLI resolves item aliases using metadata identity attributes.
 3. CLI saves one resource file per resolved item path.
-4. `declarest resource save /customers --as-one-resource` receives the same list payload.
+4. `declarest resource save /customers --mode single` receives the same list payload.
 
 Expected outputs:
-1. Step 1 produces one local file per list item under `/customers/<alias>`.
+1. Step 1 runs with the default `--mode auto` behavior and produces one local file per list item under `/customers/<alias>`.
 2. Step 4 persists the payload as a single resource file at `/customers`.
 
 Failure expectation:
-1. `--as-items` with non-list input fails with `ValidationError`.
-2. `--as-items --as-one-resource` fails with `ValidationError`.
+1. `--mode items` with non-list input fails with `ValidationError`.
+2. `--mode invalid` fails with `ValidationError`.
 
 ### Example 11: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
@@ -279,7 +279,7 @@ Goal: keep large text fields in sibling files while preserving apply/diff correc
 
 Inputs:
 1. Path `/projects/platform`.
-2. Metadata `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
+2. Metadata `resource.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
 3. Remote payload field `script: "echo hello"`.
 
 Execution:
@@ -297,7 +297,7 @@ Goal: externalize only script-bearing Rundeck job steps while preserving determi
 
 Inputs:
 1. Path `/projects/platform/jobs/sync-platform`.
-2. Metadata `resourceInfo.externalizedAttributes: [{path:["sequence","commands","*","script"], file:"script.sh"}]`.
+2. Metadata `resource.externalizedAttributes: [{path:["sequence","commands","*","script"], file:"script.sh"}]`.
 3. Payload `sequence.commands` contains `[{"script":"echo first"},{"exec":"echo inline"},{"script":"echo third"}]`.
 
 Execution:
@@ -315,7 +315,7 @@ Goal: fail fast when a placeholder-backed attribute cannot be expanded.
 
 Inputs:
 1. Path `/projects/platform`.
-2. Metadata `resourceInfo.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
+2. Metadata `resource.externalizedAttributes: [{path:["script"], file:"script.sh"}]`.
 3. Local payload `script: "{{include script.sh}}"` with no sibling `script.sh`.
 
 Execution:
@@ -529,11 +529,11 @@ Execution:
 2. With payload input, CLI detects secret candidates from payload content.
 3. When `--secret-attribute` is provided, CLI filters to exactly one detected attribute.
 4. In `--fix` mode, CLI loads existing metadata for each target path (or initializes empty metadata when missing).
-5. CLI merges filtered detected attributes into `resourceInfo.secretInAttributes` and persists metadata.
+5. CLI merges filtered detected attributes into `resource.secretAttributes` and persists metadata.
 
 Expected outputs:
 1. Repository-scan output groups detected attributes by logical resource path with deterministic ordering.
-2. Metadata for fixed paths contains deterministic, deduplicated `resourceInfo.secretInAttributes`.
+2. Metadata for fixed paths contains deterministic, deduplicated `resource.secretAttributes`.
 3. Existing metadata directives remain preserved.
 
 Failure expectation:
@@ -554,7 +554,7 @@ Execution:
 
 Expected outputs:
 1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
-2. `declarest config show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `metadata infer --openapi`.
+2. `declarest context show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `metadata infer --openapi`.
 
 Failure expectation:
 1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `metadata` commands run.
@@ -584,21 +584,21 @@ Goal: commit repository changes after local mutation commands while protecting a
 Inputs:
 1. Git repository context with clean worktree.
 2. `resource save` or `resource delete --source repository`.
-3. Optional commit-message flags `--message` or `--message-override`.
+3. Optional commit-message flag `--message`.
 
 Execution:
-1. Run `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123`.
-2. Run `declarest resource delete /customers/acme --confirm-delete --source repository --message-override 'cleanup customer'`.
+1. Run `declarest resource save /customers/acme --payload '/id=acme,/name=Acme' --force --message ticket-123`.
+2. Run `declarest resource delete /customers/acme --confirm-delete --source repository --message 'cleanup customer'`.
 3. Re-run one command after creating an unrelated uncommitted change in the repo.
-4. Run one command with both `--message` and `--message-override`.
+4. Run one command with `--message '   '`.
 
 Expected outputs:
-1. Step 1 saves repository content and creates one local commit whose message appends `ticket-123` to the default save message.
+1. Step 1 saves repository content and creates one local commit whose message is exactly `ticket-123`.
 2. Step 2 deletes local repository content and creates one local commit using the override message exactly.
 
 Failure expectation:
 1. Step 3 fails with `ValidationError` before mutation because auto-commit commands require a clean git worktree.
-2. Step 4 fails with `ValidationError` because commit-message flags are mutually exclusive.
+2. Step 4 fails with `ValidationError` because `--message` cannot be empty after trimming.
 
 ### Example 19: Managed-Server Proxy Context Injection
 Goal: ensure E2E proxy selection writes a complete `managed-server.http.proxy` block in generated contexts.

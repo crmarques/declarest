@@ -22,25 +22,25 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
 		return err
 	}
-	if err := validateAttributePointer("resourceInfo.idFromAttribute", metadata.IDFromAttribute); err != nil {
+	if err := validateAttributePointer("resource.idAttribute", metadata.IDAttribute); err != nil {
 		return err
 	}
-	if err := validateAttributePointer("resourceInfo.aliasFromAttribute", metadata.AliasFromAttribute); err != nil {
+	if err := validateAttributePointer("resource.aliasAttribute", metadata.AliasAttribute); err != nil {
 		return err
 	}
-	if err := validateAttributePointers("resourceInfo.secretInAttributes", metadata.SecretsFromAttributes); err != nil {
+	if err := validateAttributePointers("resource.secretAttributes", metadata.SecretAttributes); err != nil {
 		return err
 	}
 	if err := validateStructuredOnlyMetadataFields(resolvedPayloadType, metadata); err != nil {
 		return err
 	}
-	if metadata.IsWholeResourceSecret() && len(metadata.SecretsFromAttributes) > 0 {
+	if metadata.IsWholeResourceSecret() && len(metadata.SecretAttributes) > 0 {
 		return faults.NewValidationError(
-			"resourceInfo.secret: true and resourceInfo.secretInAttributes are mutually exclusive",
+			"resource.secret: true and resource.secretAttributes are mutually exclusive",
 			nil,
 		)
 	}
-	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.PayloadMutation, nil); err != nil {
+	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.Transforms, nil); err != nil {
 		return err
 	}
 
@@ -54,7 +54,7 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		if err := validateStructuredPayloadDirectives(
 			fmt.Sprintf("operation %q", key),
 			resolvedPayloadType,
-			operationSpec.PayloadMutation,
+			operationSpec.Transforms,
 			operationSpec.Validate,
 		); err != nil {
 			return err
@@ -74,28 +74,28 @@ func validateStructuredOnlyMetadataFields(
 		return nil
 	}
 
-	if strings.TrimSpace(metadata.IDFromAttribute) != "" {
+	if strings.TrimSpace(metadata.IDAttribute) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resourceInfo.idFromAttribute requires structured payload type (json, yaml); got %q",
+				"resource.idAttribute requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,
 		)
 	}
-	if strings.TrimSpace(metadata.AliasFromAttribute) != "" {
+	if strings.TrimSpace(metadata.AliasAttribute) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resourceInfo.aliasFromAttribute requires structured payload type (json, yaml); got %q",
+				"resource.aliasAttribute requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,
 		)
 	}
-	if len(metadata.SecretsFromAttributes) > 0 {
+	if len(metadata.SecretAttributes) > 0 {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resourceInfo.secretInAttributes requires structured payload type (json, yaml); got %q; use resourceInfo.secret: true for whole-resource secrets",
+				"resource.secretAttributes requires structured payload type (json, yaml); got %q; use resource.secret: true for whole-resource secrets",
 				payloadType,
 			),
 			nil,
@@ -104,7 +104,7 @@ func validateStructuredOnlyMetadataFields(
 	if len(metadata.ExternalizedAttributes) > 0 {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resourceInfo.externalizedAttributes requires structured payload type (json, yaml); got %q",
+				"resource.externalizedAttributes requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,
@@ -116,24 +116,24 @@ func validateStructuredOnlyMetadataFields(
 func validateStructuredPayloadDirectives(
 	scope string,
 	payloadType string,
-	mutations []metadatadomain.PayloadMutationStep,
+	mutations []metadatadomain.TransformStep,
 	validate *metadatadomain.OperationValidationSpec,
 ) error {
 	for idx, step := range mutations {
-		stepType := metadatadomain.PayloadMutationStepType(step)
+		stepType := metadatadomain.TransformStepType(step)
 		if stepType == "" {
 			return faults.NewValidationError(
-				fmt.Sprintf("%s payloadMutation[%d] must define exactly one of selectAttributes, suppressAttributes, or jqExpression", scope, idx),
+				fmt.Sprintf("%s transforms[%d] must define exactly one of selectAttributes, excludeAttributes, or jqExpression", scope, idx),
 				nil,
 			)
 		}
 		switch stepType {
 		case "selectAttributes":
-			if err := validateAttributePointers(fmt.Sprintf("%s payloadMutation[%d].selectAttributes", scope, idx), step.SelectAttributes); err != nil {
+			if err := validateAttributePointers(fmt.Sprintf("%s transforms[%d].selectAttributes", scope, idx), step.SelectAttributes); err != nil {
 				return err
 			}
-		case "suppressAttributes":
-			if err := validateAttributePointers(fmt.Sprintf("%s payloadMutation[%d].suppressAttributes", scope, idx), step.SuppressAttributes); err != nil {
+		case "excludeAttributes":
+			if err := validateAttributePointers(fmt.Sprintf("%s transforms[%d].excludeAttributes", scope, idx), step.ExcludeAttributes); err != nil {
 				return err
 			}
 		}

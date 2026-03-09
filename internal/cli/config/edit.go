@@ -31,7 +31,7 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 
 			editorService, ok := contexts.(configdomain.ContextCatalogEditor)
 			if !ok {
-				return cliutil.ValidationError("config edit requires a file-backed context catalog editor service", nil)
+				return cliutil.ValidationError("context edit requires a file-backed context catalog editor service", nil)
 			}
 
 			targetName, err := resolveCreateContextName(args, selectedContextName(globalFlags))
@@ -116,8 +116,8 @@ func editSingleContext(
 
 	oldName := catalog.Contexts[idx].Name
 	catalog.Contexts[idx] = decoded
-	if catalog.CurrentCtx == oldName && decoded.Name != "" {
-		catalog.CurrentCtx = decoded.Name
+	if catalog.CurrentContext == oldName && decoded.Name != "" {
+		catalog.CurrentContext = decoded.Name
 	}
 
 	return editorService.ReplaceCatalog(command.Context(), catalog)

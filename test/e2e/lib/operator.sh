@@ -1156,7 +1156,7 @@ spec:
     url: $(e2e_operator_yaml_quote "${repo_url}")
     branch: $(e2e_operator_yaml_quote "${repo_branch}")
     auth:
-      tokenSecretRef:
+      tokenRef:
         name: ${repo_secret_name}
         key: token
 EOF_REPO_CR
@@ -1347,7 +1347,6 @@ metadata:
   name: ${secret_store_name}
   namespace: ${namespace}
 spec:
-  provider: file
   file:
     path: $(e2e_operator_yaml_quote "${secret_file_path}")
     storage:
@@ -1417,7 +1416,6 @@ EOF_FILE_STORE
         printf '  name: %s\n' "${secret_store_name}"
         printf '  namespace: %s\n' "${namespace}"
         printf 'spec:\n'
-        printf '  provider: vault\n'
         printf '  vault:\n'
         printf '    address: %s\n' "$(e2e_operator_yaml_quote "${vault_address}")"
         printf '    mount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_MOUNT:-secret}")"
@@ -1426,27 +1424,30 @@ EOF_FILE_STORE
         printf '    auth:\n'
         case "${VAULT_AUTH_MODE:-token}" in
           token)
-            printf '      tokenRef:\n'
-            printf '        name: %s\n' "${secret_store_secret_name}"
-            printf '        key: token\n'
+            printf '      token:\n'
+            printf '        secretRef:\n'
+            printf '          name: %s\n' "${secret_store_secret_name}"
+            printf '          key: token\n'
             ;;
           password)
-            printf '      usernameRef:\n'
-            printf '        name: %s\n' "${secret_store_secret_name}"
-            printf '        key: username\n'
-            printf '      passwordRef:\n'
-            printf '        name: %s\n' "${secret_store_secret_name}"
-            printf '        key: password\n'
-            printf '      userpassMount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_AUTH_MOUNT:-userpass}")"
+            printf '      userpass:\n'
+            printf '        usernameRef:\n'
+            printf '          name: %s\n' "${secret_store_secret_name}"
+            printf '          key: username\n'
+            printf '        passwordRef:\n'
+            printf '          name: %s\n' "${secret_store_secret_name}"
+            printf '          key: password\n'
+            printf '        mount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_AUTH_MOUNT:-userpass}")"
             ;;
           approle)
-            printf '      appRoleRoleIDRef:\n'
-            printf '        name: %s\n' "${secret_store_secret_name}"
-            printf '        key: role-id\n'
-            printf '      appRoleSecretIDRef:\n'
-            printf '        name: %s\n' "${secret_store_secret_name}"
-            printf '        key: secret-id\n'
-            printf '      appRoleMount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_AUTH_MOUNT:-approle}")"
+            printf '      appRole:\n'
+            printf '        roleIDRef:\n'
+            printf '          name: %s\n' "${secret_store_secret_name}"
+            printf '          key: role-id\n'
+            printf '        secretIDRef:\n'
+            printf '          name: %s\n' "${secret_store_secret_name}"
+            printf '          key: secret-id\n'
+            printf '        mount: %s\n' "$(e2e_operator_yaml_quote "${VAULT_AUTH_MOUNT:-approle}")"
             ;;
         esac
       } >"${manifest_dir}/secret-store.yaml"

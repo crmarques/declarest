@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
@@ -112,18 +113,36 @@ func decodeInputStrict(data []byte, contentType string, sourceName string, outpu
 		}
 
 	default:
-		return cliutil.ValidationError("invalid input content type: use json, yaml, application/json, or application/yaml", nil)
+		return cliutil.ValidationError("invalid input content type: use json or yaml", nil)
 	}
 
 	return nil
 }
 
 func resolveConfigInputPayloadType(contentType string, sourceName string) string {
-	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
-		return descriptor.PayloadType
+	if normalized, err := normalizeConfigInputContentType(contentType); err == nil {
+		if descriptor, ok := resource.PayloadDescriptorForContentType(normalized); ok {
+			return descriptor.PayloadType
+		}
+	}
+	if strings.TrimSpace(contentType) != "" {
+		return ""
 	}
 	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
 		return descriptor.PayloadType
 	}
 	return cliutil.OutputJSON
+}
+
+func normalizeConfigInputContentType(contentType string) (string, error) {
+	switch strings.TrimSpace(contentType) {
+	case "":
+		return "", nil
+	case cliutil.OutputJSON:
+		return "application/json", nil
+	case cliutil.OutputYAML:
+		return "application/yaml", nil
+	default:
+		return "", cliutil.ValidationError("invalid input content type: use json or yaml", nil)
+	}
 }

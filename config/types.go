@@ -13,9 +13,9 @@ const (
 )
 
 type ContextCatalog struct {
-	Contexts      []Context `json:"contexts" yaml:"contexts"`
-	CurrentCtx    string    `json:"currentCtx" yaml:"currentCtx"`
-	DefaultEditor string    `json:"defaultEditor,omitempty" yaml:"defaultEditor,omitempty"`
+	Contexts       []Context `json:"contexts" yaml:"contexts"`
+	CurrentContext string    `json:"currentContext" yaml:"currentContext"`
+	DefaultEditor  string    `json:"defaultEditor,omitempty" yaml:"defaultEditor,omitempty"`
 }
 
 type Context struct {
@@ -81,7 +81,7 @@ type ManagedServer struct {
 }
 
 type HTTPServer struct {
-	BaseURL           string                 `json:"baseUrl" yaml:"baseUrl"`
+	BaseURL           string                 `json:"baseURL" yaml:"baseURL"`
 	HealthCheck       string                 `json:"healthCheck,omitempty" yaml:"healthCheck,omitempty"`
 	OpenAPI           string                 `json:"openapi,omitempty" yaml:"openapi,omitempty"`
 	DefaultHeaders    map[string]string      `json:"defaultHeaders,omitempty" yaml:"defaultHeaders,omitempty"`
@@ -100,8 +100,8 @@ type HTTPRequestThrottling struct {
 }
 
 type HTTPProxy struct {
-	HTTPURL  string     `json:"httpUrl,omitempty" yaml:"httpUrl,omitempty"`
-	HTTPSURL string     `json:"httpsUrl,omitempty" yaml:"httpsUrl,omitempty"`
+	HTTPURL  string     `json:"httpURL,omitempty" yaml:"httpURL,omitempty"`
+	HTTPSURL string     `json:"httpsURL,omitempty" yaml:"httpsURL,omitempty"`
 	NoProxy  string     `json:"noProxy,omitempty" yaml:"noProxy,omitempty"`
 	Auth     *ProxyAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
@@ -118,9 +118,9 @@ type HTTPAuth struct {
 }
 
 type OAuth2 struct {
-	TokenURL     string `json:"tokenUrl" yaml:"tokenUrl"`
+	TokenURL     string `json:"tokenURL" yaml:"tokenURL"`
 	GrantType    string `json:"grantType" yaml:"grantType"`
-	ClientID     string `json:"clientId" yaml:"clientId"`
+	ClientID     string `json:"clientID" yaml:"clientID"`
 	ClientSecret string `json:"clientSecret" yaml:"clientSecret"`
 	Username     string `json:"username,omitempty" yaml:"username,omitempty"`
 	Password     string `json:"password,omitempty" yaml:"password,omitempty"`
@@ -194,8 +194,8 @@ type VaultUserPasswordAuth struct {
 }
 
 type VaultAppRoleAuth struct {
-	RoleID   string `json:"roleId" yaml:"roleId"`
-	SecretID string `json:"secretId" yaml:"secretId"`
+	RoleID   string `json:"roleID" yaml:"roleID"`
+	SecretID string `json:"secretID" yaml:"secretID"`
 	Mount    string `json:"mount,omitempty" yaml:"mount,omitempty"`
 }
 

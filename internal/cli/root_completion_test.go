@@ -709,7 +709,7 @@ func TestConfigContextArgCompletionShowsContextNames(t *testing.T) {
 	for _, subcommand := range subcommands {
 		subcommand := subcommand
 		t.Run(subcommand, func(t *testing.T) {
-			output, err := executeForTest(testDeps(), "", "__complete", "config", subcommand, "")
+			output, err := executeForTest(testDeps(), "", "__complete", "context", subcommand, "")
 			if err != nil {
 				t.Fatalf("unexpected completion error: %v", err)
 			}

@@ -74,10 +74,10 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 	remoteID := localAlias
 
 	payload := map[string]any{}
-	if aliasAttribute := strings.TrimSpace(resolvedMetadata.AliasFromAttribute); aliasAttribute != "" {
+	if aliasAttribute := strings.TrimSpace(resolvedMetadata.AliasAttribute); aliasAttribute != "" {
 		payload[aliasAttribute] = localAlias
 	}
-	if idAttribute := strings.TrimSpace(resolvedMetadata.IDFromAttribute); idAttribute != "" {
+	if idAttribute := strings.TrimSpace(resolvedMetadata.IDAttribute); idAttribute != "" {
 		payload[idAttribute] = remoteID
 	}
 	for key, value := range templatescope.DerivePathTemplateFields(normalizedPath, resolvedMetadata) {

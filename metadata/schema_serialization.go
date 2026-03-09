@@ -10,17 +10,17 @@ import (
 )
 
 type resourceMetadataWire struct {
-	ResourceInfo   *resourceInfoWire   `json:"resourceInfo,omitempty" yaml:"resourceInfo,omitempty"`
-	OperationsInfo *operationsInfoWire `json:"operationsInfo,omitempty" yaml:"operationsInfo,omitempty"`
+	Resource   *resourceWire   `json:"resource,omitempty" yaml:"resource,omitempty"`
+	Operations *operationsWire `json:"operations,omitempty" yaml:"operations,omitempty"`
 }
 
-type resourceInfoWire struct {
-	IDFromAttribute        string                       `json:"idFromAttribute,omitempty" yaml:"idFromAttribute,omitempty"`
-	AliasFromAttribute     string                       `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
+type resourceWire struct {
+	IDAttribute            string                       `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
+	AliasAttribute         string                       `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
 	CollectionPath         string                       `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
-	SecretInAttributes     *[]string                    `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
+	SecretAttributes       *[]string                    `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 }
 
@@ -34,24 +34,24 @@ type externalizedAttributeWire struct {
 	Enabled        *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
-type operationsInfoWire struct {
-	Defaults         *operationDefaultsWire `json:"defaults,omitempty" yaml:"defaults,omitempty"`
-	GetResource      *resourceOperationWire `json:"getResource,omitempty" yaml:"getResource,omitempty"`
-	CreateResource   *resourceOperationWire `json:"createResource,omitempty" yaml:"createResource,omitempty"`
-	UpdateResource   *resourceOperationWire `json:"updateResource,omitempty" yaml:"updateResource,omitempty"`
-	DeleteResource   *resourceOperationWire `json:"deleteResource,omitempty" yaml:"deleteResource,omitempty"`
-	ListCollection   *resourceOperationWire `json:"listCollection,omitempty" yaml:"listCollection,omitempty"`
-	CompareResources *resourceOperationWire `json:"compareResources,omitempty" yaml:"compareResources,omitempty"`
+type operationsWire struct {
+	Defaults *operationDefaultsWire `json:"defaults,omitempty" yaml:"defaults,omitempty"`
+	Get      *resourceOperationWire `json:"get,omitempty" yaml:"get,omitempty"`
+	Create   *resourceOperationWire `json:"create,omitempty" yaml:"create,omitempty"`
+	Update   *resourceOperationWire `json:"update,omitempty" yaml:"update,omitempty"`
+	Delete   *resourceOperationWire `json:"delete,omitempty" yaml:"delete,omitempty"`
+	List     *resourceOperationWire `json:"list,omitempty" yaml:"list,omitempty"`
+	Compare  *resourceOperationWire `json:"compare,omitempty" yaml:"compare,omitempty"`
 }
 
 type operationDefaultsWire struct {
-	PayloadMutation *[]payloadMutationStepWire `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
+	Transforms *[]transformStepWire `json:"transforms,omitempty" yaml:"transforms,omitempty"`
 }
 
-type payloadMutationStepWire struct {
-	SelectAttributes   *stringListWire `json:"selectAttributes,omitempty" yaml:"selectAttributes,omitempty"`
-	SuppressAttributes *stringListWire `json:"suppressAttributes,omitempty" yaml:"suppressAttributes,omitempty"`
-	JQExpression       *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
+type transformStepWire struct {
+	SelectAttributes  *stringListWire `json:"selectAttributes,omitempty" yaml:"selectAttributes,omitempty"`
+	ExcludeAttributes *stringListWire `json:"excludeAttributes,omitempty" yaml:"excludeAttributes,omitempty"`
+	JQExpression      *string         `json:"jqExpression,omitempty" yaml:"jqExpression,omitempty"`
 }
 
 type validationAssertionWire struct {
@@ -65,19 +65,42 @@ type operationValidationWire struct {
 	SchemaRef          string                     `json:"schemaRef,omitempty" yaml:"schemaRef,omitempty"`
 }
 
-type httpHeaderWire struct {
-	Name  string `json:"name" yaml:"name"`
-	Value string `json:"value" yaml:"value"`
-}
+type headerMapWire map[string]string
 
 type resourceOperationWire struct {
-	HTTPMethod      string                     `json:"httpMethod,omitempty" yaml:"httpMethod,omitempty"`
-	Path            string                     `json:"path,omitempty" yaml:"path,omitempty"`
-	Query           *map[string]string         `json:"query,omitempty" yaml:"query,omitempty"`
-	HTTPHeaders     *[]httpHeaderWire          `json:"httpHeaders,omitempty" yaml:"httpHeaders,omitempty"`
-	Body            any                        `json:"body,omitempty" yaml:"body,omitempty"`
-	PayloadMutation *[]payloadMutationStepWire `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
-	Validate        *operationValidationWire   `json:"validate,omitempty" yaml:"validate,omitempty"`
+	Method     string                   `json:"method,omitempty" yaml:"method,omitempty"`
+	Path       string                   `json:"path,omitempty" yaml:"path,omitempty"`
+	Query      *map[string]string       `json:"query,omitempty" yaml:"query,omitempty"`
+	Headers    *headerMapWire           `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Body       any                      `json:"body,omitempty" yaml:"body,omitempty"`
+	Transforms *[]transformStepWire     `json:"transforms,omitempty" yaml:"transforms,omitempty"`
+	Validate   *operationValidationWire `json:"validate,omitempty" yaml:"validate,omitempty"`
+}
+
+func (h headerMapWire) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string(h))
+}
+
+func (h *headerMapWire) UnmarshalJSON(data []byte) error {
+	decoded, err := decodeHeaderMapWireJSON(data)
+	if err != nil {
+		return err
+	}
+	*h = headerMapWire(decoded)
+	return nil
+}
+
+func (h headerMapWire) MarshalYAML() (any, error) {
+	return map[string]string(h), nil
+}
+
+func (h *headerMapWire) UnmarshalYAML(value *yaml.Node) error {
+	decoded, err := decodeHeaderMapWireYAML(value)
+	if err != nil {
+		return err
+	}
+	*h = headerMapWire(decoded)
+	return nil
 }
 
 func (m ResourceMetadata) MarshalJSON() ([]byte, error) {
@@ -153,53 +176,53 @@ func EffectiveCollectionPath(md ResourceMetadata, fallback string) string {
 func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	wire := resourceMetadataWire{}
 
-	resourceInfo := resourceInfoWire{
-		IDFromAttribute:    metadata.IDFromAttribute,
-		AliasFromAttribute: metadata.AliasFromAttribute,
-		CollectionPath:     metadata.CollectionPath,
-		PayloadType:        metadata.PayloadType,
-		Secret:             cloneBoolPointer(metadata.Secret),
+	resource := resourceWire{
+		IDAttribute:    metadata.IDAttribute,
+		AliasAttribute: metadata.AliasAttribute,
+		CollectionPath: metadata.CollectionPath,
+		PayloadType:    metadata.PayloadType,
+		Secret:         cloneBoolPointer(metadata.Secret),
 	}
-	if metadata.SecretsFromAttributes != nil {
-		resourceInfo.SecretInAttributes = stringSlicePointer(metadata.SecretsFromAttributes)
+	if metadata.SecretAttributes != nil {
+		resource.SecretAttributes = stringSlicePointer(metadata.SecretAttributes)
 	}
 	if metadata.ExternalizedAttributes != nil {
-		resourceInfo.ExternalizedAttributes = externalizedAttributeWirePointer(metadata.ExternalizedAttributes)
+		resource.ExternalizedAttributes = externalizedAttributeWirePointer(metadata.ExternalizedAttributes)
 	}
 
-	if hasResourceInfo(resourceInfo) {
-		wire.ResourceInfo = &resourceInfo
+	if hasResourceInfo(resource) {
+		wire.Resource = &resource
 	}
 
-	operationsInfo := operationsInfoWire{}
-	if metadata.PayloadMutation != nil {
-		operationsInfo.Defaults = &operationDefaultsWire{
-			PayloadMutation: payloadMutationStepsWirePointer(metadata.PayloadMutation),
+	operations := operationsWire{}
+	if metadata.Transforms != nil {
+		operations.Defaults = &operationDefaultsWire{
+			Transforms: transformStepsWirePointer(metadata.Transforms),
 		}
 	}
 	if metadata.Operations != nil {
 		if spec, exists := metadata.Operations[string(OperationGet)]; exists {
-			operationsInfo.GetResource = operationSpecToWire(OperationGet, spec)
+			operations.Get = operationSpecToWire(OperationGet, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationCreate)]; exists {
-			operationsInfo.CreateResource = operationSpecToWire(OperationCreate, spec)
+			operations.Create = operationSpecToWire(OperationCreate, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationUpdate)]; exists {
-			operationsInfo.UpdateResource = operationSpecToWire(OperationUpdate, spec)
+			operations.Update = operationSpecToWire(OperationUpdate, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationDelete)]; exists {
-			operationsInfo.DeleteResource = operationSpecToWire(OperationDelete, spec)
+			operations.Delete = operationSpecToWire(OperationDelete, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationList)]; exists {
-			operationsInfo.ListCollection = operationSpecToWire(OperationList, spec)
+			operations.List = operationSpecToWire(OperationList, spec)
 		}
 		if spec, exists := metadata.Operations[string(OperationCompare)]; exists {
-			operationsInfo.CompareResources = operationSpecToWire(OperationCompare, spec)
+			operations.Compare = operationSpecToWire(OperationCompare, spec)
 		}
 	}
 
-	if metadata.Operations != nil || hasOperationsInfo(operationsInfo) {
-		wire.OperationsInfo = &operationsInfo
+	if metadata.Operations != nil || hasOperationsInfo(operations) {
+		wire.Operations = &operations
 	}
 
 	return wire
@@ -208,33 +231,33 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 	metadata := ResourceMetadata{}
 
-	if wire.ResourceInfo != nil {
-		resourceInfo := wire.ResourceInfo
-		if resourceInfo.IDFromAttribute != "" {
-			metadata.IDFromAttribute = resourceInfo.IDFromAttribute
+	if wire.Resource != nil {
+		resource := wire.Resource
+		if resource.IDAttribute != "" {
+			metadata.IDAttribute = resource.IDAttribute
 		}
-		if resourceInfo.AliasFromAttribute != "" {
-			metadata.AliasFromAttribute = resourceInfo.AliasFromAttribute
+		if resource.AliasAttribute != "" {
+			metadata.AliasAttribute = resource.AliasAttribute
 		}
-		if resourceInfo.CollectionPath != "" {
-			metadata.CollectionPath = resourceInfo.CollectionPath
+		if resource.CollectionPath != "" {
+			metadata.CollectionPath = resource.CollectionPath
 		}
-		if resourceInfo.PayloadType != "" {
-			metadata.PayloadType = resourceInfo.PayloadType
+		if resource.PayloadType != "" {
+			metadata.PayloadType = resource.PayloadType
 		}
-		if resourceInfo.Secret != nil {
-			metadata.Secret = cloneBoolPointer(resourceInfo.Secret)
+		if resource.Secret != nil {
+			metadata.Secret = cloneBoolPointer(resource.Secret)
 		}
-		if resourceInfo.SecretInAttributes != nil {
-			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretInAttributes)
+		if resource.SecretAttributes != nil {
+			metadata.SecretAttributes = cloneStringSlice(*resource.SecretAttributes)
 		}
-		if resourceInfo.ExternalizedAttributes != nil {
-			metadata.ExternalizedAttributes = externalizedAttributesFromWire(*resourceInfo.ExternalizedAttributes)
+		if resource.ExternalizedAttributes != nil {
+			metadata.ExternalizedAttributes = externalizedAttributesFromWire(*resource.ExternalizedAttributes)
 		}
 	}
 
-	if wire.OperationsInfo != nil {
-		if operationMap := operationsInfoToMap(wire.OperationsInfo); operationMap != nil {
+	if wire.Operations != nil {
+		if operationMap := operationsToMap(wire.Operations); operationMap != nil {
 			if metadata.Operations == nil {
 				metadata.Operations = map[string]OperationSpec{}
 			}
@@ -242,15 +265,15 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 				metadata.Operations[key] = spec
 			}
 		}
-		if wire.OperationsInfo.Defaults != nil {
-			defaults := wire.OperationsInfo.Defaults
-			if defaults.PayloadMutation != nil {
-				metadata.PayloadMutation = payloadMutationStepsFromWire(*defaults.PayloadMutation)
+		if wire.Operations.Defaults != nil {
+			defaults := wire.Operations.Defaults
+			if defaults.Transforms != nil {
+				metadata.Transforms = transformStepsFromWire(*defaults.Transforms)
 			}
 		}
 		if metadata.Operations == nil &&
-			wire.OperationsInfo.Defaults == nil &&
-			operationsInfoIsExplicitEmpty(wire.OperationsInfo) {
+			wire.Operations.Defaults == nil &&
+			operationsIsExplicitEmpty(wire.Operations) {
 			metadata.Operations = map[string]OperationSpec{}
 		}
 	}
@@ -258,40 +281,40 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 	return metadata
 }
 
-func hasResourceInfo(resourceInfo resourceInfoWire) bool {
-	return strings.TrimSpace(resourceInfo.IDFromAttribute) != "" ||
-		strings.TrimSpace(resourceInfo.AliasFromAttribute) != "" ||
-		strings.TrimSpace(resourceInfo.CollectionPath) != "" ||
-		strings.TrimSpace(resourceInfo.PayloadType) != "" ||
-		resourceInfo.Secret != nil ||
-		resourceInfo.SecretInAttributes != nil ||
-		resourceInfo.ExternalizedAttributes != nil
+func hasResourceInfo(resource resourceWire) bool {
+	return strings.TrimSpace(resource.IDAttribute) != "" ||
+		strings.TrimSpace(resource.AliasAttribute) != "" ||
+		strings.TrimSpace(resource.CollectionPath) != "" ||
+		strings.TrimSpace(resource.PayloadType) != "" ||
+		resource.Secret != nil ||
+		resource.SecretAttributes != nil ||
+		resource.ExternalizedAttributes != nil
 }
 
-func hasOperationsInfo(info operationsInfoWire) bool {
+func hasOperationsInfo(info operationsWire) bool {
 	return info.Defaults != nil ||
-		info.GetResource != nil ||
-		info.CreateResource != nil ||
-		info.UpdateResource != nil ||
-		info.DeleteResource != nil ||
-		info.ListCollection != nil ||
-		info.CompareResources != nil
+		info.Get != nil ||
+		info.Create != nil ||
+		info.Update != nil ||
+		info.Delete != nil ||
+		info.List != nil ||
+		info.Compare != nil
 }
 
-func operationsInfoIsExplicitEmpty(info *operationsInfoWire) bool {
+func operationsIsExplicitEmpty(info *operationsWire) bool {
 	if info == nil {
 		return false
 	}
 
-	return info.GetResource == nil &&
-		info.CreateResource == nil &&
-		info.UpdateResource == nil &&
-		info.DeleteResource == nil &&
-		info.ListCollection == nil &&
-		info.CompareResources == nil
+	return info.Get == nil &&
+		info.Create == nil &&
+		info.Update == nil &&
+		info.Delete == nil &&
+		info.List == nil &&
+		info.Compare == nil
 }
 
-func operationsInfoToMap(info *operationsInfoWire) map[string]OperationSpec {
+func operationsToMap(info *operationsWire) map[string]OperationSpec {
 	if info == nil {
 		return nil
 	}
@@ -305,12 +328,12 @@ func operationsInfoToMap(info *operationsInfoWire) map[string]OperationSpec {
 		result[string(operation)] = operationSpecFromWire(operation, *spec)
 	}
 
-	set(OperationGet, info.GetResource)
-	set(OperationCreate, info.CreateResource)
-	set(OperationUpdate, info.UpdateResource)
-	set(OperationDelete, info.DeleteResource)
-	set(OperationList, info.ListCollection)
-	set(OperationCompare, info.CompareResources)
+	set(OperationGet, info.Get)
+	set(OperationCreate, info.Create)
+	set(OperationUpdate, info.Update)
+	set(OperationDelete, info.Delete)
+	set(OperationList, info.List)
+	set(OperationCompare, info.Compare)
 
 	if len(result) == 0 {
 		return nil
@@ -320,20 +343,20 @@ func operationsInfoToMap(info *operationsInfoWire) map[string]OperationSpec {
 
 func operationSpecToWire(_ Operation, spec OperationSpec) *resourceOperationWire {
 	wire := &resourceOperationWire{
-		HTTPMethod: spec.Method,
-		Path:       spec.Path,
-		Body:       spec.Body,
-		Validate:   operationValidationToWire(spec.Validate),
+		Method:   spec.Method,
+		Path:     spec.Path,
+		Body:     spec.Body,
+		Validate: operationValidationToWire(spec.Validate),
 	}
 
 	if spec.Query != nil {
 		wire.Query = stringMapPointer(spec.Query)
 	}
 	if headers := operationHeadersToWire(spec); headers != nil {
-		wire.HTTPHeaders = httpHeaderListPointer(headers)
+		wire.Headers = headerMapWirePointer(headers)
 	}
-	if spec.PayloadMutation != nil {
-		wire.PayloadMutation = payloadMutationStepsWirePointer(spec.PayloadMutation)
+	if spec.Transforms != nil {
+		wire.Transforms = transformStepsWirePointer(spec.Transforms)
 	}
 
 	return wire
@@ -341,7 +364,7 @@ func operationSpecToWire(_ Operation, spec OperationSpec) *resourceOperationWire
 
 func operationSpecFromWire(_ Operation, spec resourceOperationWire) OperationSpec {
 	decoded := OperationSpec{
-		Method: spec.HTTPMethod,
+		Method: spec.Method,
 		Path:   spec.Path,
 		Body:   spec.Body,
 	}
@@ -349,13 +372,13 @@ func operationSpecFromWire(_ Operation, spec resourceOperationWire) OperationSpe
 	if spec.Query != nil {
 		decoded.Query = maps.Clone(*spec.Query)
 	}
-	preserveExplicitEmptyHeaders := spec.HTTPHeaders != nil && len(*spec.HTTPHeaders) == 0
-	if spec.HTTPHeaders != nil {
-		decoded.Headers = httpHeaderListToMap(*spec.HTTPHeaders)
+	preserveExplicitEmptyHeaders := spec.Headers != nil && len(*spec.Headers) == 0
+	if spec.Headers != nil {
+		decoded.Headers = maps.Clone(map[string]string(*spec.Headers))
 	}
 	promoteMediaHeadersFromOperationHeaders(&decoded, preserveExplicitEmptyHeaders)
-	if spec.PayloadMutation != nil {
-		decoded.PayloadMutation = payloadMutationStepsFromWire(*spec.PayloadMutation)
+	if spec.Transforms != nil {
+		decoded.Transforms = transformStepsFromWire(*spec.Transforms)
 	}
 	decoded.Validate = operationValidationFromWire(spec.Validate)
 
@@ -419,64 +442,40 @@ func validationAssertionFromWire(assertion validationAssertionWire) ValidationAs
 	return ValidationAssertion(assertion)
 }
 
-func payloadMutationStepsWirePointer(values []PayloadMutationStep) *[]payloadMutationStepWire {
+func transformStepsWirePointer(values []TransformStep) *[]transformStepWire {
 	if values == nil {
 		return nil
 	}
 
-	items := make([]payloadMutationStepWire, len(values))
+	items := make([]transformStepWire, len(values))
 	for idx, value := range values {
-		items[idx] = payloadMutationStepToWire(value)
+		items[idx] = transformStepToWire(value)
 	}
 	return &items
 }
 
-func payloadMutationStepsFromWire(values []payloadMutationStepWire) []PayloadMutationStep {
-	decoded := make([]PayloadMutationStep, len(values))
+func transformStepsFromWire(values []transformStepWire) []TransformStep {
+	decoded := make([]TransformStep, len(values))
 	for idx, value := range values {
-		decoded[idx] = payloadMutationStepFromWire(value)
+		decoded[idx] = transformStepFromWire(value)
 	}
 	return decoded
 }
 
-func payloadMutationStepToWire(value PayloadMutationStep) payloadMutationStepWire {
-	return payloadMutationStepWire{
-		SelectAttributes:   stringListWireNullPointer(value.SelectAttributes),
-		SuppressAttributes: stringListWireNullPointer(value.SuppressAttributes),
-		JQExpression:       stringPointer(value.JQExpression),
+func transformStepToWire(value TransformStep) transformStepWire {
+	return transformStepWire{
+		SelectAttributes:  stringListWireNullPointer(value.SelectAttributes),
+		ExcludeAttributes: stringListWireNullPointer(value.ExcludeAttributes),
+		JQExpression:      stringPointer(value.JQExpression),
 	}
 }
 
-func payloadMutationStepFromWire(value payloadMutationStepWire) PayloadMutationStep {
-	return PayloadMutationStep{
-		SelectAttributes:   cloneStringListWire(value.SelectAttributes),
-		SuppressAttributes: cloneStringListWire(value.SuppressAttributes),
-		JQExpression:       stringValue(value.JQExpression),
+func transformStepFromWire(value transformStepWire) TransformStep {
+	return TransformStep{
+		SelectAttributes:  cloneStringListWire(value.SelectAttributes),
+		ExcludeAttributes: cloneStringListWire(value.ExcludeAttributes),
+		JQExpression:      stringValue(value.JQExpression),
 	}
-}
-
-func httpHeaderListPointer(values map[string]string) *[]httpHeaderWire {
-	if values == nil {
-		return nil
-	}
-
-	keys := sortedMapKeys(values)
-	items := make([]httpHeaderWire, 0, len(keys))
-	for _, key := range keys {
-		items = append(items, httpHeaderWire{
-			Name:  key,
-			Value: values[key],
-		})
-	}
-	return &items
-}
-
-func httpHeaderListToMap(values []httpHeaderWire) map[string]string {
-	result := make(map[string]string, len(values))
-	for _, item := range values {
-		result[item.Name] = item.Value
-	}
-	return result
 }
 
 func operationHeadersToWire(spec OperationSpec) map[string]string {
@@ -565,6 +564,60 @@ func stringMapPointer(values map[string]string) *map[string]string {
 		cloned[key] = value
 	}
 	return &cloned
+}
+
+func headerMapWirePointer(values map[string]string) *headerMapWire {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make(headerMapWire, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return &cloned
+}
+
+func decodeHeaderMapWireJSON(data []byte) (map[string]string, error) {
+	var object map[string]string
+	if err := json.Unmarshal(data, &object); err == nil {
+		return object, nil
+	}
+
+	var list []map[string]string
+	if err := json.Unmarshal(data, &list); err == nil {
+		return mergeHeaderMaps(list), nil
+	}
+
+	return nil, json.Unmarshal(data, &object)
+}
+
+func decodeHeaderMapWireYAML(value *yaml.Node) (map[string]string, error) {
+	var object map[string]string
+	if err := value.Decode(&object); err == nil {
+		return object, nil
+	}
+
+	var list []map[string]string
+	if err := value.Decode(&list); err == nil {
+		return mergeHeaderMaps(list), nil
+	}
+
+	return nil, value.Decode(&object)
+}
+
+func mergeHeaderMaps(values []map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+
+	merged := map[string]string{}
+	for _, item := range values {
+		for key, value := range item {
+			merged[key] = value
+		}
+	}
+	return merged
 }
 
 func externalizedAttributeWirePointer(values []ExternalizedAttribute) *[]externalizedAttributeWire {

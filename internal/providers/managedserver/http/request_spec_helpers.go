@@ -19,10 +19,10 @@ func resolveOperationSpecTemplates(
 	md metadata.ResourceMetadata,
 	operation metadata.Operation,
 	spec metadata.OperationSpec,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	descriptor resource.PayloadDescriptor,
 ) (metadata.OperationSpec, error) {
-	templateScope, err := templatescope.BuildResourceScope(resourceInfo, md)
+	templateScope, err := templatescope.BuildResourceScope(resolvedResource, md)
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
@@ -34,7 +34,7 @@ func resolveOperationSpecTemplates(
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},
-		PayloadMutation: metadata.CloneResourceMetadata(metadata.ResourceMetadata{PayloadMutation: md.PayloadMutation}).PayloadMutation,
+		Transforms: metadata.CloneResourceMetadata(metadata.ResourceMetadata{Transforms: md.Transforms}).Transforms,
 	}
 
 	rendered, err := metadata.ResolveOperationSpecWithScope(ctx, templateMetadata, operation, templateScope)
@@ -94,16 +94,16 @@ func (g *Client) requestFallbackDescriptor(
 }
 
 func (g *Client) requestBodyDescriptor(
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) resource.PayloadDescriptor {
 	switch {
-	case resource.IsPayloadDescriptorExplicit(resourceInfo.PayloadDescriptor):
-		return resource.NormalizePayloadDescriptor(resourceInfo.PayloadDescriptor)
+	case resource.IsPayloadDescriptorExplicit(resolvedResource.PayloadDescriptor):
+		return resource.NormalizePayloadDescriptor(resolvedResource.PayloadDescriptor)
 	case strings.TrimSpace(md.PayloadType) != "":
 		return g.metadataPayloadDescriptor(md)
 	default:
-		return payloadDescriptorFromValue(resourceInfo.Payload)
+		return payloadDescriptorFromValue(resolvedResource.Payload)
 	}
 }
 
@@ -124,15 +124,15 @@ func (g *Client) genericRequestBodyDescriptor(requestSpec managedserver.RequestS
 
 func (g *Client) payloadTemplateScopeDescriptor(
 	md metadata.ResourceMetadata,
-	resourceInfo resource.Resource,
+	resolvedResource resource.Resource,
 ) resource.PayloadDescriptor {
 	switch {
-	case resource.IsPayloadDescriptorExplicit(resourceInfo.PayloadDescriptor):
-		return resource.NormalizePayloadDescriptor(resourceInfo.PayloadDescriptor)
+	case resource.IsPayloadDescriptorExplicit(resolvedResource.PayloadDescriptor):
+		return resource.NormalizePayloadDescriptor(resolvedResource.PayloadDescriptor)
 	case strings.TrimSpace(md.PayloadType) != "":
 		return g.metadataPayloadDescriptor(md)
 	default:
-		return payloadDescriptorFromValue(resourceInfo.Payload)
+		return payloadDescriptorFromValue(resolvedResource.Payload)
 	}
 }
 

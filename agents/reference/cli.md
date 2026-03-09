@@ -27,16 +27,16 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 10. Help invocations (`--help`, `-h`, or `help`) and completion-script invocations (`completion`, `__complete`, `__completeNoDesc`) MUST render without requiring active-context resolution.
 11. Shell completion output MUST expose canonical command names and MUST NOT leak internal command placeholders.
 12. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
-13. Non-runtime commands (`version`, `config print-template|add|edit|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
+13. Non-runtime commands (`version`, `context print-template|add|edit|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
 14. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 15. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
 16. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates, `resource request <method>` path completion MUST prefer remote candidates with repository fallback, and `metadata *` plus path-aware `secret` commands MUST prefer repository candidates with remote fallback.
-17. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasFromAttribute` values for displayed path segments over ID-only segments when aliases are available, completion suggestions MUST use canonical absolute paths that remain prefix-compatible with the current input token, templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, collection-prefix suggestions SHOULD preserve trailing `/` semantics, and path completion SHOULD emit no-space directives so accepted path candidates do not append a trailing space.
+17. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasAttribute` values for displayed path segments over ID-only segments when aliases are available, completion suggestions MUST use canonical absolute paths that remain prefix-compatible with the current input token, templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, collection-prefix suggestions SHOULD preserve trailing `/` semantics, and path completion SHOULD emit no-space directives so accepted path candidates do not append a trailing space.
 18. When metadata selector trees define logical child branches that are not present in OpenAPI paths (for example intermediary `/_/` templates such as `/admin/realms/_/user-registry/_/mappers/_/`), path completion SHOULD surface those metadata-defined child segments as canonical logical suggestions under matching concrete paths.
 
 ## Data Contracts
 Command groups:
-1. Basic Commands: `config`, `metadata`, `repository`, `resource`, `managed-server`, `secret`.
+1. Basic Commands: `context`, `metadata`, `repository`, `resource`, `server`, `secret`.
 2. Other Commands: `completion`, `version`.
 Global flags:
 1. `--context`, `-c`.
@@ -49,11 +49,11 @@ Global flags:
 
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
-2. `--content-type`, `-i` with accepted values including full MIME types and shortnames such as `json|yaml|xml|hcl|ini|properties|text|binary|octet-stream`; unknown values normalize to `application/octet-stream`.
+2. `--content-type`, `-i` MUST accept short-form values only; context-catalog commands accept `json|yaml`, and resource payload commands accept `json|yaml|xml|hcl|ini|properties|text|binary`.
 3. `--payload` as a command-specific inline payload flag for `resource request post`, `resource request put`, and `resource request patch`; resource mutation commands (`apply`, `create`, `update`, `save`) accept explicit payload input from `--payload` as a file path, `-` (stdin), inline object text for structured or text codecs, or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`), and explicit input MUST override repository-sourced payload loading when provided. For resource mutation commands, path-looking `--payload` values (for example `private.key`, `./payload.json`, or `dir/payload.key`) MUST be treated as file inputs first and MUST fail when the file is missing rather than being decoded as literal inline payload. Inline payload text and JSON Pointer assignments MUST NOT be accepted for binary content types.
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
-5. `resource save` SHOULD use `--overwrite` for local overwrite confirmation.
-6. `resource copy` SHOULD use `--overwrite` for local overwrite confirmation.
+5. `resource save` SHOULD use `--force` for local overwrite confirmation.
+6. `resource copy` SHOULD use `--force` for local overwrite confirmation.
 7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation.
 8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent.
 9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.autoSync` is disabled.
@@ -84,14 +84,14 @@ Core resource commands:
 13. `request`.
 
 Selected command names:
-1. `config edit`.
-2. `config print-template`.
-3. `config add`.
-4. `config init`.
-5. `config use`.
-6. `config show`.
-7. `config current`.
-8. `config resolve`.
+1. `context edit`.
+2. `context print-template`.
+3. `context add`.
+4. `context init`.
+5. `context use`.
+6. `context show`.
+7. `context current`.
+8. `context resolve`.
 8. `metadata resolve`.
 9. `metadata render`.
 10. `repository status`.
@@ -106,26 +106,26 @@ Selected command names:
 17. `secret detect`.
 18. `completion`.
 19. `version`.
-20. `managed-server get baseUrl`.
-19. `managed-server get tokenUrl`.
-20. `managed-server get access-token`.
-21. `managed-server check`.
+20. `server get base-url`.
+21. `server get token-url`.
+22. `server get access-token`.
+23. `server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
 2. Methods: `get|head|options|post|put|patch|delete|trace|connect`.
 
-Interactive config commands:
-1. `config add` SHOULD support terminal prompts when no file/stdin input is provided.
-2. `config add` SHOULD accept optional context name from positional `[new-context-name]` or global `--context` and skip name prompting when provided.
-3. `config use` SHOULD support context selection when no name argument is provided.
-4. `config show` SHOULD support context selection when `--context` is omitted.
-5. `config rename` SHOULD support context selection and target-name prompt when arguments are omitted.
-6. `config delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
-7. Interactive `config add` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
-8. For interactive `config add`, repository payload-format prompts MUST NOT be shown; managed-server media signals are the default source for repository payload formats.
-9. `config edit` SHOULD open the context catalog in an editor, validate the edited YAML on save/exit, and persist only validated changes.
-10. `config edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
+Interactive context commands:
+1. `context add` SHOULD support terminal prompts when no file/stdin input is provided.
+2. `context add` SHOULD accept optional context name from positional `[new-context-name]` or global `--context` and skip name prompting when provided.
+3. `context use` SHOULD support context selection when no name argument is provided.
+4. `context show` SHOULD support context selection when `--context` is omitted.
+5. `context rename` SHOULD support context selection and target-name prompt when arguments are omitted.
+6. `context delete` SHOULD support context selection and explicit confirmation when no name argument is provided.
+7. Interactive `context add` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
+8. For interactive `context add`, repository payload-format prompts MUST NOT be shown; managed-server media signals are the default source for repository payload formats.
+9. `context edit` SHOULD open the context catalog in an editor, validate the edited YAML on save/exit, and persist only validated changes.
+10. `context edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
 
 ## CLI Input Grammar
 1. Resource targets MUST be logical absolute paths.
@@ -143,10 +143,10 @@ Interactive config commands:
 13. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
 14. `resource get` MUST support `--source <managed-server|repository>`.
 15. `resource get` MUST default to `--source managed-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
-16. `resource get` MUST redact values for metadata-declared `resourceInfo.secretInAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
+16. `resource get` MUST redact values for metadata-declared `resource.secretAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
-18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operationsInfo.*` directives under the metadata section.
-19. `resource get|list` MUST support `--skip-items <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
+18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operations.*` directives under the metadata section.
+19. `resource get|list` MUST support `--exclude <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
 20. `resource list` MUST support `--source <managed-server|repository>`.
 21. `resource list` MUST default to `--source managed-server`.
 22. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
@@ -164,56 +164,56 @@ Interactive config commands:
 32. `resource apply --force` MUST execute update after remote read even when metadata compare output indicates no drift.
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
-32. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
-33. `resource save` MUST support `--secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.`, persist only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix, and persist metadata `resourceInfo.secret: true`.
-33. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
-34. `resource save` MUST support `--skip-items <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
-35. `resource save --skip-items` MUST fail with `ValidationError` when `--as-one-resource` is selected.
-36. `resource save --secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--as-items`, `--skip-items`, `--secret-attributes`, and `--allow-plaintext`.
-37. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--allow-plaintext` or `--secret-attributes` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
-38. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resourceInfo.secret: true` and `--secret-attributes` is not selected.
+32. `resource save` MUST support `--mode <auto|items|single>`.
+33. `resource save` MUST support `--secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.`, persist only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix, and persist metadata `resource.secret: true`.
+33. `resource save --mode auto` MUST save non-list payloads as one resource and MUST fan out list payloads (`[]` or objects with `items` arrays) into one repository resource per resolved item.
+34. `resource save` MUST support `--exclude <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
+35. `resource save --exclude` MUST fail with `ValidationError` when `--mode single` is selected.
+36. `resource save --secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--mode items`, `--exclude`, `--secret-attributes`, and `--allow-plaintext`.
+37. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resource.secretAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--allow-plaintext` or `--secret-attributes` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
+38. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
 39. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
-40. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
+40. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
-39. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
+39. For collection list saves (`--mode auto` on list payloads or explicit `--mode items`), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 40. `resource edit` MUST resolve the edit source from the local repository first, using the same literal-then-bounded metadata-aware fallback as other repository-backed single-resource workflows; when that local resolution returns `NotFound`, it MUST fall back to one remote read for the requested logical path before opening the editor, and it MUST persist the edited payload only when decoding and save validation succeed.
 41. `resource edit` on git repository contexts MUST commit repository changes and MAY autoSync when the git context enables repository autoSync.
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
 43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
-44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resourceInfo.secretInAttributes`.
+44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
 45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 46. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
-47. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resourceInfo.secretInAttributes` for each detected resource path in scope.
+47. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resource.secretAttributes` for each detected resource path in scope.
 48. `secret detect --secret-attribute <pointer>` MUST apply only that detected JSON Pointer attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
 49. `secret get` MUST accept `secret get <path>`, `secret get <path> <pointer>`, `secret get --path <path>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
 50. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
 51. `secret get` with path+key input (`<path> <pointer>`, `--path`+`--key`, or `<path>:<pointer>`) MUST resolve the canonical secret key as `<path>:<pointer>`.
 52. `secret get --key` MUST require `--path`.
-49. Interactive config flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
-50. `config show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
-51. `config add` MUST accept `--content-type <json|yaml|application/json|application/yaml>` for stdin or extension-less payloads, infer JSON or YAML from the payload file extension when present, and otherwise default extension-less input decoding to JSON.
-52. `config add` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
-53. `config add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
-54. `config resolve`, `config check`, and `config init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
-55. `config init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
+49. Interactive context flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
+50. `context show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
+51. `context add` MUST accept `--content-type <json|yaml>` for stdin or extension-less payloads, infer JSON or YAML from the payload file extension when present, and otherwise default extension-less input decoding to JSON.
+52. `context add` MUST accept optional context name from positional `[new-context-name]` or global `--context`.
+53. `context add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
+54. `context resolve`, `context check`, and `context init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
+55. `context init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
 56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
 57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--content-type` when provided, otherwise by trusted file extension, otherwise by content heuristics (`JSON` for structured-looking input, `application/octet-stream` otherwise); binary input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
 58. `resource request post`, `resource request put`, and `resource request patch` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--content-type` when provided, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
-59. `config add` MUST accept input from `--payload <path|->` or stdin.
-57. `config add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
-58. When `config add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
-59. When `config add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
-60. When `config add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
-61. `config add --set-current` MUST set current context to the imported context when exactly one context is imported.
-62. `config add --set-current` with multiple imported contexts MUST require catalog `current-ctx` or fail with `ValidationError`.
-63. `config add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
-64. `config update` and `config validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `config add`.
+59. `context add` MUST accept input from `--payload <path|->` or stdin.
+57. `context add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
+58. When `context add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
+59. When `context add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
+60. When `context add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
+61. `context add --set-current` MUST set current context to the imported context when exactly one context is imported.
+62. `context add --set-current` with multiple imported contexts MUST require catalog `currentContext` or fail with `ValidationError`.
+63. `context add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
+64. `context update` and `context validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `context add`.
 65. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
 67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
-68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idFromAttribute`.
+68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idAttribute`.
 69. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
 70. `resource delete --source managed-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
 71. `resource request delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
@@ -221,33 +221,33 @@ Interactive config commands:
 73. `resource save` with wildcard path segments and payload input (`--payload <path|->` or stdin) MUST fail with `ValidationError`.
 74. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 75. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
-76. Interactive `config add` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth vs custom-headers) by collecting only the selected option's fields.
-77. `config print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
+76. Interactive `context add` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth vs custom-headers) by collecting only the selected option's fields.
+77. `context print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
 78. `repository push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
 79. `repository clean` MUST discard uncommitted tracked and untracked changes for git repositories and MUST succeed as a no-op for filesystem repositories.
 80. `repository commit` MUST accept `--message`, `-m`, fail with `ValidationError` when the active repository type is `filesystem`, and create at most one local git commit from current worktree changes.
 81. `repository commit` on a clean git worktree MUST succeed as a no-op and report that no commit was created.
 82. `repository status --verbose` (global `--verbose`) MUST include deterministic local worktree change details for git repositories.
-79. Context-catalog mutations (`config add|edit|update|validate`) MUST fail validation when `managed-server` is omitted.
-80. Interactive `config add` MUST NOT prompt for repository payload format; repository payload files follow the managed-server response media type or explicit payload input media type at runtime.
+79. Context-catalog mutations (`context add|edit|update|validate`) MUST fail validation when `managed-server` is omitted.
+80. Interactive `context add` MUST NOT prompt for repository payload format; repository payload files follow the managed-server response media type or explicit payload input media type at runtime.
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
-82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasFromAttribute` or `idFromAttribute`) present in the payload do not match the target path segment.
-83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` (append to default message) and `--message-override` (replace default message); the flags MUST be mutually exclusive; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.autoSync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
+82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasAttribute` or `idAttribute`) present in the payload do not match the target path segment.
+83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` as an override-only git commit message flag; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.autoSync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
 84. `resource delete` when repository deletion is selected (`--source repository|both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
-86. Commands that open editors (`config edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
+86. Commands that open editors (`context edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
 87. `resource edit` MUST reject resources whose resolved payload type is `octet-stream` with `ValidationError`.
 88. `resource request <method>` MUST support optional `--accept-type` and `--content-type` overrides for direct managed-server requests; when omitted, payload-type-aware defaults MAY be resolved from metadata, request content type, or response headers.
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source managed-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
-90. `managed-server get baseUrl` MUST print the active context `managedServer.http.baseUrl` and fail with `ValidationError` when `managedServer.http` is not configured.
-91. `managed-server get tokenUrl` MUST print the active context `managedServer.http.auth.oauth2.tokenUrl` and fail with `ValidationError` when OAuth2 auth is not configured.
-92. `managed-server get access-token` MUST fetch and print the OAuth2 access token from `managedServer.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
-93. `managed-server check` MUST probe managed-server connectivity using a non-recursive remote root list request and treat probe results in categories `NotFoundError`, `ValidationError`, and `ConflictError` as reachable-success outcomes while surfacing other errors.
-94. Commands with plain-text-only output (`secret get`, `repository tree`, `managed-server get *`, `managed-server check`, shell `completion` subcommands, and `config print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
-95. `config show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
+90. `server get base-url` MUST print the active context `managedServer.http.baseURL` and fail with `ValidationError` when `managedServer.http` is not configured.
+91. `server get token-url` MUST print the active context `managedServer.http.auth.oauth2.tokenURL` and fail with `ValidationError` when OAuth2 auth is not configured.
+92. `server get access-token` MUST fetch and print the OAuth2 access token from `managedServer.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
+93. `server check` MUST probe managed-server connectivity using a GET request against `managedServer.http.healthCheck` when configured or the normalized `managedServer.http.baseURL` path otherwise, and it MUST succeed only when the probe request succeeds.
+94. Commands with plain-text-only output (`secret get`, `repository tree`, `server get *`, `server check`, shell `completion` subcommands, and `context print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
+95. `context show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
 96. `repository status --verbose` MAY include structured `worktree` entries when `--output json|yaml` is selected.
 97. `repository commit` MUST support `--output text|json|yaml`; `json|yaml` output MUST expose a stable `committed` success indicator, and text-mode success SHOULD use the standard CLI execution-status footer.
 
@@ -261,8 +261,8 @@ Interactive config commands:
 7. `repository status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
 8. `repository commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
 9. `repository tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
-9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasFromAttribute`/`idFromAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
-7. `config show` MUST print the full selected context configuration as YAML to stdout.
+9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasAttribute`/`idAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
+7. `context show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
 10. Help output SHOULD avoid repeated blank lines between sections.
@@ -278,11 +278,11 @@ Interactive config commands:
 17. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
-20. `config check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
+20. `context check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
 21. `repository status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 22. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.
-23. `managed-server get baseUrl|tokenUrl|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
-24. `managed-server check` text output MUST print a concise probe result line and MAY include one additional line with the probe error detail when connectivity is confirmed through a warning-category response.
+23. `server get base-url|token-url|access-token` output MUST be plain text and print only the requested value followed by one trailing newline.
+24. `server check` text output MUST print a concise probe result line when the configured connectivity probe succeeds.
 25. The CLI MUST support `--no-color` to disable ANSI color output for status labels, and `NO_COLOR` environment variable MUST also disable ANSI color output.
 26. CLI process exit codes SHOULD map typed error categories deterministically (for example validation, not-found, auth, conflict, transport) instead of collapsing all errors to one exit code.
 
@@ -292,32 +292,32 @@ Interactive config commands:
 3. Unsupported command/flag combination.
 4. Command requires configured manager not present in active context.
 5. `resource get|list|delete` receives invalid `--source` values.
-8. `resource save` receives both `--as-items` and `--as-one-resource`.
-9. `resource save --as-items` receives non-list input.
-10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--allow-plaintext` nor `--secret-attributes` is set, detects metadata-declared plaintext or whole-resource secret candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--overwrite`.
+8. `resource save --mode` receives a value other than `auto`, `items`, or `single`.
+9. `resource save --mode items` receives non-list input.
+10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--allow-plaintext` nor `--secret-attributes` is set, detects metadata-declared plaintext or whole-resource secret candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--force`.
 11. `resource save --secret-attributes=<attr-list>` includes one or more attributes that are not detected in the payload, or is selected for a non-structured payload.
-12. `resource save --secret` is combined with `--as-items`, `--skip-items`, `--secret-attributes`, or `--allow-plaintext`.
+12. `resource save --secret` is combined with `--mode items`, `--exclude`, `--secret-attributes`, or `--allow-plaintext`.
 13. `resource apply|create|update|save` receives a path-looking `--payload` value that does not resolve to an input file.
 14. `resource create` is invoked without payload input and no matching local resources exist under the target path.
 15. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
 16. `secret detect --fix` is provided with payload input but without path input.
 17. `secret detect --secret-attribute` value is not detected in payload or repository scope.
-18. `config add --context-name` does not match any catalog context.
+18. `context add --context-name` does not match any catalog context.
 19. `resource request post|put` receives inline `--payload` together with the `--payload <path|->` or stdin option.
 20. Binary payload mode receives inline `--payload` text or JSON Pointer assignments.
-19. `config add --set-current` with multiple imported contexts and missing catalog `current-ctx`.
+19. `context add --set-current` with multiple imported contexts and missing catalog `currentContext`.
 20. `resource request delete` is invoked without `--confirm-delete`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
 22. `resource save` wildcard path is combined with payload input.
 23. `resource diff` targets a collection path with no local resources.
-24. `config add` receives both positional context name and `--context` with different values.
-25. `config print-template` receives positional arguments.
+24. `context add` receives both positional context name and `--context` with different values.
+25. `context print-template` receives positional arguments.
 26. `repository push` is invoked for a `filesystem` repository context.
 27. Context-catalog mutation input omits required `managed-server`.
 28. `secret get --key <key>` is invoked without `--path`.
 29. `secret get <path>:` uses an empty key segment.
-30. `managed-server get tokenUrl` or `managed-server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
-31. `resource save|delete` receives both `--message` and `--message-override`.
+30. `server get token-url` or `server get access-token` is invoked when the active context managed-server auth mode is not OAuth2.
+31. `resource save|delete|copy` receives `--message` with an empty or whitespace-only value.
 32. `resource save|delete` auto-commit is attempted while the git worktree already has unrelated uncommitted changes.
 33. `resource save --push` is invoked when the active repository is filesystem or when git remote configuration is missing.
 34. `resource edit` targets a resource whose resolved payload type is `octet-stream`.
@@ -329,7 +329,7 @@ Interactive config commands:
 3. `delete` invoked on collection without recursive force confirmation.
 4. `metadata infer` called with missing OpenAPI source.
 5. Completion for alias path when remote ID differs.
-6. Interactive config command invoked from non-TTY input/output.
+6. Interactive context command invoked from non-TTY input/output.
 7. `resource save --help` invoked when no current context exists.
 8. `completion` or shell completion engine invocation (`__complete`, `__completeNoDesc`) when no current context exists.
 9. `resource save` payload mixes placeholders and plaintext values for secret-like fields.
@@ -338,24 +338,24 @@ Interactive config commands:
 12. `resource` invoked without a subcommand when no current context exists.
 13. `resource apply`, `resource create`, or `resource update` is invoked on a collection that has only nested descendants and omits `--recursive`.
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
-15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idFromAttribute` and fails with `ConflictError`.
+15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idAttribute` and fails with `ConflictError`.
 16. `resource save --push` is used with `repository.git.remote.autoSync: false` and still pushes the new save commit to the configured remote.
 17. `resource get /files/blob --output text` writes raw binary bytes without a trailing newline when `/files/blob` resolves to payload type `octet-stream`.
 18. `resource get /files/blob --output json` emits a stable base64 wrapper with `encoding`, `mediaType`, and `data`.
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/rea`) returns canonical concrete collection candidates (for example `/admin/realms/`) when local/remote/OpenAPI context provides them and suppresses template placeholder segments (`{...}`) from completion output.
-19. `version` and context-catalog management commands (for example `config list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
+19. `version` and context-catalog management commands (for example `context list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 20. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
-21. `config add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
-22. `config print-template` works without a configured current context and still renders the full template.
+21. `context add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
+22. `context print-template` works without a configured current context and still renders the full template.
 23. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
 24. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
-24. Interactive `config add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
+24. Interactive `context add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
 25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
 25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
-26. `managed-server get tokenUrl` or `managed-server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
-27. `managed-server check` reaches the server but the root-list probe returns `NotFoundError`, `ValidationError`, or `ConflictError`, and the command still reports connectivity success with the probe detail.
+26. `server get token-url` or `server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
+27. `server check` fails when the configured GET probe returns an error or non-success outcome.
 28. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
 
 ## Examples
@@ -383,16 +383,16 @@ Interactive config commands:
 20. `declarest resource delete /customers/acme --confirm-delete --source both` deletes from both remote server and repository.
 21. `declarest resource save /customers/acme` fetches remote state and saves it into repository for `/customers/acme`.
 22. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
-23. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
+23. `declarest resource save /customers --mode single < list.json` stores the list payload in one resource file.
 24. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
 25. `declarest resource save /customers/acme --allow-plaintext < payload.json` bypasses plaintext-secret save guard.
-26. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
-27. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
+26. `declarest resource save /customers/acme < payload.json` with metadata `resource.secretAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
+27. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resource.secretAttributes`.
 28. `declarest resource save /customers/acme --secret-attributes=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
-29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --overwrite` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resourceInfo.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
-30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --overwrite` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
-31. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
-32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.
+29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --force` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
+30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --force` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
+31. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
+32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resource.secretAttributes` for `/customers/acme`.
 33. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
 34. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
 35. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
@@ -409,34 +409,34 @@ Interactive config commands:
 39. `declarest repository commit -m "manual changes"` commits manual local repository changes in git contexts and reports whether a commit was created.
 40. `declarest repository clean` discards uncommitted tracked and untracked changes in a git repository worktree.
 41. `declarest repository tree` prints a tree-style directory view of the local repository and preserves spaces in directory names (for example `AD PRD`) while omitting files.
-42. `declarest config init prod` initializes repository state and preloads metadata dependencies (including bundle-backed metadata cache) for context `prod`.
-43. Corner case: `declarest config check prod --context dev` fails with `ValidationError` because positional and flag context selections conflict.
+42. `declarest context init prod` initializes repository state and preloads metadata dependencies (including bundle-backed metadata cache) for context `prod`.
+43. Corner case: `declarest context check prod --context dev` fails with `ValidationError` because positional and flag context selections conflict.
 44. `declarest completion bash` generates Bash completion output.
 39. `declarest version -o json` prints machine-readable version information.
-40. `declarest config use` opens interactive context selection when run in a terminal.
-41. `declarest config show --context dev` prints the selected context configuration as YAML.
+40. `declarest context use` opens interactive context selection when run in a terminal.
+41. `declarest context show --context dev` prints the selected context configuration as YAML.
 42. `declarest resource request get /health` executes a direct managed-server GET request.
 43. `declarest resource request post /customers --payload payload.json` executes a direct managed-server POST request with JSON body.
-44. `declarest resource request put /files/blob --payload blob.bin --content-type application/octet-stream` executes a direct binary upload request.
+44. `declarest resource request put /files/blob --payload blob.bin --content-type binary` executes a direct binary upload request.
 44. `declarest resource request post /customers --payload '{"id":"acme"}'` executes a direct managed-server POST request with inline JSON payload.
 45. `echo '{"id":"acme"}' | declarest resource request put /customers/acme` executes a direct managed-server PUT request from stdin.
 46. `declarest resource request delete /customers/a --path /customers/b` fails with `ValidationError` due to path mismatch.
-47. `declarest config add` opens interactive prompts to build one context configuration when `--payload`/stdin input is not provided.
-48. `declarest config add --payload contexts.yaml` imports all contexts defined in a catalog file.
-49. `declarest config add --payload contexts.yaml --context-name prod --set-current` imports only `prod` and sets it as current.
-50. `declarest config add --payload contexts.yaml --set-current` fails when multiple contexts are imported and the catalog omits `current-ctx`.
+47. `declarest context add` opens interactive prompts to build one context configuration when `--payload`/stdin input is not provided.
+48. `declarest context add --payload contexts.yaml` imports all contexts defined in a catalog file.
+49. `declarest context add --payload contexts.yaml --context-name prod --set-current` imports only `prod` and sets it as current.
+50. `declarest context add --payload contexts.yaml --set-current` fails when multiple contexts are imported and the catalog omits `currentContext`.
 51. `declarest resource save --help` prints help text even when no current context is configured.
 52. `declarest secret detect` scans the whole local repository for secret candidates when no payload input is provided.
-53. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resourceInfo.secretInAttributes` for detected resource paths.
+53. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resource.secretAttributes` for detected resource paths.
 54. `declarest completion bash` prints completion script even when no current context is configured.
 55. `declarest` shell tab completion at root suggests `help` and does not suggest internal helper names.
 56. `declarest resource` prints resource command help even when no current context is configured.
 57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--confirm-delete` is required.
 58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct managed-server DELETE request.
 59. `declarest resource request delete /customers --confirm-delete --recursive` issues delete requests for all repository resources under `/customers`.
-60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idFromAttribute` matches the provided path segment when no literal repository resource exists.
+60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idAttribute` matches the provided path segment when no literal repository resource exists.
 61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
-62. `declarest resource get /admin/realms/ --skip-items master,realm1` returns the remaining realm payloads after excluding those collection items.
+62. `declarest resource get /admin/realms/ --exclude master,realm1` returns the remaining realm payloads after excluding those collection items.
 63. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
 64. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
 65. `declarest resource diff /customers` compares all direct-child repository resources in `/customers` and returns a single deterministic diff list.
@@ -450,28 +450,28 @@ Interactive config commands:
 73. `declarest resource request delete /customers --confirm-delete --recursive` prints no response bodies by default and only the final status footer.
 74. `declarest resource request delete /customers --confirm-delete --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
 74. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
-75. `declarest config add dev` skips context-name prompt and starts interactive prompts at repository settings.
-76. `declarest config add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
-77. `declarest config add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
-78. `declarest config print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
+75. `declarest context add dev` skips context-name prompt and starts interactive prompts at repository settings.
+76. `declarest context add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
+77. `declarest context add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
+78. `declarest context print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
 79. `declarest repository push` fails with `ValidationError` when the active context repository type is `filesystem`.
 80. `declarest repository status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
-81. `declarest config add` interactive flow always prompts `managed-server` fields and never asks for a repository payload format override.
-82. `declarest config edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
+81. `declarest context add` interactive flow always prompts `managed-server` fields and never asks for a repository payload format override.
+82. `declarest context edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
 83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
 84. `declarest resource edit /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c --editor "vi"` resolves the existing alias-based repository entry first; if no local resource matches, it bootstraps the editor from one remote read and saves the edited payload to the requested logical path.
-84. `declarest resource copy /customers/acme /customers/acme-copy --override-attributes name=acme-copy,spec.tier=gold` copies one repository resource and applies dotted overrides before saving.
-85. `declarest resource copy /admin/realms/test /admin/realms/test2 --override-attributes realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
-85. `declarest resource save /customers/acme --payload 'id=acme,name=Acme' --overwrite --message ticket-123` saves a resource and appends `ticket-123` to the default git commit message when the active repository is git.
-86. `declarest resource delete /customers/acme --confirm-delete --source repository --message-override 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
+84. `declarest resource copy /customers/acme /customers/acme-copy --override-attributes /name=acme-copy,/spec/tier=gold` copies one repository resource and applies JSON Pointer overrides before saving.
+85. `declarest resource copy /admin/realms/test /admin/realms/test2 --override-attributes /realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
+85. `declarest resource save /customers/acme --payload '/id=acme,/name=Acme' --force --message ticket-123` saves a resource and uses `ticket-123` as the exact git commit message when the active repository is git.
+86. `declarest resource delete /customers/acme --confirm-delete --source repository --message 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
 87. `declarest repository history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
 88. `declarest repository history` in a filesystem context prints a deterministic not-supported message.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.
-83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasFromAttribute` (for example `account`) instead of ID-only segments.
+83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasAttribute` (for example `account`) instead of ID-only segments.
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.
-87. `declarest managed-server get baseUrl` prints the active context managed-server HTTP base URL.
-88. `declarest managed-server get tokenUrl` prints the active context managed-server OAuth2 token URL.
-89. `declarest managed-server get access-token` prints only the OAuth2 access token for the active context managed server.
-90. `declarest managed-server check` reports a successful connectivity probe even when the root probe returns `NotFoundError` because the server was reached.
+87. `declarest server get base-url` prints the active context managed-server HTTP base URL.
+88. `declarest server get token-url` prints the active context managed-server OAuth2 token URL.
+89. `declarest server get access-token` prints only the OAuth2 access token for the active context managed server.
+90. `declarest server check` reports a successful connectivity probe when the configured GET probe succeeds.

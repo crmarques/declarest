@@ -19,7 +19,7 @@ fi
 {
   printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    baseUrl: %s\n' "${VAULT_ADDRESS}"
+  printf '    baseURL: %s\n' "${VAULT_ADDRESS}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi

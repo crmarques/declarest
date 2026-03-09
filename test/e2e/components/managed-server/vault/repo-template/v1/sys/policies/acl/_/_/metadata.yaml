@@ -1,18 +1,18 @@
-resourceInfo:
-  idFromAttribute: /name
-  aliasFromAttribute: /name
-operationsInfo:
-  createResource:
-    httpMethod: PUT
+resource:
+  idAttribute: /name
+  aliasAttribute: /name
+operations:
+  create:
+    method: PUT
     path: /v1/sys/policies/acl/{{.name}}
-  getResource:
+  get:
     path: /v1/sys/policies/acl/{{.name}}
-  updateResource:
-    httpMethod: PUT
+  update:
+    method: PUT
     path: /v1/sys/policies/acl/{{.name}}
-  deleteResource:
+  delete:
     path: /v1/sys/policies/acl/{{.name}}
-  listCollection:
+  list:
     path: /v1/sys/policies/acl
-  compareResources:
+  compare:
     path: /v1/sys/policies/acl/{{.name}}

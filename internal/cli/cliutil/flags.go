@@ -32,7 +32,7 @@ func IsVerbose(flags *GlobalFlags) bool {
 
 func BindInputFlags(command *cobra.Command, flags *InputFlags) {
 	command.Flags().StringVarP(&flags.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&flags.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
+	command.Flags().StringVar(&flags.ContentType, "content-type", "", "input content type: json|yaml")
 	RegisterInputContentTypeFlagCompletion(command)
 }
 
@@ -42,7 +42,7 @@ func BindResourceInputFlags(command *cobra.Command, flags *InputFlags) {
 		&flags.ContentType,
 		"content-type",
 		"",
-		"input content type: json|yaml|xml|hcl|ini|properties|text|binary|application/...",
+		"input content type: json|yaml|xml|hcl|ini|properties|text|binary",
 	)
 	RegisterResourceInputContentTypeFlagCompletion(command)
 }

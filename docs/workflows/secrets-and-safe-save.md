@@ -8,7 +8,7 @@ Save resources into Git without committing plaintext credentials.
 
 ## 1. Configure a secret store
 
-Set up either `secret-store.file` or `secret-store.vault` in your context.
+Set up either `secretStore.file` or `secretStore.vault` in your context.
 Then initialize it (when required by the backend):
 
 ```bash
@@ -17,14 +17,14 @@ declarest secret init
 
 ## 2. Declare secret attributes in metadata
 
-Add `resourceInfo.secretInAttributes` at the correct collection scope.
+Add `resource.secretAttributes` at the correct collection scope.
 
 Example:
 
 ```json
 {
-  "resourceInfo": {
-    "secretInAttributes": ["credentials.password", "clientSecret"]
+  "resource": {
+    "secretAttributes": ["credentials.password", "clientSecret"]
   }
 }
 ```
@@ -32,14 +32,14 @@ Example:
 ## 3. Import remote resources safely
 
 ```bash
-declarest resource save /corporations/acme --handle-secrets
+declarest resource save /corporations/acme --secret-attributes
 ```
 
 DeclaREST will:
 
 - detect plaintext secret candidates
 - store handled values in the secret store
-- replace them with `{{secret .}}` placeholders in repository payloads
+- replace them with {% raw %}`{{secret .}}`{% endraw %} placeholders in repository payloads
 - keep metadata secret declarations aligned
 
 ## 4. Verify what was stored
@@ -78,14 +78,14 @@ Possible reasons:
 
 - metadata does not declare the secret attribute yet
 - secret store is not configured
-- you passed `--handle-secrets` but left some detected secrets unhandled
+- you passed `--secret-attributes` but left some detected secrets unhandled
 
 Fix order:
 
-1. declare `secretInAttributes`
+1. declare `secretAttributes`
 2. ensure secret store works (`secret init`, `secret get`)
-3. retry `resource save --handle-secrets`
+3. retry `resource save --secret-attributes`
 
 ### I need to import a one-off fixture with plaintext
 
-Use `--ignore` only for temporary/local testing and avoid committing the result.
+Use `--allow-plaintext` only for temporary/local testing and avoid committing the result.

@@ -91,7 +91,7 @@ func persistWholeResourceSecretMetadata(
 
 	wholeSecret := true
 	currentMetadata.Secret = &wholeSecret
-	currentMetadata.SecretsFromAttributes = nil
+	currentMetadata.SecretAttributes = nil
 
 	return metadataService.Set(ctx, logicalPath, currentMetadata)
 }

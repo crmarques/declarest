@@ -30,15 +30,15 @@ Inspired by:
 
 ```json
 {
-  "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "name",
-    "collectionPath": "/admin/realms/{{.realm}}/components",
-    "secretInAttributes": ["config.bindCredential[0]"]
+  "resource": {
+    "idAttribute": "id",
+    "aliasAttribute": "name",
+    "collectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "secretAttributes": ["config.bindCredential[0]"]
   },
-  "operationsInfo": {
-    "listCollection": {
-      "payloadMutation": [
+  "operations": {
+    "list": {
+      "transforms": [
         { "jqExpression": "[ .[] | select(.providerId == \"ldap\") ]" }
       ]
     }
@@ -80,9 +80,9 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 
 ```json
 {
-  "resourceInfo": {
-    "idFromAttribute": "alias",
-    "aliasFromAttribute": "alias"
+  "resource": {
+    "idAttribute": "alias",
+    "aliasAttribute": "alias"
   }
 }
 ```
@@ -91,24 +91,24 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 
 ```json
 {
-  "resourceInfo": {
-    "idFromAttribute": "id",
-    "aliasFromAttribute": "displayName"
+  "resource": {
+    "idAttribute": "id",
+    "aliasAttribute": "displayName"
   },
-  "operationsInfo": {
-    "createResource": {
+  "operations": {
+    "create": {
       "path": "./execution",
-      "payloadMutation": [
+      "transforms": [
         { "jqExpression": ". | .provider = .providerId" },
-        { "suppressAttributes": ["providerId"] }
+        { "excludeAttributes": ["providerId"] }
       ]
     },
-    "updateResource": {
+    "update": {
       "path": "./"
     },
-    "deleteResource": {
-      "httpMethod": "DELETE",
-      "path": "/admin/realms/{{.realm}}/authentication/executions/{{.id}}"
+    "delete": {
+      "method": "DELETE",
+      "path": "{% raw %}/admin/realms/{{.realm}}/authentication/executions/{{.id}}{% endraw %}"
     }
   }
 }
@@ -154,7 +154,7 @@ This is an advanced pattern for APIs that flatten nested resources internally.
 2. Add high-level selector metadata with `collectionPath` and identity fields.
 3. Add list `jq` filters to isolate the logical collection.
 4. Render operations with `metadata render` for concrete paths.
-5. Add per-operation overrides and ordered `payloadMutation` steps only where the API deviates.
+5. Add per-operation overrides and ordered `transforms` steps only where the API deviates.
 6. Use `resource explain` to validate reconciliation behavior end-to-end.
 7. Save/apply one resource before scaling to a whole collection.
 

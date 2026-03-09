@@ -455,9 +455,9 @@ func resolveOperationSpecWithoutRendering(
 	operation metadatadomain.Operation,
 ) (metadatadomain.OperationSpec, error) {
 	spec := metadatadomain.OperationSpec{
-		PayloadMutation: metadatadomain.CloneResourceMetadata(
-			metadatadomain.ResourceMetadata{PayloadMutation: metadataValue.PayloadMutation},
-		).PayloadMutation,
+		Transforms: metadatadomain.CloneResourceMetadata(
+			metadatadomain.ResourceMetadata{Transforms: metadataValue.Transforms},
+		).Transforms,
 	}
 	if metadataValue.Operations != nil {
 		if operationSpec, found := metadataValue.Operations[string(operation)]; found {
@@ -589,7 +589,7 @@ func resolvedMetadataForGet(
 		return resolved, nil
 	}
 
-	// Preserve explicit empty metadata files (for example `operationsInfo: {}`) as
+	// Preserve explicit empty metadata files (for example `operations: {}`) as
 	// a valid hit instead of forcing fallback inference.
 	explicit, err := service.Get(ctx, logicalPath)
 	if err == nil {
@@ -618,13 +618,13 @@ func metadataPathContainsReservedSegment(logicalPath string) bool {
 }
 
 func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
-	return strings.TrimSpace(item.IDFromAttribute) != "" ||
-		strings.TrimSpace(item.AliasFromAttribute) != "" ||
+	return strings.TrimSpace(item.IDAttribute) != "" ||
+		strings.TrimSpace(item.AliasAttribute) != "" ||
 		strings.TrimSpace(item.CollectionPath) != "" ||
 		item.Secret != nil ||
-		item.SecretsFromAttributes != nil ||
+		item.SecretAttributes != nil ||
 		item.Operations != nil ||
-		item.PayloadMutation != nil
+		item.Transforms != nil
 }
 
 func resolveOpenAPISpec(

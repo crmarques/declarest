@@ -210,7 +210,7 @@ step_configure_access() {
 
   e2e_context_build || return 1
 
-  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" config show >/dev/null || return 1
+  DECLAREST_CONTEXTS_FILE="${E2E_CONTEXT_FILE}" "${E2E_BIN}" --context "${E2E_CONTEXT_NAME}" context show >/dev/null || return 1
 
   if e2e_profile_is_manual_handoff; then
     e2e_manual_collect_component_access_info || return 1

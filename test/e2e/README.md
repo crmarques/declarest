@@ -17,7 +17,7 @@ This repository uses a componentized Bash e2e harness.
   - default stack includes `managed-server=simple-api-server`
   - remote component selections are rejected in Step 1
   - when a managed-server is selected, its `repo-template` tree is copied into the context repository directory
-  - when `repo-type=git`, the runner initializes the local git repository before handoff so `config check`/`repository status` are immediately usable
+  - when `repo-type=git`, the runner initializes the local git repository before handoff so `context check`/`repository status` are immediately usable
   - component manual access details are printed in manual handoff output before `Repository provider access` when available; if the selected managed-server has no `manual-info` hook output, the runner falls back to state-derived managed-server connection details
   - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `test/e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
@@ -66,9 +66,9 @@ Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and managed-server fixture metadata rules) and exit without running test cases.
 When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
-When `--managed-server-proxy true`, generated contexts include `managed-server.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
-`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managed-server.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
-`--metadata-type base-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.base-dir` and keeps normal local `openapi.yaml` wiring.
+When `--managed-server-proxy true`, generated contexts include `managedServer.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
+`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
+`--metadata-type base-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:
 
@@ -81,9 +81,9 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `managed-server.http.proxy.http-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `managed-server.http.proxy.https-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `managed-server.http.proxy.no-proxy` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `managedServer.http.proxy.http-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `managedServer.http.proxy.https-url` value used when `--managed-server-proxy true`
+- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `managedServer.http.proxy.no-proxy` value used when `--managed-server-proxy true`
 - `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME`: optional proxy auth username used when `--managed-server-proxy true`
 - `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`: optional proxy auth password used when `--managed-server-proxy true`
 
@@ -183,7 +183,7 @@ Component authoring is contract-driven. Use `test/e2e/components/STANDARD.md` as
 Each component directory under `test/e2e/components/<type>/<name>/` must include:
 
 - `component.env` with `COMPONENT_CONTRACT_VERSION=1`, explicit `COMPONENT_RUNTIME_KIND`, and explicit `COMPONENT_DEPENDS_ON`
-- `managed-server` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
+- `managedServer` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
@@ -225,7 +225,7 @@ Fixture tree rules:
 - resource payloads must be stored at `<logical-resource>/resource.<ext>`.
 - metadata paths may be nested (for example `/admin/realms/_/organizations/_`) to avoid duplicated metadata files.
 - when metadata paths include intermediary `/_/`, the e2e loader expands them to concrete collection metadata paths from template resources before calling `declarest metadata set`.
-- metadata must represent API-specific identifiers using `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`, not internal `id`).
+- metadata must represent API-specific identifiers using `idAttribute` and `aliasAttribute` (for example, keycloak realms use `realm`, not internal `id`).
 
 Keycloak repo-template currently covers:
 

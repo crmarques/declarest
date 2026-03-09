@@ -48,7 +48,7 @@ contexts:
     # Required managedServer.
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         # healthCheck: /health
         # openapi: /path/to/openapi-or-swagger.yaml
         # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
@@ -60,8 +60,8 @@ contexts:
         # Optional managedServer proxy.
         # proxy:
         #   # Configure one or both proxy URLs.
-        #   httpUrl: http://proxy.example.com:3128
-        #   httpsUrl: http://proxy.example.com:3128
+        #   httpURL: http://proxy.example.com:3128
+        #   httpsURL: http://proxy.example.com:3128
         #   # Optional comma-separated bypass rules.
         #   noProxy: localhost,127.0.0.1,.svc.cluster.local
         #   # Optional proxy auth.
@@ -76,9 +76,9 @@ contexts:
               prefix: Bearer
               value: change-me
           # oauth2:
-          #   tokenUrl: https://example.com/oauth/token
+          #   tokenURL: https://example.com/oauth/token
           #   grantType: client_credentials
-          #   clientId: change-me
+          #   clientID: change-me
           #   clientSecret: change-me
           #   username: change-me
           #   password: change-me
@@ -126,8 +126,8 @@ contexts:
     #   #     #   password: vault-pass
     #   #     #   mount: userpass
     #   #     # appRole:
-    #   #     #   roleId: role-id
-    #   #     #   secretId: secret-id
+    #   #     #   roleID: role-id
+    #   #     #   secretID: secret-id
     #   #     #   mount: approle
     #   #   tls:
     #   #     caCertFile: /path/to/ca.pem
@@ -147,5 +147,5 @@ contexts:
     #   env: dev
     #   owner: team-a
 
-currentCtx: my-context
+currentContext: my-context
 `

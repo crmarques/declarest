@@ -39,8 +39,8 @@ func (m *Service) Create(_ context.Context, cfg config.Context) error {
 	}
 
 	contextCatalog.Contexts = append(contextCatalog.Contexts, cfg)
-	if contextCatalog.CurrentCtx == "" {
-		contextCatalog.CurrentCtx = cfg.Name
+	if contextCatalog.CurrentContext == "" {
+		contextCatalog.CurrentContext = cfg.Name
 	}
 
 	return m.saveCatalog(contextCatalog)
@@ -81,11 +81,11 @@ func (m *Service) Delete(_ context.Context, name string) error {
 
 	contextCatalog.Contexts = append(contextCatalog.Contexts[:idx], contextCatalog.Contexts[idx+1:]...)
 
-	if contextCatalog.CurrentCtx == name {
+	if contextCatalog.CurrentContext == name {
 		if len(contextCatalog.Contexts) == 0 {
-			contextCatalog.CurrentCtx = ""
+			contextCatalog.CurrentContext = ""
 		} else {
-			contextCatalog.CurrentCtx = contextCatalog.Contexts[0].Name
+			contextCatalog.CurrentContext = contextCatalog.Contexts[0].Name
 		}
 	}
 
@@ -111,8 +111,8 @@ func (m *Service) Rename(_ context.Context, fromName string, toName string) erro
 	}
 
 	contextCatalog.Contexts[fromIdx].Name = toName
-	if contextCatalog.CurrentCtx == fromName {
-		contextCatalog.CurrentCtx = toName
+	if contextCatalog.CurrentContext == fromName {
+		contextCatalog.CurrentContext = toName
 	}
 
 	return m.saveCatalog(contextCatalog)
@@ -139,7 +139,7 @@ func (m *Service) SetCurrent(_ context.Context, name string) error {
 		return notFoundError(fmt.Sprintf("context %q not found", name))
 	}
 
-	contextCatalog.CurrentCtx = name
+	contextCatalog.CurrentContext = name
 	return m.saveCatalog(contextCatalog)
 }
 
@@ -148,13 +148,13 @@ func (m *Service) GetCurrent(_ context.Context) (config.Context, error) {
 	if err != nil {
 		return config.Context{}, err
 	}
-	if contextCatalog.CurrentCtx == "" {
+	if contextCatalog.CurrentContext == "" {
 		return config.Context{}, notFoundError("current context not set")
 	}
 
-	idx := findContextIndex(contextCatalog.Contexts, contextCatalog.CurrentCtx)
+	idx := findContextIndex(contextCatalog.Contexts, contextCatalog.CurrentContext)
 	if idx < 0 {
-		return config.Context{}, notFoundError(fmt.Sprintf("current context %q not found", contextCatalog.CurrentCtx))
+		return config.Context{}, notFoundError(fmt.Sprintf("current context %q not found", contextCatalog.CurrentContext))
 	}
 
 	return contextCatalog.Contexts[idx], nil
@@ -168,7 +168,7 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 
 	effectiveName := selection.Name
 	if effectiveName == "" {
-		effectiveName = contextCatalog.CurrentCtx
+		effectiveName = contextCatalog.CurrentContext
 	}
 	if effectiveName == "" {
 		return config.Context{}, notFoundError("current context not set")

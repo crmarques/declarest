@@ -552,7 +552,7 @@ case_repo_template_sync_tree() {
       return 1
     fi
 
-    case_run_declarest resource save "${logical_path}" -f "${resource_file}" -i json --overwrite
+    case_run_declarest resource save "${logical_path}" -f "${resource_file}" -i json --force
     case_expect_success
 
     case_run_declarest resource apply "${logical_path}"
@@ -597,7 +597,7 @@ case_expect_sorted_resource_list_payloads() {
     def list_key:
       if type == "object" then
         [
-          (.clientId // .alias // .realm // .name // .displayName // .path // .id // .providerId // ""),
+          (.clientID // .alias // .realm // .name // .displayName // .path // .id // .providerId // ""),
           (tojson)
         ] | join("\u0000")
       else
@@ -625,7 +625,7 @@ case_repo_template_write_update_payload() {
       .organizationsEnabled = (not .organizationsEnabled)
     elif has("topLevel") and (.topLevel | type == "string") then
       .topLevel = (if (.topLevel | ascii_downcase) == "true" then "false" else "true" end)
-    elif has("clientId") and (.clientId | type == "string") then
+    elif has("clientID") and (.clientID | type == "string") then
       .description = $tag
     elif has("attributes") and (.attributes | type == "object") then
       .attributes = (.attributes + {"e2eRevision": $tag})
@@ -659,7 +659,7 @@ case_repo_template_create_resource_path() {
 case_repo_template_update_resource_path() {
   local logical_resource_path=$1
   local payload_file=$2
-  case_run_declarest resource save "${logical_resource_path}" -f "${payload_file}" -i json --overwrite
+  case_run_declarest resource save "${logical_resource_path}" -f "${payload_file}" -i json --force
   case_expect_success
   case_run_declarest resource update "${logical_resource_path}"
   case_expect_success

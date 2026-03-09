@@ -23,8 +23,8 @@ func TestDecodeCatalogSuccess(t *testing.T) {
 	if len(contextCatalog.Contexts) != 1 {
 		t.Fatalf("expected 1 context, got %d", len(contextCatalog.Contexts))
 	}
-	if contextCatalog.CurrentCtx != "dev" {
-		t.Fatalf("expected currentCtx dev, got %q", contextCatalog.CurrentCtx)
+	if contextCatalog.CurrentContext != "dev" {
+		t.Fatalf("expected currentContext dev, got %q", contextCatalog.CurrentContext)
 	}
 }
 
@@ -40,13 +40,13 @@ contexts:
           baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-currentCtx: git
+currentContext: git
 `))
 	if err != nil {
 		t.Fatalf("decodeCatalog returned error: %v", err)
@@ -77,13 +77,13 @@ contexts:
           autoInit: false
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-currentCtx: git
+currentContext: git
 `))
 	if err != nil {
 		t.Fatalf("decodeCatalog returned error: %v", err)
@@ -111,7 +111,7 @@ contexts:
       filesystem:
         baseDir: /tmp/repo
         unknown-key: true
-currentCtx: dev
+currentContext: dev
 `
 	_, err := decodeCatalog([]byte(invalidYAML))
 	if err == nil {
@@ -128,12 +128,12 @@ func TestValidateCatalogCurrentContextMissing(t *testing.T) {
 			Repository:    validFilesystemRepository(),
 			ManagedServer: validManagedServer(),
 		}},
-		CurrentCtx: "prod",
+		CurrentContext: "prod",
 	}
 
 	err := validateCatalog(contextCatalog)
 	if err == nil {
-		t.Fatal("expected currentCtx mismatch error")
+		t.Fatal("expected currentContext mismatch error")
 	}
 }
 
@@ -145,7 +145,7 @@ func TestValidateCatalogDuplicateContextNames(t *testing.T) {
 			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
 			{Name: "dev", Repository: validFilesystemRepository(), ManagedServer: validManagedServer()},
 		},
-		CurrentCtx: "dev",
+		CurrentContext: "dev",
 	}
 
 	err := validateCatalog(contextCatalog)
@@ -757,7 +757,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -765,7 +765,7 @@ contexts:
               value: secret-token
     metadata:
       bundle: keycloak-bundle:0.0.1
-currentCtx: dev
+currentContext: dev
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
@@ -795,7 +795,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -803,7 +803,7 @@ contexts:
               value: secret-token
     metadata:
       bundleFile: /tmp/keycloak-bundle-0.0.1.tar.gz
-currentCtx: dev
+currentContext: dev
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
@@ -890,7 +890,7 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
-		Overrides: map[string]string{"managedServer.http.baseUrl": "https://override.example.com"},
+		Overrides: map[string]string{"managedServer.http.baseURL": "https://override.example.com"},
 	})
 	if err != nil {
 		t.Fatalf("expected managedServer override to succeed, got %v", err)
@@ -899,7 +899,7 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 		t.Fatalf("expected managedServer configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.BaseURL != "https://override.example.com" {
-		t.Fatalf("expected managedServer baseUrl override, got %q", resolved.ManagedServer.HTTP.BaseURL)
+		t.Fatalf("expected managedServer baseURL override, got %q", resolved.ManagedServer.HTTP.BaseURL)
 	}
 }
 
@@ -939,8 +939,8 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"managedServer.http.proxy.httpUrl":       "http://proxy.example.com:3128",
-			"managedServer.http.proxy.httpsUrl":      "https://proxy.example.com:3128",
+			"managedServer.http.proxy.httpURL":       "http://proxy.example.com:3128",
+			"managedServer.http.proxy.httpsURL":      "https://proxy.example.com:3128",
 			"managedServer.http.proxy.noProxy":       "localhost,127.0.0.1",
 			"managedServer.http.proxy.auth.username": "proxy-user",
 			"managedServer.http.proxy.auth.password": "proxy-pass",
@@ -954,10 +954,10 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 		t.Fatalf("expected managedServer proxy configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpUrl override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
+		t.Fatalf("expected proxy httpURL override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpsUrl override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
+		t.Fatalf("expected proxy httpsURL override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
 		t.Fatalf("expected proxy noProxy override, got %q", resolved.ManagedServer.HTTP.Proxy.NoProxy)
@@ -1084,10 +1084,10 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 		t.Fatalf("expected %s proxy to be configured, got nil", component)
 	}
 	if proxy.HTTPURL != httpURL {
-		t.Fatalf("expected %s proxy httpUrl %q, got %q", component, httpURL, proxy.HTTPURL)
+		t.Fatalf("expected %s proxy httpURL %q, got %q", component, httpURL, proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != httpsURL {
-		t.Fatalf("expected %s proxy httpsUrl %q, got %q", component, httpsURL, proxy.HTTPSURL)
+		t.Fatalf("expected %s proxy httpsURL %q, got %q", component, httpsURL, proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != noProxy {
 		t.Fatalf("expected %s proxy noProxy %q, got %q", component, noProxy, proxy.NoProxy)
@@ -1212,7 +1212,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1224,7 +1224,7 @@ contexts:
         passphrase: change-me
     metadata:
       baseDir: /tmp/metadata
-currentCtx: dev
+currentContext: dev
 `
 
 const providerSelectionContextCatalogYAML = `
@@ -1235,7 +1235,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1249,7 +1249,7 @@ contexts:
           baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1262,7 +1262,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1275,7 +1275,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1292,7 +1292,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1304,7 +1304,7 @@ contexts:
         auth:
           token: s.xxxx
 
-currentCtx: fs
+currentContext: fs
 `
 
 const contextCatalogWithoutResourceFormatYAML = `
@@ -1315,13 +1315,13 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseUrl: https://example.com/api
+        baseURL: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
-currentCtx: dev
+currentContext: dev
 `
 
 const proxyInheritanceContextCatalogYAML = `
@@ -1339,7 +1339,7 @@ contexts:
               password: secret
     managedServer:
       http:
-        baseUrl: https://api.example.com
+        baseURL: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
@@ -1351,15 +1351,15 @@ contexts:
         auth:
           token: vault-token
         proxy:
-          httpUrl: http://proxy.example.com:3128
-          httpsUrl: https://proxy.example.com:3128
+          httpURL: http://proxy.example.com:3128
+          httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
             password: proxy-pass
     metadata:
       baseDir: /tmp/metadata
-currentCtx: shared
+currentContext: shared
 `
 
 const proxyDisableContextCatalogYAML = `
@@ -1377,15 +1377,15 @@ contexts:
               password: secret
     managedServer:
       http:
-        baseUrl: https://api.example.com
+        baseURL: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          httpUrl: http://proxy.example.com:3128
-          httpsUrl: https://proxy.example.com:3128
+          httpURL: http://proxy.example.com:3128
+          httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
@@ -1398,7 +1398,7 @@ contexts:
     metadata:
       baseDir: /tmp/metadata
       proxy: {}
-currentCtx: disable
+currentContext: disable
 `
 
 const proxyPersistenceContextCatalogYAML = `
@@ -1416,15 +1416,15 @@ contexts:
               password: secret
     managedServer:
       http:
-        baseUrl: https://api.example.com
+        baseURL: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          httpUrl: http://proxy.example.com:3128
-          httpsUrl: https://proxy.example.com:3128
+          httpURL: http://proxy.example.com:3128
+          httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             username: proxy-user
@@ -1436,5 +1436,5 @@ contexts:
           token: vault-token
     metadata:
       baseDir: /tmp/metadata
-currentCtx: persist
+currentContext: persist
 `

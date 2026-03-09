@@ -65,15 +65,15 @@ Useful for checking:
 ## 6. Check managed server auth/connectivity directly
 
 ```bash
-declarest managed-server check
-declarest managed-server get base-url
-declarest managed-server get token-url
+declarest server check
+declarest server get base-url
+declarest server get token-url
 ```
 
 If OAuth2 is configured:
 
 ```bash
-declarest managed-server get access-token
+declarest server get access-token
 ```
 
 ## 7. Add debug output when needed
@@ -86,8 +86,8 @@ declarest -d resource get /corporations/acme
 
 ## Common diagnosis checklist
 
-- Wrong endpoint: check `resourceInfo.collectionPath` and operation `path`
-- Wrong ID/alias segment: check `idFromAttribute` and `aliasFromAttribute`
-- List returns extra objects: add `listCollection.payload.jqExpression`
-- Diff noise: tune `compareResources` suppress/filter rules
-- Write payload rejected: inspect `createResource`/`updateResource` payload transforms
+- Wrong endpoint: check `resource.collectionPath` and operation `path`
+- Wrong ID/alias segment: check `idAttribute` and `aliasAttribute`
+- List returns extra objects: add `list.payload.jqExpression`
+- Diff noise: tune `compare` suppress/filter rules
+- Write payload rejected: inspect `create`/`update` payload transforms

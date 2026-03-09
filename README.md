@@ -27,7 +27,7 @@ DeclaREST turns REST API resources into versioned desired-state files you can re
 ## Fast happy path
 
 ```bash
-declarest config add
+declarest context add
 
 declarest resource save /corporations/acme
 # edit repository file
@@ -72,7 +72,7 @@ Cluster manifests and samples are under:
 ## Quickstart
 
 ```bash
-declarest config add
+declarest context add
 
 declarest resource save /corporations/acme
 declarest resource diff /corporations/acme
@@ -82,9 +82,9 @@ declarest resource apply /corporations/acme
 If you prefer file-based context setup:
 
 ```bash
-declarest config print-template > /tmp/contexts.yaml
+declarest context print-template > /tmp/contexts.yaml
 # edit /tmp/contexts.yaml
-declarest config add --payload /tmp/contexts.yaml --set-current
+declarest context add --payload /tmp/contexts.yaml --set-current
 ```
 
 ## Documentation map

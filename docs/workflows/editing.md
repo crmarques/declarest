@@ -7,19 +7,19 @@ This page shows safe edit loops for the two things that most often change during
 ### Inspect current context
 
 ```bash
-declarest config current
-declarest config show
-declarest config resolve
+declarest context current
+declarest context show
+declarest context resolve
 ```
 
 ### Test overrides without changing stored config
 
-Use `config resolve --set` to preview runtime overrides.
+Use `context resolve --set` to preview runtime overrides.
 
 ```bash
-declarest config resolve \
-  --set managed-server.http.base-url=https://staging-api.example.com \
-  --set metadata.base-dir=/srv/declarest/staging-metadata
+declarest context resolve \
+  --set managedServer.http.baseURL=https://staging-api.example.com \
+  --set metadata.baseDir=/srv/declarest/staging-metadata
 ```
 
 This is the safest way to test environment-specific changes before editing the stored context.
@@ -27,17 +27,17 @@ This is the safest way to test environment-specific changes before editing the s
 ### Validate config files before import/update
 
 ```bash
-declarest config print-template > /tmp/contexts.yaml
+declarest context print-template > /tmp/contexts.yaml
 # edit /tmp/contexts.yaml
 
-declarest config validate --payload /tmp/contexts.yaml
-declarest config add --payload /tmp/contexts.yaml --set-current
+declarest context validate --payload /tmp/contexts.yaml
+declarest context add --payload /tmp/contexts.yaml --set-current
 ```
 
 Update an existing context catalog entry:
 
 ```bash
-declarest config update --payload /tmp/contexts.yaml
+declarest context update --payload /tmp/contexts.yaml
 ```
 
 ## Editing metadata safely

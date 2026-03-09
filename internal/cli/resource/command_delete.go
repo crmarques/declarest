@@ -19,8 +19,7 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var confirmDelete bool
 	var recursive bool
 	var httpMethod string
-	var commitMessageAppend string
-	var commitMessageOverride string
+	var commitMessage string
 
 	command := &cobra.Command{
 		Use:   "delete [path]",
@@ -55,7 +54,6 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			}
 
 			var cfg configdomain.Context
-			var commitMessage string
 			if deleteFromRepository {
 				cfg, err = resolveActiveResourceContext(command.Context(), deps, nil)
 				if err != nil {
@@ -67,8 +65,7 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				commitMessage, err = resolveRepositoryCommitMessage(
 					command,
 					fmt.Sprintf("declarest: delete resource %s", resolvedPath),
-					commitMessageAppend,
-					commitMessageOverride,
+					commitMessage,
 				)
 				if err != nil {
 					return err
@@ -127,6 +124,6 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete recursively")
 	bindDeleteSourceFlags(command, &sourceFlag)
 	bindHTTPMethodFlag(command, &httpMethod)
-	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
+	bindRepositoryCommitMessageFlags(command, &commitMessage)
 	return command
 }

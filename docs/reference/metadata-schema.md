@@ -4,63 +4,63 @@ This page is a field map for the main metadata sections and what they control.
 
 ## Top-level sections
 
-### `resourceInfo`
+### `resource`
 
 Controls identity and path mapping.
 
 Common fields:
 
-- `idFromAttribute`
-- `aliasFromAttribute`
+- `idAttribute`
+- `aliasAttribute`
 - `collectionPath`
-- `secretInAttributes`
+- `secretAttributes`
 
 Use when path/identity on the API differs from your logical path model.
 
-### `operationsInfo`
+### `operations`
 
 Controls operation-specific request behavior.
 
 Common operation keys:
 
-- `getResource`
-- `createResource`
-- `updateResource`
-- `deleteResource`
-- `listCollection`
-- `compareResources`
+- `get`
+- `create`
+- `update`
+- `delete`
+- `list`
+- `compare`
 
 Common operation fields:
 
 - `path`
-- `httpMethod`
+- `method`
 - `query`
-- `httpHeaders`
+- `headers`
 - `body`
-- `payloadMutation`
+- `transforms`
 - `validate.requiredAttributes`
 - `validate.assertions`
 - `validate.schemaRef`
 
-Each `payloadMutation` entry must contain exactly one of:
+Each `transforms` entry must contain exactly one of:
 
 - `selectAttributes`
-- `suppressAttributes`
+- `excludeAttributes`
 - `jqExpression`
 
-DeclaREST applies `operationsInfo.defaults.payloadMutation` first and then the operation-specific pipeline.
+DeclaREST applies `operations.defaults.transforms` first and then the operation-specific pipeline.
 
-### `operationsInfo.defaults`
+### `operations.defaults`
 
 Defines reusable defaults for transforms/compare behavior that operations can inherit.
 
 ## Quick field-to-impact map
 
-- Identity problems: check `resourceInfo.idFromAttribute` and `aliasFromAttribute`.
-- Wrong endpoint/method: check `operationsInfo.<op>.path` and `httpMethod`.
-- Wrong payload shape: check the ordered `payloadMutation` pipeline.
-- Noisy drift: check `compareResources.payloadMutation`.
-- Secret handling gaps: check `resourceInfo.secretInAttributes`.
+- Identity problems: check `resource.idAttribute` and `aliasAttribute`.
+- Wrong endpoint/method: check `operations.<op>.path` and `method`.
+- Wrong payload shape: check the ordered `transforms` pipeline.
+- Noisy drift: check `compare.transforms`.
+- Secret handling gaps: check `resource.secretAttributes`.
 
 ## Related docs
 

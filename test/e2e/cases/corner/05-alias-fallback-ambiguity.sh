@@ -16,9 +16,9 @@ case_run() {
   local remote_id_two
 
   case_write_json "${metadata_file}" '{
-    "resourceInfo": {
-      "idFromAttribute": "id",
-      "aliasFromAttribute": "clientId"
+    "resource": {
+      "idAttribute": "id",
+      "aliasAttribute": "clientId"
     }
   }'
 

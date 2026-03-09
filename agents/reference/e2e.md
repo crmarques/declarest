@@ -39,8 +39,8 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 20. Missing dependency targets and dependency cycles MUST fail initialization or hook execution with actionable output.
 21. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
 22. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.yaml` or `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`; YAML SHOULD be the default for new fixture metadata files.
-23. Resource-server fixture metadata MUST model API-facing identifiers via `idFromAttribute` and `aliasFromAttribute` (for example, keycloak realms use `realm`).
-24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resourceInfo.idFromAttribute` or `resourceInfo.aliasFromAttribute`.
+23. Resource-server fixture metadata MUST model API-facing identifiers via `idAttribute` and `aliasAttribute` (for example, keycloak realms use `realm`).
+24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resource.idAttribute` or `resource.aliasAttribute`.
 25. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
 26. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`; they MAY declare `CASE_PROFILES` as a whitespace-separated subset of `cli operator`.
 27. `smoke` scope MUST represent the curated fast suite used by `cli-basic` and `operator-basic`.
@@ -60,7 +60,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 37. When a managed-server component cannot support a selected auth-type or mTLS combination for the chosen connection mode, its hooks MUST fail with actionable output if selection validation did not already reject the combination.
 38. `simple-api-server` mTLS trust MUST be reloaded from configured client-certificate sources for new connections without process restart.
 39. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.
-40. `cli-manual` with `repo-type=git` MUST run `repository init` after context assembly so repository-dependent checks (`config check`, `repository status`) are immediately usable.
+40. `cli-manual` with `repo-type=git` MUST run `repository init` after context assembly so repository-dependent checks (`context check`, `repository status`) are immediately usable.
 41. Runner metadata selection flags MUST include `--metadata-type <base-dir|bundle>`; default mode MUST be `bundle`.
 42. In `bundle` mode, the runner MUST skip local `openapi.yaml` wiring so `managed-server.http.openapi` remains unset, and MUST use managed-server shorthand metadata bundle mappings when available (for example `keycloak-bundle:0.0.1` for `keycloak`).
 43. In `base-dir` mode, managed-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST set `E2E_METADATA_DIR` to that component-local directory and repository-type context fragments MUST emit `metadata.base-dir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset).
@@ -177,7 +177,7 @@ Operator handoff:
 5. `./run-e2e.sh --profile cli-full --managed-server simple-api-server --managed-server-mtls true` validates runtime mTLS trust reload by removing and re-adding trusted client certificates without restarting the server.
 6. `./run-e2e.sh --profile cli-basic --repo-type git --git-provider gitea --managed-server simple-api-server --secret-provider file` runs git main-case coverage against a local compose-backed Gitea provider.
 7. `./run-e2e.sh --profile cli-basic --repo-type git --git-provider gitea --git-provider-connection remote --managed-server simple-api-server --secret-provider none` fails `Preparing Components` when required `DECLAREST_E2E_GITEA_*` remote credentials are missing.
-8. `./run-e2e.sh --profile cli-manual --repo-type git --git-provider gitea --managed-server simple-api-server --secret-provider none` yields a handoff context where `declarest-e2e config check` and `declarest-e2e repository status` can run without `git repository not initialized`.
+8. `./run-e2e.sh --profile cli-manual --repo-type git --git-provider gitea --managed-server simple-api-server --secret-provider none` yields a handoff context where `declarest-e2e context check` and `declarest-e2e repository status` can run without `git repository not initialized`.
 9. `./run-e2e.sh --validate-components` validates all discovered component manifests, hook scripts, dependency catalog, and managed-server fixture metadata, then exits without running test cases.
 10. `./run-e2e.sh --profile cli-basic --managed-server keycloak` emits a context with `metadata.bundle: keycloak-bundle:0.0.1` (and no `metadata.base-dir`) so keycloak runs consume metadata from the default remote bundle source.
 11. `./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-type base-dir` emits `metadata.base-dir` from `test/e2e/components/managed-server/simple-api-server/metadata` and keeps local `managed-server.http.openapi`.

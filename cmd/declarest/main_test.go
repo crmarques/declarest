@@ -41,13 +41,13 @@ func TestContextNameFromArgs(t *testing.T) {
 			want: "",
 		},
 		{
-			name: "config check positional context",
-			args: []string{"config", "check", "prod"},
+			name: "context check positional context",
+			args: []string{"context", "check", "prod"},
 			want: "prod",
 		},
 		{
-			name: "config init positional context",
-			args: []string{"config", "init", "prod"},
+			name: "context init positional context",
+			args: []string{"context", "init", "prod"},
 			want: "prod",
 		},
 	}
@@ -95,7 +95,7 @@ func TestIsHelpInvocation(t *testing.T) {
 		},
 		{
 			name: "help token as positional argument is not help invocation",
-			args: []string{"config", "use", "help"},
+			args: []string{"context", "use", "help"},
 			want: false,
 		},
 		{
@@ -163,7 +163,7 @@ func TestIsCompletionInvocation(t *testing.T) {
 		},
 		{
 			name: "completion token as positional argument",
-			args: []string{"config", "use", "completion"},
+			args: []string{"context", "use", "completion"},
 			want: false,
 		},
 	}
@@ -235,28 +235,28 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "config create command does not require context bootstrap",
-			args: []string{"config", "create"},
+			name: "context create command does not require context bootstrap",
+			args: []string{"context", "create"},
 			want: true,
 		},
 		{
-			name: "config list command does not require context bootstrap",
-			args: []string{"config", "list"},
+			name: "context list command does not require context bootstrap",
+			args: []string{"context", "list"},
 			want: true,
 		},
 		{
-			name: "config print-template command does not require context bootstrap",
-			args: []string{"config", "print-template"},
+			name: "context print-template command does not require context bootstrap",
+			args: []string{"context", "print-template"},
 			want: true,
 		},
 		{
-			name: "config check command requires context bootstrap",
-			args: []string{"config", "check"},
+			name: "context check command requires context bootstrap",
+			args: []string{"context", "check"},
 			want: false,
 		},
 		{
-			name: "config init command requires context bootstrap",
-			args: []string{"config", "init"},
+			name: "context init command requires context bootstrap",
+			args: []string{"context", "init"},
 			want: false,
 		},
 	}
@@ -301,13 +301,13 @@ func TestRequiresContextBootstrap(t *testing.T) {
 			want:        true,
 		},
 		{
-			name:        "config check requires context",
-			commandPath: "declarest config check",
+			name:        "context check requires context",
+			commandPath: "declarest context check",
 			want:        true,
 		},
 		{
-			name:        "config init requires context",
-			commandPath: "declarest config init",
+			name:        "context init requires context",
+			commandPath: "declarest context init",
 			want:        true,
 		},
 		{
@@ -316,13 +316,13 @@ func TestRequiresContextBootstrap(t *testing.T) {
 			want:        false,
 		},
 		{
-			name:        "config list does not require context",
-			commandPath: "declarest config list",
+			name:        "context list does not require context",
+			commandPath: "declarest context list",
 			want:        false,
 		},
 		{
-			name:        "config print-template does not require context",
-			commandPath: "declarest config print-template",
+			name:        "context print-template does not require context",
+			commandPath: "declarest context print-template",
 			want:        false,
 		},
 	}

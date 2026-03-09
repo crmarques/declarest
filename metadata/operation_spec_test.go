@@ -13,9 +13,9 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 	t.Parallel()
 
 	resolved, err := ResolveOperationSpec(context.Background(), ResourceMetadata{
-		PayloadMutation: []PayloadMutationStep{
+		Transforms: []TransformStep{
 			{SelectAttributes: []string{"/root"}},
-			{SuppressAttributes: []string{"/internal"}},
+			{ExcludeAttributes: []string{"/internal"}},
 		},
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
@@ -42,18 +42,18 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 	if resolved.Query["expand"] != "true" {
 		t.Fatalf("expected rendered query, got %+v", resolved.Query)
 	}
-	if len(resolved.PayloadMutation) != 2 {
-		t.Fatalf("expected inherited payloadMutation pipeline, got %+v", resolved.PayloadMutation)
+	if len(resolved.Transforms) != 2 {
+		t.Fatalf("expected inherited transforms pipeline, got %+v", resolved.Transforms)
 	}
-	if PayloadMutationStepType(resolved.PayloadMutation[0]) != "selectAttributes" ||
-		len(resolved.PayloadMutation[0].SelectAttributes) != 1 ||
-		resolved.PayloadMutation[0].SelectAttributes[0] != "/root" {
-		t.Fatalf("expected first payloadMutation step to select /root, got %+v", resolved.PayloadMutation[0])
+	if TransformStepType(resolved.Transforms[0]) != "selectAttributes" ||
+		len(resolved.Transforms[0].SelectAttributes) != 1 ||
+		resolved.Transforms[0].SelectAttributes[0] != "/root" {
+		t.Fatalf("expected first transforms step to select /root, got %+v", resolved.Transforms[0])
 	}
-	if PayloadMutationStepType(resolved.PayloadMutation[1]) != "suppressAttributes" ||
-		len(resolved.PayloadMutation[1].SuppressAttributes) != 1 ||
-		resolved.PayloadMutation[1].SuppressAttributes[0] != "/internal" {
-		t.Fatalf("expected second payloadMutation step to suppress /internal, got %+v", resolved.PayloadMutation[1])
+	if TransformStepType(resolved.Transforms[1]) != "excludeAttributes" ||
+		len(resolved.Transforms[1].ExcludeAttributes) != 1 ||
+		resolved.Transforms[1].ExcludeAttributes[0] != "/internal" {
+		t.Fatalf("expected second transforms step to suppress /internal, got %+v", resolved.Transforms[1])
 	}
 }
 
@@ -240,14 +240,14 @@ func TestInferFromOpenAPISupportsIntermediarySelectors(t *testing.T) {
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/clientId" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as clientId, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/clientId" {
+		t.Fatalf("expected aliasAttribute to be inferred as clientId, got %q", inferred.AliasAttribute)
 	}
-	if len(inferred.SecretsFromAttributes) != 1 || inferred.SecretsFromAttributes[0] != "/secret" {
-		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretsFromAttributes)
+	if len(inferred.SecretAttributes) != 1 || inferred.SecretAttributes[0] != "/secret" {
+		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretAttributes)
 	}
 
 	listOperation := inferred.Operations[string(OperationList)]
@@ -310,11 +310,11 @@ func TestInferFromOpenAPIPrefersSchemaIdentityAttributesOverMissingPathVariable(
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/alias" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/alias" {
+		t.Fatalf("expected aliasAttribute to be inferred as alias, got %q", inferred.AliasAttribute)
 	}
 }
 
@@ -367,11 +367,11 @@ func TestInferFromOpenAPIPrefersSchemaIdentityAttributesForNonTemplateSafePathVa
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/alias" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/alias" {
+		t.Fatalf("expected aliasAttribute to be inferred as alias, got %q", inferred.AliasAttribute)
 	}
 }
 
@@ -424,11 +424,11 @@ func TestInferFromOpenAPISupportsConcreteSegmentsAgainstTemplatedOpenAPIPaths(t 
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/alias" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/alias" {
+		t.Fatalf("expected aliasAttribute to be inferred as alias, got %q", inferred.AliasAttribute)
 	}
 }
 
@@ -477,11 +477,11 @@ func TestInferFromOpenAPIFallsBackToCollectionResponseSchemaForIdentity(t *testi
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/alias" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as alias, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/alias" {
+		t.Fatalf("expected aliasAttribute to be inferred as alias, got %q", inferred.AliasAttribute)
 	}
 }
 
@@ -510,11 +510,11 @@ func TestInferFromOpenAPITreatsCollectionPathWithoutSelectorAsCollection(t *test
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/realm" {
-		t.Fatalf("expected idFromAttribute to be inferred as realm, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/realm" {
+		t.Fatalf("expected idAttribute to be inferred as realm, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/realm" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as realm, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/realm" {
+		t.Fatalf("expected aliasAttribute to be inferred as realm, got %q", inferred.AliasAttribute)
 	}
 
 	listOperation := inferred.Operations[string(OperationList)]
@@ -726,11 +726,11 @@ func TestCompactInferredMetadataDefaultsOmitsFallbackOperations(t *testing.T) {
 		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
 	}
 
-	if compact.IDFromAttribute != "/realm" {
-		t.Fatalf("expected idFromAttribute to be preserved, got %q", compact.IDFromAttribute)
+	if compact.IDAttribute != "/realm" {
+		t.Fatalf("expected idAttribute to be preserved, got %q", compact.IDAttribute)
 	}
-	if compact.AliasFromAttribute != "/realm" {
-		t.Fatalf("expected aliasFromAttribute to be preserved, got %q", compact.AliasFromAttribute)
+	if compact.AliasAttribute != "/realm" {
+		t.Fatalf("expected aliasAttribute to be preserved, got %q", compact.AliasAttribute)
 	}
 	if len(compact.Operations) != 0 {
 		t.Fatalf("expected fallback-equivalent operations to be omitted, got %#v", compact.Operations)
@@ -759,14 +759,14 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIDefaultOperationsWithNonTemp
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.IDFromAttribute != "/id" {
-		t.Fatalf("expected idFromAttribute to be inferred as id, got %q", inferred.IDFromAttribute)
+	if inferred.IDAttribute != "/id" {
+		t.Fatalf("expected idAttribute to be inferred as id, got %q", inferred.IDAttribute)
 	}
-	if inferred.AliasFromAttribute != "/clientId" {
-		t.Fatalf("expected aliasFromAttribute to be inferred as clientId, got %q", inferred.AliasFromAttribute)
+	if inferred.AliasAttribute != "/clientId" {
+		t.Fatalf("expected aliasAttribute to be inferred as clientId, got %q", inferred.AliasAttribute)
 	}
-	if len(inferred.SecretsFromAttributes) != 1 || inferred.SecretsFromAttributes[0] != "/secret" {
-		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretsFromAttributes)
+	if len(inferred.SecretAttributes) != 1 || inferred.SecretAttributes[0] != "/secret" {
+		t.Fatalf("expected inferred secret attribute [secret], got %#v", inferred.SecretAttributes)
 	}
 
 	compact, err := CompactInferredMetadataDefaults("/admin/realms/_/clients/", inferred, openAPISpec)

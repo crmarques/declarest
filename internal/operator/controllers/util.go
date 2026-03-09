@@ -246,7 +246,7 @@ func collectSecretNames(
 	}
 	// ResourceRepository secret refs
 	if repo.Spec.Git != nil {
-		addRef(repo.Spec.Git.Auth.TokenSecretRef)
+		addRef(repo.Spec.Git.Auth.TokenRef)
 		if repo.Spec.Git.Auth.SSHSecretRef != nil {
 			addRef(repo.Spec.Git.Auth.SSHSecretRef.PrivateKeyRef)
 			addRef(repo.Spec.Git.Auth.SSHSecretRef.KnownHostsRef)
@@ -281,11 +281,17 @@ func collectSecretNames(
 	}
 	// SecretStore secret refs
 	if secretStore.Spec.Vault != nil {
-		addRef(secretStore.Spec.Vault.Auth.TokenRef)
-		addRef(secretStore.Spec.Vault.Auth.UsernameRef)
-		addRef(secretStore.Spec.Vault.Auth.PasswordRef)
-		addRef(secretStore.Spec.Vault.Auth.AppRoleRoleIDRef)
-		addRef(secretStore.Spec.Vault.Auth.AppRoleSecretIDRef)
+		if secretStore.Spec.Vault.Auth.Token != nil {
+			addRef(secretStore.Spec.Vault.Auth.Token.SecretRef)
+		}
+		if secretStore.Spec.Vault.Auth.Userpass != nil {
+			addRef(secretStore.Spec.Vault.Auth.Userpass.UsernameRef)
+			addRef(secretStore.Spec.Vault.Auth.Userpass.PasswordRef)
+		}
+		if secretStore.Spec.Vault.Auth.AppRole != nil {
+			addRef(secretStore.Spec.Vault.Auth.AppRole.RoleIDRef)
+			addRef(secretStore.Spec.Vault.Auth.AppRole.SecretIDRef)
+		}
 		if secretStore.Spec.Vault.TLS != nil {
 			addRef(secretStore.Spec.Vault.TLS.CACertRef)
 			addRef(secretStore.Spec.Vault.TLS.ClientCertRef)

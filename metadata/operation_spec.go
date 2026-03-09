@@ -46,7 +46,7 @@ func ResolveOperationSpecWithScope(
 	scopeCopy["collectionPath"] = collectionPath
 
 	spec := OperationSpec{
-		PayloadMutation: nil,
+		Transforms: nil,
 	}
 
 	if metadata.Operations != nil {
@@ -54,7 +54,7 @@ func ResolveOperationSpecWithScope(
 			spec = MergeOperationSpec(spec, operationSpec)
 		}
 	}
-	spec.PayloadMutation = combinePayloadMutationSteps(metadata.PayloadMutation, spec.PayloadMutation)
+	spec.Transforms = combineTransformSteps(metadata.Transforms, spec.Transforms)
 
 	if strings.TrimSpace(spec.Path) == "" {
 		spec.Path = defaultOperationPathTemplate(operation)
@@ -198,13 +198,13 @@ func InferFromOpenAPISpec(
 			openAPIResourceAttributes,
 		)
 		if strings.TrimSpace(idAttribute) != "" {
-			inferred.IDFromAttribute = resource.JSONPointerForObjectKey(idAttribute)
+			inferred.IDAttribute = resource.JSONPointerForObjectKey(idAttribute)
 		}
 		if strings.TrimSpace(aliasAttribute) != "" {
-			inferred.AliasFromAttribute = resource.JSONPointerForObjectKey(aliasAttribute)
+			inferred.AliasAttribute = resource.JSONPointerForObjectKey(aliasAttribute)
 		}
 		if shouldInferSecretAttribute(target) {
-			inferred.SecretsFromAttributes = []string{resource.JSONPointerForObjectKey("secret")}
+			inferred.SecretAttributes = []string{resource.JSONPointerForObjectKey("secret")}
 		}
 	}
 
@@ -245,14 +245,14 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	openAPIDefaults, _, _ := inferMetadataFromOpenAPISpec(target, openAPISpec)
 	defaults = MergeResourceMetadata(defaults, openAPIDefaults)
 	compact := ResourceMetadata{
-		IDFromAttribute:        inferred.IDFromAttribute,
-		AliasFromAttribute:     inferred.AliasFromAttribute,
+		IDAttribute:        inferred.IDAttribute,
+		AliasAttribute:     inferred.AliasAttribute,
 		CollectionPath:         inferred.CollectionPath,
 		PayloadType:            inferred.PayloadType,
-		SecretsFromAttributes:  cloneStringSlice(inferred.SecretsFromAttributes),
+		SecretAttributes:  cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
-		PayloadMutation:        clonePayloadMutationSteps(inferred.PayloadMutation),
+		Transforms:        cloneTransformSteps(inferred.Transforms),
 	}
 
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
@@ -274,7 +274,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 		Query:           maps.Clone(spec.Query),
 		Headers:         maps.Clone(spec.Headers),
 		Body:            spec.Body,
-		PayloadMutation: clonePayloadMutationSteps(spec.PayloadMutation),
+		Transforms: cloneTransformSteps(spec.Transforms),
 		Validate:        cloneOperationValidationSpec(spec.Validate),
 	}
 
@@ -311,13 +311,13 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 		rendered.Headers[key] = value
 	}
 
-	for idx := range rendered.PayloadMutation {
-		if strings.TrimSpace(rendered.PayloadMutation[idx].JQExpression) == "" {
+	for idx := range rendered.Transforms {
+		if strings.TrimSpace(rendered.Transforms[idx].JQExpression) == "" {
 			continue
 		}
-		rendered.PayloadMutation[idx].JQExpression, err = renderTemplateString(
-			"payloadMutation["+strconv.Itoa(idx)+"].jqExpression",
-			rendered.PayloadMutation[idx].JQExpression,
+		rendered.Transforms[idx].JQExpression, err = renderTemplateString(
+			"transforms["+strconv.Itoa(idx)+"].jqExpression",
+			rendered.Transforms[idx].JQExpression,
 			scope,
 		)
 		if err != nil {

@@ -16,8 +16,8 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	contextCatalog.DefaultEditor = strings.TrimSpace(contextCatalog.DefaultEditor)
 
 	if len(contextCatalog.Contexts) == 0 {
-		if contextCatalog.CurrentCtx != "" {
-			return faults.NewValidationError("currentCtx must be empty when contexts list is empty", nil)
+		if contextCatalog.CurrentContext != "" {
+			return faults.NewValidationError("currentContext must be empty when contexts list is empty", nil)
 		}
 		return nil
 	}
@@ -37,12 +37,12 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 		}
 	}
 
-	if contextCatalog.CurrentCtx == "" {
-		return faults.NewValidationError("currentCtx must be set when contexts are defined", nil)
+	if contextCatalog.CurrentContext == "" {
+		return faults.NewValidationError("currentContext must be set when contexts are defined", nil)
 	}
 
-	if _, exists := seen[contextCatalog.CurrentCtx]; !exists {
-		return faults.NewValidationError(fmt.Sprintf("currentCtx %q does not match any context", contextCatalog.CurrentCtx), nil)
+	if _, exists := seen[contextCatalog.CurrentContext]; !exists {
+		return faults.NewValidationError(fmt.Sprintf("currentContext %q does not match any context", contextCatalog.CurrentContext), nil)
 	}
 
 	return nil
@@ -275,7 +275,7 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		return faults.NewValidationError("managedServer must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("managedServer.http.baseUrl is required", nil)
+		return faults.NewValidationError("managedServer.http.baseURL is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
 		return faults.NewValidationError("managedServer.http.auth is required", nil)
@@ -292,7 +292,7 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return faults.NewValidationError("managedServer.http.auth.oauth2 requires tokenUrl, grantType, clientId, clientSecret", nil)
+			return faults.NewValidationError("managedServer.http.auth.oauth2 requires tokenURL, grantType, clientID, clientSecret", nil)
 		}
 	}
 
@@ -459,7 +459,7 @@ func validateProxy(field string, proxy *config.HTTPProxy) error {
 		return nil
 	}
 	if !proxyhelper.HasURLs(proxy) {
-		return faults.NewValidationError(field+" must define at least one of httpUrl or httpsUrl", nil)
+		return faults.NewValidationError(field+" must define at least one of httpURL or httpsURL", nil)
 	}
 	if _, err := proxyhelper.Build(field, proxy); err != nil {
 		return err
@@ -481,9 +481,9 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "managedServer.http.baseUrl":
+		case "managedServer.http.baseURL":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.baseUrl requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.baseURL requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.BaseURL = value
 		case "managedServer.http.healthCheck":
@@ -491,17 +491,17 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override managedServer.http.healthCheck requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.HealthCheck = value
-		case "managedServer.http.proxy.httpUrl":
+		case "managedServer.http.proxy.httpURL":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpUrl requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpURL requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.HTTPURL = value
-		case "managedServer.http.proxy.httpsUrl":
+		case "managedServer.http.proxy.httpsURL":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpsUrl requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpsURL requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
