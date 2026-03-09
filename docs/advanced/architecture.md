@@ -87,7 +87,7 @@ A typical `resource apply` flow:
 
 1. **Load local** — read desired-state payload from the repository.
 2. **Resolve metadata** — merge metadata layers to determine operation specs.
-3. **Resolve secrets** — expand `{{secret .}}` placeholders in the payload.
+3. **Resolve secrets** — expand {% raw %}`{{secret .}}`{% endraw %} placeholders in the payload.
 4. **Read remote** — fetch current state from the managed server.
 5. **Compare** — diff desired vs actual using metadata compare transforms.
 6. **Decide** — skip if no drift (unless `--force`), create if remote returns `NotFound`, update otherwise.
