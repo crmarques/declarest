@@ -806,7 +806,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			},
 			items: map[string]metadatadomain.ResourceMetadata{
 				"/customers/acme": {
-					IDAttribute:       "/id",
+					IDAttribute:      "/id",
 					SecretAttributes: []string{"/existingSecret"},
 				},
 			},

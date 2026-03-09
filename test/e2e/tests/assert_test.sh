@@ -42,5 +42,42 @@ test_case_wait_until_times_out_with_diagnostics() {
   assert_contains "${output}" 'still failing'
 }
 
+test_case_repo_template_metadata_input_format_uses_file_extension() {
+  source_e2e_lib "assert"
+
+  assert_eq "$(case_repo_template_metadata_input_format '/tmp/example.json')" "json"
+  assert_eq "$(case_repo_template_metadata_input_format '/tmp/example.yaml')" "yaml"
+  assert_eq "$(case_repo_template_metadata_input_format '/tmp/example.yml')" "yaml"
+}
+
+test_case_expect_sorted_resource_list_payloads_accepts_client_id_ordering() {
+  source_e2e_lib "assert"
+
+  local payload='[{"clientId":"account"},{"clientId":"billing"}]'
+  case_expect_sorted_resource_list_payloads "${payload}"
+}
+
+test_case_repo_template_write_update_payload_updates_client_id_payloads() {
+  source_e2e_lib "assert"
+
+  local tmp source_file target_file rendered
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  source_file="${tmp}/source.json"
+  target_file="${tmp}/target.json"
+
+  cat >"${source_file}" <<'EOF'
+{"clientId":"declarest-cli"}
+EOF
+
+  case_repo_template_write_update_payload "${source_file}" "${target_file}" "rev-1"
+  rendered=$(<"${target_file}")
+
+  assert_contains "${rendered}" '"description": "rev-1"'
+}
+
 test_case_wait_until_succeeds_after_retries
 test_case_wait_until_times_out_with_diagnostics
+test_case_repo_template_metadata_input_format_uses_file_extension
+test_case_expect_sorted_resource_list_payloads_accepts_client_id_ordering
+test_case_repo_template_write_update_payload_updates_client_id_payloads

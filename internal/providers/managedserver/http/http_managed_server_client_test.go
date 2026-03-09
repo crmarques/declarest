@@ -366,7 +366,7 @@ func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testi
 	md := metadata.ResourceMetadata{
 		IDAttribute:    "/id",
 		AliasAttribute: "/name",
-		CollectionPath:     "/admin/realms/{{.realm}}/components",
+		CollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
 				Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -2321,7 +2321,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
 			IDAttribute:    "/id",
 			AliasAttribute: "/name",
-			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			CollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -2365,7 +2365,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 			AliasAttribute: "/name",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
-					Path:            `/api/projects/widgets`,
+					Path:       `/api/projects/widgets`,
 					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/api/projects/current") | .id)) ]`),
 				},
 			},
@@ -2412,7 +2412,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
 			IDAttribute:    "/id",
 			AliasAttribute: "/name",
-			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			CollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`),
@@ -2473,7 +2473,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/AD/mappers", metadata.ResourceMetadata{
 			IDAttribute:    "/id",
 			AliasAttribute: "/name",
-			CollectionPath:     "/admin/realms/{{.realm}}/components",
+			CollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.name}}/") | .id)) ]`),
@@ -2542,7 +2542,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 			AliasAttribute: "/name",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
-					Path:            `/admin/realms/publico-br/user-registry/ldap-test/mappers`,
+					Path:       `/admin/realms/publico-br/user-registry/ldap-test/mappers`,
 					Transforms: jqMutation(`[ .[] | select(.parentId == (resource(1) | .id)) ]`),
 				},
 			},

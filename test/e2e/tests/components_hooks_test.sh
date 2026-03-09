@@ -354,6 +354,15 @@ test_prepare_component_openapi_specs_keeps_local_openapi_for_base_dir_mode() {
   assert_path_exists "${copied_spec}"
 }
 
+test_keycloak_configure_auth_script_uses_current_client_id_fields() {
+  local script_path="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/scripts/configure-auth.sh"
+  local content
+  content=$(<"${script_path}")
+
+  assert_contains "${content}" 'clients?clientId=${client_id}' "expected keycloak configure-auth query filter to use clientId"
+  assert_contains "${content}" 'clientId:$client_id' "expected keycloak configure-auth payload to use clientId"
+}
+
 test_prepare_component_openapi_specs_defaults_to_bundle_mode() {
   load_hook_libs
   local tmp
@@ -1058,6 +1067,7 @@ test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
 test_repo_context_scripts_emit_metadata_bundle_when_set
 test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode
 test_prepare_component_openapi_specs_keeps_local_openapi_for_base_dir_mode
+test_keycloak_configure_auth_script_uses_current_client_id_fields
 test_prepare_component_openapi_specs_defaults_to_bundle_mode
 test_component_compose_file_resolves_compose_subdir
 test_k8s_port_forward_pid_tracking_and_stop

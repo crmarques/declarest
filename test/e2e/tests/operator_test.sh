@@ -502,6 +502,14 @@ EOF
     "bundle: '$(e2e_operator_managed_server_metadata_bundle_mount_path)'"
 }
 
+test_secretstore_crd_does_not_require_legacy_provider_field() {
+  local crd_file="${REPO_ROOT}/config/crd/bases/declarest.io_secretstores.yaml"
+  local content
+  content=$(<"${crd_file}")
+
+  assert_not_contains "${content}" "- provider"
+}
+
 test_operator_example_resource_mapping
 test_operator_scoped_names_are_run_specific
 test_operator_handoff_prints_managed_server_specific_commands
@@ -516,3 +524,4 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir
 test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 test_operator_write_manager_manifest_mounts_prepared_metadata_bundle
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path
+test_secretstore_crd_does_not_require_legacy_provider_field

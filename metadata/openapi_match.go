@@ -104,13 +104,13 @@ func operationSpecsEquivalent(left OperationSpec, right OperationSpec) bool {
 
 func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 	normalized := OperationSpec{
-		Method:          strings.TrimSpace(spec.Method),
-		Path:            strings.TrimSpace(spec.Path),
-		Accept:          strings.TrimSpace(spec.Accept),
-		ContentType:     strings.TrimSpace(spec.ContentType),
-		Body:            spec.Body,
-		Transforms: normalizeTransformStepsForComparison(spec.Transforms),
-		Validate:        normalizeOperationValidationSpecForComparison(spec.Validate),
+		Method:      strings.TrimSpace(spec.Method),
+		Path:        strings.TrimSpace(spec.Path),
+		Accept:      strings.TrimSpace(spec.Accept),
+		ContentType: strings.TrimSpace(spec.ContentType),
+		Body:        spec.Body,
+		Transforms:  normalizeTransformStepsForComparison(spec.Transforms),
+		Validate:    normalizeOperationValidationSpecForComparison(spec.Validate),
 	}
 
 	if len(spec.Query) > 0 {
@@ -130,9 +130,9 @@ func normalizeTransformStepsForComparison(values []TransformStep) []TransformSte
 	normalized := make([]TransformStep, len(values))
 	for idx, value := range values {
 		normalized[idx] = TransformStep{
-			SelectAttributes:   cloneStringSlice(value.SelectAttributes),
+			SelectAttributes:  cloneStringSlice(value.SelectAttributes),
 			ExcludeAttributes: cloneStringSlice(value.ExcludeAttributes),
-			JQExpression:       strings.TrimSpace(value.JQExpression),
+			JQExpression:      strings.TrimSpace(value.JQExpression),
 		}
 	}
 	return normalized

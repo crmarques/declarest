@@ -24,18 +24,18 @@ func DefaultResourceMetadata() ResourceMetadata {
 			defaultContentType = "{{payload_media_type .}}"
 		}
 		operations[string(operation)] = OperationSpec{
-			Method:          DefaultOperationMethod(operation),
-			Path:            defaultOperationPathTemplate(operation),
-			Query:           map[string]string{},
-			Headers:         map[string]string{},
-			Accept:          defaultAccept,
-			ContentType:     defaultContentType,
-			Transforms: nil,
+			Method:      DefaultOperationMethod(operation),
+			Path:        defaultOperationPathTemplate(operation),
+			Query:       map[string]string{},
+			Headers:     map[string]string{},
+			Accept:      defaultAccept,
+			ContentType: defaultContentType,
+			Transforms:  nil,
 		}
 	}
 
 	return ResourceMetadata{
-		Operations:      operations,
+		Operations: operations,
 		Transforms: nil,
 	}
 }

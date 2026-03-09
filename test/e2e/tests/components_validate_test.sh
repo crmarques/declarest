@@ -232,6 +232,14 @@ _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl()
   assert_contains "${output}" "metadata fixture missing resource.idAttribute or resource.aliasAttribute"
 }
 
+test_checked_in_keycloak_client_metadata_uses_client_id_alias_attribute() {
+  local metadata_file="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
+  local content
+  content=$(<"${metadata_file}")
+
+  assert_contains "${content}" "aliasAttribute: /clientId"
+}
+
 test_managed_server_auth_type_defaults_prefer_oauth2() {
   load_components_libs
 
@@ -325,6 +333,7 @@ _test_validate_all_discovered_components_accepts_native_without_runtime_artifact
 test_discover_rejects_missing_contract_version
 test_validate_all_discovered_components_accepts_valid_fixture_identity
 test_validate_all_discovered_components_rejects_missing_fixture_identity
+test_checked_in_keycloak_client_metadata_uses_client_id_alias_attribute
 test_managed_server_auth_type_defaults_prefer_oauth2
 test_managed_server_auth_type_rejects_unsupported_selection
 test_validate_all_discovered_components_rejects_missing_compose_artifacts

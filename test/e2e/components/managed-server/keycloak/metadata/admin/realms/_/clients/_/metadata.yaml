@@ -1,5 +1,5 @@
 resource:
   idAttribute: /id
-  aliasAttribute: /clientID
+  aliasAttribute: /clientId
   secretAttributes:
   - /secret

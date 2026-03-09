@@ -245,14 +245,14 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	openAPIDefaults, _, _ := inferMetadataFromOpenAPISpec(target, openAPISpec)
 	defaults = MergeResourceMetadata(defaults, openAPIDefaults)
 	compact := ResourceMetadata{
-		IDAttribute:        inferred.IDAttribute,
-		AliasAttribute:     inferred.AliasAttribute,
+		IDAttribute:            inferred.IDAttribute,
+		AliasAttribute:         inferred.AliasAttribute,
 		CollectionPath:         inferred.CollectionPath,
 		PayloadType:            inferred.PayloadType,
-		SecretAttributes:  cloneStringSlice(inferred.SecretAttributes),
+		SecretAttributes:       cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
-		Transforms:        cloneTransformSteps(inferred.Transforms),
+		Transforms:             cloneTransformSteps(inferred.Transforms),
 	}
 
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
@@ -271,11 +271,11 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 
 func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (OperationSpec, error) {
 	rendered := OperationSpec{
-		Query:           maps.Clone(spec.Query),
-		Headers:         maps.Clone(spec.Headers),
-		Body:            spec.Body,
+		Query:      maps.Clone(spec.Query),
+		Headers:    maps.Clone(spec.Headers),
+		Body:       spec.Body,
 		Transforms: cloneTransformSteps(spec.Transforms),
-		Validate:        cloneOperationValidationSpec(spec.Validate),
+		Validate:   cloneOperationValidationSpec(spec.Validate),
 	}
 
 	var err error

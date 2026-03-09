@@ -484,14 +484,33 @@ case_repo_template_apply_all_metadata() {
   while IFS= read -r metadata_file; do
     [[ -n "${metadata_file}" ]] || continue
     logical_path=$(case_repo_template_metadata_logical_path "${metadata_file}" "${component_name}") || return 1
+    local metadata_input_format
+    metadata_input_format=$(case_repo_template_metadata_input_format "${metadata_file}") || return 1
 
     local target_path
     while IFS= read -r target_path; do
       [[ -n "${target_path}" ]] || continue
-      case_run_declarest metadata set "${target_path}" -f "${metadata_file}" -i json
+      case_run_declarest metadata set "${target_path}" -f "${metadata_file}" -i "${metadata_input_format}"
       case_expect_success
     done < <(case_repo_template_metadata_target_paths "${logical_path}" "${component_name}")
   done < <(case_repo_template_metadata_files "${component_name}")
+}
+
+case_repo_template_metadata_input_format() {
+  local metadata_file=$1
+
+  case "${metadata_file}" in
+    *.json)
+      printf 'json\n'
+      ;;
+    *.yaml|*.yml)
+      printf 'yaml\n'
+      ;;
+    *)
+      printf 'unsupported metadata file extension: %s\n' "${metadata_file}" >&2
+      return 1
+      ;;
+  esac
 }
 
 case_repo_template_sync_tree() {
@@ -597,7 +616,7 @@ case_expect_sorted_resource_list_payloads() {
     def list_key:
       if type == "object" then
         [
-          (.clientID // .alias // .realm // .name // .displayName // .path // .id // .providerId // ""),
+          (.clientId // .clientID // .alias // .realm // .name // .displayName // .path // .id // .providerId // ""),
           (tojson)
         ] | join("\u0000")
       else
@@ -625,6 +644,8 @@ case_repo_template_write_update_payload() {
       .organizationsEnabled = (not .organizationsEnabled)
     elif has("topLevel") and (.topLevel | type == "string") then
       .topLevel = (if (.topLevel | ascii_downcase) == "true" then "false" else "true" end)
+    elif has("clientId") and (.clientId | type == "string") then
+      .description = $tag
     elif has("clientID") and (.clientID | type == "string") then
       .description = $tag
     elif has("attributes") and (.attributes | type == "object") then
