@@ -561,6 +561,12 @@ EOF
   pids=$(e2e_state_get "${state_file}" 'K8S_PORT_FORWARD_PIDS')
   [[ -n "${pids}" ]] || fail "expected k8s port-forward pid to be persisted"
 
+  local wrapper_script
+  wrapper_script=$(find "${E2E_LOG_DIR}" -maxdepth 1 -name 'port-forward-*.sh' | head -n 1)
+  [[ -n "${wrapper_script}" ]] || fail "expected generated port-forward wrapper script"
+  assert_file_contains "${wrapper_script}" 'port_forward_pid=$!'
+  assert_file_contains "${wrapper_script}" 'rc=$?'
+
   local -a pid_array=()
   read -r -a pid_array <<<"${pids}"
   if ((${#pid_array[@]} != 1)); then

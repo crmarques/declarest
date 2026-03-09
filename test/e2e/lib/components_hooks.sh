@@ -219,9 +219,9 @@ while true; do
     --kubeconfig "${E2E_KUBECONFIG}" \
     -n "${E2E_K8S_NAMESPACE}" \
     port-forward "service/${service_name}" "${local_port}:${remote_port}" &
-  port_forward_pid=$!
+  port_forward_pid=\$!
   wait "\${port_forward_pid}"
-  rc=$?
+  rc=\$?
   port_forward_pid=''
 
   if ((rc != 0)); then

@@ -43,6 +43,26 @@ wait_for() {
   return 1
 }
 
+wait_for_git_receive_pack() {
+  local url="${GITLAB_BASE_URL}/${GITLAB_PROJECT_PATH}.git/info/refs?service=git-receive-pack"
+  local i
+
+  for ((i = 1; i <= wait_attempts; i++)); do
+    if curl -fsS -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    if ((i % 12 == 0)); then
+      printf 'gitlab receive-pack pending (%d/%d): %s\n' "${i}" "${wait_attempts}" "${url}" >&2
+    fi
+
+    sleep "${wait_interval_seconds}"
+  done
+
+  printf 'gitlab receive-pack did not become ready after %d attempts (%ss interval): %s\n' "${wait_attempts}" "${wait_interval_seconds}" "${url}" >&2
+  return 1
+}
+
 wait_for "${GITLAB_BASE_URL}/users/sign_in"
 
 oauth_token=''
@@ -120,6 +140,8 @@ if [[ -z "${project_id}" ]]; then
   printf 'failed to provision gitlab project %s\n' "${GITLAB_PROJECT_PATH}" >&2
   exit 1
 fi
+
+wait_for_git_receive_pack
 
 webhook_url=${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL:-}
 webhook_secret=${E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET:-}
