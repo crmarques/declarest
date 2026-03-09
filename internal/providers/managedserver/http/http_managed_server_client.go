@@ -242,4 +242,3 @@ func parseBaseURL(raw string) (*url.URL, error) {
 func buildTLSConfig(tlsSettings *config.TLS) (*tls.Config, error) {
 	return tlsconfig.BuildTLSConfig(tlsSettings, "managed-server.http")
 }
-

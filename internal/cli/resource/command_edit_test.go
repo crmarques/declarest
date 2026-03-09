@@ -185,11 +185,13 @@ type fakeEditServiceAccessor struct {
 	metadata metadatadomain.MetadataService
 }
 
-func (a *fakeEditServiceAccessor) RepositoryStore() repository.ResourceStore              { return a.store }
-func (a *fakeEditServiceAccessor) RepositorySync() repository.RepositorySync              { return nil }
-func (a *fakeEditServiceAccessor) MetadataService() metadatadomain.MetadataService        { return a.metadata }
-func (a *fakeEditServiceAccessor) SecretProvider() secretdomain.SecretProvider             { return nil }
-func (a *fakeEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient { return nil }
+func (a *fakeEditServiceAccessor) RepositoryStore() repository.ResourceStore       { return a.store }
+func (a *fakeEditServiceAccessor) RepositorySync() repository.RepositorySync       { return nil }
+func (a *fakeEditServiceAccessor) MetadataService() metadatadomain.MetadataService { return a.metadata }
+func (a *fakeEditServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return nil }
+func (a *fakeEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+	return nil
+}
 
 func editTestContext() configdomain.Context {
 	return configdomain.Context{

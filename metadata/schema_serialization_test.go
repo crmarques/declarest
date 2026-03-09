@@ -13,6 +13,7 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 		IDFromAttribute:       "/id",
 		AliasFromAttribute:    "/name",
 		CollectionPath:        "/api/customers",
+		Secret:                boolPointer(true),
 		SecretsFromAttributes: []string{"/credentials/password"},
 		Operations: map[string]OperationSpec{
 			string(OperationCreate): {
@@ -75,6 +76,9 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	}
 	if resourceInfo["collectionPath"] != "/api/customers" {
 		t.Fatalf("expected resourceInfo.collectionPath=/api/customers, got %#v", resourceInfo["collectionPath"])
+	}
+	if resourceInfo["secret"] != true {
+		t.Fatalf("expected resourceInfo.secret=true, got %#v", resourceInfo["secret"])
 	}
 	secretAttributes, ok := resourceInfo["secretInAttributes"].([]any)
 	if !ok || len(secretAttributes) != 1 || secretAttributes[0] != "/credentials/password" {
@@ -195,6 +199,25 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	}
 	if jq, ok := jqStep["jqExpression"].(string); !ok || jq != "" {
 		t.Fatalf("expected explicit empty defaults payloadMutation jqExpression, got %#v", jqStep["jqExpression"])
+	}
+}
+
+func TestResourceMetadataWholeResourceSecretRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	encoded, err := json.Marshal(ResourceMetadata{
+		Secret: boolPointer(true),
+	})
+	if err != nil {
+		t.Fatalf("marshal returned error: %v", err)
+	}
+
+	var decoded ResourceMetadata
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal returned error: %v", err)
+	}
+	if !decoded.IsWholeResourceSecret() {
+		t.Fatalf("expected whole-resource secret round-trip, got %#v", decoded)
 	}
 }
 

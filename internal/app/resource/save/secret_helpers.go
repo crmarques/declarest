@@ -43,7 +43,7 @@ func enforceSaveSecretSafety(
 	deps Dependencies,
 	logicalPath string,
 	value resource.Value,
-	ignore bool,
+	allowPlaintext bool,
 ) error {
 	candidates, err := detectSaveSecretCandidates(ctx, deps, logicalPath, value)
 	if err != nil {
@@ -55,7 +55,7 @@ func enforceSaveSecretSafety(
 		return err
 	}
 
-	blockingCandidates := filterSaveSecretCandidatesForSafety(candidates, declaredCandidates, ignore)
+	blockingCandidates := filterSaveSecretCandidatesForSafety(candidates, declaredCandidates, allowPlaintext)
 	if len(blockingCandidates) == 0 {
 		return nil
 	}
@@ -91,7 +91,7 @@ func handleSaveSecrets(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, faults.NewValidationError("--handle-secrets requires object payloads", nil)
+		return nil, nil, faults.NewValidationError("--secret-attributes requires structured payload (json, yaml)", nil)
 	}
 
 	secretProvider, err := appdeps.RequireSecretProvider(deps)
@@ -246,7 +246,7 @@ func applySaveSecretCandidates(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, nil, faults.NewValidationError("--handle-secrets requires object payloads", nil)
+		return nil, nil, faults.NewValidationError("--secret-attributes requires structured payload (json, yaml)", nil)
 	}
 
 	attributes := resolveSaveSecretAttributes(payload, selectedCandidates)
@@ -321,7 +321,7 @@ func selectSaveSecretCandidates(candidates []string, requested []string, allowMi
 				continue
 			}
 			return nil, nil, faults.NewValidationError(
-				fmt.Sprintf("requested --handle-secrets attribute %q was not detected", requestedCandidate),
+				fmt.Sprintf("requested --secret-attributes attribute %q was not detected", requestedCandidate),
 				nil,
 			)
 		}
@@ -356,12 +356,12 @@ func resolveDeclaredSaveSecretAttributes(
 	return dedupeAndSortSaveSecretAttributes(resolvedMetadata.SecretsFromAttributes), nil
 }
 
-func filterSaveSecretCandidatesForSafety(candidates []string, declared []string, ignore bool) []string {
+func filterSaveSecretCandidatesForSafety(candidates []string, declared []string, allowPlaintext bool) []string {
 	normalizedCandidates := dedupeAndSortSaveSecretAttributes(candidates)
 	if len(normalizedCandidates) == 0 {
 		return nil
 	}
-	if ignore {
+	if allowPlaintext {
 		return nil
 	}
 
@@ -383,7 +383,7 @@ func filterSaveSecretCandidatesForSafety(candidates []string, declared []string,
 func saveSecretSafetyError(logicalPath string, candidates []string) error {
 	return faults.NewValidationError(
 		fmt.Sprintf(
-			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --ignore",
+			"warning: potential plaintext secrets detected for %q at attributes [%s]; refusing to save without --allow-plaintext",
 			logicalPath,
 			strings.Join(candidates, ", "),
 		),

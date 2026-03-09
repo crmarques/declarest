@@ -263,4 +263,3 @@ func logicalPathDepth(logicalPath string) int {
 	}
 	return len(strings.Split(trimmed, "/"))
 }
-

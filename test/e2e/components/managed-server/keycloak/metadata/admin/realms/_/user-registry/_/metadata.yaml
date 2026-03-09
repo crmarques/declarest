@@ -1,0 +1,10 @@
+resourceInfo:
+  idFromAttribute: /id
+  aliasFromAttribute: /name
+  collectionPath: /admin/realms/{{.realm}}/components
+  secretInAttributes:
+  - /config/bindCredential/0
+operationsInfo:
+  listCollection:
+    payloadMutation:
+    - jqExpression: '[ .[] | select(.providerId == "ldap") ]'

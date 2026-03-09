@@ -212,11 +212,13 @@ type stubLocalEditServiceAccessor struct {
 	sync repository.RepositorySync
 }
 
-func (a *stubLocalEditServiceAccessor) RepositoryStore() repository.ResourceStore              { return nil }
-func (a *stubLocalEditServiceAccessor) RepositorySync() repository.RepositorySync              { return a.sync }
-func (a *stubLocalEditServiceAccessor) MetadataService() metadatadomain.MetadataService        { return nil }
-func (a *stubLocalEditServiceAccessor) SecretProvider() secretdomain.SecretProvider             { return nil }
-func (a *stubLocalEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient { return nil }
+func (a *stubLocalEditServiceAccessor) RepositoryStore() repository.ResourceStore       { return nil }
+func (a *stubLocalEditServiceAccessor) RepositorySync() repository.RepositorySync       { return a.sync }
+func (a *stubLocalEditServiceAccessor) MetadataService() metadatadomain.MetadataService { return nil }
+func (a *stubLocalEditServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return nil }
+func (a *stubLocalEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+	return nil
+}
 
 type stubRepositorySync struct {
 	status          repository.SyncReport

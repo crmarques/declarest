@@ -69,5 +69,3 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	return Result{Values: results}, nil
 }
-
-

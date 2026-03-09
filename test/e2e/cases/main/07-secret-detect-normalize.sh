@@ -70,9 +70,9 @@ case_run() {
     "apiToken": "token-002"
   }'
 
-  case_run_declarest resource save "${repo_detect_scope}/acme" --ignore -f "${repo_detect_acme_payload_file}" -i json
+  case_run_declarest resource save "${repo_detect_scope}/acme" --allow-plaintext -f "${repo_detect_acme_payload_file}" -i json
   case_expect_success
-  case_run_declarest resource save "${repo_detect_scope}/beta" --ignore -f "${repo_detect_beta_payload_file}" -i json
+  case_run_declarest resource save "${repo_detect_scope}/beta" --allow-plaintext -f "${repo_detect_beta_payload_file}" -i json
   case_expect_success
 
   case_run_declarest secret detect -o json

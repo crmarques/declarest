@@ -20,7 +20,7 @@ case_run() {
   case_expect_output_contains '--secret-attribute'
 
   case_write_json "${repo_payload_file}" '{"password":"pw-123"}'
-  case_run_declarest resource save "${repo_scope}/acme" --ignore -f "${repo_payload_file}" -i json
+  case_run_declarest resource save "${repo_scope}/acme" --allow-plaintext -f "${repo_payload_file}" -i json
   case_expect_success
 
   case_run_declarest secret detect "${repo_scope}" --secret-attribute clientSecret -o json

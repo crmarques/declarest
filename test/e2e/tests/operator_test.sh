@@ -297,9 +297,9 @@ version: 0.0.1
 declarest:
   shorthand: keycloak-bundle
   metadataRoot: metadata
-  metadataFileName: metadata.json
+  metadataFileName: metadata.yaml
 EOF
-  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.json" <<'EOF'
+  cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.yaml" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"/realm","aliasFromAttribute":"/realm"}}
 EOF
 
@@ -351,7 +351,7 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
   unset E2E_METADATA_BUNDLE
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
-  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"/name","aliasFromAttribute":"/name"}}
 EOF
 
@@ -369,7 +369,7 @@ EOF
   assert_contains "${bundle_manifest}" "name: e2e-rundeck-bundle"
   assert_contains "${bundle_manifest}" "metadataRoot: metadata"
   assert_contains "${archive_listing}" "bundle.yaml"
-  assert_contains "${archive_listing}" "metadata/projects/_/metadata.json"
+  assert_contains "${archive_listing}" "metadata/projects/_/metadata.yaml"
 }
 
 test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures() {
@@ -391,7 +391,7 @@ test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
   local archive_listing
   archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}")
 
-  assert_contains "${archive_listing}" "metadata/projects/_/jobs/_/metadata.json"
+  assert_contains "${archive_listing}" "metadata/projects/_/jobs/_/metadata.yaml"
   assert_not_contains "${archive_listing}" "metadata/projects/platform/jobs/_/metadata.yaml"
   assert_not_contains "${archive_listing}" "metadata/save-input-modes-items/_/metadata.yaml"
   assert_not_contains "${archive_listing}" "metadata/save-secret-guard/metadata/metadata.yaml"
@@ -416,7 +416,7 @@ test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
   unset E2E_METADATA_BUNDLE
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
-  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"/name","aliasFromAttribute":"/name"}}
 EOF
 
@@ -463,7 +463,7 @@ test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
   export E2E_OPERATOR_REPOSITORY_NAME='declarest-e2e-repository'
 
   mkdir -p "${E2E_STATE_DIR}" "${E2E_METADATA_DIR}/projects/_"
-  cat >"${E2E_METADATA_DIR}/projects/_/metadata.json" <<'EOF'
+  cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
 {"resourceInfo":{"idFromAttribute":"name","aliasFromAttribute":"name"}}
 EOF
 

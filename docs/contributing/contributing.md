@@ -51,13 +51,14 @@ make e2e-validate-components
 
 ## Documentation workflow
 
-Docs are built with MkDocs Material.
+Docs are built with MkDocs Material and the MkDocs Macros plugin, which exposes the current DeclaREST release version to examples in the docs.
 
 ```bash
-pip install mkdocs-material
+pip install -r docs/requirements.txt
 mkdocs serve
 mkdocs build --strict
 ```
+After installing the dependencies, `make docs` also runs `mkdocs build --strict` so you can rebuild the site via the Makefile.
 
 Files:
 
@@ -81,6 +82,8 @@ For semver tags (`vX.Y.Z`), the workflow publishes:
 - `ghcr.io/crmarques/declarest-operator:latest`
 
 Tagging a semver version (for example `v1.2.3`) triggers both release flows.
+
+When docs are built from a release tag, examples use that tag's DeclaREST version automatically. For local builds you can override the rendered version with `DECLAREST_DOCS_VERSION=<version>`.
 
 ## Contribution checklist
 

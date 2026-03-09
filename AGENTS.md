@@ -87,6 +87,12 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
 15. Inline or explanatory comments that only restate what the code already expresses MUST NOT be added; updates SHOULD remove such non-functional comments and rely on clear naming, structure, and tests instead, while only keeping compile-time directives or exported-API documentation that cannot be conveyed otherwise.
 
+## Bundle Repository Synchronization
+1. When editing metadata under `test/e2e/components/managed-server/<component>/metadata`, identify the matching sibling repository named `../declarest-bundle-<component>` by using the same `<component>` segment.
+2. If the identified bundle repository exists and is writable, the agent MUST mirror each metadata file change into `declarest-bundle-<component>/metadata/` so that both trees contain the same filenames and contents (no extra or missing files) before handing off. Use deterministic copy or sync steps rather than ad-hoc edits to keep diffs minimal.
+3. When the bundle repository hosts a manifest such as `bundle.yaml` that references metadata content, update the manifest simultaneously to keep it consistent with the mirrored metadata tree (for example adjust file lists, version hints, or metadata-specific fields that mention `metadata/`).
+4. If the bundle repository is absent or cannot be edited (for example because it is outside writable roots), document the missing sync in the final response so the downstream reviewer knows a manual bundle update is required to keep the metadata content aligned.
+
 ## Delivery Protocol
 1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (code modifications always include `go test -race ./...` at completion, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
 2. If the user agrees and asks for help composing the commit, ensure each resulting Conventional Commit message follows the `Commit guidance (agents)` rules and the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting them.

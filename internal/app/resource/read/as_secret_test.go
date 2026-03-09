@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	resourcedomain "github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
@@ -98,6 +99,55 @@ func TestResolveSecretsForOutputWholeResourcePlaceholderRequiresSecretProvider(t
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
+func TestMaskSecretsForOutputMasksWholeResourceSecretValue(t *testing.T) {
+	t.Parallel()
+
+	wholeSecret := true
+	masked, err := maskSecretsForOutput(
+		context.Background(),
+		Dependencies{
+			Metadata: fakeReadMetadataService{
+				resolved: metadatadomain.ResourceMetadata{Secret: &wholeSecret},
+			},
+		},
+		"/projects/platform/secrets/private-key",
+		resourcedomain.BinaryValue{Bytes: []byte("private-key-bytes")},
+	)
+	if err != nil {
+		t.Fatalf("maskSecretsForOutput returned error: %v", err)
+	}
+	if masked != "{{secret .}}" {
+		t.Fatalf("expected whole-resource secret to be masked to placeholder, got %#v", masked)
+	}
+}
+
+func TestMaskSecretsForOutputPreservesWholeResourcePlaceholder(t *testing.T) {
+	t.Parallel()
+
+	wholeSecret := true
+	value := resourcedomain.BinaryValue{Bytes: []byte("{{secret .}}")}
+	masked, err := maskSecretsForOutput(
+		context.Background(),
+		Dependencies{
+			Metadata: fakeReadMetadataService{
+				resolved: metadatadomain.ResourceMetadata{Secret: &wholeSecret},
+			},
+		},
+		"/projects/platform/secrets/private-key",
+		value,
+	)
+	if err != nil {
+		t.Fatalf("maskSecretsForOutput returned error: %v", err)
+	}
+	binaryValue, ok := masked.(resourcedomain.BinaryValue)
+	if !ok {
+		t.Fatalf("expected binary placeholder to be preserved, got %T", masked)
+	}
+	if !bytes.Equal(binaryValue.Bytes, value.Bytes) {
+		t.Fatalf("expected preserved placeholder bytes, got %q", string(binaryValue.Bytes))
+	}
+}
+
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {
 	t.Helper()
 
@@ -112,4 +162,31 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 	if typedErr.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
 	}
+}
+
+type fakeReadMetadataService struct {
+	resolved metadatadomain.ResourceMetadata
+}
+
+func (f fakeReadMetadataService) Get(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+}
+
+func (f fakeReadMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
+	return nil
+}
+
+func (f fakeReadMetadataService) Unset(context.Context, string) error { return nil }
+
+func (f fakeReadMetadataService) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return f.resolved, nil
+}
+
+func (f fakeReadMetadataService) RenderOperationSpec(
+	context.Context,
+	string,
+	metadatadomain.Operation,
+	any,
+) (metadatadomain.OperationSpec, error) {
+	return metadatadomain.OperationSpec{}, nil
 }

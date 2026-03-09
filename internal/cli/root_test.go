@@ -2171,8 +2171,8 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"/customers/acme",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "--ignore") {
-			t.Fatalf("expected --ignore hint, got %q", err.Error())
+		if !strings.Contains(err.Error(), "--allow-plaintext") {
+			t.Fatalf("expected --allow-plaintext hint, got %q", err.Error())
 		}
 		if len(orchestrator.saveCalls) != 0 {
 			t.Fatalf("expected no save calls after safety failure, got %d", len(orchestrator.saveCalls))
@@ -2334,10 +2334,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--ignore",
+			"--allow-plaintext",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --ignore: %v", err)
+			t.Fatalf("unexpected error with --allow-plaintext: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
@@ -2358,10 +2358,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--ignore",
+			"--allow-plaintext",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --ignore: %v", err)
+			t.Fatalf("unexpected error with --allow-plaintext: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
@@ -2384,10 +2384,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets",
+			"--secret-attributes",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --handle-secrets: %v", err)
+			t.Fatalf("unexpected error with --secret-attributes: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 1 {
 			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
@@ -2437,10 +2437,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers",
-			"--handle-secrets",
+			"--secret-attributes",
 		)
 		if err != nil {
-			t.Fatalf("unexpected list save error with --handle-secrets: %v", err)
+			t.Fatalf("unexpected list save error with --secret-attributes: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 2 {
 			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
@@ -2481,7 +2481,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets",
+			"--secret-attributes",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), "secret provider is not configured") {
@@ -2501,7 +2501,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets=/password",
+			"--secret-attributes=/password",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), `attributes [/apiToken]`) {
@@ -2529,10 +2529,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/customers/acme",
-			"--handle-secrets=/apiToken",
+			"--secret-attributes=/apiToken",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "/apiToken" was not detected`) {
+		if !strings.Contains(err.Error(), `requested --secret-attributes attribute "/apiToken" was not detected`) {
 			t.Fatalf("expected unknown requested candidate error, got %q", err.Error())
 		}
 	})
@@ -2558,7 +2558,7 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/master/clients",
-			"--handle-secrets=/secret",
+			"--secret-attributes=/secret",
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), `attributes [/apiToken]`) {
@@ -2600,11 +2600,11 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/master/clients",
-			"--handle-secrets=/secret",
-			"--ignore",
+			"--secret-attributes=/secret",
+			"--allow-plaintext",
 		)
 		if err != nil {
-			t.Fatalf("unexpected error with --handle-secrets and --ignore: %v", err)
+			t.Fatalf("unexpected error with --secret-attributes and --allow-plaintext: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 2 {
 			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
@@ -2660,10 +2660,10 @@ func TestResourceSaveInputModes(t *testing.T) {
 			"resource",
 			"save",
 			"/admin/realms/_/clients",
-			"--handle-secrets=/secret",
+			"--secret-attributes=/secret",
 		)
 		if err != nil {
-			t.Fatalf("unexpected wildcard save error with --handle-secrets=/secret: %v", err)
+			t.Fatalf("unexpected wildcard save error with --secret-attributes=/secret: %v", err)
 		}
 		if len(orchestrator.saveCalls) != 2 {
 			t.Fatalf("expected 2 save calls, got %d", len(orchestrator.saveCalls))
@@ -5868,8 +5868,8 @@ func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected resource save help output, got error: %v", err)
 	}
-	if !strings.Contains(output, "--handle-secrets") {
-		t.Fatalf("expected --handle-secrets in resource save help output, got %q", output)
+	if !strings.Contains(output, "--secret-attributes") {
+		t.Fatalf("expected --secret-attributes in resource save help output, got %q", output)
 	}
 	if !strings.Contains(output, "--payload") {
 		t.Fatalf("expected --payload flag in resource save help output, got %q", output)

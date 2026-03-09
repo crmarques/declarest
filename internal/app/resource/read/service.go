@@ -254,14 +254,39 @@ func maskSecretsForOutput(
 	logicalPath string,
 	value resource.Value,
 ) (resource.Value, error) {
-	secretAttributes, err := secretworkflow.ResolveDeclaredAttributes(ctx, deps.Metadata, logicalPath)
+	if value == nil {
+		return nil, nil
+	}
+
+	resolvedMetadata, err := secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.Metadata, logicalPath)
 	if err != nil {
 		return nil, err
 	}
+	if resolvedMetadata.IsWholeResourceSecret() {
+		if isWholeResourceSecretPlaceholderValue(value) {
+			return value, nil
+		}
+		return secretworkflow.PlaceholderValue(), nil
+	}
+
+	secretAttributes := secretworkflow.DedupeAndSortAttributes(resolvedMetadata.SecretsFromAttributes)
 	if len(secretAttributes) == 0 {
 		return value, nil
 	}
 	return secretworkflow.MaskValue(value, secretAttributes)
+}
+
+func isWholeResourceSecretPlaceholderValue(value resource.Value) bool {
+	switch typed := value.(type) {
+	case string:
+		return secretworkflow.IsPlaceholderValue(typed)
+	case resource.BinaryValue:
+		return secretworkflow.IsPlaceholderValue(string(typed.Bytes))
+	case *resource.BinaryValue:
+		return typed != nil && secretworkflow.IsPlaceholderValue(string(typed.Bytes))
+	default:
+		return false
+	}
 }
 
 func resolveSecretsForOutput(

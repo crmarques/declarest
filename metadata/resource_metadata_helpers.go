@@ -11,6 +11,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		AliasFromAttribute:     value.AliasFromAttribute,
 		CollectionPath:         value.CollectionPath,
 		PayloadType:            value.PayloadType,
+		Secret:                 cloneBoolPointer(value.Secret),
 		SecretsFromAttributes:  cloneStringSlice(value.SecretsFromAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
 		Operations:             make(map[string]OperationSpec, len(value.Operations)),
@@ -40,6 +41,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		AliasFromAttribute:     base.AliasFromAttribute,
 		CollectionPath:         base.CollectionPath,
 		PayloadType:            base.PayloadType,
+		Secret:                 cloneBoolPointer(base.Secret),
 		SecretsFromAttributes:  cloneStringSlice(base.SecretsFromAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
 		Operations:             cloneOperationMap(base.Operations),
@@ -57,6 +59,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 	if overlay.PayloadType != "" {
 		merged.PayloadType = overlay.PayloadType
+	}
+	if overlay.Secret != nil {
+		merged.Secret = cloneBoolPointer(overlay.Secret)
 	}
 	if overlay.SecretsFromAttributes != nil {
 		merged.SecretsFromAttributes = cloneStringSlice(overlay.SecretsFromAttributes)

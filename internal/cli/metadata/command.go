@@ -621,6 +621,7 @@ func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
 	return strings.TrimSpace(item.IDFromAttribute) != "" ||
 		strings.TrimSpace(item.AliasFromAttribute) != "" ||
 		strings.TrimSpace(item.CollectionPath) != "" ||
+		item.Secret != nil ||
 		item.SecretsFromAttributes != nil ||
 		item.Operations != nil ||
 		item.PayloadMutation != nil

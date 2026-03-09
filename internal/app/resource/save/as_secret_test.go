@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	resourcedomain "github.com/crmarques/declarest/resource"
 )
 
@@ -25,6 +26,7 @@ func TestSaveResolvedPathAsSecretStoresWholeResourceAndWritesPlaceholder(t *test
 	t.Parallel()
 
 	writer := &fakeSaveWriter{}
+	metadataStore := &fakeSaveMetadataStore{}
 	secretProvider := &fakeSaveSecretProvider{}
 	descriptor := resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{
 		Extension: ".key",
@@ -32,7 +34,7 @@ func TestSaveResolvedPathAsSecretStoresWholeResourceAndWritesPlaceholder(t *test
 
 	err := saveResolvedPathAsSecret(
 		context.Background(),
-		Dependencies{Secrets: secretProvider},
+		Dependencies{Metadata: metadataStore, Secrets: secretProvider},
 		writer,
 		"/projects/platform/secrets/private-key",
 		resourcedomain.Content{
@@ -63,6 +65,34 @@ func TestSaveResolvedPathAsSecretStoresWholeResourceAndWritesPlaceholder(t *test
 	if string(placeholder.Bytes) != "{{secret .}}" {
 		t.Fatalf("expected whole-resource placeholder bytes, got %q", string(placeholder.Bytes))
 	}
+	if !metadataStore.items["/projects/platform/secrets/private-key"].IsWholeResourceSecret() {
+		t.Fatalf("expected secret metadata to be persisted, got %#v", metadataStore.items["/projects/platform/secrets/private-key"])
+	}
+}
+
+func TestSaveResolvedPathAsSecretRequiresMetadataServiceBeforeSideEffects(t *testing.T) {
+	t.Parallel()
+
+	writer := &fakeSaveWriter{}
+	secretProvider := &fakeSaveSecretProvider{}
+
+	err := saveResolvedPathAsSecret(
+		context.Background(),
+		Dependencies{Secrets: secretProvider},
+		writer,
+		"/customers/acme",
+		testSaveContent(map[string]any{"id": "acme"}),
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err.Error() != "metadata service is not configured" {
+		t.Fatalf("expected metadata service validation error, got %q", err)
+	}
+	if writer.callCount != 0 {
+		t.Fatalf("expected no repository writes when metadata service is missing, got %d", writer.callCount)
+	}
+	if len(secretProvider.values) != 0 {
+		t.Fatalf("expected no secret writes when metadata service is missing, got %#v", secretProvider.values)
+	}
 }
 
 func TestSaveResolvedPathAsSecretRequiresSecretProvider(t *testing.T) {
@@ -70,10 +100,49 @@ func TestSaveResolvedPathAsSecretRequiresSecretProvider(t *testing.T) {
 
 	err := saveResolvedPathAsSecret(
 		context.Background(),
-		Dependencies{},
+		Dependencies{Metadata: &fakeSaveMetadataStore{}},
 		&fakeSaveWriter{},
 		"/customers/acme",
 		testSaveContent(map[string]any{"id": "acme"}),
 	)
 	assertTypedCategory(t, err, faults.ValidationError)
+	if err.Error() != "secret provider is not configured" {
+		t.Fatalf("expected secret provider validation error, got %q", err)
+	}
+}
+
+type fakeSaveMetadataStore struct {
+	items map[string]metadatadomain.ResourceMetadata
+}
+
+func (f *fakeSaveMetadataStore) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	if f.items != nil {
+		if metadata, found := f.items[logicalPath]; found {
+			return metadata, nil
+		}
+	}
+	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+}
+
+func (f *fakeSaveMetadataStore) Set(_ context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
+	if f.items == nil {
+		f.items = map[string]metadatadomain.ResourceMetadata{}
+	}
+	f.items[logicalPath] = metadata
+	return nil
+}
+
+func (f *fakeSaveMetadataStore) Unset(context.Context, string) error { return nil }
+
+func (f *fakeSaveMetadataStore) ResolveForPath(context.Context, string) (metadatadomain.ResourceMetadata, error) {
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func (f *fakeSaveMetadataStore) RenderOperationSpec(
+	context.Context,
+	string,
+	metadatadomain.Operation,
+	any,
+) (metadatadomain.OperationSpec, error) {
+	return metadatadomain.OperationSpec{}, nil
 }

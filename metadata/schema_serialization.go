@@ -19,6 +19,7 @@ type resourceInfoWire struct {
 	AliasFromAttribute     string                       `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
 	CollectionPath         string                       `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
+	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretInAttributes     *[]string                    `json:"secretInAttributes,omitempty" yaml:"secretInAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 }
@@ -157,6 +158,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		AliasFromAttribute: metadata.AliasFromAttribute,
 		CollectionPath:     metadata.CollectionPath,
 		PayloadType:        metadata.PayloadType,
+		Secret:             cloneBoolPointer(metadata.Secret),
 	}
 	if metadata.SecretsFromAttributes != nil {
 		resourceInfo.SecretInAttributes = stringSlicePointer(metadata.SecretsFromAttributes)
@@ -220,6 +222,9 @@ func resourceMetadataFromWire(wire resourceMetadataWire) ResourceMetadata {
 		if resourceInfo.PayloadType != "" {
 			metadata.PayloadType = resourceInfo.PayloadType
 		}
+		if resourceInfo.Secret != nil {
+			metadata.Secret = cloneBoolPointer(resourceInfo.Secret)
+		}
 		if resourceInfo.SecretInAttributes != nil {
 			metadata.SecretsFromAttributes = cloneStringSlice(*resourceInfo.SecretInAttributes)
 		}
@@ -258,6 +263,7 @@ func hasResourceInfo(resourceInfo resourceInfoWire) bool {
 		strings.TrimSpace(resourceInfo.AliasFromAttribute) != "" ||
 		strings.TrimSpace(resourceInfo.CollectionPath) != "" ||
 		strings.TrimSpace(resourceInfo.PayloadType) != "" ||
+		resourceInfo.Secret != nil ||
 		resourceInfo.SecretInAttributes != nil ||
 		resourceInfo.ExternalizedAttributes != nil
 }

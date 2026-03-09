@@ -20,7 +20,7 @@ case_run() {
   case_run_declarest resource save "${heuristic_path}" -f "${plaintext_payload_file}" -i json
   case_expect_failure
   case_expect_output_contains 'potential plaintext secrets detected'
-  case_expect_output_contains '--ignore'
+  case_expect_output_contains '--allow-plaintext'
 
   repo_dir=$(case_context_repo_base_dir) || return 1
   heuristic_repo_file="${repo_dir}/save-secret-guard/heuristic/resource.json"
@@ -29,13 +29,13 @@ case_run() {
     return 1
   fi
 
-  case_run_declarest resource save "${heuristic_path}" -f "${plaintext_payload_file}" -i json --ignore
+  case_run_declarest resource save "${heuristic_path}" -f "${plaintext_payload_file}" -i json --allow-plaintext
   case_expect_success
 
   case_run_declarest resource get "${heuristic_path}" --source repository -o json
   case_expect_success
   if ! jq -e '.password == "plain-secret" and .name == "acme"' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
-    printf 'expected --ignore save to persist plaintext payload\n' >&2
+    printf 'expected --allow-plaintext save to persist plaintext payload\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
   fi

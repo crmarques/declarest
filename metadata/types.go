@@ -21,10 +21,15 @@ type ResourceMetadata struct {
 	AliasFromAttribute     string                   `json:"aliasFromAttribute,omitempty" yaml:"aliasFromAttribute,omitempty"`
 	CollectionPath         string                   `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
+	Secret                 *bool                    `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretsFromAttributes  []string                 `json:"secretsFromAttributes,omitempty" yaml:"secretsFromAttributes,omitempty"`
 	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
 	Operations             map[string]OperationSpec `json:"operations,omitempty" yaml:"operations,omitempty"`
 	PayloadMutation        []PayloadMutationStep    `json:"payloadMutation,omitempty" yaml:"payloadMutation,omitempty"`
+}
+
+func (m ResourceMetadata) IsWholeResourceSecret() bool {
+	return m.Secret != nil && *m.Secret
 }
 
 type ExternalizedAttribute struct {

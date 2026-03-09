@@ -116,7 +116,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
 	bindSkipItemsFlag(command, &skipItemsFlag)
-	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "show plaintext values for metadata-declared secret attributes")
+	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "reveal masked secret values (both attribute-level and whole-resource secrets)")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")
 	bindHTTPMethodFlag(command, &httpMethod)
 	return command

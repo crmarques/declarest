@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const handleSecretsAllSentinel = "__all__"
+const secretAttributesAllSentinel = "__all__"
 
 func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var pathFlag string
@@ -19,9 +19,9 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var skipItemsFlag string
 	var asItems bool
 	var asOneResource bool
-	var asSecret bool
-	var ignore bool
-	var handleSecrets string
+	var secret bool
+	var allowPlaintext bool
+	var secretAttributes string
 	var overwrite bool
 	var push bool
 	var commitMessageAppend string
@@ -36,8 +36,8 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			"  declarest resource save /admin/realms --skip-items master,realm1",
 			"  cat payload.json | declarest resource save /customers/acme --payload -",
 			"  declarest resource save /customers/ --as-items < customers.json",
-			"  declarest resource save /customers/acme --handle-secrets",
-			"  declarest resource save /projects/platform/secrets/private-key --payload private.key --as-secret",
+			"  declarest resource save /customers/acme --secret-attributes",
+			"  declarest resource save /projects/platform/secrets/private-key --payload private.key --secret",
 			"  declarest resource save /customers/acme --overwrite",
 			"  declarest --context git resource save /customers/acme --payload payload.json --overwrite --push",
 		}, "\n"),
@@ -53,7 +53,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			handleSecretsEnabled, requestedSecretCandidates, err := parseSaveHandleSecretsFlag(command, handleSecrets)
+			secretAttributesEnabled, requestedSecretAttributes, err := parseSaveSecretAttributesFlag(command, secretAttributes)
 			if err != nil {
 				return err
 			}
@@ -105,11 +105,11 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				resourcesave.ExecuteOptions{
 					AsItems:                   asItems,
 					AsOneResource:             asOneResource,
-					AsSecret:                  asSecret,
-					Ignore:                    ignore,
+					Secret:                    secret,
+					AllowPlaintext:            allowPlaintext,
 					Force:                     overwrite,
-					HandleSecretsEnabled:      handleSecretsEnabled,
-					RequestedSecretCandidates: requestedSecretCandidates,
+					SecretAttributesEnabled:   secretAttributesEnabled,
+					RequestedSecretAttributes: requestedSecretAttributes,
 					SkipItems:                 skipItems,
 				},
 			); err != nil {
@@ -130,25 +130,25 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 	command.Flags().BoolVar(&asItems, "as-items", false, "save list payload entries as individual resources")
 	command.Flags().BoolVar(&asOneResource, "as-one-resource", false, "save payload as one resource file")
-	command.Flags().BoolVar(&asSecret, "as-secret", false, "store the whole saved resource payload in the secret store and persist only a root placeholder")
-	command.Flags().BoolVar(&ignore, "ignore", false, "ignore plaintext-secret safety validation when saving")
-	command.Flags().StringVar(&handleSecrets, "handle-secrets", "", "detect, store, and mask plaintext secrets while saving (optional comma-separated attributes)")
+	command.Flags().BoolVar(&secret, "secret", false, "store the whole resource payload in the secret store and persist only a placeholder")
+	command.Flags().BoolVar(&allowPlaintext, "allow-plaintext", false, "acknowledge saving resources that may contain plaintext secrets")
+	command.Flags().StringVar(&secretAttributes, "secret-attributes", "", "detect, store, and mask individual secret attributes (optional comma-separated JSON pointers; structured payloads only)")
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "override existing repository resources")
 	command.Flags().BoolVar(&push, "push", false, "push git repository changes after save (git repositories with remote only)")
 	bindRepositoryCommitMessageFlags(command, &commitMessageAppend, &commitMessageOverride)
-	handleSecretsFlag := command.Flags().Lookup("handle-secrets")
-	handleSecretsFlag.NoOptDefVal = handleSecretsAllSentinel
+	secretAttributesFlag := command.Flags().Lookup("secret-attributes")
+	secretAttributesFlag.NoOptDefVal = secretAttributesAllSentinel
 	return command
 }
 
-func parseSaveHandleSecretsFlag(command *cobra.Command, rawValue string) (bool, []string, error) {
-	flag := command.Flags().Lookup("handle-secrets")
+func parseSaveSecretAttributesFlag(command *cobra.Command, rawValue string) (bool, []string, error) {
+	flag := command.Flags().Lookup("secret-attributes")
 	if flag == nil || !flag.Changed {
 		return false, nil, nil
 	}
 
 	trimmed := strings.TrimSpace(rawValue)
-	if trimmed == "" || trimmed == handleSecretsAllSentinel {
+	if trimmed == "" || trimmed == secretAttributesAllSentinel {
 		return true, nil, nil
 	}
 
@@ -158,7 +158,7 @@ func parseSaveHandleSecretsFlag(command *cobra.Command, rawValue string) (bool, 
 	for _, raw := range items {
 		value := strings.TrimSpace(raw)
 		if value == "" {
-			return false, nil, cliutil.ValidationError("--handle-secrets contains an empty attribute value", nil)
+			return false, nil, cliutil.ValidationError("--secret-attributes contains an empty attribute value", nil)
 		}
 		if _, found := seen[value]; found {
 			continue

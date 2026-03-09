@@ -112,7 +112,13 @@ func (r *Orchestrator) applyDesiredState(
 		return resource.Resource{}, mutationErr
 	}
 
-	localForCompare, remoteForCompare, err := r.resolveComparedPayloads(ctx, resourceInfo, resourceMd, resourceInfo.Payload, remoteValue.Value)
+	localForCompare, remoteForCompare, err := r.resolveComparedPayloads(
+		ctx,
+		resourceInfo,
+		resourceMd,
+		contentFromResource(resourceInfo),
+		remoteValue,
+	)
 	if err != nil {
 		return resource.Resource{}, err
 	}
@@ -303,7 +309,13 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 	if remoteValue.Value != nil {
 		remotePayload = remoteValue.Value
 	}
-	localTransformed, remoteTransformed, err := r.resolveComparedPayloads(ctx, resourceInfo, resourceMd, localForCompare.Value, remotePayload)
+	localTransformed, remoteTransformed, err := r.resolveComparedPayloads(
+		ctx,
+		resourceInfo,
+		resourceMd,
+		localForCompare,
+		resource.Content{Value: remotePayload, Descriptor: remoteValue.Descriptor},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -325,15 +337,18 @@ func (r *Orchestrator) resolveComparedPayloads(
 	ctx context.Context,
 	resourceInfo resource.Resource,
 	resourceMd metadata.ResourceMetadata,
-	localValue resource.Value,
-	remoteValue resource.Value,
+	localContent resource.Content,
+	remoteContent resource.Content,
 ) (resource.Value, resource.Value, error) {
-	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localValue)
+	compareSpec, err := r.renderOperationSpec(ctx, resourceInfo, resourceMd, metadata.OperationCompare, localContent.Value)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	payloadType := strings.TrimSpace(resourceInfo.PayloadDescriptor.PayloadType)
+	payloadType := strings.TrimSpace(localContent.Descriptor.PayloadType)
+	if payloadType == "" {
+		payloadType = strings.TrimSpace(resourceInfo.PayloadDescriptor.PayloadType)
+	}
 	if payloadType == "" {
 		payloadType = strings.TrimSpace(resourceMd.PayloadType)
 	}
@@ -346,32 +361,96 @@ func (r *Orchestrator) resolveComparedPayloads(
 	}
 	if !resource.IsStructuredPayloadType(payloadType) {
 		if len(compareSpec.PayloadMutation) > 0 {
-			return nil, nil, faults.NewValidationError(
-				fmt.Sprintf("compare transforms require structured payloads, got %q", payloadType),
-				nil,
-			)
+			if !resourceMd.IsWholeResourceSecret() {
+				return nil, nil, faults.NewValidationError(
+					fmt.Sprintf("compare transforms require structured payloads, got %q", payloadType),
+					nil,
+				)
+			}
+
+			localInput := compareInputForWholeResourceOpaquePayload(resourceInfo, resourceMd, localContent.Descriptor)
+			localTransformed, err := applyCompareTransforms(localInput, compareSpec)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if remoteContent.Value == nil {
+				return localTransformed, nil, nil
+			}
+
+			remoteInput := remoteContent.Value
+			if !isStructuredCompareValue(remoteInput) {
+				remoteInput = compareInputForWholeResourceOpaquePayload(resourceInfo, resourceMd, remoteContent.Descriptor)
+			}
+			remoteTransformed, err := applyCompareTransforms(remoteInput, compareSpec)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return localTransformed, remoteTransformed, nil
 		}
-		normalizedLocal, err := resource.Normalize(localValue)
+		normalizedLocal, err := resource.Normalize(localContent.Value)
 		if err != nil {
 			return nil, nil, err
 		}
-		normalizedRemote, err := resource.Normalize(remoteValue)
+		normalizedRemote, err := resource.Normalize(remoteContent.Value)
 		if err != nil {
 			return nil, nil, err
 		}
 		return normalizedLocal, normalizedRemote, nil
 	}
 
-	localTransformed, err := applyCompareTransforms(localValue, compareSpec)
+	localTransformed, err := applyCompareTransforms(localContent.Value, compareSpec)
 	if err != nil {
 		return nil, nil, err
 	}
-	remoteTransformed, err := applyCompareTransforms(remoteValue, compareSpec)
+	remoteTransformed, err := applyCompareTransforms(remoteContent.Value, compareSpec)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return localTransformed, remoteTransformed, nil
+}
+
+func compareInputForWholeResourceOpaquePayload(
+	resourceInfo resource.Resource,
+	resourceMd metadata.ResourceMetadata,
+	descriptor resource.PayloadDescriptor,
+) resource.Value {
+	resolved := descriptor
+	if !resource.IsPayloadDescriptorExplicit(resolved) && strings.TrimSpace(resourceMd.PayloadType) != "" {
+		resolved = resource.PayloadDescriptor{PayloadType: resourceMd.PayloadType}
+	}
+	resolved = resource.NormalizePayloadDescriptor(resolved)
+	input := map[string]any{}
+
+	if id := strings.TrimSpace(resourceInfo.RemoteID); id != "" {
+		input["id"] = id
+	}
+	if alias := strings.TrimSpace(resourceInfo.LocalAlias); alias != "" {
+		input["alias"] = alias
+		input["name"] = alias
+	}
+	if payloadType := strings.TrimSpace(resolved.PayloadType); payloadType != "" {
+		input["payloadType"] = payloadType
+	}
+	if contentType := strings.TrimSpace(resolved.MediaType); contentType != "" {
+		input["contentType"] = contentType
+	}
+	if extension := strings.TrimSpace(resolved.Extension); extension != "" {
+		input["payloadExtension"] = extension
+	}
+
+	return input
+}
+
+func isStructuredCompareValue(value resource.Value) bool {
+	switch value.(type) {
+	case map[string]any, []any:
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Orchestrator) Template(ctx context.Context, logicalPath string, content resource.Content) (resource.Content, error) {

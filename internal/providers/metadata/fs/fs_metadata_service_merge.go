@@ -31,6 +31,15 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	if err := validateAttributePointers("resourceInfo.secretInAttributes", metadata.SecretsFromAttributes); err != nil {
 		return err
 	}
+	if err := validateStructuredOnlyMetadataFields(resolvedPayloadType, metadata); err != nil {
+		return err
+	}
+	if metadata.IsWholeResourceSecret() && len(metadata.SecretsFromAttributes) > 0 {
+		return faults.NewValidationError(
+			"resourceInfo.secret: true and resourceInfo.secretInAttributes are mutually exclusive",
+			nil,
+		)
+	}
 	if err := validateStructuredPayloadDirectives("metadata defaults", resolvedPayloadType, metadata.PayloadMutation, nil); err != nil {
 		return err
 	}
@@ -53,6 +62,53 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		if err := validateOperationValidationSpec(metadatadomain.Operation(key), operationSpec.Validate); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateStructuredOnlyMetadataFields(
+	payloadType string,
+	metadata metadatadomain.ResourceMetadata,
+) error {
+	if strings.TrimSpace(payloadType) == "" || resource.IsStructuredPayloadType(payloadType) {
+		return nil
+	}
+
+	if strings.TrimSpace(metadata.IDFromAttribute) != "" {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resourceInfo.idFromAttribute requires structured payload type (json, yaml); got %q",
+				payloadType,
+			),
+			nil,
+		)
+	}
+	if strings.TrimSpace(metadata.AliasFromAttribute) != "" {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resourceInfo.aliasFromAttribute requires structured payload type (json, yaml); got %q",
+				payloadType,
+			),
+			nil,
+		)
+	}
+	if len(metadata.SecretsFromAttributes) > 0 {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resourceInfo.secretInAttributes requires structured payload type (json, yaml); got %q; use resourceInfo.secret: true for whole-resource secrets",
+				payloadType,
+			),
+			nil,
+		)
+	}
+	if len(metadata.ExternalizedAttributes) > 0 {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resourceInfo.externalizedAttributes requires structured payload type (json, yaml); got %q",
+				payloadType,
+			),
+			nil,
+		)
 	}
 	return nil
 }

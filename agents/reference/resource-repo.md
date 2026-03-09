@@ -28,7 +28,7 @@ Define local repository semantics for resource persistence, metadata storage, pa
 11. `clean` MUST remove uncommitted tracked and untracked worktree changes for git repositories and MUST be a no-op for filesystem repositories.
 12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile (detailed receiver behavior is defined in `agents/reference/k8s-operator.md`).
 13. Resource and collection metadata sidecars MUST support `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default.
-14. When `resource save --as-secret` is selected, the repository payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream files).
+14. When `resource save --secret` is selected or metadata-driven whole-resource secret handling applies, the repository payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream files).
 
 ## Data Contracts
 Layout contract:
@@ -80,7 +80,7 @@ Policy contracts:
 2. Save `/projects/platform/readme` as plain text writes `/projects/platform/readme/resource.txt`.
 3. Save `/certificates/ca` as octet-stream without an existing file writes `/certificates/ca/resource.bin`.
 4. Save `/projects/platform/secrets/private-key` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` and still treats the payload as octet-stream.
-5. Save `/projects/platform/secrets/private-key --as-secret` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` containing only `{{secret .}}` while the original payload bytes live in the secret store.
+5. Save `/projects/platform/secrets/private-key --secret` from input file `private.key` writes `/projects/platform/secrets/private-key/resource.key` containing only `{{secret .}}` while the original payload bytes live in the secret store.
 6. Set collection metadata for `/customers` writes `/customers/_/metadata.yaml`.
 7. Alias change from `acme` to `acme-inc` moves payload from `/customers/acme/resource.*` to `/customers/acme-inc/resource.*`.
 8. `status` on a repository without remote configuration returns `state: no_remote` with zero ahead/behind counts.

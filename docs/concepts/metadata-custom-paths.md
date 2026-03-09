@@ -55,7 +55,7 @@ That means you often only override paths for the operations that truly differ.
 
 ## Keycloak example: logical `user-registry` backed by `/components`
 
-Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.json`):
+Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.yaml`):
 
 ```json
 {
@@ -84,7 +84,7 @@ What this achieves:
 
 ## Keycloak example: operation override on executions
 
-A second fixture (`.../authentication/flows/_/executions/_/metadata.json`) overrides operation paths and payload shape.
+A second fixture (`.../authentication/flows/_/executions/_/metadata.yaml`) overrides operation paths and payload shape.
 
 Key patterns:
 

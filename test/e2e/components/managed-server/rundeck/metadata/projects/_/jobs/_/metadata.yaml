@@ -1,0 +1,38 @@
+resourceInfo:
+  idFromAttribute: /id
+  aliasFromAttribute: /name
+  collectionPath: /projects/{{.project}}/jobs
+  externalizedAttributes:
+  - path: /sequence/commands/*/script
+    file: script.sh
+operationsInfo:
+  createResource:
+    httpMethod: POST
+    path: /project/{{.project}}/jobs/import
+    query:
+      dupeOption: create
+      uuidOption: preserve
+    payloadMutation:
+    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
+  getResource:
+    path: /job/{{.id}}
+    payloadMutation:
+    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'
+  updateResource:
+    httpMethod: POST
+    path: /project/{{.project}}/jobs/import
+    query:
+      dupeOption: update
+      uuidOption: preserve
+    payloadMutation:
+    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
+  deleteResource:
+    path: /job/{{.id}}
+  listCollection:
+    path: /project/{{.project}}/jobs
+    payloadMutation:
+    - jqExpression: 'map({id: (.id // .uuid // .name), name: (.name // (.id // "")), project: (.project // "{{.project}}"), description: (.description // "")})'
+  compareResources:
+    path: /job/{{.id}}
+    payloadMutation:
+    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'

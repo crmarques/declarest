@@ -482,6 +482,85 @@ func TestFSMetadataValidation(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
+func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
+	t.Parallel()
+
+	wholeSecret := true
+
+	testCases := []struct {
+		name    string
+		meta    metadatadomain.ResourceMetadata
+		want    string
+		wantAll []string
+	}{
+		{
+			name: "id_from_attribute_requires_structured_payload",
+			meta: metadatadomain.ResourceMetadata{
+				PayloadType:     "text",
+				IDFromAttribute: "/id",
+			},
+			want: "resourceInfo.idFromAttribute requires structured payload type (json, yaml)",
+		},
+		{
+			name: "alias_from_attribute_requires_structured_payload",
+			meta: metadatadomain.ResourceMetadata{
+				PayloadType:        "text",
+				AliasFromAttribute: "/name",
+			},
+			want: "resourceInfo.aliasFromAttribute requires structured payload type (json, yaml)",
+		},
+		{
+			name: "secret_in_attributes_requires_structured_payload",
+			meta: metadatadomain.ResourceMetadata{
+				PayloadType:           "text",
+				SecretsFromAttributes: []string{"/password"},
+			},
+			wantAll: []string{
+				"resourceInfo.secretInAttributes requires structured payload type (json, yaml)",
+				"resourceInfo.secret: true",
+			},
+		},
+		{
+			name: "externalized_attributes_requires_structured_payload",
+			meta: metadatadomain.ResourceMetadata{
+				PayloadType: "text",
+				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
+					{Path: "/script", File: "script.sh"},
+				},
+			},
+			want: "resourceInfo.externalizedAttributes requires structured payload type (json, yaml)",
+		},
+		{
+			name: "whole_resource_secret_and_secret_attributes_are_mutually_exclusive",
+			meta: metadatadomain.ResourceMetadata{
+				Secret:                &wholeSecret,
+				SecretsFromAttributes: []string{"/password"},
+			},
+			want: "resourceInfo.secret: true and resourceInfo.secretInAttributes are mutually exclusive",
+		},
+	}
+
+	for _, tt := range testCases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := NewFSMetadataService(t.TempDir())
+			ctx := context.Background()
+			err := service.Set(ctx, "/secrets/app", tt.meta)
+			assertTypedCategory(t, err, faults.ValidationError)
+			if tt.want != "" && !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected error to contain %q, got %q", tt.want, err.Error())
+			}
+			for _, fragment := range tt.wantAll {
+				if !strings.Contains(err.Error(), fragment) {
+					t.Fatalf("expected error to contain %q, got %q", fragment, err.Error())
+				}
+			}
+		})
+	}
+}
+
 func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	t.Parallel()
 

@@ -148,7 +148,7 @@ Holds behavior directives for a resource or collection.
 
 Contract groups:
 1. `resourceInfo` identity mapping (`idFromAttribute`, `aliasFromAttribute`), optional `collectionPath` override, and optional `payloadType` override.
-2. `resourceInfo` secret mapping (`secretInAttributes`).
+2. `resourceInfo` secret mapping (`secret`, `secretInAttributes`).
 3. `resourceInfo` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operationsInfo` directives (`createResource`, `updateResource`, `deleteResource`, `getResource`, `compareResources`, `listCollection`).
 5. operation wire fields (`path`, `httpMethod`, `query`, `httpHeaders`, `body`, `payloadMutation[*].{selectAttributes,suppressAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `httpHeaders` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.

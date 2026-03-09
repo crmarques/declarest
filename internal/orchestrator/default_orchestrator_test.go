@@ -1683,9 +1683,9 @@ func (f *fakeRepository) ReadResourceArtifact(_ context.Context, logicalPath str
 
 	return append([]byte(nil), content...), nil
 }
-func (f *fakeRepository) Init(context.Context) error                 { return nil }
-func (f *fakeRepository) Refresh(context.Context) error              { return nil }
-func (f *fakeRepository) Clean(context.Context) error                { return nil }
+func (f *fakeRepository) Init(context.Context) error    { return nil }
+func (f *fakeRepository) Refresh(context.Context) error { return nil }
+func (f *fakeRepository) Clean(context.Context) error   { return nil }
 func (f *fakeRepository) Reset(context.Context, repository.ResetPolicy) error {
 	return nil
 }
@@ -2171,6 +2171,56 @@ func TestOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
 	}
 	if !reflect.DeepEqual(item.Payload, serverManager.updateValue) {
 		t.Fatalf("expected payload from force-update response, got %#v", item.Payload)
+	}
+}
+
+func TestOrchestratorApplyWholeResourceOpaqueSecretUsesCompareProjection(t *testing.T) {
+	t.Parallel()
+
+	wholeResourceSecret := true
+	md := metadatadomain.ResourceMetadata{
+		Secret: &wholeResourceSecret,
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCompare): {
+				PayloadMutation: jqMutation(`if type == "object" and has("meta") then {name: (.name // "{{.id}}"), type: (.meta["Rundeck-key-type"] // "password"), contentType: (.meta["Rundeck-content-type"] // "application/x-rundeck-data-password")} else {name: (.name // "{{.id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" elif (.contentType // "") == "application/octet-stream" then "private" else "password" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" elif (.type // "") == "private" then "application/octet-stream" else "application/x-rundeck-data-password" end))} end`),
+			},
+		},
+	}
+
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"name": "private-key",
+			"meta": map[string]any{
+				"Rundeck-key-type":     "private",
+				"Rundeck-content-type": "application/octet-stream",
+			},
+		},
+	}
+
+	orchestrator := &Orchestrator{
+		metadata: &fakeMetadata{resolveValue: md},
+		server:   serverManager,
+	}
+
+	item, err := orchestrator.ApplyWithContent(
+		context.Background(),
+		"/projects/platform/secrets/private-key",
+		resource.Content{
+			Value: resource.BinaryValue{Bytes: []byte("private-key-bytes")},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+				Extension: ".key",
+			}),
+		},
+		orch.ApplyPolicy{},
+	)
+	if err != nil {
+		t.Fatalf("ApplyWithContent returned error: %v", err)
+	}
+	if serverManager.createCalled || serverManager.updateCalled {
+		t.Fatalf("expected opaque whole-resource secret apply no-op, got create=%t update=%t", serverManager.createCalled, serverManager.updateCalled)
+	}
+	if !reflect.DeepEqual(item.Payload, serverManager.getValue) {
+		t.Fatalf("expected no-op apply to return remote payload, got %#v", item.Payload)
 	}
 }
 

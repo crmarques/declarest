@@ -11,6 +11,9 @@ case_run() {
   local secret_path="${project_path}/secrets/${secret_name}"
   local project_source_file
   local project_payload_file="${E2E_CASE_TMP_DIR}/project.json"
+  local private_key_file="${E2E_CASE_TMP_DIR}/private.key"
+  local private_key_name="tls-private-${RANDOM}${RANDOM}.key"
+  local private_key_path="${project_path}/secrets/${private_key_name}"
   local secret_metadata_file="${E2E_CASE_TMP_DIR}/secret-metadata.json"
   local secret_payload_file="${E2E_CASE_TMP_DIR}/secret.json"
   local armored_key_value
@@ -131,6 +134,27 @@ EOF
     'map(select(.name == $name and .type == "public" and .contentType == "application/pgp-keys")) | length == 1' \
     <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected secret collection listing to include the saved armored key metadata\n' >&2
+    printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
+    return 1
+  fi
+
+  cat >"${private_key_file}" <<'EOF'
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDKRGXqvNcJwJwA
+Hf9gVwB1g5B6Yq3N9mM2vByP0rG4Hk4F3m5k7lR8mWwJpB9Qxw7m0cS1d2e3f4g5
+-----END PRIVATE KEY-----
+EOF
+
+  case_run_declarest resource save "${private_key_path}" --payload "${private_key_file}" --secret --overwrite
+  case_expect_success
+
+  case_run_declarest resource apply "${private_key_path}"
+  case_expect_success
+
+  case_run_declarest resource get "${private_key_path}" --source managed-server -o json
+  case_expect_success
+  if ! jq -e '. == "{{secret .}}"' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
+    printf 'expected managed-server output to redact the whole-resource private key\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
   fi

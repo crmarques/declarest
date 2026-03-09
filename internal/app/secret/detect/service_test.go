@@ -120,8 +120,8 @@ func TestExecuteRepositoryScanDefaultsToRootAndSortsResults(t *testing.T) {
 	}
 
 	result, err := Execute(context.Background(), Dependencies{
-		Orchestrator:   orch,
-		Secrets: secrets,
+		Orchestrator: orch,
+		Secrets:      secrets,
 	}, Request{})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -185,8 +185,8 @@ func TestExecuteRepositoryScanRejectsUndetectedSecretAttributeFilter(t *testing.
 	}
 
 	_, err := Execute(context.Background(), Dependencies{
-		Orchestrator:   orch,
-		Secrets: secrets,
+		Orchestrator: orch,
+		Secrets:      secrets,
 	}, Request{
 		SecretAttribute: "token",
 	})
@@ -211,9 +211,9 @@ func TestExecuteFixPersistsDetectedAttributes(t *testing.T) {
 	meta := &fakeMetadata{}
 
 	_, err := Execute(context.Background(), Dependencies{
-		Orchestrator:   orch,
-		Metadata:       meta,
-		Secrets: secrets,
+		Orchestrator: orch,
+		Metadata:     meta,
+		Secrets:      secrets,
 	}, Request{Fix: true})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)

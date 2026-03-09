@@ -14,14 +14,14 @@ import (
 type Dependencies = appdeps.Dependencies
 
 type ExecuteOptions struct {
-	AsItems       bool
-	AsOneResource bool
-	AsSecret      bool
-	Ignore        bool
-	Force         bool
+	AsItems        bool
+	AsOneResource  bool
+	Secret         bool
+	AllowPlaintext bool
+	Force          bool
 
-	HandleSecretsEnabled      bool
-	RequestedSecretCandidates []string
+	SecretAttributesEnabled   bool
+	RequestedSecretAttributes []string
 	SkipItems                 []string
 }
 
@@ -40,20 +40,20 @@ func Execute(
 	if options.AsItems && options.AsOneResource {
 		return faults.NewValidationError("flags --as-items and --as-one-resource cannot be used together", nil)
 	}
-	if options.AsSecret && options.AsItems {
-		return faults.NewValidationError("flags --as-secret and --as-items cannot be used together", nil)
+	if options.Secret && options.AsItems {
+		return faults.NewValidationError("flags --secret and --as-items cannot be used together", nil)
 	}
 	if options.AsOneResource && len(options.SkipItems) > 0 {
 		return faults.NewValidationError("flag --skip-items is not supported with --as-one-resource", nil)
 	}
-	if options.AsSecret && len(options.SkipItems) > 0 {
-		return faults.NewValidationError("flag --skip-items is not supported with --as-secret", nil)
+	if options.Secret && len(options.SkipItems) > 0 {
+		return faults.NewValidationError("flag --skip-items is not supported with --secret", nil)
 	}
-	if options.AsSecret && options.HandleSecretsEnabled {
-		return faults.NewValidationError("flags --as-secret and --handle-secrets cannot be used together", nil)
+	if options.Secret && options.SecretAttributesEnabled {
+		return faults.NewValidationError("flags --secret and --secret-attributes cannot be used together", nil)
 	}
-	if options.AsSecret && options.Ignore {
-		return faults.NewValidationError("flags --as-secret and --ignore cannot be used together", nil)
+	if options.Secret && options.AllowPlaintext {
+		return faults.NewValidationError("flags --secret and --allow-plaintext cannot be used together", nil)
 	}
 
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
@@ -95,10 +95,10 @@ func Execute(
 				remoteValue,
 				options.AsItems,
 				options.AsOneResource,
-				options.AsSecret,
-				options.Ignore,
-				options.HandleSecretsEnabled,
-				options.RequestedSecretCandidates,
+				options.Secret,
+				options.AllowPlaintext,
+				options.SecretAttributesEnabled,
+				options.RequestedSecretAttributes,
 				options.Force,
 				options.SkipItems,
 			); err != nil {
@@ -140,12 +140,34 @@ func Execute(
 		value,
 		options.AsItems,
 		options.AsOneResource,
-		options.AsSecret,
-		options.Ignore,
-		options.HandleSecretsEnabled,
-		options.RequestedSecretCandidates,
+		options.Secret,
+		options.AllowPlaintext,
+		options.SecretAttributesEnabled,
+		options.RequestedSecretAttributes,
 		options.Force,
 		options.SkipItems,
+	)
+}
+
+func validateSecretAttributesPayloadType(
+	descriptor resource.PayloadDescriptor,
+	enabled bool,
+) error {
+	if !enabled {
+		return nil
+	}
+
+	resolved := resource.NormalizePayloadDescriptor(descriptor)
+	if resource.IsStructuredPayloadType(resolved.PayloadType) {
+		return nil
+	}
+
+	return faults.NewValidationError(
+		fmt.Sprintf(
+			"--secret-attributes requires structured payload (json, yaml); got %q; use --secret for whole-resource secrets",
+			resolved.PayloadType,
+		),
+		nil,
 	)
 }
 
@@ -158,10 +180,10 @@ func saveResolvedPathPayload(
 	content resource.Content,
 	asItems bool,
 	asOneResource bool,
-	asSecret bool,
-	ignore bool,
-	handleSecretsEnabled bool,
-	requestedSecretCandidates []string,
+	secret bool,
+	allowPlaintext bool,
+	secretAttributesEnabled bool,
+	requestedSecretAttributes []string,
 	force bool,
 	skipItems []string,
 ) error {
@@ -169,23 +191,35 @@ func saveResolvedPathPayload(
 	if err != nil {
 		return err
 	}
+	if err := validateSecretAttributesPayloadType(content.Descriptor, secretAttributesEnabled); err != nil {
+		return err
+	}
 
-	if asSecret || asOneResource || (!asItems && !isListPayload) {
+	autoWholeResourceSecret := false
+	if !secret && !secretAttributesEnabled && !asItems {
+		resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, resolvedPath)
+		if err != nil {
+			return err
+		}
+		autoWholeResourceSecret = resolvedMetadata.IsWholeResourceSecret()
+	}
+
+	if secret || autoWholeResourceSecret || asOneResource || (!asItems && !isListPayload) {
 		if err := ensureSaveTargetAllowed(ctx, repositoryService, resolvedPath, force); err != nil {
 			return err
 		}
-		if asSecret {
+		if secret || autoWholeResourceSecret {
 			return saveResolvedPathAsSecret(ctx, deps, orchestratorService, resolvedPath, content)
 		}
 		value := content.Value
-		if handleSecretsEnabled {
+		if secretAttributesEnabled {
 			value, unhandled, err := handleSaveSecrets(
 				ctx,
 				deps,
 				resolvedPath,
 				value,
 				"",
-				requestedSecretCandidates,
+				requestedSecretAttributes,
 			)
 			if err != nil {
 				return err
@@ -194,7 +228,7 @@ func saveResolvedPathPayload(
 			if err != nil {
 				return err
 			}
-			blockingCandidates := filterSaveSecretCandidatesForSafety(unhandled, declaredCandidates, ignore)
+			blockingCandidates := filterSaveSecretCandidatesForSafety(unhandled, declaredCandidates, allowPlaintext)
 			if len(blockingCandidates) > 0 {
 				return saveSecretSafetyError(resolvedPath, blockingCandidates)
 			}
@@ -207,7 +241,7 @@ func saveResolvedPathPayload(
 		if err != nil {
 			return err
 		}
-		if err := enforceSaveSecretSafety(ctx, deps, resolvedPath, value, ignore); err != nil {
+		if err := enforceSaveSecretSafety(ctx, deps, resolvedPath, value, allowPlaintext); err != nil {
 			return err
 		}
 		return orchestratorService.Save(ctx, resolvedPath, resource.Content{
@@ -237,10 +271,10 @@ func saveResolvedPathPayload(
 	if err != nil {
 		return err
 	}
-	if handleSecretsEnabled {
+	if secretAttributesEnabled {
 		selectedCandidates, unhandledCandidates, err := selectSaveSecretCandidates(
 			collectionCandidates,
-			requestedSecretCandidates,
+			requestedSecretAttributes,
 			true,
 		)
 		if err != nil {
@@ -273,7 +307,7 @@ func saveResolvedPathPayload(
 			return err
 		}
 
-		blockingCandidates := filterSaveSecretCandidatesForSafety(unhandledCandidates, declaredCandidates, ignore)
+		blockingCandidates := filterSaveSecretCandidatesForSafety(unhandledCandidates, declaredCandidates, allowPlaintext)
 		if len(blockingCandidates) > 0 {
 			return saveSecretSafetyError(resolvedPath, blockingCandidates)
 		}
@@ -293,7 +327,7 @@ func saveResolvedPathPayload(
 			return err
 		}
 
-		blockingCandidates := filterSaveSecretCandidatesForSafety(collectionCandidates, declaredCandidates, ignore)
+		blockingCandidates := filterSaveSecretCandidatesForSafety(collectionCandidates, declaredCandidates, allowPlaintext)
 		if len(blockingCandidates) > 0 {
 			return saveSecretSafetyError(resolvedPath, blockingCandidates)
 		}

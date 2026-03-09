@@ -20,7 +20,7 @@ E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
+.PHONY: help fmt vet lint test docs e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -54,6 +54,9 @@ e2e-validate-components: ## Validate all e2e component contracts and fixtures
 	bash ./test/e2e/run-e2e.sh --validate-components
 
 check: fmt lint test ## Run formatting, linting, and tests
+
+docs: ## Build the MkDocs documentation site locally
+	@mkdocs build --strict --clean --site-dir .docs
 
 build: ## Compile the declarest binary into $(BIN_DIR)/
 	@mkdir -p $(BIN_DIR)

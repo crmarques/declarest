@@ -665,7 +665,7 @@ func TestDetectSaveSecretCandidatesForCollection(t *testing.T) {
 func TestEnforceSaveSecretSafety(t *testing.T) {
 	t.Parallel()
 
-	t.Run("fails_without_ignore_when_plaintext_secret_detected", func(t *testing.T) {
+	t.Run("fails_without_allow_plaintext_when_plaintext_secret_detected", func(t *testing.T) {
 		t.Parallel()
 
 		err := enforceSaveSecretSafety(
@@ -679,12 +679,12 @@ func TestEnforceSaveSecretSafety(t *testing.T) {
 		if !strings.Contains(err.Error(), "warning: potential plaintext secrets detected") {
 			t.Fatalf("expected warning in error message, got %q", err.Error())
 		}
-		if !strings.Contains(err.Error(), "--ignore") {
-			t.Fatalf("expected --ignore hint in error message, got %q", err.Error())
+		if !strings.Contains(err.Error(), "--allow-plaintext") {
+			t.Fatalf("expected --allow-plaintext hint in error message, got %q", err.Error())
 		}
 	})
 
-	t.Run("allows_plaintext_secret_when_ignore_is_enabled", func(t *testing.T) {
+	t.Run("allows_plaintext_secret_when_allow_plaintext_is_enabled", func(t *testing.T) {
 		t.Parallel()
 
 		err := enforceSaveSecretSafety(
@@ -928,7 +928,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			map[string]any{"password": "plain-secret"},
 		}, "", nil)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "--handle-secrets requires object payloads") {
+		if !strings.Contains(err.Error(), "--secret-attributes requires structured payload (json, yaml)") {
 			t.Fatalf("expected non-object validation message, got %q", err.Error())
 		}
 	})
@@ -999,7 +999,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			[]string{"/apiToken"},
 		)
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), `requested --handle-secrets attribute "/apiToken" was not detected`) {
+		if !strings.Contains(err.Error(), `requested --secret-attributes attribute "/apiToken" was not detected`) {
 			t.Fatalf("expected unknown requested candidate error, got %q", err.Error())
 		}
 	})
@@ -1037,6 +1037,22 @@ func TestHandleSaveSecrets(t *testing.T) {
 			t.Fatalf("expected metadata override path to be updated, got %#v", metadata.SecretsFromAttributes)
 		}
 	})
+}
+
+func TestValidateSecretAttributesPayloadType(t *testing.T) {
+	t.Parallel()
+
+	err := validateSecretAttributesPayloadType(
+		resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{Extension: ".key"}),
+		true,
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if !strings.Contains(err.Error(), "--secret-attributes requires structured payload") {
+		t.Fatalf("expected structured payload validation error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "--secret") {
+		t.Fatalf("expected whole-resource secret guidance, got %q", err.Error())
+	}
 }
 
 func TestSaveSecretMetadataPathForCollection(t *testing.T) {
@@ -1323,9 +1339,9 @@ func (f *fakeSaveRepository) Exists(_ context.Context, logicalPath string) (bool
 	return found, nil
 }
 
-func (f *fakeSaveRepository) Init(context.Context) error                 { return nil }
-func (f *fakeSaveRepository) Refresh(context.Context) error              { return nil }
-func (f *fakeSaveRepository) Clean(context.Context) error                { return nil }
+func (f *fakeSaveRepository) Init(context.Context) error    { return nil }
+func (f *fakeSaveRepository) Refresh(context.Context) error { return nil }
+func (f *fakeSaveRepository) Clean(context.Context) error   { return nil }
 func (f *fakeSaveRepository) Reset(context.Context, repositorydomain.ResetPolicy) error {
 	return nil
 }

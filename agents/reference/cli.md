@@ -165,16 +165,17 @@ Interactive config commands:
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
 32. `resource save` MUST support mutually exclusive `--as-items` and `--as-one-resource` flags.
-33. `resource save` MUST support `--as-secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.` while persisting only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix.
+33. `resource save` MUST support `--secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.`, persist only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix, and persist metadata `resourceInfo.secret: true`.
 33. `resource save` MUST default to `--as-items` behavior when input payload is a list (`[]` or object with `items` array).
 34. `resource save` MUST support `--skip-items <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
 35. `resource save --skip-items` MUST fail with `ValidationError` when `--as-one-resource` is selected.
-36. `resource save --as-secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--as-items`, `--skip-items`, `--handle-secrets`, and `--ignore`.
-34. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--ignore` or `--handle-secrets` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
-35. `resource save --handle-secrets` MUST accept an optional comma-separated attribute list; when no list is provided, all detected plaintext secret candidates MUST be handled.
-36. `resource save --handle-secrets` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
+36. `resource save --secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--as-items`, `--skip-items`, `--secret-attributes`, and `--allow-plaintext`.
+37. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resourceInfo.secretInAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--allow-plaintext` or `--secret-attributes` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--overwrite`.
+38. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resourceInfo.secret: true` and `--secret-attributes` is not selected.
+39. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
+40. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resourceInfo.secretInAttributes` for the saved logical path.
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
-38. When `resource save --handle-secrets` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--ignore` is set.
+38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
 39. For collection list saves (`--as-items` default), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
 40. `resource edit` MUST resolve the edit source from the local repository first, using the same literal-then-bounded metadata-aware fallback as other repository-backed single-resource workflows; when that local resolution returns `NotFound`, it MUST fall back to one remote read for the requested logical path before opening the editor, and it MUST persist the edited payload only when decoding and save validation succeed.
 41. `resource edit` on git repository contexts MUST commit repository changes and MAY autoSync when the git context enables repository autoSync.
@@ -293,9 +294,9 @@ Interactive config commands:
 5. `resource get|list|delete` receives invalid `--source` values.
 8. `resource save` receives both `--as-items` and `--as-one-resource`.
 9. `resource save --as-items` receives non-list input.
-10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--ignore` nor `--handle-secrets` is set, detects metadata-declared plaintext candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--overwrite`.
-11. `resource save --handle-secrets=<attr-list>` includes one or more attributes that are not detected in the payload.
-12. `resource save --as-secret` is combined with `--as-items`, `--skip-items`, `--handle-secrets`, or `--ignore`.
+10. `resource save` detects non-metadata-declared potential plaintext secret values and neither `--allow-plaintext` nor `--secret-attributes` is set, detects metadata-declared plaintext or whole-resource secret candidates without a configured secret provider, or attempts to overwrite an existing repository resource without `--overwrite`.
+11. `resource save --secret-attributes=<attr-list>` includes one or more attributes that are not detected in the payload, or is selected for a non-structured payload.
+12. `resource save --secret` is combined with `--as-items`, `--skip-items`, `--secret-attributes`, or `--allow-plaintext`.
 13. `resource apply|create|update|save` receives a path-looking `--payload` value that does not resolve to an input file.
 14. `resource create` is invoked without payload input and no matching local resources exist under the target path.
 15. `resource apply`, `resource create`, or `resource update` targets a collection path with no local resources.
@@ -323,8 +324,8 @@ Interactive config commands:
 35. `--output auto|text` is requested for a collection or multi-item result that contains binary payloads.
 
 ## Edge Cases
-1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--handle-secrets`) but no secret manager is configured.
-2. `resource save --handle-secrets` handles only a subset and fails with warning for the remaining non-metadata-declared plaintext candidates unless `--ignore` is set.
+1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--secret-attributes`) but no secret manager is configured.
+2. `resource save --secret-attributes` handles only a subset and fails with warning for the remaining non-metadata-declared plaintext candidates unless `--allow-plaintext` is set.
 3. `delete` invoked on collection without recursive force confirmation.
 4. `metadata infer` called with missing OpenAPI source.
 5. Completion for alias path when remote ID differs.
@@ -384,11 +385,11 @@ Interactive config commands:
 22. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
 23. `declarest resource save /customers --as-one-resource < list.json` stores the list payload in one resource file.
 24. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
-25. `declarest resource save /customers/acme --ignore < payload.json` bypasses plaintext-secret save guard.
+25. `declarest resource save /customers/acme --allow-plaintext < payload.json` bypasses plaintext-secret save guard.
 26. `declarest resource save /customers/acme < payload.json` with metadata `resourceInfo.secretInAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
-27. `declarest resource save /customers/acme --handle-secrets < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
-28. `declarest resource save /customers/acme --handle-secrets=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--ignore` is set.
-29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --as-secret --overwrite` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.` and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
+27. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resourceInfo.secretInAttributes`.
+28. `declarest resource save /customers/acme --secret-attributes=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
+29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --overwrite` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resourceInfo.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
 30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --overwrite` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
 31. `declarest --context git resource save /customers/acme --payload payload.json --overwrite --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
 32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resourceInfo.secretInAttributes` for `/customers/acme`.

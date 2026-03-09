@@ -169,4 +169,3 @@ func appendDiffEntry(
 		Remote:       remote,
 	})
 }
-

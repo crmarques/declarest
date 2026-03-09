@@ -814,6 +814,9 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		if spec.Path != "/storage/keys/projects/platform/private-key" {
 			t.Fatalf("expected project key-storage path, got %q", spec.Path)
 		}
+		if spec.Accept != defaultMediaType {
+			t.Fatalf("expected metadata accept %q, got %q", defaultMediaType, spec.Accept)
+		}
 		if spec.ContentType != "application/octet-stream" {
 			t.Fatalf("expected octet-stream content type, got %q", spec.ContentType)
 		}
@@ -830,6 +833,36 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		}
 		if bodyContent.Descriptor.Extension != ".key" {
 			t.Fatalf("expected .key descriptor extension, got %q", bodyContent.Descriptor.Extension)
+		}
+	})
+
+	t.Run("secret_get_requests_metadata_for_raw_private_key_payloads", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/secrets/private-key")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/secrets/private-key",
+			Payload:     resource.BinaryValue{Bytes: []byte("private-key-bytes")},
+			PayloadDescriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+				Extension: ".key",
+			}),
+		}, md, metadata.OperationGet)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/storage/keys/projects/platform/private-key" {
+			t.Fatalf("expected project key-storage path, got %q", spec.Path)
+		}
+		if spec.Accept != defaultMediaType {
+			t.Fatalf("expected metadata accept %q, got %q", defaultMediaType, spec.Accept)
+		}
+		if spec.Body != nil {
+			t.Fatalf("expected GET request to have no body, got %#v", spec.Body)
 		}
 	})
 }

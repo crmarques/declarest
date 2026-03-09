@@ -24,7 +24,7 @@ Keycloak example:
 
 Inspired by:
 
-- `test/e2e/components/managed-server/keycloak/metadata/admin/realms/_/user-registry/_/metadata.json`
+- `test/e2e/components/managed-server/keycloak/metadata/admin/realms/_/user-registry/_/metadata.yaml`
 
 ### Metadata
 
@@ -70,8 +70,8 @@ That is the core DeclaREST pattern for best-practices-drifting APIs.
 
 Inspired by:
 
-- `.../authentication/flows/_/metadata.json`
-- `.../authentication/flows/_/executions/_/metadata.json`
+- `.../authentication/flows/_/metadata.yaml`
+- `.../authentication/flows/_/executions/_/metadata.yaml`
 
 The parent flow metadata sets identity defaults for flows.
 A deeper metadata file for `executions` overrides specific operations and payloads.
@@ -137,7 +137,7 @@ If the logical path alias contains spaces, shell quoting matters.
 
 Inspired by:
 
-- `.../user-registry/_/mappers/_/metadata.json`
+- `.../user-registry/_/mappers/_/metadata.yaml`
 
 Pattern (simplified): use a shared backend collection endpoint, but filter rows based on the parent resource's resolved ID.
 
