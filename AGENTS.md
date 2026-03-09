@@ -57,7 +57,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 
 ## Commit guidance (agents)
 - Agents MUST NOT create, amend, or push commits themselves; the user runs `git commit` after the agent finishes preparing the change.
-- Agents MAY stage touched files to clarify the final diff, but they must leave the final commit execution to the user and should never stage unrelated modifications.
+- Agents MAY stage touched files to clarify the final diff, but only after all code changes and verifications are complete; they must leave the final commit execution to the user and should never stage unrelated modifications.
 - Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `managed-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
 - Each logical change needs a focused justification so that a Conventional Commit can still be composed if the user consents to committing; agents should reserve the actual phrasing until the user explicitly asks or approves the commit.
 - Before handing off, agents MUST:

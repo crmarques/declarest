@@ -1,5 +1,7 @@
 # Canonical Interfaces and Contracts
 
+**Quick navigation:** [Data Contracts (Types)](#data-contracts) | [Interface Contracts](#interface-contracts) | [Error Taxonomy](#error-taxonomy-and-propagation) | [Determinism](#determinism-requirements)
+
 ## Purpose
 Define stable contracts for shared interfaces, types, determinism, and error handling across bounded-context packages.
 
@@ -38,15 +40,12 @@ Represents client-facing application state assembled at startup.
 Required fields:
 1. `Contexts`: `config.ContextService` instance.
 2. `Orchestrator`: `orchestrator.Orchestrator` instance.
-3. `ResourceStore`: `repository.ResourceStore` instance.
-4. `RepositorySync`: `repository.RepositorySync` instance.
-5. `Metadata`: optional `metadata.MetadataService` instance.
-6. `Secrets`: optional `secrets.SecretProvider` instance.
-7. `ManagedServerClient`: optional `managedserver.ManagedServerClient` instance.
+3. `Services`: `orchestrator.ServiceAccessor` instance — provides access to individual domain services (`RepositoryStore()`, `RepositorySync()`, `MetadataService()`, `SecretProvider()`, `ManagedServerClient()`).
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
 2. clients MUST consume `bootstrap.Session` as their primary dependency entrypoint.
+3. clients that need direct access to sub-services (metadata inspection, secret management) MUST use `Services` via the `orchestrator.ServiceAccessor` interface rather than instantiating providers directly.
 
 Factory contract:
 1. `bootstrap.NewSession` MUST assemble default provider implementations.

@@ -31,27 +31,27 @@ nav:
       - Troubleshooting: getting-started/troubleshooting.md
   - Concepts:
       - Overview: concepts/overview.md
-      - Git repository as source of truth: concepts/git-source-of-truth.md
-      - Operator model: concepts/operator.md
-      - Managed Server: concepts/managed-server.md
-      - CLI role in GitOps: concepts/cli-in-gitops.md
       - Contexts: concepts/context.md
-      - Paths and Selectors: concepts/paths-and-selectors.md
       - Resource Files: concepts/resource.md
+      - Paths and Selectors: concepts/paths-and-selectors.md
       - Repository: concepts/repository.md
+      - Managed Server: concepts/managed-server.md
       - Metadata Overview: concepts/metadata.md
       - Metadata Overrides: concepts/metadata-overrides.md
-      - Custom Paths: concepts/metadata-custom-paths.md
       - Secrets: concepts/secrets.md
+      - Git repository as source of truth: concepts/git-source-of-truth.md
+      - CLI role in GitOps: concepts/cli-in-gitops.md
+      - Operator model: concepts/operator.md
   - How-to:
       - Sync Resources (CLI/CI): workflows/sync.md
-      - Run the Operator: workflows/operator.md
-      - Inspect and Debug Mappings: workflows/ad-hoc.md
-      - Editing Metadata and Contexts: workflows/editing.md
       - Repository Operations: workflows/repository.md
-      - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
-      - Custom API Modeling Recipes: workflows/custom-api-modeling.md
+      - Editing Metadata and Contexts: workflows/editing.md
       - Secrets and Safe Save: workflows/secrets-and-safe-save.md
+      - Inspect and Debug Mappings: workflows/ad-hoc.md
+      - Custom API Modeling Recipes: workflows/custom-api-modeling.md
+      - Custom Paths: concepts/metadata-custom-paths.md
+      - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
+      - Run the Operator: workflows/operator.md
   - Reference:
       - Configuration: reference/configuration.md
       - CLI: reference/cli.md

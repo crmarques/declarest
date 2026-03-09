@@ -1,5 +1,7 @@
 # Concepts Overview
 
+> New here? Complete the [Quickstart](../getting-started/quickstart.md) first to see DeclaREST in action, then come back to understand the building blocks.
+
 DeclaREST provides a consistent model for managing REST API resources as declarative files.
 
 - You define desired state in repository files.

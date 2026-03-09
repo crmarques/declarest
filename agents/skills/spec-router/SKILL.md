@@ -13,7 +13,11 @@ description: Route requests to the smallest useful set of reference files so con
 5. Record selected files and rationale before substantial edits.
 
 ## Scope-Expanding Factors
-1. Add `agents/reference/quality.md` when behavior, contracts, security, or verification expectations change.
+1. Add `agents/reference/quality.md` when behavior, contracts, security, or verification expectations change. Concrete triggers:
+   - Adding or modifying a normative MUST/SHOULD rule in any domain file.
+   - Changing method signatures, type fields, or error categories in interfaces.
+   - Touching CLI output format, exit codes, or status footer behavior.
+   - Any change to auth, secret, path-safety, or destructive-operation flows.
 2. Add `agents/reference/use-cases.md` when scenario design, acceptance criteria, or corner-case coverage changes.
 3. Add `AGENTS.md` and affected `agents/skills/*` files when instruction or skill workflows are touched.
 4. For mixed request types, use the strict union of required files across all matched matrix rows.

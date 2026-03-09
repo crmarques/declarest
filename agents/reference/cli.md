@@ -1,5 +1,7 @@
 # CLI Commands, Input Grammar, Output, and Completion
 
+**Quick navigation:** [Normative Rules](#normative-rules) | [Data Contracts](#data-contracts) | [CLI Input Grammar](#cli-input-grammar) | [Output Contract](#output-contract) | [Failure Modes](#failure-modes) | [Edge Cases](#edge-cases)
+
 ## Purpose
 Define user-facing CLI contract, command semantics, output stability, and completion behavior.
 
@@ -92,24 +94,24 @@ Selected command names:
 6. `context show`.
 7. `context current`.
 8. `context resolve`.
-8. `metadata resolve`.
-9. `metadata render`.
-10. `repository status`.
-11. `repository clean`.
-12. `repository commit`.
-13. `repository history`.
-14. `repository tree`.
-15. `resource request`.
-14. `secret mask`.
-15. `secret resolve`.
-16. `secret normalize`.
-17. `secret detect`.
-18. `completion`.
-19. `version`.
-20. `server get base-url`.
-21. `server get token-url`.
-22. `server get access-token`.
-23. `server check`.
+9. `metadata resolve`.
+10. `metadata render`.
+11. `repository status`.
+12. `repository clean`.
+13. `repository commit`.
+14. `repository history`.
+15. `repository tree`.
+16. `resource request`.
+17. `secret mask`.
+18. `secret resolve`.
+19. `secret normalize`.
+20. `secret detect`.
+21. `completion`.
+22. `version`.
+23. `server get base-url`.
+24. `server get token-url`.
+25. `server get access-token`.
+26. `server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
@@ -128,6 +130,8 @@ Interactive context commands:
 10. `context edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
 
 ## CLI Input Grammar
+
+### Metadata Commands
 1. Resource targets MUST be logical absolute paths.
 2. Metadata targets accept collection and resource scopes with positional path and `--path`.
 3. Metadata selector paths using intermediary namespace segments (for example `/admin/realms/_/clients/`) MUST be accepted by `metadata get|infer|render`.
@@ -141,6 +145,8 @@ Interactive context commands:
 11. Mutations from stdin MUST validate payload format before side effects.
 12. Option conflicts MUST produce usage errors.
 13. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
+
+### Resource Get, List, and Delete
 14. `resource get` MUST support `--source <managed-server|repository>`.
 15. `resource get` MUST default to `--source managed-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`.
 16. `resource get` MUST redact values for metadata-declared `resource.secretAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
@@ -152,6 +158,8 @@ Interactive context commands:
 22. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
 23. `resource delete` MUST support `--source <managed-server|repository|both>` and default to `--source managed-server`.
 23. `resource delete` MUST support `--recursive` and default to non-recursive collection deletes.
+
+### Resource Apply, Create, and Update
 24. `resource apply` MUST treat collection paths as batch targets resolved from local repository resources and default to non-recursive direct-child execution when payload input is absent.
 25. `resource apply --recursive` MUST include descendant resources under the target path when payload input is absent.
 26. `resource apply` MUST accept explicit payload input (`--payload` file path, `-`/stdin, inline JSON/YAML object text, or JSON Pointer assignments) for a single target path and use explicit input instead of loading repository payloads; apply MUST read remote state first, create only on `NotFound`, compare desired vs remote with metadata compare directives, and update only when drift exists unless `--force` is set.
@@ -162,6 +170,8 @@ Interactive context commands:
 31. `resource update --recursive` MUST include descendant resources under the target path when payload input is absent.
 32. `resource apply|create|update` explicit-input mode MUST accept a collection target path when metadata exposes a wildcard child under that path and the payload contains metadata-derived alias/id values; the CLI MUST infer one concrete child logical path from the payload identity before remote mutation, and explicit resource-path inputs MUST preserve identity-match validation behavior.
 32. `resource apply --force` MUST execute update after remote read even when metadata compare output indicates no drift.
+
+### Resource Save
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
 32. `resource save` MUST support `--mode <auto|items|single>`.
@@ -174,14 +184,17 @@ Interactive context commands:
 38. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
 39. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
 40. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
+### Secret Placeholder Resolution
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
 39. For collection list saves (`--mode auto` on list payloads or explicit `--mode items`), plaintext-secret candidate detection MUST be computed once per save from the collection payload set and then applied consistently across all list items.
+### Resource Edit and Copy
 40. `resource edit` MUST resolve the edit source from the local repository first, using the same literal-then-bounded metadata-aware fallback as other repository-backed single-resource workflows; when that local resolution returns `NotFound`, it MUST fall back to one remote read for the requested logical path before opening the editor, and it MUST persist the edited payload only when decoding and save validation succeed.
 41. `resource edit` on git repository contexts MUST commit repository changes and MAY autoSync when the git context enables repository autoSync.
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
 43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
+### Secret Detect and Get
 44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
 45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 46. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
@@ -191,6 +204,7 @@ Interactive context commands:
 50. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
 51. `secret get` with path+key input (`<path> <pointer>`, `--path`+`--key`, or `<path>:<pointer>`) MUST resolve the canonical secret key as `<path>:<pointer>`.
 52. `secret get --key` MUST require `--path`.
+### Context Commands
 49. Interactive context flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 50. `context show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
 51. `context add` MUST accept `--content-type <json|yaml>` for stdin or extension-less payloads, infer JSON or YAML from the payload file extension when present, and otherwise default extension-less input decoding to JSON.
@@ -198,6 +212,7 @@ Interactive context commands:
 53. `context add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
 54. `context resolve`, `context check`, and `context init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
 55. `context init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
+### Resource Request
 56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`.
 57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--content-type` when provided, otherwise by trusted file extension, otherwise by content heuristics (`JSON` for structured-looking input, `application/octet-stream` otherwise); binary input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
 58. `resource request post`, `resource request put`, and `resource request patch` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--content-type` when provided, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
@@ -210,9 +225,11 @@ Interactive context commands:
 62. `context add --set-current` with multiple imported contexts MUST require catalog `currentContext` or fail with `ValidationError`.
 63. `context add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
 64. `context update` and `context validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `context add`.
+### Help, Completion, and Bootstrap Gating
 65. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
 67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
+### Repository-Backed Fallback and Delete
 68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idAttribute`.
 69. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
 70. `resource delete --source managed-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
@@ -221,8 +238,10 @@ Interactive context commands:
 73. `resource save` with wildcard path segments and payload input (`--payload <path|->` or stdin) MUST fail with `ValidationError`.
 74. `resource save` wildcard expansions for resource targets MUST skip unresolved concrete `NotFound` reads and MUST return `NotFoundError` when no concrete targets resolve successfully.
 75. `resource diff` MUST resolve collection targets from local repository resources (direct-child by default), execute compare for each resolved resource, and when no collection targets match a deep path it MUST attempt single-resource fallback lookup before returning `NotFound`.
+### Context Template and Validation
 76. Interactive `context add` MUST support full context-schema authoring: prompt required fields for repository and managed-server providers, offer skip paths for optional sections, and enforce one-of prompt branching (for example oauth2 vs basic-auth vs custom-headers) by collecting only the selected option's fields.
 77. `context print-template` MUST output a commented YAML context catalog template that includes all supported configuration branches and explicitly marks mutually-exclusive blocks.
+### Repository Commands
 78. `repository push` MUST fail with `ValidationError` when the active repository type is `filesystem`, and it MUST fail with `ValidationError` when active repository type is `git` without `repository.git.remote` configuration.
 79. `repository clean` MUST discard uncommitted tracked and untracked changes for git repositories and MUST succeed as a no-op for filesystem repositories.
 80. `repository commit` MUST accept `--message`, `-m`, fail with `ValidationError` when the active repository type is `filesystem`, and create at most one local git commit from current worktree changes.
@@ -233,15 +252,18 @@ Interactive context commands:
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
 82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasAttribute` or `idAttribute`) present in the payload do not match the target path segment.
+### Git Auto-Commit and Push
 83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` as an override-only git commit message flag; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.autoSync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
 84. `resource delete` when repository deletion is selected (`--source repository|both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
 85. Auto-commit-enabled repository mutation commands (`resource save|delete|edit`) MUST require a clean git worktree before mutation to avoid committing unrelated changes.
 86. Commands that open editors (`context edit`, `resource edit`) MUST support `--editor <command>` to override the catalog `default-editor` and the built-in `vi` fallback.
 87. `resource edit` MUST reject resources whose resolved payload type is `octet-stream` with `ValidationError`.
 88. `resource request <method>` MUST support optional `--accept-type` and `--content-type` overrides for direct managed-server requests; when omitted, payload-type-aware defaults MAY be resolved from metadata, request content type, or response headers.
+### Git Auto-Init and Binary Payload
 87. Git-backed repository command flows and git-backed repository mutation post-actions (for example `repository status|clean|history|check|refresh|reset|push` and resource auto-commit/status checks) MUST auto-initialize the local git repository when `.git/` is missing before continuing operation-specific behavior.
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source managed-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
+### Server Commands
 90. `server get base-url` MUST print the active context `managedServer.http.baseURL` and fail with `ValidationError` when `managedServer.http` is not configured.
 91. `server get token-url` MUST print the active context `managedServer.http.auth.oauth2.tokenURL` and fail with `ValidationError` when OAuth2 auth is not configured.
 92. `server get access-token` MUST fetch and print the OAuth2 access token from `managedServer.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
@@ -252,6 +274,8 @@ Interactive context commands:
 97. `repository commit` MUST support `--output text|json|yaml`; `json|yaml` output MUST expose a stable `committed` success indicator, and text-mode success SHOULD use the standard CLI execution-status footer.
 
 ## Output Contract
+
+### General Output Rules
 1. Success output MAY be human-readable by default.
 2. Structured output mode MUST define stable keys for automation.
 3. Error output MUST include category and actionable next step where possible.
@@ -261,23 +285,28 @@ Interactive context commands:
 7. `repository status --verbose` text output MUST append deterministic git-style short worktree detail lines for git repositories and MUST print `worktree=clean` when no local changes exist.
 8. `repository commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
 9. `repository tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
+### Resource and List Output
 9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasAttribute`/`idAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
 7. `context show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
 10. Help output SHOULD avoid repeated blank lines between sections.
+### Diff and Explain Output
 11. `resource diff --output text` MUST render one line per diff entry using relative dot-path notation from the requested target path and JSON-encoded values in the form `<dot-path> [Local=<json>] => [Remote=<json>]`.
 12. Structured `resource diff` and `resource explain` output MUST encode `resource.DiffEntry.ResourcePath` as the logical resource path and `resource.DiffEntry.Path` as an RFC 6901 JSON Pointer relative to that resource payload; root payload replacements MUST use `Path=""`.
+### Status Footer and Color
 13. Unless `--no-status` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
 14. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
 15. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
 16. Structured `--output json|yaml` for binary payloads MUST emit a stable wrapper with keys `encoding`, `mediaType`, and `data`, where `encoding=base64` and `mediaType=application/octet-stream`.
 17. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
 18. Text-mode binary diff output MUST render a deterministic whole-payload message indicating that binary content differs instead of attempting field-level rendering.
+### Metadata and Binary Output
 16. Metadata command structured output (`metadata get|resolve|infer`) MUST omit nil directive fields instead of emitting `null` entries.
 17. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
+### Context, Server, and Secret Output
 20. `context check` text output MUST report component rows using `context`, `repository`, `metadata`, `managed-server`, and `secret-store` labels.
 21. `repository status` text output MUST be repository-type aware: `filesystem` contexts MUST report local-only sync as `sync=not_applicable`, and `git` contexts MUST report git sync state with explicit `remote=not_configured` marker when remote configuration is absent.
 22. `secret get` output MUST always be plain text: single-secret reads print only the secret value line, and path reads print one `<key>=<value>` line per matched secret without JSON quoting.

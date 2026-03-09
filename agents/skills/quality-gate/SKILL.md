@@ -14,9 +14,13 @@ description: Select and execute the smallest verification set that protects chan
 
 ## Impact Matrix
 1. `doc`: spec/comment/instruction-only edits with no behavior change; tests are optional unless contracts changed.
+   - Examples: README update, AGENTS.md wording fix, code comment edit, doc-only markdown change.
 2. `low`: pure transforms in one package, no I/O/auth/path-safety changes; run targeted package tests.
+   - Examples: adding a helper in `resource/normalize.go`, refactoring internal logic within one file, fixing a formatting bug in metadata rendering.
 3. `medium`: CLI wiring, metadata behavior, repository semantics, or provider contract changes; run targeted tests plus repository-wide tests.
+   - Examples: new CLI flag, metadata directive addition, repository read/write behavior change, new secret-attribute handling path, provider interface method change.
 4. `high`: orchestration, auth/secrets, path safety, destructive operations, or E2E harness changes; run repository-wide tests and relevant E2E coverage.
+   - Examples: orchestrator apply/diff logic, auth flow change, secret placeholder resolution, path traversal guard, `resource delete` behavior, operator reconcile planning, E2E profile/component contract change.
 
 ## Command Guidance
 1. Prefer package-scoped checks first: `go test ./<package>/...`.

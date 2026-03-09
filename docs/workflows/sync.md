@@ -1,5 +1,7 @@
 # Sync Resources
 
+> This section covers real-world workflows. Make sure you understand [Contexts](../concepts/context.md) and [Resource Files](../concepts/resource.md) from the Concepts section first.
+
 This page shows practical save/diff/apply flows, from one resource to larger collections.
 
 ## Prerequisites

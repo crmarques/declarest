@@ -4,23 +4,23 @@
   <img src="assets/logo.png" alt="DeclaREST logo" width="200">
 </p>
 
-DeclaREST enables declarative management of REST API–backed systems, using a Git repository as the *Source of Truth* (SoT) for desired state and following GitOps principles.
+Managing API configurations usually means scripts, manual UI clicks, and changes nobody can review or reproduce. DeclaREST replaces that with a simple model: store what you want in Git files, and DeclaREST keeps your systems in sync.
 
-You can use it as a CLI for on-demand runs or CI/CD workflows, or as a Kubernetes Operator that continuously reconciles managed servers to match what’s defined in your Git repository.
+## How it works
 
-## What this project solves
+1. **Save** a resource from any REST API into a local file.
+2. **Edit** the file to match what you want.
+3. **Apply** the change back — DeclaREST handles the diff and the HTTP calls.
 
-Teams usually manage system's configuration through scripts, manual UI steps, and low-visibility changes.
+That’s it. Your configuration lives in Git, with full history, pull requests, and repeatable automation.
 
-DeclaREST standardizes this into:
+## What makes it different
 
-- Stable logical paths (`/corporations/acme`, `/admin/realms/prod/clients/app`)
-- Repository-managed desired state
-- Repeatable `save -> diff -> apply` workflows
-- Metadata-driven adaptation for APIs that are not clean REST
-- Secret placeholders instead of plaintext in resource files
-
-If you’re used to GitOps workflows, DeclaREST will feel natural: define desired state in Git and keep systems in sync.
+- **Stable logical paths** — use `/corporations/acme` instead of raw endpoint URLs
+- **Git as source of truth** — review changes before they hit the API
+- **Metadata-driven adaptation** — works with APIs that aren’t clean REST
+- **Secret placeholders** — no plaintext credentials in your repository
+- **Two modes** — CLI for on-demand work, Kubernetes Operator for continuous sync
 
 ## Usage flow
 

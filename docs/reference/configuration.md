@@ -1,5 +1,7 @@
 # Configuration Reference
 
+> This is a lookup reference. For guided setup, see [Quickstart](../getting-started/quickstart.md). For understanding what each option does, see [Contexts](../concepts/context.md).
+
 This page documents the user-facing context catalog schema used by DeclaREST.
 
 Use `declarest context print-template` to generate the full commented template, and use `declarest context validate` before importing changes.
