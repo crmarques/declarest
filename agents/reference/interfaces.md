@@ -84,7 +84,7 @@ Optional fields:
 4. `Preferences` settings map.
 5. `Metadata` typed metadata configuration object.
 6. `managedServer.http.healthCheck` optional probe target used by `server check`.
-7. Metadata attribute references (`idAttribute`, `aliasAttribute`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
+7. Metadata attribute references (`idAttribute`, `aliasAttribute`, `requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
@@ -148,7 +148,7 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`idAttribute`, `aliasAttribute`), optional `remoteCollectionPath` override, and optional `payloadType` override.
+1. `resource` identity mapping (`idAttribute`, `aliasAttribute`, `requiredAttributes`), optional `remoteCollectionPath` override, and optional `payloadType` override.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
 3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).

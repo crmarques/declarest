@@ -76,6 +76,9 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	}
 
 	if operationRequiresBody(operation) {
+		if err := g.validateResourceMutationPayload(resolvedResource, md, bodyDescriptor); err != nil {
+			return metadata.OperationSpec{}, err
+		}
 		if strings.TrimSpace(spec.ContentType) == "" {
 			spec.ContentType, err = g.defaultResourceMediaType(bodyDescriptor)
 			if err != nil {

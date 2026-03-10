@@ -521,6 +521,14 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 			},
 		},
 		{
+			name: "required_attributes_require_structured_payload",
+			meta: metadatadomain.ResourceMetadata{
+				PayloadType:        "text",
+				RequiredAttributes: []string{"/name"},
+			},
+			want: "resource.requiredAttributes requires structured payload type (json, yaml)",
+		},
+		{
 			name: "externalized_attributes_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
 				PayloadType: "text",
@@ -558,6 +566,21 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFSMetadataValidationRejectsInvalidResourceRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	err := service.Set(ctx, "/customers/acme", metadatadomain.ResourceMetadata{
+		RequiredAttributes: []string{"name"},
+	})
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !strings.Contains(err.Error(), "resource.requiredAttributes[0] must be a valid JSON pointer") {
+		t.Fatalf("expected resource.requiredAttributes pointer validation error, got %v", err)
 	}
 }
 

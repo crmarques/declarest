@@ -1,6 +1,9 @@
 package metadata
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestResourceMetadataIsWholeResourceSecret(t *testing.T) {
 	t.Parallel()
@@ -71,5 +74,32 @@ func TestMergeResourceMetadataOverlaysPreferredFormat(t *testing.T) {
 	)
 	if merged.PreferredFormat != "yaml" {
 		t.Fatalf("expected merged preferredFormat yaml, got %#v", merged)
+	}
+}
+
+func TestCloneResourceMetadataClonesRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	original := ResourceMetadata{RequiredAttributes: []string{"/name", "/realm"}}
+	cloned := CloneResourceMetadata(original)
+
+	if !reflect.DeepEqual(cloned.RequiredAttributes, original.RequiredAttributes) {
+		t.Fatalf("expected cloned requiredAttributes %#v, got %#v", original.RequiredAttributes, cloned.RequiredAttributes)
+	}
+	cloned.RequiredAttributes[0] = "/displayName"
+	if original.RequiredAttributes[0] != "/name" {
+		t.Fatalf("expected original requiredAttributes to remain unchanged, got %#v", original.RequiredAttributes)
+	}
+}
+
+func TestMergeResourceMetadataOverlaysRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	merged := MergeResourceMetadata(
+		ResourceMetadata{RequiredAttributes: []string{"/name"}},
+		ResourceMetadata{RequiredAttributes: []string{"/realm", "/clientId"}},
+	)
+	if !reflect.DeepEqual(merged.RequiredAttributes, []string{"/realm", "/clientId"}) {
+		t.Fatalf("expected merged requiredAttributes to use overlay, got %#v", merged.RequiredAttributes)
 	}
 }

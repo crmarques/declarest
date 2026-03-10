@@ -50,11 +50,12 @@ func (g *Client) Request(
 		spec.ContentType = bodyDescriptor.MediaType
 	}
 
-	_, hasOperation := requestMethodOperation(resolvedMethod)
+	operation, hasOperation := requestMethodOperation(resolvedMethod)
 	validationResource := resource.Resource{}
 	validationMd := metadata.ResourceMetadata{}
-	if _, resourceInput, validateSpec, ok := metadata.RequestOperationValidation(ctx); ok {
+	if ctxOperation, resourceInput, validateSpec, ok := metadata.RequestOperationValidation(ctx); ok {
 		hasOperation = true
+		operation = ctxOperation
 		spec.Validate = validateSpec
 		validationResource = resource.Resource{
 			LogicalPath:       resourceInput.LogicalPath,
@@ -65,6 +66,15 @@ func (g *Client) Request(
 			PayloadDescriptor: bodyDescriptor,
 		}
 		validationMd = resourceInput.Metadata
+	}
+	if validationResource.Payload == nil && requestSpec.Body.Value != nil {
+		validationResource.Payload = requestSpec.Body.Value
+		validationResource.PayloadDescriptor = bodyDescriptor
+	}
+	if hasOperation && operationRequiresBody(operation) {
+		if err := g.validateResourceMutationPayload(validationResource, validationMd, bodyDescriptor); err != nil {
+			return resource.Content{}, err
+		}
 	}
 	if hasOperation && spec.Validate != nil {
 		if err := g.validateOperationPayload(ctx, validationResource, validationMd, spec); err != nil {

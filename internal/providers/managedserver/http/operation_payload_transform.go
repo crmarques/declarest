@@ -6,6 +6,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
+	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -44,7 +45,7 @@ func (g *Client) applyOperationPayloadTransforms(
 }
 
 func applyPayloadSelectAttributes(value resource.Value, attributes []string) (resource.Value, error) {
-	pointers, err := normalizePayloadAttributePointers("selectAttributes", attributes)
+	pointers, err := metadatavalidation.NormalizeAttributePointers("selectAttributes", attributes)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func applyPayloadSelectAttributes(value resource.Value, attributes []string) (re
 }
 
 func applyPayloadExcludeAttributes(value resource.Value, attributes []string) (resource.Value, error) {
-	pointers, err := normalizePayloadAttributePointers("excludeAttributes", attributes)
+	pointers, err := metadatavalidation.NormalizeAttributePointers("excludeAttributes", attributes)
 	if err != nil {
 		return nil, err
 	}
@@ -108,32 +109,6 @@ func applyPayloadExcludeAttributes(value resource.Value, attributes []string) (r
 
 	return filtered, nil
 }
-
-func normalizePayloadAttributePointers(field string, attributes []string) ([]string, error) {
-	if attributes == nil {
-		return nil, nil
-	}
-
-	pointers := make([]string, 0, len(attributes))
-	seen := make(map[string]struct{}, len(attributes))
-	for _, raw := range attributes {
-		pointer := strings.TrimSpace(raw)
-		if pointer == "" {
-			return nil, faults.NewValidationError("payload "+field+" contains an empty JSON pointer", nil)
-		}
-		if _, err := resource.ParseJSONPointer(pointer); err != nil {
-			return nil, faults.NewValidationError("payload "+field+" contains an invalid JSON pointer", err)
-		}
-		if _, exists := seen[pointer]; exists {
-			continue
-		}
-		seen[pointer] = struct{}{}
-		pointers = append(pointers, pointer)
-	}
-
-	return pointers, nil
-}
-
 func (g *Client) applyPayloadJQ(ctx context.Context, payload resource.Value, expression string) (resource.Value, error) {
 	trimmedExpression := strings.TrimSpace(expression)
 	if trimmedExpression == "" {

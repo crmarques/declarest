@@ -28,6 +28,9 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	if err := validateAttributePointer("resource.aliasAttribute", metadata.AliasAttribute); err != nil {
 		return err
 	}
+	if err := validateAttributePointers("resource.requiredAttributes", metadata.RequiredAttributes); err != nil {
+		return err
+	}
 	if err := validateAttributePointers("resource.secretAttributes", metadata.SecretAttributes); err != nil {
 		return err
 	}
@@ -96,6 +99,15 @@ func validateStructuredOnlyMetadataFields(
 		return faults.NewValidationError(
 			fmt.Sprintf(
 				"resource.secretAttributes requires structured payload type (json, yaml); got %q; use resource.secret: true for whole-resource secrets",
+				payloadType,
+			),
+			nil,
+		)
+	}
+	if len(metadata.RequiredAttributes) > 0 {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resource.requiredAttributes requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,

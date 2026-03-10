@@ -21,43 +21,6 @@ var (
 	jqCacheOrder []string
 )
 
-func (g *Client) applyListJQ(ctx context.Context, payload any, expression string) (any, error) {
-	trimmedExpression := strings.TrimSpace(expression)
-	if trimmedExpression == "" {
-		return payload, nil
-	}
-
-	code, err := g.compileListJQCode(ctx, trimmedExpression)
-	if err != nil {
-		return nil, faults.NewValidationError("invalid list jq expression", err)
-	}
-
-	runCtx := ctx
-	if runCtx == nil {
-		runCtx = context.Background()
-	}
-	iterator := code.RunWithContext(runCtx, payload)
-	results := make([]any, 0, 1)
-	for {
-		value, ok := iterator.Next()
-		if !ok {
-			break
-		}
-		if valueErr, isErr := value.(error); isErr {
-			return nil, faults.NewValidationError("failed to evaluate list jq expression", valueErr)
-		}
-		results = append(results, value)
-	}
-
-	if len(results) == 0 {
-		return []any{}, nil
-	}
-	if len(results) == 1 {
-		return results[0], nil
-	}
-	return results, nil
-}
-
 func (g *Client) compileListJQCode(ctx context.Context, expression string) (*gojq.Code, error) {
 	if !strings.Contains(expression, "resource(") {
 		return cachedListJQCode(expression)

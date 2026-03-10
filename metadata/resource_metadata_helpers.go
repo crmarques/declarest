@@ -9,6 +9,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
 		IDAttribute:            value.IDAttribute,
 		AliasAttribute:         value.AliasAttribute,
+		RequiredAttributes:     cloneStringSlice(value.RequiredAttributes),
 		RemoteCollectionPath:   value.RemoteCollectionPath,
 		PayloadType:            value.PayloadType,
 		PreferredFormat:        value.PreferredFormat,
@@ -40,6 +41,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	merged := ResourceMetadata{
 		IDAttribute:            base.IDAttribute,
 		AliasAttribute:         base.AliasAttribute,
+		RequiredAttributes:     cloneStringSlice(base.RequiredAttributes),
 		RemoteCollectionPath:   base.RemoteCollectionPath,
 		PayloadType:            base.PayloadType,
 		PreferredFormat:        base.PreferredFormat,
@@ -55,6 +57,9 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 	if overlay.AliasAttribute != "" {
 		merged.AliasAttribute = overlay.AliasAttribute
+	}
+	if overlay.RequiredAttributes != nil {
+		merged.RequiredAttributes = cloneStringSlice(overlay.RequiredAttributes)
 	}
 	if overlay.RemoteCollectionPath != "" {
 		merged.RemoteCollectionPath = overlay.RemoteCollectionPath

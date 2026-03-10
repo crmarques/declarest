@@ -247,6 +247,7 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	compact := ResourceMetadata{
 		IDAttribute:            inferred.IDAttribute,
 		AliasAttribute:         inferred.AliasAttribute,
+		RequiredAttributes:     cloneStringSlice(inferred.RequiredAttributes),
 		RemoteCollectionPath:   inferred.RemoteCollectionPath,
 		PayloadType:            inferred.PayloadType,
 		PreferredFormat:        inferred.PreferredFormat,

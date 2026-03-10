@@ -27,13 +27,14 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
 12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
-13. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
-14. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
-15. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
-16. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
-17. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
-18. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
-19. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
+13. Before body transforms or remote HTTP execution, body-bearing mutation workflows MUST validate `resource.requiredAttributes` against the structured source payload, and configured `resource.aliasAttribute` MUST count as required even when `resource.requiredAttributes` omits it; non-structured mutation payloads MAY skip this attribute-presence check because JSON Pointer traversal is unavailable.
+14. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
+15. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
+16. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
+17. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+18. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
+19. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
+20. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
 
 ## Data Contracts
 Request spec fields:
@@ -84,6 +85,7 @@ Request throttling fields:
 8. OpenAPI advertises `application/octet-stream` or `format: binary`, and the resolved payload type becomes `octet-stream`.
 9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
 10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
+11. Structured mutation validation can require `/clientId` from `resource.aliasAttribute` even when an operation transform removes `/clientId` from the outgoing request body afterward.
 
 ## Examples
 1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.
@@ -95,3 +97,4 @@ Request throttling fields:
 7. With `requestThrottling.max-concurrent-requests=1` and `queue-size=1`, a third concurrent request fails fast with `ConflictError` while two earlier requests are in-flight/queued.
 8. `Get` of a binary certificate endpoint returns `resource.BinaryValue` when the server responds `application/octet-stream`.
 9. `Update` of a Rundeck private key stored as `resource.key` sends raw bytes and resolves `ContentType` to `application/octet-stream` even when the local payload is not a JSON object.
+10. `Create` with `resource.requiredAttributes: ["/realm"]` and `resource.aliasAttribute: /clientId` fails before remote HTTP execution when the structured source payload omits `/clientId`, even if `operations.create.transforms` would otherwise remove `/clientId` from the transmitted body.

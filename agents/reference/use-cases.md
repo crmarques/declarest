@@ -657,3 +657,21 @@ Expected outputs:
 
 Failure expectation:
 1. Any command reaching component startup after violating operator profile constraints is a contract breach.
+
+### Example 32: Resource Required Attributes Before Transforms (Corner)
+Goal: reject structured mutations that omit metadata-required identity fields even when operation transforms would later remove those fields from the outgoing body.
+
+Inputs:
+1. Metadata with `resource.aliasAttribute: /clientId`, `resource.requiredAttributes: [/realm]`, and `operations.update.transforms: [{excludeAttributes:["/clientId"]}]`.
+2. Structured update payload that omits `/clientId` but includes `/realm`.
+
+Execution:
+1. User runs `resource update` or metadata-resolved `resource request put` for the target logical path.
+2. Runtime validates resource-level required attributes before applying operation transforms.
+
+Expected outputs:
+1. Command fails with `ValidationError` that references missing `/clientId`.
+2. No remote HTTP request is sent.
+
+Failure expectation:
+1. If the runtime validates only the transformed outgoing body or allows the missing alias to pass, the contract is breached.

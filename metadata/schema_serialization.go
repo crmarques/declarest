@@ -17,6 +17,7 @@ type resourceMetadataWire struct {
 type resourceWire struct {
 	IDAttribute            string                       `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
 	AliasAttribute         string                       `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
+	RequiredAttributes     *[]string                    `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
 	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	PreferredFormat        string                       `json:"preferredFormat,omitempty" yaml:"preferredFormat,omitempty"`
@@ -193,6 +194,9 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		PreferredFormat:      metadata.PreferredFormat,
 		Secret:               cloneBoolPointer(metadata.Secret),
 	}
+	if metadata.RequiredAttributes != nil {
+		resource.RequiredAttributes = stringSlicePointer(metadata.RequiredAttributes)
+	}
 	if metadata.SecretAttributes != nil {
 		resource.SecretAttributes = stringSlicePointer(metadata.SecretAttributes)
 	}
@@ -249,6 +253,9 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 		if resource.AliasAttribute != "" {
 			metadata.AliasAttribute = resource.AliasAttribute
 		}
+		if resource.RequiredAttributes != nil {
+			metadata.RequiredAttributes = cloneStringSlice(*resource.RequiredAttributes)
+		}
 		remoteCollectionPath := strings.TrimSpace(resource.RemoteCollectionPath)
 		if remoteCollectionPath != "" {
 			metadata.RemoteCollectionPath = remoteCollectionPath
@@ -298,6 +305,7 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 func hasResourceInfo(resource resourceWire) bool {
 	return strings.TrimSpace(resource.IDAttribute) != "" ||
 		strings.TrimSpace(resource.AliasAttribute) != "" ||
+		resource.RequiredAttributes != nil ||
 		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(resource.PayloadType) != "" ||
 		strings.TrimSpace(resource.PreferredFormat) != "" ||

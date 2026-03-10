@@ -14,6 +14,7 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	value := ResourceMetadata{
 		IDAttribute:          "/id",
 		AliasAttribute:       "/name",
+		RequiredAttributes:   []string{"/name", "/realm"},
 		RemoteCollectionPath: "/api/customers",
 		Secret:               boolPointer(true),
 		SecretAttributes:     []string{"/credentials/password"},
@@ -76,6 +77,10 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if resource["aliasAttribute"] != "/name" {
 		t.Fatalf("expected resource.aliasAttribute=name, got %#v", resource["aliasAttribute"])
 	}
+	requiredAttributes, ok := resource["requiredAttributes"].([]any)
+	if !ok || len(requiredAttributes) != 2 || requiredAttributes[0] != "/name" || requiredAttributes[1] != "/realm" {
+		t.Fatalf("expected resource.requiredAttributes, got %#v", resource["requiredAttributes"])
+	}
 	if resource["remoteCollectionPath"] != "/api/customers" {
 		t.Fatalf("expected resource.remoteCollectionPath=/api/customers, got %#v", resource["remoteCollectionPath"])
 	}
@@ -127,8 +132,8 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected create.validate object, got %#v", create["validate"])
 	}
-	requiredAttributes, ok := validateValue["requiredAttributes"].([]any)
-	if !ok || len(requiredAttributes) != 0 {
+	createRequiredAttributes, ok := validateValue["requiredAttributes"].([]any)
+	if !ok || len(createRequiredAttributes) != 0 {
 		t.Fatalf("expected explicit empty validate.requiredAttributes array, got %#v", validateValue["requiredAttributes"])
 	}
 	assertions, ok := validateValue["assertions"].([]any)
@@ -249,6 +254,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		  "resource": {
 		    "idAttribute": "/realm",
 		    "aliasAttribute": "/realm",
+		    "requiredAttributes": ["/realm", "/displayName"],
 		    "remoteCollectionPath": "/admin/realms",
 		    "secretAttributes": []
 		  },
@@ -301,6 +307,9 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 
 		if decoded.IDAttribute != "/realm" || decoded.AliasAttribute != "/realm" {
 			t.Fatalf("unexpected identity fields: %+v", decoded)
+		}
+		if !reflect.DeepEqual(decoded.RequiredAttributes, []string{"/realm", "/displayName"}) {
+			t.Fatalf("unexpected resource.requiredAttributes: %#v", decoded.RequiredAttributes)
 		}
 		if decoded.RemoteCollectionPath != "/admin/realms" {
 			t.Fatalf("unexpected remoteCollectionPath: %q", decoded.RemoteCollectionPath)

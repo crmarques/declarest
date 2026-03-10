@@ -33,10 +33,6 @@ func jqMutation(expression string) []metadata.TransformStep {
 	return []metadata.TransformStep{{JQExpression: expression}}
 }
 
-func suppressMutation(attributes ...string) []metadata.TransformStep {
-	return []metadata.TransformStep{{ExcludeAttributes: attributes}}
-}
-
 func TestNewClientValidation(t *testing.T) {
 	t.Parallel()
 
@@ -906,6 +902,52 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 	t.Parallel()
 
+	t.Run("resource_required_attributes_include_alias_and_run_before_transforms", func(t *testing.T) {
+		t.Parallel()
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+			},
+		})
+
+		md := metadata.ResourceMetadata{
+			AliasAttribute:     "/clientId",
+			RequiredAttributes: []string{"/realm"},
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationCreate): {
+					Path: "/customers",
+					Transforms: []metadata.TransformStep{
+						{ExcludeAttributes: []string{"/clientId"}},
+					},
+				},
+			},
+		}
+
+		_, err := client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/declarest-cli",
+			Payload: map[string]any{
+				"realm":    "platform",
+				"clientId": "declarest-cli",
+			},
+		}, md, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		_, err = client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/declarest-cli",
+			Payload: map[string]any{
+				"realm": "platform",
+			},
+		}, md, metadata.OperationCreate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "/clientId") {
+			t.Fatalf("expected aliasAttribute validation error, got %v", err)
+		}
+	})
+
 	t.Run("required_attributes_accept_path_derived_fields", func(t *testing.T) {
 		t.Parallel()
 
@@ -1206,6 +1248,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 			LogicalPath:    "/admin/realms/platform/clients",
 			CollectionPath: "/admin/realms/platform/clients",
 			Metadata: metadata.ResourceMetadata{
+				AliasAttribute:       "/clientId",
 				RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
 			},
 		},
@@ -1226,6 +1269,21 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("Request returned error: %v", err)
+	}
+
+	_, err = client.Request(
+		validationCtx,
+		managedserverdomain.RequestSpec{
+			Method: http.MethodPost,
+			Path:   "/admin/realms/platform/clients",
+			Body: resource.Content{
+				Value: map[string]any{"realm": "platform"},
+			},
+		},
+	)
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !strings.Contains(err.Error(), "/clientId") {
+		t.Fatalf("expected resource.requiredAttributes alias validation error, got %v", err)
 	}
 
 	_, err = client.Request(

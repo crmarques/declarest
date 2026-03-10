@@ -10,7 +10,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/metadata/templatescope"
+	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -44,14 +44,19 @@ func (g *Client) validateOperationPayload(
 	if err != nil {
 		return err
 	}
-	derivedFields := deriveValidationPathFields(resolvedResource, md)
+	derivedFields := metadatavalidation.DerivePathFields(resolvedResource, md)
 
 	payloadView := normalizedBody
 	if len(derivedFields) > 0 {
-		payloadView = mergeValidationPayloadFields(normalizedBody, derivedFields)
+		payloadView = metadatavalidation.MergePayloadFields(normalizedBody, derivedFields)
 	}
 
-	if err := validateOperationRequiredAttributes(payloadView, spec.Validate.RequiredAttributes); err != nil {
+	if err := metadatavalidation.ValidateRequiredAttributes(
+		payloadView,
+		"validate.requiredAttributes",
+		spec.Validate.RequiredAttributes,
+		"operation payload validation",
+	); err != nil {
 		return err
 	}
 	if err := g.validateOperationAssertions(ctx, payloadView, spec.Validate.Assertions); err != nil {
@@ -71,97 +76,21 @@ func (g *Client) validateOperationPayload(
 	return nil
 }
 
-func mergeValidationPayloadFields(normalizedBody resource.Value, derivedFields map[string]any) resource.Value {
-	if len(derivedFields) == 0 {
-		return normalizedBody
-	}
-	baseObject, isObject := normalizedBody.(map[string]any)
-	if !isObject {
-		baseObject = map[string]any{}
-		if normalizedBody != nil {
-			baseObject["payload"] = normalizedBody
-		}
-	}
-
-	merged := resource.DeepCopyValue(baseObject)
-	for _, pointer := range sortedMapKeysAny(derivedFields) {
-		if _, found, err := resource.LookupJSONPointer(merged, pointer); err == nil && found {
-			continue
-		}
-
-		next, err := resource.SetJSONPointerValue(merged, pointer, derivedFields[pointer])
-		if err != nil {
-			continue
-		}
-		merged = next
-	}
-
-	return merged
-}
-
-func deriveValidationPathFields(resolvedResource resource.Resource, md metadata.ResourceMetadata) map[string]any {
-	fields := map[string]any{}
-
-	for key, value := range templatescope.DerivePathTemplateFields(resolvedResource.LogicalPath, md) {
-		trimmedKey := strings.TrimSpace(key)
-		trimmedValue := strings.TrimSpace(value)
-		if trimmedKey == "" || trimmedValue == "" {
-			continue
-		}
-		fields[resource.JSONPointerForObjectKey(trimmedKey)] = trimmedValue
-	}
-
-	if aliasAttribute := strings.TrimSpace(md.AliasAttribute); aliasAttribute != "" {
-		if strings.TrimSpace(resolvedResource.LocalAlias) != "" {
-			if _, exists := fields[aliasAttribute]; !exists {
-				fields[aliasAttribute] = strings.TrimSpace(resolvedResource.LocalAlias)
-			}
-		}
-	}
-	if idAttribute := strings.TrimSpace(md.IDAttribute); idAttribute != "" {
-		if strings.TrimSpace(resolvedResource.RemoteID) != "" {
-			if _, exists := fields[idAttribute]; !exists {
-				fields[idAttribute] = strings.TrimSpace(resolvedResource.RemoteID)
-			}
-		}
-	}
-
-	if len(fields) == 0 {
-		return nil
-	}
-	return fields
-}
-
-func validateOperationRequiredAttributes(payload resource.Value, attributes []string) error {
-	pointers, err := normalizePayloadAttributePointers("validate.requiredAttributes", attributes)
-	if err != nil {
-		return err
-	}
-	if len(pointers) == 0 {
+func (g *Client) validateResourceMutationPayload(
+	resolvedResource resource.Resource,
+	md metadata.ResourceMetadata,
+	descriptor resource.PayloadDescriptor,
+) error {
+	if len(metadatavalidation.EffectiveResourceRequiredAttributes(md)) == 0 {
 		return nil
 	}
 
-	missing := make([]string, 0)
-	for _, pointer := range pointers {
-		value, found, lookupErr := resource.LookupJSONPointer(payload, pointer)
-		if lookupErr != nil {
-			return lookupErr
-		}
-		if !found || value == nil {
-			missing = append(missing, pointer)
-		}
-	}
-	if len(missing) > 0 {
-		return faults.NewValidationError(
-			fmt.Sprintf(
-				"operation payload validation failed: missing required attributes [%s]",
-				strings.Join(missing, ", "),
-			),
-			nil,
-		)
+	payloadType := resource.NormalizePayloadDescriptor(descriptor).PayloadType
+	if !resource.IsStructuredPayloadType(payloadType) {
+		return nil
 	}
 
-	return nil
+	return metadatavalidation.ValidateResourceRequiredAttributes(resolvedResource.Payload, md)
 }
 
 func (g *Client) validateOperationAssertions(

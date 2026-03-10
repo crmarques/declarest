@@ -44,23 +44,26 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 27. OpenAPI-backed inference SHOULD populate `operations.create/update.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 28. `resource.payloadType` MAY override filename-derived payload inference for one resource or collection scope and MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`.
 29. `resource.secret: true` MAY declare one whole-resource secret save/read contract for that scope, MUST remain distinct from attribute-scoped secret masking, and MUST be mutually exclusive with `resource.secretAttributes`.
-30. Metadata attribute references (`resource.idAttribute`, `resource.aliasAttribute`, `resource.secretAttributes[*]`, `resource.externalizedAttributes[*].path`, `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
-31. When `resource.payloadType` resolves to a non-structured payload type, `resource.idAttribute`, `resource.aliasAttribute`, `resource.secretAttributes`, and `resource.externalizedAttributes` MUST fail validation because they depend on structured payload traversal.
-32. `resource.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
-33. Enabled `resource.externalizedAttributes` entries MUST treat `path` as one JSON Pointer traversal path, MUST traverse object keys by pointer token, MUST traverse arrays only through zero-based numeric tokens or `*` wildcard tokens, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
-34. When an enabled externalized-attribute `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
-35. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
+30. Metadata attribute references (`resource.idAttribute`, `resource.aliasAttribute`, `resource.requiredAttributes[*]`, `resource.secretAttributes[*]`, `resource.externalizedAttributes[*].path`, `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
+31. `resource.requiredAttributes` MUST be preserved through metadata merge/render/serialization and MUST remain resource-scoped.
+32. Body-bearing resource mutation workflows MUST validate the structured source payload against the effective resource required-attribute set before operation-specific payload transforms run; the effective set MUST include `resource.aliasAttribute` when configured, even when `resource.requiredAttributes` omits it.
+33. When `resource.payloadType` resolves to a non-structured payload type, `resource.idAttribute`, `resource.aliasAttribute`, `resource.requiredAttributes`, `resource.secretAttributes`, and `resource.externalizedAttributes` MUST fail validation because they depend on structured payload traversal.
+34. `resource.externalizedAttributes` MUST default unspecified `template|mode|saveBehavior|renderBehavior|enabled` fields deterministically and MUST validate duplicate enabled `path` or `file` entries before persistence or workflow use.
+35. Enabled `resource.externalizedAttributes` entries MUST treat `path` as one JSON Pointer traversal path, MUST traverse object keys by pointer token, MUST traverse arrays only through zero-based numeric tokens or `*` wildcard tokens, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
+36. When an enabled externalized-attribute `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
+37. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
 
 ## Data Contracts
 Supported metadata groups:
-1. `resource`: identity, payload-type, whole-resource-secret, secret-attribute, and collection directives.
+1. `resource`: identity, required-attribute, payload-type, whole-resource-secret, secret-attribute, and collection directives.
 2. `resource.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` is one JSON Pointer string and arrays use numeric or `*` wildcard tokens.
 3. `operations.create/update/delete/get/compare/list`: operation-specific directives.
 4. `operations.defaults.transforms`: shared ordered transform pipeline applied before operation-specific pipelines.
 5. Operation wire fields: `path`, `method`, `query`, `headers`, `body` (including media headers such as `Accept` and `Content-Type` as `headers` entries).
 6. Transform wire fields: `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, `transforms[*].jqExpression`.
 7. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
-8. Resource-level secret detection fields: `secret`, `secretAttributes`.
+8. Resource-level attribute requirement fields: `requiredAttributes`.
+9. Resource-level secret detection fields: `secret`, `secretAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -108,6 +111,7 @@ Template context contract:
 14. Externalized-attribute file paths containing `../` or duplicate enabled `file`/`path` entries fail metadata validation deterministically before repository IO.
 15. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
 16. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
+17. Raw text or octet-stream mutation payloads MAY bypass `resource.requiredAttributes` checks at runtime even when metadata still uses identity attributes for path rendering, because attribute traversal is unavailable for non-structured payloads.
 
 ## Examples
 1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.
@@ -126,3 +130,4 @@ Template context contract:
 14. When `resource.yaml` contains `script: "{{include script.sh}}"` but `script.sh` is absent, repository-backed mutation workflows fail with a typed validation error before remote HTTP execution.
 15. `resource.payloadType: text` plus `resource.secret: true` is valid for a whole-file secret, while `resource.secretAttributes: ["/password"]` at that same scope fails validation because text payloads are not structured.
 16. Rundeck-style metadata can render `{{index . "contentType"}}` for a raw `resource.key` payload because the template scope injects `contentType: application/octet-stream` from the active descriptor.
+17. `resource.requiredAttributes: ["/realm"]` plus `resource.aliasAttribute: /clientId` still requires `/clientId` in a structured mutation payload even when `operations.update.transforms` later excludes `/clientId` from the transmitted body.
