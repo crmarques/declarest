@@ -73,42 +73,42 @@ func inferIdentityAttributes(
 	openAPIIdentityAttribute string,
 	openAPIResourceAttributes map[string]struct{},
 ) (string, string) {
-	aliasAttribute := ""
+	aliasFieldName := ""
 	aliasFromOpenAPIIdentity := false
 	openAPIAliasCandidate := strings.TrimSpace(openAPIIdentityAttribute)
 	if openAPIAliasCandidate != "" {
 		if len(openAPIResourceAttributes) == 0 || attributeSetContains(openAPIResourceAttributes, openAPIAliasCandidate) {
-			aliasAttribute = openAPIAliasCandidate
+			aliasFieldName = openAPIAliasCandidate
 			aliasFromOpenAPIIdentity = true
 		}
 	}
-	if aliasAttribute == "" {
-		aliasAttribute = inferAliasAttributeFromSchema(openAPIResourceAttributes)
+	if aliasFieldName == "" {
+		aliasFieldName = inferAliasFieldNameFromSchema(openAPIResourceAttributes)
 	}
-	if aliasAttribute == "" {
+	if aliasFieldName == "" {
 		collectionName := inferCollectionName(target)
 		singularCollectionName := singularizeToken(collectionName)
 		switch singularCollectionName {
 		case "":
-			aliasAttribute = "id"
+			aliasFieldName = "id"
 		case "client":
-			aliasAttribute = "clientId"
+			aliasFieldName = "clientId"
 		default:
-			aliasAttribute = singularCollectionName
+			aliasFieldName = singularCollectionName
 		}
 	}
 
-	idAttribute := aliasAttribute
+	idFieldName := aliasFieldName
 	if !aliasFromOpenAPIIdentity && attributeSetContains(openAPIResourceAttributes, "id") {
-		idAttribute = "id"
-	} else if strings.HasSuffix(strings.ToLower(aliasAttribute), "id") && strings.ToLower(aliasAttribute) != "id" {
-		idAttribute = "id"
+		idFieldName = "id"
+	} else if strings.HasSuffix(strings.ToLower(aliasFieldName), "id") && strings.ToLower(aliasFieldName) != "id" {
+		idFieldName = "id"
 	}
 
-	return idAttribute, aliasAttribute
+	return idFieldName, aliasFieldName
 }
 
-func inferAliasAttributeFromSchema(attributes map[string]struct{}) string {
+func inferAliasFieldNameFromSchema(attributes map[string]struct{}) string {
 	if len(attributes) == 0 {
 		return ""
 	}

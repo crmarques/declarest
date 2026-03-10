@@ -1,3 +1,3 @@
 resource:
-  idAttribute: /id
-  aliasAttribute: /alias
+  id: "{{/id}}"
+  alias: "{{/alias}}"

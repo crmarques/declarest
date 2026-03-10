@@ -87,7 +87,7 @@ declarest -d resource get /corporations/acme
 ## Common diagnosis checklist
 
 - Wrong endpoint: check `resource.remoteCollectionPath` and operation `path`
-- Wrong ID/alias segment: check `idAttribute` and `aliasAttribute`
+- Wrong ID/alias segment: check `resource.id` and `resource.alias`
 - List returns extra objects: add `list.payload.jqExpression`
 - Diff noise: tune `compare` suppress/filter rules
 - Write payload rejected: inspect `create`/`update` payload transforms

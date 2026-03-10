@@ -10,12 +10,14 @@ Controls identity and path mapping.
 
 Common fields:
 
-- `idAttribute`
-- `aliasAttribute`
+- `id`
+- `alias`
 - `remoteCollectionPath`
 - `secretAttributes`
 
 Use when path/identity on the API differs from your logical path model.
+`id` and `alias` accept full identity templates such as `{% raw %}{{/name}} - {{/version}}{% endraw %}` and raw JSON Pointer shorthand such as `/id`.
+When omitted, effective metadata defaults both to `/id` for identity resolution.
 
 ### `operations`
 
@@ -56,7 +58,7 @@ Defines reusable defaults for transforms/compare behavior that operations can in
 
 ## Quick field-to-impact map
 
-- Identity problems: check `resource.idAttribute` and `aliasAttribute`.
+- Identity problems: check `resource.id` and `resource.alias`.
 - Wrong endpoint/method: check `operations.<op>.path` and `method`.
 - Wrong payload shape: check the ordered `transforms` pipeline.
 - Noisy drift: check `compare.transforms`.

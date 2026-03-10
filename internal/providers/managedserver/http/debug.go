@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/crmarques/declarest/config"
-	debugctx "github.com/crmarques/declarest/debugctx"
+	"github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 )
 
@@ -39,12 +41,24 @@ func (info tlsDebugInfo) mTLSEnabled() bool {
 }
 
 func (g *Client) doRequest(ctx context.Context, purpose string, request *http.Request) (*http.Response, error) {
+	resolvedURL := resolveURLForDebug(ctx, request.URL)
+
+	// Level 2: HTTP request summary
+	debugctx.Detailf(
+		ctx,
+		"http request purpose=%q method=%q url=%q",
+		purpose,
+		request.Method,
+		resolvedURL,
+	)
+
+	// Level 3: full request details including TLS
 	debugctx.Printf(
 		ctx,
 		"http request purpose=%q method=%q url=%q tls_enabled=%t mtls_enabled=%t tls_insecure_skip_verify=%t tls_ca_cert_file=%q tls_client_cert_file=%q tls_client_key_file=%q",
 		purpose,
 		request.Method,
-		redactURLForDebug(request.URL),
+		resolvedURL,
 		g.tlsDebug.enabled,
 		g.tlsDebug.mTLSEnabled(),
 		g.tlsDebug.insecureSkipVerify,
@@ -53,30 +67,45 @@ func (g *Client) doRequest(ctx context.Context, purpose string, request *http.Re
 		g.tlsDebug.clientKeyFile,
 	)
 
+	// Level 3: request headers
+	debugRequestHeaders(ctx, request)
+
+	start := time.Now()
+
 	invoke := func() (*http.Response, error) {
 		return g.client.Do(request)
 	}
 	response, err := g.executeWithThrottle(ctx, purpose, request, invoke)
+	elapsed := time.Since(start)
+
 	if err != nil {
-		debugctx.Printf(
+		// Level 2: request failure with timing
+		debugctx.Detailf(
 			ctx,
-			"http request failed purpose=%q method=%q url=%q error=%v",
+			"http request failed purpose=%q method=%q url=%q elapsed=%s error=%v",
 			purpose,
 			request.Method,
-			redactURLForDebug(request.URL),
+			resolvedURL,
+			elapsed.Truncate(time.Millisecond),
 			err,
 		)
 		return nil, err
 	}
 
-	debugctx.Printf(
+	// Level 2: response summary with timing
+	debugctx.Detailf(
 		ctx,
-		"http response purpose=%q method=%q url=%q status=%d",
+		"http response purpose=%q method=%q url=%q status=%d elapsed=%s",
 		purpose,
 		request.Method,
-		redactURLForDebug(request.URL),
+		resolvedURL,
 		response.StatusCode,
+		elapsed.Truncate(time.Millisecond),
 	)
+
+	// Level 3: response headers
+	debugResponseHeaders(ctx, response)
+
 	return response, nil
 }
 
@@ -104,6 +133,69 @@ func (g *Client) executeWithThrottle(
 		)
 	}
 	return nil, err
+}
+
+func debugRequestHeaders(ctx context.Context, request *http.Request) {
+	if debugctx.Level(ctx) < 3 || request == nil {
+		return
+	}
+
+	headers := request.Header.Clone()
+	if !debugctx.Insecure(ctx) {
+		if auth := headers.Get("Authorization"); auth != "" {
+			headers.Set("Authorization", redactHeaderValue(auth))
+		}
+	}
+
+	keys := sortedHeaderKeys(headers)
+	for _, key := range keys {
+		for _, value := range headers.Values(key) {
+			debugctx.Printf(ctx, "http request header %s: %s", key, value)
+		}
+	}
+}
+
+func debugResponseHeaders(ctx context.Context, response *http.Response) {
+	if debugctx.Level(ctx) < 3 || response == nil {
+		return
+	}
+
+	keys := sortedHeaderKeys(response.Header)
+	for _, key := range keys {
+		for _, value := range response.Header.Values(key) {
+			debugctx.Printf(ctx, "http response header %s: %s", key, value)
+		}
+	}
+}
+
+func sortedHeaderKeys(headers http.Header) []string {
+	keys := make([]string, 0, len(headers))
+	for key := range headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func redactHeaderValue(value string) string {
+	parts := strings.SplitN(value, " ", 2)
+	if len(parts) == 2 {
+		return parts[0] + " <redacted>"
+	}
+	return "<redacted>"
+}
+
+// resolveURLForDebug returns the URL string for debug output.
+// When --verbose-insecure is enabled, the full URL (with credentials and query params) is shown.
+// Otherwise, user info and query parameter values are redacted.
+func resolveURLForDebug(ctx context.Context, value *url.URL) string {
+	if debugctx.Insecure(ctx) {
+		if value == nil {
+			return ""
+		}
+		return value.String()
+	}
+	return redactURLForDebug(value)
 }
 
 func redactURLForDebug(value *url.URL) string {

@@ -17,8 +17,8 @@ case_run() {
 
   case_write_json "${metadata_file}" '{
     "resource": {
-      "idAttribute": "id",
-      "aliasAttribute": "clientId"
+      "id": "{{/id}}",
+      "alias": "{{/clientId}}"
     }
   }'
 

@@ -225,7 +225,7 @@ Fixture tree rules:
 - resource payloads must be stored at `<logical-resource>/resource.<ext>`.
 - metadata paths may be nested (for example `/admin/realms/_/organizations/_`) to avoid duplicated metadata files.
 - when metadata paths include intermediary `/_/`, the e2e loader expands them to concrete collection metadata paths from template resources before calling `declarest metadata set`.
-- metadata must represent API-specific identifiers using `idAttribute` and `aliasAttribute` (for example, keycloak realms use `realm`, not internal `id`).
+- metadata must represent API-specific identifiers using `id` and `alias` identity templates (for example, keycloak realms use `{{/realm}}`, not internal `{{/id}}`).
 
 Keycloak repo-template currently covers:
 

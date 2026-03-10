@@ -15,7 +15,7 @@ Common issues for both CLI and Operator mode.
 ## 3. `resource get` returns not found, but resource exists
 
 - Symptom: direct read fails for alias-style paths.
-- Fix: confirm metadata identity mapping (`idAttribute` / `aliasAttribute`) and run `declarest metadata render <path> get`.
+- Fix: confirm metadata identity mapping (`resource.id` / `resource.alias`) and run `declarest metadata render <path> get`.
 
 ## 4. Diff shows unexpected drift every run
 

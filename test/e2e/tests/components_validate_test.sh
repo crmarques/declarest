@@ -83,22 +83,22 @@ EOF
     if [[ "${include_identity_fields}" == 'true' ]]; then
       cat >"${metadata_file}" <<'EOF'
 resource:
-  idAttribute: id
-  aliasAttribute: name
+  id: "{{/id}}"
+  alias: "{{/name}}"
 EOF
     else
       cat >"${metadata_file}" <<'EOF'
 resource:
-  idAttribute: id
+  id: "{{/id}}"
 EOF
     fi
   elif [[ "${include_identity_fields}" == 'true' ]]; then
     cat >"${metadata_file}" <<'EOF'
-{"resource":{"idAttribute":"id","aliasAttribute":"name"}}
+{"resource":{"id":"{{/id}}","alias":"{{/name}}"}}
 EOF
   else
     cat >"${metadata_file}" <<'EOF'
-{"resource":{"idAttribute":"id"}}
+{"resource":{"id":"{{/id}}"}}
 EOF
   fi
   {
@@ -229,15 +229,15 @@ _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl()
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "metadata fixture missing resource.idAttribute or resource.aliasAttribute"
+  assert_contains "${output}" "metadata fixture missing resource.id or resource.alias"
 }
 
-test_checked_in_keycloak_client_metadata_uses_client_id_alias_attribute() {
+test_checked_in_keycloak_client_metadata_uses_client_id_alias_template() {
   local metadata_file="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
   local content
   content=$(<"${metadata_file}")
 
-  assert_contains "${content}" "aliasAttribute: /clientId"
+  assert_contains "${content}" 'alias: "{{/clientId}}"'
 }
 
 test_managed_server_auth_type_defaults_prefer_oauth2() {

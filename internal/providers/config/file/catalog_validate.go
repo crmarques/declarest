@@ -101,13 +101,25 @@ func applyConfigDefaults(cfg config.Context) config.Context {
 }
 
 func applyProxyDefaults(cfg config.Context) config.Context {
+	envProxy := proxyhelper.FromEnvironment()
 	targets := buildProxyTargets(&cfg)
 	var canonical *config.HTTPProxy
+	if envProxy != nil && proxyhelper.HasURLs(envProxy) {
+		canonical = proxyhelper.Clone(envProxy)
+	}
+	canonicalFromConfig := false
+
 	for _, target := range targets {
 		current := *target.proxy
-		if current != nil && proxyhelper.HasURLs(current) {
-			canonical = proxyhelper.Clone(current)
-			break
+		if current == nil || proxyhelper.IsExplicitDisable(current) {
+			continue
+		}
+
+		merged := proxyhelper.Merge(envProxy, current)
+		*target.proxy = merged
+		if !canonicalFromConfig && proxyhelper.HasURLs(merged) {
+			canonical = proxyhelper.Clone(merged)
+			canonicalFromConfig = true
 		}
 	}
 	if canonical == nil {
@@ -460,9 +472,6 @@ func validateMetadata(metadata config.Metadata) error {
 func validateProxy(field string, proxy *config.HTTPProxy) error {
 	if proxy == nil || proxyhelper.IsExplicitDisable(proxy) {
 		return nil
-	}
-	if !proxyhelper.HasURLs(proxy) {
-		return faults.NewValidationError(field+" must define at least one of httpURL or httpsURL", nil)
 	}
 	if _, err := proxyhelper.Build(field, proxy); err != nil {
 		return err

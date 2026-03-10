@@ -26,7 +26,7 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 9. Conflict conditions MUST return typed `ConflictError` with actionable context.
 10. Compare/diff output MUST be stable for identical inputs.
 11. Binary payload comparison MUST be whole-payload only: identical bytes mean no drift, and differing bytes MUST produce one deterministic root-level replace diff entry.
-12. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `idAttribute` when literal lookup returns `NotFound`.
+12. Single-resource local workflows MUST attempt literal repository lookup first and then bounded collection fallback by metadata `resource.id`, using reverse matching only when the identity template is a simple single-pointer expression, when literal lookup returns `NotFound`.
 13. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
 14. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint, and they SHOULD preserve `NotFound` when a nested collection read fails because the parent resource is also `NotFound`.
 15. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering, but only when the requested logical path depth does not exceed the resolved selector/collection template depth; singleton fallback MUST NOT collapse explicit child identity segments and SHOULD then resolve to canonical remote identity for follow-up reads when possible.

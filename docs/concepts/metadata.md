@@ -9,11 +9,14 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 
 ### Resource identity and path mapping
 
-- `resource.idAttribute`
-- `resource.aliasAttribute`
+- `resource.id`
+- `resource.alias`
 - `resource.remoteCollectionPath`
 - `resource.secretAttributes`
 - `resource.externalizedAttributes`
+
+`resource.id` and `resource.alias` accept either full identity templates such as `{% raw %}{{/clientId}}{% endraw %}` or raw JSON Pointer shorthand such as `/clientId`.
+If you omit them, DeclaREST defaults identity resolution to `/id`.
 
 ### Operation behavior (`operations.*`)
 

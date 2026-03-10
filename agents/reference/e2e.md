@@ -39,8 +39,8 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 20. Missing dependency targets and dependency cycles MUST fail initialization or hook execution with actionable output.
 21. Component scripts MUST be ShellCheck-friendly Bash and publish generated runtime values through the component state file.
 22. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.yaml` or `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`; YAML SHOULD be the default for new fixture metadata files.
-23. Resource-server fixture metadata MUST model API-facing identifiers via `idAttribute` and `aliasAttribute` (for example, keycloak realms use `realm`).
-24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resource.idAttribute` or `resource.aliasAttribute`.
+23. Resource-server fixture metadata MUST model API-facing identifiers via `resource.id` and `resource.alias` identity templates (for example, keycloak realms use `{{/realm}}`).
+24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resource.id` or `resource.alias`.
 25. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
 26. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`; they MAY declare `CASE_PROFILES` as a whitespace-separated subset of `cli operator`.
 27. `smoke` scope MUST represent the curated fast suite used by `cli-basic` and `operator-basic`.

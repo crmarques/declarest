@@ -3,6 +3,7 @@ package proxy
 import (
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/crmarques/declarest/config"
@@ -15,6 +16,15 @@ type Config struct {
 	HTTP    *url.URL
 	HTTPS   *url.URL
 	NoProxy string
+}
+
+var environmentKeys = []string{
+	"HTTP_PROXY",
+	"http_proxy",
+	"HTTPS_PROXY",
+	"https_proxy",
+	"NO_PROXY",
+	"no_proxy",
 }
 
 // Build parses the configuration and returns canonical proxy values.
@@ -63,6 +73,26 @@ func Build(fieldPrefix string, proxy *config.HTTPProxy) (Config, error) {
 	return cfg, nil
 }
 
+// Resolve merges process proxy environment variables with the configured proxy
+// block. Explicit empty proxy blocks disable both inherited and environment
+// proxy settings.
+func Resolve(fieldPrefix string, proxy *config.HTTPProxy) (Config, bool, error) {
+	if IsExplicitDisable(proxy) {
+		return Config{}, true, nil
+	}
+
+	merged := Merge(FromEnvironment(), proxy)
+	if merged == nil {
+		return Config{}, false, nil
+	}
+
+	cfg, err := Build(fieldPrefix, merged)
+	if err != nil {
+		return Config{}, false, err
+	}
+	return cfg, false, nil
+}
+
 // HasProxy returns true when either HTTP or HTTPS proxy URL is configured.
 func (cfg Config) HasProxy() bool {
 	return cfg.HTTP != nil || cfg.HTTPS != nil
@@ -104,6 +134,78 @@ func (cfg Config) Env() map[string]string {
 		env["no_proxy"] = cfg.NoProxy
 	}
 	return env
+}
+
+// EnvironmentKeys returns the proxy-related environment variable names used by
+// the runtime.
+func EnvironmentKeys() []string {
+	keys := make([]string, len(environmentKeys))
+	copy(keys, environmentKeys)
+	return keys
+}
+
+// FromEnvironment returns the process proxy environment as a proxy block.
+func FromEnvironment() *config.HTTPProxy {
+	httpURL, hasHTTP := firstEnvValue("HTTP_PROXY", "http_proxy")
+	httpsURL, hasHTTPS := firstEnvValue("HTTPS_PROXY", "https_proxy")
+	noProxy, hasNoProxy := firstEnvValue("NO_PROXY", "no_proxy")
+	if !hasHTTP && !hasHTTPS && !hasNoProxy {
+		return nil
+	}
+
+	proxy := &config.HTTPProxy{
+		HTTPURL:  httpURL,
+		HTTPSURL: httpsURL,
+		NoProxy:  noProxy,
+	}
+	if IsExplicitDisable(proxy) {
+		return nil
+	}
+	return proxy
+}
+
+// Merge overlays override onto base field by field.
+func Merge(base *config.HTTPProxy, override *config.HTTPProxy) *config.HTTPProxy {
+	if IsExplicitDisable(override) {
+		return &config.HTTPProxy{}
+	}
+	if base == nil && override == nil {
+		return nil
+	}
+
+	merged := Clone(base)
+	if merged == nil {
+		merged = &config.HTTPProxy{}
+	}
+	if override == nil {
+		return merged
+	}
+
+	overrideHTTPURL := strings.TrimSpace(override.HTTPURL)
+	overrideHTTPSURL := strings.TrimSpace(override.HTTPSURL)
+	if overrideHTTPURL != "" {
+		merged.HTTPURL = overrideHTTPURL
+	}
+	if overrideHTTPSURL != "" {
+		merged.HTTPSURL = overrideHTTPSURL
+	}
+	if value := strings.TrimSpace(override.NoProxy); value != "" {
+		merged.NoProxy = value
+	}
+	if override.Auth != nil {
+		if overrideHTTPURL == "" {
+			merged.HTTPURL = stripProxyURLUserInfo(merged.HTTPURL)
+		}
+		if overrideHTTPSURL == "" {
+			merged.HTTPSURL = stripProxyURLUserInfo(merged.HTTPSURL)
+		}
+		merged.Auth = &config.ProxyAuth{
+			Username: strings.TrimSpace(override.Auth.Username),
+			Password: strings.TrimSpace(override.Auth.Password),
+		}
+	}
+
+	return merged
 }
 
 // Clone duplicates the provided HTTP proxy configuration.
@@ -183,6 +285,21 @@ func Equal(a, b *config.HTTPProxy) bool {
 	return true
 }
 
+func firstEnvValue(keys ...string) (string, bool) {
+	for _, key := range keys {
+		value, ok := os.LookupEnv(key)
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		return value, true
+	}
+	return "", false
+}
+
 func parseProxyURL(field string, raw string) (*url.URL, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -222,4 +339,23 @@ func proxyURLString(value *url.URL) string {
 		return ""
 	}
 	return value.String()
+}
+
+func stripProxyURLUserInfo(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return value
+	}
+	if parsed.User == nil {
+		return value
+	}
+
+	clone := *parsed
+	clone.User = nil
+	return clone.String()
 }

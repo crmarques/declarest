@@ -1,6 +1,6 @@
 resource:
-  idAttribute: /name
-  aliasAttribute: /name
+  id: "{{/name}}"
+  alias: "{{/name}}"
 operations:
   create:
     method: PUT

@@ -1,6 +1,6 @@
 resource:
-  idAttribute: /index
-  aliasAttribute: /index
+  id: "{{/index}}"
+  alias: "{{/index}}"
   remoteCollectionPath: /project/{{.project}}/sources
 operations:
   create:

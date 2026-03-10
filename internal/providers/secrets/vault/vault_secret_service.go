@@ -106,14 +106,13 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
-	if cfg.Proxy != nil && !proxyhelper.IsExplicitDisable(cfg.Proxy) {
-		proxyConfig, err := proxyhelper.Build("secret-store.vault.proxy", cfg.Proxy)
-		if err != nil {
-			return nil, err
-		}
-		if proxyConfig.HasProxy() {
-			transport.Proxy = proxyConfig.Resolver()
-		}
+	transport.Proxy = nil
+	proxyConfig, disabled, err := proxyhelper.Resolve("secret-store.vault.proxy", cfg.Proxy)
+	if err != nil {
+		return nil, err
+	}
+	if !disabled {
+		transport.Proxy = proxyConfig.Resolver()
 	}
 
 	service := &VaultSecretService{

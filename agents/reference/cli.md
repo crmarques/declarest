@@ -33,7 +33,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 14. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 15. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
 16. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates, `resource request <method>` path completion MUST prefer remote candidates with repository fallback, and `metadata *` plus path-aware `secret` commands MUST prefer repository candidates with remote fallback.
-17. When completion resolves collection items from payload-backed metadata, it MUST prefer `aliasAttribute` values for displayed path segments over ID-only segments when aliases are available, completion suggestions MUST use canonical absolute paths that remain prefix-compatible with the current input token, templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, collection-prefix suggestions SHOULD preserve trailing `/` semantics, and path completion SHOULD emit no-space directives so accepted path candidates do not append a trailing space.
+17. When completion resolves collection items from payload-backed metadata, it MUST prefer rendered `resource.alias` values for displayed path segments over ID-only segments when aliases are available, completion suggestions MUST use canonical absolute paths that remain prefix-compatible with the current input token, templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, collection-prefix suggestions SHOULD preserve trailing `/` semantics, and path completion SHOULD emit no-space directives so accepted path candidates do not append a trailing space.
 18. When metadata selector trees define logical child branches that are not present in OpenAPI paths (for example intermediary `/_/` templates such as `/admin/realms/_/user-registry/_/mappers/_/`), path completion SHOULD surface those metadata-defined child segments as canonical logical suggestions under matching concrete paths.
 
 ## Data Contracts
@@ -242,7 +242,7 @@ Interactive context commands:
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
 67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
 ### Repository-Backed Fallback and Delete
-68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `idAttribute`.
+68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `resource.id`, using reverse matching only when the template is a simple single-pointer expression.
 69. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
 70. `resource delete --source managed-server` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and, when no local targets match, attempt literal delete with metadata-aware remote identity fallback on `NotFound`.
 71. `resource request delete` MUST resolve collection targets from local repository resources (direct-child by default, descendants with `--recursive`) and issue one delete request per resolved target; when no local targets match it MUST issue a single delete request for the requested path.
@@ -263,7 +263,7 @@ Interactive context commands:
 80. Interactive `context add` MUST NOT prompt for repository payload format; repository payload files follow the managed-server response media type or explicit payload input media type at runtime.
 81. `repository history` MUST return a deterministic not-supported text message for filesystem repositories and MUST expose filtered local git history for git repositories.
 82. `repository tree` MUST accept no positional arguments and MUST print a deterministic directory-only tree view of the local repository, excluding files, hidden control directories (for example `.git`), and reserved metadata namespace directories named `_`; directory names with spaces MUST be preserved verbatim.
-82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata identity attributes (`aliasAttribute` or `idAttribute`) present in the payload do not match the target path segment.
+82. `resource create|apply` explicit-input payload mode MUST fail with `ValidationError` when metadata-rendered identity (`resource.alias` or `resource.id`) from the payload does not match the target path segment.
 ### Git Auto-Commit and Push
 83. `resource save` on a git repository context MUST create a local commit after repository mutation and MUST accept `--message` as an override-only git commit message flag; when `--push` is provided, save MUST push the resulting commit regardless of `repository.git.remote.autoSync` and MUST fail with `ValidationError` when the active repository is not git or has no configured `repository.git.remote`.
 84. `resource delete` when repository deletion is selected (`--source repository|both`) on a git repository context MUST create a local commit after repository mutation and MUST accept the same commit-message flags with the same mutual-exclusion rule.
@@ -298,7 +298,7 @@ Interactive context commands:
 8. `repository commit` text output MUST deterministically report whether a commit was created (including the clean-worktree no-op case).
 9. `repository tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
 ### Resource and List Output
-9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`aliasAttribute`/`idAttribute`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
+9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`alias`/`id`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
 7. `context show` MUST print the full selected context configuration as YAML to stdout.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
@@ -379,7 +379,7 @@ Interactive context commands:
 12. `resource` invoked without a subcommand when no current context exists.
 13. `resource apply`, `resource create`, or `resource update` is invoked on a collection that has only nested descendants and omits `--recursive`.
 14. `resource save` list payload item is missing metadata-defined alias/id attributes; command falls back to common identity attributes (`clientId`, `id`, `name`, `alias`) before failing.
-15. Repository identity fallback receives a path segment that matches multiple resources by metadata `idAttribute` and fails with `ConflictError`.
+15. Repository identity fallback receives a path segment that matches multiple resources by metadata `resource.id` simple-pointer reverse matching and fails with `ConflictError`.
 16. `resource save --push` is used with `repository.git.remote.autoSync: false` and still pushes the new save commit to the configured remote.
 17. `resource get /files/blob --output text` writes raw binary bytes without a trailing newline when `/files/blob` resolves to payload type `octet-stream`.
 18. `resource get /files/blob --output json` emits a stable base64 wrapper with `encoding`, `mediaType`, and `data`.
@@ -477,7 +477,7 @@ Interactive context commands:
 57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--confirm-delete` is required.
 58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct managed-server DELETE request.
 59. `declarest resource request delete /customers --confirm-delete --recursive` issues delete requests for all repository resources under `/customers`.
-60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `idAttribute` matches the provided path segment when no literal repository resource exists.
+60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `resource.id` template resolves or reverse-matches the provided path segment when no literal repository resource exists.
 61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
 62. `declarest resource get /admin/realms/ --exclude master,realm1` returns the remaining realm payloads after excluding those collection items.
 63. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
@@ -510,7 +510,7 @@ Interactive context commands:
 87. `declarest repository history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
 88. `declarest repository history` in a filesystem context prints a deterministic not-supported message.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.
-83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `aliasAttribute` (for example `account`) instead of ID-only segments.
+83. `declarest resource get /admin/realms/master/clients/<TAB>` completes using alias values from metadata `resource.alias` (for example `account`) instead of ID-only segments.
 84. `declarest resource get /admin/realms/publico-br/user-registry/AD/mappers/` executes remote collection list resolution for `/admin/realms/publico-br/user-registry/AD/mappers`.
 85. `declarest resource get /admin/realms/publico-br/user-registry/A<TAB>` can complete to `/admin/realms/publico-br/user-registry/AD PRD` as one candidate path segment.
 86. `declarest resource get /admin/realms/master/` retries a single-resource remote read for `/admin/realms/master` when collection list decoding fails with `list response ...` or `list payload ...` validation.

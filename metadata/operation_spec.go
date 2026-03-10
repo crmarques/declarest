@@ -13,6 +13,7 @@ import (
 	"text/template"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/metadata/identitytemplate"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -192,16 +193,16 @@ func InferFromOpenAPISpec(
 	inferred := MergeResourceMetadata(fallbackMetadata, openAPIMetadata)
 
 	if target.Collection {
-		idAttribute, aliasAttribute := inferIdentityAttributes(
+		idFieldName, aliasFieldName := inferIdentityAttributes(
 			target,
 			openAPIIdentityAttribute,
 			openAPIResourceAttributes,
 		)
-		if strings.TrimSpace(idAttribute) != "" {
-			inferred.IDAttribute = resource.JSONPointerForObjectKey(idAttribute)
+		if strings.TrimSpace(idFieldName) != "" {
+			inferred.ID = identitytemplate.PointerTemplate(resource.JSONPointerForObjectKey(idFieldName))
 		}
-		if strings.TrimSpace(aliasAttribute) != "" {
-			inferred.AliasAttribute = resource.JSONPointerForObjectKey(aliasAttribute)
+		if strings.TrimSpace(aliasFieldName) != "" {
+			inferred.Alias = identitytemplate.PointerTemplate(resource.JSONPointerForObjectKey(aliasFieldName))
 		}
 		if shouldInferSecretAttribute(target) {
 			inferred.SecretAttributes = []string{resource.JSONPointerForObjectKey("secret")}
@@ -245,8 +246,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	openAPIDefaults, _, _ := inferMetadataFromOpenAPISpec(target, openAPISpec)
 	defaults = MergeResourceMetadata(defaults, openAPIDefaults)
 	compact := ResourceMetadata{
-		IDAttribute:            inferred.IDAttribute,
-		AliasAttribute:         inferred.AliasAttribute,
+		ID:                     inferred.ID,
+		Alias:                  inferred.Alias,
 		RequiredAttributes:     cloneStringSlice(inferred.RequiredAttributes),
 		RemoteCollectionPath:   inferred.RemoteCollectionPath,
 		PayloadType:            inferred.PayloadType,

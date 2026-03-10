@@ -339,6 +339,24 @@ func TestValidateConfigAllowsExplicitProxyDisable(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAllowsSparseProxyOverrideWithoutURLs(t *testing.T) {
+	t.Parallel()
+
+	server := validManagedServer()
+	server.HTTP.Proxy = &config.HTTPProxy{
+		NoProxy: "localhost,127.0.0.1",
+	}
+
+	err := validateConfig(config.Context{
+		Name:          "proxy-override",
+		Repository:    validFilesystemRepository(),
+		ManagedServer: server,
+	})
+	if err != nil {
+		t.Fatalf("expected sparse proxy override to be valid, got %v", err)
+	}
+}
+
 func TestValidateConfigAllowsMissingRepositoryWhenManagedServerIsConfigured(t *testing.T) {
 	t.Parallel()
 
@@ -1128,6 +1146,92 @@ func TestResolveContextProxyExplicitDisable(t *testing.T) {
 	}
 }
 
+func TestResolveContextMergesEnvironmentProxyWithConfiguredFields(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://env-proxy.example.com:3128")
+	t.Setenv("HTTPS_PROXY", "https://env-secure-proxy.example.com:8443")
+	t.Setenv("NO_PROXY", "svc.cluster.local")
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	const yaml = `
+contexts:
+  - name: merge
+    repository:
+      git:
+        local:
+          baseDir: /tmp/repo
+        remote:
+          url: https://git.example.com/org/repo.git
+    managedServer:
+      http:
+        baseURL: https://example.com/api
+        proxy:
+          noProxy: localhost,127.0.0.1
+        auth:
+          customHeaders:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+currentContext: merge
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatalf("failed to write proxy merge context catalog: %v", err)
+	}
+
+	contextService := NewService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "merge"})
+	if err != nil {
+		t.Fatalf("expected proxy environment merge to succeed, got %v", err)
+	}
+
+	assertProxyConfig(t, "managedServer", resolved.ManagedServer.HTTP.Proxy, "http://env-proxy.example.com:3128", "https://env-secure-proxy.example.com:8443", "localhost,127.0.0.1", "", "")
+	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://env-proxy.example.com:3128", "https://env-secure-proxy.example.com:8443", "localhost,127.0.0.1", "", "")
+}
+
+func TestResolveContextExplicitProxyDisableSuppressesEnvironment(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://env-proxy.example.com:3128")
+	t.Setenv("HTTPS_PROXY", "https://env-secure-proxy.example.com:8443")
+	t.Setenv("NO_PROXY", "svc.cluster.local")
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	const yaml = `
+contexts:
+  - name: disable-env
+    repository:
+      git:
+        local:
+          baseDir: /tmp/repo
+        remote:
+          url: https://git.example.com/org/repo.git
+    managedServer:
+      http:
+        baseURL: https://example.com/api
+        proxy: {}
+        auth:
+          customHeaders:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+currentContext: disable-env
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatalf("failed to write proxy disable context catalog: %v", err)
+	}
+
+	contextService := NewService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "disable-env"})
+	if err != nil {
+		t.Fatalf("expected proxy disable to succeed, got %v", err)
+	}
+
+	if resolved.ManagedServer.HTTP.Proxy == nil {
+		t.Fatal("expected managedServer proxy block to remain present")
+	}
+	if resolved.ManagedServer.HTTP.Proxy.HTTPURL != "" || resolved.ManagedServer.HTTP.Proxy.HTTPSURL != "" || resolved.ManagedServer.HTTP.Proxy.NoProxy != "" {
+		t.Fatalf("expected managedServer proxy disable to suppress environment values, got %#v", resolved.ManagedServer.HTTP.Proxy)
+	}
+	assertProxyConfig(t, "repository", resolved.Repository.Git.Remote.Proxy, "http://env-proxy.example.com:3128", "https://env-secure-proxy.example.com:8443", "svc.cluster.local", "", "")
+}
+
 func TestUpdatePreservesProxyOmissionsFromStoredContext(t *testing.T) {
 	t.Parallel()
 
@@ -1197,6 +1301,12 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 	}
 	if proxy.NoProxy != noProxy {
 		t.Fatalf("expected %s proxy noProxy %q, got %q", component, noProxy, proxy.NoProxy)
+	}
+	if username == "" && password == "" {
+		if proxy.Auth != nil {
+			t.Fatalf("expected %s proxy auth to be omitted, got %#v", component, proxy.Auth)
+		}
+		return
 	}
 	if proxy.Auth == nil {
 		t.Fatalf("expected %s proxy auth to be configured", component)

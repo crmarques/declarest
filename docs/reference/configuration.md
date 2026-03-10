@@ -153,7 +153,7 @@ repository:
           password: proxy-pass
 ```
 
-`proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. When unset, the component inherits the first configured proxy from `managedServer.http.proxy`, `secretStore.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly skip the inherited proxy for this component.
+`proxy` fields configure the HTTP/HTTPS proxy used for fetch/push operations. `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` (or their lowercase aliases) provide the baseline proxy configuration; a component proxy block overrides only the fields it defines, and when a component proxy is unset it inherits the first configured concrete proxy from `managedServer.http.proxy`, `secretStore.vault.proxy`, or `metadata.proxy`. Set `proxy:` with no values to explicitly disable both inherited and environment proxy settings for that component.
 
 Repository payload files are not configured in the context. DeclaREST persists `resource.<ext>` using the managed-server response media type or the explicit payload input media type.
 
@@ -182,7 +182,7 @@ managed-server:
       insecureSkipVerify: false
 ```
 
-Define any of the `managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited proxy for that component.
+Define any of the `managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, or `metadata.proxy` blocks to set the default proxy shared across the other components. These blocks can define only the fields they need to override from the process environment. Add an empty `proxy:` block for a component if you want to explicitly disable the inherited and environment proxy for that component.
 
 ### Health check (`managedServer.http.healthCheck`)
 

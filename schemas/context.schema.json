@@ -100,30 +100,7 @@
         "auth": {
           "$ref": "#/$defs/proxyAuth"
         }
-      },
-      "allOf": [
-        {
-          "anyOf": [
-            {
-              "maxProperties": 0
-            },
-            {
-              "anyOf": [
-                {
-                  "required": [
-                    "httpURL"
-                  ]
-                },
-                {
-                  "required": [
-                    "httpsURL"
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
+      }
     },
     "tls": {
       "type": "object",

@@ -21,7 +21,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. `SyncPolicy` admission and reconcile validation MUST reject overlapping logical source scopes regardless of dependency-reference equality.
 4. Controllers MUST add finalizer `declarest.io/cleanup` and MUST remove it only after controller-owned cleanup is complete.
 5. `ResourceRepository` reconcile MUST ensure configured storage availability, perform authenticated git sync against the configured branch, update `status.lastFetchedRevision` and `status.lastFetchedTime`, and set `Ready`/`Stalled` conditions deterministically.
-6. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, and persist cache paths in status without leaking secret values.
+6. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
 7. `SecretStore` reconcile MUST enforce provider one-of constraints (`vault` or `file`), ensure file-backed storage dependencies when required, and set `status.resolvedPath` only for file-backed stores.
 8. `SyncPolicy` reconcile MUST validate referenced dependency resources, compute a secret-version hash from referenced Secret `resourceVersion` values, and trigger full sync when generation, secret hash, or full-resync schedule requires it.
 9. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync.
@@ -39,7 +39,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 6. `ResourceRepository` defaults: `spec.git.branch=main` when omitted; repository payload file extensions are determined at runtime from managed-server responses or explicit payload input, and `ResourceRepository` MUST NOT expose a payload-format default field.
 7. `ManagedServer` defaults: `spec.http.auth.oauth2.grantType=client_credentials` when omitted; `spec.pollInterval=10m` when omitted.
 8. `SyncPolicy` defaults: `spec.source.recursive=true` and `spec.syncInterval=5m` when omitted.
-9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows.
+9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows; managed-server and vault proxy blocks MAY override only selected fields from process proxy environment.
 10. Sync execution plan modes: `full` or `incremental`; plan targets MUST be normalized and deduplicated.
 
 ## Failure Modes

@@ -84,7 +84,7 @@ Optional fields:
 4. `Preferences` settings map.
 5. `Metadata` typed metadata configuration object.
 6. `managedServer.http.healthCheck` optional probe target used by `server check`.
-7. Metadata attribute references (`idAttribute`, `aliasAttribute`, `requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
+7. Metadata JSON Pointer references (`requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings; `resource.id` and `resource.alias` are identity template strings that MAY embed one or more JSON Pointer expressions and MUST also accept raw JSON Pointer shorthand such as `/id`.
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
@@ -98,7 +98,7 @@ One-of invariants:
 4. `secretStore` MUST define exactly one of `file` or `vault`.
 5. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
 6. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
-7. `managedServer.http.proxy` MUST define at least one of `httpURL` or `httpsURL` when configured.
+7. `managedServer.http.proxy` MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
 8. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
 9. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
 10. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
@@ -148,7 +148,7 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`idAttribute`, `aliasAttribute`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `preferredFormat` persistence hint.
+1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `preferredFormat` persistence hint; when omitted, `id` and `alias` default to `/id` for identity resolution.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
 3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).

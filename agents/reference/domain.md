@@ -43,7 +43,7 @@ Key terms:
 3. Array fields in metadata are replace, not deep-merge.
 4. Compare behavior MUST ignore fields declared by metadata suppression/filter rules.
 5. Non-unique alias in the same collection is a conflict and MUST be surfaced.
-6. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`, and configured `resource.aliasAttribute` MUST count as required even when `resource.requiredAttributes` omits it.
+6. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`, and every JSON Pointer referenced by configured `resource.alias` or `resource.id` MUST count as required even when `resource.requiredAttributes` omits it.
 
 ## Failure Modes
 1. Alias collision causing ambiguous target resolution.
@@ -59,7 +59,7 @@ Key terms:
 5. Structured update transforms remove an alias field from the outgoing body after resource-level validation already confirmed it exists in the source payload.
 
 ## Examples
-1. Local path `/customers/acme` maps to collection `/customers`, alias `acme`, remote ID from `idAttribute` if configured.
+1. Local path `/customers/acme` maps to collection `/customers`, alias `acme`, and remote ID from rendered `resource.id` when configured.
 2. Metadata on `/customers/_` sets default `operations.get.path`; resource metadata on `/customers/acme` overrides only `operations.update.path`.
 3. Diff operation suppresses `/updatedAt` and `/lastSeen` before comparison to avoid false drift.
-4. Metadata with `resource.aliasAttribute: /clientId` and `resource.requiredAttributes: [/realm]` still requires `/clientId` in a structured create/update payload even when an operation transform later excludes `/clientId` from the transmitted body.
+4. Metadata with `resource.alias: "{{/clientId}}"` and `resource.requiredAttributes: [/realm]` still requires `/clientId` in a structured create/update payload even when an operation transform later excludes `/clientId` from the transmitted body.

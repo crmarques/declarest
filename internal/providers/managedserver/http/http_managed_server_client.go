@@ -79,6 +79,7 @@ func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
+	transport.Proxy = nil
 	if proxyFunc, err := buildProxyFunc(cfg.Proxy); err != nil {
 		return nil, err
 	} else if proxyFunc != nil {

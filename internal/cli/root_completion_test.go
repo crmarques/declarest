@@ -196,7 +196,7 @@ func TestPathCompletionResourceApplyPrefersRepository(t *testing.T) {
 	}
 }
 
-func TestPathCompletionUsesAliasAttributeForCollectionItems(t *testing.T) {
+func TestPathCompletionUsesRenderedAliasTemplateForCollectionItems(t *testing.T) {
 	t.Parallel()
 
 	deps := testDeps()

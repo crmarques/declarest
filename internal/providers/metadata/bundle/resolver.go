@@ -596,23 +596,19 @@ func openBundleStream(ctx context.Context, source bundleSource, opts bundleResol
 		}
 
 		client := &http.Client{Timeout: 60 * time.Second}
-		if opts.proxy != nil && !proxyhelper.IsExplicitDisable(opts.proxy) {
-			proxyConfig, parseErr := proxyhelper.Build("metadata.proxy", opts.proxy)
-			if parseErr != nil {
-				return nil, parseErr
+		proxyConfig, disabled, parseErr := proxyhelper.Resolve("metadata.proxy", opts.proxy)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+			transportCopy := transport.Clone()
+			transportCopy.Proxy = nil
+			if !disabled {
+				transportCopy.Proxy = proxyConfig.Resolver()
 			}
-			if proxyConfig.HasProxy() {
-				if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-					transportCopy := transport.Clone()
-					transportCopy.Proxy = proxyConfig.Resolver()
-					client.Transport = transportCopy
-				} else {
-					configuredTransport := &http.Transport{
-						Proxy: proxyConfig.Resolver(),
-					}
-					client.Transport = configuredTransport
-				}
-			}
+			client.Transport = transportCopy
+		} else if !disabled {
+			client.Transport = &http.Transport{Proxy: proxyConfig.Resolver()}
 		}
 
 		response, err := client.Do(request)

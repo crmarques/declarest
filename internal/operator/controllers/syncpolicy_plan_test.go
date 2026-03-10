@@ -21,7 +21,7 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 
 	writeFile(t, filepath.Join(repoDir, "customers", "acme", "resource.json"), `{"id":"acme","name":"Acme"}`)
 	writeFile(t, filepath.Join(repoDir, "customers", "bravo", "resource.json"), `{"id":"bravo","name":"Bravo"}`)
-	writeFile(t, filepath.Join(repoDir, "customers", "_", "metadata.json"), `{"resource":{"idAttribute":"id"}}`)
+	writeFile(t, filepath.Join(repoDir, "customers", "_", "metadata.json"), `{"resource":{"id":"{{/id}}"}}`)
 	rev1 := commitAll(t, repo, "initial")
 
 	writeFile(t, filepath.Join(repoDir, "customers", "acme", "resource.json"), `{"id":"acme","name":"Acme Updated"}`)
@@ -40,7 +40,7 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 		t.Fatalf("unexpected apply targets: got %#v want %#v", targets, expectedTargets)
 	}
 
-	writeFile(t, filepath.Join(repoDir, "customers", "_", "metadata.json"), `{"resource":{"idAttribute":"id","aliasAttribute":"name"}}`)
+	writeFile(t, filepath.Join(repoDir, "customers", "_", "metadata.json"), `{"resource":{"id":"{{/id}}","alias":"{{/name}}"}}`)
 	rev3 := commitAll(t, repo, "update customers metadata")
 
 	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, rev2, rev3, "/customers")

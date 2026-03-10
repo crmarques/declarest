@@ -251,8 +251,8 @@ func buildTemplateScopeForResource(
 }
 
 func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
-	return strings.TrimSpace(value.IDAttribute) == "" &&
-		strings.TrimSpace(value.AliasAttribute) == "" &&
+	return strings.TrimSpace(value.ID) == "" &&
+		strings.TrimSpace(value.Alias) == "" &&
 		strings.TrimSpace(value.RemoteCollectionPath) == "" &&
 		strings.TrimSpace(value.PayloadType) == "" &&
 		value.Secret == nil &&

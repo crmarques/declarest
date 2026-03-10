@@ -6,6 +6,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/identitytemplate"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -22,10 +23,10 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
 		return err
 	}
-	if err := validateAttributePointer("resource.idAttribute", metadata.IDAttribute); err != nil {
+	if err := validateIdentityTemplate("resource.id", metadata.ID); err != nil {
 		return err
 	}
-	if err := validateAttributePointer("resource.aliasAttribute", metadata.AliasAttribute); err != nil {
+	if err := validateIdentityTemplate("resource.alias", metadata.Alias); err != nil {
 		return err
 	}
 	if err := validateAttributePointers("resource.requiredAttributes", metadata.RequiredAttributes); err != nil {
@@ -77,19 +78,19 @@ func validateStructuredOnlyMetadataFields(
 		return nil
 	}
 
-	if strings.TrimSpace(metadata.IDAttribute) != "" {
+	if strings.TrimSpace(metadata.ID) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.idAttribute requires structured payload type (json, yaml); got %q",
+				"resource.id requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,
 		)
 	}
-	if strings.TrimSpace(metadata.AliasAttribute) != "" {
+	if strings.TrimSpace(metadata.Alias) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.aliasAttribute requires structured payload type (json, yaml); got %q",
+				"resource.alias requires structured payload type (json, yaml); got %q",
 				payloadType,
 			),
 			nil,
@@ -218,6 +219,17 @@ func validateAttributePointer(field string, value string) error {
 	}
 	if _, err := resource.ParseJSONPointer(trimmed); err != nil {
 		return faults.NewValidationError(field+" must be a valid JSON pointer", err)
+	}
+	return nil
+}
+
+func validateIdentityTemplate(field string, value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	if _, err := identitytemplate.Compile(trimmed); err != nil {
+		return faults.NewValidationError(field+" must be a valid identity template or JSON pointer shorthand", err)
 	}
 	return nil
 }

@@ -74,23 +74,11 @@ func populateManagedServerConfig(
 		cfg.TLS = tlsConfig
 	}
 
-	if managedServer.Spec.HTTP.Proxy != nil {
-		proxy := &config.HTTPProxy{
-			HTTPURL:  managedServer.Spec.HTTP.Proxy.HTTPURL,
-			HTTPSURL: managedServer.Spec.HTTP.Proxy.HTTPSURL,
-			NoProxy:  managedServer.Spec.HTTP.Proxy.NoProxy,
-		}
-		if managedServer.Spec.HTTP.Proxy.Auth != nil {
-			username, err := readSecretValue(ctx, reader, namespace, managedServer.Spec.HTTP.Proxy.Auth.UsernameRef)
-			if err != nil {
-				return err
-			}
-			password, err := readSecretValue(ctx, reader, namespace, managedServer.Spec.HTTP.Proxy.Auth.PasswordRef)
-			if err != nil {
-				return err
-			}
-			proxy.Auth = &config.ProxyAuth{Username: username, Password: password}
-		}
+	proxy, err := resolveManagedServerProxyConfig(ctx, reader, namespace, managedServer.Spec.HTTP.Proxy)
+	if err != nil {
+		return err
+	}
+	if proxy != nil {
 		cfg.Proxy = proxy
 	}
 
@@ -153,4 +141,35 @@ func populateManagedServerConfig(
 	}
 	cfg.Auth = auth
 	return nil
+}
+
+func resolveManagedServerProxyConfig(
+	ctx context.Context,
+	reader client.Reader,
+	namespace string,
+	proxySpec *declarestv1alpha1.HTTPProxySpec,
+) (*config.HTTPProxy, error) {
+	if proxySpec == nil {
+		return nil, nil
+	}
+
+	proxy := &config.HTTPProxy{
+		HTTPURL:  proxySpec.HTTPURL,
+		HTTPSURL: proxySpec.HTTPSURL,
+		NoProxy:  proxySpec.NoProxy,
+	}
+	if proxySpec.Auth == nil {
+		return proxy, nil
+	}
+
+	username, err := readSecretValue(ctx, reader, namespace, proxySpec.Auth.UsernameRef)
+	if err != nil {
+		return nil, err
+	}
+	password, err := readSecretValue(ctx, reader, namespace, proxySpec.Auth.PasswordRef)
+	if err != nil {
+		return nil, err
+	}
+	proxy.Auth = &config.ProxyAuth{Username: username, Password: password}
+	return proxy, nil
 }

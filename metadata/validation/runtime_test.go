@@ -8,35 +8,43 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
-func TestEffectiveResourceRequiredAttributesIncludesAliasAttribute(t *testing.T) {
+func TestEffectiveResourceRequiredAttributesIncludesIdentityTemplatePointers(t *testing.T) {
 	t.Parallel()
 
 	md := metadatadomain.ResourceMetadata{
-		AliasAttribute:     "/clientId",
+		Alias:              "{{/clientId}}",
+		ID:                 "{{default /metadata/externalId /id}}",
 		RequiredAttributes: []string{"/realm"},
 	}
 
 	effective := EffectiveResourceRequiredAttributes(md)
-	if len(effective) != 2 || effective[0] != "/realm" || effective[1] != "/clientId" {
-		t.Fatalf("expected aliasAttribute to be appended to required attributes, got %#v", effective)
+	want := []string{"/realm", "/clientId", "/metadata/externalId", "/id"}
+	if len(effective) != len(want) {
+		t.Fatalf("unexpected required attributes %#v", effective)
+	}
+	for idx := range want {
+		if effective[idx] != want[idx] {
+			t.Fatalf("unexpected required attributes %#v", effective)
+		}
 	}
 }
 
-func TestValidateResourceRequiredAttributesRequiresAliasAttribute(t *testing.T) {
+func TestValidateResourceRequiredAttributesRequiresIdentityTemplatePointers(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateResourceRequiredAttributes(
 		map[string]any{"realm": "platform"},
 		metadatadomain.ResourceMetadata{
-			AliasAttribute:     "/clientId",
+			Alias:              "{{/clientId}}",
+			ID:                 "{{/id}}",
 			RequiredAttributes: []string{"/realm"},
 		},
 	)
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected ValidationError, got %v", err)
 	}
-	if err == nil || !strings.Contains(err.Error(), "/clientId") {
-		t.Fatalf("expected missing aliasAttribute in validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "/clientId") || !strings.Contains(err.Error(), "/id") {
+		t.Fatalf("expected missing identity pointers in validation error, got %v", err)
 	}
 }
 

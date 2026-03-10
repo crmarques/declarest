@@ -27,6 +27,14 @@ func TestMachineReadableSchemasRemainParseableAndWired(t *testing.T) {
 	if _, ok := contextSchema["$defs"]; !ok {
 		t.Fatal("expected context schema to define shared definitions")
 	}
+	contextDefs := objectProperty(t, contextSchema, "$defs")
+	proxyDef, ok := contextDefs["proxy"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected proxy definition, got %#v", contextDefs["proxy"])
+	}
+	if _, ok := proxyDef["allOf"]; ok {
+		t.Fatalf("expected proxy schema to allow sparse overrides without allOf URL requirements, got %#v", proxyDef["allOf"])
+	}
 
 	contextsSchema := loadSchemaDocument(t, "contexts.schema.json")
 	contextsProperties := objectProperty(t, contextsSchema, "properties")
@@ -72,6 +80,12 @@ func TestMachineReadableSchemasRemainParseableAndWired(t *testing.T) {
 		t.Fatalf("expected resource definition, got %#v", metadataDefs["resource"])
 	}
 	resourceProperties := objectProperty(t, resourceDef, "properties")
+	if _, ok := resourceProperties["id"]; !ok {
+		t.Fatal("expected metadata resource schema to define id")
+	}
+	if _, ok := resourceProperties["alias"]; !ok {
+		t.Fatal("expected metadata resource schema to define alias")
+	}
 	if _, ok := resourceProperties["preferredFormat"]; !ok {
 		t.Fatal("expected metadata resource schema to define preferredFormat")
 	}

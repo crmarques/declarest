@@ -98,7 +98,7 @@ Each step is bounded: no unbounded retries, no cascading searches. If a step fai
 ## Determinism principles
 
 - **Normalized paths:** all logical paths are absolute and normalized before any I/O.
-- **Metadata-first identity:** resource identity resolves through metadata `idAttribute`/`aliasAttribute` before raw API response.
+- **Metadata-first identity:** resource identity resolves through metadata `resource.id`/`resource.alias` templates before raw API response.
 - **Bounded fallback:** read fallbacks (literal -> collection list/filter) are always bounded by one level — no recursive search.
 - **Stable ordering:** list and diff outputs use deterministic ordering for equivalent inputs.
 - **Typed errors:** every error path maps to a specific category (`ValidationError`, `NotFoundError`, `ConflictError`, `AuthError`, `TransportError`, `InternalError`), which maps to a deterministic CLI exit code.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 )
 
@@ -96,18 +97,33 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 func (g *Client) applyAuth(ctx context.Context, request *http.Request) error {
 	switch g.auth.mode {
 	case authModeOAuth2:
+		debugctx.Detailf(ctx, "auth mode=oauth2 token_url=%q client_id=%q", g.auth.oauth2.TokenURL, g.auth.oauth2.ClientID)
+		if debugctx.Insecure(ctx) {
+			debugctx.Detailf(ctx, "auth oauth2 client_secret=%q", g.auth.oauth2.ClientSecret)
+		}
 		token, err := g.oauthToken(ctx)
 		if err != nil {
 			return err
 		}
 		request.Header.Set("Authorization", "Bearer "+token)
+		if debugctx.Insecure(ctx) {
+			debugctx.Detailf(ctx, "auth oauth2 access_token=%q", token)
+		}
 	case authModeBasic:
+		debugctx.Detailf(ctx, "auth mode=basic username=%q", g.auth.basicAuth.Username)
+		if debugctx.Insecure(ctx) {
+			debugctx.Detailf(ctx, "auth basic password=%q", g.auth.basicAuth.Password)
+		}
 		request.SetBasicAuth(g.auth.basicAuth.Username, g.auth.basicAuth.Password)
 	case authModeCustomHeaders:
+		debugctx.Detailf(ctx, "auth mode=custom-headers count=%d", len(g.auth.customHeaders))
 		for _, customHeader := range g.auth.customHeaders {
 			value := customHeader.Value
 			if customHeader.Prefix != "" {
 				value = customHeader.Prefix + " " + value
+			}
+			if debugctx.Insecure(ctx) {
+				debugctx.Detailf(ctx, "auth custom-header %s: %s", customHeader.Header, value)
 			}
 			request.Header.Set(customHeader.Header, value)
 		}
@@ -122,8 +138,11 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 	defer g.oauthMu.Unlock()
 
 	if g.oauthAccessToken != "" && time.Now().Before(g.oauthExpiresAt.Add(-30*time.Second)) {
+		debugctx.Detailf(ctx, "oauth2 using cached token expires_at=%s", g.oauthExpiresAt.Format(time.RFC3339))
 		return g.oauthAccessToken, nil
 	}
+
+	debugctx.Detailf(ctx, "oauth2 requesting new token token_url=%q grant_type=%q", g.auth.oauth2.TokenURL, g.auth.oauth2.GrantType)
 
 	formValues := url.Values{}
 	formValues.Set("grant_type", g.auth.oauth2.GrantType)
@@ -162,6 +181,12 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
+		debugctx.Infof(
+			ctx,
+			"oauth2 token error status=%d response_body=%s",
+			response.StatusCode,
+			summarizeBodyForLevel(body, debugctx.Level(ctx)),
+		)
 		return "", authError(
 			fmt.Sprintf("oauth2 token request failed with status %d: %s", response.StatusCode, summarizeBody(body)),
 			nil,
@@ -186,6 +211,8 @@ func (g *Client) oauthToken(ctx context.Context) (string, error) {
 
 	g.oauthAccessToken = tokenResponse.AccessToken
 	g.oauthExpiresAt = expiresAt
+
+	debugctx.Detailf(ctx, "oauth2 token acquired expires_in=%ds expires_at=%s", tokenResponse.ExpiresIn, expiresAt.Format(time.RFC3339))
 
 	return g.oauthAccessToken, nil
 }

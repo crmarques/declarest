@@ -112,28 +112,28 @@ func TestFSMetadataGetSupportsJSONAndPrefersYAML(t *testing.T) {
 	ctx := context.Background()
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.json"), false, metadatadomain.ResourceMetadata{
-		IDAttribute:    "/json-id",
-		AliasAttribute: "/json-alias",
+		ID:    "{{/json-id}}",
+		Alias: "{{/json-alias}}",
 	})
 
 	gotJSON, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get json metadata returned error: %v", err)
 	}
-	if gotJSON.IDAttribute != "/json-id" || gotJSON.AliasAttribute != "/json-alias" {
+	if gotJSON.ID != "{{/json-id}}" || gotJSON.Alias != "{{/json-alias}}" {
 		t.Fatalf("expected json metadata fallback, got %+v", gotJSON)
 	}
 
 	writeMetadataFixture(t, filepath.Join(baseDir, "customers", "acme", "metadata.yaml"), true, metadatadomain.ResourceMetadata{
-		IDAttribute:    "/yaml-id",
-		AliasAttribute: "/yaml-alias",
+		ID:    "{{/yaml-id}}",
+		Alias: "{{/yaml-alias}}",
 	})
 
 	gotYAML, err := service.Get(ctx, "/customers/acme")
 	if err != nil {
 		t.Fatalf("Get yaml metadata returned error: %v", err)
 	}
-	if gotYAML.IDAttribute != "/yaml-id" || gotYAML.AliasAttribute != "/yaml-alias" {
+	if gotYAML.ID != "{{/yaml-id}}" || gotYAML.Alias != "{{/yaml-alias}}" {
 		t.Fatalf("expected yaml metadata to take precedence, got %+v", gotYAML)
 	}
 }
@@ -261,12 +261,12 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_", metadatadomain.ResourceMetadata{
-		IDAttribute:    "/realm",
-		AliasAttribute: "/realm",
+		ID:    "{{/realm}}",
+		Alias: "{{/realm}}",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/clients", metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/clientId",
+		ID:    "{{/id}}",
+		Alias: "{{/clientId}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCreate): {
 				Path: "/admin/realms/{{.realm}}/clients",
@@ -278,13 +278,13 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ResolveForPath returned error: %v", err)
 	}
-	if resolved.IDAttribute != "/id" {
-		t.Fatalf("expected clients idAttribute from intermediary placeholder metadata, got %q", resolved.IDAttribute)
+	if resolved.ID != "{{/id}}" {
+		t.Fatalf("expected clients id from intermediary placeholder metadata, got %q", resolved.ID)
 	}
-	if resolved.AliasAttribute != "/clientId" {
+	if resolved.Alias != "{{/clientId}}" {
 		t.Fatalf(
-			"expected clients aliasAttribute from intermediary placeholder metadata, got %q",
-			resolved.AliasAttribute,
+			"expected clients alias from intermediary placeholder metadata, got %q",
+			resolved.Alias,
 		)
 	}
 	createPath := resolved.Operations[string(metadatadomain.OperationCreate)].Path
@@ -300,13 +300,13 @@ func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *tes
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
-		IDAttribute:          "/id",
-		AliasAttribute:       "/name",
+		ID:                   "{{/id}}",
+		Alias:                "{{/name}}",
 		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
-		IDAttribute:          "/id",
-		AliasAttribute:       "/name",
+		ID:                   "{{/id}}",
+		Alias:                "{{/name}}",
 		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 	})
 
@@ -329,8 +329,8 @@ func TestFSMetadataHasCollectionWildcardChild(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/authentication/flows/_/executions/_", metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/displayName",
+		ID:    "{{/id}}",
+		Alias: "{{/displayName}}",
 	})
 
 	ok, err := service.HasCollectionWildcardChild(
@@ -360,8 +360,8 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/slug",
+		ID:    "{{/id}}",
+		Alias: "{{/slug}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path: "/api{{.remoteCollectionPath}}/{{.alias}}/{{.remoteID}}",
@@ -396,7 +396,7 @@ func TestFSMetadataRenderOperationSpecSupportsRemoteCollectionPathIndirection(t 
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
-		IDAttribute:          "/id",
+		ID:                   "{{/id}}",
 		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
@@ -443,9 +443,9 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/id",
-		PayloadType:    "yaml",
+		ID:          "{{/id}}",
+		Alias:       "{{/id}}",
+		PayloadType: "yaml",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path:   "/api/customers/{{.id}}",
@@ -482,6 +482,21 @@ func TestFSMetadataValidation(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 }
 
+func TestFSMetadataValidationAcceptsIdentityPointerShorthand(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	err := service.Set(ctx, "/customers/acme", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "/name",
+	})
+	if err != nil {
+		t.Fatalf("expected identity pointer shorthand to validate, got %v", err)
+	}
+}
+
 func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 	t.Parallel()
 
@@ -497,17 +512,17 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 			name: "id_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
 				PayloadType: "text",
-				IDAttribute: "/id",
+				ID:          "{{/id}}",
 			},
-			want: "resource.idAttribute requires structured payload type (json, yaml)",
+			want: "resource.id requires structured payload type (json, yaml)",
 		},
 		{
 			name: "alias_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:    "text",
-				AliasAttribute: "/name",
+				PayloadType: "text",
+				Alias:       "{{/name}}",
 			},
-			want: "resource.aliasAttribute requires structured payload type (json, yaml)",
+			want: "resource.alias requires structured payload type (json, yaml)",
 		},
 		{
 			name: "secret_in_attributes_requires_structured_payload",
@@ -592,8 +607,8 @@ func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {
 	ctx := context.Background()
 
 	metadata := metadatadomain.ResourceMetadata{
-		IDAttribute:      "/id",
-		AliasAttribute:   "/clientId",
+		ID:               "{{/id}}",
+		Alias:            "{{/clientId}}",
 		SecretAttributes: []string{"/secret"},
 	}
 
@@ -752,13 +767,13 @@ func TestFSMetadataSetWritesYAMLAndRemovesExistingJSON(t *testing.T) {
 
 	jsonPath := filepath.Join(baseDir, "customers", "acme", "metadata.json")
 	writeMetadataFixture(t, jsonPath, false, metadatadomain.ResourceMetadata{
-		IDAttribute:    "/legacy-id",
-		AliasAttribute: "/legacy-alias",
+		ID:    "{{/legacy-id}}",
+		Alias: "{{/legacy-alias}}",
 	})
 
 	updated := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/yaml-id",
-		AliasAttribute: "/yaml-alias",
+		ID:    "{{/yaml-id}}",
+		Alias: "{{/yaml-alias}}",
 	}
 	if err := service.Set(ctx, "/customers/acme", updated); err != nil {
 		t.Fatalf("Set metadata returned error: %v", err)

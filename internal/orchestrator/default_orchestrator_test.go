@@ -398,8 +398,8 @@ func TestOrchestratorGetRemoteSeedsIdentityFromMetadata(t *testing.T) {
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/realm",
-				AliasAttribute: "/realm",
+				ID:    "{{/realm}}",
+				Alias: "{{/realm}}",
 			},
 		},
 		server: &fakeServer{
@@ -424,8 +424,8 @@ func TestOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 		server: &fakeServer{
@@ -506,8 +506,8 @@ func TestOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:          "/id",
-				AliasAttribute:       "/name",
+				ID:                   "{{/id}}",
+				Alias:                "{{/name}}",
 				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
@@ -574,8 +574,8 @@ func TestOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:          "/id",
-				AliasAttribute:       "/name",
+				ID:                   "{{/id}}",
+				Alias:                "{{/name}}",
 				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
@@ -623,8 +623,8 @@ func TestOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *test
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:          "/id",
-				AliasAttribute:       "/name",
+				ID:                   "{{/id}}",
+				Alias:                "{{/name}}",
 				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			},
 		},
@@ -682,12 +682,12 @@ func TestOrchestratorGetRemoteResolvesAliasPathToMetadataIDBeforeCollectionFallb
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 				resolvedIDPath: {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 			},
 		},
@@ -770,24 +770,24 @@ func TestOrchestratorGetRemoteRecursivelyResolvesParentMetadataIdentity(t *testi
 		metadata: &fakeMetadata{
 			resolveValues: map[string]metadatadomain.ResourceMetadata{
 				aliasPath: {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 				resolvedRealmPath: {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 				resolvedResourcePath: {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 				"/admin/realms/publico-br": {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 				"/admin/realms/realm-1": {
-					IDAttribute:    "/id",
-					AliasAttribute: "/alias",
+					ID:    "{{/id}}",
+					Alias: "{{/alias}}",
 				},
 			},
 		},
@@ -836,8 +836,8 @@ func TestOrchestratorGetRemoteKeepsOriginalNotFoundWhenRecursiveFallbackProbeRes
 	orchestrator := &Orchestrator{
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/alias",
+				ID:    "{{/id}}",
+				Alias: "{{/alias}}",
 			},
 		},
 		server: serverManager,
@@ -1120,8 +1120,8 @@ func TestOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T)
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 	}
@@ -1147,7 +1147,7 @@ func TestOrchestratorGetLocalFallsBackToCollectionListByMetadataID(t *testing.T)
 	}
 }
 
-func TestOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUsesAlias(t *testing.T) {
+func TestOrchestratorGetLocalFallsBackToCommonIDFieldWhenMetadataUsesAlias(t *testing.T) {
 	t.Parallel()
 
 	repositoryManager := &fakeRepository{
@@ -1166,8 +1166,8 @@ func TestOrchestratorGetLocalFallsBackToCommonIDAttributeWhenMetadataUsesAlias(t
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/clientId",
-				AliasAttribute: "/clientId",
+				ID:    "{{/clientId}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 	}
@@ -1216,8 +1216,8 @@ func TestOrchestratorGetLocalFallbackPrefersListedAliasWithoutFullScan(t *testin
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 	}
@@ -1262,8 +1262,8 @@ func TestOrchestratorApplyResolvesLocalPathByMetadataIDFallback(t *testing.T) {
 		repository: repositoryManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 		server: &fakeServer{
@@ -1318,8 +1318,8 @@ func TestOrchestratorDeleteRetriesWithResolvedRemoteIdentityAfterNotFound(t *tes
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 	}
@@ -1384,8 +1384,8 @@ func TestOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDAttribute:          "/id",
-			AliasAttribute:       "/name",
+			ID:                   "{{/id}}",
+			Alias:                "{{/name}}",
 			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		},
 	}
@@ -1426,8 +1426,8 @@ func TestOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *test
 	}
 	metadataService := &fakeMetadata{
 		resolveValue: metadatadomain.ResourceMetadata{
-			IDAttribute:          "/id",
-			AliasAttribute:       "/name",
+			ID:                   "{{/id}}",
+			Alias:                "{{/name}}",
 			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
@@ -1479,8 +1479,8 @@ func TestOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNotFound(t
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/clientId",
+				ID:    "{{/id}}",
+				Alias: "{{/clientId}}",
 			},
 		},
 	}
@@ -1531,8 +1531,8 @@ func TestOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/alias",
+				ID:    "{{/id}}",
+				Alias: "{{/alias}}",
 			},
 		},
 	}
@@ -1570,8 +1570,8 @@ func TestOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedNotFound
 		server: serverManager,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/id",
-				AliasAttribute: "/displayName",
+				ID:    "{{/id}}",
+				Alias: "{{/displayName}}",
 			},
 		},
 	}
@@ -2007,8 +2007,8 @@ func TestOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationCreate): {Path: "/api/customers"},
@@ -2077,8 +2077,8 @@ func TestOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *te
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/clientId",
+		ID:    "{{/id}}",
+		Alias: "{{/clientId}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):    {Path: "/admin/realms/test/clients/{{.id}}"},
 			string(metadatadomain.OperationList):   {Path: "/admin/realms/test/clients"},
@@ -2146,8 +2146,8 @@ func TestOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Transforms: suppressMutation("/updatedAt")},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
@@ -2193,8 +2193,8 @@ func TestOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Transforms: suppressMutation("/updatedAt")},
 			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
@@ -2304,8 +2304,8 @@ func TestOrchestratorApplyRetriesUpdateWhenCreateConflicts(t *testing.T) {
 		repository: repo,
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
-				IDAttribute:    "/realm",
-				AliasAttribute: "/realm",
+				ID:    "{{/realm}}",
+				Alias: "{{/realm}}",
 			},
 		},
 		server: serverManager,
@@ -2344,8 +2344,8 @@ func TestOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2411,8 +2411,8 @@ func TestOrchestratorDiffAppliesCompareJQTransforms(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/name",
-		AliasAttribute: "/name",
+		ID:    "{{/name}}",
+		Alias: "{{/name}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {
 				Transforms: jqMutation(`if type == "object" and has("config") then {name: .name, config: (.config + {"project.name": .name})} else . end`),
@@ -2457,8 +2457,8 @@ func TestOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2512,8 +2512,8 @@ func TestOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2551,8 +2551,8 @@ func TestOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(t *test
 	}
 
 	md := metadatadomain.ResourceMetadata{
-		IDAttribute:    "/id",
-		AliasAttribute: "/alias",
+		ID:    "{{/id}}",
+		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
@@ -2627,12 +2627,12 @@ func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 	metadataService := &fakeMetadata{
 		resolveValues: map[string]metadatadomain.ResourceMetadata{
 			"/admin/realms/publico-br/user-registry/ldap-test/mappers": {
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
+				ID:    "{{/id}}",
+				Alias: "{{/name}}",
 			},
 			"/admin/realms/publico-br/user-registry/ldap-test": {
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
+				ID:    "{{/id}}",
+				Alias: "{{/name}}",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -2640,8 +2640,8 @@ func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 				},
 			},
 			"/admin/realms/publico-br/user-registry": {
-				IDAttribute:    "/id",
-				AliasAttribute: "/name",
+				ID:    "{{/id}}",
+				Alias: "{{/name}}",
 			},
 		},
 	}

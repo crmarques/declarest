@@ -71,18 +71,29 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 				return err
 			}
 
+			verboseLevel := cliutil.VerboseLevel(&globalFlags)
+
 			commandContext := context.Background()
 			commandContext = cliutil.WithContextName(commandContext, globalFlags.Context)
-			commandContext = debugctx.WithEnabled(commandContext, globalFlags.Debug)
+			commandContext = debugctx.WithLevel(commandContext, verboseLevel)
+			commandContext = debugctx.WithInsecure(commandContext, globalFlags.VerboseInsecure)
 			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
 			command.SetContext(commandContext)
 
+			if globalFlags.VerboseInsecure && verboseLevel >= 1 {
+				debugctx.Infof(
+					command.Context(),
+					"WARNING: --verbose-insecure is enabled. Secrets, tokens, and credentials will be printed to stderr.",
+				)
+			}
+
 			debugctx.Printf(
 				command.Context(),
-				"root flags context=%q output=%q verbose=%t no_status=%t no_color=%t command=%q",
+				"root flags context=%q output=%q verbose=%d verbose_insecure=%t no_status=%t no_color=%t command=%q",
 				globalFlags.Context,
 				globalFlags.Output,
-				globalFlags.Verbose,
+				verboseLevel,
+				globalFlags.VerboseInsecure,
 				globalFlags.NoStatus,
 				globalFlags.NoColor,
 				command.CommandPath(),

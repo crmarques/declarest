@@ -360,8 +360,8 @@ func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testi
 	})
 
 	md := metadata.ResourceMetadata{
-		IDAttribute:          "/id",
-		AliasAttribute:       "/name",
+		ID:                   "{{/id}}",
+		Alias:                "{{/name}}",
 		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
@@ -913,7 +913,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		})
 
 		md := metadata.ResourceMetadata{
-			AliasAttribute:     "/clientId",
+			Alias:              "{{/clientId}}",
 			RequiredAttributes: []string{"/realm"},
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationCreate): {
@@ -944,7 +944,7 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		}, md, metadata.OperationCreate)
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "/clientId") {
-			t.Fatalf("expected aliasAttribute validation error, got %v", err)
+			t.Fatalf("expected alias validation error, got %v", err)
 		}
 	})
 
@@ -1248,7 +1248,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 			LogicalPath:    "/admin/realms/platform/clients",
 			CollectionPath: "/admin/realms/platform/clients",
 			Metadata: metadata.ResourceMetadata{
-				AliasAttribute:       "/clientId",
+				Alias:                "{{/clientId}}",
 				RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
 			},
 		},
@@ -1882,7 +1882,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		}
 
 		var debugOutput bytes.Buffer
-		ctx := debugctx.WithEnabled(context.Background(), true)
+		ctx := debugctx.WithLevel(context.Background(), 3)
 		ctx = debugctx.WithWriter(ctx, &debugOutput)
 
 		if _, err := client.Get(ctx, resource, md); err != nil {
@@ -1934,7 +1934,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		})
 
 		var debugOutput bytes.Buffer
-		ctx := debugctx.WithEnabled(context.Background(), true)
+		ctx := debugctx.WithLevel(context.Background(), 3)
 		ctx = debugctx.WithWriter(ctx, &debugOutput)
 
 		md := metadata.ResourceMetadata{
@@ -1986,7 +1986,7 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		})
 
 		var debugOutput bytes.Buffer
-		ctx := debugctx.WithEnabled(context.Background(), true)
+		ctx := debugctx.WithLevel(context.Background(), 3)
 		ctx = debugctx.WithWriter(ctx, &debugOutput)
 
 		md := metadata.ResourceMetadata{
@@ -2116,6 +2116,57 @@ func TestManagedServerProxySupport(t *testing.T) {
 			t.Fatalf("expected configured proxy URL, got %q", resolvedProxy.String())
 		}
 	})
+}
+
+func TestBuildProxyFuncMergesEnvironmentWithConfiguredFields(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://env-proxy.example.com:3128")
+	t.Setenv("NO_PROXY", "svc.cluster.local")
+
+	proxyFunc, err := buildProxyFunc(&config.HTTPProxy{
+		NoProxy: "localhost",
+	})
+	if err != nil {
+		t.Fatalf("buildProxyFunc returned error: %v", err)
+	}
+	if proxyFunc == nil {
+		t.Fatal("expected merged proxy resolver")
+	}
+
+	request, err := http.NewRequest(http.MethodGet, "http://other.example.com/resource", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	resolvedProxy, err := proxyFunc(request)
+	if err != nil {
+		t.Fatalf("proxy resolver returned error: %v", err)
+	}
+	if resolvedProxy == nil || resolvedProxy.String() != "http://env-proxy.example.com:3128" {
+		t.Fatalf("expected environment proxy URL, got %#v", resolvedProxy)
+	}
+
+	noProxyRequest, err := http.NewRequest(http.MethodGet, "http://localhost/resource", nil)
+	if err != nil {
+		t.Fatalf("failed to build no-proxy request: %v", err)
+	}
+	resolvedProxy, err = proxyFunc(noProxyRequest)
+	if err != nil {
+		t.Fatalf("proxy resolver returned error for no-proxy request: %v", err)
+	}
+	if resolvedProxy != nil {
+		t.Fatalf("expected configured noProxy override to bypass proxy, got %q", resolvedProxy.String())
+	}
+}
+
+func TestBuildProxyFuncExplicitDisableSuppressesEnvironment(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://env-proxy.example.com:3128")
+
+	proxyFunc, err := buildProxyFunc(&config.HTTPProxy{})
+	if err != nil {
+		t.Fatalf("buildProxyFunc returned error: %v", err)
+	}
+	if proxyFunc != nil {
+		t.Fatal("expected explicit empty proxy block to disable environment proxy")
+	}
 }
 
 func TestRequestOperations(t *testing.T) {
@@ -2375,7 +2426,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDAttribute: "/id",
+			ID: "{{/id}}",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2413,8 +2464,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
-			IDAttribute:          "/id",
-			AliasAttribute:       "/name",
+			ID:                   "{{/id}}",
+			Alias:                "{{/name}}",
 			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2455,8 +2506,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/api/projects/widgets", metadata.ResourceMetadata{
-			IDAttribute:    "/id",
-			AliasAttribute: "/name",
+			ID:    "{{/id}}",
+			Alias: "{{/name}}",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Path:       `/api/projects/widgets`,
@@ -2504,8 +2555,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		)
 
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
-			IDAttribute:          "/id",
-			AliasAttribute:       "/name",
+			ID:                   "{{/id}}",
+			Alias:                "{{/name}}",
 			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2565,8 +2616,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		)
 
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/AD/mappers", metadata.ResourceMetadata{
-			IDAttribute:          "/id",
-			AliasAttribute:       "/name",
+			ID:                   "{{/id}}",
+			Alias:                "{{/name}}",
 			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
@@ -2605,8 +2656,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
-			IDAttribute:    "/id",
-			AliasAttribute: "/name",
+			ID:    "{{/id}}",
+			Alias: "{{/name}}",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: jqMutation("[ .[] | select(.providerId == ]"),
@@ -2632,8 +2683,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
-			IDAttribute:    "/id",
-			AliasAttribute: "/name",
+			ID:    "{{/id}}",
+			Alias: "{{/name}}",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Path:       `/admin/realms/publico-br/user-registry/ldap-test/mappers`,
@@ -2660,8 +2711,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			AliasAttribute: "/alias",
-			IDAttribute:    "/id",
+			Alias: "{{/alias}}",
+			ID:    "{{/id}}",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2690,7 +2741,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		items, err := client.List(context.Background(), "/admin/realms", metadata.ResourceMetadata{
-			IDAttribute: "/realm",
+			ID: "{{/realm}}",
 		})
 		if err != nil {
 			t.Fatalf("List returned error: %v", err)
@@ -2719,7 +2770,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDAttribute: "/id",
+			ID: "{{/id}}",
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "ambiguous") {
@@ -2743,7 +2794,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			IDAttribute: "/id",
+			ID: "{{/id}}",
 		})
 		assertTypedCategory(t, err, faults.ConflictError)
 	})
@@ -2764,8 +2815,8 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		})
 
 		_, err := client.List(context.Background(), "/customers", metadata.ResourceMetadata{
-			AliasAttribute: "/alias",
-			IDAttribute:    "/id",
+			Alias: "{{/alias}}",
+			ID:    "{{/id}}",
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 	})

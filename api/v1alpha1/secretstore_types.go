@@ -124,11 +124,6 @@ func (s *SecretStore) ValidateSpec() error {
 			}
 		}
 		if vault.Proxy != nil {
-			hasHTTP := strings.TrimSpace(vault.Proxy.HTTPURL) != ""
-			hasHTTPS := strings.TrimSpace(vault.Proxy.HTTPSURL) != ""
-			if !hasHTTP && !hasHTTPS {
-				return fmt.Errorf("spec.vault.proxy must define at least one of httpURL or httpsURL")
-			}
 			if vault.Proxy.Auth != nil {
 				if err := validateSecretRef(vault.Proxy.Auth.UsernameRef, "spec.vault.proxy.auth.usernameRef"); err != nil {
 					return err

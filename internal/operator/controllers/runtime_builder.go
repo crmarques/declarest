@@ -42,9 +42,13 @@ func buildRuntimeContext(
 	}
 
 	cacheDir := resolveCacheRootPath(policy.Namespace, policy.Name)
+	proxyConfig, err := resolveManagedServerProxyConfig(ctx, reader, policy.Namespace, managedServer.Spec.HTTP.Proxy)
+	if err != nil {
+		return runtimeContextBuildResult{}, err
+	}
 	openAPIPath := strings.TrimSpace(managedServer.Status.OpenAPICachePath)
 	if openAPIPath == "" && strings.TrimSpace(managedServer.Spec.OpenAPI.URL) != "" {
-		downloaded, err := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, filepath.Join(cacheDir, "openapi"))
+		downloaded, err := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, filepath.Join(cacheDir, "openapi"), proxyConfig)
 		if err != nil {
 			return runtimeContextBuildResult{}, err
 		}
@@ -54,7 +58,7 @@ func buildRuntimeContext(
 	metadataPath := strings.TrimSpace(managedServer.Status.MetadataCachePath)
 	metadataBundle := strings.TrimSpace(managedServer.Spec.Metadata.Bundle)
 	if metadataBundle == "" && metadataPath == "" && strings.TrimSpace(managedServer.Spec.Metadata.URL) != "" {
-		downloaded, err := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"))
+		downloaded, err := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"), proxyConfig)
 		if err != nil {
 			return runtimeContextBuildResult{}, err
 		}

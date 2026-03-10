@@ -13,24 +13,14 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/crmarques/declarest/config"
+	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
 
 const maxArtifactDownloadSize = 256 << 20 // 256 MB
 
-var sharedHTTPClient = &http.Client{
-	Timeout: 60 * time.Second,
-	Transport: &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:        20,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     90 * time.Second,
-	},
-}
-
-func downloadArtifact(ctx context.Context, artifactURL string, destDir string) (string, error) {
+func downloadArtifact(ctx context.Context, artifactURL string, destDir string, proxy *config.HTTPProxy) (string, error) {
 	trimmedURL := strings.TrimSpace(artifactURL)
 	if trimmedURL == "" {
 		return "", nil
@@ -62,7 +52,11 @@ func downloadArtifact(ctx context.Context, artifactURL string, destDir string) (
 		request.Header.Set("If-Modified-Since", info.ModTime().UTC().Format(http.TimeFormat))
 	}
 
-	response, err := sharedHTTPClient.Do(request)
+	client, err := newArtifactHTTPClient(proxy)
+	if err != nil {
+		return "", err
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("download artifact %s: %w", sanitizeURL(trimmedURL), err)
 	}
@@ -116,4 +110,30 @@ func artifactPathExtension(path string) string {
 		return ".tgz"
 	}
 	return filepath.Ext(lowerPath)
+}
+
+func newArtifactHTTPClient(proxy *config.HTTPProxy) (*http.Client, error) {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:        20,
+		MaxIdleConnsPerHost: 5,
+		IdleConnTimeout:     90 * time.Second,
+		Proxy:               nil,
+	}
+
+	proxyConfig, disabled, err := proxyhelper.Resolve("managedServer.http.proxy", proxy)
+	if err != nil {
+		return nil, err
+	}
+	if !disabled {
+		transport.Proxy = proxyConfig.Resolver()
+	}
+
+	return &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: transport,
+	}, nil
 }

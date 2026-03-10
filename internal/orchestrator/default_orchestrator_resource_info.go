@@ -7,6 +7,7 @@ import (
 
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/metadata/templatescope"
+	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
 )
@@ -74,12 +75,15 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 	remoteID := localAlias
 
 	payload := map[string]any{}
-	if aliasAttribute := strings.TrimSpace(resolvedMetadata.AliasAttribute); aliasAttribute != "" {
-		payload[aliasAttribute] = localAlias
-	}
-	if idAttribute := strings.TrimSpace(resolvedMetadata.IDAttribute); idAttribute != "" {
-		payload[idAttribute] = remoteID
-	}
+	payload = metadatavalidation.MergePayloadFields(
+		payload,
+		metadatavalidation.DerivePathFields(resource.Resource{
+			LogicalPath:    normalizedPath,
+			CollectionPath: collectionPathFor(normalizedPath),
+			LocalAlias:     localAlias,
+			RemoteID:       remoteID,
+		}, resolvedMetadata),
+	).(map[string]any)
 	for key, value := range templatescope.DerivePathTemplateFields(normalizedPath, resolvedMetadata) {
 		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
 			continue

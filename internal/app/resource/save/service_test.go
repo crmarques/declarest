@@ -280,7 +280,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/alias"},
+				resolved: metadatadomain.ResourceMetadata{Alias: "{{/alias}}"},
 			},
 		}
 
@@ -324,7 +324,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/alias"},
+				resolved: metadatadomain.ResourceMetadata{Alias: "{{/alias}}"},
 			},
 		}
 
@@ -335,7 +335,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
-	t.Run("falls_back_to_common_identity_attributes_when_metadata_is_missing", func(t *testing.T) {
+	t.Run("defaults_missing_metadata_identity_to_id_pointer", func(t *testing.T) {
 		t.Parallel()
 
 		deps := Dependencies{
@@ -355,11 +355,11 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 		if len(entries) != 2 {
 			t.Fatalf("expected 2 entries, got %d", len(entries))
 		}
-		if entries[0].LogicalPath != "/admin/realms/master/clients/alpha" {
-			t.Fatalf("expected first resolved path to use clientId fallback, got %q", entries[0].LogicalPath)
+		if entries[0].LogicalPath != "/admin/realms/master/clients/uuid-a" {
+			t.Fatalf("expected first resolved path to use implicit /id identity, got %q", entries[0].LogicalPath)
 		}
-		if entries[1].LogicalPath != "/admin/realms/master/clients/beta" {
-			t.Fatalf("expected second resolved path to use clientId fallback, got %q", entries[1].LogicalPath)
+		if entries[1].LogicalPath != "/admin/realms/master/clients/uuid-b" {
+			t.Fatalf("expected second resolved path to use implicit /id identity, got %q", entries[1].LogicalPath)
 		}
 	})
 
@@ -368,7 +368,7 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 
 		deps := Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{AliasAttribute: "/clientId"},
+				resolved: metadatadomain.ResourceMetadata{Alias: "{{/clientId}}"},
 			},
 		}
 
@@ -806,7 +806,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 			},
 			items: map[string]metadatadomain.ResourceMetadata{
 				"/customers/acme": {
-					IDAttribute:      "/id",
+					ID:               "{{/id}}",
 					SecretAttributes: []string{"/existingSecret"},
 				},
 			},
@@ -866,7 +866,7 @@ func TestHandleSaveSecrets(t *testing.T) {
 		if !reflect.DeepEqual(updatedMetadata.SecretAttributes, expectedAttributes) {
 			t.Fatalf("expected merged metadata attributes %#v, got %#v", expectedAttributes, updatedMetadata.SecretAttributes)
 		}
-		if updatedMetadata.IDAttribute != "/id" {
+		if updatedMetadata.ID != "{{/id}}" {
 			t.Fatalf("expected existing metadata fields to be preserved, got %#v", updatedMetadata)
 		}
 	})

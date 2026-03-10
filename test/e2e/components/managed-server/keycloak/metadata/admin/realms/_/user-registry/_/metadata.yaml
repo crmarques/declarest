@@ -1,6 +1,6 @@
 resource:
-  idAttribute: /id
-  aliasAttribute: /name
+  id: "{{/id}}"
+  alias: "{{/name}}"
   remoteCollectionPath: /admin/realms/{{.realm}}/components
   secretAttributes:
   - /config/bindCredential/0

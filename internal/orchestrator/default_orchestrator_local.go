@@ -50,8 +50,8 @@ func (r *Orchestrator) resolveLocalResourceForRead(
 	if infoErr != nil {
 		return resource.Resource{}, infoErr
 	}
-	if strings.TrimSpace(requestedMd.IDAttribute) == "" &&
-		strings.TrimSpace(requestedMd.AliasAttribute) == "" {
+	if strings.TrimSpace(requestedMd.ID) == "" &&
+		strings.TrimSpace(requestedMd.Alias) == "" {
 		return resource.Resource{}, err
 	}
 
@@ -188,7 +188,7 @@ func matchesLocalFallbackIdentity(
 		return false
 	}
 
-	identityCandidates := identityAttributeCandidates(md)
+	identityCandidates := identityAttributeCandidates()
 	for _, attribute := range identityCandidates {
 		value, found := identity.LookupScalarAttribute(payloadMap, attribute)
 		if !found || strings.TrimSpace(value) == "" {
@@ -202,7 +202,7 @@ func matchesLocalFallbackIdentity(
 	return false
 }
 
-func identityAttributeCandidates(md metadata.ResourceMetadata) []string {
+func identityAttributeCandidates() []string {
 	seen := make(map[string]struct{})
 	candidates := make([]string, 0, 10)
 
@@ -218,10 +218,6 @@ func identityAttributeCandidates(md metadata.ResourceMetadata) []string {
 		candidates = append(candidates, trimmed)
 	}
 
-	addCandidate(md.IDAttribute)
-	addCandidate(md.AliasAttribute)
-
-	// Keep local fallback usable when repository metadata points at aliases only.
 	for _, fallback := range []string{
 		resource.JSONPointerForObjectKey("id"),
 		resource.JSONPointerForObjectKey("clientId"),
@@ -261,23 +257,16 @@ func resolveResourceIdentity(
 }
 
 func resolvedRemoteIDFromPayload(md metadata.ResourceMetadata, value resource.Value) (string, bool) {
-	idAttribute := strings.TrimSpace(md.IDAttribute)
-	if idAttribute == "" {
+	if strings.TrimSpace(md.ID) == "" {
 		return "", false
 	}
 
-	payloadMap, ok := value.(map[string]any)
-	if !ok {
+	_, remoteID, err := identity.ResolveAliasAndRemoteID("/", md, value)
+	if err != nil {
 		return "", false
 	}
-
-	remoteID, found := identity.LookupScalarAttribute(payloadMap, idAttribute)
 	remoteID = strings.TrimSpace(remoteID)
-	if !found || remoteID == "" {
-		return "", false
-	}
-
-	return remoteID, true
+	return remoteID, remoteID != ""
 }
 
 func logicalPathAlias(logicalPath string) string {

@@ -84,6 +84,31 @@ func TestManagedServerValidateSpecAllowsMetadataBundle(t *testing.T) {
 	}
 }
 
+func TestManagedServerValidateSpecAllowsSparseProxyOverride(t *testing.T) {
+	t.Parallel()
+
+	server := &ManagedServer{
+		Spec: ManagedServerSpec{
+			HTTP: ManagedServerHTTP{
+				BaseURL: "https://managed-server.example.com",
+				Auth: ManagedServerAuth{
+					BasicAuth: &ManagedServerBasicAuth{
+						UsernameRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "managed-server-auth"}, Key: "username"},
+						PasswordRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "managed-server-auth"}, Key: "password"},
+					},
+				},
+				Proxy: &HTTPProxySpec{
+					NoProxy: "localhost,127.0.0.1",
+				},
+			},
+		},
+	}
+
+	if err := server.ValidateSpec(); err != nil {
+		t.Fatalf("ValidateSpec() unexpected error: %v", err)
+	}
+}
+
 func TestManagedServerValidateSpecRejectsMetadataURLAndBundle(t *testing.T) {
 	t.Parallel()
 

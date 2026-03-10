@@ -163,7 +163,7 @@ Goal: validate fixture-tree sync against API-facing identifiers and nested metad
 
 Inputs:
 1. Selected managed-server fixture tree under `repo-template/`.
-2. Metadata using `idAttribute`/`aliasAttribute` and intermediary placeholder paths (for example `/x/_/y/_/_`).
+2. Metadata using `resource.id`/`resource.alias` identity templates and intermediary placeholder paths (for example `/x/_/y/_/_`).
 
 Execution:
 1. Loader expands metadata placeholders into concrete collection targets.
@@ -662,7 +662,7 @@ Failure expectation:
 Goal: reject structured mutations that omit metadata-required identity fields even when operation transforms would later remove those fields from the outgoing body.
 
 Inputs:
-1. Metadata with `resource.aliasAttribute: /clientId`, `resource.requiredAttributes: [/realm]`, and `operations.update.transforms: [{excludeAttributes:["/clientId"]}]`.
+1. Metadata with `resource.alias: "{{/clientId}}"`, `resource.requiredAttributes: [/realm]`, and `operations.update.transforms: [{excludeAttributes:["/clientId"]}]`.
 2. Structured update payload that omits `/clientId` but includes `/realm`.
 
 Execution:

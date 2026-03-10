@@ -12,8 +12,8 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	t.Parallel()
 
 	value := ResourceMetadata{
-		IDAttribute:          "/id",
-		AliasAttribute:       "/name",
+		ID:                   "{{/id}}",
+		Alias:                "{{/name}}",
 		RequiredAttributes:   []string{"/name", "/realm"},
 		RemoteCollectionPath: "/api/customers",
 		Secret:               boolPointer(true),
@@ -71,11 +71,11 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected resource object, got %#v", decoded["resource"])
 	}
-	if resource["idAttribute"] != "/id" {
-		t.Fatalf("expected resource.idAttribute=id, got %#v", resource["idAttribute"])
+	if resource["id"] != "{{/id}}" {
+		t.Fatalf("expected resource.id={{/id}}, got %#v", resource["id"])
 	}
-	if resource["aliasAttribute"] != "/name" {
-		t.Fatalf("expected resource.aliasAttribute=name, got %#v", resource["aliasAttribute"])
+	if resource["alias"] != "{{/name}}" {
+		t.Fatalf("expected resource.alias={{/name}}, got %#v", resource["alias"])
 	}
 	requiredAttributes, ok := resource["requiredAttributes"].([]any)
 	if !ok || len(requiredAttributes) != 2 || requiredAttributes[0] != "/name" || requiredAttributes[1] != "/realm" {
@@ -203,6 +203,36 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	}
 }
 
+func TestResourceMetadataMarshalJSONPreservesPointerShorthand(t *testing.T) {
+	t.Parallel()
+
+	value := ResourceMetadata{
+		ID:    "/id",
+		Alias: "/name",
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal returned error: %v", err)
+	}
+
+	decoded := map[string]any{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal encoded payload returned error: %v", err)
+	}
+
+	resource, ok := decoded["resource"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected resource object, got %#v", decoded["resource"])
+	}
+	if resource["id"] != "/id" {
+		t.Fatalf("expected resource.id=/id, got %#v", resource["id"])
+	}
+	if resource["alias"] != "/name" {
+		t.Fatalf("expected resource.alias=/name, got %#v", resource["alias"])
+	}
+}
+
 func TestResourceMetadataWholeResourceSecretRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -252,8 +282,8 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 
 		payload := []byte(`{
 		  "resource": {
-		    "idAttribute": "/realm",
-		    "aliasAttribute": "/realm",
+		    "id": "{{/realm}}",
+		    "alias": "{{/realm}}",
 		    "requiredAttributes": ["/realm", "/displayName"],
 		    "remoteCollectionPath": "/admin/realms",
 		    "secretAttributes": []
@@ -305,7 +335,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 			t.Fatalf("unmarshal returned error: %v", err)
 		}
 
-		if decoded.IDAttribute != "/realm" || decoded.AliasAttribute != "/realm" {
+		if decoded.ID != "{{/realm}}" || decoded.Alias != "{{/realm}}" {
 			t.Fatalf("unexpected identity fields: %+v", decoded)
 		}
 		if !reflect.DeepEqual(decoded.RequiredAttributes, []string{"/realm", "/displayName"}) {
@@ -625,7 +655,7 @@ func TestResourceMetadataPreferredFormatJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
-		IDAttribute:     "/id",
+		ID:              "{{/id}}",
 		PreferredFormat: "yaml",
 	}
 
@@ -642,8 +672,8 @@ func TestResourceMetadataPreferredFormatJSONRoundtrip(t *testing.T) {
 	if decoded.PreferredFormat != "yaml" {
 		t.Fatalf("expected preferredFormat=yaml, got %q", decoded.PreferredFormat)
 	}
-	if decoded.IDAttribute != "/id" {
-		t.Fatalf("expected idAttribute=/id, got %q", decoded.IDAttribute)
+	if decoded.ID != "{{/id}}" {
+		t.Fatalf("expected id={{/id}}, got %q", decoded.ID)
 	}
 }
 
@@ -651,7 +681,7 @@ func TestResourceMetadataPreferredFormatOmittedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
-		IDAttribute: "/id",
+		ID: "{{/id}}",
 	}
 
 	encoded, err := json.Marshal(original)

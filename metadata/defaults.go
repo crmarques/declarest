@@ -1,6 +1,10 @@
 package metadata
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/crmarques/declarest/resource"
+)
 
 var defaultMetadataOperations = []Operation{
 	OperationCreate,
@@ -35,6 +39,8 @@ func DefaultResourceMetadata() ResourceMetadata {
 	}
 
 	return ResourceMetadata{
+		ID:         resource.JSONPointerForObjectKey("id"),
+		Alias:      resource.JSONPointerForObjectKey("id"),
 		Operations: operations,
 		Transforms: nil,
 	}

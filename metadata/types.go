@@ -17,8 +17,8 @@ type InferenceRequest struct {
 }
 
 type ResourceMetadata struct {
-	IDAttribute            string                   `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
-	AliasAttribute         string                   `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
+	ID                     string                   `json:"id,omitempty" yaml:"id,omitempty"`
+	Alias                  string                   `json:"alias,omitempty" yaml:"alias,omitempty"`
 	RequiredAttributes     []string                 `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
 	RemoteCollectionPath   string                   `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`

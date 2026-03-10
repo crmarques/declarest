@@ -9,6 +9,7 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
+	"github.com/crmarques/declarest/resource/identity"
 )
 
 func NormalizeAttributePointers(field string, attributes []string) ([]string, error) {
@@ -37,26 +38,22 @@ func NormalizeAttributePointers(field string, attributes []string) ([]string, er
 }
 
 func EffectiveResourceRequiredAttributes(md metadatadomain.ResourceMetadata) []string {
-	attributes := append([]string(nil), md.RequiredAttributes...)
-	aliasAttribute := strings.TrimSpace(md.AliasAttribute)
-	if aliasAttribute == "" {
-		return attributes
+	attributes, err := identity.RequiredAttributes(md)
+	if err != nil {
+		return append([]string(nil), md.RequiredAttributes...)
 	}
-
-	for _, attribute := range md.RequiredAttributes {
-		if strings.TrimSpace(attribute) == aliasAttribute {
-			return attributes
-		}
-	}
-
-	return append(attributes, aliasAttribute)
+	return attributes
 }
 
 func ValidateResourceRequiredAttributes(payload resource.Value, md metadatadomain.ResourceMetadata) error {
+	required, err := identity.RequiredAttributes(md)
+	if err != nil {
+		return err
+	}
 	return ValidateRequiredAttributes(
 		payload,
 		"resource.requiredAttributes",
-		EffectiveResourceRequiredAttributes(md),
+		required,
 		"resource payload validation",
 	)
 }
@@ -112,17 +109,29 @@ func DerivePathFields(resolvedResource resource.Resource, md metadatadomain.Reso
 		fields[resource.JSONPointerForObjectKey(trimmedKey)] = trimmedValue
 	}
 
-	if aliasAttribute := strings.TrimSpace(md.AliasAttribute); aliasAttribute != "" {
-		if localAlias := strings.TrimSpace(resolvedResource.LocalAlias); localAlias != "" {
-			if _, exists := fields[aliasAttribute]; !exists {
-				fields[aliasAttribute] = localAlias
+	aliasPointer, aliasOK, aliasErr := identity.SimpleAliasPointer(md)
+	idPointer, idOK, idErr := identity.SimpleIDPointer(md)
+	if aliasErr == nil && idErr == nil && aliasOK && idOK && aliasPointer == idPointer {
+		if _, exists := fields[idPointer]; !exists {
+			if remoteID := strings.TrimSpace(resolvedResource.RemoteID); remoteID != "" {
+				fields[idPointer] = remoteID
+			} else if localAlias := strings.TrimSpace(resolvedResource.LocalAlias); localAlias != "" {
+				fields[idPointer] = localAlias
 			}
 		}
-	}
-	if idAttribute := strings.TrimSpace(md.IDAttribute); idAttribute != "" {
-		if remoteID := strings.TrimSpace(resolvedResource.RemoteID); remoteID != "" {
-			if _, exists := fields[idAttribute]; !exists {
-				fields[idAttribute] = remoteID
+	} else {
+		if aliasErr == nil && aliasOK {
+			if localAlias := strings.TrimSpace(resolvedResource.LocalAlias); localAlias != "" {
+				if _, exists := fields[aliasPointer]; !exists {
+					fields[aliasPointer] = localAlias
+				}
+			}
+		}
+		if idErr == nil && idOK {
+			if remoteID := strings.TrimSpace(resolvedResource.RemoteID); remoteID != "" {
+				if _, exists := fields[idPointer]; !exists {
+					fields[idPointer] = remoteID
+				}
 			}
 		}
 	}

@@ -31,8 +31,8 @@ Inspired by:
 ```json
 {
   "resource": {
-    "idAttribute": "id",
-    "aliasAttribute": "name",
+    "id": "{{/id}}",
+    "alias": "{{/name}}",
     "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "secretAttributes": ["config.bindCredential[0]"]
   },
@@ -81,8 +81,8 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 ```json
 {
   "resource": {
-    "idAttribute": "alias",
-    "aliasAttribute": "alias"
+    "id": "{{/alias}}",
+    "alias": "{{/alias}}"
   }
 }
 ```
@@ -92,8 +92,8 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 ```json
 {
   "resource": {
-    "idAttribute": "id",
-    "aliasAttribute": "displayName"
+    "id": "{{/id}}",
+    "alias": "{{/displayName}}"
   },
   "operations": {
     "create": {
@@ -151,7 +151,7 @@ This is an advanced pattern for APIs that flatten nested resources internally.
 ## Authoring workflow (recommended)
 
 1. Model the logical path tree you want users to operate on.
-2. Add high-level selector metadata with `remoteCollectionPath` and identity fields.
+2. Add high-level selector metadata with `remoteCollectionPath` and identity templates.
 3. Add list `jq` filters to isolate the logical collection.
 4. Render operations with `metadata render` for concrete paths.
 5. Add per-operation overrides and ordered `transforms` steps only where the API deviates.

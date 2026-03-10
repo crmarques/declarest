@@ -34,8 +34,8 @@ Define the canonical context catalog schema, file location, validation rules, an
 17. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 18. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 19. When `managedServer.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-20. When any proxy block (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `httpURL` or `httpsURL`; proxy auth (when provided) MUST include both `username` and `password`.
-21. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
+20. Proxy blocks (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; proxy auth (when provided) MUST include both `username` and `password`, and an empty `proxy:` block explicitly disables inherited or environment proxy settings for that component.
+21. Proxy precedence MUST be: process environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, plus lowercase aliases), then component-local proxy fields overriding only the fields they define, then shared-context inheritance where the first configured concrete proxy becomes the default for components that do not define their own proxy block.
 22. `managedServer.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 23. `managedServer.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
 24. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
@@ -72,7 +72,7 @@ Resource server proxy contract:
 1. `managedServer.http.proxy` MAY define `httpURL` and/or `httpsURL`.
 2. `managedServer.http.proxy.noProxy` MAY define comma-separated bypass rules.
 3. `managedServer.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
-4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secretStore.vault.proxy`, and `metadata.proxy`, and they inherit the shared proxy unless an empty `proxy:` block explicitly disables it for their component.
+4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secretStore.vault.proxy`, and `metadata.proxy`; each block can override only selected fields from the process environment, and unset components inherit the first configured concrete proxy unless an empty `proxy:` block explicitly disables it for that component.
 
 Resource server healthCheck contract:
 1. `managedServer.http.healthCheck` MAY be omitted; when omitted, probe commands target `managedServer.http.baseURL` itself and reuse its normalized path.
@@ -256,7 +256,7 @@ currentContext: xxx
 10. Config path resolution failure for home expansion or file access.
 11. Runtime override key not in the supported override-key list.
 12. Composition root startup (`bootstrap.NewSession`) fails when neither `selection.name` nor `currentContext` resolves to a valid context.
-13. `managedServer.http.proxy` is configured without at least one proxy URL, or with incomplete auth credentials.
+13. a proxy block defines incomplete auth credentials, or a resolved proxy URL is invalid.
 14. `managedServer.http.healthCheck` is configured with query parameters or an invalid URL form.
 
 ## Edge Cases
@@ -271,7 +271,8 @@ currentContext: xxx
 9. `metadata.bundleFile` configured; resolve keeps `metadata.baseDir` empty and startup resolves metadata from the local bundle archive.
 10. `defaultEditor` omitted in YAML; editor-opening CLI commands still resolve `vi` by default.
 11. `managedServer.http.proxy.noProxy` can be set without proxy auth and still remains valid.
-12. `managedServer.http.healthCheck` can be absolute and still resolves to a managedServer-relative probe when scheme/host match `managedServer.http.baseURL`.
+12. a context can define only `managedServer.http.proxy.noProxy` and inherit `httpURL` / `httpsURL` from environment variables or the shared proxy default.
+13. `managedServer.http.healthCheck` can be absolute and still resolves to a managedServer-relative probe when scheme/host match `managedServer.http.baseURL`.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `currentContext`.
@@ -285,7 +286,8 @@ currentContext: xxx
 9. `context edit prod` loads only context `prod` into a temporary document, validates the edited YAML, and replaces only that context in the persisted catalog when validation succeeds.
 10. Corner case: `managedServer.http.auth.customHeaders` with one entry that defines `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
 11. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `managedServer.http.openapi` and bundle metadata source (`metadata.bundle` or `metadata.bundleFile`) that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
-12. Corner case: `ResolveContext({Name: "dev", Overrides: {"managedServer.http.proxy.httpURL":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.
-13. Corner case: a legacy catalog entry with `current-ctx`, `filesystem.base-dir`, and `repository.resource-format: yaml` resolves as `currentContext`, `repository.filesystem.baseDir`, and `preferences.preferredFormat: yaml`, and persists back without the legacy keys.
-14. Corner case: `ResolveContext({Name: "local-only", Overrides: nil})` with repository-only config and no `managedServer` remains valid, defaults `metadata.baseDir` from the repository, and bootstraps local-only commands without a remote client.
-15. Corner case: adding a canonical field under `managedServer.http` or `metadata` requires the same change to update `schemas/context.schema.json` and `schemas/contexts.schema.json`, while documented legacy aliases remain reader-only and stay out of the schema files.
+12. Corner case: `ResolveContext({Name: "dev", Overrides: {"managedServer.http.proxy.httpURL":"http://proxy.example.com:3128"}})` applies the proxy override and keeps other proxy fields untouched when unset.
+13. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with `HTTPS_PROXY=https://proxy.example.com:3128` in the environment and only `managedServer.http.proxy.noProxy=localhost` in the context resolves a managed-server proxy with inherited `httpsURL` plus overridden `noProxy`.
+14. Corner case: a legacy catalog entry with `current-ctx`, `filesystem.base-dir`, and `repository.resource-format: yaml` resolves as `currentContext`, `repository.filesystem.baseDir`, and `preferences.preferredFormat: yaml`, and persists back without the legacy keys.
+15. Corner case: `ResolveContext({Name: "local-only", Overrides: nil})` with repository-only config and no `managedServer` remains valid, defaults `metadata.baseDir` from the repository, and bootstraps local-only commands without a remote client.
+16. Corner case: adding a canonical field under `managedServer.http` or `metadata` requires the same change to update `schemas/context.schema.json` and `schemas/contexts.schema.json`, while documented legacy aliases remain reader-only and stay out of the schema files.

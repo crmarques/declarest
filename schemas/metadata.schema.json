@@ -70,6 +70,10 @@
         "octet-stream"
       ]
     },
+    "identityTemplate": {
+      "type": "string",
+      "description": "Identity template string using {{...}} expressions or raw JSON Pointer shorthand such as /id."
+    },
     "validationAssertion": {
       "type": "object",
       "additionalProperties": false,
@@ -183,11 +187,21 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "idAttribute": {
-          "$ref": "#/$defs/jsonPointer"
+        "id": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/identityTemplate"
+            }
+          ],
+          "default": "/id"
         },
-        "aliasAttribute": {
-          "$ref": "#/$defs/jsonPointer"
+        "alias": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/identityTemplate"
+            }
+          ],
+          "default": "/id"
         },
         "requiredAttributes": {
           "$ref": "#/$defs/jsonPointerArray"
@@ -262,12 +276,12 @@
               "anyOf": [
                 {
                   "required": [
-                    "idAttribute"
+                    "id"
                   ]
                 },
                 {
                   "required": [
-                    "aliasAttribute"
+                    "alias"
                   ]
                 },
                 {

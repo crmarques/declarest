@@ -15,8 +15,8 @@ type resourceMetadataWire struct {
 }
 
 type resourceWire struct {
-	IDAttribute            string                       `json:"idAttribute,omitempty" yaml:"idAttribute,omitempty"`
-	AliasAttribute         string                       `json:"aliasAttribute,omitempty" yaml:"aliasAttribute,omitempty"`
+	ID                     string                       `json:"id,omitempty" yaml:"id,omitempty"`
+	Alias                  string                       `json:"alias,omitempty" yaml:"alias,omitempty"`
 	RequiredAttributes     *[]string                    `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
 	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
@@ -187,8 +187,8 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	wire := resourceMetadataWire{}
 
 	resource := resourceWire{
-		IDAttribute:          metadata.IDAttribute,
-		AliasAttribute:       metadata.AliasAttribute,
+		ID:                   metadata.ID,
+		Alias:                metadata.Alias,
 		RemoteCollectionPath: metadata.RemoteCollectionPath,
 		PayloadType:          metadata.PayloadType,
 		PreferredFormat:      metadata.PreferredFormat,
@@ -247,11 +247,11 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 
 	if wire.Resource != nil {
 		resource := wire.Resource
-		if resource.IDAttribute != "" {
-			metadata.IDAttribute = resource.IDAttribute
+		if resource.ID != "" {
+			metadata.ID = resource.ID
 		}
-		if resource.AliasAttribute != "" {
-			metadata.AliasAttribute = resource.AliasAttribute
+		if resource.Alias != "" {
+			metadata.Alias = resource.Alias
 		}
 		if resource.RequiredAttributes != nil {
 			metadata.RequiredAttributes = cloneStringSlice(*resource.RequiredAttributes)
@@ -303,8 +303,8 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 }
 
 func hasResourceInfo(resource resourceWire) bool {
-	return strings.TrimSpace(resource.IDAttribute) != "" ||
-		strings.TrimSpace(resource.AliasAttribute) != "" ||
+	return strings.TrimSpace(resource.ID) != "" ||
+		strings.TrimSpace(resource.Alias) != "" ||
 		resource.RequiredAttributes != nil ||
 		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(resource.PayloadType) != "" ||

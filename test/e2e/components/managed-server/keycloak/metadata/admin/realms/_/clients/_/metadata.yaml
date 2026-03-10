@@ -1,5 +1,5 @@
 resource:
-  idAttribute: /id
-  aliasAttribute: /clientId
+  id: "{{/id}}"
+  alias: "{{/clientId}}"
   secretAttributes:
   - /secret

@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
@@ -96,6 +98,9 @@ func (g *Client) execute(ctx context.Context, spec metadata.OperationSpec) ([]by
 		return nil, nil, err
 	}
 
+	// Level 3: log request body
+	debugRequestBody(ctx, request)
+
 	response, err := g.doRequest(ctx, "resource", request)
 	if err != nil {
 		return nil, nil, transportError("remote request failed", err)
@@ -110,10 +115,85 @@ func (g *Client) execute(ctx context.Context, spec metadata.OperationSpec) ([]by
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
+		debugErrorResponse(ctx, spec.Method, spec.Path, response.StatusCode, body)
 		return nil, nil, classifyStatusError(response.StatusCode, body)
 	}
 
+	// Level 3: log successful response body
+	debugctx.Printf(ctx, "http response body length=%d content=%s", len(body), summarizeBodyForLevel(body, 3))
+
 	return body, response.Header.Clone(), nil
+}
+
+// debugRequestBody logs the request body at trace level (3).
+func debugRequestBody(ctx context.Context, request *http.Request) {
+	if debugctx.Level(ctx) < 3 || request == nil || request.Body == nil {
+		return
+	}
+	if request.GetBody == nil {
+		debugctx.Printf(ctx, "http request body <not replayable>")
+		return
+	}
+	bodyReader, err := request.GetBody()
+	if err != nil {
+		debugctx.Printf(ctx, "http request body <read error: %v>", err)
+		return
+	}
+	bodyBytes, err := io.ReadAll(io.LimitReader(bodyReader, 1<<20))
+	if err != nil {
+		debugctx.Printf(ctx, "http request body <read error: %v>", err)
+		return
+	}
+	if len(bodyBytes) == 0 {
+		return
+	}
+	debugctx.Printf(ctx, "http request body length=%d content=%s", len(bodyBytes), string(bodyBytes))
+}
+
+// debugErrorResponse logs the full error response at the appropriate verbosity level.
+// Level 1: enriched error with full response body, method, and path.
+// Level 2+: same but already covered by doRequest logging.
+func debugErrorResponse(ctx context.Context, method string, path string, statusCode int, body []byte) {
+	level := debugctx.Level(ctx)
+	if level < 1 {
+		return
+	}
+
+	debugctx.Infof(
+		ctx,
+		"managed-server error method=%s path=%q status=%d response_body=%s",
+		method,
+		path,
+		statusCode,
+		summarizeBodyForLevel(body, level),
+	)
+}
+
+// summarizeBodyForLevel returns the response body truncated according to verbosity level.
+//
+//	Level 1: up to 1024 characters
+//	Level 2: up to 4096 characters
+//	Level 3: full body (no truncation)
+func summarizeBodyForLevel(body []byte, level int) string {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return "<empty>"
+	}
+
+	limit := 0
+	switch {
+	case level >= 3:
+		return trimmed
+	case level == 2:
+		limit = 4096
+	default:
+		limit = 1024
+	}
+
+	if len(trimmed) <= limit {
+		return trimmed
+	}
+	return fmt.Sprintf("%s... (%d bytes truncated)", trimmed[:limit], len(trimmed)-limit)
 }
 
 func (g *Client) newRequest(ctx context.Context, spec metadata.OperationSpec) (*http.Request, error) {

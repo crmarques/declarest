@@ -151,7 +151,7 @@ func remoteFallbackSegmentValue(candidate resource.Resource, md metadata.Resourc
 
 	payload, ok := candidate.Payload.(map[string]any)
 	if ok {
-		for _, attribute := range identityAttributeCandidates(md) {
+		for _, attribute := range identityAttributeCandidates() {
 			value, found := identity.LookupScalarAttribute(payload, attribute)
 			if !found || strings.TrimSpace(value) == "" {
 				continue
@@ -188,14 +188,14 @@ func replaceLogicalPathSegment(
 }
 
 func hasRemoteFallbackIdentityMetadata(md metadata.ResourceMetadata) bool {
-	return strings.TrimSpace(md.IDAttribute) != "" || strings.TrimSpace(md.AliasAttribute) != ""
+	return strings.TrimSpace(md.ID) != "" || strings.TrimSpace(md.Alias) != ""
 }
 
 func shouldCheckRemoteIdentityAmbiguity(resolvedResource resource.Resource, md metadata.ResourceMetadata) bool {
-	if strings.TrimSpace(md.IDAttribute) == "" {
+	if strings.TrimSpace(md.ID) == "" {
 		return false
 	}
-	if strings.TrimSpace(md.AliasAttribute) == "" {
+	if strings.TrimSpace(md.Alias) == "" {
 		return false
 	}
 

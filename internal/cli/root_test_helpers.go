@@ -569,7 +569,7 @@ func newTestMetadata() *testMetadata {
 	return &testMetadata{
 		items: map[string]metadatadomain.ResourceMetadata{
 			"/customers/acme": {
-				IDAttribute: "/id",
+				ID: "{{/id}}",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationGet):     {Path: "/api/customers/acme"},
 					string(metadatadomain.OperationCompare): {Path: "/api/customers/acme"},

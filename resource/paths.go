@@ -137,6 +137,11 @@ func JoinLogicalPath(collectionPath string, segment string) (string, error) {
 	return NormalizeLogicalPath(joined)
 }
 
+func ValidateLogicalPathSegment(segment string) error {
+	_, err := normalizeLogicalPathSegment(segment)
+	return err
+}
+
 // SplitRawPathSegments splits a path string into its segments without
 // validation. Use SplitLogicalPathSegments when the path should be validated
 // first (rejects reserved segments like "_").
@@ -195,4 +200,21 @@ func overlapBoundaryMatch(candidate string, prefix string) bool {
 		return false
 	}
 	return candidate[len(prefix)] == '/'
+}
+
+func normalizeLogicalPathSegment(segment string) (string, error) {
+	trimmedSegment := strings.TrimSpace(segment)
+	if trimmedSegment == "" {
+		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not be empty", nil)
+	}
+	if trimmedSegment == "." || trimmedSegment == ".." {
+		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain traversal segments", nil)
+	}
+	if trimmedSegment == "_" {
+		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain reserved metadata segment \"_\"", nil)
+	}
+	if strings.Contains(trimmedSegment, "/") || strings.Contains(trimmedSegment, "\\") {
+		return "", faults.NewTypedError(faults.ValidationError, "logical path segment must not contain path separators", nil)
+	}
+	return trimmedSegment, nil
 }

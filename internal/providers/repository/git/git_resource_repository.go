@@ -793,30 +793,32 @@ func classifyRemoteError(message string, err error) error {
 }
 
 func (r *GitResourceRepository) withProxyEnv(fn func() error) error {
-	if r.proxy == nil || proxyhelper.IsExplicitDisable(r.proxy) {
-		return fn()
-	}
-	proxyConfig, err := proxyhelper.Build("repository.git.remote.proxy", r.proxy)
+	proxyConfig, _, err := proxyhelper.Resolve("repository.git.remote.proxy", r.proxy)
 	if err != nil {
 		return err
 	}
 	envVars := proxyConfig.Env()
-	if len(envVars) == 0 {
-		return fn()
-	}
+	keys := proxyhelper.EnvironmentKeys()
 
 	proxyEnvMu.Lock()
 	defer proxyEnvMu.Unlock()
 
-	saved := make(map[string]*string, len(envVars))
-	for key, value := range envVars {
+	saved := make(map[string]*string, len(keys))
+	for _, key := range keys {
 		if old, ok := os.LookupEnv(key); ok {
 			temp := old
 			saved[key] = &temp
 		} else {
 			saved[key] = nil
 		}
-		if err := os.Setenv(key, value); err != nil {
+		if value, ok := envVars[key]; ok {
+			if err := os.Setenv(key, value); err != nil {
+				restoreEnv(saved)
+				return err
+			}
+			continue
+		}
+		if err := os.Unsetenv(key); err != nil {
 			restoreEnv(saved)
 			return err
 		}

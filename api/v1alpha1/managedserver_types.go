@@ -182,11 +182,6 @@ func validateManagedServerSpec(spec *ManagedServerSpec) error {
 		}
 	}
 	if spec.HTTP.Proxy != nil {
-		hasHTTP := strings.TrimSpace(spec.HTTP.Proxy.HTTPURL) != ""
-		hasHTTPS := strings.TrimSpace(spec.HTTP.Proxy.HTTPSURL) != ""
-		if !hasHTTP && !hasHTTPS {
-			return fmt.Errorf("spec.http.proxy must define at least one of httpURL or httpsURL")
-		}
 		if spec.HTTP.Proxy.Auth != nil {
 			if err := validateSecretRef(spec.HTTP.Proxy.Auth.UsernameRef, "spec.http.proxy.auth.usernameRef"); err != nil {
 				return err

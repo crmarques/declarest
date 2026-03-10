@@ -27,7 +27,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
 11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
 12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
-13. Before body transforms or remote HTTP execution, body-bearing mutation workflows MUST validate `resource.requiredAttributes` against the structured source payload, and configured `resource.aliasAttribute` MUST count as required even when `resource.requiredAttributes` omits it; non-structured mutation payloads MAY skip this attribute-presence check because JSON Pointer traversal is unavailable.
+13. Before body transforms or remote HTTP execution, body-bearing mutation workflows MUST validate `resource.requiredAttributes` against the structured source payload, and every JSON Pointer referenced by configured `resource.alias` or `resource.id` MUST count as required even when `resource.requiredAttributes` omits it; non-structured mutation payloads MAY skip this attribute-presence check because JSON Pointer traversal is unavailable.
 14. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
 15. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
 16. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
@@ -85,7 +85,7 @@ Request throttling fields:
 8. OpenAPI advertises `application/octet-stream` or `format: binary`, and the resolved payload type becomes `octet-stream`.
 9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
 10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
-11. Structured mutation validation can require `/clientId` from `resource.aliasAttribute` even when an operation transform removes `/clientId` from the outgoing request body afterward.
+11. Structured mutation validation can require `/clientId` from `resource.alias: "{{/clientId}}"` even when an operation transform removes `/clientId` from the outgoing request body afterward.
 
 ## Examples
 1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.
@@ -97,4 +97,4 @@ Request throttling fields:
 7. With `requestThrottling.max-concurrent-requests=1` and `queue-size=1`, a third concurrent request fails fast with `ConflictError` while two earlier requests are in-flight/queued.
 8. `Get` of a binary certificate endpoint returns `resource.BinaryValue` when the server responds `application/octet-stream`.
 9. `Update` of a Rundeck private key stored as `resource.key` sends raw bytes and resolves `ContentType` to `application/octet-stream` even when the local payload is not a JSON object.
-10. `Create` with `resource.requiredAttributes: ["/realm"]` and `resource.aliasAttribute: /clientId` fails before remote HTTP execution when the structured source payload omits `/clientId`, even if `operations.create.transforms` would otherwise remove `/clientId` from the transmitted body.
+10. `Create` with `resource.requiredAttributes: ["/realm"]` and `resource.alias: "{{/clientId}}"` fails before remote HTTP execution when the structured source payload omits `/clientId`, even if `operations.create.transforms` would otherwise remove `/clientId` from the transmitted body.

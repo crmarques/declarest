@@ -6,7 +6,7 @@ This page installs the CLI and walks through one happy-flow setup: one context, 
 
 If you already have `declarest` available in your shell, skip to step 2.
 
-### Option 1: Download a release binary
+### Option A: Download a release binary
 
 Releases are published at:
 
@@ -29,7 +29,7 @@ declarest version
 
 Adjust the archive name for your platform (`darwin_arm64`, `darwin_amd64`, `windows_amd64.zip`, etc.).
 
-### Option 2: Build from source
+### Option B: Build from source
 
 ```bash
 go build -o bin/declarest ./cmd/declarest

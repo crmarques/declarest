@@ -300,7 +300,7 @@ declarest:
   metadataFileName: metadata.yaml
 EOF
   cat >"${HOME}/.declarest/metadata-bundles/keycloak-bundle-0.0.1/metadata/admin/realms/_/metadata.yaml" <<'EOF'
-{"resource":{"idAttribute":"/realm","aliasAttribute":"/realm"}}
+{"resource":{"id":"{{/realm}}","alias":"{{/realm}}"}}
 EOF
 
   local repo_state managed_state secret_state
@@ -352,7 +352,7 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
   cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
-{"resource":{"idAttribute":"/name","aliasAttribute":"/name"}}
+{"resource":{"id":"{{/name}}","alias":"{{/name}}"}}
 EOF
 
   e2e_operator_prepare_managed_server_metadata_bundle
@@ -417,7 +417,7 @@ test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
 
   mkdir -p "${E2E_RUN_DIR}" "${E2E_METADATA_DIR}/projects/_"
   cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
-{"resource":{"idAttribute":"/name","aliasAttribute":"/name"}}
+{"resource":{"id":"{{/name}}","alias":"{{/name}}"}}
 EOF
 
   e2e_operator_api_server_endpoint() {
@@ -464,7 +464,7 @@ test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
 
   mkdir -p "${E2E_STATE_DIR}" "${E2E_METADATA_DIR}/projects/_"
   cat >"${E2E_METADATA_DIR}/projects/_/metadata.yaml" <<'EOF'
-{"resource":{"idAttribute":"name","aliasAttribute":"name"}}
+{"resource":{"id":"{{/name}}","alias":"{{/name}}"}}
 EOF
 
   local repo_state managed_state secret_state

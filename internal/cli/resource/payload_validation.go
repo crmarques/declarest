@@ -104,14 +104,36 @@ func validateExplicitMutationPayloadIdentityForPath(
 		return nil
 	}
 
-	if err := validatePayloadIdentityAttributeMatch(commandPath, normalizedPath, pathSegment, payloadMap, md, true); err != nil {
-		return err
-	}
-	if err := validatePayloadIdentityAttributeMatch(commandPath, normalizedPath, pathSegment, payloadMap, md, false); err != nil {
-		return err
+	if strings.TrimSpace(md.Alias) == "" && strings.TrimSpace(md.ID) == "" {
+		return nil
 	}
 
-	return nil
+	alias, remoteID, err := identitysupport.ResolveAliasAndRemoteIDForListItem(payloadMap, md)
+	if err != nil {
+		return nil
+	}
+
+	identityKind := "resource.id"
+	identityValue := strings.TrimSpace(remoteID)
+	if strings.TrimSpace(md.Alias) != "" {
+		identityKind = "resource.alias"
+		identityValue = strings.TrimSpace(alias)
+	}
+	if identityValue == "" || identityValue == pathSegment {
+		return nil
+	}
+
+	return cliutil.ValidationError(
+		fmt.Sprintf(
+			"%s explicit payload %s value %q does not match path segment %q for %q",
+			strings.TrimSpace(commandPath),
+			identityKind,
+			identityValue,
+			pathSegment,
+			normalizedPath,
+		),
+		nil,
+	)
 }
 
 func canInferExplicitMutationChildPath(
@@ -139,72 +161,18 @@ func explicitMutationPayloadIdentitySegment(
 	payload map[string]any,
 	md metadatadomain.ResourceMetadata,
 ) (string, bool) {
-	candidates := []string{
-		strings.TrimSpace(md.AliasAttribute),
-		strings.TrimSpace(md.IDAttribute),
+	if strings.TrimSpace(md.Alias) == "" && strings.TrimSpace(md.ID) == "" {
+		return "", false
 	}
-
-	for _, attributeName := range candidates {
-		if attributeName == "" {
-			continue
-		}
-		value, found := identitysupport.LookupScalarAttribute(payload, attributeName)
-		value = strings.TrimSpace(value)
-		if !found || value == "" {
-			continue
-		}
-		if strings.Contains(value, "/") {
-			return "", false
-		}
-		return value, true
+	alias, remoteID, err := identitysupport.ResolveAliasAndRemoteIDForListItem(payload, md)
+	if err != nil {
+		return "", false
 	}
-
+	if strings.TrimSpace(alias) != "" {
+		return alias, true
+	}
+	if strings.TrimSpace(remoteID) != "" {
+		return remoteID, true
+	}
 	return "", false
-}
-
-func validatePayloadIdentityAttributeMatch(
-	commandPath string,
-	normalizedPath string,
-	pathSegment string,
-	payload map[string]any,
-	md metadatadomain.ResourceMetadata,
-	checkAlias bool,
-) error {
-	attributeName := strings.TrimSpace(md.IDAttribute)
-	identityKind := "id"
-	if checkAlias {
-		attributeName = strings.TrimSpace(md.AliasAttribute)
-		identityKind = "alias"
-	}
-	if attributeName == "" {
-		return nil
-	}
-
-	// When alias and id attributes are distinct, the logical path segment is
-	// expected to follow alias semantics, not remote-id semantics.
-	if !checkAlias && strings.TrimSpace(md.AliasAttribute) != "" && strings.TrimSpace(md.AliasAttribute) != attributeName {
-		return nil
-	}
-
-	payloadValue, found := identitysupport.LookupScalarAttribute(payload, attributeName)
-	if !found || strings.TrimSpace(payloadValue) == "" {
-		return nil
-	}
-
-	if strings.TrimSpace(payloadValue) == pathSegment {
-		return nil
-	}
-
-	return cliutil.ValidationError(
-		fmt.Sprintf(
-			"%s explicit payload %s attribute %q=%q does not match path segment %q for %q",
-			strings.TrimSpace(commandPath),
-			identityKind,
-			attributeName,
-			strings.TrimSpace(payloadValue),
-			pathSegment,
-			normalizedPath,
-		),
-		nil,
-	)
 }

@@ -14,8 +14,8 @@ Use:
 ```json
 {
   "resource": {
-    "idAttribute": "id",
-    "aliasAttribute": "name"
+    "id": "{{/id}}",
+    "alias": "{{/name}}"
   }
 }
 ```

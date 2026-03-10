@@ -66,8 +66,8 @@ func inferFallbackMetadata(target inferTarget) ResourceMetadata {
 		}
 	}
 
-	idAttribute, _ := inferIdentityAttributes(target, "", nil)
-	collectionPath, resourcePath := inferCollectionAndResourceTemplatePaths(target, idAttribute)
+	idFieldName, _ := inferIdentityAttributes(target, "", nil)
+	collectionPath, resourcePath := inferCollectionAndResourceTemplatePaths(target, idFieldName)
 	operations := make(map[string]OperationSpec)
 	if collectionPath != "" {
 		operations[string(OperationList)] = OperationSpec{Method: "GET", Path: collectionPath}

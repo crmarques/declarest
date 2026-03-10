@@ -7,8 +7,8 @@ import (
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
-		IDAttribute:            value.IDAttribute,
-		AliasAttribute:         value.AliasAttribute,
+		ID:                     value.ID,
+		Alias:                  value.Alias,
 		RequiredAttributes:     cloneStringSlice(value.RequiredAttributes),
 		RemoteCollectionPath:   value.RemoteCollectionPath,
 		PayloadType:            value.PayloadType,
@@ -39,8 +39,8 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 
 func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) ResourceMetadata {
 	merged := ResourceMetadata{
-		IDAttribute:            base.IDAttribute,
-		AliasAttribute:         base.AliasAttribute,
+		ID:                     base.ID,
+		Alias:                  base.Alias,
 		RequiredAttributes:     cloneStringSlice(base.RequiredAttributes),
 		RemoteCollectionPath:   base.RemoteCollectionPath,
 		PayloadType:            base.PayloadType,
@@ -52,11 +52,11 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		Transforms:             cloneTransformSteps(base.Transforms),
 	}
 
-	if overlay.IDAttribute != "" {
-		merged.IDAttribute = overlay.IDAttribute
+	if overlay.ID != "" {
+		merged.ID = overlay.ID
 	}
-	if overlay.AliasAttribute != "" {
-		merged.AliasAttribute = overlay.AliasAttribute
+	if overlay.Alias != "" {
+		merged.Alias = overlay.Alias
 	}
 	if overlay.RequiredAttributes != nil {
 		merged.RequiredAttributes = cloneStringSlice(overlay.RequiredAttributes)

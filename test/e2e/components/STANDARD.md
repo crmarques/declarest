@@ -79,7 +79,7 @@ Field rules:
 - `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
 - `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because managed-server auth selection is one-of.
 - Runner selection uses `--managed-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-server-mtls` independently for mTLS.
-- Resource-server fixture metadata files (`*/_/metadata.yaml` or `*/_/metadata.json`) MUST include non-empty `resource.idAttribute` and `resource.aliasAttribute`; YAML is preferred for new fixtures.
+- Resource-server fixture metadata files (`*/_/metadata.yaml` or `*/_/metadata.json`) MUST include non-empty `resource.id` and `resource.alias` identity templates; YAML is preferred for new fixtures.
 
 ## Hook Contract
 

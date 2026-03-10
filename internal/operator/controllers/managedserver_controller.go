@@ -69,7 +69,21 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	cacheDir := resolveCacheRootPath(managedServer.Namespace, managedServer.Name)
-	openAPIPath, openAPIErr := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, cacheDir)
+	proxyConfig, proxyErr := resolveManagedServerProxyConfig(ctx, r.Client, managedServer.Namespace, managedServer.Spec.HTTP.Proxy)
+	if proxyErr != nil {
+		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "ProxyConfigFailed", "proxy configuration failed: %v", proxyErr)
+		return returnAfterSetNotReady(
+			ctx,
+			func(innerCtx context.Context, reason string, message string) error {
+				return r.setNotReady(innerCtx, managedServer, reason, message)
+			},
+			conditionReasonDependencyInvalid,
+			proxyErr.Error(),
+			pollInterval,
+		)
+	}
+
+	openAPIPath, openAPIErr := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, cacheDir, proxyConfig)
 	if openAPIErr != nil {
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "DownloadFailed", "openapi artifact download failed: %v", openAPIErr)
 		return returnAfterSetNotReady(
@@ -82,7 +96,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			pollInterval,
 		)
 	}
-	metadataPath, metadataErr := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, cacheDir)
+	metadataPath, metadataErr := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, cacheDir, proxyConfig)
 	if metadataErr != nil {
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "DownloadFailed", "metadata artifact download failed: %v", metadataErr)
 		return returnAfterSetNotReady(

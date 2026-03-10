@@ -1,13 +1,17 @@
 package identity
 
 import (
+	"fmt"
 	"path"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/identitytemplate"
 	"github.com/crmarques/declarest/resource"
 )
+
+const defaultIdentityPointer = "/id"
 
 func LookupScalarAttribute(payload map[string]any, attribute string) (string, bool) {
 	trimmed := strings.TrimSpace(attribute)
@@ -25,23 +29,40 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 	alias := aliasForLogicalPath(logicalPath)
 	remoteID := alias
 
-	payloadMap, ok := payload.(map[string]any)
-	if !ok {
-		return alias, remoteID, nil
-	}
-
-	if attr := strings.TrimSpace(md.AliasAttribute); attr != "" {
-		if value, found := LookupScalarAttribute(payloadMap, attr); found && strings.TrimSpace(value) != "" {
-			alias = strings.TrimSpace(value)
+	if template := effectiveIdentityTemplate(md.Alias); template != "" {
+		if pointer, ok, err := simpleIdentityPointer("resource.alias", template); err != nil {
+			return "", "", err
+		} else if ok {
+			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
+				return "", "", faults.NewValidationError("resource.alias must resolve from payload data", lookupErr)
+			} else if found {
+				alias = value
+			}
+		} else {
+			rendered, renderErr := renderIdentityTemplate("resource.alias", template, payload)
+			if renderErr != nil {
+				return "", "", renderErr
+			}
+			alias = rendered
 		}
 	}
 
-	if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
-		if value, found := LookupScalarAttribute(payloadMap, attr); found && strings.TrimSpace(value) != "" {
-			remoteID = strings.TrimSpace(value)
+	if template := effectiveIdentityTemplate(md.ID); template != "" {
+		if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
+			return "", "", err
+		} else if ok {
+			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
+				return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
+			} else if found {
+				remoteID = value
+			}
+		} else {
+			rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
+			if renderErr != nil {
+				return "", "", renderErr
+			}
+			remoteID = rendered
 		}
-	} else {
-		remoteID = alias
 	}
 
 	if strings.TrimSpace(alias) == "" {
@@ -51,35 +72,122 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 		remoteID = alias
 	}
 
+	if err := resource.ValidateLogicalPathSegment(alias); err != nil {
+		return "", "", faults.NewValidationError(
+			fmt.Sprintf("resource.alias rendered invalid logical path segment %q", alias),
+			err,
+		)
+	}
+	if err := resource.ValidateLogicalPathSegment(remoteID); err != nil {
+		return "", "", faults.NewValidationError(
+			fmt.Sprintf("resource.id rendered invalid logical path segment %q", remoteID),
+			err,
+		)
+	}
+
 	return alias, remoteID, nil
 }
 
 func ResolveAliasAndRemoteIDForListItem(payload map[string]any, md metadata.ResourceMetadata) (string, string, error) {
 	var alias string
-	if attr := strings.TrimSpace(md.AliasAttribute); attr != "" {
-		alias, _ = LookupScalarAttribute(payload, attr)
+	if template := effectiveIdentityTemplate(md.Alias); template != "" {
+		if pointer, ok, err := simpleIdentityPointer("resource.alias", template); err != nil {
+			return "", "", err
+		} else if ok {
+			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
+				return "", "", faults.NewValidationError("resource.alias must resolve from payload data", lookupErr)
+			} else if found {
+				alias = value
+			}
+		} else {
+			rendered, renderErr := renderIdentityTemplate("resource.alias", template, payload)
+			if renderErr != nil {
+				return "", "", renderErr
+			}
+			alias = rendered
+		}
 	}
 	if alias == "" {
-		if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
-			alias, _ = LookupScalarAttribute(payload, attr)
+		if template := effectiveIdentityTemplate(md.ID); template != "" {
+			if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
+				return "", "", err
+			} else if ok {
+				if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
+					return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
+				} else if found {
+					alias = value
+				}
+			} else {
+				rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
+				if renderErr != nil {
+					return "", "", renderErr
+				}
+				alias = rendered
+			}
 		}
 	}
 	if alias == "" {
 		return "", "", faults.NewTypedError(
 			faults.ValidationError,
-			"list item alias could not be resolved from metadata attributes",
+			"list item alias could not be resolved from metadata alias/id templates",
 			nil,
 		)
 	}
 
 	remoteID := alias
-	if attr := strings.TrimSpace(md.IDAttribute); attr != "" {
-		if value, ok := LookupScalarAttribute(payload, attr); ok && strings.TrimSpace(value) != "" {
-			remoteID = strings.TrimSpace(value)
+	if template := effectiveIdentityTemplate(md.ID); template != "" {
+		if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
+			return "", "", err
+		} else if ok {
+			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
+				return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
+			} else if found {
+				remoteID = value
+			}
+		} else {
+			rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
+			if renderErr != nil {
+				return "", "", renderErr
+			}
+			remoteID = rendered
 		}
 	}
 
 	return alias, remoteID, nil
+}
+
+func RequiredAttributes(md metadata.ResourceMetadata) ([]string, error) {
+	attributes := append([]string(nil), md.RequiredAttributes...)
+	addPointer := orderedStringCollector(&attributes)
+
+	if template := strings.TrimSpace(md.Alias); template != "" {
+		pointers, err := identitytemplate.ExtractPointers(template)
+		if err != nil {
+			return nil, faults.NewValidationError("resource.alias must be a valid identity template", err)
+		}
+		for _, pointer := range pointers {
+			addPointer(pointer)
+		}
+	}
+	if template := strings.TrimSpace(md.ID); template != "" {
+		pointers, err := identitytemplate.ExtractPointers(template)
+		if err != nil {
+			return nil, faults.NewValidationError("resource.id must be a valid identity template", err)
+		}
+		for _, pointer := range pointers {
+			addPointer(pointer)
+		}
+	}
+
+	return attributes, nil
+}
+
+func SimpleAliasPointer(md metadata.ResourceMetadata) (string, bool, error) {
+	return simpleIdentityPointer("resource.alias", md.Alias)
+}
+
+func SimpleIDPointer(md metadata.ResourceMetadata) (string, bool, error) {
+	return simpleIdentityPointer("resource.id", md.ID)
 }
 
 func aliasForLogicalPath(logicalPath string) string {
@@ -88,4 +196,74 @@ func aliasForLogicalPath(logicalPath string) string {
 		return "/"
 	}
 	return path.Base(trimmed)
+}
+
+func renderIdentityTemplate(field string, raw string, payload any) (string, error) {
+	rendered, err := identitytemplate.Render(raw, payload)
+	if err != nil {
+		return "", faults.NewValidationError(field+" must resolve from payload data", err)
+	}
+	trimmed := strings.TrimSpace(rendered)
+	if trimmed == "" {
+		return "", faults.NewValidationError(field+" must not resolve to an empty value", nil)
+	}
+	return trimmed, nil
+}
+
+func simpleIdentityPointer(field string, raw string) (string, bool, error) {
+	template := strings.TrimSpace(raw)
+	if template == "" {
+		return "", false, nil
+	}
+	pointer, ok, err := identitytemplate.SimplePointer(template)
+	if err != nil {
+		return "", false, faults.NewValidationError(field+" must be a valid identity template", err)
+	}
+	return pointer, ok, nil
+}
+
+func lookupSimplePointer(payload any, pointer string) (string, bool, error) {
+	value, found, err := resource.LookupJSONPointerString(payload, pointer)
+	if err != nil {
+		return "", false, err
+	}
+	if !found {
+		return "", false, nil
+	}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", false, nil
+	}
+	return trimmed, true, nil
+}
+
+func effectiveIdentityTemplate(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return defaultIdentityPointer
+	}
+	return trimmed
+}
+
+func orderedStringCollector(target *[]string) func(string) {
+	seen := make(map[string]struct{}, len(*target))
+	for _, item := range *target {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+	}
+
+	return func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, exists := seen[trimmed]; exists {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		*target = append(*target, trimmed)
+	}
 }
