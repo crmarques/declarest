@@ -98,7 +98,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 
 		matched := make([]resource.Resource, 0, len(candidates))
 		for _, candidate := range candidates {
-			if matchesLocalFallbackIdentity(segmentInfo, segmentMd, candidate.LocalAlias, candidate.RemoteID, candidate.Payload) {
+			if matchesLocalFallbackIdentity(segmentInfo, candidate.LocalAlias, candidate.RemoteID, candidate.Payload) {
 				matched = append(matched, candidate)
 			}
 		}
@@ -109,7 +109,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 				nextPath, replaced, replaceErr := replaceLogicalPathSegment(
 					segments,
 					segmentIndex,
-					remoteFallbackSegmentValue(candidates[0], segmentMd),
+					remoteFallbackSegmentValue(candidates[0]),
 				)
 				if replaceErr != nil {
 					return nil, replaceErr
@@ -123,7 +123,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 			nextPath, replaced, replaceErr := replaceLogicalPathSegment(
 				segments,
 				segmentIndex,
-				remoteFallbackSegmentValue(matched[0], segmentMd),
+				remoteFallbackSegmentValue(matched[0]),
 			)
 			if replaceErr != nil {
 				return nil, replaceErr
@@ -144,7 +144,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 	return nil, nil
 }
 
-func remoteFallbackSegmentValue(candidate resource.Resource, md metadata.ResourceMetadata) string {
+func remoteFallbackSegmentValue(candidate resource.Resource) string {
 	if value := strings.TrimSpace(candidate.RemoteID); value != "" {
 		return value
 	}

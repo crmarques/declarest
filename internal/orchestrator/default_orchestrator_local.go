@@ -86,7 +86,6 @@ func (r *Orchestrator) resolveLocalResourceForRead(
 		}
 		if !matchesLocalFallbackIdentity(
 			requestedInfo,
-			requestedMd,
 			hydrated.LocalAlias,
 			hydrated.RemoteID,
 			hydrated.Payload,
@@ -169,7 +168,6 @@ func requestedFallbackSegment(requestedInfo resource.Resource) string {
 
 func matchesLocalFallbackIdentity(
 	requestedInfo resource.Resource,
-	md metadata.ResourceMetadata,
 	candidateAlias string,
 	candidateRemoteID string,
 	candidatePayload resource.Value,

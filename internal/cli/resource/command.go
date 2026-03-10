@@ -115,6 +115,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		newEditCommand(deps, globalFlags),
 		newCopyCommand(deps, globalFlags),
 		newExplainCommand(deps, globalFlags),
+		newDescribeCommand(deps, globalFlags),
 		newTemplateCommand(deps, globalFlags),
 		newRequestCommand(deps, globalFlags),
 	)
