@@ -157,7 +157,7 @@ func defaultOperationPathTemplate(operation Operation) string {
 	case OperationCreate, OperationList:
 		return "."
 	default:
-		return "./{{.id}}"
+		return "./{{/id}}"
 	}
 }
 
@@ -336,7 +336,8 @@ func renderTemplateString(field string, raw string, scope map[string]any) (strin
 		return raw, nil
 	}
 
-	tmpl, err := template.New(field).Funcs(TemplateFuncMap(scope)).Option("missingkey=error").Parse(raw)
+	rewritten := rewriteMetadataTemplateSyntax(raw)
+	tmpl, err := template.New(field).Funcs(TemplateFuncMap(scope)).Option("missingkey=error").Parse(rewritten)
 	if err != nil {
 		return "", faults.NewTypedError(
 			faults.ValidationError,

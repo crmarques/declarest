@@ -431,12 +431,12 @@ Interactive context commands:
 25. `declarest resource save /customers/acme --allow-plaintext < payload.json` bypasses plaintext-secret save guard.
 26. `declarest resource save /customers/acme < payload.json` with metadata `resource.secretAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
 27. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resource.secretAttributes`.
-28. `declarest resource save /customers/acme --secret-attributes=password < payload.json` handles only `password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
+28. `declarest resource save /customers/acme --secret-attributes=/password < payload.json` handles only `/password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
 29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --force` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
 30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --force` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
 31. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
 32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resource.secretAttributes` for `/customers/acme`.
-33. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
+33. `declarest secret detect /customers/acme --fix --secret-attribute /password < payload.json` writes only `/password` from detected candidates.
 34. `declarest secret set /customers/acme /apiToken token-123` stores one path-scoped secret under `/customers/acme:/apiToken`.
 35. `declarest secret list /customers/acme` prints only the keys stored for `/customers/acme` in deterministic order.
 36. `declarest secret list /projects --recursive` prints relative descendant entries such as `/test/secrets/private-key:.` when secrets are stored under nested logical paths.

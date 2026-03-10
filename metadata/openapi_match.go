@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/crmarques/declarest/resource"
 )
 
 func promoteInferTargetFromOpenAPI(target inferTarget, openAPISpec any) inferTarget {
@@ -365,14 +367,14 @@ func openAPIPathToMetadataTemplate(pathTemplate string, fallbackTemplate string)
 	for idx, segment := range segments {
 		if variableName, isPathParameter := openAPIPathParameterName(segment); isPathParameter {
 			if isTemplateIdentifier(variableName) {
-				converted = append(converted, "{{."+variableName+"}}")
+				converted = append(converted, "{{"+resource.JSONPointerForObjectKey(variableName)+"}}")
 				continue
 			}
-			if idx < len(fallbackSegments) && isMetadataTemplatePlaceholderSegment(fallbackSegments[idx]) {
+			if idx < len(fallbackSegments) && IsTemplatePlaceholderSegment(fallbackSegments[idx]) {
 				converted = append(converted, fallbackSegments[idx])
 				continue
 			}
-			converted = append(converted, "{{.id}}")
+			converted = append(converted, "{{/id}}")
 			continue
 		}
 		converted = append(converted, segment)
@@ -420,6 +422,5 @@ func isTemplateIdentifier(value string) bool {
 }
 
 func isMetadataTemplatePlaceholderSegment(segment string) bool {
-	trimmed := strings.TrimSpace(segment)
-	return strings.HasPrefix(trimmed, "{{.") && strings.HasSuffix(trimmed, "}}")
+	return IsTemplatePlaceholderSegment(segment)
 }

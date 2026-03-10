@@ -4,15 +4,15 @@ resource:
 operations:
   create:
     method: PUT
-    path: /api/projects/{{.id}}
+    path: /api/projects/{{/id}}
   get:
-    path: /api/projects/{{.id}}
+    path: /api/projects/{{/id}}
   update:
     method: PUT
-    path: /api/projects/{{.id}}
+    path: /api/projects/{{/id}}
   delete:
-    path: /api/projects/{{.id}}
+    path: /api/projects/{{/id}}
   list:
     path: /api/projects
   compare:
-    path: /api/projects/{{.id}}
+    path: /api/projects/{{/id}}

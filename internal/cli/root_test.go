@@ -3477,7 +3477,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		metadataService.items["/admin/realms/_/clients/"] = metadatadomain.ResourceMetadata{
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
-					Path: "/admin/realms/{{.realm}}/clients",
+					Path: "/admin/realms/{{/realm}}/clients",
 				},
 			},
 		}
@@ -3487,7 +3487,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected selector render default-operation error: %v", err)
 		}
-		if !strings.Contains(output, "\"path\": \"/admin/realms/{{.realm}}/clients\"") {
+		if !strings.Contains(output, "\"path\": \"/admin/realms/{{/realm}}/clients\"") {
 			t.Fatalf("expected list render output for selector path, got %q", output)
 		}
 	})
@@ -3511,7 +3511,7 @@ func TestMetadataPathCommands(t *testing.T) {
 				name:         "get_defaults_to_dot_id_template",
 				path:         "/admin/realms/_/clients/_",
 				operationArg: "get",
-				expectedPath: "./{{.id}}",
+				expectedPath: "./{{/id}}",
 			},
 		}
 
@@ -3780,7 +3780,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		if strings.Contains(output, "\"ignoreAttributes\":") {
 			t.Fatalf("expected metadata get output without compare ignoreAttributes alias, got %q", output)
 		}
-		if !strings.Contains(output, "\"path\": \"./{{.id}}\"") {
+		if !strings.Contains(output, "\"path\": \"./{{/id}}\"") {
 			t.Fatalf("expected default get resource path in metadata get output, got %q", output)
 		}
 	})

@@ -801,7 +801,7 @@ func newDetectCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 		Example: strings.Join([]string{
 			"  declarest secret detect /customers/",
 			"  declarest secret detect --fix /customers/",
-			"  declarest secret detect --secret-attribute apiToken < payload.json",
+			"  declarest secret detect --secret-attribute /apiToken < payload.json",
 			"  declarest secret detect --fix --path /customers/acme < payload.json",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
@@ -850,7 +850,7 @@ func newDetectCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&fix, "fix", false, "write detected secret attributes to metadata")
-	command.Flags().StringVar(&secretAttribute, "secret-attribute", "", "apply only one detected secret attribute")
+	command.Flags().StringVar(&secretAttribute, "secret-attribute", "", "apply only one detected JSON pointer attribute")
 	return command
 }
 

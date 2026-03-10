@@ -1,38 +1,38 @@
 resource:
   id: "{{/id}}"
   alias: "{{/name}}"
-  remoteCollectionPath: /project/{{.project}}/jobs
+  remoteCollectionPath: /project/{{/project}}/jobs
   externalizedAttributes:
   - path: /sequence/commands/*/script
     file: script.sh
 operations:
   create:
     method: POST
-    path: /project/{{.project}}/jobs/import
+    path: /project/{{/project}}/jobs/import
     query:
       dupeOption: create
       uuidOption: preserve
     transforms:
-    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
+    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{/id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{/id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
   get:
-    path: /job/{{.id}}
+    path: /job/{{/id}}
     transforms:
-    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'
+    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{/id}}"), name: (.name // "{{/id}}"), project: "{{/project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{/id}}"))}]})}'
   update:
     method: POST
-    path: /project/{{.project}}/jobs/import
+    path: /project/{{/project}}/jobs/import
     query:
       dupeOption: update
       uuidOption: preserve
     transforms:
-    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{.id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
+    - jqExpression: '[(if type == "array" then (.[0] // {}) else . end) | ({name: (.name // "{{/id}}"), description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{/id}}"))}]})} + (if (.id // "") != "" then {uuid: .id} else {} end))]'
   delete:
-    path: /job/{{.id}}
+    path: /job/{{/id}}
   list:
-    path: /project/{{.project}}/jobs
+    path: /project/{{/project}}/jobs
     transforms:
-    - jqExpression: 'map({id: (.id // .uuid // .name), name: (.name // (.id // "")), project: (.project // "{{.project}}"), description: (.description // "")})'
+    - jqExpression: 'map({id: (.id // .uuid // .name), name: (.name // (.id // "")), project: (.project // "{{/project}}"), description: (.description // "")})'
   compare:
-    path: /job/{{.id}}
+    path: /job/{{/id}}
     transforms:
-    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{.id}}"), name: (.name // "{{.id}}"), project: "{{.project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{.id}}"))}]})}'
+    - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | {id: (.uuid // .id // "{{/id}}"), name: (.name // "{{/id}}"), project: "{{/project}}", description: (.description // ""), sequence: (.sequence // {keepgoing: false, strategy: "node-first", commands: [{exec: ("echo " + (.name // "{{/id}}"))}]})}'

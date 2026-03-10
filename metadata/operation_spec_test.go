@@ -19,9 +19,9 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 		},
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
-				Path:    "/api/customers/{{.id}}",
-				Headers: map[string]string{"X-Tenant": "{{.tenant}}"},
-				Query:   map[string]string{"expand": "{{.expand}}"},
+				Path:    "/api/customers/{{/id}}",
+				Headers: map[string]string{"X-Tenant": "{{/tenant}}"},
+				Query:   map[string]string{"expand": "{{/expand}}"},
 			},
 		},
 	}, OperationGet, map[string]any{
@@ -57,6 +57,39 @@ func TestResolveOperationSpecMergesAndRenders(t *testing.T) {
 	}
 }
 
+func TestResolveOperationSpecSupportsPointerAndBareKeyTemplates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "json_pointer", path: "/api/customers/{{/id}}"},
+		{name: "single_level_shorthand", path: "/api/customers/{{id}}"},
+		{name: "legacy_dot_notation", path: "/api/customers/{{.id}}"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			resolved, err := ResolveOperationSpec(context.Background(), ResourceMetadata{
+				Operations: map[string]OperationSpec{
+					string(OperationGet): {
+						Path: test.path,
+					},
+				},
+			}, OperationGet, map[string]any{"id": "acme"})
+			if err != nil {
+				t.Fatalf("ResolveOperationSpec returned error: %v", err)
+			}
+			if resolved.Path != "/api/customers/acme" {
+				t.Fatalf("expected rendered path, got %q", resolved.Path)
+			}
+		})
+	}
+}
+
 func TestResolveOperationSpecValidation(t *testing.T) {
 	t.Parallel()
 
@@ -74,10 +107,10 @@ func TestResolveOperationSpecWithScopeSupportsRemoteCollectionPathIndirection(t 
 	resolved, err := ResolveOperationSpecWithScope(
 		context.Background(),
 		ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
-					Path: "./{{.id}}",
+					Path: "./{{/id}}",
 				},
 			},
 		},
@@ -102,7 +135,7 @@ func TestResolveOperationSpecWithScopeDefaultsOperationPathTemplates(t *testing.
 	t.Parallel()
 
 	metadata := ResourceMetadata{
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 	}
 	scope := map[string]any{
 		"realm": "platform",
@@ -140,7 +173,7 @@ func TestResolveOperationSpecWithScopeSupportsPayloadTemplateFunc(t *testing.T) 
 	md := ResourceMetadata{
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
-				Path:        "/api/customers/{{.id}}",
+				Path:        "/api/customers/{{/id}}",
 				Accept:      "{{payload_media_type .}}",
 				ContentType: "application/{{payload_type .}}",
 			},
@@ -186,7 +219,7 @@ func TestResolveOperationSpecWithScopeRejectsInvalidPayloadTemplateUsage(t *test
 	_, err := ResolveOperationSpecWithScope(context.Background(), ResourceMetadata{
 		Operations: map[string]OperationSpec{
 			string(OperationGet): {
-				Path:   "/api/customers/{{.id}}",
+				Path:   "/api/customers/{{/id}}",
 				Accept: "application/{{payload_type \"yaml\"}}",
 			},
 		},
@@ -252,12 +285,12 @@ func TestInferFromOpenAPISupportsIntermediarySelectors(t *testing.T) {
 	}
 
 	listOperation := inferred.Operations[string(OperationList)]
-	if listOperation.Path != "/admin/realms/{{.realm}}/clients" {
+	if listOperation.Path != "/admin/realms/{{/realm}}/clients" {
 		t.Fatalf("unexpected inferred list operation path: %+v", listOperation)
 	}
 
 	getOperation := inferred.Operations[string(OperationGet)]
-	if getOperation.Path != "/admin/realms/{{.realm}}/clients/{{.clientId}}" {
+	if getOperation.Path != "/admin/realms/{{/realm}}/clients/{{/clientId}}" {
 		t.Fatalf("unexpected inferred get operation path: %+v", getOperation)
 	}
 }
@@ -524,7 +557,7 @@ func TestInferFromOpenAPITreatsCollectionPathWithoutSelectorAsCollection(t *test
 	}
 
 	getOperation := inferred.Operations[string(OperationGet)]
-	if getOperation.Path != "/admin/realms/{{.realm}}" {
+	if getOperation.Path != "/admin/realms/{{/realm}}" {
 		t.Fatalf("unexpected inferred get operation path: %+v", getOperation)
 	}
 }

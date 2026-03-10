@@ -4,15 +4,15 @@ resource:
 operations:
   create:
     method: PUT
-    path: /v1/sys/policies/acl/{{.name}}
+    path: /v1/sys/policies/acl/{{/name}}
   get:
-    path: /v1/sys/policies/acl/{{.name}}
+    path: /v1/sys/policies/acl/{{/name}}
   update:
     method: PUT
-    path: /v1/sys/policies/acl/{{.name}}
+    path: /v1/sys/policies/acl/{{/name}}
   delete:
-    path: /v1/sys/policies/acl/{{.name}}
+    path: /v1/sys/policies/acl/{{/name}}
   list:
     path: /v1/sys/policies/acl
   compare:
-    path: /v1/sys/policies/acl/{{.name}}
+    path: /v1/sys/policies/acl/{{/name}}

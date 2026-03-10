@@ -3,6 +3,8 @@ package metadata
 import (
 	"fmt"
 	"strings"
+
+	"github.com/crmarques/declarest/resource"
 )
 
 func inferCollectionAndResourceTemplatePaths(target inferTarget, resourceIdentity string) (string, string) {
@@ -20,7 +22,7 @@ func inferCollectionAndResourceTemplatePaths(target inferTarget, resourceIdentit
 	for idx, segment := range target.Segments {
 		if segment == "_" || hasWildcardPattern(segment) {
 			placeholderName := inferPlaceholderName(target.Segments, idx, usedPlaceholderNames)
-			collectionSegments = append(collectionSegments, "{{."+placeholderName+"}}")
+			collectionSegments = append(collectionSegments, "{{"+resource.JSONPointerForObjectKey(placeholderName)+"}}")
 			continue
 		}
 		collectionSegments = append(collectionSegments, segment)
@@ -33,9 +35,9 @@ func inferCollectionAndResourceTemplatePaths(target inferTarget, resourceIdentit
 
 	resourcePath := collectionPath
 	if strings.TrimSpace(resourcePath) == "/" {
-		resourcePath = "/{{." + placeholderSuffix + "}}"
+		resourcePath = "/{{" + resource.JSONPointerForObjectKey(placeholderSuffix) + "}}"
 	} else {
-		resourcePath = resourcePath + "/{{." + placeholderSuffix + "}}"
+		resourcePath = resourcePath + "/{{" + resource.JSONPointerForObjectKey(placeholderSuffix) + "}}"
 	}
 
 	return collectionPath, resourcePath
@@ -196,11 +198,7 @@ func singularizeToken(token string) string {
 }
 
 func splitPathSegments(value string) []string {
-	trimmed := strings.Trim(strings.TrimSpace(value), "/")
-	if trimmed == "" {
-		return nil
-	}
-	return strings.Split(trimmed, "/")
+	return resource.SplitRawPathSegments(value)
 }
 
 func hasWildcardPattern(segment string) bool {

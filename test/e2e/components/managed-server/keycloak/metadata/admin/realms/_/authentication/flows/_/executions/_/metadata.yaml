@@ -12,4 +12,4 @@ operations:
     path: ./
   delete:
     method: DELETE
-    path: /admin/realms/{{.realm}}/authentication/executions/{{.id}}
+    path: /admin/realms/{{/realm}}/authentication/executions/{{/id}}

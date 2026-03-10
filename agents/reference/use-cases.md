@@ -518,11 +518,11 @@ Goal: detect secret-like attributes from repository resources or input payload a
 
 Inputs:
 1. Local repository resources under `/customers` containing potential secret-like attributes.
-2. Optional payload input with detected keys (for example `apiToken`, `password`).
+2. Optional payload input with detected keys (for example `/apiToken`, `/password`).
 3. `declarest secret detect` (repository-scan mode, whole repo scope).
 4. `declarest secret detect /customers --fix` (repository-scan scoped metadata autofix).
 5. `declarest secret detect /customers/acme --fix < payload.json` (payload mode metadata autofix).
-6. Optional `--secret-attribute password`.
+6. Optional `--secret-attribute /password`.
 
 Execution:
 1. Without payload input, CLI scans local repository resources recursively under requested path (or `/` when path omitted).
@@ -538,7 +538,7 @@ Expected outputs:
 
 Failure expectation:
 1. `declarest secret detect --fix < payload.json` without path fails with `ValidationError`.
-2. `declarest secret detect /customers --secret-attribute unknown` fails with `ValidationError`.
+2. `declarest secret detect /customers --secret-attribute /unknown` fails with `ValidationError`.
 
 ### Example 16: OpenAPI Context Propagation
 Goal: surface a component's `openapi.yaml` (when present) to the generated context so metadata inference uses the stable API definition.

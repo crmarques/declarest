@@ -23,7 +23,7 @@ func TestFSMetadataGetSetUnset(t *testing.T) {
 	resourceMetadata := metadatadomain.ResourceMetadata{
 		SecretAttributes: []string{"/credentials/authValue"},
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet): {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationGet): {Path: "/api/customers/{{/id}}"},
 		},
 	}
 	if err := service.Set(ctx, "/customers/acme", resourceMetadata); err != nil {
@@ -198,7 +198,7 @@ func TestFSMetadataResolveForPathWildcardRules(t *testing.T) {
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path: "/api/customers/{{.id}}",
+				Path: "/api/customers/{{/id}}",
 				Headers: map[string]string{
 					"X-Resource": "true",
 				},
@@ -269,7 +269,7 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 		Alias: "{{/clientId}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCreate): {
-				Path: "/admin/realms/{{.realm}}/clients",
+				Path: "/admin/realms/{{/realm}}/clients",
 			},
 		},
 	})
@@ -288,7 +288,7 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 		)
 	}
 	createPath := resolved.Operations[string(metadatadomain.OperationCreate)].Path
-	if createPath != "/admin/realms/{{.realm}}/clients" {
+	if createPath != "/admin/realms/{{/realm}}/clients" {
 		t.Fatalf("expected create path from clients metadata, got %q", createPath)
 	}
 }
@@ -302,12 +302,12 @@ func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *tes
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_", metadatadomain.ResourceMetadata{
 		ID:                   "{{/id}}",
 		Alias:                "{{/name}}",
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 	})
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
 		ID:                   "{{/id}}",
 		Alias:                "{{/name}}",
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 	})
 
 	children, err := service.ResolveCollectionChildren(
@@ -364,9 +364,9 @@ func TestFSMetadataRenderOperationSpec(t *testing.T) {
 		Alias: "{{/slug}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path: "/api{{.remoteCollectionPath}}/{{.alias}}/{{.remoteID}}",
+				Path: "/api{{/remoteCollectionPath}}/{{/alias}}/{{/remoteID}}",
 				Headers: map[string]string{
-					"X-Tenant": "{{.tenant}}",
+					"X-Tenant": "{{/tenant}}",
 				},
 			},
 		},
@@ -397,10 +397,10 @@ func TestFSMetadataRenderOperationSpecSupportsRemoteCollectionPathIndirection(t 
 
 	mustSetMetadata(t, service, ctx, "/admin/realms/_/user-registry", metadatadomain.ResourceMetadata{
 		ID:                   "{{/id}}",
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path: "./{{.id}}",
+				Path: "./{{/id}}",
 			},
 		},
 	})
@@ -478,7 +478,7 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 		PayloadType: "yaml",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path:   "/api/customers/{{.id}}",
+				Path:   "/api/customers/{{/id}}",
 				Accept: "{{payload_media_type .}}",
 			},
 		},
@@ -686,7 +686,7 @@ func TestFSMetadataSetPreservesExplicitEmptyCollectionsInYAML(t *testing.T) {
 	metadata := metadatadomain.ResourceMetadata{
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path:    "/api/customers/{{.id}}",
+				Path:    "/api/customers/{{/id}}",
 				Query:   map[string]string{},
 				Headers: map[string]string{},
 				Transforms: []metadatadomain.TransformStep{
@@ -832,12 +832,12 @@ func TestFSMetadataGetRejectsOperationURLPathSyntax(t *testing.T) {
 
 	payload := `{
   "resource": {
-    "remoteCollectionPath": "/admin/realms/{{.realm}}/components"
+    "remoteCollectionPath": "/admin/realms/{{/realm}}/components"
   },
   "operations": {
     "get": {
       "url": {
-        "path": "./{{.id}}"
+        "path": "./{{/id}}"
       }
     }
   }

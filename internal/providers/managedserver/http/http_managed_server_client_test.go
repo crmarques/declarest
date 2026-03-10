@@ -322,9 +322,9 @@ func TestBuildRequestFromMetadataRendersTemplates(t *testing.T) {
 	md := metadata.ResourceMetadata{
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationCreate): {
-				Path: "/admin/realms/{{.realm}}/clients",
+				Path: "/admin/realms/{{/realm}}/clients",
 				Query: map[string]string{
-					"clientId": "{{.clientId}}",
+					"clientId": "{{/clientId}}",
 				},
 			},
 		},
@@ -362,7 +362,7 @@ func TestBuildRequestFromMetadataListUsesRenderedCollectionPathTemplate(t *testi
 	md := metadata.ResourceMetadata{
 		ID:                   "{{/id}}",
 		Alias:                "{{/name}}",
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
 				Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -959,10 +959,10 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		})
 
 		md := metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationCreate): {
-					Path: "/admin/realms/{{.realm}}/clients",
+					Path: "/admin/realms/{{/realm}}/clients",
 					Validate: &metadata.OperationValidationSpec{
 						RequiredAttributes: []string{"/realm", "/clientId"},
 					},
@@ -1091,10 +1091,10 @@ paths:
 		})
 
 		md := metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationCreate): {
-					Path: "/admin/realms/{{.realm}}/clients",
+					Path: "/admin/realms/{{/realm}}/clients",
 					Validate: &metadata.OperationValidationSpec{
 						SchemaRef: "openapi:request-body",
 					},
@@ -1113,10 +1113,10 @@ paths:
 		}
 
 		md2 := metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationCreate): {
-					Path: "/admin/realms/{{.realm}}/clients",
+					Path: "/admin/realms/{{/realm}}/clients",
 					Validate: &metadata.OperationValidationSpec{
 						SchemaRef: "openapi:request-body",
 					},
@@ -1188,10 +1188,10 @@ paths:
 		})
 
 		md := metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationCreate): {
-					Path: "/admin/realms/{{.realm}}/clients",
+					Path: "/admin/realms/{{/realm}}/clients",
 					Validate: &metadata.OperationValidationSpec{
 						SchemaRef: "openapi:request-body",
 					},
@@ -1249,7 +1249,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 			CollectionPath: "/admin/realms/platform/clients",
 			Metadata: metadata.ResourceMetadata{
 				Alias:                "{{/clientId}}",
-				RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+				RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			},
 		},
 		&metadata.OperationValidationSpec{
@@ -2510,7 +2510,7 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(context.Background(), "/admin/realms/publico-br", metadata.ResourceMetadata{
 			ID:                   "{{/id}}",
 			Alias:                "{{/name}}",
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -2662,10 +2662,10 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/ldap-test/mappers", metadata.ResourceMetadata{
 			ID:                   "{{/id}}",
 			Alias:                "{{/name}}",
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
-					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`),
+					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/") | .id)) ]`),
 				},
 			},
 		})
@@ -2723,10 +2723,10 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		items, err := client.List(ctx, "/admin/realms/publico-br/user-registry/AD/mappers", metadata.ResourceMetadata{
 			ID:                   "{{/id}}",
 			Alias:                "{{/name}}",
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
-					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.name}}/") | .id)) ]`),
+					Transforms: jqMutation(`[ .[] | select(.parentId == (resource("/admin/realms/{{/realm}}/user-registry/{{/name}}/") | .id)) ]`),
 				},
 			},
 		})

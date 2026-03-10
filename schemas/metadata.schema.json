@@ -72,7 +72,7 @@
     },
     "identityTemplate": {
       "type": "string",
-      "description": "Identity template string using {{...}} expressions or raw JSON Pointer shorthand such as /id."
+      "description": "Identity template string using canonical JSON Pointer placeholders such as {{/id}}, one-level shorthand such as {{id}}, or raw JSON Pointer shorthand such as /id."
     },
     "validationAssertion": {
       "type": "object",
@@ -207,7 +207,8 @@
           "$ref": "#/$defs/jsonPointerArray"
         },
         "remoteCollectionPath": {
-          "type": "string"
+          "type": "string",
+          "description": "Template string that can render metadata scope attributes using canonical JSON Pointer placeholders such as {{/realm}} or one-level shorthand such as {{realm}}."
         },
         "payloadType": {
           "$ref": "#/$defs/payloadType"
@@ -328,7 +329,8 @@
           "type": "string"
         },
         "path": {
-          "type": "string"
+          "type": "string",
+          "description": "Template string that can render metadata scope attributes using canonical JSON Pointer placeholders such as {{/id}} or one-level shorthand such as {{id}}."
         },
         "query": {
           "$ref": "#/$defs/stringMap"

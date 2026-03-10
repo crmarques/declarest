@@ -84,7 +84,7 @@ Optional fields:
 4. `Preferences` settings map.
 5. `Metadata` typed metadata configuration object.
 6. `managedServer.http.healthCheck` optional probe target used by `server check`.
-7. Metadata JSON Pointer references (`requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings; `resource.id` and `resource.alias` are identity template strings that MAY embed one or more JSON Pointer expressions and MUST also accept raw JSON Pointer shorthand such as `/id`.
+7. Metadata JSON Pointer references (`requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings; `resource.id` and `resource.alias` are identity template strings that MAY embed one or more JSON Pointer expressions, MUST accept raw JSON Pointer shorthand such as `/id`, and metadata string-template fields that render payload/context attributes MUST accept canonical RFC 6901 placeholder form such as `{{/id}}` plus one-level shorthand such as `{{id}}`.
 
 User-config key contract:
 1. persisted keys MUST use camelCase.

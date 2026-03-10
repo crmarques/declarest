@@ -67,7 +67,7 @@ Use payload transforms:
     "create": {
       "transforms": [
         { "jqExpression": ". | .provider = .providerId" },
-        { "excludeAttributes": ["providerId"] }
+        { "excludeAttributes": ["/providerId"] }
       ]
     }
   }

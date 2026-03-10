@@ -28,13 +28,15 @@ Inspired by:
 
 ### Metadata
 
+Use canonical JSON Pointer placeholders such as {% raw %}`{{/realm}}`{% endraw %} and {% raw %}`{{/id}}`{% endraw %} in metadata. Single-level shorthand such as {% raw %}`{{realm}}`{% endraw %} is accepted for one-token lookups, but the canonical pointer form keeps examples consistent.
+
 ```json
 {
   "resource": {
     "id": "{% raw %}`{{/id}}`{% endraw %}",
     "alias": "{% raw %}`{{/name}}`{% endraw %}",
-    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
-    "secretAttributes": ["config.bindCredential[0]"]
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{/realm}}/components{% endraw %}",
+    "secretAttributes": ["/config/bindCredential/0"]
   },
   "operations": {
     "list": {
@@ -100,7 +102,7 @@ A deeper metadata file for `executions` overrides specific operations and payloa
       "path": "./execution",
       "transforms": [
         { "jqExpression": ". | .provider = .providerId" },
-        { "excludeAttributes": ["providerId"] }
+        { "excludeAttributes": ["/providerId"] }
       ]
     },
     "update": {
@@ -108,7 +110,7 @@ A deeper metadata file for `executions` overrides specific operations and payloa
     },
     "delete": {
       "method": "DELETE",
-      "path": "{% raw %}/admin/realms/{{.realm}}/authentication/executions/{{.id}}{% endraw %}"
+      "path": "{% raw %}/admin/realms/{{/realm}}/authentication/executions/{{/id}}{% endraw %}"
     }
   }
 }

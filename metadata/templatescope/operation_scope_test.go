@@ -66,10 +66,10 @@ func TestDerivePathTemplateFields(t *testing.T) {
 		metadata.ResourceMetadata{
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationGet): {
-					Path: "/api/projects/{{.project}}/widgets/{{.id}}",
+					Path: "/api/projects/{{/project}}/widgets/{{/id}}",
 				},
 				string(metadata.OperationDelete): {
-					Path: "/api/projects/{{.project}}/widgets/{{.id}}",
+					Path: "/api/projects/{{/project}}/widgets/{{/id}}",
 				},
 			},
 		},
@@ -91,7 +91,7 @@ func TestDerivePathTemplateFieldsSkipsMismatchedTemplate(t *testing.T) {
 		metadata.ResourceMetadata{
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationGet): {
-					Path: "/customers/{{.id}}",
+					Path: "/customers/{{/id}}",
 				},
 			},
 		},
@@ -108,10 +108,10 @@ func TestDerivePathTemplateFieldsFromCollectionTemplatePrefix(t *testing.T) {
 	fields := DerivePathTemplateFields(
 		"/admin/realms/platform/user-registry",
 		metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationGet): {
-					Path: "./{{.id}}",
+					Path: "./{{/id}}",
 				},
 			},
 		},
@@ -128,11 +128,11 @@ func TestDerivePathTemplateFieldsFromListJQResourcePathTemplate(t *testing.T) {
 	fields := DerivePathTemplateFields(
 		"/admin/realms/aaa/user-registry/bbb/mappers/ccc",
 		metadata.ResourceMetadata{
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadata.OperationSpec{
 				string(metadata.OperationList): {
 					Transforms: []metadata.TransformStep{
-						{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`},
+						{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/") | .id)) ]`},
 					},
 				},
 			},
@@ -157,10 +157,10 @@ func TestBuildResourceScopeInjectsDerivedPathFields(t *testing.T) {
 		RemoteID:       "123",
 		Payload:        map[string]any{"id": "123"},
 	}, metadata.ResourceMetadata{
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationGet): {
-				Path: "./{{.id}}",
+				Path: "./{{/id}}",
 			},
 		},
 	})
@@ -190,10 +190,10 @@ func TestBuildResourceScopeInjectsPluralLogicalCollectionFields(t *testing.T) {
 		RemoteID:       "db-password",
 		Payload:        map[string]any{"name": "db-password"},
 	}, metadata.ResourceMetadata{
-		RemoteCollectionPath: "/storage/keys/project/{{.project}}",
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationGet): {
-				Path: "./{{.id}}",
+				Path: "./{{/id}}",
 			},
 		},
 	})
@@ -223,11 +223,11 @@ func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 		RemoteID:       "mapper-id",
 		Payload:        map[string]any{"id": "mapper-id"},
 	}, metadata.ResourceMetadata{
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 		Operations: map[string]metadata.OperationSpec{
 			string(metadata.OperationList): {
 				Transforms: []metadata.TransformStep{
-					{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/") | .id)) ]`},
+					{JQExpression: `[ .[] | select(.parentId == (resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/") | .id)) ]`},
 				},
 			},
 		},

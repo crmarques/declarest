@@ -1,41 +1,41 @@
 resource:
   id: "{{/name}}"
   alias: "{{/name}}"
-  remoteCollectionPath: /storage/keys/project/{{.project}}
+  remoteCollectionPath: /storage/keys/project/{{/project}}
 operations:
   create:
     method: POST
-    path: /storage/keys/project/{{.project}}/{{.id}}
+    path: /storage/keys/project/{{/project}}/{{/id}}
     headers:
       - Accept: application/json
       - Content-Type: '{{if eq (index . "contentType") "application/pgp-keys"}}application/pgp-keys{{else if eq (index . "type") "public"}}application/pgp-keys{{else}}application/octet-stream{{end}}'
     transforms:
       - jqExpression: if type == "object" and has("content") then .content else . end
   get:
-    path: /storage/keys/project/{{.project}}/{{.id}}
+    path: /storage/keys/project/{{/project}}/{{/id}}
     headers:
       - Accept: application/json
     transforms:
-      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{.id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{.id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
+      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
   update:
     method: PUT
-    path: /storage/keys/project/{{.project}}/{{.id}}
+    path: /storage/keys/project/{{/project}}/{{/id}}
     headers:
       - Accept: application/json
       - Content-Type: '{{if eq (index . "contentType") "application/pgp-keys"}}application/pgp-keys{{else if eq (index . "type") "public"}}application/pgp-keys{{else}}application/octet-stream{{end}}'
     transforms:
       - jqExpression: if type == "object" and has("content") then .content else . end
   delete:
-    path: /storage/keys/project/{{.project}}/{{.id}}
+    path: /storage/keys/project/{{/project}}/{{/id}}
   list:
-    path: /storage/keys/project/{{.project}}
+    path: /storage/keys/project/{{/project}}
     headers:
       - Accept: application/json
     transforms:
       - jqExpression: '(.resources // []) | map(select(.type == "file" and (((.meta["Rundeck-key-type"] // "") == "public") or ((.meta["Rundeck-key-type"] // "") == "private"))) | {name: .name, type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))})'
   compare:
-    path: /storage/keys/project/{{.project}}/{{.id}}
+    path: /storage/keys/project/{{/project}}/{{/id}}
     headers:
       - Accept: application/json
     transforms:
-      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{.id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{.id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
+      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'

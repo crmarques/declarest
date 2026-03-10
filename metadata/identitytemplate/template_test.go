@@ -10,9 +10,11 @@ func TestCompileValidTemplates(t *testing.T) {
 
 	for _, raw := range []string{
 		"{{/name}}",
+		"{{name}}",
 		"/name",
 		"{{/name}} - {{/version}}",
 		"{{to_uppercase /name}}",
+		"{{default name \"/fallback\"}}",
 		"{{substring /name 0 3}}",
 		"{{default /missing \"/fallback\"}}",
 	} {
@@ -66,6 +68,18 @@ func TestRenderPointerShorthand(t *testing.T) {
 	}
 }
 
+func TestRenderSingleLevelPointerTemplateShorthand(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := Render("{{name}}", map[string]any{"name": "widget"})
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+	if rendered != "widget" {
+		t.Fatalf("expected single-level shorthand to resolve widget, got %q", rendered)
+	}
+}
+
 func TestRenderTemplateHelpers(t *testing.T) {
 	t.Parallel()
 
@@ -80,10 +94,12 @@ func TestRenderTemplateHelpers(t *testing.T) {
 		want string
 	}{
 		{raw: "{{uppercase /name}}", want: "WIDGET"},
+		{raw: "{{uppercase name}}", want: "WIDGET"},
 		{raw: "{{lowercase /name}}", want: "widget"},
 		{raw: "{{trim /name}}", want: "Widget"},
 		{raw: "{{substring /name 0 3}}", want: "Wid"},
 		{raw: "{{default /missing /metadata/externalId}}", want: "ext-1"},
+		{raw: "{{default missing /metadata/externalId}}", want: "ext-1"},
 		{raw: "{{default /missing /numericSuffix}}", want: "42"},
 	}
 
@@ -146,6 +162,14 @@ func TestSimplePointerDetection(t *testing.T) {
 	}
 	if !ok || pointer != "/name" {
 		t.Fatalf("expected shorthand simple pointer /name, got ok=%v pointer=%q", ok, pointer)
+	}
+
+	pointer, ok, err = SimplePointer("{{name}}")
+	if err != nil {
+		t.Fatalf("SimplePointer returned error: %v", err)
+	}
+	if !ok || pointer != "/name" {
+		t.Fatalf("expected bare shorthand simple pointer /name, got ok=%v pointer=%q", ok, pointer)
 	}
 
 	pointer, ok, err = SimplePointer("{{/name}}-{{/version}}")

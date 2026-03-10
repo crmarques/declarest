@@ -1,19 +1,19 @@
 resource:
   id: "{{/index}}"
   alias: "{{/index}}"
-  remoteCollectionPath: /project/{{.project}}/sources
+  remoteCollectionPath: /project/{{/project}}/sources
 operations:
   create:
     method: POST
-    path: /project/{{.project}}/source/{{.id}}/resources
+    path: /project/{{/project}}/source/{{/id}}/resources
   get:
-    path: /project/{{.project}}/source/{{.id}}/resources
+    path: /project/{{/project}}/source/{{/id}}/resources
   update:
     method: POST
-    path: /project/{{.project}}/source/{{.id}}/resources
+    path: /project/{{/project}}/source/{{/id}}/resources
   list:
-    path: /project/{{.project}}/sources
+    path: /project/{{/project}}/sources
     transforms:
-    - jqExpression: 'map(. + {index: (.index | tostring), project: "{{.project}}"})'
+    - jqExpression: 'map(. + {index: (.index | tostring), project: "{{/project}}"})'
   compare:
-    path: /project/{{.project}}/source/{{.id}}/resources
+    path: /project/{{/project}}/source/{{/id}}/resources

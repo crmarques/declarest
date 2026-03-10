@@ -150,7 +150,37 @@ func SplitRawPathSegments(value string) []string {
 	if trimmed == "" {
 		return nil
 	}
-	return strings.Split(trimmed, "/")
+
+	segments := make([]string, 0, strings.Count(trimmed, "/")+1)
+	var current strings.Builder
+	templateDepth := 0
+
+	for idx := 0; idx < len(trimmed); idx++ {
+		if idx+1 < len(trimmed) && trimmed[idx] == '{' && trimmed[idx+1] == '{' {
+			templateDepth++
+			current.WriteString("{{")
+			idx++
+			continue
+		}
+		if idx+1 < len(trimmed) && trimmed[idx] == '}' && trimmed[idx+1] == '}' && templateDepth > 0 {
+			templateDepth--
+			current.WriteString("}}")
+			idx++
+			continue
+		}
+		if trimmed[idx] == '/' && templateDepth == 0 {
+			segments = append(segments, current.String())
+			current.Reset()
+			continue
+		}
+		current.WriteByte(trimmed[idx])
+	}
+
+	if current.Len() > 0 {
+		segments = append(segments, current.String())
+	}
+
+	return segments
 }
 
 func SplitLogicalPathSegments(value string) []string {

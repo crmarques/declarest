@@ -590,7 +590,7 @@ func defaultOperationPathTemplate(operation metadatadomain.Operation) string {
 	case metadatadomain.OperationCreate, metadatadomain.OperationList:
 		return "."
 	default:
-		return "./{{.id}}"
+		return "./{{/id}}"
 	}
 }
 
@@ -781,9 +781,10 @@ func isOperationPathRequiredError(err error, operation metadatadomain.Operation)
 		return true
 	}
 
-	// Default get paths resolve to "./{{.id}}". When "id" is unavailable in
+	// Default get paths resolve to "./{{/id}}". When "id" is unavailable in
 	// render mode, retry list just like the missing-path fallback.
 	return operation == metadatadomain.OperationGet &&
 		strings.Contains(message, "failed to render metadata template for path") &&
-		strings.Contains(message, "map has no entry for key \"id\"")
+		(strings.Contains(message, "json pointer \"/id\" did not resolve to a value") ||
+			strings.Contains(message, "map has no entry for key \"id\""))
 }

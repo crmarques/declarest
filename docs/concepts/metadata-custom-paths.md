@@ -21,12 +21,14 @@ The main tools are:
 When omitted, DeclaREST defaults it to the logical collection path.
 It can be templated.
 
+Use canonical JSON Pointer placeholders such as {% raw %}`{{/realm}}`{% endraw %} in docs and metadata inference output. Single-level shorthand such as {% raw %}`{{realm}}`{% endraw %} is also accepted when the lookup is just one token.
+
 Example:
 
 ```json
 {
   "resource": {
-    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{/realm}}/components{% endraw %}",
     "id": "{% raw %}`{{/id}}`{% endraw %}",
     "alias": "{% raw %}`{{/name}}`{% endraw %}"
   }
@@ -40,7 +42,7 @@ This lets a logical path like `/admin/realms/prod/user-registry/ldap-main` map t
 Operation `path` values can be relative to the rendered effective collection path:
 
 - `.` -> collection endpoint itself
-- {% raw %}`./{{.id}}`{% endraw %} -> child resource under the collection
+- {% raw %}`./{{/id}}`{% endraw %} -> child resource under the collection
 - `./execution` -> nested sub-endpoint under the collection
 
 This keeps metadata readable and avoids repeating long API paths.
@@ -50,7 +52,7 @@ This keeps metadata readable and avoids repeating long API paths.
 When you omit an operation `path`, DeclaREST uses safe defaults:
 
 - `create` and `list`: `.`
-- `get`, `update`, `delete`, `compare`: {% raw %}`./{{.id}}`{% endraw %}
+- `get`, `update`, `delete`, `compare`: {% raw %}`./{{/id}}`{% endraw %}
 
 That means you often only override paths for the operations that truly differ.
 
@@ -63,8 +65,8 @@ Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.yam
   "resource": {
     "id": "{% raw %}`{{/id}}`{% endraw %}",
     "alias": "{% raw %}`{{/name}}`{% endraw %}",
-    "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
-    "secretAttributes": ["config.bindCredential[0]"]
+    "remoteCollectionPath": "{% raw %}/admin/realms/{{/realm}}/components{% endraw %}",
+    "secretAttributes": ["/config/bindCredential/0"]
   },
   "operations": {
     "list": {

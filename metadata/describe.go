@@ -324,7 +324,7 @@ func extractResponseEntrySchema(entry any, openAPISpec any) any {
 }
 
 // findPathItemForMetadataOperation matches a metadata operation path template
-// (e.g. /admin/realms/{{.realm}}/clients) against OpenAPI path items.
+// (e.g. /admin/realms/{{/realm}}/clients) against OpenAPI path items.
 func findPathItemForMetadataOperation(
 	metadataPath string,
 	pathItems map[string]map[string]any,

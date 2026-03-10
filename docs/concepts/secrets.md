@@ -17,14 +17,14 @@ Example metadata:
 {
   "resource": {
     "secretAttributes": [
-      "credentials.password",
-      "config.bindCredential[0]"
+      "/credentials/password",
+      "/config/bindCredential/0"
     ]
   }
 }
 ```
 
-Attribute paths use dot notation and optional array indexes.
+Attribute paths use JSON Pointer syntax with `/`-separated tokens.
 
 ## Placeholders in resource files
 
@@ -46,7 +46,7 @@ declarest resource save /corporations/acme --secret-attributes
 Options:
 
 - `--secret-attributes` (all detected secret candidates)
-- `--secret-attributes attr1,attr2` (selected attributes)
+- `--secret-attributes /attr1,/attr2` (selected attributes)
 - `--allow-plaintext` (bypass plaintext-secret guard; use carefully)
 
 ## Detecting and fixing secret metadata on existing repositories

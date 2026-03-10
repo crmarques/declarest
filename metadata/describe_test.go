@@ -8,16 +8,16 @@ func TestDescribeResourceBasicMetadata(t *testing.T) {
 	t.Parallel()
 
 	md := ResourceMetadata{
-		ID:                   "{{pointer:/id}}",
-		Alias:                "{{pointer:/clientId}}",
+		ID:                   "{{/id}}",
+		Alias:                "{{/clientId}}",
 		PayloadType:          "json",
-		RemoteCollectionPath: "/admin/realms/{{.realm}}/clients",
+		RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 		Operations: map[string]OperationSpec{
-			"get":    {Method: "GET", Path: "/admin/realms/{{.realm}}/clients/{{.clientId}}"},
-			"create": {Method: "POST", Path: "/admin/realms/{{.realm}}/clients"},
-			"update": {Method: "PUT", Path: "/admin/realms/{{.realm}}/clients/{{.clientId}}"},
-			"delete": {Method: "DELETE", Path: "/admin/realms/{{.realm}}/clients/{{.clientId}}"},
-			"list":   {Method: "GET", Path: "/admin/realms/{{.realm}}/clients"},
+			"get":    {Method: "GET", Path: "/admin/realms/{{/realm}}/clients/{{/clientId}}"},
+			"create": {Method: "POST", Path: "/admin/realms/{{/realm}}/clients"},
+			"update": {Method: "PUT", Path: "/admin/realms/{{/realm}}/clients/{{/clientId}}"},
+			"delete": {Method: "DELETE", Path: "/admin/realms/{{/realm}}/clients/{{/clientId}}"},
+			"list":   {Method: "GET", Path: "/admin/realms/{{/realm}}/clients"},
 		},
 	}
 
@@ -29,7 +29,7 @@ func TestDescribeResourceBasicMetadata(t *testing.T) {
 	if desc.Identity == nil {
 		t.Fatal("expected identity to be present")
 	}
-	if desc.Identity.ID != "{{pointer:/id}}" {
+	if desc.Identity.ID != "{{/id}}" {
 		t.Fatalf("expected identity id, got %q", desc.Identity.ID)
 	}
 	if desc.PayloadType != "json" {
@@ -117,8 +117,8 @@ func TestDescribeResourceWithOpenAPISchema(t *testing.T) {
 
 	md := ResourceMetadata{
 		Operations: map[string]OperationSpec{
-			"create": {Method: "POST", Path: "/admin/realms/{{.realm}}/clients"},
-			"list":   {Method: "GET", Path: "/admin/realms/{{.realm}}/clients"},
+			"create": {Method: "POST", Path: "/admin/realms/{{/realm}}/clients"},
+			"list":   {Method: "GET", Path: "/admin/realms/{{/realm}}/clients"},
 		},
 	}
 
@@ -389,7 +389,7 @@ func TestDescribeResourceFallsBackToResponseSchema(t *testing.T) {
 
 	md := ResourceMetadata{
 		Operations: map[string]OperationSpec{
-			"get": {Method: "GET", Path: "/api/items/{{.id}}"},
+			"get": {Method: "GET", Path: "/api/items/{{/id}}"},
 		},
 	}
 
@@ -412,10 +412,10 @@ func TestDescribeResourceNoOpenAPI(t *testing.T) {
 	t.Parallel()
 
 	md := ResourceMetadata{
-		ID:          "{{pointer:/id}}",
+		ID:          "{{/id}}",
 		PayloadType: "json",
 		Operations: map[string]OperationSpec{
-			"get": {Method: "GET", Path: "/api/items/{{.id}}"},
+			"get": {Method: "GET", Path: "/api/items/{{/id}}"},
 		},
 	}
 
@@ -440,7 +440,7 @@ func TestFindPathItemForMetadataOperation(t *testing.T) {
 		"/admin/realms/{realm}/clients/{client-uuid}": {"get": map[string]any{}, "put": map[string]any{}},
 	}
 
-	item, found := findPathItemForMetadataOperation("/admin/realms/{{.realm}}/clients", pathItems)
+	item, found := findPathItemForMetadataOperation("/admin/realms/{{/realm}}/clients", pathItems)
 	if !found {
 		t.Fatal("expected to find path item for collection path")
 	}
@@ -448,7 +448,7 @@ func TestFindPathItemForMetadataOperation(t *testing.T) {
 		t.Fatal("expected path item to have GET method")
 	}
 
-	item, found = findPathItemForMetadataOperation("/admin/realms/{{.realm}}/clients/{{.clientId}}", pathItems)
+	item, found = findPathItemForMetadataOperation("/admin/realms/{{/realm}}/clients/{{/clientId}}", pathItems)
 	if !found {
 		t.Fatal("expected to find path item for resource path")
 	}

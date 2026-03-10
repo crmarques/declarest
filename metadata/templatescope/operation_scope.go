@@ -11,7 +11,6 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-var pathTemplateSegmentPattern = regexp.MustCompile(`^\{\{\s*\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}$`)
 var jqResourcePathPattern = regexp.MustCompile(`resource\(\s*"((?:[^"\\]|\\.)*)"\s*\)`)
 
 func BuildOperationScope(
@@ -205,9 +204,7 @@ func deriveTemplateFieldsFromPathTemplate(pathTemplate string, logicalPath strin
 		templateSegment := templateSegments[idx]
 		logicalSegment := logicalSegments[idx]
 
-		matches := pathTemplateSegmentPattern.FindStringSubmatch(templateSegment)
-		if len(matches) == 2 {
-			key := matches[1]
+		if key, ok := metadata.TemplatePlaceholderKey(templateSegment); ok {
 			if existing, exists := fields[key]; exists && existing != logicalSegment {
 				return nil
 			}
@@ -330,9 +327,5 @@ func collectionPathForLogicalPath(logicalPath string) string {
 }
 
 func splitPathSegments(value string) []string {
-	trimmed := strings.Trim(strings.TrimSpace(value), "/")
-	if trimmed == "" {
-		return []string{}
-	}
-	return strings.Split(trimmed, "/")
+	return resource.SplitRawPathSegments(value)
 }

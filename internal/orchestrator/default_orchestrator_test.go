@@ -489,7 +489,7 @@ func TestOrchestratorGetRemoteResolvesComplexAliasViaListCandidatePayload(t *tes
 		Alias: "{{/name}} - {{/version}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path: "/api/apis/{{.name}}/{{.version}}",
+				Path: "/api/apis/{{/name}}/{{/version}}",
 			},
 			string(metadatadomain.OperationList): {
 				Path: "/api/apis",
@@ -564,7 +564,7 @@ func TestOrchestratorRequestGetResolvesComplexAliasViaListCandidatePayload(t *te
 		Alias: "{{/name}} - {{/version}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
-				Path: "/api/apis/{{.name}}/{{.version}}",
+				Path: "/api/apis/{{/name}}/{{/version}}",
 			},
 			string(metadatadomain.OperationList): {
 				Path: "/api/apis",
@@ -642,7 +642,7 @@ func TestOrchestratorDeleteResolvesComplexAliasViaListCandidatePayload(t *testin
 		Alias: "{{/name}} - {{/version}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationDelete): {
-				Path: "/api/apis/{{.name}}/{{.version}}",
+				Path: "/api/apis/{{/name}}/{{/version}}",
 			},
 			string(metadatadomain.OperationList): {
 				Path: "/api/apis",
@@ -711,7 +711,7 @@ func TestOrchestratorRequestDeleteResolvesComplexAliasViaListCandidatePayload(t 
 		Alias: "{{/name}} - {{/version}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationDelete): {
-				Path: "/api/apis/{{.name}}/{{.version}}",
+				Path: "/api/apis/{{/name}}/{{/version}}",
 			},
 			string(metadatadomain.OperationList): {
 				Path: "/api/apis",
@@ -811,7 +811,7 @@ func TestOrchestratorGetRemoteUsesSingleJQFilteredCandidateFallback(t *testing.T
 			resolveValue: metadatadomain.ResourceMetadata{
 				ID:                   "{{/id}}",
 				Alias:                "{{/name}}",
-				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+				RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -879,7 +879,7 @@ func TestOrchestratorGetRemoteDoesNotCollapseExplicitChildToSingletonJQCandidate
 			resolveValue: metadatadomain.ResourceMetadata{
 				ID:                   "{{/id}}",
 				Alias:                "{{/name}}",
-				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+				RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Transforms: jqMutation(`[ .[] | select(.providerId == "ldap") ]`),
@@ -928,7 +928,7 @@ func TestOrchestratorGetRemoteDoesNotUseSingleCandidateFallbackWithoutJQ(t *test
 			resolveValue: metadatadomain.ResourceMetadata{
 				ID:                   "{{/id}}",
 				Alias:                "{{/name}}",
-				RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+				RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			},
 		},
 		server: serverManager,
@@ -1276,7 +1276,7 @@ func TestOrchestratorGetRemoteDoesNotTreatNotFoundAsEmptyWithoutOpenAPIOrReposit
 				Operations: map[string]metadatadomain.OperationSpec{
 					string(metadatadomain.OperationList): {
 						Method: "GET",
-						Path:   "/admin/realms/{{.realm}}/organizations",
+						Path:   "/admin/realms/{{/realm}}/organizations",
 					},
 				},
 			},
@@ -1689,7 +1689,7 @@ func TestOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 		resolveValue: metadatadomain.ResourceMetadata{
 			ID:                   "{{/id}}",
 			Alias:                "{{/name}}",
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 		},
 	}
 	orchestrator := &Orchestrator{
@@ -1731,7 +1731,7 @@ func TestOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *test
 		resolveValue: metadatadomain.ResourceMetadata{
 			ID:                   "{{/id}}",
 			Alias:                "{{/name}}",
-			RemoteCollectionPath: "/admin/realms/{{.realm}}/components",
+			RemoteCollectionPath: "/admin/realms/{{/realm}}/components",
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationList): {
 					Transforms: jqMutation("[ .[] | select(.providerId == \"ldap\") ]"),
@@ -2313,7 +2313,7 @@ func TestOrchestratorApplyUsesSecretsForRemoteMutation(t *testing.T) {
 		ID:    "{{/id}}",
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{/id}}"},
 			string(metadatadomain.OperationCreate): {Path: "/api/customers"},
 		},
 	}
@@ -2383,9 +2383,9 @@ func TestOrchestratorApplyUsesResolvedRemoteIDForUpdateAfterRemoteFallback(t *te
 		ID:    "{{/id}}",
 		Alias: "{{/clientId}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet):    {Path: "/admin/realms/test/clients/{{.id}}"},
+			string(metadatadomain.OperationGet):    {Path: "/admin/realms/test/clients/{{/id}}"},
 			string(metadatadomain.OperationList):   {Path: "/admin/realms/test/clients"},
-			string(metadatadomain.OperationUpdate): {Path: "/admin/realms/test/clients/{{.id}}"},
+			string(metadatadomain.OperationUpdate): {Path: "/admin/realms/test/clients/{{/id}}"},
 		},
 	}
 	metadataService := &fakeMetadata{resolveValue: md}
@@ -2453,7 +2453,7 @@ func TestOrchestratorApplySkipsUpdateWhenCompareShowsNoDrift(t *testing.T) {
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Transforms: suppressMutation("/updatedAt")},
-			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{/id}}"},
 		},
 	}
 	metadataService := &fakeMetadata{resolveValue: md}
@@ -2500,7 +2500,7 @@ func TestOrchestratorApplyForceUpdatesWhenCompareShowsNoDrift(t *testing.T) {
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {Transforms: suppressMutation("/updatedAt")},
-			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationUpdate):  {Path: "/api/customers/{{/id}}"},
 		},
 	}
 	metadataService := &fakeMetadata{resolveValue: md}
@@ -2544,7 +2544,7 @@ func TestOrchestratorApplyWholeResourceOpaqueSecretUsesCompareProjection(t *test
 		Secret: &wholeResourceSecret,
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationCompare): {
-				Transforms: jqMutation(`if type == "object" and has("meta") then {name: (.name // "{{.id}}"), type: (.meta["Rundeck-key-type"] // "password"), contentType: (.meta["Rundeck-content-type"] // "application/x-rundeck-data-password")} else {name: (.name // "{{.id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" elif (.contentType // "") == "application/octet-stream" then "private" else "password" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" elif (.type // "") == "private" then "application/octet-stream" else "application/x-rundeck-data-password" end))} end`),
+				Transforms: jqMutation(`if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "password"), contentType: (.meta["Rundeck-content-type"] // "application/x-rundeck-data-password")} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" elif (.contentType // "") == "application/octet-stream" then "private" else "password" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" elif (.type // "") == "private" then "application/octet-stream" else "application/x-rundeck-data-password" end))} end`),
 			},
 		},
 	}
@@ -2650,7 +2650,7 @@ func TestOrchestratorDiffUsesFallbackAndCompareSuppressRules(t *testing.T) {
 		ID:    "{{/id}}",
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{/id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
 			string(metadatadomain.OperationCompare): {Transforms: suppressMutation("/updatedAt")},
 		},
@@ -2763,9 +2763,9 @@ func TestOrchestratorDiffTreatsMissingRemoteResourceAsDrift(t *testing.T) {
 		ID:    "{{/id}}",
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{/id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
-			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{/id}}"},
 		},
 	}
 
@@ -2818,9 +2818,9 @@ func TestOrchestratorDiffReturnsConflictOnAmbiguousFallback(t *testing.T) {
 		ID:    "{{/id}}",
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{/id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
-			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{/id}}"},
 		},
 	}
 
@@ -2857,9 +2857,9 @@ func TestOrchestratorDiffReturnsConflictWhenDirectGetIdentityIsAmbiguous(t *test
 		ID:    "{{/id}}",
 		Alias: "{{/alias}}",
 		Operations: map[string]metadatadomain.OperationSpec{
-			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationGet):     {Path: "/api/customers/{{/id}}"},
 			string(metadatadomain.OperationList):    {Path: "/api/customers"},
-			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{.id}}"},
+			string(metadatadomain.OperationCompare): {Path: "/api/customers/{{/id}}"},
 		},
 	}
 
@@ -3052,7 +3052,7 @@ func TestOrchestratorTemplateReturnsNormalizedPayload(t *testing.T) {
 		metadata: &fakeMetadata{
 			resolveValue: metadatadomain.ResourceMetadata{
 				Operations: map[string]metadatadomain.OperationSpec{
-					string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{.id}}"},
+					string(metadatadomain.OperationUpdate): {Path: "/api/customers/{{/id}}"},
 				},
 			},
 		},
@@ -3264,7 +3264,7 @@ func TestOrchestratorRenderOperationSpecSupportsPayloadTemplateFunc(t *testing.T
 		metadatadomain.ResourceMetadata{
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {
-					Path:   "/api/customers/{{.id}}",
+					Path:   "/api/customers/{{/id}}",
 					Accept: "{{payload_media_type .}}",
 				},
 			},

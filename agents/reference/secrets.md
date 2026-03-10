@@ -80,20 +80,20 @@ Store contracts:
 6. `secret detect --fix` targets paths that have no metadata files yet; command creates metadata with `resource.secretAttributes`.
 
 ## Examples
-1. `resource save --secret-attributes` at `/customers/acme` stores plaintext `apiToken` as key `/customers/acme:apiToken` and writes `{{secret .}}` in the resource payload.
+1. `resource save --secret-attributes` at `/customers/acme` stores plaintext `apiToken` as key `/customers/acme:/apiToken` and writes `{{secret .}}` in the resource payload.
 2. Apply operation resolves placeholders at execution time and keeps repository content masked.
 3. Compare operation normalizes equivalent placeholders with different key naming conventions.
-4. `resource save --secret-attributes=password` handles `password` and then fails with warning when another non-metadata-declared detected candidate like `apiToken` remains unhandled unless `--allow-plaintext` is set.
-5. Save auto-stores and masks plaintext at `credentials.authValue` when `resource.secretAttributes` includes that attribute, even when the user omits both `--allow-plaintext` and `--secret-attributes`.
+4. `resource save --secret-attributes=/password` handles `/password` and then fails with warning when another non-metadata-declared detected candidate like `/apiToken` remains unhandled unless `--allow-plaintext` is set.
+5. Save auto-stores and masks plaintext at `/credentials/authValue` when `resource.secretAttributes` includes that attribute, even when the user omits both `--allow-plaintext` and `--secret-attributes`.
 6. `secret detect /customers/acme --fix` writes detected attributes into `/customers/acme` metadata `resource.secretAttributes`.
 7. `secret detect` without path scans the whole local repository and returns detected attributes grouped by logical resource path.
-8. `resource save /admin/realms/master/clients --secret-attributes=secret` writes handled secret attributes to collection metadata path `/admin/realms/_/clients`, skips resources without `secret`, and fails if other non-metadata-declared candidates remain unhandled.
+8. `resource save /admin/realms/master/clients --secret-attributes=/secret` writes handled secret attributes to collection metadata path `/admin/realms/_/clients`, skips resources without `/secret`, and fails if other non-metadata-declared candidates remain unhandled.
 9. `{{secret client-token}}` inside `/customers/acme` resolves secret key `/customers/acme:client-token`.
 10. `actionTokenGeneratedByUserLifespan.reset-credentials: "43200"` is not treated as a secret candidate by default detection.
 11. `access.token.claim: true` and `token.response.type.bearer.lower-case: false` are not treated as secret candidates by default detection.
-12. `resource get /customers/acme` redacts `password` to `{{secret .}}` when metadata for `/customers/acme` includes `resource.secretAttributes: [password]`.
-13. `resource get /customers/acme --show-secrets` prints plaintext `password` even when metadata declares that attribute as secret.
-14. `resource save /customers/acme` fails with `ValidationError` when metadata declares `password` as secret and no secret store provider is configured.
+12. `resource get /customers/acme` redacts `password` to `{{secret .}}` when metadata for `/customers/acme` includes `resource.secretAttributes: [/password]`.
+13. `resource get /customers/acme --show-secrets` prints plaintext `password` even when metadata declares `/password` as secret.
+14. `resource save /customers/acme` fails with `ValidationError` when metadata declares `/password` as secret and no secret store provider is configured.
 15. `resource save /projects/platform/secrets/private-key --payload private.key --secret` stores the full key content under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, leaves `resource.key` containing only `{{secret .}}`, and `resource apply /projects/platform/secrets/private-key` resolves the placeholder back to the original `.key` payload.
 16. `resource.secret: true` on `/projects/platform/secrets/private-key` causes a later plain `resource save /projects/platform/secrets/private-key --payload private.key` to store the whole payload in the secret store without requiring `--secret` again.
 17. `secret list /customers/acme` prints only path-relative keys such as `/password` and `/apiToken`, not their plaintext values.

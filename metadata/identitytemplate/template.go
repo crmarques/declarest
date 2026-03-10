@@ -2,6 +2,7 @@ package identitytemplate
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,6 +60,7 @@ type cacheEntry struct {
 }
 
 var compiledTemplateCache sync.Map
+var barePointerIdentifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func Compile(raw string) (*Template, error) {
 	if cached, ok := compiledTemplateCache.Load(raw); ok {
@@ -230,11 +232,11 @@ func parseExpression(raw string) (expressionNode, error) {
 	}
 
 	if len(tokens) == 1 {
-		if isPointerToken(tokens[0]) {
-			if _, err := resource.ParseJSONPointer(tokens[0].text); err != nil {
+		if pointer, ok, err := singleTokenPointer(tokens[0]); ok {
+			if err != nil {
 				return nil, err
 			}
-			return pointerNode{pointer: tokens[0].text}, nil
+			return pointerNode{pointer: pointer}, nil
 		}
 		if tokens[0].quoted {
 			return literalNode{value: tokens[0].text}, nil
@@ -249,15 +251,14 @@ func parseExpression(raw string) (expressionNode, error) {
 
 	args := make([]expressionNode, 0, len(tokens)-1)
 	for _, item := range tokens[1:] {
-		switch {
-		case isPointerToken(item):
-			if _, err := resource.ParseJSONPointer(item.text); err != nil {
+		if pointer, ok, err := singleTokenPointer(item); ok {
+			if err != nil {
 				return nil, err
 			}
-			args = append(args, pointerNode{pointer: item.text})
-		default:
-			args = append(args, literalNode{value: item.text})
+			args = append(args, pointerNode{pointer: pointer})
+			continue
 		}
+		args = append(args, literalNode{value: item.text})
 	}
 
 	if err := validateHelperArity(name, len(args)); err != nil {
@@ -360,6 +361,26 @@ func validateHelperArity(name string, count int) error {
 
 func isPointerToken(item token) bool {
 	return !item.quoted && strings.HasPrefix(strings.TrimSpace(item.text), "/")
+}
+
+func singleTokenPointer(item token) (string, bool, error) {
+	if item.quoted {
+		return "", false, nil
+	}
+
+	trimmed := strings.TrimSpace(item.text)
+	if strings.HasPrefix(trimmed, "/") {
+		if _, err := resource.ParseJSONPointer(trimmed); err != nil {
+			return "", false, err
+		}
+		return trimmed, true, nil
+	}
+
+	if barePointerIdentifierPattern.MatchString(trimmed) {
+		return resource.JSONPointerForObjectKey(trimmed), true, nil
+	}
+
+	return "", false, nil
 }
 
 func (p literalPart) render(_ any) (string, error) {

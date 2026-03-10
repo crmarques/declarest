@@ -33,10 +33,10 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 16. Until recursive metadata inference traversal is implemented, inference requests with `recursive=true` MUST return a typed validation error and MUST NOT persist metadata changes.
 17. `resource.remoteCollectionPath` templates MUST support indirection by resolving template fields from the handled logical path when payload attributes are absent.
 18. When `resource.remoteCollectionPath` is omitted, the effective remote collection path MUST default to the handled logical collection path.
-19. Operation paths starting with `.` (for example `.` or `./{{.id}}`) MUST resolve relative to the rendered effective collection path.
-20. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{.id}}` for `get`, `update`, `delete`, and `compare`.
+19. Operation paths starting with `.` (for example `.` or `./{{/id}}`) MUST resolve relative to the rendered effective collection path.
+20. When an operation path is omitted, defaults MUST be `.` for `create` and `list`, and `./{{/id}}` for `get`, `update`, `delete`, and `compare`.
 21. List-operation `transforms[*].jqExpression` entries MAY call `resource("<logical-path>")`; when used, resolution MUST target the same active source as the primary list workflow and return normalized JSON payload.
-22. Metadata template-rendered string fields MUST support `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload descriptor.
+22. Metadata template-rendered string fields MUST support canonical JSON Pointer placeholders such as `{{/id}}`, MUST accept one-level shorthand such as `{{id}}` as equivalent to `{{/id}}`, MAY continue accepting legacy dot notation such as `{{.id}}` for compatibility, and MUST support `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, which resolve from the active resource payload descriptor.
 23. Metadata template scopes MUST expose `logicalCollectionPath` as the handled logical collection path and MUST expose `remoteCollectionPath` as the effective remote collection path.
 24. Metadata template scopes MUST expose `contentType` as the active payload media type when the payload itself does not already define `contentType`, so media-aware templates work for raw text or octet-stream payloads.
 25. Metadata defaults MUST leave media header selection to payload-type-aware request building unless explicit metadata overrides are present.
@@ -44,7 +44,7 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 27. OpenAPI-backed inference SHOULD populate `operations.create/update.validate.schemaRef` as `openapi:request-body` when request-body schemas exist and MAY populate `validate.requiredAttributes` from deterministic schema `required` fields.
 28. `resource.payloadType` MAY override filename-derived payload inference for one resource or collection scope and MUST support `json`, `yaml`, `xml`, `hcl`, `ini`, `properties`, `text`, and `octet-stream`.
 29. `resource.secret: true` MAY declare one whole-resource secret save/read contract for that scope, MUST remain distinct from attribute-scoped secret masking, and MUST be mutually exclusive with `resource.secretAttributes`.
-30. `resource.id` and `resource.alias` MUST be identity template strings, MUST NOT accept legacy identity fields, MUST accept raw JSON Pointer shorthand such as `/id` as equivalent to `{{/id}}`, and MAY embed one or more RFC 6901 JSON Pointer expressions plus helper functions such as `uppercase`, `lowercase`, `trim`, `substring`, and `default`.
+30. `resource.id` and `resource.alias` MUST be identity template strings, MUST NOT accept legacy identity fields, MUST accept raw JSON Pointer shorthand such as `/id` as equivalent to `{{/id}}`, MUST accept one-level shorthand such as `{{id}}` as equivalent to `{{/id}}`, and MAY embed one or more RFC 6901 JSON Pointer expressions plus helper functions such as `uppercase`, `lowercase`, `trim`, `substring`, and `default`.
 31. When `resource.id` or `resource.alias` is omitted, identity resolution MUST default that field to `/id`.
 32. `resource.requiredAttributes` MUST be preserved through metadata merge/render/serialization and MUST remain resource-scoped.
 33. Body-bearing resource mutation workflows MUST validate the structured source payload against the effective resource required-attribute set before operation-specific payload transforms run; the effective set MUST include every JSON Pointer referenced by explicitly configured `resource.alias` and `resource.id`, even when `resource.requiredAttributes` omits those pointers.
@@ -80,7 +80,7 @@ Template context contract:
 2. Ancestor resource payload fields.
 3. Context attributes: logical path, logical collection path, effective remote collection path, alias, remote ID.
 4. Relative references allowed with `../` traversal semantics bound to ancestor levels.
-5. Helper functions `payload_type`, `payload_media_type`, and `payload_extension` with root-scope call form `{{... .}}`.
+5. Canonical JSON Pointer placeholders such as `{{/id}}`, one-level shorthand such as `{{id}}`, and helper functions `payload_type`, `payload_media_type`, and `payload_extension` with root-scope call form `{{... .}}`.
 6. Compatibility alias `contentType` populated from the active payload media type when the payload map does not already define `contentType`.
 
 ## Layering Algorithm
@@ -104,7 +104,7 @@ Template context contract:
 5. `secretAttributes` points to missing payload fields and SHOULD not fail metadata resolution.
 6. Metadata update writes from CLI commands remove nil keys while keeping explicit empty arrays/maps, default to `metadata.yaml`, and still read legacy `metadata.json` sidecars.
 7. Selector-path inference without OpenAPI data still returns deterministic fallback metadata hints.
-8. Remote-collection-path indirection uses selector/logical-path-derived attributes (for example `{{.realm}}`) even when the payload omits those attributes, and plural logical collection segments (for example `/projects/<project>/...`) remain available as fallback template fields when payload attributes are absent.
+8. Remote-collection-path indirection uses selector/logical-path-derived attributes (for example `{{/realm}}`) even when the payload omits those attributes, and plural logical collection segments (for example `/projects/<project>/...`) remain available as fallback template fields when payload attributes are absent.
 9. `resource("<logical-path>")` lookups used by list `jq` can resolve parent resources through metadata-aware alias/id fallback and then filter candidates deterministically by referenced fields.
 10. Invalid metadata template helper usage (for example `{{payload_type "yaml"}}`) returns a typed validation error.
 11. Raw octet-stream or text payloads can still render templates that read `contentType`; when the payload is not a map object, that alias resolves from the active payload descriptor instead of failing on a missing key.
@@ -115,18 +115,19 @@ Template context contract:
 16. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
 17. Identity-template rendering MUST fail with a typed validation error when a referenced JSON Pointer is missing unless a helper such as `default` handles that case explicitly.
 18. Complex identity templates (for example `{{/name}}-{{/version}}`) MUST support forward rendering but MUST NOT be reverse-mapped into payload fields; reverse mapping is limited to simple single-pointer templates such as `{{/id}}`.
+19. Metadata string-template rendering MUST treat one-level shorthand placeholders such as `{{id}}` as equivalent to canonical JSON Pointer placeholders such as `{{/id}}`.
 20. Machine-readable schema maintenance remains nested-only: adding or changing a persisted metadata field (for example `resource.preferredFormat`) requires a matching `schemas/metadata.schema.json` update without reintroducing flat legacy aliases.
 
 ## Examples
-1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.
+1. `/customers/_` defines `operations.get.path: /api/customers/{{/id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.
 2. `operations.compare.transforms: [{excludeAttributes:["/updatedAt","/version"]}]` excludes those fields from diff output.
 3. `operations.list.path` inferred from OpenAPI, then manually overridden with custom query defaults.
 4. Inference for `/admin/realms/_/clients/` can propose `resource.id: {{/id}}`, `resource.alias: {{/clientId}}`, and templated operation paths from OpenAPI selectors.
-5. For selector `/admin/realms/_/user-registry` with `resource.remoteCollectionPath: /admin/realms/{{.realm}}/components` and `operations.get.path: ./{{.id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
-6. For selector `/projects/_/jobs/_`, omitting `resource.remoteCollectionPath` would default remote collection access to `/projects/{{.project}}/jobs`; when the managed-server collection is actually `/project/{{.project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that remote value while `project` still resolves from the logical collection path.
-7. For selector `/admin/realms/_/user-registry/_/mappers/`, `operations.list.transforms: [{jqExpression:"..."}]` MAY use `resource("/admin/realms/{{.realm}}/user-registry/{{.provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
+5. For selector `/admin/realms/_/user-registry` with `resource.remoteCollectionPath: /admin/realms/{{/realm}}/components` and `operations.get.path: ./{{/id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
+6. For selector `/projects/_/jobs/_`, omitting `resource.remoteCollectionPath` would default remote collection access to `/projects/{{/project}}/jobs`; when the managed-server collection is actually `/project/{{/project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that remote value while `project` still resolves from the logical collection path.
+7. For selector `/admin/realms/_/user-registry/_/mappers/`, `operations.list.transforms: [{jqExpression:"..."}]` MAY use `resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
 8. `metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.
-9. `metadata get` resolves payload-aware helper tokens in metadata string fields while preserving unrelated templates such as `{{.id}}`.
+9. `metadata get` resolves payload-aware helper tokens in metadata string fields while preserving unrelated templates such as `{{/id}}`.
 10. `operations.create.validate.requiredAttributes: ["/realm"]` is satisfied for `/admin/realms/platform/...` when `realm` is derived from the logical path template context.
 11. OpenAPI inference for an endpoint with `application/octet-stream` request or response media infers `resource.payloadType: octet-stream` when explicit metadata is absent.
 12. `resource.externalizedAttributes: [{path:"/script", file:"script.sh"}]` plus `resource.yaml script: "{{include script.sh}}"` stores script content in a sibling `script.sh` file and expands that file back into the effective payload for apply/diff.
@@ -135,3 +136,4 @@ Template context contract:
 15. `resource.payloadType: text` plus `resource.secret: true` is valid for a whole-file secret, while `resource.secretAttributes: ["/password"]` at that same scope fails validation because text payloads are not structured.
 16. Rundeck-style metadata can render `{{index . "contentType"}}` for a raw `resource.key` payload because the template scope injects `contentType: application/octet-stream` from the active descriptor.
 17. `resource.requiredAttributes: ["/realm"]` plus `resource.alias: "{{/clientId}}"` still requires `/clientId` in a structured mutation payload even when `operations.update.transforms` later excludes `/clientId` from the transmitted body.
+18. `operations.get.path: /api/customers/{{id}}` is valid shorthand for `/api/customers/{{/id}}`, but docs and inferred output SHOULD prefer the canonical `{{/id}}` form.

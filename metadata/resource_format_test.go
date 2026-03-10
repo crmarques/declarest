@@ -14,7 +14,7 @@ func TestResolveOperationSpecWithScopeResolvesPayloadTemplateHelpers(t *testing.
 			RemoteCollectionPath: "/api/{{payload_type .}}/customers",
 			Operations: map[string]OperationSpec{
 				string(OperationGet): {
-					Path:        "/api/customers/{{.id}}",
+					Path:        "/api/customers/{{/id}}",
 					Accept:      "{{payload_media_type .}}",
 					ContentType: "application/{{payload_type .}}",
 					Query: map[string]string{

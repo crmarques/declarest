@@ -114,8 +114,8 @@ func TestExecuteRepositoryScanDefaultsToRootAndSortsResults(t *testing.T) {
 	}
 	secrets := &fakeSecretProvider{
 		detected: map[string][]string{
-			"a": {"token", "password", "token"},
-			"b": {"apikey"},
+			"a": {"/token", "/password", "/token"},
+			"b": {"/apikey"},
 		},
 	}
 
@@ -142,8 +142,8 @@ func TestExecuteRepositoryScanDefaultsToRootAndSortsResults(t *testing.T) {
 		t.Fatalf("expected detected resource list output, got %T", result.Output)
 	}
 	want := []DetectedResourceSecrets{
-		{LogicalPath: "/a", Attributes: []string{"password", "token"}},
-		{LogicalPath: "/b", Attributes: []string{"apikey"}},
+		{LogicalPath: "/a", Attributes: []string{"/password", "/token"}},
+		{LogicalPath: "/b", Attributes: []string{"/apikey"}},
 	}
 	if !reflect.DeepEqual(items, want) {
 		t.Fatalf("unexpected detect results: got=%#v want=%#v", items, want)
@@ -153,7 +153,7 @@ func TestExecuteRepositoryScanDefaultsToRootAndSortsResults(t *testing.T) {
 func TestExecuteInputModeFixRequiresPath(t *testing.T) {
 	t.Parallel()
 
-	secrets := &fakeSecretProvider{detected: map[string][]string{"": {"password"}}}
+	secrets := &fakeSecretProvider{detected: map[string][]string{"": {"/password"}}}
 	_, err := Execute(context.Background(), Dependencies{
 		Secrets: secrets,
 	}, Request{
@@ -180,7 +180,7 @@ func TestExecuteRepositoryScanRejectsUndetectedSecretAttributeFilter(t *testing.
 	}
 	secrets := &fakeSecretProvider{
 		detected: map[string][]string{
-			"a": {"password"},
+			"a": {"/password"},
 		},
 	}
 
@@ -188,7 +188,7 @@ func TestExecuteRepositoryScanRejectsUndetectedSecretAttributeFilter(t *testing.
 		Orchestrator: orch,
 		Secrets:      secrets,
 	}, Request{
-		SecretAttribute: "token",
+		SecretAttribute: "/token",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -207,7 +207,7 @@ func TestExecuteFixPersistsDetectedAttributes(t *testing.T) {
 			"/a": map[string]any{"id": "a"},
 		},
 	}
-	secrets := &fakeSecretProvider{detected: map[string][]string{"a": {"token"}}}
+	secrets := &fakeSecretProvider{detected: map[string][]string{"a": {"/token"}}}
 	meta := &fakeMetadata{}
 
 	_, err := Execute(context.Background(), Dependencies{
@@ -224,7 +224,7 @@ func TestExecuteFixPersistsDetectedAttributes(t *testing.T) {
 	if meta.setCalls[0].path != "/a" {
 		t.Fatalf("expected metadata set for /a, got %q", meta.setCalls[0].path)
 	}
-	if !reflect.DeepEqual(meta.setCalls[0].meta.SecretAttributes, []string{"token"}) {
+	if !reflect.DeepEqual(meta.setCalls[0].meta.SecretAttributes, []string{"/token"}) {
 		t.Fatalf("unexpected metadata secret attributes: %#v", meta.setCalls[0].meta.SecretAttributes)
 	}
 }

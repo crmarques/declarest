@@ -35,7 +35,7 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 				},
 			},
 			string(OperationGet): {
-				Path: "/api/customers/{{.id}}",
+				Path: "/api/customers/{{/id}}",
 			},
 			string(OperationList): {
 				Path: "/api/customers",
@@ -263,7 +263,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		  "aliasAttribute": "/name",
 		  "secretsFromAttributes": ["password"],
 		  "operations": {
-		    "get": {"path": "/api/customers/{{.id}}"},
+		    "get": {"path": "/api/customers/{{/id}}"},
 		    "list": {"path": "/api/customers"}
 		  },
 		  "filter": ["/items"],
@@ -306,7 +306,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		    },
 		    "get": {
 		      "method": "GET",
-		      "path": "/admin/realms/{{.realm}}",
+		      "path": "/admin/realms/{{/realm}}",
 		      "headers": [
 		        {"X-Tenant": "platform"}
 		      ],
@@ -350,7 +350,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacySchemaAndSupportsNestedSchema
 		if decoded.Operations[string(OperationCreate)].Path != "/admin/realms" {
 			t.Fatalf("unexpected create operation: %#v", decoded.Operations[string(OperationCreate)])
 		}
-		if decoded.Operations[string(OperationGet)].Path != "/admin/realms/{{.realm}}" {
+		if decoded.Operations[string(OperationGet)].Path != "/admin/realms/{{/realm}}" {
 			t.Fatalf("unexpected get operation: %#v", decoded.Operations[string(OperationGet)])
 		}
 		if decoded.Operations[string(OperationGet)].Method != "GET" {
@@ -402,7 +402,7 @@ func TestResourceMetadataUnmarshalJSONRejectsLegacyCollectionPathField(t *testin
 
 	payload := []byte(`{
 	  "resource": {
-	    "collectionPath": "/admin/realms/{{.realm}}/components"
+	    "collectionPath": "/admin/realms/{{/realm}}/components"
 	  }
 	}`)
 
@@ -417,7 +417,7 @@ func TestResourceMetadataUnmarshalYAMLRejectsLegacyCollectionPathField(t *testin
 
 	payload := []byte(`
 resource:
-  collectionPath: /admin/realms/{{.realm}}/components
+  collectionPath: /admin/realms/{{/realm}}/components
 `)
 
 	var decoded ResourceMetadata
@@ -518,12 +518,12 @@ func TestResourceMetadataUnmarshalJSONRejectsOperationURLPathSyntax(t *testing.T
 
 	payload := []byte(`{
 	  "resource": {
-	    "remoteCollectionPath": "/admin/realms/{{.realm}}/components"
+	    "remoteCollectionPath": "/admin/realms/{{/realm}}/components"
 	  },
 	  "operations": {
 	    "get": {
 	      "url": {
-	        "path": "./{{.id}}"
+	        "path": "./{{/id}}"
 	      }
 	    }
 	  }

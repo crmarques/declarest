@@ -24,7 +24,7 @@ Example:
 ```json
 {
   "resource": {
-    "secretAttributes": ["credentials.password", "clientSecret"]
+    "secretAttributes": ["/credentials/password", "/clientSecret"]
   }
 }
 ```
@@ -60,7 +60,7 @@ declarest secret detect --fix /customers/
 Apply one attribute only:
 
 ```bash
-declarest secret detect --fix --secret-attribute clientSecret /customers/
+declarest secret detect --fix --secret-attribute /clientSecret /customers/
 ```
 
 ## 6. Inspect plaintext only when necessary
