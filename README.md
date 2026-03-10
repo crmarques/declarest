@@ -92,7 +92,6 @@ declarest context add --payload /tmp/contexts.yaml --set-current
 Start here:
 
 - `docs/index.md`
-- `docs/getting-started/installation.md`
 - `docs/getting-started/quickstart.md`
 - `docs/concepts/overview.md`
 

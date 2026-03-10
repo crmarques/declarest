@@ -25,7 +25,6 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Install: getting-started/installation.md
       - Quickstart (CLI): getting-started/quickstart.md
       - Quickstart (Operator): getting-started/quickstart-operator.md
       - Troubleshooting: getting-started/troubleshooting.md

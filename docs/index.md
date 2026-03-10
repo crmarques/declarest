@@ -56,6 +56,8 @@ Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`
 Use DeclaREST when you need:
 
 - Git review and history for API configuration
+- less standing administrative access without taking autonomy away from the teams who own the changes
+- stronger auditability for who changed what, when, and why across API-backed configuration
 - repeatable automation across environments
 - one model for both local debugging and continuous sync
 - support for APIs that need mapping logic
@@ -69,8 +71,7 @@ DeclaREST is usually not the best fit when:
 
 ## Start here
 
-- [Install](getting-started/installation.md)
-- [Quickstart (CLI)](getting-started/quickstart.md)
+- [Quickstart (CLI)](getting-started/quickstart.md) — includes CLI installation and first-run setup
 - [Quickstart (Operator - recommended)](getting-started/quickstart-operator.md)
 - [Troubleshooting](getting-started/troubleshooting.md)
 
