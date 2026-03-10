@@ -14,8 +14,8 @@ Use:
 ```json
 {
   "resource": {
-    "id": "{{/id}}",
-    "alias": "{{/name}}"
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}"
   }
 }
 ```

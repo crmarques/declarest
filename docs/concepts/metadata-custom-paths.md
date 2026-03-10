@@ -27,8 +27,8 @@ Example:
 {
   "resource": {
     "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
-    "id": "{{/id}}",
-    "alias": "{{/name}}"
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}"
   }
 }
 ```
@@ -61,8 +61,8 @@ Real fixture example (simplified from `test/e2e/.../user-registry/_/metadata.yam
 ```json
 {
   "resource": {
-    "id": "{{/id}}",
-    "alias": "{{/name}}",
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}",
     "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "secretAttributes": ["config.bindCredential[0]"]
   },

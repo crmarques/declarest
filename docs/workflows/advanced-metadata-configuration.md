@@ -31,8 +31,8 @@ Inspired by:
 ```json
 {
   "resource": {
-    "id": "{{/id}}",
-    "alias": "{{/name}}",
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}",
     "remoteCollectionPath": "{% raw %}/admin/realms/{{.realm}}/components{% endraw %}",
     "secretAttributes": ["config.bindCredential[0]"]
   },
@@ -81,8 +81,8 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 ```json
 {
   "resource": {
-    "id": "{{/alias}}",
-    "alias": "{{/alias}}"
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}"
   }
 }
 ```
@@ -92,8 +92,8 @@ A deeper metadata file for `executions` overrides specific operations and payloa
 ```json
 {
   "resource": {
-    "id": "{{/id}}",
-    "alias": "{{/displayName}}"
+    "id": "{% raw %}`{{/id}}`{% endraw %}",
+    "alias": "{% raw %}`{{/displayName}}`{% endraw %}"
   },
   "operations": {
     "create": {
