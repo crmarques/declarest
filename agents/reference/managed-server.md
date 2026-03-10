@@ -36,6 +36,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 19. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
 20. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
 21. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
+22. When a single-resource `get` or `delete` operation path cannot be rendered from the requested logical path alone because metadata templates require payload fields that are only available from a collection item (for example complex aliases such as `{{/name}} - {{/version}}`), managed-server resolution MUST attempt one parent-collection list, find a unique metadata alias/id match, and rerender the resource operation using that matched candidate payload and identity before returning the original validation error.
 
 ## Data Contracts
 Request spec fields:
@@ -88,6 +89,7 @@ Request throttling fields:
 10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
 11. Structured mutation validation can require `/clientId` from `resource.alias: "{{/clientId}}"` even when an operation transform removes `/clientId` from the outgoing request body afterward.
 12. Custom auth header names other than `Authorization` still require debug-log redaction when they come from `managedServer.http.auth.customHeaders`.
+13. A direct resource `get` or `delete` path that cannot render `operations.get.path` or `operations.delete.path` from the requested logical segment alone can still succeed when the parent collection list yields exactly one candidate whose rendered alias matches that segment and whose payload supplies the missing template fields.
 
 ## Examples
 1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.
@@ -100,3 +102,4 @@ Request throttling fields:
 8. `Get` of a binary certificate endpoint returns `resource.BinaryValue` when the server responds `application/octet-stream`.
 9. `Update` of a Rundeck private key stored as `resource.key` sends raw bytes and resolves `ContentType` to `application/octet-stream` even when the local payload is not a JSON object.
 10. `Create` with `resource.requiredAttributes: ["/realm"]` and `resource.alias: "{{/clientId}}"` fails before remote HTTP execution when the structured source payload omits `/clientId`, even if `operations.create.transforms` would otherwise remove `/clientId` from the transmitted body.
+11. `Get` or `Delete` for logical path `/apis/orders - v1` with `resource.alias: "{{/name}} - {{/version}}"`, `resource.id: "/id"`, `operations.list.path: /api/apis`, and `operations.get.path: /api/apis/{{.name}}/{{.version}}` first lists `/api/apis`, matches alias `orders - v1`, and then rerenders the resource operation with the matched payload so `.name` and `.version` resolve correctly.

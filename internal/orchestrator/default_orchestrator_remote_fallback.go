@@ -9,7 +9,6 @@ import (
 	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
-	"github.com/crmarques/declarest/resource/identity"
 )
 
 func (r *Orchestrator) fetchRemoteMetadataPathFallbackValue(
@@ -98,7 +97,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 
 		matched := make([]resource.Resource, 0, len(candidates))
 		for _, candidate := range candidates {
-			if matchesLocalFallbackIdentity(segmentInfo, candidate.LocalAlias, candidate.RemoteID, candidate.Payload) {
+			if matchesFallbackCandidate(segmentInfo, candidate) {
 				matched = append(matched, candidate)
 			}
 		}
@@ -109,7 +108,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 				nextPath, replaced, replaceErr := replaceLogicalPathSegment(
 					segments,
 					segmentIndex,
-					remoteFallbackSegmentValue(candidates[0]),
+					fallbackSegmentValue(candidates[0]),
 				)
 				if replaceErr != nil {
 					return nil, replaceErr
@@ -123,7 +122,7 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 			nextPath, replaced, replaceErr := replaceLogicalPathSegment(
 				segments,
 				segmentIndex,
-				remoteFallbackSegmentValue(matched[0]),
+				fallbackSegmentValue(matched[0]),
 			)
 			if replaceErr != nil {
 				return nil, replaceErr
@@ -142,28 +141,6 @@ func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 	}
 
 	return nil, nil
-}
-
-func remoteFallbackSegmentValue(candidate resource.Resource) string {
-	if value := strings.TrimSpace(candidate.RemoteID); value != "" {
-		return value
-	}
-
-	payload, ok := candidate.Payload.(map[string]any)
-	if ok {
-		for _, attribute := range identityAttributeCandidates() {
-			value, found := identity.LookupScalarAttribute(payload, attribute)
-			if !found || strings.TrimSpace(value) == "" {
-				continue
-			}
-			return strings.TrimSpace(value)
-		}
-	}
-	if value := strings.TrimSpace(candidate.LocalAlias); value != "" {
-		return value
-	}
-
-	return ""
 }
 
 func replaceLogicalPathSegment(
@@ -205,13 +182,6 @@ func shouldCheckRemoteIdentityAmbiguity(resolvedResource resource.Resource, md m
 		return false
 	}
 	return alias != remoteID
-}
-
-func matchesRemoteFallbackCandidate(resolvedResource resource.Resource, candidate resource.Resource) bool {
-	if candidate.LocalAlias == resolvedResource.LocalAlias {
-		return true
-	}
-	return resolvedResource.RemoteID != "" && candidate.RemoteID == resolvedResource.RemoteID
 }
 
 func allowsSingletonListIdentityFallback(

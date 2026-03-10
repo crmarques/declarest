@@ -84,7 +84,7 @@ func (r *Orchestrator) resolveLocalResourceForRead(
 		if hydrateErr != nil {
 			return resource.Resource{}, hydrateErr
 		}
-		if !matchesLocalFallbackIdentity(
+		if !matchesFallbackIdentity(
 			requestedInfo,
 			hydrated.LocalAlias,
 			hydrated.RemoteID,
@@ -148,56 +148,6 @@ func (r *Orchestrator) hydrateLocalFallbackCandidate(
 		Payload:           candidatePayload,
 		PayloadDescriptor: candidateContent.Descriptor,
 	}, nil
-}
-
-func listedResourceAlias(item resource.Resource) string {
-	alias := strings.TrimSpace(item.LocalAlias)
-	if alias != "" && alias != "/" {
-		return alias
-	}
-	return logicalPathAlias(item.LogicalPath)
-}
-
-func requestedFallbackSegment(requestedInfo resource.Resource) string {
-	requestedSegment := strings.TrimSpace(requestedInfo.RemoteID)
-	if requestedSegment == "" {
-		requestedSegment = logicalPathAlias(requestedInfo.LogicalPath)
-	}
-	return requestedSegment
-}
-
-func matchesLocalFallbackIdentity(
-	requestedInfo resource.Resource,
-	candidateAlias string,
-	candidateRemoteID string,
-	candidatePayload resource.Value,
-) bool {
-	requestedSegment := requestedFallbackSegment(requestedInfo)
-	if requestedSegment == "" {
-		return false
-	}
-
-	if strings.TrimSpace(candidateRemoteID) == requestedSegment || strings.TrimSpace(candidateAlias) == requestedSegment {
-		return true
-	}
-
-	payloadMap, ok := candidatePayload.(map[string]any)
-	if !ok {
-		return false
-	}
-
-	identityCandidates := identityAttributeCandidates()
-	for _, attribute := range identityCandidates {
-		value, found := identity.LookupScalarAttribute(payloadMap, attribute)
-		if !found || strings.TrimSpace(value) == "" {
-			continue
-		}
-		if strings.TrimSpace(value) == requestedSegment {
-			return true
-		}
-	}
-
-	return false
 }
 
 func identityAttributeCandidates() []string {

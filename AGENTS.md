@@ -11,7 +11,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 5. If authoring/revising specs or instruction files, run `agents/skills/spec-writer/SKILL.md`.
 6. If behavior or verification expectations changed, run `agents/skills/quality-gate/SKILL.md`.
 7. If reviewing/auditing specs, or after substantial spec/instruction edits, run `agents/skills/spec-auditor/SKILL.md`.
-8. Before final response, run the completion checklist and report unmet items.
+8. Before final response, run the completion checklist and resolve or surface any blocking unmet items.
 
 ## Domain File Catalog
 | File | Domain | Load When |
@@ -29,6 +29,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | `agents/reference/k8s-operator.md` | Kubernetes operator contracts | CRD validation, reconcile loops, webhook refresh flows |
 | `agents/reference/cli.md` | CLI behavior and output contracts | Command design and UX behavior |
 | `agents/reference/e2e.md` | E2E harness and component contracts | E2E profile logic, component onboarding, runtime step orchestration |
+| `agents/reference/commit-instructions.md` | Final handoff subject-line format | Final response and explicit commit-message formatting |
 | `agents/reference/quality.md` | Quality, testing, and security gates | Validation, test planning, release checks |
 | `agents/reference/use-cases.md` | End-to-end examples and edge cases | Scenario design and acceptance tests |
 
@@ -44,7 +45,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 | Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
 | Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/code.md`, `agents/reference/quality.md` |
-| Instruction/skill workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` plus affected `AGENTS.md`/`agents/skills/*` files |
+| Instruction/skill workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` plus affected `AGENTS.md`/`agents/skills/*` files, and `agents/reference/commit-instructions.md` when final handoff or commit guidance changes |
 | Quality strategy/test-policy change | `agents/reference/interfaces.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 
 ## Skill Selection Rules
@@ -53,28 +54,25 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 3. Use `agents/skills/quality-gate/SKILL.md` when selecting verification scope for behavior, contract, or security changes.
 4. Use `agents/skills/spec-auditor/SKILL.md` when validating consistency and coverage.
 5. If multiple skills apply, run in order: `spec-router`, `spec-writer`, `quality-gate`, `spec-auditor`.
-6. Use `agents/skills/commit-workflow/SKILL.md` whenever preparing commit guidance that the user will execute once the agent finishes.
+6. Use `agents/skills/commit-workflow/SKILL.md` only when the user explicitly asks for commit guidance or commit creation after the request work is complete.
 
-## Commit guidance (agents)
-- Agents MUST NOT create, amend, or push commits themselves; the user runs `git commit` after the agent finishes preparing the change.
-- Agents MAY stage touched files to clarify the final diff, but only after all code changes and verifications are complete; they must leave the final commit execution to the user and should never stage unrelated modifications.
-- Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `managed-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
-- Each logical change needs a focused justification so that a Conventional Commit can still be composed if the user consents to committing; agents should reserve the actual phrasing until the user explicitly asks or approves the commit.
-- Before handing off, agents MUST:
+## Final handoff and commit guidance
+- Agents MUST NOT create, amend, stage, or push commits during standard request handoff.
+- Agents MUST NOT automatically invoke `agents/skills/commit-workflow/SKILL.md` just because tracked or untracked changes remain after request processing.
+- Before standard handoff, agents MUST:
   - apply the `Go-file handoff verification` rules below,
   - scan diffs for secrets or unexpected large/binary files,
-  - review the prepared diff (for example via `git diff`/`git diff --staged`) for correctness.
-- Agents MUST include in their final response:
-  - which files changed,
-  - the list of commands executed during the work, including any intentional verification skips,
-  - any blockers or remaining verification needs that the user should address before committing,
-  - and a direct question asking whether the agent should commit the prepared changes now (mirroring the plan-mode prompt before execution).
+  - review the prepared diff (for example via `git diff`) for correctness.
+- When the request completes successfully with no remaining blocker, the final response MUST contain only one short subject line that obeys `agents/reference/commit-instructions.md`.
+- That standard successful final response MUST NOT append work summaries, changed-file lists, command inventories, verification logs, residual-risk notes, or commit questions.
+- When the user explicitly asks for commit guidance or commit creation after the request work is complete, agents MUST use `agents/skills/commit-workflow/SKILL.md`.
+- When required verification, required repository/bundle synchronization, or another blocking handoff condition cannot complete, the agent MUST report the blocker directly instead of the standard one-line final response.
 
 ## Go-file handoff verification
 - When the agent changes at least one `.go` file during a request, the agent MUST run `gofmt -w` on every changed Go file before handoff.
 - When the agent changes at least one `.go` file during a request, the agent MUST then run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
 - When the agent changes no `.go` files during a request, the agent MAY skip both `gofmt` and `go test -race`.
-- Final handoff MUST report whether this verification gate ran and describe any blocker that prevented it from completing.
+- If this verification gate cannot complete when required, the agent MUST treat that as a blocker and report it instead of the standard one-line final response.
 
 ## Engineering Rules
 1. Keep architecture and implementation aligned with senior engineering practices.
@@ -90,23 +88,24 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 11. Add or update dependencies only when they are trusted, widely adopted, and actively maintained.
 12. When dependencies/imports change, align `go.mod`/`go.sum` and run `go mod tidy`.
 13. Use risk-based verification: run the fastest checks that cover changed contracts, then escalate only when required by risk.
-14. Final responses should report executed verification commands and any residual risk when checks are skipped or blocked.
+14. Required verification MUST complete before standard handoff; successful standard final responses SHOULD stay minimal and MUST omit verification detail unless the user explicitly asks for it.
 15. Inline or explanatory comments that only restate what the code already expresses MUST NOT be added; updates SHOULD remove such non-functional comments and rely on clear naming, structure, and tests instead, while only keeping compile-time directives or exported-API documentation that cannot be conveyed otherwise.
 
 ## Bundle Repository Synchronization
 1. When editing metadata under `test/e2e/components/managed-server/<component>/metadata`, identify the matching sibling repository named `../declarest-bundle-<component>` by using the same `<component>` segment.
 2. If the identified bundle repository exists and is writable, the agent MUST mirror each metadata file change into `declarest-bundle-<component>/metadata/` so that both trees contain the same filenames and contents (no extra or missing files) before handing off. Use deterministic copy or sync steps rather than ad-hoc edits to keep diffs minimal.
 3. When the bundle repository hosts a manifest such as `bundle.yaml` that references metadata content, update the manifest simultaneously to keep it consistent with the mirrored metadata tree (for example adjust file lists, version hints, or metadata-specific fields that mention `metadata/`).
-4. If the bundle repository is absent or cannot be edited (for example because it is outside writable roots), document the missing sync in the final response so the downstream reviewer knows a manual bundle update is required to keep the metadata content aligned.
+4. If the bundle repository is absent or cannot be edited (for example because it is outside writable roots), treat the missing sync as a blocking handoff condition and report it instead of the standard one-line final response.
 
 ## Delivery Protocol
-1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (including the `Go-file handoff verification` commands only when at least one `.go` file changed, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
-2. If the user agrees and asks for help composing the commit, ensure each resulting Conventional Commit message follows the `Commit guidance (agents)` rules and the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting them.
-3. When multiple logical concerns exist and the user asks for multiple commits, propose multiple Conventional Commit messages by numbering each message and describing its individual scope.
+1. After fulfilling a request, run the required verification commands (including the `Go-file handoff verification` commands only when at least one `.go` file changed) and complete any required repository or bundle synchronization work, then stop as soon as those tasks finish.
+2. If the request is successful and unblocked, emit only the one-line subject required by `agents/reference/commit-instructions.md`.
+3. If the user later asks for commit help, ensure each resulting Conventional Commit message obeys `agents/reference/commit-instructions.md` and follows the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting or proposing commit-related commands.
+4. When multiple logical concerns exist and the user asks for multiple commits, propose multiple Conventional Commit messages by numbering each message and describing its individual scope.
 
 ## Commit workflow
-- Committing is opt-in and MUST go through `agents/skills/commit-workflow/SKILL.md` so that all git-related commands are only executed after the host tool’s default approval/confirmation UI (buttons) explicitly accepts them.
-- After a task and its validations complete, if the agent’s work left tracked or untracked changes, it SHOULD invoke the commit-workflow skill so the user sees a brief summary, confirms (yes/no), and approves each proposed git command before it runs.
+- Committing is opt-in and MUST go through `agents/skills/commit-workflow/SKILL.md` only after the user explicitly asks for commit help or commit creation.
+- Agents MUST NOT invoke the commit-workflow skill automatically during standard request handoff.
 
 ## Spec Quality Criteria
 1. Efficiency: keep workflows and rules minimal; reference canonical sources instead of repeating full rule sets.
@@ -121,6 +120,6 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 4. Updated examples include at least one corner case.
 5. Quality/security impacts are reflected in `agents/reference/quality.md` when applicable.
 6. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
-7. Verification scope is documented (commands run, blockers, and residual risks).
+7. Verification scope is completed before standard handoff, and any blocking gap is surfaced instead of the standard one-line final response.
 8. No unnecessary file fragmentation was introduced.
 9. Spec updates satisfy the efficiency/assertivity/objectivity/redundancy criteria above.

@@ -183,7 +183,28 @@ func (r *Orchestrator) Delete(ctx context.Context, logicalPath string, _ orchest
 	}
 
 	deleteErr := serverManager.Delete(ctx, resolvedResource, resourceMd)
-	if deleteErr == nil || !faults.IsCategory(deleteErr, faults.NotFoundError) {
+	if deleteErr == nil {
+		return nil
+	}
+	if faults.IsCategory(deleteErr, faults.ValidationError) {
+		candidate, handled, candidateErr := r.resolveRemoteCollectionCandidate(
+			ctx,
+			serverManager,
+			resolvedResource,
+			resourceMd,
+		)
+		if candidateErr != nil {
+			return candidateErr
+		}
+		if handled {
+			resolvedResource = remoteReadResourceFromFallbackCandidate(resolvedResource, candidate)
+			deleteErr = serverManager.Delete(ctx, resolvedResource, resourceMd)
+			if deleteErr == nil {
+				return nil
+			}
+		}
+	}
+	if !faults.IsCategory(deleteErr, faults.NotFoundError) {
 		return deleteErr
 	}
 

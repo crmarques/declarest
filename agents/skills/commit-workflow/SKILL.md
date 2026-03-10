@@ -6,10 +6,11 @@ description: Coordinate the pre-commit handoff so Conventional Commit guidance a
 # Commit Workflow (Repo Standard)
 
 ## Purpose
-Ensure the agent inspects the delta, validates it with the repository’s standard checks, summarizes the intent, and asks the user if a git commit should be created before proposing any commit-related commands that rely on the host tool’s approval buttons.
+When the user explicitly asks for commit help after request work is complete, ensure the agent inspects the delta, validates it with the repository’s standard checks, summarizes the intent, and asks the user if a git commit should be created before proposing any commit-related commands that rely on the host tool’s approval buttons.
 
 ## Trigger
-- This skill runs only when the agent’s work produced tracked or untracked changes; when the working tree is already clean, note that no commits are necessary and skip the workflow.
+- This skill runs only when the user explicitly asks for commit help or commit creation after the request work is complete; it MUST NOT run automatically just because the working tree changed.
+- When the working tree is already clean, note that no commits are necessary and skip the workflow.
 - Begin by running `git status` to confirm which files changed, and use `git diff` (and `git diff --cached` after any staging from earlier clarifications) to understand the delta before summarizing it for the user.
 
 ## Pre-commit verification
@@ -25,7 +26,7 @@ Ensure the agent inspects the delta, validates it with the repository’s standa
 - Then ask the user, “Do you want me to create a git commit for these changes?” and wait for an explicit yes/no answer. Do not run any commit-related commands or stage files while awaiting that confirmation.
 
 ## Approval workflow when the user agrees
-- When the user says yes, craft a Conventional Commit message in the format `<type>(optional-scope): <short summary>` (use `feat`, `fix`, `docs`, `chore`, `test`, etc.). Keep each logical change independent so a single message can describe it.
+- When the user says yes, craft a Conventional Commit message that obeys `agents/reference/commit-instructions.md` (use `feat`, `fix`, `docs`, `chore`, `test`, etc. as appropriate). Keep each logical change independent so a single message can describe it.
 - Once the message is ready, rely on the host tool’s default approval/confirmation UI: propose the following commands in order and require approval before executing each.
   1. `git status --porcelain` (reconfirm the working tree is unchanged since the summary).
   2. `git diff --stat` (review the aggregate diff shape).

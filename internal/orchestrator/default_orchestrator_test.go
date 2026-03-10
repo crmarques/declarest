@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	managedserverhttp "github.com/crmarques/declarest/internal/providers/managedserver/http"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orch "github.com/crmarques/declarest/orchestrator"
@@ -469,6 +474,304 @@ func TestOrchestratorGetRemoteFallsBackToCollectionListByAlias(t *testing.T) {
 	}
 	if payload["clientId"] != "account" {
 		t.Fatalf("expected alias-matched payload, got %#v", payload)
+	}
+}
+
+func TestOrchestratorGetRemoteResolvesComplexAliasViaListCandidatePayload(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := t.TempDir()
+	metadataService := fsmetadata.NewFSMetadataService(metadataDir)
+	ctx := context.Background()
+
+	if err := metadataService.Set(ctx, "/apis/_", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "{{/name}} - {{/version}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "/api/apis/{{.name}}/{{.version}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: "/api/apis",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	requestLog := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestLog = append(requestLog, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/apis":
+			_, _ = fmt.Fprint(w, `[{"id":"api-orders-v1","name":"orders","version":"v1"}]`)
+		case "/api/apis/orders/v1":
+			_, _ = fmt.Fprint(w, `{"id":"api-orders-v1","name":"orders","version":"v1","details":"full"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := managedserverhttp.NewClient(
+		config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		managedserverhttp.WithMetadataRenderer(metadataService),
+	)
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	orchestrator := &Orchestrator{
+		metadata: metadataService,
+		server:   client,
+	}
+
+	value, err := orchestrator.GetRemote(ctx, "/apis/orders - v1")
+	if err != nil {
+		t.Fatalf("GetRemote returned error: %v", err)
+	}
+
+	payload, ok := value.Value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected object payload, got %T", value.Value)
+	}
+	if payload["details"] != "full" {
+		t.Fatalf("expected full GET payload after alias fallback, got %#v", payload)
+	}
+	if len(requestLog) < 2 || requestLog[0] != "/api/apis" || requestLog[1] != "/api/apis/orders/v1" {
+		t.Fatalf("expected list fallback then resolved GET, got %#v", requestLog)
+	}
+}
+
+func TestOrchestratorRequestGetResolvesComplexAliasViaListCandidatePayload(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := t.TempDir()
+	metadataService := fsmetadata.NewFSMetadataService(metadataDir)
+	ctx := context.Background()
+
+	if err := metadataService.Set(ctx, "/apis/_", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "{{/name}} - {{/version}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "/api/apis/{{.name}}/{{.version}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: "/api/apis",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	requestLog := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestLog = append(requestLog, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/apis":
+			_, _ = fmt.Fprint(w, `[{"id":"api-orders-v1","name":"orders","version":"v1"}]`)
+		case "/api/apis/orders/v1":
+			_, _ = fmt.Fprint(w, `{"id":"api-orders-v1","name":"orders","version":"v1","details":"full"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := managedserverhttp.NewClient(
+		config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		managedserverhttp.WithMetadataRenderer(metadataService),
+	)
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	orchestrator := &Orchestrator{
+		metadata: metadataService,
+		server:   client,
+	}
+
+	value, err := orchestrator.Request(ctx, managedserverdomain.RequestSpec{
+		Method: "GET",
+		Path:   "/apis/orders - v1",
+	})
+	if err != nil {
+		t.Fatalf("Request returned error: %v", err)
+	}
+
+	payload, ok := value.Value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected object payload, got %T", value.Value)
+	}
+	if payload["details"] != "full" {
+		t.Fatalf("expected full GET payload after alias fallback, got %#v", payload)
+	}
+	if len(requestLog) < 2 || requestLog[0] != "/api/apis" || requestLog[1] != "/api/apis/orders/v1" {
+		t.Fatalf("expected list fallback then resolved GET request, got %#v", requestLog)
+	}
+}
+
+func TestOrchestratorDeleteResolvesComplexAliasViaListCandidatePayload(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := t.TempDir()
+	metadataService := fsmetadata.NewFSMetadataService(metadataDir)
+	ctx := context.Background()
+
+	if err := metadataService.Set(ctx, "/apis/_", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "{{/name}} - {{/version}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationDelete): {
+				Path: "/api/apis/{{.name}}/{{.version}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: "/api/apis",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	requestLog := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestLog = append(requestLog, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/apis":
+			_, _ = fmt.Fprint(w, `[{"id":"api-orders-v1","name":"orders","version":"v1"}]`)
+		case "/api/apis/orders/v1":
+			if r.Method != http.MethodDelete {
+				t.Fatalf("expected DELETE method, got %s", r.Method)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := managedserverhttp.NewClient(
+		config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		managedserverhttp.WithMetadataRenderer(metadataService),
+	)
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	orchestrator := &Orchestrator{
+		metadata: metadataService,
+		server:   client,
+	}
+
+	if err := orchestrator.Delete(ctx, "/apis/orders - v1", orch.DeletePolicy{}); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+	if len(requestLog) < 2 || requestLog[0] != "/api/apis" || requestLog[1] != "/api/apis/orders/v1" {
+		t.Fatalf("expected list fallback then resolved DELETE request, got %#v", requestLog)
+	}
+}
+
+func TestOrchestratorRequestDeleteResolvesComplexAliasViaListCandidatePayload(t *testing.T) {
+	t.Parallel()
+
+	metadataDir := t.TempDir()
+	metadataService := fsmetadata.NewFSMetadataService(metadataDir)
+	ctx := context.Background()
+
+	if err := metadataService.Set(ctx, "/apis/_", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "{{/name}} - {{/version}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationDelete): {
+				Path: "/api/apis/{{.name}}/{{.version}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: "/api/apis",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	requestLog := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestLog = append(requestLog, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/apis":
+			_, _ = fmt.Fprint(w, `[{"id":"api-orders-v1","name":"orders","version":"v1"}]`)
+		case "/api/apis/orders/v1":
+			if r.Method != http.MethodDelete {
+				t.Fatalf("expected DELETE method, got %s", r.Method)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := managedserverhttp.NewClient(
+		config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		managedserverhttp.WithMetadataRenderer(metadataService),
+	)
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	orchestrator := &Orchestrator{
+		metadata: metadataService,
+		server:   client,
+	}
+
+	value, err := orchestrator.Request(ctx, managedserverdomain.RequestSpec{
+		Method: "DELETE",
+		Path:   "/apis/orders - v1",
+	})
+	if err != nil {
+		t.Fatalf("Request returned error: %v", err)
+	}
+	if value.Value != nil {
+		t.Fatalf("expected empty delete response, got %#v", value.Value)
+	}
+	if len(requestLog) < 2 || requestLog[0] != "/api/apis" || requestLog[1] != "/api/apis/orders/v1" {
+		t.Fatalf("expected list fallback then resolved DELETE request, got %#v", requestLog)
 	}
 }
 

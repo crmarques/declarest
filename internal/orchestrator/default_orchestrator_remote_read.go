@@ -24,7 +24,23 @@ func (r *Orchestrator) fetchRemoteValue(ctx context.Context, resolvedResource re
 		}
 		return remoteValue, nil
 	}
-	if !faults.IsCategory(err, faults.NotFoundError) {
+	if !canUseRemoteCollectionCandidateFallback(err) {
+		return resource.Content{}, err
+	}
+
+	if faults.IsCategory(err, faults.ValidationError) {
+		candidateValue, handled, candidateErr := r.fetchRemoteValueFromCollectionCandidate(
+			ctx,
+			serverManager,
+			resolvedResource,
+			md,
+		)
+		if handled {
+			if candidateErr != nil {
+				return resource.Content{}, candidateErr
+			}
+			return candidateValue, nil
+		}
 		return resource.Content{}, err
 	}
 
@@ -51,29 +67,27 @@ func (r *Orchestrator) fetchRemoteValue(ctx context.Context, resolvedResource re
 		}
 		return resource.Content{}, listErr
 	}
-
-	matched := make([]resource.Resource, 0, len(candidates))
-	for _, candidate := range candidates {
-		if matchesRemoteFallbackCandidate(resolvedResource, candidate) {
-			matched = append(matched, candidate)
-		}
+	matched, matchErr := remoteFallbackCandidates(resolvedResource, candidates)
+	if matchErr != nil {
+		return resource.Content{}, matchErr
 	}
-
-	switch len(matched) {
-	case 0:
-		if allowsSingletonListIdentityFallback(resolvedResource.LogicalPath, md, candidates) {
-			return contentFromResource(candidates[0]), nil
-		}
-		return resource.Content{}, err
-	case 1:
-		return contentFromResource(matched[0]), nil
-	default:
-		return resource.Content{}, faults.NewTypedError(
-			faults.ConflictError,
-			fmt.Sprintf("remote fallback for %q is ambiguous", resolvedResource.LogicalPath),
-			nil,
+	if len(matched) == 1 {
+		candidateValue, _, candidateErr := r.fetchRemoteValueForCandidate(
+			ctx,
+			serverManager,
+			resolvedResource,
+			md,
+			matched[0],
 		)
+		if candidateErr != nil {
+			return resource.Content{}, candidateErr
+		}
+		return candidateValue, nil
 	}
+	if allowsSingletonListIdentityFallback(resolvedResource.LogicalPath, md, candidates) {
+		return contentFromResource(candidates[0]), nil
+	}
+	return resource.Content{}, err
 }
 
 func (r *Orchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
@@ -97,7 +111,7 @@ func (r *Orchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
 
 	matchCount := 0
 	for _, candidate := range candidates {
-		if !matchesRemoteFallbackCandidate(resolvedResource, candidate) {
+		if !matchesResolvedIdentityCandidate(resolvedResource, candidate) {
 			continue
 		}
 		matchCount++

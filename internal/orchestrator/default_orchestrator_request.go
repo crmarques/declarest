@@ -233,6 +233,26 @@ func (r *Orchestrator) resolveRequestSpec(
 	}
 
 	spec, err := r.renderOperationSpec(ctx, resolvedResource, resourceMd, operation, resolvedResource.Payload)
+	if err != nil && faults.IsCategory(err, faults.ValidationError) && requestOperationAllowsCollectionCandidateFallback(operation) {
+		serverManager, serverErr := r.requireServer()
+		if serverErr != nil {
+			return managedserver.RequestSpec{}, ctx, serverErr
+		}
+
+		candidate, handled, candidateErr := r.resolveRemoteCollectionCandidate(
+			ctx,
+			serverManager,
+			resolvedResource,
+			resourceMd,
+		)
+		if candidateErr != nil {
+			return managedserver.RequestSpec{}, ctx, candidateErr
+		}
+		if handled {
+			resolvedResource = remoteReadResourceFromFallbackCandidate(resolvedResource, candidate)
+			spec, err = r.renderOperationSpec(ctx, resolvedResource, resourceMd, operation, resolvedResource.Payload)
+		}
+	}
 	if err != nil {
 		return managedserver.RequestSpec{}, ctx, err
 	}
@@ -254,6 +274,10 @@ func (r *Orchestrator) resolveRequestSpec(
 	)
 
 	return resolved, ctxWithValidation, nil
+}
+
+func requestOperationAllowsCollectionCandidateFallback(operation metadata.Operation) bool {
+	return operation == metadata.OperationGet || operation == metadata.OperationDelete
 }
 
 func requestMetadataOperation(method string) (metadata.Operation, bool) {
