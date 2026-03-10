@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeclaREST Context Catalog",
+  "description": "Canonical persisted context catalog schema. Legacy YAML aliases are intentionally excluded from this machine-readable contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contexts": {
+      "type": "array",
+      "items": {
+        "$ref": "./context.schema.json"
+      }
+    },
+    "currentContext": {
+      "type": "string"
+    },
+    "defaultEditor": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "contexts",
+    "currentContext"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "contexts": {
+            "minItems": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "currentContext": {
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contexts": {
+            "maxItems": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "currentContext": {
+            "maxLength": 0
+          }
+        }
+      }
+    }
+  ]
+}

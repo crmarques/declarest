@@ -1,0 +1,841 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeclaREST Context",
+  "description": "Canonical persisted context schema. Legacy YAML aliases are intentionally excluded from this machine-readable contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository": {
+      "$ref": "#/$defs/repository"
+    },
+    "managedServer": {
+      "$ref": "#/$defs/managedServer"
+    },
+    "secretStore": {
+      "$ref": "#/$defs/secretStore"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "preferences": {
+      "$ref": "#/$defs/preferences"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "repository"
+          ]
+        },
+        {
+          "required": [
+            "managedServer"
+          ]
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "payloadType": {
+      "type": "string",
+      "enum": [
+        "json",
+        "yaml",
+        "xml",
+        "hcl",
+        "ini",
+        "properties",
+        "text",
+        "octet-stream"
+      ]
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "proxyAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ]
+    },
+    "proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "httpURL": {
+          "type": "string",
+          "minLength": 1
+        },
+        "httpsURL": {
+          "type": "string",
+          "minLength": 1
+        },
+        "noProxy": {
+          "type": "string"
+        },
+        "auth": {
+          "$ref": "#/$defs/proxyAuth"
+        }
+      },
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "anyOf": [
+                {
+                  "required": [
+                    "httpURL"
+                  ]
+                },
+                {
+                  "required": [
+                    "httpsURL"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caCertFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientCertFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientKeyFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "insecureSkipVerify": {
+          "type": "boolean"
+        }
+      }
+    },
+    "basicAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ]
+    },
+    "sshAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "user": {
+          "type": "string",
+          "minLength": 1
+        },
+        "privateKeyFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passphrase": {
+          "type": "string"
+        },
+        "knownHostsFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "insecureIgnoreHostKey": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "user",
+        "privateKeyFile"
+      ]
+    },
+    "accessKeyAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "token"
+      ]
+    },
+    "gitAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "basicAuth": {
+          "$ref": "#/$defs/basicAuth"
+        },
+        "ssh": {
+          "$ref": "#/$defs/sshAuth"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/accessKeyAuth"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "basicAuth"
+          ]
+        },
+        {
+          "required": [
+            "ssh"
+          ]
+        },
+        {
+          "required": [
+            "accessKey"
+          ]
+        }
+      ]
+    },
+    "gitLocal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "autoInit": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "baseDir"
+      ]
+    },
+    "gitRemote": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "autoSync": {
+          "type": "boolean"
+        },
+        "auth": {
+          "$ref": "#/$defs/gitAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "gitRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "local": {
+          "$ref": "#/$defs/gitLocal"
+        },
+        "remote": {
+          "$ref": "#/$defs/gitRemote"
+        }
+      },
+      "required": [
+        "local"
+      ]
+    },
+    "filesystemRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseDir": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "baseDir"
+      ]
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "git": {
+          "$ref": "#/$defs/gitRepository"
+        },
+        "filesystem": {
+          "$ref": "#/$defs/filesystemRepository"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "git"
+          ]
+        },
+        {
+          "required": [
+            "filesystem"
+          ]
+        }
+      ]
+    },
+    "headerTokenAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "header",
+        "value"
+      ]
+    },
+    "oauth2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tokenURL": {
+          "type": "string",
+          "minLength": 1
+        },
+        "grantType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "audience": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tokenURL",
+        "grantType",
+        "clientID",
+        "clientSecret"
+      ]
+    },
+    "httpAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "oauth2": {
+          "$ref": "#/$defs/oauth2"
+        },
+        "basicAuth": {
+          "$ref": "#/$defs/basicAuth"
+        },
+        "customHeaders": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/headerTokenAuth"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "oauth2"
+          ]
+        },
+        {
+          "required": [
+            "basicAuth"
+          ]
+        },
+        {
+          "required": [
+            "customHeaders"
+          ]
+        }
+      ]
+    },
+    "requestThrottling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxConcurrentRequests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queueSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestsPerSecond": {
+          "type": "number",
+          "minimum": 0
+        },
+        "burst": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "maxConcurrentRequests": {
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "maxConcurrentRequests"
+              ]
+            },
+            {
+              "properties": {
+                "requestsPerSecond": {
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "requestsPerSecond"
+              ]
+            }
+          ]
+        },
+        {
+          "if": {
+            "properties": {
+              "queueSize": {
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "queueSize"
+            ]
+          },
+          "then": {
+            "properties": {
+              "maxConcurrentRequests": {
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "maxConcurrentRequests"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "burst": {
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "burst"
+            ]
+          },
+          "then": {
+            "properties": {
+              "requestsPerSecond": {
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "requestsPerSecond"
+            ]
+          }
+        }
+      ]
+    },
+    "httpServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseURL": {
+          "type": "string",
+          "minLength": 1
+        },
+        "healthCheck": {
+          "type": "string",
+          "minLength": 1
+        },
+        "openapi": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultHeaders": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "auth": {
+          "$ref": "#/$defs/httpAuth"
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "requestThrottling": {
+          "$ref": "#/$defs/requestThrottling"
+        }
+      },
+      "required": [
+        "baseURL",
+        "auth"
+      ]
+    },
+    "managedServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "http": {
+          "$ref": "#/$defs/httpServer"
+        }
+      },
+      "required": [
+        "http"
+      ]
+    },
+    "kdf": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "memory": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "fileSecretStore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keyFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passphrase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passphraseFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kdf": {
+          "$ref": "#/$defs/kdf"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "key"
+          ]
+        },
+        {
+          "required": [
+            "keyFile"
+          ]
+        },
+        {
+          "required": [
+            "passphrase"
+          ]
+        },
+        {
+          "required": [
+            "passphraseFile"
+          ]
+        }
+      ]
+    },
+    "vaultUserPasswordAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mount": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ]
+    },
+    "vaultAppRoleAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roleID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "secretID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mount": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "roleID",
+        "secretID"
+      ]
+    },
+    "vaultAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "$ref": "#/$defs/vaultUserPasswordAuth"
+        },
+        "appRole": {
+          "$ref": "#/$defs/vaultAppRoleAuth"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "token"
+          ]
+        },
+        {
+          "required": [
+            "password"
+          ]
+        },
+        {
+          "required": [
+            "appRole"
+          ]
+        }
+      ]
+    },
+    "vaultSecretStore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mount": {
+          "type": "string"
+        },
+        "pathPrefix": {
+          "type": "string"
+        },
+        "kvVersion": {
+          "type": "integer"
+        },
+        "auth": {
+          "$ref": "#/$defs/vaultAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        }
+      },
+      "required": [
+        "address",
+        "auth"
+      ]
+    },
+    "secretStore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "$ref": "#/$defs/fileSecretStore"
+        },
+        "vault": {
+          "$ref": "#/$defs/vaultSecretStore"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "required": [
+            "vault"
+          ]
+        }
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundleFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proxy": {
+          "$ref": "#/$defs/proxy"
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "baseDir",
+              "bundle"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "baseDir",
+              "bundleFile"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "bundle",
+              "bundleFile"
+            ]
+          }
+        }
+      ]
+    },
+    "preferences": {
+      "type": "object",
+      "properties": {
+        "preferredFormat": {
+          "$ref": "#/$defs/payloadType"
+        }
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

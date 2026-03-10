@@ -41,6 +41,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 24. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
 25. When `managedServer` is present, it MUST define `managedServer.http` with exactly one configured auth mode.
 26. Legacy `repository.resource-format` input MUST be mapped to canonical `preferences.preferredFormat`, and persisted YAML MUST omit the legacy field.
+27. Changes to the canonical persisted context or catalog wire shape, one-of blocks, or schema-managed validation fields MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change; those schemas MUST describe canonical camelCase keys only and MUST NOT add legacy aliases.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -287,3 +288,4 @@ currentContext: xxx
 12. Corner case: `ResolveContext({Name: "dev", Overrides: {"managedServer.http.proxy.httpURL":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.
 13. Corner case: a legacy catalog entry with `current-ctx`, `filesystem.base-dir`, and `repository.resource-format: yaml` resolves as `currentContext`, `repository.filesystem.baseDir`, and `preferences.preferredFormat: yaml`, and persists back without the legacy keys.
 14. Corner case: `ResolveContext({Name: "local-only", Overrides: nil})` with repository-only config and no `managedServer` remains valid, defaults `metadata.baseDir` from the repository, and bootstraps local-only commands without a remote client.
+15. Corner case: adding a canonical field under `managedServer.http` or `metadata` requires the same change to update `schemas/context.schema.json` and `schemas/contexts.schema.json`, while documented legacy aliases remain reader-only and stay out of the schema files.

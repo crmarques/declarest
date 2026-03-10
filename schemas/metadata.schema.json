@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeclaREST Resource Metadata",
+  "description": "Canonical nested metadata wire schema. Legacy flat aliases are intentionally excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "resource": {
+      "$ref": "#/$defs/resource"
+    },
+    "operations": {
+      "$ref": "#/$defs/operations"
+    }
+  },
+  "$defs": {
+    "jsonPointer": {
+      "type": "string",
+      "pattern": "^/.*$",
+      "description": "RFC 6901 JSON Pointer."
+    },
+    "jsonPointerArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/jsonPointer"
+      }
+    },
+    "jsonPointerOrArray": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/jsonPointer"
+        },
+        {
+          "$ref": "#/$defs/jsonPointerArray"
+        }
+      ]
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "stringMapOrEntryList": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/stringMap"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "payloadType": {
+      "type": "string",
+      "enum": [
+        "json",
+        "yaml",
+        "xml",
+        "hcl",
+        "ini",
+        "properties",
+        "text",
+        "octet-stream"
+      ]
+    },
+    "validationAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "jq": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "jq"
+      ]
+    },
+    "operationValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredAttributes": {
+          "$ref": "#/$defs/jsonPointerOrArray"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/validationAssertion"
+          }
+        },
+        "schemaRef": {
+          "type": "string",
+          "pattern": "^(openapi:request-body|openapi:#/.+)$"
+        }
+      }
+    },
+    "transformStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selectAttributes": {
+          "$ref": "#/$defs/jsonPointerOrArray"
+        },
+        "excludeAttributes": {
+          "$ref": "#/$defs/jsonPointerOrArray"
+        },
+        "jqExpression": {
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "selectAttributes"
+          ]
+        },
+        {
+          "required": [
+            "excludeAttributes"
+          ]
+        },
+        {
+          "required": [
+            "jqExpression"
+          ]
+        }
+      ]
+    },
+    "externalizedAttribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/jsonPointer"
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!\\.?$)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "template": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "text"
+          ]
+        },
+        "saveBehavior": {
+          "type": "string",
+          "enum": [
+            "externalize"
+          ]
+        },
+        "renderBehavior": {
+          "type": "string",
+          "enum": [
+            "include"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "file"
+      ]
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idAttribute": {
+          "$ref": "#/$defs/jsonPointer"
+        },
+        "aliasAttribute": {
+          "$ref": "#/$defs/jsonPointer"
+        },
+        "requiredAttributes": {
+          "$ref": "#/$defs/jsonPointerArray"
+        },
+        "remoteCollectionPath": {
+          "type": "string"
+        },
+        "payloadType": {
+          "$ref": "#/$defs/payloadType"
+        },
+        "preferredFormat": {
+          "$ref": "#/$defs/payloadType"
+        },
+        "secret": {
+          "type": "boolean"
+        },
+        "secretAttributes": {
+          "$ref": "#/$defs/jsonPointerArray"
+        },
+        "externalizedAttributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/externalizedAttribute"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "secret": {
+                "const": true
+              }
+            },
+            "required": [
+              "secret"
+            ]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "secretAttributes": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "secretAttributes"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "payloadType": {
+                "enum": [
+                  "xml",
+                  "hcl",
+                  "ini",
+                  "properties",
+                  "text",
+                  "octet-stream"
+                ]
+              }
+            },
+            "required": [
+              "payloadType"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "idAttribute"
+                  ]
+                },
+                {
+                  "required": [
+                    "aliasAttribute"
+                  ]
+                },
+                {
+                  "properties": {
+                    "requiredAttributes": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "requiredAttributes"
+                  ]
+                },
+                {
+                  "properties": {
+                    "secretAttributes": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "secretAttributes"
+                  ]
+                },
+                {
+                  "properties": {
+                    "externalizedAttributes": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "externalizedAttributes"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "query": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "headers": {
+          "$ref": "#/$defs/stringMapOrEntryList"
+        },
+        "body": true,
+        "transforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transformStep"
+          }
+        },
+        "validate": {
+          "$ref": "#/$defs/operationValidation"
+        }
+      }
+    },
+    "operationDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transformStep"
+          }
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "$ref": "#/$defs/operationDefaults"
+        },
+        "get": {
+          "$ref": "#/$defs/operation"
+        },
+        "create": {
+          "$ref": "#/$defs/operation"
+        },
+        "update": {
+          "$ref": "#/$defs/operation"
+        },
+        "delete": {
+          "$ref": "#/$defs/operation"
+        },
+        "list": {
+          "$ref": "#/$defs/operation"
+        },
+        "compare": {
+          "$ref": "#/$defs/operation"
+        }
+      }
+    }
+  }
+}

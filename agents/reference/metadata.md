@@ -52,10 +52,11 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 35. Enabled `resource.externalizedAttributes` entries MUST treat `path` as one JSON Pointer traversal path, MUST traverse object keys by pointer token, MUST traverse arrays only through zero-based numeric tokens or `*` wildcard tokens, MUST reject empty paths/files and repository-escaping relative files, MUST externalize only text/string payload values in MVP scope, and MUST leave disabled entries inert.
 36. When an enabled externalized-attribute `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
 37. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
+38. Changes to the persisted metadata wire shape or metadata validation contract MUST update `schemas/metadata.schema.json` in the same change; that schema MUST describe the canonical nested metadata structure and MUST NOT reintroduce legacy flat aliases.
 
 ## Data Contracts
 Supported metadata groups:
-1. `resource`: identity, required-attribute, payload-type, whole-resource-secret, secret-attribute, and collection directives.
+1. `resource`: identity, required-attribute, payload-type, preferred-format, whole-resource-secret, secret-attribute, and collection directives.
 2. `resource.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` is one JSON Pointer string and arrays use numeric or `*` wildcard tokens.
 3. `operations.create/update/delete/get/compare/list`: operation-specific directives.
 4. `operations.defaults.transforms`: shared ordered transform pipeline applied before operation-specific pipelines.
@@ -112,6 +113,7 @@ Template context contract:
 15. Wildcard array externalization can skip elements that do not contain the targeted attribute while still materializing indexed sidecars for matching siblings only.
 16. Repository payloads MAY keep inline values for configured externalized attributes; expansion only occurs when the stored value matches the configured placeholder string exactly.
 17. Raw text or octet-stream mutation payloads MAY bypass `resource.requiredAttributes` checks at runtime even when metadata still uses identity attributes for path rendering, because attribute traversal is unavailable for non-structured payloads.
+18. Machine-readable schema maintenance remains nested-only: adding or changing a persisted metadata field (for example `resource.preferredFormat`) requires a matching `schemas/metadata.schema.json` update without reintroducing flat legacy aliases such as top-level `idAttribute`.
 
 ## Examples
 1. `/customers/_` defines `operations.get.path: /api/customers/{{.id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.

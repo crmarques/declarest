@@ -111,9 +111,10 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 ## Completion Checklist
 1. Changed behavior is captured in the correct domain files.
 2. Interface references match `agents/reference/interfaces.md` exactly.
-3. Updated examples include at least one corner case.
-4. Quality/security impacts are reflected in `agents/reference/quality.md` when applicable.
-5. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
-6. Verification scope is documented (commands run, blockers, and residual risks).
-7. No unnecessary file fragmentation was introduced.
-8. Spec updates satisfy the efficiency/assertivity/objectivity/redundancy criteria above.
+3. Machine-readable schemas under `schemas/*.json` are updated when metadata or context contracts change.
+4. Updated examples include at least one corner case.
+5. Quality/security impacts are reflected in `agents/reference/quality.md` when applicable.
+6. `AGENTS.md` routing rules and `agents/skills/*` workflows are consistent with each other.
+7. Verification scope is documented (commands run, blockers, and residual risks).
+8. No unnecessary file fragmentation was introduced.
+9. Spec updates satisfy the efficiency/assertivity/objectivity/redundancy criteria above.

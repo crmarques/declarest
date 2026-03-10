@@ -24,6 +24,7 @@ Define quality gates and security invariants so behavior changes are verifiable 
 7. Secret values MUST never appear in logs, errors, or snapshots.
 8. New normative rules SHOULD include an explicit matching test expectation.
 9. Kubernetes operator behavior changes MUST include controller-level coverage for CRD validation/status transitions plus webhook authentication/event-filtering paths.
+10. Changes to persisted metadata or context contracts MUST update the corresponding `schemas/*.json` artifacts and include a low-level check that those schema files remain valid JSON and keep their expected top-level wiring.
 
 ## Data Contracts
 Test layers:
@@ -229,3 +230,4 @@ Acceptance contracts:
 13. Unit + integration tests verify managed-server requestThrottling validation, shared-gate queue overflow behavior, and repository webhook authentication/annotation patch behavior for valid vs invalid payloads.
 14. Operator unit tests verify sync-plan fallbacks, schedule computation (`syncInterval` vs `fullResyncCron`), and overlap validation behavior with shared vs distinct dependency references.
 15. Unit + CLI + integration tests verify `resource save --secret` stores whole-resource payloads under `<logical-path>:.`, preserves repository suffixes and root placeholders (including octet-stream files), persists `resource.secret: true`, auto-reuses metadata-driven whole-resource secret handling on later saves, rejects incompatible flags or missing secret/metadata providers, lets repository reads plus remote apply/diff resolve the whole-resource placeholder back to the original payload, and rejects missing path-like `--payload` inputs instead of persisting the literal path text as opaque content.
+16. Unit tests verify `schemas/context.schema.json`, `schemas/contexts.schema.json`, and `schemas/metadata.schema.json` stay valid JSON and preserve the expected top-level contract wiring for repository/context/metadata consumers.
