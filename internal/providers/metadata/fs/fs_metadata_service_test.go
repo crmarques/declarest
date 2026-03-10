@@ -436,6 +436,36 @@ func TestFSMetadataRenderOperationSpecSupportsRemoteCollectionPathIndirection(t 
 	}
 }
 
+func TestFSMetadataRenderOperationSpecListDoesNotRequireItemIdentityPayload(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/apis/_", metadatadomain.ResourceMetadata{
+		ID:    "/id",
+		Alias: "{{/name}} - {{/version}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationList): {
+				Path: "/api/apis",
+			},
+		},
+	})
+
+	spec, err := service.RenderOperationSpec(
+		ctx,
+		"/apis",
+		metadatadomain.OperationList,
+		map[string]any{},
+	)
+	if err != nil {
+		t.Fatalf("RenderOperationSpec(list) returned error: %v", err)
+	}
+	if spec.Path != "/api/apis" {
+		t.Fatalf("unexpected rendered list path %q", spec.Path)
+	}
+}
+
 func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *testing.T) {
 	t.Parallel()
 

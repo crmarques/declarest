@@ -2,6 +2,7 @@ package fsmetadata
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
@@ -57,7 +58,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	templateValue, err := buildTemplateValue(targetPath, metadata, value)
+	templateValue, err := buildTemplateValue(targetPath, metadata, value, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -143,7 +144,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		}
 	}
 
-	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resolvedResource)
+	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resolvedResource, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -182,13 +183,21 @@ func buildTemplateValue(
 	logicalPath string,
 	metadata metadatadomain.ResourceMetadata,
 	value any,
+	operation metadatadomain.Operation,
 ) (map[string]any, error) {
 	normalizedPayload, err := resource.Normalize(value)
 	if err != nil {
 		return nil, err
 	}
 
-	alias, remoteID, err := identity.ResolveAliasAndRemoteID(logicalPath, metadata, normalizedPayload)
+	alias, remoteID, err := resolveTemplateScopeIdentity(
+		logicalPath,
+		metadata,
+		normalizedPayload,
+		"",
+		"",
+		operation,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -206,29 +215,11 @@ func buildTemplateScopeForResource(
 	logicalPath string,
 	resolvedMetadata metadatadomain.ResourceMetadata,
 	resolvedResource resource.Resource,
+	operation metadatadomain.Operation,
 ) (map[string]any, error) {
 	normalizedPayload, err := resource.Normalize(resolvedResource.Payload)
 	if err != nil {
 		return nil, err
-	}
-
-	localAlias := strings.TrimSpace(resolvedResource.LocalAlias)
-	remoteID := strings.TrimSpace(resolvedResource.RemoteID)
-	if localAlias == "" || remoteID == "" {
-		derivedAlias, derivedRemoteID, identityErr := identity.ResolveAliasAndRemoteID(
-			logicalPath,
-			resolvedMetadata,
-			normalizedPayload,
-		)
-		if identityErr != nil {
-			return nil, identityErr
-		}
-		if localAlias == "" {
-			localAlias = derivedAlias
-		}
-		if remoteID == "" {
-			remoteID = derivedRemoteID
-		}
 	}
 
 	collectionPath := strings.TrimSpace(resolvedResource.CollectionPath)
@@ -241,6 +232,18 @@ func buildTemplateScopeForResource(
 		}
 	}
 
+	localAlias, remoteID, err := resolveTemplateScopeIdentity(
+		logicalPath,
+		resolvedMetadata,
+		normalizedPayload,
+		resolvedResource.LocalAlias,
+		resolvedResource.RemoteID,
+		operation,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return templatescope.BuildResourceScope(resource.Resource{
 		LogicalPath:    logicalPath,
 		CollectionPath: collectionPath,
@@ -248,6 +251,71 @@ func buildTemplateScopeForResource(
 		RemoteID:       remoteID,
 		Payload:        normalizedPayload,
 	}, resolvedMetadata)
+}
+
+func resolveTemplateScopeIdentity(
+	logicalPath string,
+	resolvedMetadata metadatadomain.ResourceMetadata,
+	normalizedPayload any,
+	localAlias string,
+	remoteID string,
+	operation metadatadomain.Operation,
+) (string, string, error) {
+	alias := strings.TrimSpace(localAlias)
+	id := strings.TrimSpace(remoteID)
+
+	if (alias == "" || id == "") && payloadCanResolveTemplateIdentity(normalizedPayload) {
+		derivedAlias, derivedRemoteID, err := identity.ResolveAliasAndRemoteID(
+			logicalPath,
+			resolvedMetadata,
+			normalizedPayload,
+		)
+		if err != nil {
+			return "", "", err
+		}
+		if alias == "" {
+			alias = derivedAlias
+		}
+		if id == "" {
+			id = derivedRemoteID
+		}
+	}
+
+	if operationNeedsFallbackIdentity(operation) {
+		if alias == "" {
+			alias = aliasForTemplateScopeLogicalPath(logicalPath)
+		}
+		if id == "" {
+			id = alias
+		}
+	}
+
+	return alias, id, nil
+}
+
+func payloadCanResolveTemplateIdentity(value any) bool {
+	payloadMap, ok := value.(map[string]any)
+	return ok && len(payloadMap) > 0
+}
+
+func operationNeedsFallbackIdentity(operation metadatadomain.Operation) bool {
+	switch operation {
+	case metadatadomain.OperationGet,
+		metadatadomain.OperationUpdate,
+		metadatadomain.OperationDelete,
+		metadatadomain.OperationCompare:
+		return true
+	default:
+		return false
+	}
+}
+
+func aliasForTemplateScopeLogicalPath(logicalPath string) string {
+	trimmed := strings.TrimSpace(logicalPath)
+	if trimmed == "" || trimmed == "/" {
+		return "/"
+	}
+	return path.Base(trimmed)
 }
 
 func metadataEmpty(value metadatadomain.ResourceMetadata) bool {

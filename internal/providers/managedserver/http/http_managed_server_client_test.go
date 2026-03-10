@@ -2484,6 +2484,67 @@ func TestListResponseShapesAndAliasRules(t *testing.T) {
 		}
 	})
 
+	t.Run("list_with_metadata_renderer_allows_complex_item_alias_templates", func(t *testing.T) {
+		t.Parallel()
+
+		metadataDir := t.TempDir()
+		service := fsmetadata.NewFSMetadataService(metadataDir)
+		ctx := context.Background()
+
+		if err := service.Set(ctx, "/apis/_", metadata.ResourceMetadata{
+			ID:    "/id",
+			Alias: "{{/name}} - {{/version}}",
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationList): {
+					Path: "/api/apis",
+				},
+			},
+		}); err != nil {
+			t.Fatalf("Set metadata returned error: %v", err)
+		}
+
+		md, err := service.ResolveForPath(ctx, "/apis")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/apis" {
+				t.Fatalf("expected list request path /api/apis, got %q", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"id":"api-orders","name":"orders","version":"v1"},
+				  {"id":"api-billing","name":"billing","version":"v2"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		client := mustManagedServerClient(
+			t,
+			config.HTTPServer{
+				BaseURL: server.URL,
+				Auth: &config.HTTPAuth{
+					CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+				},
+			},
+			WithMetadataRenderer(service),
+		)
+
+		items, err := client.List(ctx, "/apis", md)
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/apis/billing - v2" || items[1].LogicalPath != "/apis/orders - v1" {
+			t.Fatalf("unexpected logical paths: %#v", items)
+		}
+	})
+
 	t.Run("list_operation_jq_resource_function_requires_context_resolver", func(t *testing.T) {
 		t.Parallel()
 
