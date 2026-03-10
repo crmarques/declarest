@@ -795,13 +795,13 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 	t.Run("secret_update_accepts_raw_private_key_payload", func(t *testing.T) {
 		t.Parallel()
 
-		md, err := service.ResolveForPath(ctx, "/projects/platform/secrets/private-key")
+		md, err := service.ResolveForPath(ctx, "/projects/platform/infra-secrets/private-key")
 		if err != nil {
 			t.Fatalf("ResolveForPath returned error: %v", err)
 		}
 
 		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
-			LogicalPath: "/projects/platform/secrets/private-key",
+			LogicalPath: "/projects/platform/infra-secrets/private-key",
 			Payload:     resource.BinaryValue{Bytes: []byte("private-key-bytes")},
 			PayloadDescriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
 				Extension: ".key",
@@ -836,16 +836,52 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		}
 	})
 
-	t.Run("secret_get_requests_metadata_for_raw_private_key_payloads", func(t *testing.T) {
+	t.Run("infra_secret_update_accepts_public_key_payload", func(t *testing.T) {
 		t.Parallel()
 
-		md, err := service.ResolveForPath(ctx, "/projects/platform/secrets/private-key")
+		md, err := service.ResolveForPath(ctx, "/projects/platform/infra-secrets/public-key")
 		if err != nil {
 			t.Fatalf("ResolveForPath returned error: %v", err)
 		}
 
 		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
-			LogicalPath: "/projects/platform/secrets/private-key",
+			LogicalPath: "/projects/platform/infra-secrets/public-key",
+			Payload: map[string]any{
+				"name":        "public-key",
+				"type":        "public",
+				"contentType": "application/pgp-keys",
+				"content":     "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+			},
+		}, md, metadata.OperationUpdate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+		}
+
+		if spec.Path != "/storage/keys/project/platform/public-key" {
+			t.Fatalf("expected project key-storage path, got %q", spec.Path)
+		}
+		if spec.ContentType != "application/pgp-keys" {
+			t.Fatalf("expected pgp-keys content type, got %q", spec.ContentType)
+		}
+		bodyContent, ok := spec.Body.(resource.Content)
+		if !ok {
+			t.Fatalf("expected secret body content, got %T", spec.Body)
+		}
+		if body, ok := bodyContent.Value.(string); !ok || body != "-----BEGIN PGP PUBLIC KEY BLOCK-----" {
+			t.Fatalf("expected public key body, got %#v", bodyContent.Value)
+		}
+	})
+
+	t.Run("secret_get_requests_metadata_for_raw_private_key_payloads", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects/platform/infra-secrets/private-key")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+			LogicalPath: "/projects/platform/infra-secrets/private-key",
 			Payload:     resource.BinaryValue{Bytes: []byte("private-key-bytes")},
 			PayloadDescriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
 				Extension: ".key",

@@ -8,12 +8,12 @@ case_run() {
   local project_name="platform-secret-${RANDOM}${RANDOM}"
   local secret_name="tls-key-${RANDOM}${RANDOM}.pub"
   local project_path="/projects/${project_name}"
-  local secret_path="${project_path}/secrets/${secret_name}"
+  local public_key_path="${project_path}/infra-secrets/${secret_name}"
   local project_source_file
   local project_payload_file="${E2E_CASE_TMP_DIR}/project.json"
   local private_key_file="${E2E_CASE_TMP_DIR}/private.key"
   local private_key_name="tls-private-${RANDOM}${RANDOM}.key"
-  local private_key_path="${project_path}/secrets/${private_key_name}"
+  local private_key_path="${project_path}/infra-secrets/${private_key_name}"
   local secret_metadata_file="${E2E_CASE_TMP_DIR}/secret-metadata.json"
   local secret_payload_file="${E2E_CASE_TMP_DIR}/secret.json"
   local armored_key_value
@@ -42,7 +42,7 @@ case_run() {
     }
   }'
 
-  case_run_declarest metadata set "${secret_path}" -f "${secret_metadata_file}" --content-type json
+  case_run_declarest metadata set "${public_key_path}" -f "${secret_metadata_file}" --content-type json
   case_expect_success
   case_repo_commit_setup_changes_if_git
 
@@ -76,10 +76,10 @@ EOF
       content: $content
     }' >"${secret_payload_file}"
 
-  case_run_declarest resource save "${secret_path}" -f "${secret_payload_file}" --content-type json
+  case_run_declarest resource save "${public_key_path}" -f "${secret_payload_file}" --content-type json
   case_expect_success
 
-  case_run_declarest resource get "${secret_path}" --source repository -o json
+  case_run_declarest resource get "${public_key_path}" --source repository -o json
   case_expect_success
   if ! jq -e \
     --arg name "${secret_name}" \
@@ -90,7 +90,7 @@ EOF
     return 1
   fi
 
-  case_run_declarest resource get "${secret_path}" --source repository --show-secrets -o json
+  case_run_declarest resource get "${public_key_path}" --source repository --show-secrets -o json
   case_expect_success
   repository_secret_value=$(jq -r '.content' <<<"${CASE_LAST_STDOUT}")
   if [[ "${repository_secret_value}" != "${armored_key_value}" ]]; then
@@ -98,17 +98,17 @@ EOF
     return 1
   fi
 
-  case_run_declarest secret get "${secret_path}:/content"
+  case_run_declarest secret get "${public_key_path}:/content"
   case_expect_success
   if [[ "${CASE_LAST_STDOUT}" != "${armored_key_value}" ]]; then
     printf 'expected file secret store to contain the original armored key content\n' >&2
     return 1
   fi
 
-  case_run_declarest resource apply "${secret_path}"
+  case_run_declarest resource apply "${public_key_path}"
   case_expect_success
 
-  case_run_declarest resource diff "${secret_path}" -o json
+  case_run_declarest resource diff "${public_key_path}" -o json
   case_expect_success
   if ! jq -e '. == []' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected secret compare pipeline to stay idempotent after apply\n' >&2
@@ -116,7 +116,7 @@ EOF
     return 1
   fi
 
-  case_run_declarest resource get "${secret_path}" --source managed-server -o json
+  case_run_declarest resource get "${public_key_path}" --source managed-server -o json
   case_expect_success
   if ! jq -e \
     --arg name "${secret_name}" \
@@ -127,13 +127,24 @@ EOF
     return 1
   fi
 
-  case_run_declarest resource list "${project_path}/secrets" --source managed-server -o json
+  case_run_declarest resource list "${project_path}/infra-secrets" --source managed-server -o json
   case_expect_success
   if ! jq -e \
     --arg name "${secret_name}" \
     'map(select(.name == $name and .type == "public" and .contentType == "application/pgp-keys")) | length == 1' \
     <<<"${CASE_LAST_STDOUT}" >/dev/null; then
-    printf 'expected secret collection listing to include the saved armored key metadata\n' >&2
+    printf 'expected infra-secret collection listing to include the saved armored key metadata\n' >&2
+    printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
+    return 1
+  fi
+
+  case_run_declarest resource list "${project_path}/secrets" --source managed-server -o json
+  case_expect_success
+  if ! jq -e \
+    --arg name "${secret_name}" \
+    'map(select(.name == $name)) | length == 0' \
+    <<<"${CASE_LAST_STDOUT}" >/dev/null; then
+    printf 'expected password secret collection listing to exclude infra-secret keys\n' >&2
     printf 'output: %s\n' "${CASE_LAST_OUTPUT}" >&2
     return 1
   fi
