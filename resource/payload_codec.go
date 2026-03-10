@@ -39,15 +39,14 @@ var payloadCodecs = []PayloadCodec{
 	{Type: PayloadTypeJSON, Extension: ".json", MediaType: "application/json", Structured: true},
 	{Type: PayloadTypeYAML, Extension: ".yaml", MediaType: "application/yaml", Structured: true},
 	{Type: PayloadTypeXML, Extension: ".xml", MediaType: "application/xml", Text: true},
-	{Type: PayloadTypeHCL, Extension: ".hcl", MediaType: "text/plain", Text: true},
-	{Type: PayloadTypeINI, Extension: ".ini", MediaType: "text/plain", Text: true},
-	{Type: PayloadTypeProperties, Extension: ".properties", MediaType: "text/plain", Text: true},
+	{Type: PayloadTypeHCL, Extension: ".hcl", MediaType: "application/hcl", Text: true},
+	{Type: PayloadTypeINI, Extension: ".ini", MediaType: "application/ini", Text: true},
+	{Type: PayloadTypeProperties, Extension: ".properties", MediaType: "text/x-java-properties", Text: true},
 	{Type: PayloadTypeText, Extension: ".txt", MediaType: "text/plain", Text: true},
 	{Type: PayloadTypeOctetStream, Extension: ".bin", MediaType: "application/octet-stream", Binary: true},
 }
 
 var payloadCodecByType = buildPayloadCodecByType()
-var payloadCodecByExtension = buildPayloadCodecByExtension()
 
 func NormalizePayloadType(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
@@ -90,18 +89,11 @@ func PayloadCodecForType(value string) (PayloadCodec, error) {
 }
 
 func PayloadTypeForExtension(extension string) (string, bool) {
-	normalized := strings.ToLower(strings.TrimSpace(extension))
-	if normalized == "" {
-		return "", false
-	}
-	if !strings.HasPrefix(normalized, ".") {
-		normalized = "." + normalized
-	}
-	codec, ok := payloadCodecByExtension[normalized]
+	descriptor, ok := PayloadDescriptorForExtension(extension)
 	if !ok {
 		return "", false
 	}
-	return codec.Type, true
+	return descriptor.PayloadType, true
 }
 
 func PayloadTypeForMediaType(value string) (string, bool) {
@@ -330,14 +322,6 @@ func buildPayloadCodecByType() map[string]PayloadCodec {
 	result := make(map[string]PayloadCodec, len(payloadCodecs))
 	for _, codec := range payloadCodecs {
 		result[codec.Type] = codec
-	}
-	return result
-}
-
-func buildPayloadCodecByExtension() map[string]PayloadCodec {
-	result := make(map[string]PayloadCodec, len(payloadCodecs))
-	for _, codec := range payloadCodecs {
-		result[codec.Extension] = codec
 	}
 	return result
 }

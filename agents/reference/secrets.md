@@ -39,6 +39,8 @@ Define secret lifecycle behavior for detection, masking, storage, resolution, an
 22. `secret detect --fix` with payload input MUST fail with `ValidationError` when no target path is provided.
 23. `secret detect --secret-attribute` MUST restrict apply behavior to one detected attribute and MUST fail with `ValidationError` when the attribute is not detected in payload or repository scope.
 24. Secret-candidate detection MUST ignore numeric-only and boolean-like plaintext values to avoid policy/lifespan and feature-toggle false positives on non-secret fields.
+25. Secret-store CLI listing MUST return secret keys only and MUST NOT print plaintext values; `secret list <path> --recursive` MUST expand discovery to descendant path-scoped secrets under `<path>`.
+26. Secret-store CLI reads MUST require explicit key selection for plaintext output; path-only discovery MUST route through `secret list`.
 
 ## Data Contracts
 Placeholder syntax:
@@ -94,3 +96,7 @@ Store contracts:
 14. `resource save /customers/acme` fails with `ValidationError` when metadata declares `password` as secret and no secret store provider is configured.
 15. `resource save /projects/platform/secrets/private-key --payload private.key --secret` stores the full key content under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, leaves `resource.key` containing only `{{secret .}}`, and `resource apply /projects/platform/secrets/private-key` resolves the placeholder back to the original `.key` payload.
 16. `resource.secret: true` on `/projects/platform/secrets/private-key` causes a later plain `resource save /projects/platform/secrets/private-key --payload private.key` to store the whole payload in the secret store without requiring `--secret` again.
+17. `secret list /customers/acme` prints only path-relative keys such as `/password` and `/apiToken`, not their plaintext values.
+18. `secret get /customers/acme` fails with `ValidationError` and directs the user to `secret list /customers/acme`.
+19. `secret list /projects --recursive` prints descendant entries such as `/test/secrets/private-key:.` so whole-resource secrets remain discoverable from an ancestor path.
+20. `resource save /projects/test/secrets/pass-word --payload a=b --content-type txt --secret` stores the literal text `a=b` under `/projects/test/secrets/pass-word:.` and preserves the repository payload suffix as `.txt`.

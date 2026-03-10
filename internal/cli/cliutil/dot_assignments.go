@@ -137,7 +137,8 @@ func parseDotNotationKey(key string) ([]string, error) {
 	for i < len(key) {
 		ch := key[i]
 
-		if ch == '"' {
+		switch ch {
+		case '"':
 			// Quoted segment: collect until closing quote.
 			i++ // skip opening quote
 			for i < len(key) && key[i] != '"' {
@@ -148,7 +149,7 @@ func parseDotNotationKey(key string) ([]string, error) {
 				return nil, ValidationError("invalid assignment list: unclosed quote in key", nil)
 			}
 			i++ // skip closing quote
-		} else if ch == '.' {
+		case '.':
 			segment := current.String()
 			if segment == "" {
 				return nil, ValidationError("invalid assignment list: empty key segment", nil)
@@ -156,7 +157,7 @@ func parseDotNotationKey(key string) ([]string, error) {
 			segments = append(segments, segment)
 			current.Reset()
 			i++
-		} else {
+		default:
 			current.WriteByte(ch)
 			i++
 		}

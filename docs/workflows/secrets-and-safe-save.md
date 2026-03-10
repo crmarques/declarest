@@ -46,7 +46,8 @@ DeclaREST will:
 
 ```bash
 declarest resource get --source repository /corporations/acme
-declarest secret get /corporations/acme
+declarest secret list /corporations/acme
+declarest secret get /corporations/acme /clientSecret
 ```
 
 ## 5. Detect and fix secret metadata across existing repos
@@ -83,7 +84,7 @@ Possible reasons:
 Fix order:
 
 1. declare `secretAttributes`
-2. ensure secret store works (`secret init`, `secret get`)
+2. ensure secret store works (`secret init`, `secret list`, `secret get`)
 3. retry `resource save --secret-attributes`
 
 ### I need to import a one-off fixture with plaintext

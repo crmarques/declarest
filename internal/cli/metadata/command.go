@@ -310,7 +310,6 @@ func newRenderCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var apply bool
-	var recursive bool
 
 	command := &cobra.Command{
 		Use:   "infer [path]",
@@ -328,10 +327,9 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 
 			debugctx.Printf(
 				command.Context(),
-				"metadata infer requested path=%q apply=%t recursive=%t",
+				"metadata infer requested path=%q apply=%t",
 				resolvedPath,
 				apply,
-				recursive,
 			)
 
 			service, err := cliutil.RequireMetadataService(deps)
@@ -344,14 +342,6 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			if err != nil {
 				debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 				return err
-			}
-
-			request := metadatadomain.InferenceRequest{Apply: apply, Recursive: recursive}
-			if request.Recursive {
-				return cliutil.ValidationError(
-					"metadata infer --recursive is not implemented yet",
-					nil,
-				)
 			}
 
 			_, openAPISpec := resolveOpenAPISpec(command.Context(), deps)
@@ -370,7 +360,6 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			outputItem, err := inferCompactedMetadata(
 				command.Context(),
 				resolvedPath,
-				request,
 				openAPISpec,
 				existingMetadata,
 			)
@@ -379,7 +368,7 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 				return err
 			}
 
-			if request.Apply {
+			if apply {
 				if err := service.Set(command.Context(), resolvedPath, outputItem); err != nil {
 					debugctx.Printf(command.Context(), "metadata infer failed path=%q error=%v", resolvedPath, err)
 					return err
@@ -396,8 +385,6 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVarP(&apply, "apply", "a", false, "apply inferred metadata")
-	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "infer recursively")
-	_ = command.Flags().MarkHidden("recursive")
 	return command
 }
 
@@ -548,7 +535,7 @@ func inferMetadataFromAvailableEndpoints(
 		return metadatadomain.ResourceMetadata{}, false, nil
 	}
 
-	compact, err := inferCompactedMetadata(ctx, logicalPath, metadatadomain.InferenceRequest{}, openAPISpec, nil)
+	compact, err := inferCompactedMetadata(ctx, logicalPath, openAPISpec, nil)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, false, err
 	}
@@ -648,11 +635,10 @@ type metadataPathProbe interface {
 func inferCompactedMetadata(
 	ctx context.Context,
 	logicalPath string,
-	request metadatadomain.InferenceRequest,
 	openAPISpec resource.Value,
 	existing *metadatadomain.ResourceMetadata,
 ) (metadatadomain.ResourceMetadata, error) {
-	inferred, err := metadatadomain.InferFromOpenAPISpec(ctx, logicalPath, request, openAPISpec)
+	inferred, err := metadatadomain.InferFromOpenAPISpec(ctx, logicalPath, metadatadomain.InferenceRequest{}, openAPISpec)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}

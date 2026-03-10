@@ -17,27 +17,30 @@ Define the canonical context catalog schema, file location, validation rules, an
 ## Normative Rules
 1. Context catalogs MUST be stored at `~/.declarest/configs/contexts.yaml` by default.
 2. Environment override `DECLAREST_CONTEXTS_FILE` MAY replace the default path.
-3. YAML keys MUST use camelCase.
-4. Unknown YAML keys MUST fail parsing.
-5. `contexts` MUST be a list of full context objects.
-6. `currentContext` MUST reference an existing context.
-7. Context names MUST be unique and non-empty.
-8. Validation MUST fail fast when one-of blocks are missing or ambiguous.
-9. Config precedence MUST be: runtime flags, environment overrides, persisted context values, engine defaults.
-10. Unknown override keys MUST fail validation.
-11. Missing context catalog files MUST be treated as an empty catalog state.
-12. `metadata` MUST define at most one source: `baseDir`, `bundle`, or `bundleFile`.
-13. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset.
-14. Persisted context YAML MUST omit `metadata.baseDir` when it equals repository baseDir.
-15. Every context MUST define `managedServer.http` with one configured auth mode.
-16. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
-17. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.
-18. When `managedServer.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-19. When any proxy block (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `httpURL` or `httpsURL`; proxy auth (when provided) MUST include both `username` and `password`.
-20. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
-21. `managedServer.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
-22. `managedServer.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
-23. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
+3. Persisted YAML keys MUST use camelCase.
+4. On-disk catalog readers MUST accept documented legacy aliases (for example `current-ctx`, `base-dir`, `managed-server`, `secret-store`, and `repository.resource-format`) and MUST normalize them before strict validation.
+5. Unknown YAML keys MUST fail parsing after legacy-alias normalization.
+6. `contexts` MUST be a list of full context objects.
+7. `currentContext` MUST reference an existing context.
+8. Context names MUST be unique and non-empty.
+9. Validation MUST fail fast when one-of blocks are missing or ambiguous.
+10. Config precedence MUST be: runtime flags, environment overrides, persisted context values, engine defaults.
+11. Unknown override keys MUST fail validation.
+12. Missing context catalog files MUST be treated as an empty catalog state.
+13. `metadata` MUST define at most one source: `baseDir`, `bundle`, or `bundleFile`.
+14. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset.
+15. Persisted context YAML MUST omit `metadata.baseDir` when it equals repository baseDir.
+16. Every context MUST define at least one of `repository` or `managedServer`.
+17. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
+18. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.
+19. When `managedServer.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
+20. When any proxy block (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) is configured with values, it MUST define at least one of `httpURL` or `httpsURL`; proxy auth (when provided) MUST include both `username` and `password`.
+21. Proxy blocks across the managed server, repository, secret store, and metadata share the same default: the first configured concrete proxy becomes the inherited proxy for components that do not define their own, and defining an empty `proxy:` block in a component explicitly disables the inherited proxy for that component.
+22. `managedServer.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
+23. `managedServer.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
+24. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
+25. When `managedServer` is present, it MUST define `managedServer.http` with exactly one configured auth mode.
+26. Legacy `repository.resource-format` input MUST be mapped to canonical `preferences.preferredFormat`, and persisted YAML MUST omit the legacy field.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -47,11 +50,12 @@ Top-level catalog fields:
 
 Per-context fields:
 1. `name`.
-2. `repository`.
-3. required `managedServer`.
+2. optional `repository`.
+3. optional `managedServer`.
 4. optional `secretStore`.
 5. optional `metadata` (omit when equivalent to default repository baseDir behavior); `metadata.proxy` configures the HTTP proxy used for bundle downloads and participates in the shared proxy semantics.
 6. optional `preferences`.
+7. at least one of `repository` or `managedServer` is required.
 
 Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
@@ -241,9 +245,9 @@ currentContext: xxx
 ## Failure Modes
 1. `currentContext` missing or not found in `contexts`.
 2. Duplicate context names.
-3. Unknown YAML key due to strict decode.
+3. Unknown YAML key due to strict decode after legacy-alias normalization.
 4. Repository backend one-of violation.
-5. Missing required `managedServer`.
+5. Both `repository` and `managedServer` missing.
 6. Resource server auth one-of violation.
 7. Secret store one-of violation.
 8. Secret file key source one-of violation.
@@ -257,7 +261,7 @@ currentContext: xxx
 ## Edge Cases
 1. Empty catalog with no contexts and no current context.
 2. Context with optional `secretStore` omitted.
-3. Context with required `managedServer` omitted fails validation.
+3. Repository-only context with `managedServer` omitted remains valid for local-only workflows.
 4. Runtime override targets a missing optional block.
 5. Catalog file absent on first run; list returns empty and current/resolve report `current context not set`.
 6. `metadata.baseDir` omitted in YAML; resolve still returns repository baseDir as effective metadata baseDir.
@@ -281,3 +285,5 @@ currentContext: xxx
 10. Corner case: `managedServer.http.auth.customHeaders` with one entry that defines `header` + `value` and no `prefix` remains valid and sends the raw `value` in the configured header.
 11. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with empty `managedServer.http.openapi` and bundle metadata source (`metadata.bundle` or `metadata.bundleFile`) that includes `openapi.yaml` keeps context config unchanged while startup wiring resolves OpenAPI from the extracted bundle.
 12. Corner case: `ResolveContext({Name: "dev", Overrides: {"managedServer.http.proxy.httpURL":"http://proxy.example.com:3128"}})` applies proxy override and keeps other proxy fields untouched when unset.
+13. Corner case: a legacy catalog entry with `current-ctx`, `filesystem.base-dir`, and `repository.resource-format: yaml` resolves as `currentContext`, `repository.filesystem.baseDir`, and `preferences.preferredFormat: yaml`, and persists back without the legacy keys.
+14. Corner case: `ResolveContext({Name: "local-only", Overrides: nil})` with repository-only config and no `managedServer` remains valid, defaults `metadata.baseDir` from the repository, and bootstraps local-only commands without a remote client.

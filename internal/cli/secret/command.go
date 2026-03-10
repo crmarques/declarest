@@ -3,6 +3,7 @@ package secret
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sort"
 	"strings"
@@ -25,10 +26,10 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 
 	command.AddCommand(
 		newInitCommand(deps),
-		newStoreCommand(deps),
+		newSetCommand(deps),
 		newGetCommand(deps),
-		newDeleteCommand(deps),
 		newListCommand(deps, globalFlags),
+		newDeleteCommand(deps),
 		newMaskCommand(deps, globalFlags),
 		newResolveCommand(deps, globalFlags),
 		newNormalizeCommand(deps, globalFlags),
@@ -54,20 +55,41 @@ func newInitCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	}
 }
 
-func newStoreCommand(deps cliutil.CommandDependencies) *cobra.Command {
-	return &cobra.Command{
-		Use:   "store <key> <value>",
-		Short: "Store a secret",
-		Args:  cobra.ExactArgs(2),
+func newSetCommand(deps cliutil.CommandDependencies) *cobra.Command {
+	var pathFlag string
+	var keyFlag string
+
+	command := &cobra.Command{
+		Use:     "set [path] [key] [value]",
+		Aliases: []string{"store"},
+		Short:   "Set a secret",
+		Example: strings.Join([]string{
+			"  declarest secret set apiToken super-secret",
+			"  declarest secret set /customers/acme /apiToken super-secret",
+			"  declarest secret set --path /customers/acme --key /apiToken super-secret",
+			"  declarest secret set /customers/acme:/apiToken super-secret",
+		}, "\n"),
+		Args: cobra.RangeArgs(1, 3),
 		RunE: func(command *cobra.Command, args []string) error {
 			secretProvider, err := cliutil.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			return secretProvider.Store(command.Context(), args[0], args[1])
+			request, err := resolveSecretSetRequest(pathFlag, keyFlag, args)
+			if err != nil {
+				return err
+			}
+
+			return secretProvider.Store(command.Context(), request.Target.ResolvedKey(), request.Value)
 		},
 	}
+
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	command.Flags().StringVar(&keyFlag, "key", "", "secret key under --path")
+	return command
 }
 
 func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
@@ -76,31 +98,27 @@ func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   "get [path] [key]",
-		Short: "Read one secret or all secrets for a path",
+		Short: "Read one secret",
 		Example: strings.Join([]string{
-			"  declarest secret get /customers/acme",
-			"  declarest secret get /customers/acme apiToken",
-			"  declarest secret get --path /customers/acme",
-			"  declarest secret get --path /customers/acme --key apiToken",
-			"  declarest secret get /customers/acme:apiToken",
+			"  declarest secret get apiToken",
+			"  declarest secret list /customers/acme",
+			"  declarest secret get /customers/acme /apiToken",
+			"  declarest secret get --path /customers/acme --key /apiToken",
+			"  declarest secret get /customers/acme:/apiToken",
 		}, "\n"),
-		Args: cobra.MaximumNArgs(2),
+		Args: cobra.RangeArgs(0, 2),
 		RunE: func(command *cobra.Command, args []string) error {
 			secretProvider, err := cliutil.RequireSecretProvider(deps)
 			if err != nil {
 				return err
 			}
 
-			request, err := resolveSecretGetRequest(pathFlag, keyFlag, args)
+			target, err := resolveSecretTargetRequest("get", pathFlag, keyFlag, args)
 			if err != nil {
 				return err
 			}
 
-			if request.ListByPath {
-				return writeSecretsByPath(command.Context(), command.OutOrStdout(), secretProvider, request.Path)
-			}
-
-			value, err := secretProvider.Get(command.Context(), request.ResolvedKey())
+			value, err := secretProvider.Get(command.Context(), target.ResolvedKey())
 			if err != nil {
 				return err
 			}
@@ -116,135 +134,396 @@ func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	return command
 }
 
-type secretGetRequest struct {
-	Path       string
-	Key        string
-	ListByPath bool
+func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
+	var pathFlag string
+	var recursive bool
+
+	command := &cobra.Command{
+		Use:   "list [path]",
+		Short: "List stored secret keys",
+		Example: strings.Join([]string{
+			"  declarest secret list",
+			"  declarest secret list /customers/acme",
+			"  declarest secret list --path /customers/acme",
+			"  declarest secret list /projects/test --recursive",
+			"  declarest secret list /customers/acme --output json",
+		}, "\n"),
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			secretProvider, err := cliutil.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			request, err := resolveSecretListRequest(pathFlag, recursive, args)
+			if err != nil {
+				return err
+			}
+
+			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
+			if err != nil {
+				return err
+			}
+			if globalFlags != nil && globalFlags.Output == cliutil.OutputAuto {
+				outputFormat = cliutil.OutputAuto
+			}
+
+			items, err := listSecretKeys(command.Context(), secretProvider, request)
+			if err != nil {
+				return err
+			}
+
+			return cliutil.WriteOutput(command, outputFormat, items, func(w io.Writer, items []string) error {
+				for _, item := range items {
+					if _, writeErr := fmt.Fprintln(w, item); writeErr != nil {
+						return writeErr
+					}
+				}
+				return nil
+			})
+		},
+	}
+
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "include descendant secret paths")
+	return command
 }
 
-func (r secretGetRequest) ResolvedKey() string {
+func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
+	var pathFlag string
+	var keyFlag string
+
+	command := &cobra.Command{
+		Use:   "delete [path] [key]",
+		Short: "Delete one secret",
+		Example: strings.Join([]string{
+			"  declarest secret delete apiToken",
+			"  declarest secret delete /customers/acme /apiToken",
+			"  declarest secret delete --path /customers/acme --key /apiToken",
+			"  declarest secret delete /customers/acme:/apiToken",
+		}, "\n"),
+		Args: cobra.RangeArgs(0, 2),
+		RunE: func(command *cobra.Command, args []string) error {
+			secretProvider, err := cliutil.RequireSecretProvider(deps)
+			if err != nil {
+				return err
+			}
+
+			target, err := resolveSecretTargetRequest("delete", pathFlag, keyFlag, args)
+			if err != nil {
+				return err
+			}
+
+			return secretProvider.Delete(command.Context(), target.ResolvedKey())
+		},
+	}
+
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	command.Flags().StringVar(&keyFlag, "key", "", "secret key under --path")
+	return command
+}
+
+type secretTarget struct {
+	Path string
+	Key  string
+}
+
+func (r secretTarget) ResolvedKey() string {
 	if strings.TrimSpace(r.Path) == "" {
 		return strings.TrimSpace(r.Key)
 	}
 	return strings.TrimSpace(r.Path) + ":" + strings.TrimSpace(r.Key)
 }
 
-func resolveSecretGetRequest(pathFlag string, keyFlag string, args []string) (secretGetRequest, error) {
-	normalizedPathFlag, hasPathFlag, err := normalizeGetPathFlag(pathFlag)
+type secretSetRequest struct {
+	Target secretTarget
+	Value  string
+}
+
+type secretListRequest struct {
+	Path      string
+	HasPath   bool
+	Recursive bool
+}
+
+func resolveSecretTargetRequest(action string, pathFlag string, keyFlag string, args []string) (secretTarget, error) {
+	normalizedPathFlag, hasPathFlag, err := normalizeSecretPathFlag(pathFlag)
 	if err != nil {
-		return secretGetRequest{}, err
+		return secretTarget{}, err
 	}
 	normalizedKeyFlag := strings.TrimSpace(keyFlag)
+	if normalizedKeyFlag != "" && !hasPathFlag {
+		return secretTarget{}, cliutil.ValidationError("--key requires --path", nil)
+	}
 
 	switch len(args) {
 	case 0:
-		return resolveSecretGetFromFlagsOnly(normalizedPathFlag, hasPathFlag, normalizedKeyFlag)
-	case 1:
-		return resolveSecretGetFromSingleArg(normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0])
-	case 2:
-		return resolveSecretGetFromPathAndKeyArgs(normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0], args[1])
-	default:
-		return secretGetRequest{}, cliutil.ValidationError("secret get accepts at most two positional arguments", nil)
-	}
-}
-
-func resolveSecretGetFromFlagsOnly(pathFlag string, hasPathFlag bool, keyFlag string) (secretGetRequest, error) {
-	if !hasPathFlag {
-		if keyFlag != "" {
-			return secretGetRequest{}, cliutil.ValidationError("--key requires --path", nil)
+		if !hasPathFlag {
+			return secretTarget{}, cliutil.ValidationError(
+				fmt.Sprintf("secret %s requires a key; use 'declarest secret list <path>' to inspect path-scoped keys", action),
+				nil,
+			)
 		}
-		return secretGetRequest{}, cliutil.ValidationError("secret get requires a key, path, or --path", nil)
+		if normalizedKeyFlag == "" {
+			return secretTarget{}, cliutil.ValidationError(
+				fmt.Sprintf("secret %s requires a key; use 'declarest secret list %s' to inspect available keys", action, normalizedPathFlag),
+				nil,
+			)
+		}
+		return secretTarget{Path: normalizedPathFlag, Key: normalizedKeyFlag}, nil
+	case 1:
+		return resolveSecretTargetFromSingleArg(action, normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0])
+	case 2:
+		return resolveSecretTargetFromPathAndKeyArgs(action, normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0], args[1])
+	default:
+		return secretTarget{}, cliutil.ValidationError(
+			fmt.Sprintf("secret %s accepts at most two positional arguments", action),
+			nil,
+		)
 	}
-
-	if keyFlag == "" {
-		return secretGetRequest{Path: pathFlag, ListByPath: true}, nil
-	}
-	return secretGetRequest{Path: pathFlag, Key: keyFlag}, nil
 }
 
-func resolveSecretGetFromSingleArg(pathFlag string, hasPathFlag bool, keyFlag string, rawArg string) (secretGetRequest, error) {
+func resolveSecretTargetFromSingleArg(
+	action string,
+	pathFlag string,
+	hasPathFlag bool,
+	keyFlag string,
+	rawArg string,
+) (secretTarget, error) {
 	arg := strings.TrimSpace(rawArg)
 	if arg == "" {
-		return secretGetRequest{}, cliutil.ValidationError("secret get argument must not be empty", nil)
+		return secretTarget{}, cliutil.ValidationError(fmt.Sprintf("secret %s argument must not be empty", action), nil)
 	}
 
 	if hasPathFlag {
 		if keyFlag != "" && keyFlag != arg {
-			return secretGetRequest{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
+			return secretTarget{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
 		}
 		if keyFlag != "" {
-			return secretGetRequest{Path: pathFlag, Key: keyFlag}, nil
+			return secretTarget{Path: pathFlag, Key: keyFlag}, nil
 		}
-		return secretGetRequest{Path: pathFlag, Key: arg}, nil
+		return secretTarget{Path: pathFlag, Key: arg}, nil
 	}
 
 	if keyFlag != "" {
-		normalizedPathArg, err := normalizeSecretPathForGet(arg)
-		if err != nil {
-			return secretGetRequest{}, err
-		}
-		return secretGetRequest{Path: normalizedPathArg, Key: keyFlag}, nil
-	}
-
-	if strings.HasPrefix(arg, "/") && strings.Contains(arg, ":") {
-		pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(arg)
-		if !composite {
-			return secretGetRequest{}, cliutil.ValidationError("invalid secret target format: expected <path>:<key>", nil)
-		}
-		return secretGetRequest{Path: pathFromComposite, Key: keyFromComposite}, nil
+		return secretTarget{}, cliutil.ValidationError("--key requires --path", nil)
 	}
 
 	if strings.HasPrefix(arg, "/") {
-		normalizedPathArg, err := normalizeSecretPathForGet(arg)
-		if err != nil {
-			return secretGetRequest{}, err
+		pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(arg)
+		if composite {
+			return secretTarget{Path: pathFromComposite, Key: keyFromComposite}, nil
 		}
-		return secretGetRequest{Path: normalizedPathArg, ListByPath: true}, nil
+
+		normalizedPathArg, err := normalizeSecretPathForInput(arg)
+		if err != nil {
+			return secretTarget{}, err
+		}
+		return secretTarget{}, cliutil.ValidationError(
+			fmt.Sprintf("secret %s requires a key; use 'declarest secret list %s' to inspect available keys", action, normalizedPathArg),
+			nil,
+		)
 	}
 
-	return secretGetRequest{Key: arg}, nil
+	return secretTarget{Key: arg}, nil
 }
 
-func resolveSecretGetFromPathAndKeyArgs(
+func resolveSecretTargetFromPathAndKeyArgs(
+	_ string,
 	pathFlag string,
 	hasPathFlag bool,
 	keyFlag string,
 	rawPathArg string,
 	rawKeyArg string,
-) (secretGetRequest, error) {
-	normalizedPathArg, err := normalizeSecretPathForGet(rawPathArg)
+) (secretTarget, error) {
+	normalizedPathArg, err := normalizeSecretPathForInput(rawPathArg)
 	if err != nil {
-		return secretGetRequest{}, err
+		return secretTarget{}, err
 	}
 
 	keyArg := strings.TrimSpace(rawKeyArg)
 	if keyArg == "" {
-		return secretGetRequest{}, cliutil.ValidationError("secret key must not be empty", nil)
+		return secretTarget{}, cliutil.ValidationError("secret key must not be empty", nil)
 	}
 
 	if hasPathFlag && pathFlag != normalizedPathArg {
-		return secretGetRequest{}, cliutil.ValidationError("flag --path conflicts with positional path argument", nil)
+		return secretTarget{}, cliutil.ValidationError("flag --path conflicts with positional path argument", nil)
 	}
 	if keyFlag != "" && keyFlag != keyArg {
-		return secretGetRequest{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
+		return secretTarget{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
 	}
 
-	return secretGetRequest{Path: normalizedPathArg, Key: keyArg}, nil
+	if hasPathFlag {
+		normalizedPathArg = pathFlag
+	}
+	if keyFlag != "" {
+		keyArg = keyFlag
+	}
+
+	return secretTarget{Path: normalizedPathArg, Key: keyArg}, nil
 }
 
-func normalizeGetPathFlag(pathFlag string) (string, bool, error) {
+func resolveSecretSetRequest(pathFlag string, keyFlag string, args []string) (secretSetRequest, error) {
+	normalizedPathFlag, hasPathFlag, err := normalizeSecretPathFlag(pathFlag)
+	if err != nil {
+		return secretSetRequest{}, err
+	}
+	normalizedKeyFlag := strings.TrimSpace(keyFlag)
+	if normalizedKeyFlag != "" && !hasPathFlag {
+		return secretSetRequest{}, cliutil.ValidationError("--key requires --path", nil)
+	}
+
+	switch len(args) {
+	case 1:
+		if !hasPathFlag || normalizedKeyFlag == "" {
+			return secretSetRequest{}, cliutil.ValidationError(
+				"secret set requires <key> <value> or <path> <key> <value>",
+				nil,
+			)
+		}
+		return secretSetRequest{
+			Target: secretTarget{Path: normalizedPathFlag, Key: normalizedKeyFlag},
+			Value:  args[0],
+		}, nil
+	case 2:
+		return resolveSecretSetFromTwoArgs(normalizedPathFlag, hasPathFlag, normalizedKeyFlag, args[0], args[1])
+	case 3:
+		normalizedPathArg, err := normalizeSecretPathForInput(args[0])
+		if err != nil {
+			return secretSetRequest{}, err
+		}
+		keyArg := strings.TrimSpace(args[1])
+		if keyArg == "" {
+			return secretSetRequest{}, cliutil.ValidationError("secret key must not be empty", nil)
+		}
+
+		if hasPathFlag && normalizedPathFlag != normalizedPathArg {
+			return secretSetRequest{}, cliutil.ValidationError("flag --path conflicts with positional path argument", nil)
+		}
+		if normalizedKeyFlag != "" && normalizedKeyFlag != keyArg {
+			return secretSetRequest{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
+		}
+
+		if hasPathFlag {
+			normalizedPathArg = normalizedPathFlag
+		}
+		if normalizedKeyFlag != "" {
+			keyArg = normalizedKeyFlag
+		}
+
+		return secretSetRequest{
+			Target: secretTarget{Path: normalizedPathArg, Key: keyArg},
+			Value:  args[2],
+		}, nil
+	default:
+		return secretSetRequest{}, cliutil.ValidationError("secret set accepts at most three positional arguments", nil)
+	}
+}
+
+func resolveSecretSetFromTwoArgs(
+	pathFlag string,
+	hasPathFlag bool,
+	keyFlag string,
+	rawTargetArg string,
+	valueArg string,
+) (secretSetRequest, error) {
+	targetArg := strings.TrimSpace(rawTargetArg)
+	if targetArg == "" {
+		return secretSetRequest{}, cliutil.ValidationError("secret key must not be empty", nil)
+	}
+
+	if hasPathFlag {
+		if keyFlag != "" && keyFlag != targetArg {
+			return secretSetRequest{}, cliutil.ValidationError("flag --key conflicts with positional key argument", nil)
+		}
+		if keyFlag == "" {
+			keyFlag = targetArg
+		}
+
+		return secretSetRequest{
+			Target: secretTarget{Path: pathFlag, Key: keyFlag},
+			Value:  valueArg,
+		}, nil
+	}
+
+	if strings.HasPrefix(targetArg, "/") {
+		pathFromComposite, keyFromComposite, composite := splitSecretPathKeyArg(targetArg)
+		if composite {
+			return secretSetRequest{
+				Target: secretTarget{Path: pathFromComposite, Key: keyFromComposite},
+				Value:  valueArg,
+			}, nil
+		}
+
+		if _, err := normalizeSecretPathForInput(targetArg); err != nil {
+			return secretSetRequest{}, err
+		}
+		return secretSetRequest{}, cliutil.ValidationError(
+			"secret set requires a key; use 'declarest secret set <path> <key> <value>'",
+			nil,
+		)
+	}
+
+	return secretSetRequest{
+		Target: secretTarget{Key: targetArg},
+		Value:  valueArg,
+	}, nil
+}
+
+func resolveSecretListRequest(pathFlag string, recursive bool, args []string) (secretListRequest, error) {
+	normalizedPathFlag, hasPathFlag, err := normalizeSecretPathFlag(pathFlag)
+	if err != nil {
+		return secretListRequest{}, err
+	}
+
+	switch len(args) {
+	case 0:
+		return secretListRequest{Path: normalizedPathFlag, HasPath: hasPathFlag, Recursive: recursive}, nil
+	case 1:
+		arg := strings.TrimSpace(args[0])
+		if arg == "" {
+			return secretListRequest{}, cliutil.ValidationError("secret list path must not be empty", nil)
+		}
+
+		if strings.HasPrefix(arg, "/") {
+			if _, _, composite := splitSecretPathKeyArg(arg); composite {
+				return secretListRequest{}, cliutil.ValidationError(
+					"secret list accepts only a path; use 'declarest secret get <path>:<key>' to read a value",
+					nil,
+				)
+			}
+		}
+
+		normalizedPathArg, err := normalizeSecretPathForInput(arg)
+		if err != nil {
+			return secretListRequest{}, err
+		}
+		if hasPathFlag && normalizedPathFlag != normalizedPathArg {
+			return secretListRequest{}, cliutil.ValidationError("flag --path conflicts with positional path argument", nil)
+		}
+		return secretListRequest{Path: normalizedPathArg, HasPath: true, Recursive: recursive}, nil
+	default:
+		return secretListRequest{}, cliutil.ValidationError("secret list accepts at most one positional path argument", nil)
+	}
+}
+
+func normalizeSecretPathFlag(pathFlag string) (string, bool, error) {
 	trimmed := strings.TrimSpace(pathFlag)
 	if trimmed == "" {
 		return "", false, nil
 	}
-	normalized, err := normalizeSecretPathForGet(trimmed)
+	normalized, err := normalizeSecretPathForInput(trimmed)
 	if err != nil {
 		return "", true, err
 	}
 	return normalized, true, nil
 }
 
-func normalizeSecretPathForGet(rawPath string) (string, error) {
+func normalizeSecretPathForInput(rawPath string) (string, error) {
 	trimmed := strings.TrimSpace(rawPath)
 	if trimmed == "" {
 		return "", cliutil.ValidationError("path is required", nil)
@@ -271,7 +550,7 @@ func splitSecretPathKeyArg(value string) (string, string, bool) {
 		return "", "", false
 	}
 
-	normalizedPath, err := normalizeSecretPathForGet(pathPart)
+	normalizedPath, err := normalizeSecretPathForInput(pathPart)
 	if err != nil {
 		return "", "", false
 	}
@@ -279,88 +558,127 @@ func splitSecretPathKeyArg(value string) (string, string, bool) {
 	return normalizedPath, keyPart, true
 }
 
-func writeSecretsByPath(
+func listSecretKeys(
 	ctx context.Context,
-	writer io.Writer,
 	secretProvider secretdomain.SecretProvider,
-	logicalPath string,
-) error {
+	request secretListRequest,
+) ([]string, error) {
 	keys, err := secretProvider.List(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	prefix := logicalPath + ":"
-	matchingKeys := make([]string, 0, len(keys))
+	if !request.HasPath {
+		return renderAllSecretKeys(keys), nil
+	}
+
+	normalizedPath := normalizeSecretStoreLookupKey(request.Path)
+	items := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if strings.HasPrefix(strings.TrimSpace(key), prefix) {
-			matchingKeys = append(matchingKeys, key)
-		}
-	}
-	sort.Strings(matchingKeys)
-
-	if len(matchingKeys) == 0 {
-		return faults.NewTypedError(faults.NotFoundError, "secret path not found", nil)
-	}
-
-	lines := make([]string, 0, len(matchingKeys))
-	for _, fullKey := range matchingKeys {
-		value, err := secretProvider.Get(ctx, fullKey)
-		if err != nil {
-			return err
+		normalizedKey := normalizeSecretStoreLookupKey(key)
+		pathPart, keyPart, composite := splitStoredSecretPathKey(normalizedKey)
+		if !composite {
+			continue
 		}
 
-		displayKey := strings.TrimPrefix(fullKey, prefix)
-		if strings.TrimSpace(displayKey) == "" {
-			displayKey = fullKey
+		displayKey, matches := renderPathScopedSecretListKey(normalizedPath, pathPart, keyPart, request.Recursive || request.Path == "/")
+		if !matches {
+			continue
 		}
-		lines = append(lines, displayKey+"="+value)
+		items = append(items, displayKey)
 	}
 
-	_, err = io.WriteString(writer, strings.Join(lines, "\n")+"\n")
-	return err
+	sort.Strings(items)
+	if len(items) == 0 {
+		return nil, faults.NewTypedError(faults.NotFoundError, "secret path not found", nil)
+	}
+	return items, nil
 }
 
-func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
-	return &cobra.Command{
-		Use:   "delete <key>",
-		Short: "Delete a secret",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(command *cobra.Command, args []string) error {
-			secretProvider, err := cliutil.RequireSecretProvider(deps)
-			if err != nil {
-				return err
-			}
-
-			return secretProvider.Delete(command.Context(), args[0])
-		},
+func renderPathScopedSecretListKey(
+	requestPath string,
+	pathPart string,
+	keyPart string,
+	recursive bool,
+) (string, bool) {
+	normalizedRequestPath := strings.Trim(requestPath, "/")
+	normalizedPathPart := strings.Trim(pathPart, "/")
+	if normalizedPathPart == "" || strings.TrimSpace(keyPart) == "" {
+		return "", false
 	}
+
+	if normalizedRequestPath == "" {
+		return "/" + normalizedPathPart + ":" + keyPart, true
+	}
+
+	if normalizedPathPart == normalizedRequestPath {
+		return keyPart, true
+	}
+
+	if !recursive {
+		return "", false
+	}
+
+	prefix := normalizedRequestPath + "/"
+	if !strings.HasPrefix(normalizedPathPart, prefix) {
+		return "", false
+	}
+
+	relativePath := strings.TrimPrefix(normalizedPathPart, prefix)
+	if relativePath == "" {
+		return "", false
+	}
+
+	return "/" + relativePath + ":" + keyPart, true
 }
 
-func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "List secrets",
-		Args:  cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error {
-			secretProvider, err := cliutil.RequireSecretProvider(deps)
-			if err != nil {
-				return err
-			}
-
-			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
-			if err != nil {
-				return err
-			}
-
-			items, err := secretProvider.List(command.Context())
-			if err != nil {
-				return err
-			}
-
-			return cliutil.WriteOutput(command, outputFormat, items, nil)
-		},
+func renderAllSecretKeys(keys []string) []string {
+	items := make([]string, 0, len(keys))
+	for _, key := range keys {
+		displayKey := displaySecretKey(key)
+		if displayKey == "" {
+			continue
+		}
+		items = append(items, displayKey)
 	}
+	sort.Strings(items)
+	return items
+}
+
+func displaySecretKey(rawKey string) string {
+	normalizedKey := normalizeSecretStoreLookupKey(rawKey)
+	if normalizedKey == "" {
+		return ""
+	}
+
+	pathPart, keyPart, composite := splitStoredSecretPathKey(normalizedKey)
+	if !composite {
+		return normalizedKey
+	}
+	return "/" + pathPart + ":" + keyPart
+}
+
+func splitStoredSecretPathKey(value string) (string, string, bool) {
+	index := strings.Index(value, ":")
+	if index <= 0 {
+		return "", "", false
+	}
+
+	pathPart := strings.Trim(strings.TrimSpace(value[:index]), "/")
+	keyPart := strings.TrimSpace(value[index+1:])
+	if pathPart == "" || keyPart == "" {
+		return "", "", false
+	}
+
+	return pathPart, keyPart, true
+}
+
+func normalizeSecretStoreLookupKey(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	return strings.Trim(trimmed, "/")
 }
 
 func newMaskCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
@@ -562,19 +880,26 @@ func decodeDetectInput(command *cobra.Command, flags cliutil.InputFlags) (resour
 	return value, true, nil
 }
 
-func resolveSecretInputPayloadType(contentType string, sourceName string) string {
-	if descriptor, ok := resource.PayloadDescriptorForContentType(contentType); ok {
-		return descriptor.PayloadType
+func resolveSecretInputPayloadType(contentType string, payloadPath string) string {
+	normalized := strings.ToLower(strings.TrimSpace(contentType))
+	switch normalized {
+	case "json", "application/json":
+		return cliutil.OutputJSON
+	case "yaml", "application/yaml", "text/yaml", "application/x-yaml", "text/x-yaml":
+		return cliutil.OutputYAML
 	}
-	if descriptor, ok := resource.PayloadDescriptorForFileName(sourceName); ok {
-		return descriptor.PayloadType
+
+	lowerPath := strings.ToLower(strings.TrimSpace(payloadPath))
+	switch {
+	case strings.HasSuffix(lowerPath, ".json"):
+		return cliutil.OutputJSON
+	case strings.HasSuffix(lowerPath, ".yaml"), strings.HasSuffix(lowerPath, ".yml"):
+		return cliutil.OutputYAML
+	default:
+		return cliutil.OutputJSON
 	}
-	return cliutil.OutputJSON
 }
 
 func isInputRequiredError(err error) bool {
-	if !faults.IsCategory(err, faults.ValidationError) {
-		return false
-	}
-	return strings.Contains(err.Error(), "input is required")
+	return err != nil && strings.Contains(err.Error(), "input is required")
 }

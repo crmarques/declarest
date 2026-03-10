@@ -27,7 +27,7 @@ func NormalizePayloadDescriptor(value PayloadDescriptor) PayloadDescriptor {
 
 	if descriptor, ok := PayloadDescriptorForContentType(value.MediaType); ok {
 		if extension != "" {
-			descriptor.Extension = extension
+			descriptor.Extension = resolveConsistentExtension(extension, descriptor.PayloadType)
 		}
 		return descriptor
 	}
@@ -37,7 +37,7 @@ func NormalizePayloadDescriptor(value PayloadDescriptor) PayloadDescriptor {
 		mediaType, _ := PayloadMediaType(payloadType)
 		resolvedExtension, _ := PayloadExtension(payloadType)
 		if extension != "" {
-			resolvedExtension = extension
+			resolvedExtension = resolveConsistentExtension(extension, payloadType)
 		}
 		return PayloadDescriptor{
 			PayloadType: payloadType,
@@ -55,6 +55,30 @@ func NormalizePayloadDescriptor(value PayloadDescriptor) PayloadDescriptor {
 	}
 
 	return DefaultOctetStreamDescriptor()
+}
+
+// resolveConsistentExtension returns the given extension if it is either
+// unknown (custom) or belongs to the same payload type. When the extension
+// maps to a different known payload type it is replaced with the canonical
+// extension for the resolved type so that the descriptor stays internally
+// consistent.
+func resolveConsistentExtension(extension string, resolvedPayloadType string) string {
+	extDescriptor, known := PayloadDescriptorForExtension(extension)
+	if !known {
+		// Custom/unknown extension – keep it as-is.
+		return extension
+	}
+	if extDescriptor.PayloadType == resolvedPayloadType {
+		// Extension is consistent with the resolved type (e.g. .yml for yaml).
+		return extension
+	}
+	// Extension belongs to a different type – use the canonical extension
+	// for the resolved type instead.
+	canonical, err := PayloadExtension(resolvedPayloadType)
+	if err != nil {
+		return extension
+	}
+	return canonical
 }
 
 func IsPayloadDescriptorExplicit(value PayloadDescriptor) bool {
@@ -82,7 +106,7 @@ func PayloadDescriptorForContentType(value string) (PayloadDescriptor, bool) {
 		return canonicalDescriptor(PayloadTypeINI), true
 	case PayloadTypeProperties:
 		return canonicalDescriptor(PayloadTypeProperties), true
-	case PayloadTypeText:
+	case PayloadTypeText, "txt":
 		return canonicalDescriptor(PayloadTypeText), true
 	case PayloadTypeBinary, PayloadTypeOctetStream:
 		return canonicalDescriptor(PayloadTypeOctetStream), true

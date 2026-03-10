@@ -76,31 +76,33 @@ Represents persisted context configuration.
 
 Required fields:
 1. `Name`.
-2. `Repository` typed configuration object.
-3. `ManagedServer` typed server configuration object.
 
 Optional fields:
-1. `SecretStore` typed secret store configuration object.
-2. `Preferences` settings map.
-3. `Metadata` typed metadata configuration object.
-4. `managedServer.http.healthCheck` optional probe target used by `server check`.
-5. Metadata attribute references (`idAttribute`, `aliasAttribute`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
+1. `Repository` typed configuration object.
+2. `ManagedServer` typed server configuration object.
+3. `SecretStore` typed secret store configuration object.
+4. `Preferences` settings map.
+5. `Metadata` typed metadata configuration object.
+6. `managedServer.http.healthCheck` optional probe target used by `server check`.
+7. Metadata attribute references (`idAttribute`, `aliasAttribute`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings.
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
-2. unknown keys MUST fail strict decoding.
+2. on-disk catalog readers MUST accept documented legacy aliases (for example `current-ctx`, `base-dir`, `managed-server`, `secret-store`, and `repository.resource-format`) and MUST normalize them before strict decoding.
+3. unknown keys MUST fail strict decoding after legacy-alias normalization.
 
 One-of invariants:
-1. `repository` MUST define exactly one of `git` or `filesystem`.
-2. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders`.
-3. `secretStore` MUST define exactly one of `file` or `vault`.
-4. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
-5. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
-6. `managedServer.http.proxy` MUST define at least one of `httpURL` or `httpsURL` when configured.
-7. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
-8. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
-9. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
-10. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
+1. `config.Context` MUST define at least one of `repository` or `managedServer`.
+2. `repository` MUST define exactly one of `git` or `filesystem` when configured.
+3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders` when `managedServer.http` is configured.
+4. `secretStore` MUST define exactly one of `file` or `vault`.
+5. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
+6. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
+7. `managedServer.http.proxy` MUST define at least one of `httpURL` or `httpsURL` when configured.
+8. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
+9. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
+10. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
+11. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.

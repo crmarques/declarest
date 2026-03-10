@@ -97,7 +97,7 @@ declarest resource template /corporations/acme --payload resource.json
 Useful flags for mutation and payload-driven workflows:
 
 - `--payload <path|->` for file/stdin payloads and inline JSON/YAML or JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) on `resource apply|create|update|save`
-- `--content-type <json|yaml|xml|hcl|ini|properties|text|binary>` for payload decoding overrides
+- `--content-type <json|yaml|xml|hcl|ini|properties|text|txt|binary|mime>` for payload decoding overrides
 - `--accept-type <mime|shortname>` on `resource request <method>` for explicit response media negotiation
 - `--recursive` for collection recursion on supported commands
 - `--force` on `resource apply` to execute update even when compare output has no drift
@@ -178,9 +178,10 @@ Notes:
 declarest secret init
 declarest secret detect /customers/
 declarest secret detect --fix /customers/
-declarest secret store "/corporations/acme:apiToken" "secret-value"
-declarest secret get /corporations/acme
-declarest secret get /corporations/acme apiToken
+declarest secret set /corporations/acme /apiToken secret-value
+declarest secret list /corporations/acme
+declarest secret list /projects --recursive
+declarest secret get /corporations/acme /apiToken
 ```
 
 Use `secret detect --fix` plus `resource save --secret-attributes` for the safest onboarding flow.
@@ -201,6 +202,9 @@ These commands are useful when debugging auth or connectivity independently from
 - Prefer `-o json` or `-o yaml` for automation.
 - `resource list --output text` prints a concise `alias (id)` summary per item using metadata identity mapping when available.
 - `repository tree`, `secret get`, `server get`, `server check`, `completion`, and `context print-template` are text-only outputs.
+- `secret list` behaves like other list commands: `--output text` prints one key per line, while `--output json|yaml` is safer for automation.
+- `secret list <path> --recursive` expands discovery to descendant secret-bearing paths and renders matches as the full relative path from the selected root, for example `/test/secrets/private-key:.`.
+- Explicit non-structured `--content-type` values such as `text`, `txt`, or `text/plain` keep inline payloads literal, so `--payload a=b --content-type txt` is saved as text, not parsed as JSON-style assignment shorthand.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.

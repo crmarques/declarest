@@ -176,13 +176,13 @@ func TestDecodeOptionalMutationPayloadInputPointerAssignmentsRespectStructuredCo
 	}
 }
 
-func TestDecodeOptionalMutationPayloadInputPointerAssignmentsFallbackToJSONForNonStructuredContentType(t *testing.T) {
+func TestDecodeOptionalMutationPayloadInputExplicitTextContentTypeTreatsInlinePayloadAsLiteralText(t *testing.T) {
 	t.Parallel()
 
 	command := &cobra.Command{}
 
 	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
-		Payload:     "/name=test",
+		Payload:     "a=b",
 		ContentType: "text/plain",
 	})
 	if err != nil {
@@ -191,8 +191,60 @@ func TestDecodeOptionalMutationPayloadInputPointerAssignmentsFallbackToJSONForNo
 	if !hasInput {
 		t.Fatal("expected explicit payload input")
 	}
-	if content.Descriptor.PayloadType != resource.PayloadTypeJSON {
-		t.Fatalf("expected json payload type fallback, got %q", content.Descriptor.PayloadType)
+	if content.Descriptor.PayloadType != resource.PayloadTypeText {
+		t.Fatalf("expected text payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if value, ok := content.Value.(string); !ok || value != "a=b" {
+		t.Fatalf("expected literal text payload %q, got %#v", "a=b", content.Value)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputTxtAliasTreatsInlinePayloadAsLiteralText(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload:     "a=b",
+		ContentType: "txt",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeText {
+		t.Fatalf("expected text payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if content.Descriptor.Extension != ".txt" {
+		t.Fatalf("expected .txt extension, got %q", content.Descriptor.Extension)
+	}
+	if value, ok := content.Value.(string); !ok || value != "a=b" {
+		t.Fatalf("expected literal text payload %q, got %#v", "a=b", content.Value)
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputExplicitTextMediaTypeTreatsAssignmentsAsLiteralText(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{
+		Payload:     "a=b",
+		ContentType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	if content.Descriptor.PayloadType != resource.PayloadTypeText {
+		t.Fatalf("expected text payload type, got %q", content.Descriptor.PayloadType)
+	}
+	if value, ok := content.Value.(string); !ok || value != "a=b" {
+		t.Fatalf("expected literal text payload %q, got %#v", "a=b", content.Value)
 	}
 }
 

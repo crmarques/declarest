@@ -221,7 +221,52 @@ func (s *VaultSecretService) List(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	endpoint := s.listEndpoint("")
+	pendingPrefixes := []string{""}
+	seenPrefixes := map[string]struct{}{"": {}}
+	seenKeys := map[string]struct{}{}
+	keys := []string{}
+
+	for len(pendingPrefixes) > 0 {
+		prefix := pendingPrefixes[len(pendingPrefixes)-1]
+		pendingPrefixes = pendingPrefixes[:len(pendingPrefixes)-1]
+
+		entries, err := s.listEntries(ctx, prefix)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if strings.HasSuffix(entry, "/") {
+				childPrefix, err := normalizeVaultPath(joinVaultListPath(prefix, strings.TrimSuffix(entry, "/")), false)
+				if err != nil {
+					return nil, internalError("vault list response payload is invalid", err)
+				}
+				if _, seen := seenPrefixes[childPrefix]; seen {
+					continue
+				}
+				seenPrefixes[childPrefix] = struct{}{}
+				pendingPrefixes = append(pendingPrefixes, childPrefix)
+				continue
+			}
+
+			key, err := normalizeSecretKey(joinVaultListPath(prefix, entry))
+			if err != nil {
+				return nil, internalError("vault list response payload is invalid", err)
+			}
+			if _, seen := seenKeys[key]; seen {
+				continue
+			}
+			seenKeys[key] = struct{}{}
+			keys = append(keys, key)
+		}
+	}
+
+	sort.Strings(keys)
+
+	return keys, nil
+}
+
+func (s *VaultSecretService) listEntries(ctx context.Context, key string) ([]string, error) {
+	endpoint := s.listEndpoint(key)
 	response, status, err := s.request(ctx, "LIST", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -250,20 +295,45 @@ func (s *VaultSecretService) List(ctx context.Context) ([]string, error) {
 		return nil, internalError("vault list response payload is invalid", nil)
 	}
 
-	keys := make([]string, 0, len(typedKeys))
+	entries := make([]string, 0, len(typedKeys))
 	for _, item := range typedKeys {
-		key, ok := item.(string)
+		entry, ok := item.(string)
 		if !ok {
 			return nil, internalError("vault list response payload is invalid", nil)
 		}
-		key = strings.TrimSpace(strings.TrimSuffix(key, "/"))
-		if key != "" {
-			keys = append(keys, key)
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
 		}
+		if strings.HasSuffix(entry, "/") {
+			entry = strings.TrimSpace(strings.TrimSuffix(entry, "/"))
+			if entry == "" {
+				continue
+			}
+			entries = append(entries, entry+"/")
+			continue
+		}
+		entry = strings.Trim(entry, "/")
+		if entry == "" {
+			continue
+		}
+		entries = append(entries, entry)
 	}
-	sort.Strings(keys)
 
-	return keys, nil
+	return entries, nil
+}
+
+func joinVaultListPath(prefix string, entry string) string {
+	trimmedPrefix := strings.Trim(prefix, "/")
+	trimmedEntry := strings.Trim(entry, "/")
+	switch {
+	case trimmedPrefix == "":
+		return trimmedEntry
+	case trimmedEntry == "":
+		return trimmedPrefix
+	default:
+		return trimmedPrefix + "/" + trimmedEntry
+	}
 }
 
 func (s *VaultSecretService) MaskPayload(ctx context.Context, value resource.Value) (resource.Value, error) {

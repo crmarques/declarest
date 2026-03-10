@@ -183,6 +183,46 @@ currentContext: remote-only
 	}
 }
 
+func TestNewSessionAllowsLegacyRepositoryOnlyContextWithoutManagedServer(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	repoDir := filepath.Join(tempDir, "repo")
+	contextCatalogPath := filepath.Join(tempDir, "contexts.yaml")
+	contextCatalog := []byte(`
+contexts:
+  - name: local-only
+    repository:
+      resource-format: yaml
+      filesystem:
+        base-dir: ` + repoDir + `
+current-ctx: local-only
+`)
+	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
+		t.Fatalf("failed to write catalog: %v", err)
+	}
+
+	session, err := NewSession(
+		BootstrapConfig{ContextCatalogPath: contextCatalogPath},
+		config.ContextSelection{Name: "local-only"},
+	)
+	if err != nil {
+		t.Fatalf("expected repository-only legacy context to bootstrap, got error: %v", err)
+	}
+	if session.Orchestrator == nil {
+		t.Fatal("expected orchestrator")
+	}
+	if session.Services.RepositoryStore() == nil {
+		t.Fatal("expected repository store to be configured")
+	}
+	if session.Services.ManagedServerClient() != nil {
+		t.Fatalf("expected nil managed server client, got %T", session.Services.ManagedServerClient())
+	}
+	if session.Services.MetadataService() == nil {
+		t.Fatal("expected metadata service to default from repository baseDir")
+	}
+}
+
 func TestNewSessionSupportsMetadataBundle(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

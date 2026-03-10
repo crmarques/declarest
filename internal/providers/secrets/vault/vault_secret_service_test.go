@@ -120,6 +120,51 @@ func TestVaultSecretServiceUserPassAuth(t *testing.T) {
 	}
 }
 
+func TestVaultSecretServiceListRecursesNestedPaths(t *testing.T) {
+	t.Parallel()
+
+	fake := newFakeVault()
+	server := httptest.NewServer(fake.handler())
+	defer server.Close()
+
+	service, err := NewVaultSecretService(config.VaultSecretStore{
+		Address:   server.URL,
+		KVVersion: 2,
+		Auth:      &config.VaultAuth{Token: fake.clientToken},
+	})
+	if err != nil {
+		t.Fatalf("NewVaultSecretService returned error: %v", err)
+	}
+
+	if err := service.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	for key, value := range map[string]string{
+		"apiToken":                            "raw-token",
+		"customers/acme:/apiToken":            "token-123",
+		"projects/test/secrets/private-key:.": "private-key",
+	} {
+		if err := service.Store(context.Background(), key, value); err != nil {
+			t.Fatalf("Store(%q) returned error: %v", key, err)
+		}
+	}
+
+	keys, err := service.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	want := []string{
+		"apiToken",
+		"customers/acme:/apiToken",
+		"projects/test/secrets/private-key:.",
+	}
+	if !reflect.DeepEqual(keys, want) {
+		t.Fatalf("expected %#v, got %#v", want, keys)
+	}
+}
+
 func TestVaultSecretServiceValidationAndAuth(t *testing.T) {
 	t.Parallel()
 
@@ -210,8 +255,9 @@ func (f *fakeVaultServer) handler() http.Handler {
 			return
 		}
 
-		if path == "v1/secret/metadata" {
-			f.handleList(writer, request)
+		if path == "v1/secret/metadata" || strings.HasPrefix(path, "v1/secret/metadata/") {
+			prefix := strings.Trim(strings.TrimPrefix(path, "v1/secret/metadata"), "/")
+			f.handleList(writer, request, prefix)
 			return
 		}
 
@@ -309,7 +355,7 @@ func (f *fakeVaultServer) handleSecret(writer http.ResponseWriter, request *http
 	}
 }
 
-func (f *fakeVaultServer) handleList(writer http.ResponseWriter, request *http.Request) {
+func (f *fakeVaultServer) handleList(writer http.ResponseWriter, request *http.Request, prefix string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -320,14 +366,21 @@ func (f *fakeVaultServer) handleList(writer http.ResponseWriter, request *http.R
 		return
 	}
 
-	keys := make([]string, 0, len(f.secrets))
-	for key := range f.secrets {
-		keys = append(keys, key)
+	entries := make([]string, 0, len(f.secrets))
+	for key := range f.listEntries(prefix) {
+		entries = append(entries, key)
 	}
-	sort.Strings(keys)
+	sort.Strings(entries)
 
-	anyKeys := make([]any, len(keys))
-	for idx, key := range keys {
+	if prefix != "" && len(entries) == 0 {
+		writeJSON(writer, http.StatusNotFound, map[string]any{
+			"errors": []string{"not found"},
+		})
+		return
+	}
+
+	anyKeys := make([]any, len(entries))
+	for idx, key := range entries {
 		anyKeys[idx] = key
 	}
 
@@ -336,6 +389,38 @@ func (f *fakeVaultServer) handleList(writer http.ResponseWriter, request *http.R
 			"keys": anyKeys,
 		},
 	})
+}
+
+func (f *fakeVaultServer) listEntries(prefix string) map[string]struct{} {
+	entries := map[string]struct{}{}
+	normalizedPrefix := strings.Trim(prefix, "/")
+
+	for key := range f.secrets {
+		normalizedKey := strings.Trim(key, "/")
+		remainder := normalizedKey
+		if normalizedPrefix != "" {
+			prefixWithSeparator := normalizedPrefix + "/"
+			if !strings.HasPrefix(normalizedKey, prefixWithSeparator) {
+				continue
+			}
+			remainder = strings.TrimPrefix(normalizedKey, prefixWithSeparator)
+		}
+		if remainder == "" {
+			continue
+		}
+
+		segment, rest, hasChild := strings.Cut(remainder, "/")
+		if segment == "" {
+			continue
+		}
+		if hasChild && rest != "" {
+			entries[segment+"/"] = struct{}{}
+			continue
+		}
+		entries[segment] = struct{}{}
+	}
+
+	return entries
 }
 
 func writeJSON(writer http.ResponseWriter, status int, payload any) {

@@ -54,6 +54,9 @@ func validateConfig(cfg config.Context) error {
 	if cfg.Name == "" {
 		return faults.NewValidationError("context name must not be empty", nil)
 	}
+	if cfg.Repository.Git == nil && cfg.Repository.Filesystem == nil && cfg.ManagedServer == nil {
+		return faults.NewValidationError("context must define at least one of repository or managedServer", nil)
+	}
 
 	if err := validateRepository(cfg.Repository); err != nil {
 		return err
@@ -269,7 +272,7 @@ func validateRepository(repository config.Repository) error {
 
 func validateManagedServer(resourceServer *config.ManagedServer) error {
 	if resourceServer == nil {
-		return faults.NewValidationError("managedServer is required", nil)
+		return nil
 	}
 	if resourceServer.HTTP == nil {
 		return faults.NewValidationError("managedServer must define http", nil)

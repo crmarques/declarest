@@ -24,7 +24,12 @@ func decodeCatalogFile(path string) (config.ContextCatalog, error) {
 func decodeCatalog(data []byte) (config.ContextCatalog, error) {
 	var contextCatalog config.ContextCatalog
 
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	normalizedData, err := normalizeLegacyCatalogYAML(data)
+	if err != nil {
+		return config.ContextCatalog{}, faults.NewValidationError("invalid context catalog yaml", err)
+	}
+
+	decoder := yaml.NewDecoder(bytes.NewReader(normalizedData))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(&contextCatalog); err != nil {
 		return config.ContextCatalog{}, faults.NewValidationError("invalid context catalog yaml", err)

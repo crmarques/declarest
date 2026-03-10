@@ -10,7 +10,7 @@ case_run() {
   case_run_declarest secret init
   case_expect_success
 
-  case_run_declarest secret store apiToken super-secret
+  case_run_declarest secret set apiToken super-secret
   case_expect_success
 
   case_write_json "${payload_file}" '{"apiToken": "super-secret", "name": "acme"}'

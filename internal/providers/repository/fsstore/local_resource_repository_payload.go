@@ -103,7 +103,7 @@ func (r *LocalResourceRepository) resolvePayloadTarget(
 }
 
 func desiredPayloadDescriptor(content resource.Content, existing *payloadFileInfo) resource.PayloadDescriptor {
-	if contentDescriptorExplicit(content.Descriptor) {
+	if resource.IsPayloadDescriptorExplicit(content.Descriptor) {
 		return resource.NormalizePayloadDescriptor(content.Descriptor)
 	}
 	if existing != nil {
@@ -113,10 +113,4 @@ func desiredPayloadDescriptor(content resource.Content, existing *payloadFileInf
 		return resource.DefaultOctetStreamDescriptor()
 	}
 	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-}
-
-func contentDescriptorExplicit(descriptor resource.PayloadDescriptor) bool {
-	return strings.TrimSpace(descriptor.PayloadType) != "" ||
-		strings.TrimSpace(descriptor.MediaType) != "" ||
-		strings.TrimSpace(descriptor.Extension) != ""
 }

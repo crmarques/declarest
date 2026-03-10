@@ -69,9 +69,10 @@ cat payload.json | declarest secret detect --fix --path /corporations/acme
 
 ```bash
 declarest secret init
-declarest secret store "/corporations/acme:apiToken" "super-secret"
-declarest secret get /corporations/acme
-declarest secret get /corporations/acme apiToken
+declarest secret set /corporations/acme /apiToken super-secret
+declarest secret list /corporations/acme
+declarest secret list /projects --recursive
+declarest secret get /corporations/acme /apiToken
 ```
 
 ## Backends

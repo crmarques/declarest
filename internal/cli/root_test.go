@@ -52,6 +52,9 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"repository tree",
 		"repository history",
 		"secret",
+		"secret set",
+		"secret get",
+		"secret list",
 		"secret resolve",
 		"completion",
 		"completion bash",
@@ -79,6 +82,7 @@ func TestLegacyCommandNamesRemoved(t *testing.T) {
 		"config load-resolved-config",
 		"metadata resolve-for-path",
 		"metadata render-operation-spec",
+		"repo",
 		"repository sync-status",
 		"repo sync-status",
 		"secret mask-payload",
@@ -4008,7 +4012,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("infer_recursive_is_not_implemented_and_does_not_persist", func(t *testing.T) {
+	t.Run("infer_rejects_removed_recursive_flag", func(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
@@ -4033,7 +4037,9 @@ func TestMetadataPathCommands(t *testing.T) {
 			"--recursive",
 			"--apply",
 		)
-		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "unknown flag: --recursive") {
+			t.Fatalf("expected unknown --recursive flag error, got %v", err)
+		}
 
 		if len(metadataService.items) != initialCount {
 			t.Fatalf("expected recursive infer to avoid persistence, metadata items=%#v", metadataService.items)
@@ -4047,12 +4053,12 @@ func TestMetadataPathCommands(t *testing.T) {
 func TestSecretCommands(t *testing.T) {
 	t.Parallel()
 
-	t.Run("store_get_and_delete_roundtrip", func(t *testing.T) {
+	t.Run("set_get_and_delete_roundtrip", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		if _, err := executeForTest(deps, "", "secret", "store", "apiToken", "token-123"); err != nil {
-			t.Fatalf("store returned error: %v", err)
+		if _, err := executeForTest(deps, "", "secret", "set", "apiToken", "token-123"); err != nil {
+			t.Fatalf("set returned error: %v", err)
 		}
 
 		output, err := executeForTest(deps, "", "secret", "get", "apiToken")
@@ -4071,7 +4077,7 @@ func TestSecretCommands(t *testing.T) {
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 
-	t.Run("get_accepts_path_key_input_formats_and_outputs_plaintext", func(t *testing.T) {
+	t.Run("list_accepts_path_input_formats_and_outputs_keys_only", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -4085,8 +4091,8 @@ func TestSecretCommands(t *testing.T) {
 			{key: "/customers/beta:/apiToken", value: "token-b"},
 		}
 		for _, item := range seedSecrets {
-			if _, err := executeForTest(deps, "", "secret", "store", item.key, item.value); err != nil {
-				t.Fatalf("store %q returned error: %v", item.key, err)
+			if _, err := executeForTest(deps, "", "secret", "set", item.key, item.value); err != nil {
+				t.Fatalf("set %q returned error: %v", item.key, err)
 			}
 		}
 
@@ -4096,19 +4102,179 @@ func TestSecretCommands(t *testing.T) {
 			expect string
 		}{
 			{
-				name:   "path_only_lists_all_for_path",
-				args:   []string{"secret", "get", "/customers/acme"},
-				expect: "/apiToken=token-123\n/password=pw-123\n/quoted=he said \"hi\"\n",
+				name:   "path_positional",
+				args:   []string{"--output", "text", "secret", "list", "/customers/acme"},
+				expect: "/apiToken\n/password\n/quoted\n",
+			},
+			{
+				name:   "path_flag",
+				args:   []string{"--output", "text", "secret", "list", "--path", "/customers/acme"},
+				expect: "/apiToken\n/password\n/quoted\n",
+			},
+		}
+
+		for _, testCase := range tests {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				output, err := executeForTest(deps, "", testCase.args...)
+				if err != nil {
+					t.Fatalf("secret list returned error: %v", err)
+				}
+				if output != testCase.expect {
+					t.Fatalf("unexpected output; expected %q, got %q", testCase.expect, output)
+				}
+			})
+		}
+	})
+
+	t.Run("list_matches_provider_normalized_keys", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		secretProvider := deps.Services.SecretProvider().(*testSecretProvider)
+		secretProvider.values["customers/acme:/apiToken"] = "token-123"
+		secretProvider.values["customers/acme:/password"] = "pw-123"
+		secretProvider.values["apiToken"] = "raw-token"
+
+		output, err := executeForTest(deps, "", "--output", "text", "secret", "list", "/customers/acme")
+		if err != nil {
+			t.Fatalf("list returned error: %v", err)
+		}
+		if output != "/apiToken\n/password\n" {
+			t.Fatalf("expected path-relative keys from normalized provider storage, got %q", output)
+		}
+	})
+
+	t.Run("list_recursive_includes_descendant_secret_paths", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name   string
+			args   []string
+			expect string
+		}{
+			{
+				name:   "path_positional",
+				args:   []string{"--output", "text", "secret", "list", "/projects", "--recursive"},
+				expect: "/test/secrets/api:/clientSecret\n/test/secrets/private-key:.\n",
+			},
+			{
+				name:   "path_flag",
+				args:   []string{"--output", "text", "secret", "list", "--path", "/projects", "--recursive"},
+				expect: "/test/secrets/api:/clientSecret\n/test/secrets/private-key:.\n",
+			},
+		}
+
+		for _, testCase := range tests {
+			testCase := testCase
+			t.Run(testCase.name, func(t *testing.T) {
+				deps := testDeps()
+				seedSecrets := []struct {
+					key   string
+					value string
+				}{
+					{key: "/projects/test/secrets/api:/clientSecret", value: "client-secret"},
+					{key: "/projects/test/secrets/private-key:.", value: "private-key"},
+					{key: "/other:/ignored", value: "ignored"},
+				}
+				for _, item := range seedSecrets {
+					if _, err := executeForTest(deps, "", "secret", "set", item.key, item.value); err != nil {
+						t.Fatalf("set %q returned error: %v", item.key, err)
+					}
+				}
+
+				output, err := executeForTest(deps, "", testCase.args...)
+				if err != nil {
+					t.Fatalf("secret list returned error: %v", err)
+				}
+				if output != testCase.expect {
+					t.Fatalf("unexpected recursive output; expected %q, got %q", testCase.expect, output)
+				}
+			})
+		}
+	})
+
+	t.Run("list_whole_resource_secret_path_returns_root_key", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "set", "/projects/test/secrets/private-key:.", "private-key"); err != nil {
+			t.Fatalf("set returned error: %v", err)
+		}
+
+		output, err := executeForTest(deps, "", "--output", "text", "secret", "list", "/projects/test/secrets/private-key")
+		if err != nil {
+			t.Fatalf("list returned error: %v", err)
+		}
+		if output != ".\n" {
+			t.Fatalf("expected whole-resource root key, got %q", output)
+		}
+	})
+
+	t.Run("list_supports_structured_output", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		for _, item := range []struct {
+			key   string
+			value string
+		}{
+			{key: "/customers/acme:/apiToken", value: "token-123"},
+			{key: "apiToken", value: "raw-token"},
+		} {
+			if _, err := executeForTest(deps, "", "secret", "set", item.key, item.value); err != nil {
+				t.Fatalf("set %q returned error: %v", item.key, err)
+			}
+		}
+
+		output, err := executeForTest(deps, "", "--output", "json", "secret", "list")
+		if err != nil {
+			t.Fatalf("list returned error: %v", err)
+		}
+
+		var items []string
+		if err := json.Unmarshal([]byte(output), &items); err != nil {
+			t.Fatalf("failed to decode json output: %v", err)
+		}
+		want := []string{"/customers/acme:/apiToken", "apiToken"}
+		if !reflect.DeepEqual(items, want) {
+			t.Fatalf("unexpected structured output; expected %#v, got %#v", want, items)
+		}
+	})
+
+	t.Run("get_accepts_path_key_input_formats_and_outputs_plaintext", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		seedSecrets := []struct {
+			key   string
+			value string
+		}{
+			{key: "/customers/acme:/apiToken", value: "token-123"},
+			{key: "/customers/acme:/password", value: "pw-123"},
+			{key: "/customers/acme:/quoted", value: `he said "hi"`},
+			{key: "apiToken", value: "raw-token"},
+		}
+		for _, item := range seedSecrets {
+			if _, err := executeForTest(deps, "", "secret", "set", item.key, item.value); err != nil {
+				t.Fatalf("set %q returned error: %v", item.key, err)
+			}
+		}
+
+		tests := []struct {
+			name   string
+			args   []string
+			expect string
+		}{
+			{
+				name:   "raw_key",
+				args:   []string{"secret", "get", "apiToken"},
+				expect: "raw-token\n",
 			},
 			{
 				name:   "path_and_key_positional",
 				args:   []string{"secret", "get", "/customers/acme", "/apiToken"},
 				expect: "token-123\n",
-			},
-			{
-				name:   "path_flag_only_lists_all_for_path",
-				args:   []string{"secret", "get", "--path", "/customers/acme"},
-				expect: "/apiToken=token-123\n/password=pw-123\n/quoted=he said \"hi\"\n",
 			},
 			{
 				name:   "path_and_key_flags",
@@ -4119,6 +4285,11 @@ func TestSecretCommands(t *testing.T) {
 				name:   "composite_path_key",
 				args:   []string{"secret", "get", "/customers/acme:/apiToken"},
 				expect: "token-123\n",
+			},
+			{
+				name:   "path_flag_and_positional_key",
+				args:   []string{"secret", "get", "--path", "/customers/acme", "/password"},
+				expect: "pw-123\n",
 			},
 		}
 
@@ -4139,12 +4310,22 @@ func TestSecretCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("get_path_only_guides_to_list", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "secret", "get", "/customers/acme")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "secret list /customers/acme") {
+			t.Fatalf("expected guidance toward secret list, got %v", err)
+		}
+	})
+
 	t.Run("get_path_and_key_preserves_quotes_when_secret_contains_quotes", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:/quoted", `he said "hi"`); err != nil {
-			t.Fatalf("store returned error: %v", err)
+		if _, err := executeForTest(deps, "", "secret", "set", "/customers/acme:/quoted", `he said "hi"`); err != nil {
+			t.Fatalf("set returned error: %v", err)
 		}
 
 		output, err := executeForTest(deps, "", "secret", "get", "/customers/acme", "/quoted")
@@ -4153,6 +4334,23 @@ func TestSecretCommands(t *testing.T) {
 		}
 		if output != "he said \"hi\"\n" {
 			t.Fatalf("expected quoted content preserved in plain text output, got %q", output)
+		}
+	})
+
+	t.Run("get_whole_resource_secret_accepts_root_key", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "set", "/projects/test/secrets/private-key:.", "private-key"); err != nil {
+			t.Fatalf("set returned error: %v", err)
+		}
+
+		output, err := executeForTest(deps, "", "secret", "get", "/projects/test/secrets/private-key", ".")
+		if err != nil {
+			t.Fatalf("get returned error: %v", err)
+		}
+		if output != "private-key\n" {
+			t.Fatalf("expected whole-resource secret value, got %q", output)
 		}
 	})
 
@@ -4167,12 +4365,28 @@ func TestSecretCommands(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		if _, err := executeForTest(deps, "", "secret", "store", "/customers/acme:/apiToken", "token-123"); err != nil {
-			t.Fatalf("store returned error: %v", err)
+		if _, err := executeForTest(deps, "", "secret", "set", "/customers/acme:/apiToken", "token-123"); err != nil {
+			t.Fatalf("set returned error: %v", err)
 		}
 
 		_, err := executeForTest(deps, "", "--output", "json", "secret", "get", "/customers/acme:/apiToken")
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+
+	t.Run("delete_accepts_path_key_input_formats", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		if _, err := executeForTest(deps, "", "secret", "set", "/customers/acme:/apiToken", "token-123"); err != nil {
+			t.Fatalf("set returned error: %v", err)
+		}
+
+		if _, err := executeForTest(deps, "", "secret", "delete", "/customers/acme", "/apiToken"); err != nil {
+			t.Fatalf("delete returned error: %v", err)
+		}
+
+		_, err := executeForTest(deps, "", "secret", "get", "/customers/acme:/apiToken")
+		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 
 	t.Run("mask_and_resolve_payload", func(t *testing.T) {
@@ -5967,7 +6181,7 @@ func TestRootCompletionShowsCanonicalHelpCommand(t *testing.T) {
 	}
 }
 
-func TestRootCompletionExcludesRemovedTopLevelRequestAlias(t *testing.T) {
+func TestRootCompletionExcludesRemovedTopLevelAliases(t *testing.T) {
 	t.Parallel()
 
 	output, err := executeForTest(testDeps(), "", "__complete", "")
@@ -5976,6 +6190,9 @@ func TestRootCompletionExcludesRemovedTopLevelRequestAlias(t *testing.T) {
 	}
 	if strings.Contains(output, "\trequest\t") {
 		t.Fatalf("expected request to remain nested under resource in root completion output, got %q", output)
+	}
+	if strings.Contains(output, "\trepo\t") {
+		t.Fatalf("expected repository alias repo to be absent from root completion output, got %q", output)
 	}
 }
 

@@ -184,29 +184,6 @@ func readAllWithLimit(reader io.Reader, maxBytes int64) ([]byte, error) {
 	return data, nil
 }
 
-func resourceInputPayloadType(contentType string) (string, error) {
-	switch resolveStructuredInputContentType(contentType, "") {
-	case OutputJSON:
-		return resource.PayloadTypeJSON, nil
-	case OutputYAML:
-		return resource.PayloadTypeYAML, nil
-	case resource.PayloadTypeXML:
-		return resource.PayloadTypeXML, nil
-	case resource.PayloadTypeHCL:
-		return resource.PayloadTypeHCL, nil
-	case resource.PayloadTypeINI:
-		return resource.PayloadTypeINI, nil
-	case resource.PayloadTypeProperties:
-		return resource.PayloadTypeProperties, nil
-	case resource.PayloadTypeText:
-		return resource.PayloadTypeText, nil
-	case resource.PayloadTypeBinary, resource.PayloadTypeOctetStream:
-		return resource.PayloadTypeOctetStream, nil
-	default:
-		return "", ValidationError("invalid input content type", nil)
-	}
-}
-
 func resolveStructuredInputContentType(contentType string, sourceName string) string {
 	if normalized, err := normalizeCLIInputContentType(contentType); err == nil {
 		if descriptor, ok := resource.PayloadDescriptorForContentType(normalized); ok {
@@ -223,28 +200,20 @@ func resolveStructuredInputContentType(contentType string, sourceName string) st
 }
 
 func normalizeCLIInputContentType(contentType string) (string, error) {
-	switch strings.TrimSpace(contentType) {
+	trimmed := strings.TrimSpace(contentType)
+	if trimmed == "" {
+		return "", nil
+	}
+	if descriptor, ok := resource.PayloadDescriptorForContentType(trimmed); ok {
+		return descriptor.MediaType, nil
+	}
+
+	switch trimmed {
 	case "":
 		return "", nil
-	case OutputJSON:
-		return "application/json", nil
-	case OutputYAML:
-		return "application/yaml", nil
-	case resource.PayloadTypeXML:
-		return "application/xml", nil
-	case resource.PayloadTypeHCL:
-		return "application/hcl", nil
-	case resource.PayloadTypeINI:
-		return "application/ini", nil
-	case resource.PayloadTypeProperties:
-		return "text/x-java-properties", nil
-	case resource.PayloadTypeText:
-		return "text/plain", nil
-	case resource.PayloadTypeBinary:
-		return "application/octet-stream", nil
 	default:
 		return "", ValidationError(
-			"invalid input content type: use json, yaml, xml, hcl, ini, properties, text, or binary",
+			"invalid input content type: use json, yaml, xml, hcl, ini, properties, text, txt, binary, or a supported media type",
 			nil,
 		)
 	}

@@ -102,16 +102,20 @@ Selected command names:
 14. `repository history`.
 15. `repository tree`.
 16. `resource request`.
-17. `secret mask`.
-18. `secret resolve`.
-19. `secret normalize`.
-20. `secret detect`.
-21. `completion`.
-22. `version`.
-23. `server get base-url`.
-24. `server get token-url`.
-25. `server get access-token`.
-26. `server check`.
+17. `secret set`.
+18. `secret get`.
+19. `secret list`.
+20. `secret delete`.
+21. `secret mask`.
+22. `secret resolve`.
+23. `secret normalize`.
+24. `secret detect`.
+25. `completion`.
+26. `version`.
+27. `server get base-url`.
+28. `server get token-url`.
+29. `server get access-token`.
+30. `server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
@@ -140,11 +144,12 @@ Interactive context commands:
 6. `metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
 7. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
 8. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
-9. `metadata get` MUST return resolved repository metadata overrides merged with default metadata fields by default; `metadata get --overrides-only` MUST return only the resolved/inferred override object without merged defaults.
-10. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
-11. Mutations from stdin MUST validate payload format before side effects.
-12. Option conflicts MUST produce usage errors.
-13. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
+9. `metadata infer` MUST expose only supported inference options and MUST NOT register placeholder flags for unsupported recursive behavior.
+10. `metadata get` MUST return resolved repository metadata overrides merged with default metadata fields by default; `metadata get --overrides-only` MUST return only the resolved/inferred override object without merged defaults.
+11. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
+12. Mutations from stdin MUST validate payload format before side effects.
+13. Option conflicts MUST produce usage errors.
+14. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
 
 ### Resource Get, List, and Delete
 14. `resource get` MUST support `--source <managed-server|repository>`.
@@ -174,16 +179,17 @@ Interactive context commands:
 ### Resource Save
 33. `resource save` without payload input (`--payload` omitted) MUST read the requested path from the remote server and persist the value into the repository, using the same literal-then-list/filter metadata-aware fallback as `resource get`.
 34. `resource save` MUST support optional explicit payload input from `--payload` as file path, `-` (stdin), inline JSON/YAML object text, or JSON Pointer assignments.
-32. `resource save` MUST support `--mode <auto|items|single>`.
-33. `resource save` MUST support `--secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.`, persist only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix, and persist metadata `resource.secret: true`.
-33. `resource save --mode auto` MUST save non-list payloads as one resource and MUST fan out list payloads (`[]` or objects with `items` arrays) into one repository resource per resolved item.
-34. `resource save` MUST support `--exclude <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
-35. `resource save --exclude` MUST fail with `ValidationError` when `--mode single` is selected.
-36. `resource save --secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--mode items`, `--exclude`, `--secret-attributes`, and `--allow-plaintext`.
-37. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resource.secretAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--allow-plaintext` or `--secret-attributes` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
-38. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
-39. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
-40. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
+35. When explicit `--content-type` selects a non-structured payload format (for example `text`, `txt`, or `text/plain`), inline `--payload` for `resource save` MUST be treated as literal content and MUST NOT be parsed as assignment shorthand.
+36. `resource save` MUST support `--mode <auto|items|single>`.
+37. `resource save` MUST support `--secret` to store the entire encoded resource payload in the configured secret store under key `<logical-path>:.`, persist only an exact root `{{secret .}}` placeholder in the repository using the original payload descriptor and file suffix, and persist metadata `resource.secret: true`.
+38. `resource save --mode auto` MUST save non-list payloads as one resource and MUST fan out list payloads (`[]` or objects with `items` arrays) into one repository resource per resolved item.
+39. `resource save` MUST support `--exclude <item[,item...]>` for collection saves, excluding matching collection children from managed-server collection reads and list-payload item saves before repository persistence.
+40. `resource save --exclude` MUST fail with `ValidationError` when `--mode single` is selected.
+41. `resource save --secret` MUST behave as a single-resource save even when the payload is a list and MUST reject `--mode items`, `--exclude`, `--secret-attributes`, and `--allow-plaintext`.
+42. `resource save` MUST automatically store and mask detected plaintext secret candidates declared by metadata `resource.secretAttributes` before repository persistence; non-metadata-declared candidates MUST fail with `ValidationError` unless `--allow-plaintext` or `--secret-attributes` is set; if the logical path already exists in the repository, overriding the persisted resource MUST additionally require `--force`.
+43. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
+44. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
+45. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
 ### Secret Placeholder Resolution
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
@@ -194,16 +200,22 @@ Interactive context commands:
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
 43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
-### Secret Detect and Get
+### Secret Detect and Store Access
 44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
 45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
 46. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
 47. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resource.secretAttributes` for each detected resource path in scope.
 48. `secret detect --secret-attribute <pointer>` MUST apply only that detected JSON Pointer attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
-49. `secret get` MUST accept `secret get <path>`, `secret get <path> <pointer>`, `secret get --path <path>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
-50. `secret get <path>` and `secret get --path <path>` MUST list all path-scoped secrets whose keys start with `<path>:` in deterministic key order.
-51. `secret get` with path+key input (`<path> <pointer>`, `--path`+`--key`, or `<path>:<pointer>`) MUST resolve the canonical secret key as `<path>:<pointer>`.
-52. `secret get --key` MUST require `--path`.
+49. `secret set` MUST accept `secret set <key> <value>`, `secret set <path> <key> <value>`, `secret set --path <path> --key <key> <value>`, and `secret set <path>:<key> <value>`.
+50. `secret get` MUST accept `secret get <path> <pointer>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
+51. `secret delete` MUST accept the same single-secret target grammar as `secret get`.
+52. `secret list` MUST accept optional path selection from positional `<path>` or `--path`, optional `--recursive`, and both path forms MUST treat the path as a logical absolute path.
+53. `secret list` without a path MUST return all stored secret keys in deterministic order.
+54. `secret list <path>` and `secret list --path <path>` without `--recursive` MUST return only keys stored exactly at `<path>`, sorted deterministically, and MUST render those keys relative to the selected path.
+55. `secret list <path> --recursive` and `secret list --path <path> --recursive` MUST return keys stored at `<path>` plus descendant path-scoped keys under `<path>`, sorted deterministically, and MUST render descendant matches as the full relative path from the selected root (for example `/test/secrets/private-key:.`).
+56. `secret list` MUST return keys only and MUST NOT print plaintext secret values.
+57. `secret get <path>` and `secret get --path <path>` without an explicit key MUST fail with `ValidationError` and direct the user to `secret list`.
+58. `secret get --key`, `secret set --key`, and `secret delete --key` MUST require `--path`.
 ### Context Commands
 49. Interactive context flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 50. `context show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
@@ -423,17 +435,19 @@ Interactive context commands:
 31. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
 32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resource.secretAttributes` for `/customers/acme`.
 33. `declarest secret detect /customers/acme --fix --secret-attribute password < payload.json` writes only `password` from detected candidates.
-34. `declarest secret get /customers/acme` prints all path-scoped secrets for `/customers/acme` as plain text lines.
-35. `declarest secret get /customers/acme apiToken` prints only the secret value for `/customers/acme:apiToken`.
-36. `declarest secret get --path /customers/acme --key apiToken` prints only the secret value for `/customers/acme:apiToken`.
-37. `declarest secret get /customers/acme:apiToken` prints only the secret value for `/customers/acme:apiToken`.
-38. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
-39. `declarest metadata infer --path /customers --apply --recursive` writes inferred metadata recursively.
-40. `declarest metadata render /customers/acme get` renders metadata operation spec.
-41. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
-42. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
-36. `declarest repository push --force-push` executes force push with explicit safety acknowledgment.
-37. `declarest repository status` reports local/remote sync status without mutating repository state.
+34. `declarest secret set /customers/acme /apiToken token-123` stores one path-scoped secret under `/customers/acme:/apiToken`.
+35. `declarest secret list /customers/acme` prints only the keys stored for `/customers/acme` in deterministic order.
+36. `declarest secret list /projects --recursive` prints relative descendant entries such as `/test/secrets/private-key:.` when secrets are stored under nested logical paths.
+37. `declarest resource save /projects/test/secrets/pass-word --payload a=b --content-type txt --secret --force` preserves the payload as literal text, stores `a=b` under `/projects/test/secrets/pass-word:.`, and writes `resource.txt` with `{{secret .}}`.
+38. `declarest secret get /customers/acme /apiToken` prints only the secret value for `/customers/acme:/apiToken`.
+39. `declarest secret get --path /customers/acme --key /apiToken` prints only the secret value for `/customers/acme:/apiToken`.
+40. `declarest secret get /customers/acme` fails with `ValidationError` and points the user to `declarest secret list /customers/acme`.
+41. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
+42. `declarest metadata render /customers/acme get` renders metadata operation spec.
+43. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
+44. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
+45. `declarest repository push --force-push` executes force push with explicit safety acknowledgment.
+44. `declarest repository status` reports local/remote sync status without mutating repository state.
 38. `declarest repository status --verbose` prints sync summary plus git-style local worktree details (for example modified or untracked files) in git contexts.
 39. `declarest repository commit -m "manual changes"` commits manual local repository changes in git contexts and reports whether a commit was created.
 40. `declarest repository clean` discards uncommitted tracked and untracked changes in a git repository worktree.

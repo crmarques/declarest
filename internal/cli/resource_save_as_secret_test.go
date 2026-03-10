@@ -111,6 +111,56 @@ func TestResourceSaveSecretStoresWholePayloadInSecretStore(t *testing.T) {
 	}
 }
 
+func TestResourceSaveSecretInlineTxtPayloadPreservesTextDescriptorAndLiteralSecretValue(t *testing.T) {
+	t.Parallel()
+
+	metadataService := newTestMetadata()
+	orchestrator := &testOrchestrator{metadataService: metadataService}
+	deps := newResourceSaveDeps(orchestrator, metadataService)
+
+	_, err := executeForTest(
+		deps,
+		"",
+		"resource",
+		"save",
+		"/projects/test/secrets/pass-word",
+		"--payload",
+		"a=b",
+		"--content-type",
+		"txt",
+		"--secret",
+		"--force",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(orchestrator.saveCalls) != 1 {
+		t.Fatalf("expected one save call, got %d", len(orchestrator.saveCalls))
+	}
+	if orchestrator.saveCalls[0].descriptor.PayloadType != resource.PayloadTypeText {
+		t.Fatalf("expected text payload type, got %q", orchestrator.saveCalls[0].descriptor.PayloadType)
+	}
+	if orchestrator.saveCalls[0].descriptor.Extension != ".txt" {
+		t.Fatalf("expected .txt extension, got %q", orchestrator.saveCalls[0].descriptor.Extension)
+	}
+	placeholder, ok := orchestrator.saveCalls[0].value.(string)
+	if !ok {
+		t.Fatalf("expected text placeholder payload, got %T", orchestrator.saveCalls[0].value)
+	}
+	if placeholder != "{{secret .}}" {
+		t.Fatalf("expected whole-resource text placeholder, got %q", placeholder)
+	}
+
+	secretProvider := deps.Services.(*testServiceAccessor).secrets.(*testSecretProvider)
+	if got := secretProvider.values["/projects/test/secrets/pass-word:."]; got != "a=b" {
+		t.Fatalf("expected literal text secret value, got %#v", secretProvider.values)
+	}
+	if !metadataService.items["/projects/test/secrets/pass-word"].IsWholeResourceSecret() {
+		t.Fatalf("expected whole-resource secret metadata, got %#v", metadataService.items["/projects/test/secrets/pass-word"])
+	}
+}
+
 func TestResourceSaveAutoSecretFromMetadataStoresWholePayloadInSecretStore(t *testing.T) {
 	t.Parallel()
 

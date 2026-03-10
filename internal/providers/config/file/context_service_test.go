@@ -28,6 +28,66 @@ func TestDecodeCatalogSuccess(t *testing.T) {
 	}
 }
 
+func TestDecodeCatalogAcceptsLegacyAliasesAndMigratesResourceFormat(t *testing.T) {
+	t.Parallel()
+
+	contextCatalog, err := decodeCatalog([]byte(`
+contexts:
+  - name: legacy
+    repository:
+      resource-format: yaml
+      filesystem:
+        base-dir: /tmp/repo
+    managed-server:
+      http:
+        base-url: https://example.com/api
+        default-headers:
+          X-Test: value
+        auth:
+          custom-headers:
+            - header: Authorization
+              prefix: Bearer
+              value: secret-token
+    secret-store:
+      file:
+        path: /tmp/secrets.json
+        passphrase-file: /tmp/passphrase.txt
+    metadata:
+      base-dir: /tmp/metadata
+current-ctx: legacy
+default-editor: nano
+`))
+	if err != nil {
+		t.Fatalf("decodeCatalog returned error: %v", err)
+	}
+	if contextCatalog.CurrentContext != "legacy" {
+		t.Fatalf("expected currentContext legacy, got %q", contextCatalog.CurrentContext)
+	}
+	if contextCatalog.DefaultEditor != "nano" {
+		t.Fatalf("expected defaultEditor nano, got %q", contextCatalog.DefaultEditor)
+	}
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
+	}
+
+	legacy := contextCatalog.Contexts[0]
+	if legacy.Repository.Filesystem == nil || legacy.Repository.Filesystem.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected filesystem repository /tmp/repo, got %#v", legacy.Repository.Filesystem)
+	}
+	if legacy.ManagedServer == nil || legacy.ManagedServer.HTTP == nil || legacy.ManagedServer.HTTP.BaseURL != "https://example.com/api" {
+		t.Fatalf("expected managed server baseURL to be normalized, got %#v", legacy.ManagedServer)
+	}
+	if got := legacy.Preferences["preferredFormat"]; got != "yaml" {
+		t.Fatalf("expected preferredFormat yaml from legacy resource-format, got %q", got)
+	}
+	if legacy.SecretStore == nil || legacy.SecretStore.File == nil || legacy.SecretStore.File.PassphraseFile != "/tmp/passphrase.txt" {
+		t.Fatalf("expected secret-store.file.passphrase-file to be normalized, got %#v", legacy.SecretStore)
+	}
+	if legacy.Metadata.BaseDir != "/tmp/metadata" {
+		t.Fatalf("expected metadata baseDir /tmp/metadata, got %q", legacy.Metadata.BaseDir)
+	}
+}
+
 func TestDecodeCatalogGitLocalAutoInitDefaultsTrueWhenOmitted(t *testing.T) {
 	t.Parallel()
 
@@ -183,10 +243,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 			},
 		},
 		{
-			name: "managed_server_missing",
+			name: "repository_and_managed_server_missing",
 			cfg: config.Context{
-				Name:       "dev",
-				Repository: validFilesystemRepository(),
+				Name: "dev",
 			},
 		},
 		{
@@ -289,6 +348,18 @@ func TestValidateConfigAllowsMissingRepositoryWhenManagedServerIsConfigured(t *t
 	})
 	if err != nil {
 		t.Fatalf("expected repository to be optional, got error: %v", err)
+	}
+}
+
+func TestValidateConfigAllowsMissingManagedServerWhenRepositoryIsConfigured(t *testing.T) {
+	t.Parallel()
+
+	err := validateConfig(config.Context{
+		Name:       "local-only",
+		Repository: validFilesystemRepository(),
+	})
+	if err != nil {
+		t.Fatalf("expected managedServer to be optional, got error: %v", err)
 	}
 }
 
@@ -724,6 +795,41 @@ func TestResolveContextWithoutRepositoryResourceFormat(t *testing.T) {
 	}
 	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/repo" {
 		t.Fatalf("expected filesystem repository to resolve, got %#v", resolved.Repository.Filesystem)
+	}
+}
+
+func TestResolveContextAcceptsLegacyRepositoryOnlyCatalog(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	if err := os.WriteFile(path, []byte(`
+contexts:
+  - name: legacy
+    repository:
+      resource-format: yaml
+      filesystem:
+        base-dir: /tmp/repo
+current-ctx: legacy
+`), 0o600); err != nil {
+		t.Fatalf("failed to write test contextCatalog: %v", err)
+	}
+
+	contextService := NewService(path)
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "legacy"})
+	if err != nil {
+		t.Fatalf("ResolveContext returned error: %v", err)
+	}
+	if resolved.ManagedServer != nil {
+		t.Fatalf("expected managedServer to remain unset for repository-only context, got %#v", resolved.ManagedServer)
+	}
+	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected filesystem repository /tmp/repo, got %#v", resolved.Repository.Filesystem)
+	}
+	if resolved.Metadata.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected metadata baseDir default /tmp/repo, got %q", resolved.Metadata.BaseDir)
+	}
+	if got := resolved.Preferences["preferredFormat"]; got != "yaml" {
+		t.Fatalf("expected preferredFormat yaml, got %q", got)
 	}
 }
 

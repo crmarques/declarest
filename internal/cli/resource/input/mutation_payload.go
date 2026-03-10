@@ -37,24 +37,30 @@ func DecodeOptionalMutationPayloadInput(
 		return resource.Content{}, false, cliutil.ValidationError("binary payload input requires --payload <path|-> or stdin", nil)
 	}
 
-	if objectValue, err := cliutil.ParsePointerAssignmentsObject(payloadArg); err == nil {
-		payloadType := assignmentPayloadType(flags.ContentType)
-		return resource.Content{
-			Value:      objectValue,
-			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
-		}, true, nil
+	structuredAssignmentsAllowed, err := allowsStructuredAssignmentInput(flags.ContentType)
+	if err != nil {
+		return resource.Content{}, false, err
 	}
-
-	if cliutil.IsDotNotationAssignment(payloadArg) {
-		objectValue, err := cliutil.ParseDotNotationAssignmentsObject(payloadArg)
-		if err != nil {
-			return resource.Content{}, false, err
+	if structuredAssignmentsAllowed {
+		if objectValue, err := cliutil.ParsePointerAssignmentsObject(payloadArg); err == nil {
+			payloadType := assignmentPayloadType(flags.ContentType)
+			return resource.Content{
+				Value:      objectValue,
+				Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
+			}, true, nil
 		}
-		payloadType := assignmentPayloadType(flags.ContentType)
-		return resource.Content{
-			Value:      objectValue,
-			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
-		}, true, nil
+
+		if cliutil.IsDotNotationAssignment(payloadArg) {
+			objectValue, err := cliutil.ParseDotNotationAssignmentsObject(payloadArg)
+			if err != nil {
+				return resource.Content{}, false, err
+			}
+			payloadType := assignmentPayloadType(flags.ContentType)
+			return resource.Content{
+				Value:      objectValue,
+				Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
+			}, true, nil
+		}
 	}
 
 	if payloadArgLooksLikeFilePath(payloadArg) {
@@ -103,17 +109,34 @@ func payloadArgLooksLikeFilePath(value string) bool {
 
 // assignmentPayloadType returns the payload type to use for key=value
 // assignment payloads based on the --content-type flag. When no content type is
-// specified the default is JSON.
+// specified the default is JSON. Callers must validate the content type with
+// allowsStructuredAssignmentInput before calling this function.
 func assignmentPayloadType(contentType string) string {
 	trimmed := strings.TrimSpace(contentType)
 	if trimmed == "" {
 		return resource.PayloadTypeJSON
 	}
 	descriptor, ok := resource.PayloadDescriptorForContentType(trimmed)
-	if !ok || !resource.IsStructuredPayloadType(descriptor.PayloadType) {
+	if !ok {
 		return resource.PayloadTypeJSON
 	}
 	return descriptor.PayloadType
+}
+
+func allowsStructuredAssignmentInput(contentType string) (bool, error) {
+	trimmed := strings.TrimSpace(contentType)
+	if trimmed == "" {
+		return true, nil
+	}
+
+	descriptor, ok := resource.PayloadDescriptorForContentType(trimmed)
+	if !ok {
+		return false, cliutil.ValidationError(
+			"invalid input content type: use json, yaml, xml, hcl, ini, properties, text, txt, binary, or a supported media type",
+			nil,
+		)
+	}
+	return resource.IsStructuredPayloadType(descriptor.PayloadType), nil
 }
 
 func mutationPayloadAllowsInlineLiteral(contentType string, payloadArg string) bool {

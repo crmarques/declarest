@@ -50,7 +50,7 @@ Acceptance contracts:
 7. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
 
 ### Context and Config
-8. Context config: strict decode, one-of validation, overrides precedence, and missing-catalog behavior.
+8. Context config: strict decode after legacy-alias normalization, one-of validation (including repository-only and remote-only contexts), legacy `repository.resource-format` migration to `preferences.preferredFormat`, overrides precedence, and missing-catalog behavior.
 9. Context defaults: omitted `repository.git.remote.autoSync` enables automatic push behavior, and omitted `managedServer.http.healthCheck` probes the normalized `managedServer.http.baseURL`.
 
 ### Metadata and Bundles
@@ -113,7 +113,7 @@ Acceptance contracts:
 42. Context add input contract: `context add` accepts context name from positional arg or global `--context`, decodes JSON/YAML from `--content-type` or payload file extension, defaults extension-less input to JSON, skips interactive name prompt when provided, and returns `ValidationError` when both names differ.
 43. Context add interactive schema coverage: wizard prompts require managed-server capture, allow optional-section skipping for optional blocks, support full context attribute capture across repository/managed-server/secret-store/preference blocks, and enforce one-of prompt branching so only the selected auth/key-source/provider branch is collected.
 44. Context template output contract: `context print-template` emits a stable commented YAML template containing all supported context options, explicitly documents mutually-exclusive sections, accepts no positional args, and runs without active-context resolution.
-45. Context validation contract: all context-catalog mutation and resolve flows fail with `ValidationError` when `managed-server` is missing, `managedServer.http.proxy` rejects missing proxy URLs or incomplete auth credentials, interactive `context add` always prompts managed-server configuration, and `context edit` rejects invalid edited catalog/context YAML without persisting partial changes.
+45. Context validation contract: context-catalog mutation and resolve flows fail with `ValidationError` when both `repository` and `managedServer` are missing, preserve repository-only and remote-only contexts as valid shapes, normalize documented legacy alias keys before strict decode, map legacy `repository.resource-format` to `preferences.preferredFormat`, reject incomplete `managedServer.http.proxy` values, interactive `context add` still prompts managed-server configuration, and `context edit` rejects invalid edited catalog/context YAML without persisting partial changes.
 
 ### Repository CLI
 46. Repository command repository-type awareness: `repository push` and `repository commit` fail fast with `ValidationError` on filesystem contexts, `repository status` default text output differs by repository type while preserving stable structured (`json|yaml`) sync fields, `repository status --verbose` emits deterministic git-worktree details for git contexts, and `repository tree` returns a deterministic local directory-only tree view.
@@ -121,7 +121,7 @@ Acceptance contracts:
 48. Repository clean contract: `repository clean` invokes repository cleanup, removes tracked and untracked uncommitted changes in git repositories, and succeeds as a no-op for filesystem repositories.
 
 ### Metadata CLI
-49. Metadata selector-path contract: `metadata infer|render|get` accept intermediary selector paths (for example `/admin/realms/_/clients/`), `metadata render` defaults operation by target kind and retries `list` when defaulted `get` is missing a path, infer uses OpenAPI hints when available (including fallback placeholder normalization for non-template-safe OpenAPI parameter names), structured metadata output omits nil directive fields, and infer output omits directives equal to deterministic fallback defaults.
+49. Metadata selector-path contract: `metadata infer|render|get` accept intermediary selector paths (for example `/admin/realms/_/clients/`), `metadata render` defaults operation by target kind and retries `list` when defaulted `get` is missing a path, infer uses OpenAPI hints when available (including fallback placeholder normalization for non-template-safe OpenAPI parameter names), `metadata infer` exposes only supported flags (no hidden recursive mode), structured metadata output omits nil directive fields, and infer output omits directives equal to deterministic fallback defaults.
 
 ### Secret Output
 50. Resource get secret-output contract: `resource get` redacts metadata-declared secret attributes to `{{secret .}}` for `--source repository` and `--source managed-server` by default, and `--show-secrets` restores plaintext output for those attributes.
@@ -136,7 +136,8 @@ Acceptance contracts:
 55. Metadata infer apply persistence contract: `metadata infer --apply` persists compacted metadata only (no default-equivalent directives), matching the command output contract, and JSON output/persisted JSON metadata end with one trailing newline.
 
 ### Secret CLI
-56. Secret get CLI contract: `secret get` accepts path/key positional and flag variants, path-only reads return deterministic `<key>=<value>` text lines, and single-secret reads print raw plaintext values without JSON quoting.
+56. Secret CLI contract: `secret set|get|delete` accept raw-key, path+key, and composite `<path>:<key>` target forms; `secret list [path]` returns deterministic key-only output (with structured output support for automation); `secret list <path> --recursive` includes descendant path-scoped secret entries rendered as the full relative path from `<path>` (including whole-resource `:.` keys); `secret get <path>` without a key fails with `ValidationError` that points users to `secret list`; and single-secret reads print raw plaintext values without JSON quoting.
+57. Inline text payload contract: explicit non-structured `--content-type` values such as `text`, `txt`, or `text/plain` keep inline mutation payloads literal instead of parsing `key=value` or `/pointer=value` shorthand, and whole-resource `resource save --secret` preserves that text payload under `<logical-path>:.` while writing `resource.txt` placeholders.
 
 ### Remote Read Fallback
 57. Remote collection `NotFound` fallback: `resource get`/`resource save` remote reads treat `404` as an empty list only when collection intent is confirmed by repository structure hints or OpenAPI inference and the collection path is not a misclassified concrete resource path; nested collection reads MUST preserve `NotFound` when the parent resource is also `NotFound`; single-resource paths still use metadata alias/id fallback and preserve `NotFound` when no match exists.

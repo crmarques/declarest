@@ -16,10 +16,9 @@ import (
 
 func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
-		Use:     "repository",
-		Aliases: []string{"repo"},
-		Short:   "Manage local repository state",
-		Args:    cobra.NoArgs,
+		Use:   "repository",
+		Short: "Manage local repository state",
+		Args:  cobra.NoArgs,
 	}
 
 	command.AddCommand(
