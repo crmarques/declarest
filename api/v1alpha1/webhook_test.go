@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestWebhookValidationResourceRepositoryCreate(t *testing.T) {
@@ -92,4 +93,105 @@ func TestWebhookValidationManagedServerCreateRejectsInvalidSpec(t *testing.T) {
 	if _, err := v.ValidateCreate(context.Background(), server.DeepCopy()); err == nil {
 		t.Fatal("ValidateCreate() expected validation error, got nil")
 	}
+}
+
+func TestWebhookValidationAcceptsEnvPlaceholders(t *testing.T) {
+	t.Setenv("DECLAREST_WEBHOOK_REPO_URL", "https://example.com/org/runtime.git")
+	t.Setenv("DECLAREST_WEBHOOK_SERVER_URL", "https://runtime.example.com/api")
+	t.Setenv("DECLAREST_WEBHOOK_OPENAPI_URL", "https://runtime.example.com/openapi.json")
+	t.Setenv("DECLAREST_WEBHOOK_VAULT_URL", "https://vault.runtime.example.com")
+	t.Setenv("DECLAREST_WEBHOOK_SYNC_PATH", "/customers/runtime")
+
+	repoValidator := &resourceRepositoryValidator{}
+	if _, err := repoValidator.ValidateCreate(context.Background(), &ResourceRepository{
+		Spec: ResourceRepositorySpec{
+			Type:         ResourceRepositoryTypeGit,
+			PollInterval: metav1.Duration{Duration: 30 * time.Second},
+			Git: &GitRepositorySpec{
+				URL:    "${DECLAREST_WEBHOOK_REPO_URL}",
+				Branch: "main",
+				Auth: ResourceRepositoryAuth{
+					TokenRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
+						Key:                  "token",
+					},
+				},
+			},
+			Storage: StorageSpec{
+				ExistingPVC: &corev1.LocalObjectReference{Name: "repo-pvc"},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("resource repository ValidateCreate() unexpected error: %v", err)
+	}
+
+	serverValidator := &managedServerValidator{}
+	if _, err := serverValidator.ValidateCreate(context.Background(), &ManagedServer{
+		Spec: ManagedServerSpec{
+			HTTP: ManagedServerHTTP{
+				BaseURL: "${DECLAREST_WEBHOOK_SERVER_URL}",
+				Auth: ManagedServerAuth{
+					OAuth2: &ManagedServerOAuth2Auth{
+						TokenURL:  "${DECLAREST_WEBHOOK_OPENAPI_URL}",
+						GrantType: "client_credentials",
+						ClientIDRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "oauth"},
+							Key:                  "client-id",
+						},
+						ClientSecretRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "oauth"},
+							Key:                  "client-secret",
+						},
+					},
+				},
+			},
+			OpenAPI: DeclaRESTExternalArtifact{URL: "${DECLAREST_WEBHOOK_OPENAPI_URL}"},
+		},
+	}); err != nil {
+		t.Fatalf("managed server ValidateCreate() unexpected error: %v", err)
+	}
+
+	secretStoreValidator := &secretStoreValidator{}
+	if _, err := secretStoreValidator.ValidateCreate(context.Background(), &SecretStore{
+		Spec: SecretStoreSpec{
+			Vault: &SecretStoreVaultSpec{
+				Address: "${DECLAREST_WEBHOOK_VAULT_URL}",
+				Auth: SecretStoreVaultAuth{
+					Token: &SecretStoreVaultTokenAuth{
+						SecretRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "vault-auth"},
+							Key:                  "token",
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("secret store ValidateCreate() unexpected error: %v", err)
+	}
+
+	syncPolicyValidator := &syncPolicyValidator{Client: fakeSyncPolicyClient{}}
+	if _, err := syncPolicyValidator.ValidateCreate(context.Background(), &SyncPolicy{
+		Spec: SyncPolicySpec{
+			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
+			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			SecretStoreRef:        NamespacedObjectReference{Name: "secret-store"},
+			Source:                SyncPolicySource{Path: "${DECLAREST_WEBHOOK_SYNC_PATH}"},
+		},
+	}); err != nil {
+		t.Fatalf("sync policy ValidateCreate() unexpected error: %v", err)
+	}
+}
+
+type fakeSyncPolicyClient struct{}
+
+func (fakeSyncPolicyClient) Get(context.Context, client.ObjectKey, client.Object, ...client.GetOption) error {
+	return nil
+}
+
+func (fakeSyncPolicyClient) List(_ context.Context, list client.ObjectList, _ ...client.ListOption) error {
+	if syncPolicies, ok := list.(*SyncPolicyList); ok {
+		syncPolicies.Items = nil
+	}
+	return nil
 }

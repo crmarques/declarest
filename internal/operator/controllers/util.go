@@ -14,6 +14,7 @@ import (
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/envref"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -229,6 +230,44 @@ func stringSet(values []string) []string {
 
 func uuidString() string {
 	return uuid.NewString()
+}
+
+func expandRuntimeResourceRepository(
+	resourceRepository *declarestv1alpha1.ResourceRepository,
+) *declarestv1alpha1.ResourceRepository {
+	if resourceRepository == nil {
+		return nil
+	}
+	expanded := resourceRepository.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&expanded.Spec)
+	return expanded
+}
+
+func expandRuntimeManagedServer(managedServer *declarestv1alpha1.ManagedServer) *declarestv1alpha1.ManagedServer {
+	if managedServer == nil {
+		return nil
+	}
+	expanded := managedServer.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&expanded.Spec)
+	return expanded
+}
+
+func expandRuntimeSecretStore(secretStore *declarestv1alpha1.SecretStore) *declarestv1alpha1.SecretStore {
+	if secretStore == nil {
+		return nil
+	}
+	expanded := secretStore.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&expanded.Spec)
+	return expanded
+}
+
+func expandRuntimeSyncPolicy(syncPolicy *declarestv1alpha1.SyncPolicy) *declarestv1alpha1.SyncPolicy {
+	if syncPolicy == nil {
+		return nil
+	}
+	expanded := syncPolicy.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&expanded.Spec)
+	return expanded
 }
 
 // collectSecretNames returns the deduplicated, sorted set of Kubernetes Secret

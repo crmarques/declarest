@@ -49,10 +49,12 @@ Acceptance contracts:
 ### CLI Behavior
 6. CLI execution footer: resource mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) emit deterministic `[OK|ERROR] ...` status lines to stderr unless `--no-status` is set, interactive terminals apply bold color tags, `--no-color`/`NO_COLOR` disable ANSI color tags, nil payload outputs stay empty, state-changing commands suppress payload output by default, and `--verbose` restores that payload output.
 7. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
+8. Metadata edit CLI: `metadata edit` opens YAML metadata content, seeds empty metadata for missing overrides, rejects invalid edited YAML, and persists only validated metadata updates.
 
 ### Context and Config
-8. Context config: strict decode after legacy-alias normalization, one-of validation (including repository-only and remote-only contexts), legacy `repository.resource-format` migration to `preferences.preferredFormat`, overrides precedence, and missing-catalog behavior.
-9. Context defaults: omitted `repository.git.remote.autoSync` enables automatic push behavior, and omitted `managedServer.http.healthCheck` probes the normalized `managedServer.http.baseURL`.
+9. Context config: strict decode after legacy-alias normalization, one-of validation (including repository-only and remote-only contexts), legacy `repository.resource-format` migration to `preferences.preferredFormat`, overrides precedence, and missing-catalog behavior.
+10. Context defaults: omitted `repository.git.remote.autoSync` enables automatic push behavior, and omitted `managedServer.http.healthCheck` probes the normalized `managedServer.http.baseURL`.
+11. Runtime `${ENV_VAR}` resolution: CLI context catalogs preserve placeholder text on disk, resolve exact-match placeholders before runtime validation/defaulting, and operator CR validation/runtime paths apply the same expansion semantics before dependency and overlap checks.
 
 ### Metadata and Bundles
 10. Metadata bundles: manifest validation (`bundle.yaml` required fields), shorthand name/version contract checks, secure tar.gz extraction safeguards, and deterministic cache reuse behavior.
@@ -73,10 +75,11 @@ Acceptance contracts:
 19. OAuth2 component auth: `client_credentials` token issuance and managed-server auth rejection when oauth2 config is missing or invalid.
 20. mTLS component auth: only configured client certificates are accepted when mTLS is enabled.
 21. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
+22. Managed-server auth redaction: debug logging masks `Authorization` and custom auth header names defined by `managedServer.http.auth.customHeaders` unless `--verbose-insecure` is enabled, while non-auth headers remain visible.
 
 ### HTTP Request CLI
-22. HTTP request CLI routing: `resource request <method>` maps to managed-server requests with positional/flag path validation, metadata-rendered header propagation, payload decoding from `--payload <path|->` or stdin, inline decoding only for structured payload formats, `application/octet-stream` for opaque payloads, and `--accept-type` / `--content-type` overrides for raw non-metadata endpoints.
-23. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
+23. HTTP request CLI routing: `resource request <method>` maps to managed-server requests with positional/flag path validation, metadata-rendered header propagation, payload decoding from `--payload <path|->` or stdin, inline decoding only for structured payload formats, `application/octet-stream` for opaque payloads, and `--accept-type` / `--content-type` overrides for raw non-metadata endpoints.
+24. mTLS trust reload: updating `simple-api-server` trusted client-cert files at runtime changes access behavior for new connections without service restart, including empty trusted-cert sets denying all access.
 
 ### Secret Handling
 24. Resource save secret safeguard: `resource save` fails on potential plaintext secrets that are not metadata-declared unless `--allow-plaintext` is provided, metadata-declared attribute candidates are automatically stored/masked before persistence, metadata `resource.secret: true` automatically triggers whole-resource secret persistence for default single-resource saves, `resource save --secret-attributes[=<comma-separated-json-pointers>]` handles selected structured-payload candidates and rejects non-structured payloads, stores deterministic path-scoped secret keys, writes `{{secret .}}` placeholders, updates metadata, skips group items that do not contain requested attributes, and fails with warning when non-metadata-declared candidates remain unhandled, and `resource save --secret` stores the whole encoded payload under `<logical-path>:.`, preserves the repository payload suffix, persists `resource.secret: true`, writes only the exact root placeholder, and rejects incompatible secret/list flags.

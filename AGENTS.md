@@ -61,14 +61,20 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 - Agents SHOULD stay familiar with the allowed Conventional Commit patterns (`<type>(<scope>): <summary>` with types such as `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf` and scopes like `cli`, `metadata`, `secrets`, `resource-repo`, `managed-server`, `reconciler`, `config`, `docs`, `tests`, `build`, `deps`), but they MUST NOT offer those messages as recommendations unprompted.
 - Each logical change needs a focused justification so that a Conventional Commit can still be composed if the user consents to committing; agents should reserve the actual phrasing until the user explicitly asks or approves the commit.
 - Before handing off, agents MUST:
-  - run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked),
+  - apply the `Go-file handoff verification` rules below,
   - scan diffs for secrets or unexpected large/binary files,
   - review the prepared diff (for example via `git diff`/`git diff --staged`) for correctness.
 - Agents MUST include in their final response:
   - which files changed,
-  - the list of commands executed during the work,
+  - the list of commands executed during the work, including any intentional verification skips,
   - any blockers or remaining verification needs that the user should address before committing,
   - and a direct question asking whether the agent should commit the prepared changes now (mirroring the plan-mode prompt before execution).
+
+## Go-file handoff verification
+- When the agent changes at least one `.go` file during a request, the agent MUST run `gofmt -w` on every changed Go file before handoff.
+- When the agent changes at least one `.go` file during a request, the agent MUST then run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
+- When the agent changes no `.go` files during a request, the agent MAY skip both `gofmt` and `go test -race`.
+- Final handoff MUST report whether this verification gate ran and describe any blocker that prevented it from completing.
 
 ## Engineering Rules
 1. Keep architecture and implementation aligned with senior engineering practices.
@@ -94,7 +100,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 4. If the bundle repository is absent or cannot be edited (for example because it is outside writable roots), document the missing sync in the final response so the downstream reviewer knows a manual bundle update is required to keep the metadata content aligned.
 
 ## Delivery Protocol
-1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (code modifications always include `go test -race ./...` at completion, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
+1. After fulfilling a request, stage/prepare the touched files and run the required verification commands (including the `Go-file handoff verification` commands only when at least one `.go` file changed, with blockers documented), but do not execute `git commit`; instead, summarize the prepared change, report the verification commands, and document any blockers. Then ask the user whether they would like the agent to commit the prepared changes (mirroring the plan-mode consent prompt).
 2. If the user agrees and asks for help composing the commit, ensure each resulting Conventional Commit message follows the `Commit guidance (agents)` rules and the `agents/skills/commit-workflow/SKILL.md` checklist before suggesting them.
 3. When multiple logical concerns exist and the user asks for multiple commits, propose multiple Conventional Commit messages by numbering each message and describing its individual scope.
 

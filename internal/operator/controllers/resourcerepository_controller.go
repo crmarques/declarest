@@ -73,8 +73,9 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, r.Update(ctx, resourceRepository)
 	}
 
-	resourceRepository.Default()
-	if validationErr := resourceRepository.ValidateSpec(); validationErr != nil {
+	runtimeRepository := expandRuntimeResourceRepository(resourceRepository)
+	runtimeRepository.Default()
+	if validationErr := runtimeRepository.ValidateSpec(); validationErr != nil {
 		logger.Error(validationErr, "resource repository spec validation failed")
 		emitEventf(r.Recorder, resourceRepository, corev1.EventTypeWarning, "SpecInvalid", "validation failed: %v", validationErr)
 		resourceRepositoryPollTotal.WithLabelValues(req.Namespace, req.Name, "error").Inc()
@@ -85,11 +86,11 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 			},
 			conditionReasonSpecInvalid,
 			validationErr.Error(),
-			resourceRepository.Spec.PollInterval.Duration,
+			runtimeRepository.Spec.PollInterval.Duration,
 		)
 	}
 
-	if err := r.ensurePVC(ctx, resourceRepository); err != nil {
+	if err := r.ensurePVC(ctx, runtimeRepository); err != nil {
 		emitEventf(r.Recorder, resourceRepository, corev1.EventTypeWarning, "DependencyInvalid", "dependency validation failed: %v", err)
 		resourceRepositoryPollTotal.WithLabelValues(req.Namespace, req.Name, "error").Inc()
 		return returnAfterSetNotReady(
@@ -99,15 +100,15 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 			},
 			conditionReasonDependencyInvalid,
 			err.Error(),
-			resourceRepository.Spec.PollInterval.Duration,
+			runtimeRepository.Spec.PollInterval.Duration,
 		)
 	}
 
 	localPath := resolveRepoRootPath(resourceRepository.Namespace, resourceRepository.Name)
-	revision, syncErr := r.syncRepository(ctx, resourceRepository, localPath)
+	revision, syncErr := r.syncRepository(ctx, runtimeRepository, localPath)
 	if syncErr != nil {
 		resourceRepositoryPollTotal.WithLabelValues(req.Namespace, req.Name, "error").Inc()
-		logger.Error(syncErr, "repository poll failed", "git_url", sanitizeURL(resourceRepository.Spec.Git.URL))
+		logger.Error(syncErr, "repository poll failed", "git_url", sanitizeURL(runtimeRepository.Spec.Git.URL))
 		emitEventf(r.Recorder, resourceRepository, corev1.EventTypeWarning, "SyncFailed", "repository sync failed: %v", syncErr)
 		return returnAfterSetNotReady(
 			ctx,
@@ -116,7 +117,7 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 			},
 			conditionReasonReconcileFailed,
 			syncErr.Error(),
-			resourceRepository.Spec.PollInterval.Duration,
+			runtimeRepository.Spec.PollInterval.Duration,
 		)
 	}
 
@@ -153,9 +154,9 @@ func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.R
 	logger.Info(
 		"repository reconciled",
 		"revision", revision,
-		"poll_interval", resourceRepository.Spec.PollInterval.Duration.String(),
+		"poll_interval", runtimeRepository.Spec.PollInterval.Duration.String(),
 	)
-	return ctrl.Result{RequeueAfter: resourceRepository.Spec.PollInterval.Duration}, nil
+	return ctrl.Result{RequeueAfter: runtimeRepository.Spec.PollInterval.Duration}, nil
 }
 
 func (r *ResourceRepositoryReconciler) ensurePVC(ctx context.Context, resourceRepository *declarestv1alpha1.ResourceRepository) error {

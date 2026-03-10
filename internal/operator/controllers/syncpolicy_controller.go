@@ -132,6 +132,7 @@ func (r *syncPolicyReconciliation) reconcile() (result ctrl.Result, reconcileErr
 		return *res, err
 	}
 
+	r.policy = expandRuntimeSyncPolicy(r.policy)
 	r.policy.Default()
 
 	// Validate spec and check if suspended
@@ -375,6 +376,7 @@ func (r *syncPolicyReconciliation) loadResourceRepository() (*declarestv1alpha1.
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ResourceRepositoryRef.Name}, repo); err != nil {
 		return nil, err
 	}
+	repo = expandRuntimeResourceRepository(repo)
 	repo.Default()
 	if err := repo.ValidateSpec(); err != nil {
 		return nil, fmt.Errorf("invalid referenced resource repository: %w", err)
@@ -387,6 +389,7 @@ func (r *syncPolicyReconciliation) loadManagedServer() (*declarestv1alpha1.Manag
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ManagedServerRef.Name}, server); err != nil {
 		return nil, err
 	}
+	server = expandRuntimeManagedServer(server)
 	server.Default()
 	if err := server.ValidateSpec(); err != nil {
 		return nil, fmt.Errorf("invalid referenced managed server: %w", err)
@@ -399,6 +402,7 @@ func (r *syncPolicyReconciliation) loadSecretStore() (*declarestv1alpha1.SecretS
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.SecretStoreRef.Name}, secret); err != nil {
 		return nil, err
 	}
+	secret = expandRuntimeSecretStore(secret)
 	if err := secret.ValidateSpec(); err != nil {
 		return nil, fmt.Errorf("invalid referenced secret store: %w", err)
 	}
@@ -560,18 +564,19 @@ func (r *SyncPolicyReconciler) validateNoOverlap(ctx context.Context, syncPolicy
 	}
 	for idx := range policies.Items {
 		item := &policies.Items[idx]
+		expandedItem := expandRuntimeSyncPolicy(item)
 		if item.Name == syncPolicy.Name {
 			continue
 		}
 		if item.DeletionTimestamp != nil {
 			continue
 		}
-		if hasPathOverlap(item.Spec.Source.Path, syncPolicy.Spec.Source.Path) {
+		if hasPathOverlap(expandedItem.Spec.Source.Path, syncPolicy.Spec.Source.Path) {
 			return fmt.Errorf(
 				"sync policy scope overlaps with %s/%s (%q)",
 				item.Namespace,
 				item.Name,
-				normalizeOverlapPath(item.Spec.Source.Path),
+				normalizeOverlapPath(expandedItem.Spec.Source.Path),
 			)
 		}
 	}

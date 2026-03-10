@@ -13,7 +13,8 @@ Ensure the agent inspects the delta, validates it with the repository’s standa
 - Begin by running `git status` to confirm which files changed, and use `git diff` (and `git diff --cached` after any staging from earlier clarifications) to understand the delta before summarizing it for the user.
 
 ## Pre-commit verification
-- The agent MUST identify the repository’s standard verification command(s). Consult `AGENTS.md`, the `Makefile`, or other canonical docs to discover the prescribed suite (for example, `make check`, a specific `make` target, or `go test ./...`); when no explicit command exists, the agent MUST default to `go test ./...`.
+- The agent MUST identify the repository’s standard verification command(s). Consult `AGENTS.md`, the `Makefile`, or other canonical docs to discover the prescribed suite.
+- In this repository, when the request changed at least one `.go` file, that suite MUST include `gofmt -w` on every changed Go file plus `go test -race ./...` (or the deepest feasible subset when full race tests are blocked) before any commit proposal; when no `.go` files changed, those Go-specific commands MAY be skipped.
 - Run the identified verification command(s), observe their outcomes, and if they fail the agent MUST either fix the issue or pause and ask the user how to proceed before making any commit proposals.
 - Scan every diff for apparent secrets (API keys, tokens, private keys, `.env` values, etc.) and stop to ask the user before staging or committing anything suspicious.
 - Confirm repository state is healthy (not in the middle of a rebase/merge, not on a detached HEAD). If the state is unusual, describe it to the user and request explicit permission before continuing.
@@ -43,5 +44,6 @@ Ensure the agent inspects the delta, validates it with the repository’s standa
 
 ## Output required
 - Report the verification commands executed and their results (pass/fail/blocked).
+- Report any Go-specific verification commands that were intentionally skipped because no `.go` files changed.
 - Summarize the changed files, highlight any notable diffs, and mention any safety concerns the user should resolve before committing.
 - Ask, “Should I commit the prepared changes now?” as the final question so the user can provide explicit consent before any commit action occurs.

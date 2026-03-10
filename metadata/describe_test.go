@@ -436,7 +436,7 @@ func TestFindPathItemForMetadataOperation(t *testing.T) {
 	t.Parallel()
 
 	pathItems := map[string]map[string]any{
-		"/admin/realms/{realm}/clients":              {"get": map[string]any{}, "post": map[string]any{}},
+		"/admin/realms/{realm}/clients":               {"get": map[string]any{}, "post": map[string]any{}},
 		"/admin/realms/{realm}/clients/{client-uuid}": {"get": map[string]any{}, "put": map[string]any{}},
 	}
 

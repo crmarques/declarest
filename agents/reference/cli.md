@@ -94,20 +94,21 @@ Selected command names:
 6. `context show`.
 7. `context current`.
 8. `context resolve`.
-9. `metadata resolve`.
-10. `metadata render`.
-11. `repository status`.
-12. `repository clean`.
-13. `repository commit`.
-14. `repository history`.
-15. `repository tree`.
-16. `resource request`.
-17. `secret set`.
-18. `secret get`.
-19. `secret list`.
-20. `secret delete`.
-21. `secret mask`.
-22. `secret resolve`.
+9. `metadata edit`.
+10. `metadata resolve`.
+11. `metadata render`.
+12. `repository status`.
+13. `repository clean`.
+14. `repository commit`.
+15. `repository history`.
+16. `repository tree`.
+17. `resource request`.
+18. `secret set`.
+19. `secret get`.
+20. `secret list`.
+21. `secret delete`.
+22. `secret mask`.
+23. `secret resolve`.
 23. `secret normalize`.
 24. `secret detect`.
 25. `completion`.
@@ -150,6 +151,7 @@ Interactive context commands:
 12. Mutations from stdin MUST validate payload format before side effects.
 13. Option conflicts MUST produce usage errors.
 14. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
+15. `metadata edit` MUST open the current metadata override in YAML form, MUST start from an empty metadata object when no override exists yet, MUST validate the edited YAML on save/exit, and MUST persist only validated metadata changes.
 
 ### Resource Get, List, and Delete
 14. `resource get` MUST support `--source <managed-server|repository>`.

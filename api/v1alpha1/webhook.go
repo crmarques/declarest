@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/crmarques/declarest/internal/envref"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -46,6 +47,7 @@ type resourceRepositoryValidator struct {
 
 func (v *resourceRepositoryValidator) ValidateCreate(_ context.Context, obj *ResourceRepository) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
 	return nil, candidate.ValidateSpec()
 }
@@ -69,6 +71,7 @@ type managedServerValidator struct {
 
 func (v *managedServerValidator) ValidateCreate(_ context.Context, obj *ManagedServer) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
 	return nil, candidate.ValidateSpec()
 }
@@ -92,6 +95,7 @@ type secretStoreValidator struct {
 
 func (v *secretStoreValidator) ValidateCreate(_ context.Context, obj *SecretStore) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	return nil, candidate.ValidateSpec()
 }
 
@@ -114,6 +118,7 @@ type syncPolicyValidator struct {
 
 func (v *syncPolicyValidator) ValidateCreate(ctx context.Context, obj *SyncPolicy) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
+	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
 	if err := candidate.ValidateSpec(); err != nil {
 		return nil, err
@@ -137,18 +142,20 @@ func (v *syncPolicyValidator) validateNoOverlap(ctx context.Context, syncPolicy 
 	}
 	for idx := range policies.Items {
 		item := &policies.Items[idx]
+		expandedItem := item.DeepCopy()
+		envref.ExpandExactEnvPlaceholdersInPlace(&expandedItem.Spec)
 		if item.Name == syncPolicy.Name {
 			continue
 		}
 		if item.DeletionTimestamp != nil {
 			continue
 		}
-		if HasPathOverlap(item.Spec.Source.Path, syncPolicy.Spec.Source.Path) {
+		if HasPathOverlap(expandedItem.Spec.Source.Path, syncPolicy.Spec.Source.Path) {
 			return nil, fmt.Errorf(
 				"sync policy scope overlaps with %s/%s (%q)",
 				item.Namespace,
 				item.Name,
-				NormalizeOverlapPath(item.Spec.Source.Path),
+				NormalizeOverlapPath(expandedItem.Spec.Source.Path),
 			)
 		}
 	}
@@ -176,10 +183,12 @@ func checkDependencyRef(
 	var refs []string
 	for idx := range policies.Items {
 		item := &policies.Items[idx]
+		expandedItem := item.DeepCopy()
+		envref.ExpandExactEnvPlaceholdersInPlace(&expandedItem.Spec)
 		if item.DeletionTimestamp != nil {
 			continue
 		}
-		if strings.TrimSpace(refExtractor(item)) == name {
+		if strings.TrimSpace(refExtractor(expandedItem)) == name {
 			refs = append(refs, item.Name)
 		}
 	}

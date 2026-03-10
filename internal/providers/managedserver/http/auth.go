@@ -31,6 +31,21 @@ type authConfig struct {
 	customHeaders []config.HeaderTokenAuth
 }
 
+func (c authConfig) shouldRedactHeader(name string) bool {
+	if strings.EqualFold(strings.TrimSpace(name), "Authorization") {
+		return true
+	}
+	if c.mode != authModeCustomHeaders {
+		return false
+	}
+	for _, header := range c.customHeaders {
+		if strings.EqualFold(strings.TrimSpace(header.Header), strings.TrimSpace(name)) {
+			return true
+		}
+	}
+	return false
+}
+
 func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 	if cfg == nil {
 		return authConfig{}, faults.NewValidationError("managed-server.http.auth is required", nil)

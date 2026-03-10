@@ -18,17 +18,18 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 ## Normative Rules
 1. The operator MUST register and reconcile `declarest.io/v1alpha1` resources: `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`.
 2. Admission validation MUST apply resource defaults before `ValidateSpec()` checks on create/update, and MUST block deletes of dependency resources that are referenced by non-deleting `SyncPolicy` objects in the same namespace.
-3. `SyncPolicy` admission and reconcile validation MUST reject overlapping logical source scopes regardless of dependency-reference equality.
-4. Controllers MUST add finalizer `declarest.io/cleanup` and MUST remove it only after controller-owned cleanup is complete.
-5. `ResourceRepository` reconcile MUST ensure configured storage availability, perform authenticated git sync against the configured branch, update `status.lastFetchedRevision` and `status.lastFetchedTime`, and set `Ready`/`Stalled` conditions deterministically.
-6. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
-7. `SecretStore` reconcile MUST enforce provider one-of constraints (`vault` or `file`), ensure file-backed storage dependencies when required, and set `status.resolvedPath` only for file-backed stores.
-8. `SyncPolicy` reconcile MUST validate referenced dependency resources, compute a secret-version hash from referenced Secret `resourceVersion` values, and trigger full sync when generation, secret hash, or full-resync schedule requires it.
-9. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync.
-10. `SyncPolicy` apply execution MUST invoke DeclaREST mutation workflows through `orchestrator.Orchestrator`, honor `spec.sync.force` and `spec.sync.prune`, and update status stats (`targeted`, `applied`, `pruned`, `failed`) from executed operations.
-11. `SyncPolicy` scheduling MUST requeue by the earliest due trigger between `spec.syncInterval` and `spec.fullResyncCron` (when configured), with invalid cron expressions treated as spec-validation failures.
-12. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
-13. Webhook-triggered repository refresh MUST be event-driven via `ResourceRepository` annotation changes and MUST not wait for `pollInterval`.
+3. Exact-match CR string values in the form `${ENV_VAR}` MUST resolve from the operator process environment before webhook validation, dependency-reference checks, overlap checks, and controller runtime use; the persisted CR spec MUST remain unchanged.
+4. `SyncPolicy` admission and reconcile validation MUST reject overlapping logical source scopes regardless of dependency-reference equality.
+5. Controllers MUST add finalizer `declarest.io/cleanup` and MUST remove it only after controller-owned cleanup is complete.
+6. `ResourceRepository` reconcile MUST ensure configured storage availability, perform authenticated git sync against the configured branch, update `status.lastFetchedRevision` and `status.lastFetchedTime`, and set `Ready`/`Stalled` conditions deterministically.
+7. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
+8. `SecretStore` reconcile MUST enforce provider one-of constraints (`vault` or `file`), ensure file-backed storage dependencies when required, and set `status.resolvedPath` only for file-backed stores.
+9. `SyncPolicy` reconcile MUST validate referenced dependency resources, compute a secret-version hash from referenced Secret `resourceVersion` values, and trigger full sync when generation, secret hash, or full-resync schedule requires it.
+10. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync.
+11. `SyncPolicy` apply execution MUST invoke DeclaREST mutation workflows through `orchestrator.Orchestrator`, honor `spec.sync.force` and `spec.sync.prune`, and update status stats (`targeted`, `applied`, `pruned`, `failed`) from executed operations.
+12. `SyncPolicy` scheduling MUST requeue by the earliest due trigger between `spec.syncInterval` and `spec.fullResyncCron` (when configured), with invalid cron expressions treated as spec-validation failures.
+13. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
+14. Webhook-triggered repository refresh MUST be event-driven via `ResourceRepository` annotation changes and MUST not wait for `pollInterval`.
 
 ## Data Contracts
 1. Condition types: `Ready`, `Reconciling`, `Stalled` (from `api/v1alpha1`).
@@ -66,3 +67,4 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Incremental/full sync planning and safe full-fallback paths MUST be covered by `internal/operator/controllers/syncpolicy_plan_test.go`.
 4. Full-resync schedule and requeue interval computation MUST be covered by `internal/operator/controllers/syncpolicy_schedule_test.go`.
 5. Path-overlap validation and dependency-sharing behavior MUST be covered by `internal/operator/controllers/syncpolicy_controller_test.go`.
+6. Runtime `${ENV_VAR}` expansion for CR-backed repository/server/secret-store/sync-policy fields MUST be covered by `api/v1alpha1/webhook_test.go` plus controller-level tests such as `internal/operator/controllers/util_test.go`.

@@ -497,6 +497,66 @@ func TestResolveContextSelectionAndPrecedence(t *testing.T) {
 	})
 }
 
+func TestCreatePersistsEnvPlaceholdersAndResolveContextExpandsThem(t *testing.T) {
+	t.Setenv("DECLAREST_TEST_REPO_DIR", "/tmp/runtime-repo")
+	t.Setenv("DECLAREST_TEST_BASE_URL", "https://runtime.example.com/api")
+	t.Setenv("DECLAREST_TEST_TOKEN", "runtime-token")
+
+	path := filepath.Join(t.TempDir(), "contexts.yaml")
+	contextService := NewService(path)
+
+	err := contextService.Create(context.Background(), config.Context{
+		Name: "env",
+		Repository: config.Repository{
+			Filesystem: &config.FilesystemRepository{BaseDir: "${DECLAREST_TEST_REPO_DIR}"},
+		},
+		ManagedServer: &config.ManagedServer{
+			HTTP: &config.HTTPServer{
+				BaseURL: "${DECLAREST_TEST_BASE_URL}",
+				Auth: &config.HTTPAuth{
+					CustomHeaders: []config.HeaderTokenAuth{{
+						Header: "Authorization",
+						Prefix: "Bearer",
+						Value:  "${DECLAREST_TEST_TOKEN}",
+					}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved catalog: %v", err)
+	}
+	contents := string(data)
+	if !strings.Contains(contents, "${DECLAREST_TEST_REPO_DIR}") {
+		t.Fatalf("expected repository placeholder to remain persisted, got %q", contents)
+	}
+	if !strings.Contains(contents, "${DECLAREST_TEST_BASE_URL}") {
+		t.Fatalf("expected baseURL placeholder to remain persisted, got %q", contents)
+	}
+	if !strings.Contains(contents, "${DECLAREST_TEST_TOKEN}") {
+		t.Fatalf("expected auth placeholder to remain persisted, got %q", contents)
+	}
+
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "env"})
+	if err != nil {
+		t.Fatalf("ResolveContext returned error: %v", err)
+	}
+	if resolved.Repository.Filesystem == nil || resolved.Repository.Filesystem.BaseDir != "/tmp/runtime-repo" {
+		t.Fatalf("expected expanded repository path, got %#v", resolved.Repository.Filesystem)
+	}
+	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil || resolved.ManagedServer.HTTP.BaseURL != "https://runtime.example.com/api" {
+		t.Fatalf("expected expanded managed-server baseURL, got %#v", resolved.ManagedServer)
+	}
+	if got := resolved.ManagedServer.HTTP.Auth.CustomHeaders[0].Value; got != "runtime-token" {
+		t.Fatalf("expected expanded auth header value, got %q", got)
+	}
+}
+
 func TestServiceCreateWritesUserOnlyCatalogPermissions(t *testing.T) {
 	t.Parallel()
 

@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var editTempFile = cliutil.EditTempFile
+
 func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "metadata",
@@ -25,6 +28,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		newGetCommand(deps, globalFlags),
 		newSetCommand(deps),
 		newUnsetCommand(deps),
+		newEditCommand(deps),
 		newResolveCommand(deps, globalFlags),
 		newRenderCommand(deps, globalFlags),
 		newInferCommand(deps, globalFlags),
@@ -159,6 +163,85 @@ func newUnsetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	return command
+}
+
+func newEditCommand(deps cliutil.CommandDependencies) *cobra.Command {
+	var pathFlag string
+	var editor string
+
+	command := &cobra.Command{
+		Use:   "edit [path]",
+		Short: "Edit metadata in an editor",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
+			if err != nil {
+				return err
+			}
+
+			debugctx.Printf(command.Context(), "metadata edit requested path=%q", resolvedPath)
+
+			service, err := cliutil.RequireMetadataService(deps)
+			if err != nil {
+				debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+
+			current := metadatadomain.ResourceMetadata{}
+			item, err := service.Get(command.Context(), resolvedPath)
+			if err != nil {
+				if !faults.IsCategory(err, faults.NotFoundError) {
+					debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+					return err
+				}
+			} else {
+				current = item
+			}
+
+			encoded, err := metadatadomain.EncodeResourceMetadataYAML(current)
+			if err != nil {
+				debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+				return cliutil.ValidationError("failed to encode metadata for editing", err)
+			}
+			if len(encoded) == 0 || encoded[len(encoded)-1] != '\n' {
+				encoded = append(encoded, '\n')
+			}
+
+			edited, err := editTempFile(
+				command,
+				cliutil.ResolveEditorCommand(command.Context(), deps, editor),
+				"metadata.yaml",
+				encoded,
+			)
+			if err != nil {
+				debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+			if len(bytes.TrimSpace(edited)) == 0 {
+				return cliutil.ValidationError("metadata edit is empty", nil)
+			}
+
+			decoded, err := metadatadomain.DecodeResourceMetadataYAML(edited)
+			if err != nil {
+				debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+				return cliutil.ValidationError("invalid yaml metadata", err)
+			}
+
+			if err := service.Set(command.Context(), resolvedPath, decoded); err != nil {
+				debugctx.Printf(command.Context(), "metadata edit failed path=%q error=%v", resolvedPath, err)
+				return err
+			}
+
+			debugctx.Printf(command.Context(), "metadata edit succeeded path=%q", resolvedPath)
+			return nil
+		},
+	}
+
+	cliutil.BindPathFlag(command, &pathFlag)
+	cliutil.RegisterPathFlagCompletion(command, deps)
+	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
+	cliutil.BindEditorFlag(command, &editor)
 	return command
 }
 

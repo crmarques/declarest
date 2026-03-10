@@ -52,9 +52,10 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, r.Update(ctx, managedServer)
 	}
 
-	managedServer.Default()
-	pollInterval := managedServerPollInterval(managedServer)
-	if validationErr := managedServer.ValidateSpec(); validationErr != nil {
+	runtimeManagedServer := expandRuntimeManagedServer(managedServer)
+	runtimeManagedServer.Default()
+	pollInterval := managedServerPollInterval(runtimeManagedServer)
+	if validationErr := runtimeManagedServer.ValidateSpec(); validationErr != nil {
 		logger.Error(validationErr, "managed server spec validation failed")
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "SpecInvalid", "validation failed: %v", validationErr)
 		return returnAfterSetNotReady(
@@ -69,7 +70,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	cacheDir := resolveCacheRootPath(managedServer.Namespace, managedServer.Name)
-	proxyConfig, proxyErr := resolveManagedServerProxyConfig(ctx, r.Client, managedServer.Namespace, managedServer.Spec.HTTP.Proxy)
+	proxyConfig, proxyErr := resolveManagedServerProxyConfig(ctx, r.Client, managedServer.Namespace, runtimeManagedServer.Spec.HTTP.Proxy)
 	if proxyErr != nil {
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "ProxyConfigFailed", "proxy configuration failed: %v", proxyErr)
 		return returnAfterSetNotReady(
@@ -83,7 +84,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		)
 	}
 
-	openAPIPath, openAPIErr := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, cacheDir, proxyConfig)
+	openAPIPath, openAPIErr := downloadArtifact(ctx, runtimeManagedServer.Spec.OpenAPI.URL, cacheDir, proxyConfig)
 	if openAPIErr != nil {
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "DownloadFailed", "openapi artifact download failed: %v", openAPIErr)
 		return returnAfterSetNotReady(
@@ -96,7 +97,7 @@ func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			pollInterval,
 		)
 	}
-	metadataPath, metadataErr := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, cacheDir, proxyConfig)
+	metadataPath, metadataErr := downloadArtifact(ctx, runtimeManagedServer.Spec.Metadata.URL, cacheDir, proxyConfig)
 	if metadataErr != nil {
 		emitEventf(r.Recorder, managedServer, corev1.EventTypeWarning, "DownloadFailed", "metadata artifact download failed: %v", metadataErr)
 		return returnAfterSetNotReady(

@@ -68,7 +68,7 @@ func (g *Client) doRequest(ctx context.Context, purpose string, request *http.Re
 	)
 
 	// Level 3: request headers
-	debugRequestHeaders(ctx, request)
+	debugRequestHeaders(ctx, request, g.auth)
 
 	start := time.Now()
 
@@ -135,15 +135,21 @@ func (g *Client) executeWithThrottle(
 	return nil, err
 }
 
-func debugRequestHeaders(ctx context.Context, request *http.Request) {
+func debugRequestHeaders(ctx context.Context, request *http.Request, auth authConfig) {
 	if debugctx.Level(ctx) < 3 || request == nil {
 		return
 	}
 
 	headers := request.Header.Clone()
 	if !debugctx.Insecure(ctx) {
-		if auth := headers.Get("Authorization"); auth != "" {
-			headers.Set("Authorization", redactHeaderValue(auth))
+		for key := range headers {
+			if !auth.shouldRedactHeader(key) {
+				continue
+			}
+			for _, value := range headers.Values(key) {
+				headers.Del(key)
+				headers.Add(key, redactHeaderValue(value))
+			}
 		}
 	}
 

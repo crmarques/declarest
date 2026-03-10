@@ -18,23 +18,24 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 1. Remote operations MUST be executed through `managedserver.ManagedServerClient` only.
 2. Request method, path, query, and headers MUST derive from resolved metadata plus explicit overrides.
 3. Auth mode precedence MUST be deterministic and documented.
-4. TLS configuration errors MUST fail fast during initialization.
-5. HTTP response errors MUST preserve status code and response body context.
-6. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
-7. List responses MUST be normalized into deterministic `resource.Resource` ordering.
-8. Resolved `operations.list.transforms[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
-9. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
-10. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
-11. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
-12. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
-13. Before body transforms or remote HTTP execution, body-bearing mutation workflows MUST validate `resource.requiredAttributes` against the structured source payload, and every JSON Pointer referenced by configured `resource.alias` or `resource.id` MUST count as required even when `resource.requiredAttributes` omits it; non-structured mutation payloads MAY skip this attribute-presence check because JSON Pointer traversal is unavailable.
-14. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
-15. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
-16. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
-17. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
-18. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
-19. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
-20. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
+4. Managed-server debug output MUST redact `Authorization` plus every header name configured under `managedServer.http.auth.customHeaders` unless `--verbose-insecure` is enabled.
+5. TLS configuration errors MUST fail fast during initialization.
+6. HTTP response errors MUST preserve status code and response body context.
+7. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
+8. List responses MUST be normalized into deterministic `resource.Resource` ordering.
+9. Resolved `operations.list.transforms[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
+10. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
+11. When no logical-path resolver is provided, `resource("<logical-path>")` MUST fail with a validation error.
+12. Within one `jq` evaluation, repeated `resource("<logical-path>")` calls MUST be cached by path, and invalid arguments or cyclic resolver dependencies MUST fail with validation errors.
+13. When metadata does not explicitly set `Accept`, remote operation requests MUST default to the resolved payload descriptor media mapping (`application/octet-stream` for unknown or octet-stream payloads, `text/plain` for text-like codecs, and the managed-server/OpenAPI/default descriptor when available); body-bearing operations (`create|update`) MUST apply the same default for `ContentType` when unset.
+14. Before body transforms or remote HTTP execution, body-bearing mutation workflows MUST validate `resource.requiredAttributes` against the structured source payload, and every JSON Pointer referenced by configured `resource.alias` or `resource.id` MUST count as required even when `resource.requiredAttributes` omits it; non-structured mutation payloads MAY skip this attribute-presence check because JSON Pointer traversal is unavailable.
+15. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
+16. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
+17. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
+18. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+19. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
+20. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
+21. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.
 
 ## Data Contracts
 Request spec fields:
@@ -86,6 +87,7 @@ Request throttling fields:
 9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
 10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
 11. Structured mutation validation can require `/clientId` from `resource.alias: "{{/clientId}}"` even when an operation transform removes `/clientId` from the outgoing request body afterward.
+12. Custom auth header names other than `Authorization` still require debug-log redaction when they come from `managedServer.http.auth.customHeaders`.
 
 ## Examples
 1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.

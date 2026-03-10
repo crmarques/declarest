@@ -10,6 +10,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/envref"
 )
 
 var _ config.ContextService = (*Service)(nil)
@@ -25,7 +26,7 @@ func NewService(path string) *Service {
 
 func (m *Service) Create(_ context.Context, cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
-	if err := validateConfig(cfg); err != nil {
+	if err := validateResolvedConfig(cfg); err != nil {
 		return err
 	}
 
@@ -60,7 +61,7 @@ func (m *Service) Update(_ context.Context, cfg config.Context) error {
 	}
 
 	cfg = preserveProxyOmissions(cfg, normalizeConfig(contextCatalog.Contexts[idx]))
-	if err := validateConfig(cfg); err != nil {
+	if err := validateResolvedConfig(cfg); err != nil {
 		return err
 	}
 
@@ -183,6 +184,7 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 	if err != nil {
 		return config.Context{}, err
 	}
+	resolved = envref.ExpandExactEnvPlaceholders(resolved)
 	resolved = applyConfigDefaults(resolved)
 	if err := validateConfig(resolved); err != nil {
 		return config.Context{}, err
@@ -192,7 +194,7 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 }
 
 func (m *Service) Validate(_ context.Context, cfg config.Context) error {
-	return validateConfig(normalizeConfig(cfg))
+	return validateResolvedConfig(normalizeConfig(cfg))
 }
 
 func (m *Service) GetCatalog(_ context.Context) (config.ContextCatalog, error) {
@@ -206,7 +208,7 @@ func (m *Service) ReplaceCatalog(_ context.Context, catalog config.ContextCatalo
 func (m *Service) saveCatalog(contextCatalog config.ContextCatalog) error {
 	contextCatalog = compactContextCatalogForPersistence(contextCatalog)
 
-	if err := validateCatalog(contextCatalog); err != nil {
+	if err := validateResolvedCatalog(contextCatalog); err != nil {
 		return err
 	}
 
@@ -274,7 +276,7 @@ func (m *Service) loadCatalog() (config.ContextCatalog, error) {
 		return config.ContextCatalog{}, err
 	}
 
-	if err := validateCatalog(contextCatalog); err != nil {
+	if err := validateResolvedCatalog(contextCatalog); err != nil {
 		return config.ContextCatalog{}, err
 	}
 

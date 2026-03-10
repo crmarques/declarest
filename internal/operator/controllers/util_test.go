@@ -82,3 +82,61 @@ func TestCollectSecretNamesIncludesRepositoryWebhookSecret(t *testing.T) {
 		t.Fatalf("unexpected secret names: %#v", names)
 	}
 }
+
+func TestExpandRuntimeSpecsResolveEnvPlaceholders(t *testing.T) {
+	t.Setenv("DECLAREST_REPO_URL", "https://example.com/org/runtime.git")
+	t.Setenv("DECLAREST_SERVER_URL", "https://runtime.example.com/api")
+	t.Setenv("DECLAREST_OPENAPI_URL", "https://runtime.example.com/openapi.json")
+	t.Setenv("DECLAREST_SECRET_PATH", "/data/runtime/secrets.json")
+	t.Setenv("DECLAREST_SYNC_PATH", "/customers/runtime")
+
+	repo := expandRuntimeResourceRepository(&declarestv1alpha1.ResourceRepository{
+		Spec: declarestv1alpha1.ResourceRepositorySpec{
+			Git: &declarestv1alpha1.GitRepositorySpec{
+				URL: "${DECLAREST_REPO_URL}",
+			},
+		},
+	})
+	if got := repo.Spec.Git.URL; got != "https://example.com/org/runtime.git" {
+		t.Fatalf("expected expanded repository URL, got %q", got)
+	}
+
+	server := expandRuntimeManagedServer(&declarestv1alpha1.ManagedServer{
+		Spec: declarestv1alpha1.ManagedServerSpec{
+			HTTP: declarestv1alpha1.ManagedServerHTTP{
+				BaseURL: "${DECLAREST_SERVER_URL}",
+			},
+			OpenAPI: declarestv1alpha1.DeclaRESTExternalArtifact{
+				URL: "${DECLAREST_OPENAPI_URL}",
+			},
+		},
+	})
+	if got := server.Spec.HTTP.BaseURL; got != "https://runtime.example.com/api" {
+		t.Fatalf("expected expanded managed-server baseURL, got %q", got)
+	}
+	if got := server.Spec.OpenAPI.URL; got != "https://runtime.example.com/openapi.json" {
+		t.Fatalf("expected expanded openapi URL, got %q", got)
+	}
+
+	secretStore := expandRuntimeSecretStore(&declarestv1alpha1.SecretStore{
+		Spec: declarestv1alpha1.SecretStoreSpec{
+			File: &declarestv1alpha1.SecretStoreFileSpec{
+				Path: "${DECLAREST_SECRET_PATH}",
+			},
+		},
+	})
+	if got := secretStore.Spec.File.Path; got != "/data/runtime/secrets.json" {
+		t.Fatalf("expected expanded secret-store path, got %q", got)
+	}
+
+	syncPolicy := expandRuntimeSyncPolicy(&declarestv1alpha1.SyncPolicy{
+		Spec: declarestv1alpha1.SyncPolicySpec{
+			Source: declarestv1alpha1.SyncPolicySource{
+				Path: "${DECLAREST_SYNC_PATH}",
+			},
+		},
+	})
+	if got := syncPolicy.Spec.Source.Path; got != "/customers/runtime" {
+		t.Fatalf("expected expanded sync-policy path, got %q", got)
+	}
+}

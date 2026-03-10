@@ -47,7 +47,8 @@ func (r *SecretStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, r.Update(ctx, secretStore)
 	}
 
-	if validationErr := secretStore.ValidateSpec(); validationErr != nil {
+	runtimeSecretStore := expandRuntimeSecretStore(secretStore)
+	if validationErr := runtimeSecretStore.ValidateSpec(); validationErr != nil {
 		logger.Error(validationErr, "secret store spec validation failed")
 		emitEventf(r.Recorder, secretStore, corev1.EventTypeWarning, "SpecInvalid", "validation failed: %v", validationErr)
 		return returnAfterSetNotReady(
@@ -62,8 +63,8 @@ func (r *SecretStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	resolvedPath := ""
-	if secretStore.Spec.File != nil {
-		if err := r.ensureFilePVC(ctx, secretStore); err != nil {
+	if runtimeSecretStore.Spec.File != nil {
+		if err := r.ensureFilePVC(ctx, runtimeSecretStore); err != nil {
 			emitEventf(r.Recorder, secretStore, corev1.EventTypeWarning, "DependencyInvalid", "dependency validation failed: %v", err)
 			return returnAfterSetNotReady(
 				ctx,
@@ -75,7 +76,7 @@ func (r *SecretStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				0,
 			)
 		}
-		resolvedPath = secretStore.Spec.File.Path
+		resolvedPath = runtimeSecretStore.Spec.File.Path
 	}
 
 	secretStore.Status.ObservedGeneration = secretStore.Generation

@@ -43,6 +43,7 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"server get access-token",
 		"server check",
 		"metadata",
+		"metadata edit",
 		"metadata resolve",
 		"metadata render",
 		"repository",

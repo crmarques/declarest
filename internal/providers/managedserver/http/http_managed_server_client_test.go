@@ -2012,6 +2012,50 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 			t.Fatalf("expected redacted token query value in debug output, got %q", contents)
 		}
 	})
+
+	t.Run("debug_logs_redact_custom_auth_headers_only", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, `{"ok":true}`)
+		}))
+		t.Cleanup(server.Close)
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL:        server.URL,
+			DefaultHeaders: map[string]string{"X-Request-ID": "visible"},
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "X-API-Token", Prefix: "Token", Value: "secret-token"}},
+			},
+		})
+
+		var debugOutput bytes.Buffer
+		ctx := debugctx.WithLevel(context.Background(), 3)
+		ctx = debugctx.WithWriter(ctx, &debugOutput)
+
+		md := metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {Path: "/resource"},
+			},
+		}
+		_, err := client.Get(ctx, resource.Resource{
+			LogicalPath: "/customers/acme",
+		}, md)
+		if err != nil {
+			t.Fatalf("Get returned error: %v", err)
+		}
+
+		contents := debugOutput.String()
+		if strings.Contains(contents, "secret-token") {
+			t.Fatalf("debug output leaked custom auth header: %q", contents)
+		}
+		if !strings.Contains(contents, "http request header X-Api-Token: Token <redacted>") {
+			t.Fatalf("expected redacted custom auth header in debug output, got %q", contents)
+		}
+		if !strings.Contains(contents, "http request header X-Request-Id: visible") {
+			t.Fatalf("expected non-auth header to remain visible, got %q", contents)
+		}
+	})
 }
 
 func TestManagedServerProxySupport(t *testing.T) {

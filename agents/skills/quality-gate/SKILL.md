@@ -10,7 +10,8 @@ description: Select and execute the smallest verification set that protects chan
 2. Map impact to verification scope using the matrix below.
 3. Run the fastest meaningful checks first and stop on first failure.
 4. Expand scope only when changed contracts, orchestration risk, or security risk requires it.
-5. Report commands run, outcomes, and any intentional coverage gaps.
+5. When at least one `.go` file changed, reserve final handoff for `gofmt -w` on the changed Go files plus `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
+6. Report commands run, outcomes, and any intentional coverage gaps.
 
 ## Impact Matrix
 1. `doc`: spec/comment/instruction-only edits with no behavior change; tests are optional unless contracts changed.
@@ -34,3 +35,4 @@ description: Select and execute the smallest verification set that protects chan
 2. If a required check cannot run, report the blocker and residual risk.
 3. Security-sensitive and destructive workflows require negative-test evidence.
 4. Keep verification proportional; avoid full E2E suites for low-impact edits.
+5. When no `.go` files changed, agents MAY skip the Go-specific final handoff commands.

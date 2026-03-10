@@ -9,6 +9,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/envref"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
 
@@ -48,6 +49,10 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 	return nil
 }
 
+func validateResolvedCatalog(contextCatalog config.ContextCatalog) error {
+	return validateCatalog(envref.ExpandExactEnvPlaceholders(contextCatalog))
+}
+
 func validateConfig(cfg config.Context) error {
 	cfg = normalizeConfig(cfg)
 
@@ -74,6 +79,10 @@ func validateConfig(cfg config.Context) error {
 	}
 
 	return nil
+}
+
+func validateResolvedConfig(cfg config.Context) error {
+	return validateConfig(envref.ExpandExactEnvPlaceholders(cfg))
 }
 
 func normalizeConfig(cfg config.Context) config.Context {
