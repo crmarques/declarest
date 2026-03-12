@@ -91,10 +91,15 @@ func supportsANSIStatus(w io.Writer) bool {
 }
 
 func shouldSuppressColor(args []string) bool {
-	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" {
-		return true
-	}
-	return hasNoColorArgToken(args)
+	return parseGlobalBoolFlag(
+		args,
+		cliutil.GlobalFlagNoColor,
+		"",
+		cliutil.EnvBoolOrDefault(
+			cliutil.GlobalEnvNoColor,
+			cliutil.EnvPresentOrDefault(cliutil.GlobalEnvNoColorLegacy, false),
+		),
+	)
 }
 
 func shouldEmitExecutionStatus(args []string, command *cobra.Command) bool {
@@ -104,33 +109,16 @@ func shouldEmitExecutionStatus(args []string, command *cobra.Command) bool {
 	if isHelpOrCompletionInvocation(args) {
 		return false
 	}
-	return commandPathSupportsExecutionStatus(commandPath(command))
-}
-
-func commandPath(command *cobra.Command) string {
-	if command == nil {
-		return ""
-	}
-	return strings.TrimSpace(command.CommandPath())
-}
-
-func commandPathSupportsExecutionStatus(path string) bool {
-	return commandmeta.EmitsExecutionStatusPath(path)
+	return commandmeta.EmitsExecutionStatus(command)
 }
 
 func shouldSuppressStatusMessage(args []string) bool {
-	flags := pflag.NewFlagSet("status", pflag.ContinueOnError)
-	flags.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{
-		UnknownFlags: true,
-	}
-	flags.SetOutput(io.Discard)
-
-	var noStatus bool
-	flags.BoolVarP(&noStatus, "no-status", "n", false, "hide status output")
-	if err := flags.Parse(args); err != nil {
-		return hasNoStatusArgToken(args)
-	}
-	return noStatus
+	return parseGlobalBoolFlag(
+		args,
+		cliutil.GlobalFlagNoStatus,
+		cliutil.GlobalFlagNoStatusShort,
+		cliutil.EnvBoolOrDefault(cliutil.GlobalEnvNoStatus, false),
+	)
 }
 
 func isHelpOrCompletionInvocation(args []string) bool {
@@ -156,26 +144,21 @@ func isHelpOrCompletionInvocation(args []string) bool {
 	return false
 }
 
-func hasNoStatusArgToken(args []string) bool {
-	for _, current := range args {
-		if current == "--no-status" || current == "-n" {
-			return true
-		}
-		if strings.HasPrefix(current, "--no-status=") {
-			return strings.TrimSpace(strings.TrimPrefix(current, "--no-status=")) != "false"
-		}
+func parseGlobalBoolFlag(args []string, name string, shorthand string, defaultValue bool) bool {
+	flags := pflag.NewFlagSet(name, pflag.ContinueOnError)
+	flags.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{
+		UnknownFlags: true,
 	}
-	return false
-}
+	flags.SetOutput(io.Discard)
 
-func hasNoColorArgToken(args []string) bool {
-	for _, current := range args {
-		if current == "--no-color" {
-			return true
-		}
-		if strings.HasPrefix(current, "--no-color=") {
-			return strings.TrimSpace(strings.TrimPrefix(current, "--no-color=")) != "false"
-		}
+	var value bool
+	if strings.TrimSpace(shorthand) == "" {
+		flags.BoolVar(&value, name, defaultValue, "")
+	} else {
+		flags.BoolVarP(&value, name, shorthand, defaultValue, "")
 	}
-	return false
+	if err := flags.Parse(args); err != nil {
+		return defaultValue
+	}
+	return value
 }

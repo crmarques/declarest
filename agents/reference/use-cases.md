@@ -588,7 +588,7 @@ Inputs:
 
 Execution:
 1. Run `declarest resource save /customers/acme --payload '/id=acme,/name=Acme' --force --message ticket-123`.
-2. Run `declarest resource delete /customers/acme --confirm-delete --source repository --message 'cleanup customer'`.
+2. Run `declarest resource delete /customers/acme --yes --source repository --message 'cleanup customer'`.
 3. Re-run one command after creating an unrelated uncommitted change in the repo.
 4. Run one command with `--message '   '`.
 

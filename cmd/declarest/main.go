@@ -10,15 +10,22 @@ import (
 	"github.com/crmarques/declarest/internal/cli"
 )
 
+const (
+	contextFlagName      = "context"
+	contextFlagShort     = "c"
+	contextEnvDefaultKey = "DECLAREST_CONTEXT"
+)
+
 func main() {
 	args := os.Args[1:]
+	resolvedInvocation, hasRunnableCommand := cli.ResolveRunnableInvocation(args)
 	deps := cli.Dependencies{
 		Contexts: bootstrap.NewContextService(bootstrap.BootstrapConfig{}),
 	}
-	if !shouldSkipContextBootstrap(args) {
+	if !shouldSkipContextBootstrap(args, resolvedInvocation, hasRunnableCommand) {
 		session, err := bootstrap.NewSession(
 			bootstrap.BootstrapConfig{},
-			config.ContextSelection{Name: contextNameFromArgs(args)},
+			config.ContextSelection{Name: contextNameFromArgs(args, resolvedInvocation, hasRunnableCommand)},
 		)
 		if err != nil {
 			if !isShellCompletionInvocation(args) {
@@ -43,43 +50,42 @@ func dependenciesFromSession(s bootstrap.Session) cli.Dependencies {
 	return cli.NewDependencies(s.Orchestrator, s.Contexts, s.Services)
 }
 
-func contextNameFromArgs(args []string) string {
+func contextNameFromArgs(args []string, resolvedInvocation cli.Invocation, ok bool) string {
 	if contextName, provided := contextNameFromExplicitContextFlag(args); provided {
 		return contextName
 	}
+	if contextName := strings.TrimSpace(os.Getenv(contextEnvDefaultKey)); contextName != "" {
+		return contextName
+	}
 
-	return contextNameFromPositionalContextArg(args)
+	return contextNameFromPositionalContextArg(resolvedInvocation, ok)
 }
 
 func contextNameFromExplicitContextFlag(args []string) (string, bool) {
 	for idx := 0; idx < len(args); idx++ {
 		current := args[idx]
 
-		if current == "--context" || current == "-c" {
+		if current == "--"+contextFlagName || current == "-"+contextFlagShort {
 			if idx+1 < len(args) {
 				return args[idx+1], true
 			}
 			return "", true
 		}
-		if strings.HasPrefix(current, "--context=") {
-			return strings.TrimPrefix(current, "--context="), true
+		if strings.HasPrefix(current, "--"+contextFlagName+"=") {
+			return strings.TrimPrefix(current, "--"+contextFlagName+"="), true
 		}
 	}
 
 	return "", false
 }
 
-func contextNameFromPositionalContextArg(args []string) string {
-	resolvedCommand, ok := resolveRunnableCommand(args)
-	if !ok {
+func contextNameFromPositionalContextArg(resolvedInvocation cli.Invocation, ok bool) string {
+	if !ok || !commandUsesPositionalContextSelection(resolvedInvocation) {
 		return ""
 	}
 
-	switch resolvedCommand.commandPath {
-	case "declarest context check", "declarest context init":
-		if len(resolvedCommand.positionalArgs) > 0 {
-			return strings.TrimSpace(resolvedCommand.positionalArgs[0])
-		}
+	if len(resolvedInvocation.PositionalArgs) > 0 {
+		return strings.TrimSpace(resolvedInvocation.PositionalArgs[0])
 	}
 
 	return ""
@@ -137,30 +143,19 @@ func shellCompletionRequiresContextBootstrap(args []string) bool {
 		return false
 	}
 
-	commandPath, ok := resolveCompletionCommandPath(targetArgs)
+	invocation, ok := cli.ResolveRunnableInvocation(targetArgs)
 	if !ok {
 		return false
 	}
 
-	return requiresContextBootstrap(commandPath)
+	return invocation.RequiresContextBootstrap
 }
 
-func resolveCompletionCommandPath(args []string) (string, bool) {
-	probe := cli.NewRootCommand(cli.Dependencies{})
-	command, _, err := probe.Find(args)
-	if err != nil {
-		return "", false
-	}
-	if command == nil {
-		return "", false
-	}
-	if !command.Runnable() {
-		return "", false
-	}
-	return strings.TrimSpace(command.CommandPath()), true
-}
-
-func shouldSkipContextBootstrap(args []string) bool {
+func shouldSkipContextBootstrap(
+	args []string,
+	resolvedInvocation cli.Invocation,
+	hasRunnableCommand bool,
+) bool {
 	if isHelpInvocation(args) {
 		return true
 	}
@@ -171,59 +166,19 @@ func shouldSkipContextBootstrap(args []string) bool {
 		return !shellCompletionRequiresContextBootstrap(args)
 	}
 
-	commandPath, ok := resolveRunnableCommandPath(args)
-	if !ok {
+	if !hasRunnableCommand {
 		return true
 	}
 
-	return !requiresContextBootstrap(commandPath)
+	return !resolvedInvocation.RequiresContextBootstrap
 }
 
 func isHelpFallbackInvocation(args []string) bool {
-	_, ok := resolveRunnableCommandPath(args)
+	_, ok := cli.ResolveRunnableInvocation(args)
 	return !ok
 }
 
-func resolveRunnableCommandPath(args []string) (string, bool) {
-	resolvedCommand, ok := resolveRunnableCommand(args)
-	if !ok {
-		return "", false
-	}
-	return resolvedCommand.commandPath, true
-}
-
-type runnableCommand struct {
-	commandPath    string
-	positionalArgs []string
-}
-
-func resolveRunnableCommand(args []string) (runnableCommand, bool) {
-	probe := cli.NewRootCommand(cli.Dependencies{})
-	command, remainingArgs, err := probe.Find(args)
-	if err != nil {
-		return runnableCommand{}, false
-	}
-	if command == nil {
-		return runnableCommand{}, false
-	}
-	if !command.Runnable() {
-		return runnableCommand{}, false
-	}
-
-	if err := command.ParseFlags(remainingArgs); err != nil {
-		return runnableCommand{}, false
-	}
-	positionalArgs := command.Flags().Args()
-	if err := command.ValidateArgs(positionalArgs); err != nil {
-		return runnableCommand{}, false
-	}
-
-	return runnableCommand{
-		commandPath:    strings.TrimSpace(command.CommandPath()),
-		positionalArgs: positionalArgs,
-	}, true
-}
-
-func requiresContextBootstrap(commandPath string) bool {
-	return cli.RequiresContextBootstrapPath(commandPath)
+func commandUsesPositionalContextSelection(invocation cli.Invocation) bool {
+	return strings.TrimSpace(invocation.ParentCommandName) == "context" &&
+		(strings.TrimSpace(invocation.CommandName) == "check" || strings.TrimSpace(invocation.CommandName) == "init")
 }

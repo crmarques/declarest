@@ -11,6 +11,7 @@ import (
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 func TestRequireHelpers(t *testing.T) {
@@ -95,7 +96,7 @@ func TestRequireHelpers(t *testing.T) {
 				}
 				return nil
 			},
-			deps: Dependencies{Repository: repositoryStore},
+			deps: Dependencies{Services: &noopServiceAccessor{store: repositoryStore}},
 		},
 		{
 			name: "require metadata service rejects nil",
@@ -118,7 +119,7 @@ func TestRequireHelpers(t *testing.T) {
 				}
 				return nil
 			},
-			deps: Dependencies{Metadata: metadataService},
+			deps: Dependencies{Services: &noopServiceAccessor{metadata: metadataService}},
 		},
 		{
 			name: "require secret provider rejects nil",
@@ -141,7 +142,7 @@ func TestRequireHelpers(t *testing.T) {
 				}
 				return nil
 			},
-			deps: Dependencies{Secrets: secretProvider},
+			deps: Dependencies{Services: &noopServiceAccessor{secrets: secretProvider}},
 		},
 	}
 
@@ -253,6 +254,22 @@ func (n *noopRepositoryStore) List(context.Context, string, repository.ListPolic
 	return nil, nil
 }
 func (n *noopRepositoryStore) Exists(context.Context, string) (bool, error) { return false, nil }
+
+type noopServiceAccessor struct {
+	store    repository.ResourceStore
+	metadata metadatadomain.MetadataService
+	secrets  secretdomain.SecretProvider
+}
+
+func (n *noopServiceAccessor) RepositoryStore() repository.ResourceStore { return n.store }
+func (n *noopServiceAccessor) RepositorySync() repository.RepositorySync { return nil }
+func (n *noopServiceAccessor) MetadataService() metadatadomain.MetadataService {
+	return n.metadata
+}
+func (n *noopServiceAccessor) SecretProvider() secretdomain.SecretProvider { return n.secrets }
+func (n *noopServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+	return nil
+}
 
 type noopMetadataService struct{}
 

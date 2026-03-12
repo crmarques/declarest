@@ -1,136 +1,149 @@
-You are a senior software engineer / product-minded CLI architect. Your task is to review this repository’s CLI end-to-end and propose improvements to UX, correctness, and efficiency. The project is a declarative, Git-backed sync engine for REST-based systems: users define resources and connection contexts in files, then the CLI plans/diffs/applies changes to remote REST APIs while managing metadata layering/templates and secrets through a secret-store abstraction.
+You are a senior software engineer and product-minded CLI architect. Review this repository's CLI end-to-end and propose improvements to UX, correctness, efficiency, and maintainability. The project is a declarative, Git-backed sync engine for REST-based systems: users define resources and connection contexts in files, then the CLI plans, diffs, and applies changes to remote REST APIs while managing metadata layering, templates, and secrets through a secret-store abstraction.
 
-Your review must be evidence-driven: inspect the code, enumerate commands/flags, trace execution flows, and find duplication or inconsistent behavior. Provide a concrete improvement plan (step-by-step PR-sized milestones). Do not implement changes automatically.
+This is a review and planning task. Do not implement changes automatically.
 
 PRIMARY GOALS
-1) UX quality and discoverability
+1. UX quality and discoverability
 - Ensure the CLI is intuitive for first-time users and efficient for power users.
-- Make help output, command naming, and workflows consistent and self-explanatory.
-- Ensure “happy path” flows are short and obvious; advanced features are discoverable.
+- Make help output, command naming, global flags, and common workflows consistent and self-explanatory.
+- Ensure common read, diff, and apply flows are short and obvious, while advanced features stay discoverable.
 
-2) Correctness & flow integrity
-- Validate each command’s flow is correct: config loading, context selection, auth/secrets, git operations, API calls, outputs, and exit codes.
-- Ensure error handling is consistent and actionable.
+2. Correctness and flow integrity
+- Validate each command's flow: bootstrap, context selection, metadata resolution, auth, secrets, repository access, HTTP requests, output, and exit codes.
+- Ensure error handling is consistent, typed, and actionable.
 
-3) Flag and config consistency
-- Audit all flags (global and per-command), their defaults, env-var mappings, and config-file precedence.
-- Eliminate redundant/overlapping flags and ambiguous naming.
-- Ensure stable behavior: same inputs → same outputs.
+3. Flag, env, and config consistency
+- Audit all global and local flags, their defaults, env-var mappings, config-file support, and precedence.
+- Eliminate redundant or overlapping flags and ambiguous naming.
+- Ensure the same concept behaves the same way across commands.
 
-4) Efficiency and duplication reduction
-- Identify duplicated parsing, validation, metadata rendering, git IO, REST client creation, or output formatting across commands.
-- Propose centralization via cohesive managers/facades (e.g., Metadata, Config/Context, Secrets, ResourceRepo/Git, ManagedServer/API client, Output/Formatter).
+4. Efficiency and duplication reduction
+- Identify duplicated parsing, validation, metadata rendering, git/repository access, output formatting, command metadata dispatch, and dependency wiring.
+- Propose centralization through cohesive helpers or facades rather than ad-hoc per-command logic.
 
-REVIEW METHOD (do this in order)
+REVIEW METHOD
 
-1) CLI inventory (what exists today)
-- List all commands/subcommands (tree view) and their intended purpose in 1 line each.
-- List all global flags and shared behaviors (verbosity, config path, context, output format, no-color, etc.).
-- For each command, list:
+1. CLI inventory
+- Enumerate the full command tree and summarize each leaf command in one line.
+- List all global flags in a table with: name, shorthand, type, default, and description.
+- For each leaf command, capture:
   - required args,
-  - flags,
-  - examples shown in help (and note missing ones).
+  - local flags,
+  - whether help includes examples,
+  - any obvious naming or validation problems.
 
-2) Workflows and user journeys (must be coherent)
-Identify and validate the key user flows that match the project’s nature:
-- Bootstrapping: init/setup, generating skeleton configs, validating config.
-- Read-only flows: inspect/show/list/status/export/pull/preview.
-- Change flows: plan/diff/apply/sync/push with idempotency guarantees.
-- Multi-context / multi-environment: selecting a context, overriding endpoints, switching credentials.
-- Metadata layering/templates: how users preview/render and how the engine resolves layers.
-- Secrets: how credentials are referenced, loaded, and never leaked to output/logs.
-- Git-backed resource repository: clone/init, branch/mirror/workdir patterns, safety checks, and remote operations.
-For each flow:
-- Trace the call path in code (from Cobra command → services/managers → git/fs/http).
-- Confirm the flow is correct, efficient, and provides good UX (messages, progress, errors).
+2. Workflow tracing
+- Trace and validate the main user journeys:
+  - bootstrap and startup gating,
+  - context selection and override resolution,
+  - read-only flows (`get`, `list`, `diff`, `describe`, `show`, `resolve`),
+  - mutation flows (`save`, `apply`, `create`, `update`, `delete`, repository sync),
+  - metadata preview and render flows,
+  - raw HTTP request flows,
+  - secrets masking, resolving, detecting, and storage,
+  - repository clone/init/refresh/status/push/reset flows,
+  - output and status footer behavior.
+- For each flow, trace the call path from Cobra command to services/managers and confirm the user experience, correctness, and safety properties.
 
-3) Flag audit (deep, systematic)
-For EVERY flag:
-- Name quality: intent-revealing, consistent style, no vague names.
-- Behavior: what it changes, default, whether it’s global or local.
-- Precedence rules:
-  - flags vs config file vs env vars vs defaults (document and enforce consistently).
-- Validation:
-  - required combos, mutually exclusive flags, allowed values, empty/zero behavior.
-- Consistency:
-  - same flag name does the same thing across commands.
-- Hidden traps:
-  - flags that silently do nothing, ambiguous flags, multiple flags controlling one concept.
+3. Flag, env, and config audit
+- For every important flag, evaluate:
+  - naming quality and shorthand quality,
+  - default and allowed values,
+  - validation and mutually exclusive combinations,
+  - precedence between CLI flags, env vars, config, and built-in defaults,
+  - consistency across commands,
+  - whether the flag silently does nothing in any scenario.
+- Pay special attention to global flags and secret-revealing flags.
 
-4) Output UX and scripting stability
-- Ensure outputs are:
-  - human-friendly by default (clear summaries, next actions),
-  - script-friendly when requested (JSON/YAML output modes),
-  - stable over time (avoid ad-hoc formatting changes without versioning).
-- Audit:
-  - exit codes per scenario (success/no-op/partial failure/validation error/auth error).
-  - stdout vs stderr usage (machine output on stdout, diagnostics on stderr).
-  - log levels and verbosity controls.
-  - color/no-color support and terminal detection.
-- Ensure no secrets are printed (tokens, passwords, private keys, auth headers).
+4. Output and scripting stability audit
+- Verify:
+  - stdout vs stderr separation,
+  - text vs JSON vs YAML output consistency,
+  - auto-format behavior for terminal vs pipe,
+  - exit-code consistency,
+  - color and no-color behavior,
+  - status footer behavior,
+  - secret redaction.
 
-5) Performance/efficiency review in CLI context
-- Look for repeated work per command (re-loading config, re-parsing metadata, re-building clients, repeated git scans).
-- Identify opportunities for:
-  - caching within a single run,
-  - lazy loading (only load what the command needs),
-  - reducing filesystem and git operations,
-  - batching HTTP calls where safe,
-  - concurrency controls (but deterministic results).
-- Confirm timeouts and retries are sane (especially around remote REST APIs and git remotes).
+5. Startup, scaffolding, and duplication audit
+- Look for:
+  - repeated command-tree construction,
+  - hardcoded command-path metadata switches,
+  - duplicated dependency structs or `Require*` helper stacks,
+  - manual pre-parsing that can drift from Cobra,
+  - repeated input-flag binding or output-resolution helpers,
+  - duplicated validation or output policy logic across command packages.
 
-6) Duplication and architecture improvement suggestions
-- Identify repeated patterns in commands (same validation, same context resolution, same manager wiring).
-- Propose refactors:
-  - shared “command scaffolding” functions,
-  - unified managers/facades with clear responsibilities,
-  - consistent error and output formatting helpers,
-  - reducing the number of ad-hoc helper functions spread across CLI packages.
+6. Efficiency and operator experience
+- Identify repeated work in a single CLI invocation: config loading, metadata resolution, repository scans, OpenAPI loading, client construction, or output conversion.
+- Note missing progress feedback for long-running operations such as git, network calls, auth, or bundle resolution.
 
-DELIVERABLES (required output format)
+7. Bundle follow-up
+- If sibling bundle repositories exist (for example `../declarest-bundle-keycloak` or `../declarest-bundle-rundeck`), review them as secondary scope:
+  - README usage examples,
+  - metadata validation in CI,
+  - example resources,
+  - documentation for complex transforms,
+  - version-range guidance.
+
+HIGH-VALUE ISSUES TO CONFIRM OR REFUTE
+- Missing env-var support for global flags.
+- Duplicated dependency containers or validation wrappers between CLI and app layers.
+- Hardcoded command path matching for bootstrap, output, or status behavior.
+- Building the Cobra tree multiple times on startup or completion paths.
+- Manual status or color pre-parsing that can diverge from Cobra flag parsing.
+- Inconsistent flag names or shorthand meanings across commands.
+- Missing or sparse `Example:` help text on leaf commands.
+- Fragmented output-format resolution helpers and inconsistent `--output auto` behavior.
+- Missing validation for suspicious flag combinations.
+- Missing `--dry-run` support on mutation commands.
+- Repeated input-flag binding and inconsistent content-type help text.
+- Missing CLI preferences config for non-context settings.
+- Missing progress indicators for long-running operations.
+- Bundle-project documentation and metadata-validation gaps.
+
+DELIVERABLES
 
 A) Current CLI overview
-- Command tree
-- Global flags
-- Primary workflows (user journeys)
+- Command tree.
+- Global flags table.
+- Primary workflows and user journeys.
 
 B) Findings (prioritized P0/P1/P2)
 For each finding include:
-- Evidence: file paths + symbols (commands/flags/functions)
-- Problem: UX/correctness/efficiency/duplication
-- Impact: user confusion, incorrect behavior, instability, maintenance cost
-- Recommendation: concrete change direction
+- Evidence: file paths plus symbols.
+- Problem: UX, correctness, efficiency, duplication, or security.
+- Impact: user confusion, wrong behavior, instability, maintenance cost, or safety risk.
+- Recommendation: concrete change direction.
 
-C) Flag & config precedence spec (proposed)
-- A single, explicit precedence order and rules.
-- Proposed naming normalization and deprecations (with migration strategy).
+C) Flag and config precedence spec (proposed)
+- A single explicit precedence order.
+- Proposed env-var mapping for important global flags.
+- Naming normalization recommendations, including breaking changes if justified.
 
 D) Target UX improvements
-- Proposed command naming/structure adjustments (if needed).
-- Help text improvements (examples, parameter descriptions, gotchas).
-- Output mode standardization (text vs JSON/YAML), exit code policy.
+- Command naming or structure adjustments, if needed.
+- Help-text improvements, examples, and cross-references.
+- Output standardization and exit-code policy.
+- Safe preview and destructive-operation guardrail improvements.
 
-E) Implementation plan (step-by-step PRs)
-- Small, safe milestones:
-  - refactor scaffolding,
-  - unify managers/facades,
-  - normalize flags,
-  - improve help/examples,
-  - improve output consistency,
-  - add CLI tests (unit + integration style for Cobra commands; golden tests for output where appropriate).
+E) Implementation plan
+- Propose a sequence of small, mergeable PR-sized milestones.
+- For each step include:
+  - scope,
+  - files or packages affected,
+  - expected benefit,
+  - risk level,
+  - verification needed.
+- Prefer refactors that centralize behavior instead of spreading more helpers across command packages.
 
-QUALITY BAR / GUARDRAILS
-- Keep changes aligned with a declarative GitOps-style workflow:
-  - commands should map to conceptual actions (validate/plan/diff/apply/sync/status/export).
-- Prefer explicitness over magic:
-  - no surprising implicit context switches or hidden defaults.
-- Backward compatibility:
-  - if you propose breaking changes, include a clear deprecation path and a compatibility period plan.
-- Security:
-  - never print secrets; sanitize errors; safe defaults for remote operations.
+OUTPUT RULES
+- Be evidence-driven. Do not assume a problem exists unless the code supports it.
+- Use exact file paths and symbol names for every substantive finding.
+- Keep the recommendations incremental and implementation-ready.
+- If you propose breaking changes, explain whether they need a compatibility period or can be applied directly.
+- Do not implement changes unless explicitly asked.
 
 SUCCESS CRITERIA
-- A CLI that is easy to understand at first glance, consistent across commands, and efficient.
-- Clear, enforceable rules for flags/config/env precedence.
-- Reduced duplication via cohesive managers and shared scaffolding.
-- Correct, reliable flows for Git-backed declarative sync to REST APIs, including metadata layering and secrets handling.
+- The review yields a clear CLI inventory, a defensible priority stack of issues, a concrete precedence spec, and a realistic implementation plan.
+- Recommendations improve first-run usability, scripting stability, safety, and maintainability without hand-wavy abstractions.

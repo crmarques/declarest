@@ -12,8 +12,10 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/spf13/cobra"
+	"go.yaml.in/yaml/v3"
 )
 
 func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
@@ -31,22 +33,44 @@ func newCommandWithPrompter(
 		Args:  cobra.NoArgs,
 	}
 
+	printTemplateCommand := newPrintTemplateCommand()
+	migrateCommand := newMigrateCommand(deps)
+	initCommand := newInitCommand(deps, globalFlags)
+	addCommand := newAddCommand(deps, globalFlags, prompter)
+	editCommand := newEditCommand(deps, globalFlags)
+	updateCommand := newUpdateCommand(deps)
+	deleteCommand := newDeleteCommand(deps, prompter)
+	renameCommand := newRenameCommand(deps, prompter)
+	listCommand := newListCommand(deps, globalFlags)
+	useCommand := newUseCommand(deps, prompter)
+	showCommand := newShowCommand(deps, globalFlags, prompter)
+	currentCommand := newCurrentCommand(deps, globalFlags)
+	resolveCommand := newResolveCommand(deps, globalFlags)
+	checkCommand := newCheckCommand(deps, globalFlags)
+	validateCommand := newValidateCommand(deps)
+
+	commandmeta.MarkTextOnlyOutput(printTemplateCommand)
+	commandmeta.MarkRequiresContextBootstrap(initCommand)
+	commandmeta.MarkYAMLDefaultTextOrYAMLOutput(showCommand)
+	commandmeta.MarkRequiresContextBootstrap(checkCommand)
+	commandmeta.MarkTextDefaultStructuredOutput(checkCommand)
+
 	command.AddCommand(
-		newPrintTemplateCommand(),
-		newMigrateCommand(deps),
-		newInitCommand(deps, globalFlags),
-		newAddCommand(deps, globalFlags, prompter),
-		newEditCommand(deps, globalFlags),
-		newUpdateCommand(deps),
-		newDeleteCommand(deps, prompter),
-		newRenameCommand(deps, prompter),
-		newListCommand(deps, globalFlags),
-		newUseCommand(deps, prompter),
-		newShowCommand(deps, globalFlags, prompter),
-		newCurrentCommand(deps, globalFlags),
-		newResolveCommand(deps, globalFlags),
-		newCheckCommand(deps, globalFlags),
-		newValidateCommand(deps),
+		printTemplateCommand,
+		migrateCommand,
+		initCommand,
+		addCommand,
+		editCommand,
+		updateCommand,
+		deleteCommand,
+		renameCommand,
+		listCommand,
+		useCommand,
+		showCommand,
+		currentCommand,
+		resolveCommand,
+		checkCommand,
+		validateCommand,
 	)
 
 	return command
@@ -235,11 +259,9 @@ func newAddCommand(
 		},
 	}
 
-	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
+	cliutil.BindInputFlags(command, &input)
 	command.Flags().StringVar(&contextName, "context-name", "", "context name to import (catalog) or assign (single context)")
 	command.Flags().BoolVar(&setCurrent, "set-current", false, "set imported context as current")
-	cliutil.RegisterInputContentTypeFlagCompletion(command)
 	return command
 }
 
@@ -381,9 +403,7 @@ func newUpdateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
-	cliutil.RegisterInputContentTypeFlagCompletion(command)
+	cliutil.BindInputFlags(command, &input)
 	return command
 }
 
@@ -555,7 +575,12 @@ func newShowCommand(
 				return err
 			}
 
-			return cliutil.WriteOutput(command, cliutil.OutputYAML, shown, nil)
+			return cliutil.WriteOutput(
+				command,
+				cliutil.ResolveCommandOutputFormat(command, globalFlags),
+				shown,
+				renderContextText,
+			)
 		},
 	}
 
@@ -628,7 +653,7 @@ func newResolveCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 		},
 	}
 
-	command.Flags().StringArrayVarP(&overrides, "set", "e", nil, "override key=value (repeatable)")
+	command.Flags().StringArrayVarP(&overrides, "set", "s", nil, "override key=value (repeatable)")
 	registerSingleContextArgCompletion(command, deps)
 	return command
 }
@@ -653,9 +678,7 @@ func newValidateCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVarP(&input.Payload, "payload", "f", "", "payload file path (use '-' to read object from stdin)")
-	command.Flags().StringVar(&input.ContentType, "content-type", "", "input content type: json|yaml|application/json|application/yaml")
-	cliutil.RegisterInputContentTypeFlagCompletion(command)
+	cliutil.BindInputFlags(command, &input)
 	return command
 }
 
@@ -687,7 +710,7 @@ func newCheckCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 			}
 
 			report := runConfigCheck(command, deps, resolvedContext)
-			if err := cliutil.WriteOutput(command, selectedOutputFormat(globalFlags), report, renderConfigCheckText); err != nil {
+			if err := cliutil.WriteOutput(command, cliutil.ResolveCommandOutputFormat(command, globalFlags), report, renderConfigCheckText); err != nil {
 				return err
 			}
 
@@ -1063,18 +1086,20 @@ func renderConfigCheckText(writer io.Writer, report configCheckReport) error {
 	return err
 }
 
+func renderContextText(writer io.Writer, value configdomain.Context) error {
+	encoded, err := yaml.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(writer, string(encoded))
+	return err
+}
+
 func selectedContextName(globalFlags *cliutil.GlobalFlags) string {
 	if globalFlags == nil {
 		return ""
 	}
 	return strings.TrimSpace(globalFlags.Context)
-}
-
-func selectedOutputFormat(globalFlags *cliutil.GlobalFlags) string {
-	if globalFlags == nil || strings.TrimSpace(globalFlags.Output) == "" {
-		return cliutil.OutputAuto
-	}
-	return globalFlags.Output
 }
 
 func typedCategory(err error) faults.ErrorCategory {

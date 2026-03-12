@@ -433,8 +433,8 @@ func detectHeuristicSecretCandidates(
 	deps Dependencies,
 	value resource.Value,
 ) ([]string, error) {
-	if deps.Secrets != nil {
-		return deps.Secrets.DetectSecretCandidates(ctx, value)
+	if provider := deps.SecretProvider(); provider != nil {
+		return provider.DetectSecretCandidates(ctx, value)
 	}
 
 	return secretdomain.DetectSecretCandidates(value)
@@ -445,7 +445,7 @@ func resolveMetadataForSecretCheck(
 	deps Dependencies,
 	logicalPath string,
 ) (metadatadomain.ResourceMetadata, error) {
-	return secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.Metadata, logicalPath)
+	return secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.MetadataService(), logicalPath)
 }
 
 func detectMetadataSecretCandidates(value resource.Value, attributes []string) []string {

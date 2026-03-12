@@ -11,6 +11,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,7 @@ func NewCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		Short: "Inspect server connectivity and auth",
 		Args:  cobra.NoArgs,
 	}
+	commandmeta.MarkRequiresContextBootstrap(command)
 
 	command.AddCommand(
 		newGetCommand(deps),
@@ -37,10 +39,17 @@ func newGetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 
+	baseURLCommand := newGetBaseURLCommand(deps)
+	tokenURLCommand := newGetTokenURLCommand(deps)
+	accessTokenCommand := newGetAccessTokenCommand(deps)
+	commandmeta.MarkTextOnlyOutput(baseURLCommand)
+	commandmeta.MarkTextOnlyOutput(tokenURLCommand)
+	commandmeta.MarkTextOnlyOutput(accessTokenCommand)
+
 	command.AddCommand(
-		newGetBaseURLCommand(deps),
-		newGetTokenURLCommand(deps),
-		newGetAccessTokenCommand(deps),
+		baseURLCommand,
+		tokenURLCommand,
+		accessTokenCommand,
 	)
 
 	return command
@@ -141,7 +150,7 @@ func resolveHTTPServerConfig(ctx context.Context, deps cliutil.CommandDependenci
 }
 
 func newCheckCommand(deps cliutil.CommandDependencies) *cobra.Command {
-	return &cobra.Command{
+	command := &cobra.Command{
 		Use:   "check",
 		Short: "Check managed-server connectivity",
 		Args:  cobra.NoArgs,
@@ -175,6 +184,8 @@ func newCheckCommand(deps cliutil.CommandDependencies) *cobra.Command {
 			return writeErr
 		},
 	}
+	commandmeta.MarkTextOnlyOutput(command)
+	return command
 }
 
 func renderHealthCheckTarget(httpConfig configdomain.HTTPServer) string {

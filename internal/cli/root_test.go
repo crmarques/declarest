@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
@@ -355,6 +356,26 @@ func TestGlobalFlagsParse(t *testing.T) {
 	}
 }
 
+func TestGlobalFlagEnvDefaults(t *testing.T) {
+	t.Setenv(cliutil.GlobalEnvOutput, "json")
+
+	output, err := executeForTest(testDeps(), "", "version")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(output, "\"version\"") {
+		t.Fatalf("expected DECLAREST_OUTPUT=json to affect version output, got %q", output)
+	}
+
+	textOutput, err := executeForTest(testDeps(), "", "--output", "text", "version")
+	if err != nil {
+		t.Fatalf("unexpected error with explicit flag override: %v", err)
+	}
+	if strings.Contains(textOutput, "\"version\"") {
+		t.Fatalf("expected explicit --output text to override DECLAREST_OUTPUT, got %q", textOutput)
+	}
+}
+
 func TestDebugFlagPrintsTraceOutput(t *testing.T) {
 	t.Parallel()
 
@@ -365,7 +386,8 @@ func TestDebugFlagPrintsTraceOutput(t *testing.T) {
 	if !strings.Contains(output, "/customers/acme") {
 		t.Fatalf("expected output to contain path, got %q", output)
 	}
-	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" verbose=3 verbose_insecure=false no_status=false no_color=false command="declarest resource get"`) {
+	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" verbose=3 verbose_insecure=false no_status=`) ||
+		!strings.Contains(debugOutput, `command="declarest resource get"`) {
 		t.Fatalf("expected root debug trace, got %q", debugOutput)
 	}
 	if !strings.Contains(debugOutput, `debug: resource get requested path="/customers/acme"`) {
@@ -1379,8 +1401,8 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 
 		_, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a")
 		assertTypedCategory(t, err, faults.ValidationError)
-		if !strings.Contains(err.Error(), "--confirm-delete") {
-			t.Fatalf("expected --confirm-delete validation message, got %v", err)
+		if !strings.Contains(err.Error(), "--yes") {
+			t.Fatalf("expected --yes validation message, got %v", err)
 		}
 		if !strings.Contains(strings.ToLower(err.Error()), "are you sure") {
 			t.Fatalf("expected confirmation-style validation message, got %v", err)
@@ -1390,7 +1412,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 	t.Run("delete_with_confirm_delete", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a", "--confirm-delete")
+		output, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a", "--yes")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1402,7 +1424,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 	t.Run("delete_with_confirm_delete_verbose", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a", "--confirm-delete", "--verbose")
+		output, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/items/a", "--yes", "--verbose")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1427,7 +1449,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--confirm-delete")
+		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--yes")
 		if err != nil {
 			t.Fatalf("unexpected collection delete error: %v", err)
 		}
@@ -1455,7 +1477,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--confirm-delete", "--recursive")
+		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--yes", "--recursive")
 		if err != nil {
 			t.Fatalf("unexpected recursive collection delete error: %v", err)
 		}
@@ -1483,7 +1505,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 		}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--confirm-delete", "--recursive", "--verbose")
+		output, err := executeForTest(deps, "", "resource", "request", "delete", "/items", "--yes", "--recursive", "--verbose")
 		if err != nil {
 			t.Fatalf("unexpected recursive collection delete error: %v", err)
 		}
@@ -1495,7 +1517,7 @@ func TestResourceRequestMethodCommands(t *testing.T) {
 	t.Run("path_mismatch_fails_validation", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/a", "--path", "/b", "--confirm-delete")
+		_, err := executeForTest(testDeps(), "", "resource", "request", "delete", "/a", "--path", "/b", "--yes")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
@@ -3060,13 +3082,13 @@ func TestResourceDeleteRequiresConfirmDelete(t *testing.T) {
 
 	_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme")
 	assertTypedCategory(t, err, faults.ValidationError)
-	if !strings.Contains(err.Error(), "flag --confirm-delete is required") {
-		t.Fatalf("expected --confirm-delete validation message, got %v", err)
+	if !strings.Contains(err.Error(), "flag --yes is required") {
+		t.Fatalf("expected --yes validation message, got %v", err)
 	}
 
-	_, err = executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete")
+	_, err = executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--yes")
 	if err != nil {
-		t.Fatalf("unexpected error with --confirm-delete: %v", err)
+		t.Fatalf("unexpected error with --yes: %v", err)
 	}
 }
 
@@ -3095,7 +3117,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
-		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete")
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--yes")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
@@ -3114,7 +3136,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
-		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "repository")
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--yes", "--source", "repository")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
@@ -3129,7 +3151,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 	t.Run("http_method_override_requires_remote_source", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "repository", "--http-method", "DELETE")
+		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--yes", "--source", "repository", "--http-method", "DELETE")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--http-method") {
 			t.Fatalf("expected http-method/source validation error, got %v", err)
@@ -3143,7 +3165,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
 		repositoryService := deps.Services.RepositoryStore().(*testRepository)
 
-		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "both")
+		_, err := executeForTest(deps, "", "resource", "delete", "/customers/acme", "--yes", "--source", "both")
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
 		}
@@ -3158,7 +3180,7 @@ func TestResourceDeleteSourceFlags(t *testing.T) {
 	t.Run("invalid_source_value_fails", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--confirm-delete", "--source", "invalid")
+		_, err := executeForTest(testDeps(), "", "resource", "delete", "/customers/acme", "--yes", "--source", "invalid")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 }
@@ -3176,7 +3198,7 @@ func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *tes
 	}
 	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-	_, err := executeForTest(deps, "", "resource", "delete", "/customers", "--confirm-delete")
+	_, err := executeForTest(deps, "", "resource", "delete", "/customers", "--yes")
 	if err != nil {
 		t.Fatalf("unexpected non-recursive delete error: %v", err)
 	}
@@ -3195,7 +3217,7 @@ func TestResourceDeleteCollectionPathUsesRepositoryTargetsForRemoteDelete(t *tes
 	}
 
 	orchestrator.deleteCalls = nil
-	_, err = executeForTest(deps, "", "resource", "delete", "/customers", "--confirm-delete", "--recursive")
+	_, err = executeForTest(deps, "", "resource", "delete", "/customers", "--yes", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected recursive delete error: %v", err)
 	}
@@ -3223,7 +3245,7 @@ func TestResourceDeleteFallsBackToRequestedPathWhenNoLocalTargetsMatch(t *testin
 	}
 	deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-	_, err := executeForTest(deps, "", "resource", "delete", "/orders", "--confirm-delete", "--recursive")
+	_, err := executeForTest(deps, "", "resource", "delete", "/orders", "--yes", "--recursive")
 	if err != nil {
 		t.Fatalf("unexpected delete fallback error: %v", err)
 	}
@@ -3253,7 +3275,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"--context", "git",
 			"resource", "delete",
 			"/customers/acme",
-			"--confirm-delete",
+			"--yes",
 			"--source", "repository",
 		)
 		if err != nil {
@@ -3282,7 +3304,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"--context", "git",
 			"resource", "delete",
 			"/customers/acme",
-			"--confirm-delete",
+			"--yes",
 			"--source", "repository",
 			"--message", "ticket-456",
 		)
@@ -3309,7 +3331,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"--context", "git",
 			"resource", "delete",
 			"/customers/acme",
-			"--confirm-delete",
+			"--yes",
 			"--source", "repository",
 			"--message", "custom delete commit",
 		)
@@ -3336,7 +3358,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"--context", "git",
 			"resource", "delete",
 			"/customers/acme",
-			"--confirm-delete",
+			"--yes",
 			"--source", "managed-server",
 		)
 		if err != nil {
@@ -3359,7 +3381,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"--context", "git",
 			"resource", "delete",
 			"/customers/acme",
-			"--confirm-delete",
+			"--yes",
 			"--source", "repository",
 			"--message", "",
 		)

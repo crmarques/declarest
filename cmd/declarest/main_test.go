@@ -5,20 +5,26 @@ import (
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli"
 )
 
 func TestContextNameFromArgs(t *testing.T) {
-	t.Parallel()
-
 	testCases := []struct {
-		name string
-		args []string
-		want string
+		name       string
+		args       []string
+		envContext string
+		want       string
 	}{
 		{
 			name: "long flag separated",
 			args: []string{"--context", "dev"},
 			want: "dev",
+		},
+		{
+			name:       "explicit flag overrides env context",
+			args:       []string{"--context", "dev"},
+			envContext: "env-prod",
+			want:       "dev",
 		},
 		{
 			name: "short flag separated",
@@ -41,6 +47,12 @@ func TestContextNameFromArgs(t *testing.T) {
 			want: "",
 		},
 		{
+			name:       "context env default",
+			args:       []string{"resource", "list"},
+			envContext: "env-prod",
+			want:       "env-prod",
+		},
+		{
 			name: "context check positional context",
 			args: []string{"context", "check", "prod"},
 			want: "prod",
@@ -55,9 +67,9 @@ func TestContextNameFromArgs(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := contextNameFromArgs(testCase.args)
+			t.Setenv("DECLAREST_CONTEXT", testCase.envContext)
+			resolvedInvocation, ok := cli.ResolveRunnableInvocation(testCase.args)
+			got := contextNameFromArgs(testCase.args, resolvedInvocation, ok)
 			if got != testCase.want {
 				t.Fatalf("contextNameFromArgs() = %q, want %q", got, testCase.want)
 			}
@@ -264,7 +276,8 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
-			got := shouldSkipContextBootstrap(testCase.args)
+			resolvedInvocation, ok := cli.ResolveRunnableInvocation(testCase.args)
+			got := shouldSkipContextBootstrap(testCase.args, resolvedInvocation, ok)
 			if got != testCase.want {
 				t.Fatalf("shouldSkipContextBootstrap() = %t, want %t", got, testCase.want)
 			}
@@ -276,54 +289,54 @@ func TestRequiresContextBootstrap(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name        string
-		commandPath string
-		want        bool
+		name string
+		args []string
+		want bool
 	}{
 		{
-			name:        "resource commands require context",
-			commandPath: "declarest resource list",
-			want:        true,
+			name: "resource commands require context",
+			args: []string{"resource", "list", "/"},
+			want: true,
 		},
 		{
-			name:        "metadata commands require context",
-			commandPath: "declarest metadata resolve",
-			want:        true,
+			name: "metadata commands require context",
+			args: []string{"metadata", "resolve", "/"},
+			want: true,
 		},
 		{
-			name:        "repository commands require context",
-			commandPath: "declarest repository status",
-			want:        true,
+			name: "repository commands require context",
+			args: []string{"repository", "status"},
+			want: true,
 		},
 		{
-			name:        "secret commands require context",
-			commandPath: "declarest secret resolve",
-			want:        true,
+			name: "secret commands require context",
+			args: []string{"secret", "resolve"},
+			want: true,
 		},
 		{
-			name:        "context check requires context",
-			commandPath: "declarest context check",
-			want:        true,
+			name: "context check requires context",
+			args: []string{"context", "check"},
+			want: true,
 		},
 		{
-			name:        "context init requires context",
-			commandPath: "declarest context init",
-			want:        true,
+			name: "context init requires context",
+			args: []string{"context", "init"},
+			want: true,
 		},
 		{
-			name:        "version does not require context",
-			commandPath: "declarest version",
-			want:        false,
+			name: "version does not require context",
+			args: []string{"version"},
+			want: false,
 		},
 		{
-			name:        "context list does not require context",
-			commandPath: "declarest context list",
-			want:        false,
+			name: "context list does not require context",
+			args: []string{"context", "list"},
+			want: false,
 		},
 		{
-			name:        "context print-template does not require context",
-			commandPath: "declarest context print-template",
-			want:        false,
+			name: "context print-template does not require context",
+			args: []string{"context", "print-template"},
+			want: false,
 		},
 	}
 
@@ -332,9 +345,13 @@ func TestRequiresContextBootstrap(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := requiresContextBootstrap(testCase.commandPath)
+			resolvedInvocation, ok := cli.ResolveRunnableInvocation(testCase.args)
+			if !ok {
+				t.Fatalf("failed to resolve command %#v", testCase.args)
+			}
+			got := resolvedInvocation.RequiresContextBootstrap
 			if got != testCase.want {
-				t.Fatalf("requiresContextBootstrap() = %t, want %t", got, testCase.want)
+				t.Fatalf("RequiresContextBootstrap = %t, want %t", got, testCase.want)
 			}
 		})
 	}

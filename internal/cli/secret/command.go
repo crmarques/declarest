@@ -11,6 +11,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	detectapp "github.com/crmarques/declarest/internal/app/secret/detect"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
 	"github.com/spf13/cobra"
@@ -23,11 +24,15 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Manage secrets",
 		Args:  cobra.NoArgs,
 	}
+	commandmeta.MarkRequiresContextBootstrap(command)
+
+	getCommand := newGetCommand(deps)
+	commandmeta.MarkTextOnlyOutput(getCommand)
 
 	command.AddCommand(
 		newInitCommand(deps),
 		newSetCommand(deps),
-		newGetCommand(deps),
+		getCommand,
 		newListCommand(deps, globalFlags),
 		newDeleteCommand(deps),
 		newMaskCommand(deps, globalFlags),
@@ -816,20 +821,12 @@ func newDetectCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 				return err
 			}
 
-			secretProvider, err := cliutil.RequireSecretProvider(deps)
-			if err != nil {
-				return err
-			}
-
 			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
 			if err != nil {
 				return err
 			}
 
-			appDeps := cliutil.AppDependencies(deps)
-			appDeps.Secrets = secretProvider
-
-			result, err := detectapp.Execute(command.Context(), appDeps, detectapp.Request{
+			result, err := detectapp.Execute(command.Context(), deps, detectapp.Request{
 				ResolvedPath:    resolvedPath,
 				Value:           value,
 				HasInput:        hasInput,

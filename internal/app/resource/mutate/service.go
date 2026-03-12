@@ -225,17 +225,10 @@ func refreshRepositoryForPaths(ctx context.Context, deps Dependencies, items []r
 		return nil
 	}
 
-	saveDeps := resourcesave.Dependencies{
-		Orchestrator: deps.Orchestrator,
-		Repository:   deps.Repository,
-		Metadata:     deps.Metadata,
-		Secrets:      deps.Secrets,
-	}
-
 	for _, item := range items {
 		if err := resourcesave.Execute(
 			ctx,
-			saveDeps,
+			deps,
 			item.LogicalPath,
 			resource.Content{},
 			false,

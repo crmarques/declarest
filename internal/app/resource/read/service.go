@@ -177,7 +177,7 @@ func renderRemoteCollectionFallback(
 	if err != nil {
 		return false, Result{}, err
 	}
-	if !pathfallback.ShouldUseMetadataCollectionFallback(ctx, deps.Metadata, logicalPath, items) {
+	if !pathfallback.ShouldUseMetadataCollectionFallback(ctx, deps.MetadataService(), logicalPath, items) {
 		return false, Result{}, nil
 	}
 
@@ -258,7 +258,7 @@ func maskSecretsForOutput(
 		return nil, nil
 	}
 
-	resolvedMetadata, err := secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.Metadata, logicalPath)
+	resolvedMetadata, err := secretworkflow.ResolveMetadataForSecretCheck(ctx, deps.MetadataService(), logicalPath)
 	if err != nil {
 		return nil, err
 	}
@@ -311,9 +311,9 @@ func resolveSecretsForOutput(
 			nil,
 		)
 	}
-	if deps.Secrets != nil {
+	if provider := deps.SecretProvider(); provider != nil {
 		getSecret = func(key string) (string, error) {
-			return deps.Secrets.Get(ctx, key)
+			return provider.Get(ctx, key)
 		}
 	}
 
@@ -335,11 +335,12 @@ func renderMetadataSnapshot(
 	logicalPath string,
 	rawValue resource.Value,
 ) (metadatadomain.ResourceMetadata, error) {
-	if deps.Metadata == nil {
-		return metadatadomain.ResourceMetadata{}, faults.NewValidationError("metadata service is not configured", nil)
+	metadataService, err := appdeps.RequireMetadataService(deps)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
 	}
 
-	resolvedMetadata, err := deps.Metadata.ResolveForPath(ctx, logicalPath)
+	resolvedMetadata, err := metadataService.ResolveForPath(ctx, logicalPath)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}

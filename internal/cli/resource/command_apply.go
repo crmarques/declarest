@@ -73,7 +73,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 				}
 			}
 
-			result, err := mutateapp.Execute(runCtx, cliutil.AppDependencies(deps), mutateapp.Request{
+			result, err := mutateapp.Execute(runCtx, deps, mutateapp.Request{
 				Operation:        mutateapp.OperationApply,
 				LogicalPath:      mutationPath,
 				Recursive:        recursive,

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/spf13/cobra"
 )
 
@@ -102,22 +103,46 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Manage resources",
 		Args:  cobra.NoArgs,
 	}
+	commandmeta.MarkRequiresContextBootstrap(command)
+
+	getCommand := newGetCommand(deps, globalFlags)
+	saveCommand := newSaveCommand(deps)
+	applyCommand := newApplyCommand(deps, globalFlags)
+	createCommand := newCreateCommand(deps, globalFlags)
+	updateCommand := newUpdateCommand(deps, globalFlags)
+	deleteCommand := newDeleteCommand(deps)
+	diffCommand := newDiffCommand(deps, globalFlags)
+	listCommand := newListCommand(deps, globalFlags)
+	editCommand := newEditCommand(deps, globalFlags)
+	copyCommand := newCopyCommand(deps, globalFlags)
+	explainCommand := newExplainCommand(deps, globalFlags)
+	describeCommand := newDescribeCommand(deps, globalFlags)
+	templateCommand := newTemplateCommand(deps, globalFlags)
+	requestCommand := newRequestCommand(deps, globalFlags)
+
+	commandmeta.MarkEmitsExecutionStatus(saveCommand)
+	commandmeta.MarkEmitsExecutionStatus(applyCommand)
+	commandmeta.MarkEmitsExecutionStatus(createCommand)
+	commandmeta.MarkEmitsExecutionStatus(updateCommand)
+	commandmeta.MarkEmitsExecutionStatus(deleteCommand)
+	commandmeta.MarkEmitsExecutionStatus(editCommand)
+	commandmeta.MarkEmitsExecutionStatus(copyCommand)
 
 	command.AddCommand(
-		newGetCommand(deps, globalFlags),
-		newSaveCommand(deps),
-		newApplyCommand(deps, globalFlags),
-		newCreateCommand(deps, globalFlags),
-		newUpdateCommand(deps, globalFlags),
-		newDeleteCommand(deps),
-		newDiffCommand(deps, globalFlags),
-		newListCommand(deps, globalFlags),
-		newEditCommand(deps, globalFlags),
-		newCopyCommand(deps, globalFlags),
-		newExplainCommand(deps, globalFlags),
-		newDescribeCommand(deps, globalFlags),
-		newTemplateCommand(deps, globalFlags),
-		newRequestCommand(deps, globalFlags),
+		getCommand,
+		saveCommand,
+		applyCommand,
+		createCommand,
+		updateCommand,
+		deleteCommand,
+		diffCommand,
+		listCommand,
+		editCommand,
+		copyCommand,
+		explainCommand,
+		describeCommand,
+		templateCommand,
+		requestCommand,
 	)
 
 	return command

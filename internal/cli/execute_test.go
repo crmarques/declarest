@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/spf13/cobra"
 )
 
 func TestShouldSuppressStatusMessage(t *testing.T) {
-	t.Parallel()
-
 	testCases := []struct {
 		name string
 		args []string
@@ -35,6 +35,16 @@ func TestShouldSuppressStatusMessage(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("env default", func(t *testing.T) {
+		t.Setenv(cliutil.GlobalEnvNoStatus, "true")
+		if !shouldSuppressStatusMessage([]string{"resource", "list", "/"}) {
+			t.Fatal("expected status suppression when DECLAREST_NO_STATUS is set")
+		}
+		if shouldSuppressStatusMessage([]string{"resource", "list", "/", "--no-status=false"}) {
+			t.Fatal("expected explicit flag to override DECLAREST_NO_STATUS")
+		}
+	})
 }
 
 func TestExecutionStatusWriters(t *testing.T) {
@@ -61,28 +71,34 @@ func TestExecutionStatusWriters(t *testing.T) {
 	})
 }
 
-func TestCommandPathSupportsExecutionStatus(t *testing.T) {
+func TestEmitsExecutionStatus(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		path string
-		want bool
+		names []string
+		mark  bool
+		want  bool
 	}{
-		{path: "declarest resource save", want: true},
-		{path: "declarest resource apply", want: true},
-		{path: "declarest resource create", want: true},
-		{path: "declarest resource update", want: true},
-		{path: "declarest resource delete", want: true},
-		{path: "declarest repository commit", want: true},
-		{path: "declarest resource get", want: false},
-		{path: "declarest resource list", want: false},
-		{path: "declarest resource diff", want: false},
-		{path: "declarest repository status", want: false},
+		{names: []string{"resource", "save"}, mark: true, want: true},
+		{names: []string{"resource", "apply"}, mark: true, want: true},
+		{names: []string{"repository", "commit"}, mark: true, want: true},
+		{names: []string{"resource", "get"}, want: false},
+		{names: []string{"repository", "status"}, want: false},
 	}
 
 	for _, testCase := range testCases {
-		if got := commandPathSupportsExecutionStatus(testCase.path); got != testCase.want {
-			t.Fatalf("commandPathSupportsExecutionStatus(%q) = %t, want %t", testCase.path, got, testCase.want)
+		root := &cobra.Command{Use: "declarest"}
+		current := root
+		for _, name := range testCase.names {
+			next := &cobra.Command{Use: name}
+			current.AddCommand(next)
+			current = next
+		}
+		if testCase.mark {
+			commandmeta.MarkEmitsExecutionStatus(current)
+		}
+		if got := commandmeta.EmitsExecutionStatus(current); got != testCase.want {
+			t.Fatalf("EmitsExecutionStatus(%v) = %t, want %t", testCase.names, got, testCase.want)
 		}
 	}
 }
@@ -96,7 +112,7 @@ func TestShouldSuppressColor(t *testing.T) {
 	})
 
 	t.Run("flag parsing", func(t *testing.T) {
-		t.Setenv("NO_COLOR", "")
+		t.Setenv(cliutil.GlobalEnvNoColorLegacy, "")
 		if !shouldSuppressColor([]string{"resource", "get", "/", "--no-color"}) {
 			t.Fatal("expected color suppression for --no-color")
 		}
@@ -104,18 +120,31 @@ func TestShouldSuppressColor(t *testing.T) {
 			t.Fatal("expected color enabled when --no-color=false")
 		}
 	})
+
+	t.Run("env default", func(t *testing.T) {
+		t.Setenv(cliutil.GlobalEnvNoColor, "true")
+		if !shouldSuppressColor([]string{"resource", "get", "/"}) {
+			t.Fatal("expected color suppression when DECLAREST_NO_COLOR is set")
+		}
+		if shouldSuppressColor([]string{"resource", "get", "/", "--no-color=false"}) {
+			t.Fatal("expected explicit flag to override DECLAREST_NO_COLOR")
+		}
+	})
 }
 
 func TestShouldEmitExecutionStatus(t *testing.T) {
 	t.Parallel()
 
-	buildCommandPath := func(names ...string) *cobra.Command {
+	buildCommandPath := func(mark bool, names ...string) *cobra.Command {
 		root := &cobra.Command{Use: "declarest"}
 		current := root
 		for _, name := range names {
 			next := &cobra.Command{Use: name}
 			current.AddCommand(next)
 			current = next
+		}
+		if mark {
+			commandmeta.MarkEmitsExecutionStatus(current)
 		}
 		return current
 	}
@@ -135,9 +164,9 @@ func TestShouldEmitExecutionStatus(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
-			command := buildCommandPath("resource", "save")
+			command := buildCommandPath(true, "resource", "save")
 			if testCase.name == "read command" {
-				command = buildCommandPath("resource", "get")
+				command = buildCommandPath(false, "resource", "get")
 			}
 			got := shouldEmitExecutionStatus(testCase.args, command)
 			if got != testCase.want {

@@ -91,7 +91,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 
 			if err := resourcesave.Execute(
 				command.Context(),
-				cliutil.AppDependencies(deps),
+				deps,
 				resolvedPath,
 				value,
 				hasInput,

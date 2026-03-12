@@ -48,6 +48,7 @@ Global flags:
 5. `--no-color`.
 6. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
 7. `--help`, `-h`.
+8. Global flag defaults MUST honor precedence `flag > env > built-in default` and use env vars `DECLAREST_CONTEXT`, `DECLAREST_OUTPUT`, `DECLAREST_VERBOSE`, `DECLAREST_VERBOSE_INSECURE`, `DECLAREST_NO_STATUS`, `DECLAREST_NO_COLOR`, plus `NO_COLOR` as a non-empty color-disable signal.
 
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
@@ -56,8 +57,8 @@ Input flags:
 4. `--http-method` as a command-specific metadata operation HTTP-method override flag for `resource get|list|apply|create|update|delete`; when provided, it MUST override the rendered metadata operation `method` for the corresponding remote operation(s).
 5. `resource save` SHOULD use `--force` for local overwrite confirmation.
 6. `resource copy` SHOULD use `--force` for local overwrite confirmation.
-7. `resource delete` and `resource request delete` SHOULD use `--confirm-delete`, `-y` for destructive confirmation.
-8. `repository push` SHOULD use `--force-push`, `-y` for non-fast-forward push intent.
+7. `resource delete` and `resource request delete` SHOULD use `--yes`, `-y` for destructive confirmation.
+8. `repository push` SHOULD use `--force-push` for non-fast-forward push intent.
 9. `resource save` SHOULD support `--push` to push git repository changes after save even when `repository.git.remote.autoSync` is disabled.
 
 Path flags:
@@ -242,7 +243,7 @@ Interactive context commands:
 ### Help, Completion, and Bootstrap Gating
 65. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
-67. `resource request delete` MUST require `--confirm-delete` and fail with `ValidationError` when confirmation is not explicit.
+67. `resource request delete` MUST require `--yes` and fail with `ValidationError` when confirmation is not explicit.
 ### Repository-Backed Fallback and Delete
 68. Repository-backed single-resource reads (`resource get --source repository`, `resource apply`, `resource update`, `resource diff`, `resource explain`) MUST attempt literal repository lookup first and, on `NotFound`, perform a bounded collection fallback that matches by metadata `resource.id`, using reverse matching only when the template is a simple single-pointer expression.
 69. `resource apply|create|update` collection-target resolution MUST attempt a non-recursive collection list first and, when no entries match a deep path target, attempt single-resource fallback lookup before returning `NotFound`.
@@ -349,7 +350,7 @@ Interactive context commands:
 19. `resource request post|put` receives inline `--payload` together with the `--payload <path|->` or stdin option.
 20. Binary payload mode receives inline `--payload` text or JSON Pointer assignments.
 19. `context add --set-current` with multiple imported contexts and missing catalog `currentContext`.
-20. `resource request delete` is invoked without `--confirm-delete`.
+20. `resource request delete` is invoked without `--yes`.
 21. Metadata-aware identity fallback yields multiple candidates for the same requested path and returns `ConflictError`.
 22. `resource save` wildcard path is combined with payload input.
 23. `resource diff` targets a collection path with no local resources.
@@ -422,8 +423,8 @@ Interactive context commands:
 17. `declarest resource list /customers` lists remote resources by default.
 18. `declarest resource list /customers --source repository` lists repository resources.
 19. `declarest resource list /customers --output text` prints one `<alias> (<id>)` line per listed item using metadata-derived identity when available.
-19. `declarest resource delete /customers/acme --confirm-delete` deletes from the remote server by default.
-20. `declarest resource delete /customers/acme --confirm-delete --source both` deletes from both remote server and repository.
+19. `declarest resource delete /customers/acme --yes` deletes from the remote server by default.
+20. `declarest resource delete /customers/acme --yes --source both` deletes from both remote server and repository.
 21. `declarest resource save /customers/acme` fetches remote state and saves it into repository for `/customers/acme`.
 22. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
 23. `declarest resource save /customers --mode single < list.json` stores the list payload in one resource file.
@@ -476,11 +477,11 @@ Interactive context commands:
 54. `declarest completion bash` prints completion script even when no current context is configured.
 55. `declarest` shell tab completion at root suggests `help` and does not suggest internal helper names.
 56. `declarest resource` prints resource command help even when no current context is configured.
-57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--confirm-delete` is required.
-58. `declarest resource request delete /customers/acme --confirm-delete` executes a direct managed-server DELETE request.
-59. `declarest resource request delete /customers --confirm-delete --recursive` issues delete requests for all repository resources under `/customers`.
+57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--yes` is required.
+58. `declarest resource request delete /customers/acme --yes` executes a direct managed-server DELETE request.
+59. `declarest resource request delete /customers --yes --recursive` issues delete requests for all repository resources under `/customers`.
 60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `resource.id` template resolves or reverse-matches the provided path segment when no literal repository resource exists.
-61. `declarest resource delete /admin/realms/master/clients/account --confirm-delete --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
+61. `declarest resource delete /admin/realms/master/clients/account --yes --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
 62. `declarest resource get /admin/realms/ --exclude master,realm1` returns the remaining realm payloads after excluding those collection items.
 63. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
 64. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
@@ -492,8 +493,8 @@ Interactive context commands:
 70. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
 71. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
 72. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
-73. `declarest resource request delete /customers --confirm-delete --recursive` prints no response bodies by default and only the final status footer.
-74. `declarest resource request delete /customers --confirm-delete --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
+73. `declarest resource request delete /customers --yes --recursive` prints no response bodies by default and only the final status footer.
+74. `declarest resource request delete /customers --yes --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
 74. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
 75. `declarest context add dev` skips context-name prompt and starts interactive prompts at repository settings.
 76. `declarest context add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
@@ -508,7 +509,7 @@ Interactive context commands:
 84. `declarest resource copy /customers/acme /customers/acme-copy --override-attributes /name=acme-copy,/spec/tier=gold` copies one repository resource and applies JSON Pointer overrides before saving.
 85. `declarest resource copy /admin/realms/test /admin/realms/test2 --override-attributes /realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.
 85. `declarest resource save /customers/acme --payload '/id=acme,/name=Acme' --force --message ticket-123` saves a resource and uses `ticket-123` as the exact git commit message when the active repository is git.
-86. `declarest resource delete /customers/acme --confirm-delete --source repository --message 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
+86. `declarest resource delete /customers/acme --yes --source repository --message 'cleanup customer'` deletes from the repository and commits with the overridden git commit message in a git context.
 87. `declarest repository history --oneline --max-count 5 --author alice --grep fix --path customers` prints filtered local git commit history.
 88. `declarest repository history` in a filesystem context prints a deterministic not-supported message.
 82. `declarest resource get /adm<TAB>` completes to `/admin/`; when remote completion lookups fail, completion falls back to repository candidates.

@@ -120,7 +120,7 @@ func Execute(
 		remoteValue, err := resolveSaveRemoteValue(
 			ctx,
 			orchestratorService,
-			deps.Metadata,
+			deps.MetadataService(),
 			normalizedPath,
 			explicitCollectionTarget,
 			options.SkipItems,

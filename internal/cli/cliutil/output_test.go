@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -41,34 +42,40 @@ func TestWriteOutputRendersNonNilPayload(t *testing.T) {
 	}
 }
 
-func TestValidateOutputFormatForCommandPath(t *testing.T) {
+func TestValidateOutputFormatForCommand(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
 		name    string
-		path    string
+		command *cobra.Command
 		format  string
 		wantErr bool
 	}{
-		{name: "structured command json", path: "declarest resource get", format: OutputJSON, wantErr: false},
-		{name: "text only command auto", path: "declarest secret get", format: OutputAuto, wantErr: false},
-		{name: "text only command text", path: "declarest secret get", format: OutputText, wantErr: false},
-		{name: "text only command json rejected", path: "declarest secret get", format: OutputJSON, wantErr: true},
-		{name: "yaml default command yaml", path: "declarest context show", format: OutputYAML, wantErr: false},
-		{name: "yaml default command text", path: "declarest context show", format: OutputText, wantErr: false},
-		{name: "yaml default command json rejected", path: "declarest context show", format: OutputJSON, wantErr: true},
+		{name: "structured command json", command: &cobra.Command{}, format: OutputJSON, wantErr: false},
+		{name: "text only command auto", command: markedCommand(commandmeta.MarkTextOnlyOutput), format: OutputAuto, wantErr: false},
+		{name: "text only command text", command: markedCommand(commandmeta.MarkTextOnlyOutput), format: OutputText, wantErr: false},
+		{name: "text only command json rejected", command: markedCommand(commandmeta.MarkTextOnlyOutput), format: OutputJSON, wantErr: true},
+		{name: "yaml default command yaml", command: markedCommand(commandmeta.MarkYAMLDefaultTextOrYAMLOutput), format: OutputYAML, wantErr: false},
+		{name: "yaml default command text", command: markedCommand(commandmeta.MarkYAMLDefaultTextOrYAMLOutput), format: OutputText, wantErr: false},
+		{name: "yaml default command json rejected", command: markedCommand(commandmeta.MarkYAMLDefaultTextOrYAMLOutput), format: OutputJSON, wantErr: true},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateOutputFormatForCommandPath(testCase.path, testCase.format)
+			err := ValidateOutputFormatForCommand(testCase.command, testCase.format)
 			if (err != nil) != testCase.wantErr {
-				t.Fatalf("ValidateOutputFormatForCommandPath(%q, %q) error=%v, wantErr=%t", testCase.path, testCase.format, err, testCase.wantErr)
+				t.Fatalf("ValidateOutputFormatForCommand(%q) error=%v, wantErr=%t", testCase.format, err, testCase.wantErr)
 			}
 		})
 	}
+}
+
+func markedCommand(mark func(*cobra.Command)) *cobra.Command {
+	command := &cobra.Command{}
+	mark(command)
+	return command
 }
 
 func TestWriteOutputAutoWritesBinaryBytesWithoutNewline(t *testing.T) {

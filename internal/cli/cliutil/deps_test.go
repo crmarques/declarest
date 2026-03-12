@@ -11,29 +11,27 @@ import (
 	secretsdomain "github.com/crmarques/declarest/secrets"
 )
 
-func TestAppDependencies(t *testing.T) {
+func TestNewCommandDependencies(t *testing.T) {
 	t.Parallel()
 
 	store := &stubResourceStore{}
 	metadataService := &stubMetadataService{}
 	secretProvider := &stubSecretProvider{}
 
-	deps := AppDependencies(CommandDependencies{
-		Services: &testServiceAccessor{
-			store:    store,
-			metadata: metadataService,
-			secrets:  secretProvider,
-		},
+	deps := NewCommandDependencies(nil, nil, &testServiceAccessor{
+		store:    store,
+		metadata: metadataService,
+		secrets:  secretProvider,
 	})
 
-	if deps.Repository != store {
-		t.Fatalf("expected repository dependency to be copied")
+	if deps.ResourceStore() != store {
+		t.Fatalf("expected repository dependency to be available through shared services")
 	}
-	if deps.Metadata != metadataService {
-		t.Fatalf("expected metadata dependency to be copied")
+	if deps.MetadataService() != metadataService {
+		t.Fatalf("expected metadata dependency to be available through shared services")
 	}
-	if deps.Secrets != secretProvider {
-		t.Fatalf("expected secrets dependency to be copied")
+	if deps.SecretProvider() != secretProvider {
+		t.Fatalf("expected secrets dependency to be available through shared services")
 	}
 }
 

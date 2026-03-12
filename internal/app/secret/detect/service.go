@@ -10,6 +10,7 @@ import (
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
+	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 type Dependencies = appdeps.Dependencies
@@ -32,12 +33,13 @@ type DetectedResourceSecrets struct {
 }
 
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
-	if deps.Secrets == nil {
-		return Result{}, faults.NewValidationError("secret provider is not configured", nil)
+	secretProvider, err := appdeps.RequireSecretProvider(deps)
+	if err != nil {
+		return Result{}, err
 	}
 
 	if req.HasInput {
-		keys, err := deps.Secrets.DetectSecretCandidates(ctx, req.Value)
+		keys, err := secretProvider.DetectSecretCandidates(ctx, req.Value)
 		if err != nil {
 			return Result{}, err
 		}
@@ -66,7 +68,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 		scanPath = "/"
 	}
 
-	results, err := detectSecretCandidatesFromRepository(ctx, deps, scanPath, req.SecretAttribute)
+	results, err := detectSecretCandidatesFromRepository(ctx, deps, secretProvider, scanPath, req.SecretAttribute)
 	if err != nil {
 		return Result{}, err
 	}
@@ -85,14 +87,16 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 func detectSecretCandidatesFromRepository(
 	ctx context.Context,
 	deps Dependencies,
+	secretProvider secretdomain.SecretProvider,
 	scanPath string,
 	secretAttribute string,
 ) ([]DetectedResourceSecrets, error) {
-	if deps.Orchestrator == nil {
-		return nil, faults.NewValidationError("orchestrator is not configured", nil)
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	if err != nil {
+		return nil, err
 	}
 
-	items, err := deps.Orchestrator.ListLocal(ctx, scanPath, orchestratordomain.ListPolicy{Recursive: true})
+	items, err := orchestratorService.ListLocal(ctx, scanPath, orchestratordomain.ListPolicy{Recursive: true})
 	if err != nil {
 		return nil, err
 	}
@@ -109,12 +113,12 @@ func detectSecretCandidatesFromRepository(
 			continue
 		}
 
-		content, err := deps.Orchestrator.GetLocal(ctx, item.LogicalPath)
+		content, err := orchestratorService.GetLocal(ctx, item.LogicalPath)
 		if err != nil {
 			return nil, err
 		}
 
-		keys, err := deps.Secrets.DetectSecretCandidates(ctx, content.Value)
+		keys, err := secretProvider.DetectSecretCandidates(ctx, content.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -176,8 +180,9 @@ func applyDetectedSecretAttributes(ctx context.Context, deps Dependencies, logic
 	if len(detected) == 0 {
 		return nil
 	}
-	if deps.Metadata == nil {
-		return faults.NewValidationError("metadata service is not configured", nil)
+	metadataService, err := appdeps.RequireMetadataService(deps)
+	if err != nil {
+		return err
 	}
-	return secretworkflow.PersistDetectedAttributes(ctx, deps.Metadata, logicalPath, detected)
+	return secretworkflow.PersistDetectedAttributes(ctx, metadataService, logicalPath, detected)
 }

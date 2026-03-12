@@ -2,9 +2,32 @@ package cliutil
 
 import (
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
+)
+
+const (
+	GlobalFlagContext         = "context"
+	GlobalFlagContextShort    = "c"
+	GlobalFlagVerbose         = "verbose"
+	GlobalFlagVerboseShort    = "v"
+	GlobalFlagVerboseInsecure = "verbose-insecure"
+	GlobalFlagNoStatus        = "no-status"
+	GlobalFlagNoStatusShort   = "n"
+	GlobalFlagNoColor         = "no-color"
+	GlobalFlagOutput          = "output"
+	GlobalFlagOutputShort     = "o"
+
+	GlobalEnvContext         = "DECLAREST_CONTEXT"
+	GlobalEnvOutput          = "DECLAREST_OUTPUT"
+	GlobalEnvVerbose         = "DECLAREST_VERBOSE"
+	GlobalEnvVerboseInsecure = "DECLAREST_VERBOSE_INSECURE"
+	GlobalEnvNoStatus        = "DECLAREST_NO_STATUS"
+	GlobalEnvNoColor         = "DECLAREST_NO_COLOR"
+	GlobalEnvNoColorLegacy   = "NO_COLOR"
 )
 
 type GlobalFlags struct {
@@ -22,24 +45,56 @@ type InputFlags struct {
 }
 
 func BindGlobalFlags(command *cobra.Command, flags *GlobalFlags) {
-	command.PersistentFlags().StringVarP(&flags.Context, "context", "c", "", "context name")
+	flags.Context = EnvOrDefault(GlobalEnvContext, "")
+	flags.Verbose = EnvIntOrDefault(GlobalEnvVerbose, 0)
+	flags.VerboseInsecure = EnvBoolOrDefault(GlobalEnvVerboseInsecure, false)
+	flags.NoStatus = EnvBoolOrDefault(GlobalEnvNoStatus, false)
+	flags.NoColor = EnvBoolOrDefault(GlobalEnvNoColor, EnvPresentOrDefault(GlobalEnvNoColorLegacy, false))
+	flags.Output = EnvOrDefault(GlobalEnvOutput, OutputAuto)
+
+	command.PersistentFlags().StringVarP(
+		&flags.Context,
+		GlobalFlagContext,
+		GlobalFlagContextShort,
+		flags.Context,
+		"context name (env: "+GlobalEnvContext+")",
+	)
 
 	vf := command.PersistentFlags().VarPF(
 		newVerboseFlag(&flags.Verbose),
-		"verbose", "v",
-		"verbosity level: -v info, -vv detail, -vvv trace (or --verbose=N where N is 1-3)",
+		GlobalFlagVerbose,
+		GlobalFlagVerboseShort,
+		"verbosity level: -v info, -vv detail, -vvv trace (or --verbose=N where N is 1-3) (env: "+GlobalEnvVerbose+")",
 	)
 	vf.NoOptDefVal = "+1"
 
 	command.PersistentFlags().BoolVar(
 		&flags.VerboseInsecure,
-		"verbose-insecure", false,
-		"show secrets, tokens, and credentials in verbose output (requires -v)",
+		GlobalFlagVerboseInsecure,
+		flags.VerboseInsecure,
+		"show secrets, tokens, and credentials in verbose output (requires -v; env: "+GlobalEnvVerboseInsecure+")",
 	)
 
-	command.PersistentFlags().BoolVarP(&flags.NoStatus, "no-status", "n", false, "hide status output")
-	command.PersistentFlags().BoolVar(&flags.NoColor, "no-color", false, "disable color output")
-	command.PersistentFlags().StringVarP(&flags.Output, "output", "o", OutputAuto, "output format: auto|text|json|yaml")
+	command.PersistentFlags().BoolVarP(
+		&flags.NoStatus,
+		GlobalFlagNoStatus,
+		GlobalFlagNoStatusShort,
+		flags.NoStatus,
+		"hide status output (env: "+GlobalEnvNoStatus+")",
+	)
+	command.PersistentFlags().BoolVar(
+		&flags.NoColor,
+		GlobalFlagNoColor,
+		flags.NoColor,
+		"disable color output (env: "+GlobalEnvNoColor+" or "+GlobalEnvNoColorLegacy+")",
+	)
+	command.PersistentFlags().StringVarP(
+		&flags.Output,
+		GlobalFlagOutput,
+		GlobalFlagOutputShort,
+		flags.Output,
+		"output format: auto|text|json|yaml (env: "+GlobalEnvOutput+")",
+	)
 	RegisterOutputFlagCompletion(command)
 }
 
@@ -112,4 +167,56 @@ func (f *verboseFlag) Set(s string) error {
 // Type returns "count" so pflag allows -v/-vv/-vvv short flag stacking.
 func (f *verboseFlag) Type() string {
 	return "count"
+}
+
+func EnvOrDefault(envKey string, defaultValue string) string {
+	if value, ok := envValue(envKey); ok {
+		return value
+	}
+	return defaultValue
+}
+
+func EnvBoolOrDefault(envKey string, defaultValue bool) bool {
+	value, ok := envValue(envKey)
+	if !ok {
+		return defaultValue
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+func EnvIntOrDefault(envKey string, defaultValue int) int {
+	value, ok := envValue(envKey)
+	if !ok {
+		return defaultValue
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	if parsed < 0 || parsed > 3 {
+		return defaultValue
+	}
+	return parsed
+}
+
+func EnvPresentOrDefault(envKey string, defaultValue bool) bool {
+	_, ok := envValue(envKey)
+	if ok {
+		return true
+	}
+	return defaultValue
+}
+
+func envValue(envKey string) (string, bool) {
+	value := strings.TrimSpace(os.Getenv(envKey))
+	if value == "" {
+		return "", false
+	}
+	return value, true
 }

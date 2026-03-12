@@ -64,7 +64,7 @@ func newUpdateCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 				}
 			}
 
-			result, err := mutateapp.Execute(runCtx, cliutil.AppDependencies(deps), mutateapp.Request{
+			result, err := mutateapp.Execute(runCtx, deps, mutateapp.Request{
 				Operation:        mutateapp.OperationUpdate,
 				LogicalPath:      mutationPath,
 				Recursive:        recursive,

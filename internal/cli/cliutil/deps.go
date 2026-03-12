@@ -4,57 +4,32 @@ import (
 	"github.com/crmarques/declarest/config"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	"github.com/crmarques/declarest/managedserver"
-	"github.com/crmarques/declarest/metadata"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
-	"github.com/crmarques/declarest/secrets"
+	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
-type CommandDependencies struct {
-	Orchestrator orchestrator.Orchestrator
-	Contexts     config.ContextService
-	Services     orchestrator.ServiceAccessor
-}
+type CommandDependencies = appdeps.Dependencies
 
 func NewCommandDependencies(
 	orch orchestrator.Orchestrator,
 	contexts config.ContextService,
 	services orchestrator.ServiceAccessor,
 ) CommandDependencies {
-	return CommandDependencies{
+	return appdeps.Dependencies{
 		Orchestrator: orch,
 		Contexts:     contexts,
 		Services:     services,
 	}
 }
 
-func AppDependencies(deps CommandDependencies) appdeps.Dependencies {
-	app := appdeps.Dependencies{
-		Orchestrator: deps.Orchestrator,
-		Contexts:     deps.Contexts,
-	}
-	if deps.Services == nil {
-		return app
-	}
-
-	app.Repository = deps.Services.RepositoryStore()
-	app.Metadata = deps.Services.MetadataService()
-	app.Secrets = deps.Services.SecretProvider()
-	return app
-}
-
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {
-	if deps.Contexts == nil {
-		return nil, ValidationError("context service is not configured", nil)
-	}
-	return deps.Contexts, nil
+	return appdeps.RequireContexts(deps)
 }
 
 func RequireOrchestrator(deps CommandDependencies) (orchestrator.Orchestrator, error) {
-	if deps.Orchestrator == nil {
-		return nil, ValidationError("orchestrator is not configured", nil)
-	}
-	return deps.Orchestrator, nil
+	return appdeps.RequireOrchestrator(deps)
 }
 
 func RequireCompletionService(deps CommandDependencies) (orchestrator.CompletionService, error) {
@@ -74,14 +49,7 @@ func RequireRemoteReader(deps CommandDependencies) (orchestrator.RemoteReader, e
 }
 
 func RequireResourceStore(deps CommandDependencies) (repository.ResourceStore, error) {
-	if deps.Services == nil {
-		return nil, ValidationError("resource store is not configured", nil)
-	}
-	store := deps.Services.RepositoryStore()
-	if store == nil {
-		return nil, ValidationError("resource store is not configured", nil)
-	}
-	return store, nil
+	return appdeps.RequireResourceStore(deps)
 }
 
 func RequireRepositorySync(deps CommandDependencies) (repository.RepositorySync, error) {
@@ -95,26 +63,12 @@ func RequireRepositorySync(deps CommandDependencies) (repository.RepositorySync,
 	return sync, nil
 }
 
-func RequireMetadataService(deps CommandDependencies) (metadata.MetadataService, error) {
-	if deps.Services == nil {
-		return nil, ValidationError("metadata service is not configured", nil)
-	}
-	md := deps.Services.MetadataService()
-	if md == nil {
-		return nil, ValidationError("metadata service is not configured", nil)
-	}
-	return md, nil
+func RequireMetadataService(deps CommandDependencies) (metadatadomain.MetadataService, error) {
+	return appdeps.RequireMetadataService(deps)
 }
 
-func RequireSecretProvider(deps CommandDependencies) (secrets.SecretProvider, error) {
-	if deps.Services == nil {
-		return nil, ValidationError("secret provider is not configured", nil)
-	}
-	sp := deps.Services.SecretProvider()
-	if sp == nil {
-		return nil, ValidationError("secret provider is not configured", nil)
-	}
-	return sp, nil
+func RequireSecretProvider(deps CommandDependencies) (secretdomain.SecretProvider, error) {
+	return appdeps.RequireSecretProvider(deps)
 }
 
 func RequireManagedServerClient(deps CommandDependencies) (managedserver.ManagedServerClient, error) {

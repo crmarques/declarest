@@ -6,6 +6,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	AnnotationRequiresContextBootstrap = "declarest.io/requires-context-bootstrap"
+	AnnotationEmitsExecutionStatus     = "declarest.io/emits-execution-status"
+	AnnotationOutputPolicy             = "declarest.io/output-policy"
+)
+
 type PathCompletionSourceStrategy uint8
 
 const (
@@ -19,65 +25,76 @@ const (
 	OutputPolicyStructured OutputPolicy = iota
 	OutputPolicyTextOnly
 	OutputPolicyYAMLDefaultTextOrYAML
+	OutputPolicyTextDefaultStructured
 )
 
-func RequiresContextBootstrapPath(commandPath string) bool {
-	normalized := strings.TrimSpace(commandPath)
-	switch {
-	case normalized == "declarest context check":
-		return true
-	case normalized == "declarest context init":
-		return true
-	case strings.HasPrefix(normalized, "declarest resource "):
-		return true
-	case strings.HasPrefix(normalized, "declarest metadata "):
-		return true
-	case strings.HasPrefix(normalized, "declarest repository "):
-		return true
-	case strings.HasPrefix(normalized, "declarest secret "):
-		return true
-	case strings.HasPrefix(normalized, "declarest server "):
-		return true
+func RequiresContextBootstrap(command *cobra.Command) bool {
+	return inheritedBoolAnnotation(command, AnnotationRequiresContextBootstrap)
+}
+
+func EmitsExecutionStatus(command *cobra.Command) bool {
+	return inheritedBoolAnnotation(command, AnnotationEmitsExecutionStatus)
+}
+
+func OutputPolicyForCommand(command *cobra.Command) OutputPolicy {
+	for current := command; current != nil; current = current.Parent() {
+		if current.Annotations == nil {
+			continue
+		}
+
+		switch strings.TrimSpace(current.Annotations[AnnotationOutputPolicy]) {
+		case "text-only":
+			return OutputPolicyTextOnly
+		case "yaml-default-text-or-yaml":
+			return OutputPolicyYAMLDefaultTextOrYAML
+		case "text-default-structured":
+			return OutputPolicyTextDefaultStructured
+		}
 	}
 
+	return OutputPolicyStructured
+}
+
+func MarkRequiresContextBootstrap(command *cobra.Command) {
+	setAnnotation(command, AnnotationRequiresContextBootstrap, "true")
+}
+
+func MarkEmitsExecutionStatus(command *cobra.Command) {
+	setAnnotation(command, AnnotationEmitsExecutionStatus, "true")
+}
+
+func MarkTextOnlyOutput(command *cobra.Command) {
+	setAnnotation(command, AnnotationOutputPolicy, "text-only")
+}
+
+func MarkYAMLDefaultTextOrYAMLOutput(command *cobra.Command) {
+	setAnnotation(command, AnnotationOutputPolicy, "yaml-default-text-or-yaml")
+}
+
+func MarkTextDefaultStructuredOutput(command *cobra.Command) {
+	setAnnotation(command, AnnotationOutputPolicy, "text-default-structured")
+}
+
+func setAnnotation(command *cobra.Command, key string, value string) {
+	if command == nil {
+		return
+	}
+	if command.Annotations == nil {
+		command.Annotations = map[string]string{}
+	}
+	command.Annotations[key] = value
+}
+
+func inheritedBoolAnnotation(command *cobra.Command, key string) bool {
+	for current := command; current != nil; current = current.Parent() {
+		if current.Annotations == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(current.Annotations[key]), "true") {
+			return true
+		}
+	}
 	return false
-}
-
-func EmitsExecutionStatusPath(path string) bool {
-	switch strings.TrimSpace(path) {
-	case "declarest resource save",
-		"declarest resource apply",
-		"declarest resource create",
-		"declarest resource update",
-		"declarest resource delete",
-		"declarest resource edit",
-		"declarest resource copy",
-		"declarest repository commit":
-		return true
-	default:
-		return false
-	}
-}
-
-func OutputPolicyForPath(path string) OutputPolicy {
-	switch strings.TrimSpace(path) {
-	case "declarest context show":
-		return OutputPolicyYAMLDefaultTextOrYAML
-	case "declarest context print-template",
-		"declarest secret get",
-		"declarest repository tree",
-		"declarest server check",
-		"declarest server get base-url",
-		"declarest server get token-url",
-		"declarest server get access-token",
-		"declarest completion bash",
-		"declarest completion zsh",
-		"declarest completion fish",
-		"declarest completion powershell":
-		return OutputPolicyTextOnly
-	default:
-		return OutputPolicyStructured
-	}
 }
 
 func PathCompletionSourceStrategyForCommand(command *cobra.Command) PathCompletionSourceStrategy {

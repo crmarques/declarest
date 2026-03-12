@@ -8,6 +8,7 @@ import (
 
 	requestapp "github.com/crmarques/declarest/internal/app/resource/request"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/resource"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +59,7 @@ func newRequestMethodCommand(
 	var headerInputs []string
 	var acceptType string
 	var contentType string
-	var confirmDelete bool
+	var yes bool
 	var recursive bool
 
 	methodUpper := strings.ToUpper(cfg.method)
@@ -77,9 +78,9 @@ func newRequestMethodCommand(
 				return err
 			}
 
-			if cfg.requireDeleteConfirm && !confirmDelete {
+			if cfg.requireDeleteConfirm && !yes {
 				return cliutil.ValidationError(
-					"flag --confirm-delete is required: are you sure you want to delete?",
+					"flag --yes is required: are you sure you want to delete?",
 					nil,
 				)
 			}
@@ -99,7 +100,7 @@ func newRequestMethodCommand(
 				return err
 			}
 
-			result, err := requestapp.Execute(command.Context(), cliutil.AppDependencies(deps), requestapp.Request{
+			result, err := requestapp.Execute(command.Context(), deps, requestapp.Request{
 				Method:         methodUpper,
 				LogicalPath:    normalizedPath,
 				Body:           body,
@@ -147,8 +148,11 @@ func newRequestMethodCommand(
 	cliutil.RegisterResourceInputContentTypeFlagCompletion(command)
 
 	if cfg.requireDeleteConfirm {
-		command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
+		command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion")
 		command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete collection children recursively")
+	}
+	if isStateChangingRequestMethod(methodUpper) {
+		commandmeta.MarkEmitsExecutionStatus(command)
 	}
 
 	return command

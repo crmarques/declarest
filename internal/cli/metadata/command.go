@@ -9,6 +9,7 @@ import (
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
@@ -23,6 +24,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Manage metadata",
 		Args:  cobra.NoArgs,
 	}
+	commandmeta.MarkRequiresContextBootstrap(command)
 
 	command.AddCommand(
 		newGetCommand(deps, globalFlags),

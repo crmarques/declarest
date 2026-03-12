@@ -10,6 +10,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/repository"
 	"github.com/spf13/cobra"
 )
@@ -20,18 +21,36 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Manage local repository state",
 		Args:  cobra.NoArgs,
 	}
+	commandmeta.MarkRequiresContextBootstrap(command)
+
+	historyCommand := newHistoryCommand(deps, globalFlags)
+	initCommand := newInitCommand(deps)
+	refreshCommand := newRefreshCommand(deps)
+	cleanCommand := newCleanCommand(deps)
+	resetCommand := newResetCommand(deps)
+	checkCommand := newCheckCommand(deps)
+	pushCommand := newPushCommand(deps, globalFlags)
+	commitCommand := newCommitCommand(deps, globalFlags)
+	statusCommand := newStatusCommand(deps, globalFlags)
+	treeCommand := newTreeCommand(deps, globalFlags)
+
+	commandmeta.MarkTextDefaultStructuredOutput(historyCommand)
+	commandmeta.MarkEmitsExecutionStatus(commitCommand)
+	commandmeta.MarkTextDefaultStructuredOutput(commitCommand)
+	commandmeta.MarkTextDefaultStructuredOutput(statusCommand)
+	commandmeta.MarkTextOnlyOutput(treeCommand)
 
 	command.AddCommand(
-		newInitCommand(deps),
-		newRefreshCommand(deps),
-		newCleanCommand(deps),
-		newResetCommand(deps),
-		newCheckCommand(deps),
-		newPushCommand(deps, globalFlags),
-		newCommitCommand(deps, globalFlags),
-		newStatusCommand(deps, globalFlags),
-		newTreeCommand(deps, globalFlags),
-		newHistoryCommand(deps, globalFlags),
+		initCommand,
+		refreshCommand,
+		cleanCommand,
+		resetCommand,
+		checkCommand,
+		pushCommand,
+		commitCommand,
+		statusCommand,
+		treeCommand,
+		historyCommand,
 	)
 
 	return command
@@ -96,7 +115,7 @@ func newHistoryCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 				return err
 			}
 
-			format := resolveRepoStatusOutputFormat(globalFlags)
+			format := cliutil.ResolveCommandOutputFormat(command, globalFlags)
 			return cliutil.WriteOutput(command, format, entries, func(w io.Writer, value []repository.HistoryEntry) error {
 				return renderRepoHistoryText(w, value, oneline)
 			})
@@ -176,7 +195,7 @@ func newResetCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		},
 	}
 
-	command.Flags().BoolVarP(&hard, "hard", "H", false, "hard reset")
+	command.Flags().BoolVar(&hard, "hard", false, "hard reset")
 	return command
 }
 
@@ -225,7 +244,7 @@ func newPushCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 		},
 	}
 
-	command.Flags().BoolVarP(&forcePush, "force-push", "y", false, "force push")
+	command.Flags().BoolVar(&forcePush, "force-push", false, "force push")
 	return command
 }
 
@@ -266,7 +285,7 @@ func newCommitCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 				return err
 			}
 
-			format := resolveRepoStatusOutputFormat(globalFlags)
+			format := cliutil.ResolveCommandOutputFormat(command, globalFlags)
 			if format == cliutil.OutputText {
 				return nil
 			}
@@ -324,7 +343,7 @@ func newStatusCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 				output.Worktree = worktreeEntries
 			}
 
-			format := resolveRepoStatusOutputFormat(globalFlags)
+			format := cliutil.ResolveCommandOutputFormat(command, globalFlags)
 			return cliutil.WriteOutput(command, format, output, func(w io.Writer, value repoStatusOutput) error {
 				return renderRepoStatusText(w, value, repositoryContext)
 			})
@@ -342,7 +361,7 @@ func newTreeCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if err != nil {
 				return err
 			}
-			return cliutil.WriteText(command, resolveRepoStatusOutputFormat(globalFlags), renderRepoTreeText(paths))
+			return cliutil.WriteText(command, cliutil.ResolveCommandOutputFormat(command, globalFlags), renderRepoTreeText(paths))
 		},
 	}
 }
@@ -417,18 +436,6 @@ func resolveRepoTreePaths(
 	}
 
 	return nil, cliutil.ValidationError("repository tree is not supported by the active repository provider", nil)
-}
-
-func resolveRepoStatusOutputFormat(globalFlags *cliutil.GlobalFlags) string {
-	if globalFlags == nil {
-		return cliutil.OutputText
-	}
-	switch globalFlags.Output {
-	case "", cliutil.OutputAuto:
-		return cliutil.OutputText
-	default:
-		return globalFlags.Output
-	}
 }
 
 type repositoryContextKind string

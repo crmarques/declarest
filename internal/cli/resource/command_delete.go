@@ -16,7 +16,7 @@ import (
 func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var pathFlag string
 	var sourceFlag string
-	var confirmDelete bool
+	var yes bool
 	var recursive bool
 	var httpMethod string
 	var commitMessage string
@@ -25,15 +25,15 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 		Use:   "delete [path]",
 		Short: "Delete a resource",
 		Example: strings.Join([]string{
-			"  declarest resource delete /customers/acme --confirm-delete",
-			"  declarest resource delete /customers/ --recursive --confirm-delete",
-			"  declarest resource delete /customers/acme --source repository --confirm-delete",
-			"  declarest resource delete /customers/acme --source both --confirm-delete",
+			"  declarest resource delete /customers/acme --yes",
+			"  declarest resource delete /customers/ --recursive --yes",
+			"  declarest resource delete /customers/acme --source repository --yes",
+			"  declarest resource delete /customers/acme --source both --yes",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			if !confirmDelete {
-				return cliutil.ValidationError("flag --confirm-delete is required: confirm deletion", nil)
+			if !yes {
+				return cliutil.ValidationError("flag --yes is required: confirm deletion", nil)
 			}
 			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
@@ -120,7 +120,7 @@ func newDeleteCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	cliutil.BindPathFlag(command, &pathFlag)
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
-	command.Flags().BoolVarP(&confirmDelete, "confirm-delete", "y", false, "confirm deletion")
+	command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion")
 	command.Flags().BoolVarP(&recursive, "recursive", "r", false, "delete recursively")
 	bindDeleteSourceFlags(command, &sourceFlag)
 	bindHTTPMethodFlag(command, &httpMethod)

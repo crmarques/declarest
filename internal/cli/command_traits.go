@@ -1,7 +1,10 @@
 package cli
 
-import "github.com/crmarques/declarest/internal/cli/commandmeta"
+import (
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
+	"github.com/spf13/cobra"
+)
 
-func RequiresContextBootstrapPath(commandPath string) bool {
-	return commandmeta.RequiresContextBootstrapPath(commandPath)
+func RequiresContextBootstrap(command *cobra.Command) bool {
+	return commandmeta.RequiresContextBootstrap(command)
 }

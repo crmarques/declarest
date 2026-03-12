@@ -2,6 +2,7 @@ package completion
 
 import (
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/spf13/cobra"
 )
 
@@ -14,11 +15,21 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		Short: "Generate shell completion scripts",
 		Args:  cobra.NoArgs,
 	}
+
+	bashCommand := newBashCommand()
+	zshCommand := newZshCommand()
+	fishCommand := newFishCommand()
+	powerShellCommand := newPowerShellCommand()
+	commandmeta.MarkTextOnlyOutput(bashCommand)
+	commandmeta.MarkTextOnlyOutput(zshCommand)
+	commandmeta.MarkTextOnlyOutput(fishCommand)
+	commandmeta.MarkTextOnlyOutput(powerShellCommand)
+
 	command.AddCommand(
-		newBashCommand(),
-		newZshCommand(),
-		newFishCommand(),
-		newPowerShellCommand(),
+		bashCommand,
+		zshCommand,
+		fishCommand,
+		powerShellCommand,
 	)
 
 	return command

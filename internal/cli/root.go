@@ -59,6 +59,18 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "declarest",
 		Short: "Manage declarative resources",
+		Long: strings.Join([]string{
+			"Manage declarative resources.",
+			"",
+			"Global flag defaults can be provided by environment variables:",
+			"  DECLAREST_CONTEXT",
+			"  DECLAREST_OUTPUT",
+			"  DECLAREST_VERBOSE",
+			"  DECLAREST_VERBOSE_INSECURE",
+			"  DECLAREST_NO_STATUS",
+			"  DECLAREST_NO_COLOR",
+			"  NO_COLOR",
+		}, "\n"),
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()
 		},
@@ -67,7 +79,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			if err := cliutil.ValidateOutputFormat(globalFlags.Output); err != nil {
 				return err
 			}
-			if err := cliutil.ValidateOutputFormatForCommandPath(command.CommandPath(), globalFlags.Output); err != nil {
+			if err := cliutil.ValidateOutputFormatForCommand(command, globalFlags.Output); err != nil {
 				return err
 			}
 
@@ -79,6 +91,10 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			commandContext = debugctx.WithInsecure(commandContext, globalFlags.VerboseInsecure)
 			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
 			command.SetContext(commandContext)
+
+			if globalFlags.VerboseInsecure && verboseLevel < 1 {
+				_, _ = fmt.Fprintln(command.ErrOrStderr(), "WARNING: --verbose-insecure has no effect without -v or --verbose.")
+			}
 
 			if globalFlags.VerboseInsecure && verboseLevel >= 1 {
 				debugctx.Infof(

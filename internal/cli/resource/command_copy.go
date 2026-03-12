@@ -65,7 +65,7 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 
 			if err := resourcesave.Execute(
 				command.Context(),
-				cliutil.AppDependencies(deps),
+				deps,
 				targetPath,
 				value,
 				true,

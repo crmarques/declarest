@@ -50,6 +50,7 @@ Acceptance contracts:
 6. CLI execution footer: resource mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) emit deterministic `[OK|ERROR] ...` status lines to stderr unless `--no-status` is set, interactive terminals apply bold color tags, `--no-color`/`NO_COLOR` disable ANSI color tags, nil payload outputs stay empty, state-changing commands suppress payload output by default, and `--verbose` restores that payload output.
 7. CLI safeguards: validation errors, conflicting path inputs, and destructive-operation protections.
 8. Metadata edit CLI: `metadata edit` opens YAML metadata content, seeds empty metadata for missing overrides, rejects invalid edited YAML, and persists only validated metadata updates.
+9. Global flag env defaults: `DECLAREST_CONTEXT`, `DECLAREST_OUTPUT`, `DECLAREST_VERBOSE`, `DECLAREST_VERBOSE_INSECURE`, `DECLAREST_NO_STATUS`, `DECLAREST_NO_COLOR`, and `NO_COLOR` honor `flag > env > built-in default` precedence, and explicit `--no-status=false` or `--no-color=false` override env-backed defaults.
 
 ### Context and Config
 9. Context config: strict decode after legacy-alias normalization, one-of validation (including repository-only and remote-only contexts), legacy `repository.resource-format` migration to `preferences.preferredFormat`, overrides precedence, and missing-catalog behavior.

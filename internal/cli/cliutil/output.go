@@ -33,13 +33,13 @@ func ValidateOutputFormat(format string) error {
 	}
 }
 
-func ValidateOutputFormatForCommandPath(commandPath string, format string) error {
+func ValidateOutputFormatForCommand(command *cobra.Command, format string) error {
 	switch strings.TrimSpace(format) {
 	case "", OutputAuto, OutputText:
 		return nil
 	}
 
-	switch commandmeta.OutputPolicyForPath(commandPath) {
+	switch commandmeta.OutputPolicyForCommand(command) {
 	case commandmeta.OutputPolicyTextOnly:
 		return ValidationError("command supports only text output; use --output text or --output auto", nil)
 	case commandmeta.OutputPolicyYAMLDefaultTextOrYAML:
@@ -49,6 +49,25 @@ func ValidateOutputFormatForCommandPath(commandPath string, format string) error
 		return ValidationError("command supports only yaml or text output; use --output yaml, text, or auto", nil)
 	default:
 		return nil
+	}
+}
+
+func ResolveCommandOutputFormat(command *cobra.Command, globalFlags *GlobalFlags) string {
+	format := OutputAuto
+	if globalFlags != nil && strings.TrimSpace(globalFlags.Output) != "" {
+		format = globalFlags.Output
+	}
+	if format != OutputAuto {
+		return format
+	}
+
+	switch commandmeta.OutputPolicyForCommand(command) {
+	case commandmeta.OutputPolicyTextOnly, commandmeta.OutputPolicyTextDefaultStructured:
+		return OutputText
+	case commandmeta.OutputPolicyYAMLDefaultTextOrYAML:
+		return OutputYAML
+	default:
+		return OutputJSON
 	}
 }
 
