@@ -27,7 +27,7 @@ func (g *Client) Request(
 		return resource.Content{}, faults.NewValidationError("request method is required", nil)
 	}
 
-	resolvedPath := normalizeRequestPath(requestSpec.Path)
+	resolvedPath := managedserverdomain.NormalizeRequestPath(requestSpec.Path)
 	if resolvedPath == "" {
 		return resource.Content{}, faults.NewValidationError("request path is required", nil)
 	}
@@ -74,7 +74,7 @@ func (g *Client) Request(
 		validationResource.PayloadDescriptor = bodyDescriptor
 	}
 	if hasOperation && operationRequiresBody(operation) {
-		if err := g.validateResourceMutationPayload(validationResource, validationMd, bodyDescriptor); err != nil {
+		if err := g.validateResourceMutationPayload(operation, validationResource, validationMd, bodyDescriptor); err != nil {
 			return resource.Content{}, err
 		}
 	}

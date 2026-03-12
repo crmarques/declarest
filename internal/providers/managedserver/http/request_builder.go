@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	managedserver "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -47,7 +48,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 		spec.Method = overrideMethod
 		explicitMethod = true
 	}
-	spec.Path = normalizeRequestPath(spec.Path)
+	spec.Path = managedserver.NormalizeRequestPath(spec.Path)
 	if spec.Path == "" {
 		return metadata.OperationSpec{}, faults.NewValidationError("resolved operation path is empty", nil)
 	}
@@ -76,7 +77,7 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	}
 
 	if operationRequiresBody(operation) {
-		if err := g.validateResourceMutationPayload(resolvedResource, md, bodyDescriptor); err != nil {
+		if err := g.validateResourceMutationPayload(operation, resolvedResource, md, bodyDescriptor); err != nil {
 			return metadata.OperationSpec{}, err
 		}
 		if strings.TrimSpace(spec.ContentType) == "" {

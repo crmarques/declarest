@@ -39,7 +39,6 @@ type Client struct {
 	openapiMu     sync.Mutex
 	openapiLoaded bool
 	openapiDoc    map[string]any
-	openapiErr    error
 
 	oauthMu          sync.Mutex
 	oauthAccessToken string

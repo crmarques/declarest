@@ -77,11 +77,12 @@ func (g *Client) validateOperationPayload(
 }
 
 func (g *Client) validateResourceMutationPayload(
+	operation metadata.Operation,
 	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 	descriptor resource.PayloadDescriptor,
 ) error {
-	if len(metadatavalidation.EffectiveResourceRequiredAttributes(md)) == 0 {
+	if len(metadatavalidation.EffectiveResourceRequiredAttributesForOperation(md, operation)) == 0 {
 		return nil
 	}
 
@@ -90,7 +91,7 @@ func (g *Client) validateResourceMutationPayload(
 		return nil
 	}
 
-	return metadatavalidation.ValidateResourceRequiredAttributes(resolvedResource.Payload, md)
+	return metadatavalidation.ValidateResourceRequiredAttributesForOperation(resolvedResource.Payload, md, operation)
 }
 
 func (g *Client) validateOperationAssertions(

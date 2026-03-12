@@ -43,7 +43,7 @@ Key terms:
 3. Array fields in metadata are replace, not deep-merge.
 4. Compare behavior MUST ignore fields declared by metadata suppression/filter rules.
 5. Non-unique alias in the same collection is a conflict and MUST be surfaced.
-6. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`, and every JSON Pointer referenced by configured `resource.alias` or `resource.id` MUST count as required even when `resource.requiredAttributes` omits it.
+6. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`; every JSON Pointer referenced by configured `resource.alias` MUST count as required even when `resource.requiredAttributes` omits it; and every JSON Pointer referenced by configured `resource.id` MUST count as required for non-create mutations while create MAY omit metadata-derived `resource.id` pointers unless they are explicitly declared elsewhere.
 
 ## Failure Modes
 1. Alias collision causing ambiguous target resolution.
@@ -57,9 +57,11 @@ Key terms:
 3. Resource payload contains fields with both secret and non-secret siblings.
 4. Collection has zero items and metadata inference still required.
 5. Structured update transforms remove an alias field from the outgoing body after resource-level validation already confirmed it exists in the source payload.
+6. Structured create payloads can omit a server-assigned `resource.id` while update still requires that ID when metadata declares it.
 
 ## Examples
 1. Local path `/customers/acme` maps to collection `/customers`, alias `acme`, and remote ID from rendered `resource.id` when configured.
 2. Metadata on `/customers/_` sets default `operations.get.path`; resource metadata on `/customers/acme` overrides only `operations.update.path`.
 3. Diff operation suppresses `/updatedAt` and `/lastSeen` before comparison to avoid false drift.
 4. Metadata with `resource.alias: "{{/clientId}}"` and `resource.requiredAttributes: [/realm]` still requires `/clientId` in a structured create/update payload even when an operation transform later excludes `/clientId` from the transmitted body.
+5. Metadata with `resource.id: "{{/id}}"`, `resource.alias: "{{/clientId}}"`, and `resource.requiredAttributes: [/realm]` can create a resource from `{realm, clientId}` when the server assigns the ID, but update still requires `/id` unless another validation layer supplies it.

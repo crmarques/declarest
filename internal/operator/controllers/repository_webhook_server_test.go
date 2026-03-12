@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,6 +18,48 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+func TestRepositoryWebhookServerBuildsHTTPServerWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	server := (&RepositoryWebhookServer{}).buildHTTPServer(":9443", http.NewServeMux())
+	if server.ReadHeaderTimeout != defaultWebhookReadHeaderTimeout {
+		t.Fatalf("expected default read header timeout %s, got %s", defaultWebhookReadHeaderTimeout, server.ReadHeaderTimeout)
+	}
+	if server.ReadTimeout != defaultWebhookReadTimeout {
+		t.Fatalf("expected default read timeout %s, got %s", defaultWebhookReadTimeout, server.ReadTimeout)
+	}
+	if server.WriteTimeout != defaultWebhookWriteTimeout {
+		t.Fatalf("expected default write timeout %s, got %s", defaultWebhookWriteTimeout, server.WriteTimeout)
+	}
+	if server.IdleTimeout != defaultWebhookIdleTimeout {
+		t.Fatalf("expected default idle timeout %s, got %s", defaultWebhookIdleTimeout, server.IdleTimeout)
+	}
+}
+
+func TestRepositoryWebhookServerBuildsHTTPServerWithCustomTimeouts(t *testing.T) {
+	t.Parallel()
+
+	sut := &RepositoryWebhookServer{
+		ReadHeaderLimit: 2 * time.Second,
+		ReadTimeout:     3 * time.Second,
+		WriteTimeout:    4 * time.Second,
+		IdleTimeout:     5 * time.Second,
+	}
+	server := sut.buildHTTPServer(":9443", http.NewServeMux())
+	if server.ReadHeaderTimeout != sut.ReadHeaderLimit {
+		t.Fatalf("expected custom read header timeout %s, got %s", sut.ReadHeaderLimit, server.ReadHeaderTimeout)
+	}
+	if server.ReadTimeout != sut.ReadTimeout {
+		t.Fatalf("expected custom read timeout %s, got %s", sut.ReadTimeout, server.ReadTimeout)
+	}
+	if server.WriteTimeout != sut.WriteTimeout {
+		t.Fatalf("expected custom write timeout %s, got %s", sut.WriteTimeout, server.WriteTimeout)
+	}
+	if server.IdleTimeout != sut.IdleTimeout {
+		t.Fatalf("expected custom idle timeout %s, got %s", sut.IdleTimeout, server.IdleTimeout)
+	}
+}
 
 func TestRepositoryWebhookServerAcceptsValidGiteaWebhook(t *testing.T) {
 	t.Parallel()

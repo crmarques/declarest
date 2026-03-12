@@ -29,6 +29,10 @@ const (
 	repositoryWebhookAnnotationLastEventAt = "declarest.io/webhook-last-received-at"
 	repositoryWebhookAnnotationLastEventID = "declarest.io/webhook-last-event-id"
 	defaultWebhookBodyLimit                = int64(1 << 20)
+	defaultWebhookReadHeaderTimeout        = 5 * time.Second
+	defaultWebhookReadTimeout              = 10 * time.Second
+	defaultWebhookWriteTimeout             = 10 * time.Second
+	defaultWebhookIdleTimeout              = 30 * time.Second
 )
 
 type RepositoryWebhookServer struct {
@@ -38,6 +42,9 @@ type RepositoryWebhookServer struct {
 	WatchNamespace  string
 	MaxBodyBytes    int64
 	ReadHeaderLimit time.Duration
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
 }
 
 func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
@@ -52,15 +59,7 @@ func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc(repositoryWebhookPathPrefix, s.handleRepositoryWebhook)
 
-	readHeaderTimeout := s.ReadHeaderLimit
-	if readHeaderTimeout <= 0 {
-		readHeaderTimeout = 5 * time.Second
-	}
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           mux,
-		ReadHeaderTimeout: readHeaderTimeout,
-	}
+	server := s.buildHTTPServer(addr, mux)
 
 	go func() {
 		<-ctx.Done()
@@ -74,6 +73,33 @@ func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+func (s *RepositoryWebhookServer) buildHTTPServer(addr string, handler http.Handler) *http.Server {
+	readHeaderTimeout := s.ReadHeaderLimit
+	if readHeaderTimeout <= 0 {
+		readHeaderTimeout = defaultWebhookReadHeaderTimeout
+	}
+	readTimeout := s.ReadTimeout
+	if readTimeout <= 0 {
+		readTimeout = defaultWebhookReadTimeout
+	}
+	writeTimeout := s.WriteTimeout
+	if writeTimeout <= 0 {
+		writeTimeout = defaultWebhookWriteTimeout
+	}
+	idleTimeout := s.IdleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = defaultWebhookIdleTimeout
+	}
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
 }
 
 func (s *RepositoryWebhookServer) NeedLeaderElection() bool {

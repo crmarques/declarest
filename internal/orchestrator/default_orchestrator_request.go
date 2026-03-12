@@ -204,7 +204,7 @@ func (r *Orchestrator) resolveRequestSpec(
 	if !ok {
 		resolved := cloneRequestSpec(requestSpec)
 		resolved.Method = normalizedMethod
-		resolved.Path = normalizeRequestPathForOrchestrator(resolved.Path)
+		resolved.Path = managedserver.NormalizeRequestPath(resolved.Path)
 		return resolved, ctx, nil
 	}
 
@@ -330,7 +330,7 @@ func sameNormalizedRequestPath(first string, second string) bool {
 		return normalizedFirst == normalizedSecond
 	}
 
-	return strings.TrimSpace(first) == strings.TrimSpace(second)
+	return managedserver.NormalizeRequestPath(first) == managedserver.NormalizeRequestPath(second)
 }
 
 func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.OperationSpec) managedserver.RequestSpec {
@@ -384,20 +384,6 @@ func cloneRequestSpec(value managedserver.RequestSpec) managedserver.RequestSpec
 		ContentType: value.ContentType,
 		Body:        value.Body,
 	}
-}
-
-func normalizeRequestPathForOrchestrator(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return ""
-	}
-	if !strings.HasPrefix(trimmed, "/") {
-		trimmed = "/" + trimmed
-	}
-	if trimmed != "/" {
-		trimmed = strings.TrimSuffix(trimmed, "/")
-	}
-	return trimmed
 }
 
 func requestBodyContent(value any, contentType string) resource.Content {

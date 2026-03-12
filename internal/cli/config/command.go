@@ -33,6 +33,7 @@ func newCommandWithPrompter(
 
 	command.AddCommand(
 		newPrintTemplateCommand(),
+		newMigrateCommand(deps),
 		newInitCommand(deps, globalFlags),
 		newAddCommand(deps, globalFlags, prompter),
 		newEditCommand(deps, globalFlags),
@@ -59,6 +60,33 @@ func newPrintTemplateCommand() *cobra.Command {
 		RunE: func(command *cobra.Command, _ []string) error {
 			_, err := io.WriteString(command.OutOrStdout(), contextTemplateYAML)
 			return err
+		},
+	}
+}
+
+func newMigrateCommand(deps cliutil.CommandDependencies) *cobra.Command {
+	return &cobra.Command{
+		Use:   "migrate",
+		Short: "Rewrite the context catalog using the canonical format",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			contexts, err := cliutil.RequireContexts(deps)
+			if err != nil {
+				return err
+			}
+			editorService, ok := contexts.(configdomain.ContextCatalogEditor)
+			if !ok {
+				return cliutil.ValidationError("context migrate requires a file-backed context catalog editor service", nil)
+			}
+
+			catalog, err := editorService.GetCatalog(command.Context())
+			if err != nil {
+				return err
+			}
+			if err := editorService.ReplaceCatalog(command.Context(), catalog); err != nil {
+				return err
+			}
+			return cliutil.WriteText(command, cliutil.OutputText, "context catalog migrated")
 		},
 	}
 }

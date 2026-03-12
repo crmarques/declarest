@@ -89,23 +89,9 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 				return err
 			}
 
-			orchestratorService, err := cliutil.RequireOrchestrator(deps)
-			if err != nil {
-				return err
-			}
-			repositoryService, err := cliutil.RequireResourceStore(deps)
-			if err != nil {
-				return err
-			}
-
 			if err := resourcesave.Execute(
 				command.Context(),
-				resourcesave.Dependencies{
-					Orchestrator: orchestratorService,
-					Repository:   repositoryService,
-					Metadata:     deps.Services.MetadataService(),
-					Secrets:      deps.Services.SecretProvider(),
-				},
+				cliutil.AppDependencies(deps),
 				resolvedPath,
 				value,
 				hasInput,

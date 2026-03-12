@@ -65,12 +65,7 @@ func newCopyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 
 			if err := resourcesave.Execute(
 				command.Context(),
-				resourcesave.Dependencies{
-					Orchestrator: deps.Orchestrator,
-					Repository:   deps.Services.RepositoryStore(),
-					Metadata:     deps.Services.MetadataService(),
-					Secrets:      deps.Services.SecretProvider(),
-				},
+				cliutil.AppDependencies(deps),
 				targetPath,
 				value,
 				true,

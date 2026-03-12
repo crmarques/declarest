@@ -80,10 +80,6 @@ func normalizeVaultPath(value string, allowEmpty bool) (string, error) {
 	return strings.Join(parts, "/"), nil
 }
 
-func normalizeSecretKey(key string) (string, error) {
-	return normalizeVaultPath(key, false)
-}
-
 func buildEndpoint(parts ...string) string {
 	encoded := make([]string, 0, len(parts)+1)
 	encoded = append(encoded, "v1")

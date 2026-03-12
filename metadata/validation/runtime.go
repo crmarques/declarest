@@ -7,6 +7,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/metadata/identitytemplate"
 	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
@@ -45,8 +46,36 @@ func EffectiveResourceRequiredAttributes(md metadatadomain.ResourceMetadata) []s
 	return attributes
 }
 
+func EffectiveResourceRequiredAttributesForOperation(
+	md metadatadomain.ResourceMetadata,
+	operation metadatadomain.Operation,
+) []string {
+	attributes, err := resourceRequiredAttributesForOperation(md, operation)
+	if err != nil {
+		return append([]string(nil), md.RequiredAttributes...)
+	}
+	return attributes
+}
+
 func ValidateResourceRequiredAttributes(payload resource.Value, md metadatadomain.ResourceMetadata) error {
 	required, err := identity.RequiredAttributes(md)
+	if err != nil {
+		return err
+	}
+	return ValidateRequiredAttributes(
+		payload,
+		"resource.requiredAttributes",
+		required,
+		"resource payload validation",
+	)
+}
+
+func ValidateResourceRequiredAttributesForOperation(
+	payload resource.Value,
+	md metadatadomain.ResourceMetadata,
+	operation metadatadomain.Operation,
+) error {
+	required, err := resourceRequiredAttributesForOperation(md, operation)
 	if err != nil {
 		return err
 	}
@@ -95,6 +124,69 @@ func ValidateRequiredAttributes(
 		fmt.Sprintf("%s failed: missing required attributes [%s]", scope, strings.Join(missing, ", ")),
 		nil,
 	)
+}
+
+func resourceRequiredAttributesForOperation(
+	md metadatadomain.ResourceMetadata,
+	operation metadatadomain.Operation,
+) ([]string, error) {
+	attributes := append([]string(nil), md.RequiredAttributes...)
+	addPointer := orderedStringCollector(&attributes)
+
+	if err := appendIdentityTemplatePointers(addPointer, "resource.alias", md.Alias); err != nil {
+		return nil, err
+	}
+	if operation != metadatadomain.OperationCreate {
+		if err := appendIdentityTemplatePointers(addPointer, "resource.id", md.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	return attributes, nil
+}
+
+func appendIdentityTemplatePointers(
+	addPointer func(string),
+	field string,
+	template string,
+) error {
+	trimmed := strings.TrimSpace(template)
+	if trimmed == "" {
+		return nil
+	}
+
+	pointers, err := identitytemplate.ExtractPointers(trimmed)
+	if err != nil {
+		return faults.NewValidationError(field+" must be a valid identity template", err)
+	}
+	for _, pointer := range pointers {
+		addPointer(pointer)
+	}
+
+	return nil
+}
+
+func orderedStringCollector(target *[]string) func(string) {
+	seen := make(map[string]struct{}, len(*target))
+	for _, item := range *target {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+	}
+
+	return func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, exists := seen[trimmed]; exists {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		*target = append(*target, trimmed)
+	}
 }
 
 func DerivePathFields(resolvedResource resource.Resource, md metadatadomain.ResourceMetadata) map[string]any {

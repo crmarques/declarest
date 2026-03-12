@@ -67,12 +67,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 
 			debugctx.Printf(runCtx, "resource get requested path=%q source=%q", resolvedPath, source)
 
-			result, err := readapp.Execute(runCtx, readapp.Dependencies{
-				Orchestrator: deps.Orchestrator,
-				Contexts:     deps.Contexts,
-				Metadata:     deps.Services.MetadataService(),
-				Secrets:      deps.Services.SecretProvider(),
-			}, readapp.Request{
+			result, err := readapp.Execute(runCtx, cliutil.AppDependencies(deps), readapp.Request{
 				LogicalPath:              resolvedPath,
 				Source:                   source,
 				SkipItems:                excludeItems,

@@ -2,6 +2,7 @@ package cliutil
 
 import (
 	"github.com/crmarques/declarest/config"
+	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
@@ -25,6 +26,21 @@ func NewCommandDependencies(
 		Contexts:     contexts,
 		Services:     services,
 	}
+}
+
+func AppDependencies(deps CommandDependencies) appdeps.Dependencies {
+	app := appdeps.Dependencies{
+		Orchestrator: deps.Orchestrator,
+		Contexts:     deps.Contexts,
+	}
+	if deps.Services == nil {
+		return app
+	}
+
+	app.Repository = deps.Services.RepositoryStore()
+	app.Metadata = deps.Services.MetadataService()
+	app.Secrets = deps.Services.SecretProvider()
+	return app
 }
 
 func RequireContexts(deps CommandDependencies) (config.ContextService, error) {

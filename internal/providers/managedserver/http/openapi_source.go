@@ -59,7 +59,7 @@ func (g *Client) openAPIDocument(ctx context.Context) (map[string]any, error) {
 	defer g.openapiMu.Unlock()
 
 	if g.openapiLoaded {
-		return g.openapiDoc, g.openapiErr
+		return g.openapiDoc, nil
 	}
 
 	document, err := g.loadOpenAPIDocument(ctx)

@@ -186,20 +186,6 @@ func requestMethodOperation(method string) (metadata.Operation, bool) {
 	}
 }
 
-func normalizeRequestPath(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return ""
-	}
-	if !strings.HasPrefix(trimmed, "/") {
-		trimmed = "/" + trimmed
-	}
-	if trimmed != "/" {
-		trimmed = strings.TrimSuffix(trimmed, "/")
-	}
-	return trimmed
-}
-
 func mergeHeaders(defaultHeaders map[string]string, operationHeaders map[string]string) map[string]string {
 	if len(defaultHeaders) == 0 && len(operationHeaders) == 0 {
 		return nil
@@ -279,12 +265,12 @@ func payloadDescriptorFromValue(value any) resource.PayloadDescriptor {
 }
 
 func joinBaseAndRequestPath(basePath string, requestPath string) string {
-	normalizedBase := normalizeRequestPath(basePath)
+	normalizedBase := managedserver.NormalizeRequestPath(basePath)
 	if normalizedBase == "" {
 		normalizedBase = "/"
 	}
 
-	normalizedRequest := normalizeRequestPath(requestPath)
+	normalizedRequest := managedserver.NormalizeRequestPath(requestPath)
 	if normalizedRequest == "" || normalizedRequest == "/" {
 		return normalizedBase
 	}

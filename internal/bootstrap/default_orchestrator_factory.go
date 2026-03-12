@@ -159,6 +159,11 @@ func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.BaseURL)), "http://") {
 			_, _ = fmt.Fprintf(w, "warning: managed-server.http.base-url uses plain HTTP, credentials will be transmitted in cleartext\n")
 		}
+		if resolvedContext.ManagedServer.HTTP.Auth != nil &&
+			resolvedContext.ManagedServer.HTTP.Auth.OAuth2 != nil &&
+			strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.Auth.OAuth2.TokenURL)), "http://") {
+			_, _ = fmt.Fprintf(w, "warning: managed-server.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext\n")
+		}
 		if resolvedContext.ManagedServer.HTTP.TLS != nil && resolvedContext.ManagedServer.HTTP.TLS.InsecureSkipVerify {
 			_, _ = fmt.Fprintf(w, "warning: managed-server.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
 		}

@@ -67,12 +67,7 @@ func newEditCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 
 			if err := resourcesave.Execute(
 				command.Context(),
-				resourcesave.Dependencies{
-					Orchestrator: deps.Orchestrator,
-					Repository:   deps.Services.RepositoryStore(),
-					Metadata:     deps.Services.MetadataService(),
-					Secrets:      deps.Services.SecretProvider(),
-				},
+				cliutil.AppDependencies(deps),
 				resolvedPath,
 				resourcedomain.Content{
 					Value:      editedValue,

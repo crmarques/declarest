@@ -948,6 +948,54 @@ func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 		}
 	})
 
+	t.Run("create_allows_server_assigned_id_when_only_resource_id_is_missing", func(t *testing.T) {
+		t.Parallel()
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+			},
+		})
+
+		md := metadata.ResourceMetadata{
+			Alias:              "{{/clientId}}",
+			ID:                 "{{/id}}",
+			RequiredAttributes: []string{"/realm"},
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationCreate): {
+					Path: "/customers",
+				},
+				string(metadata.OperationUpdate): {
+					Path: "/customers",
+				},
+			},
+		}
+
+		_, err := client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/declarest-cli",
+			Payload: map[string]any{
+				"realm":    "platform",
+				"clientId": "declarest-cli",
+			},
+		}, md, metadata.OperationCreate)
+		if err != nil {
+			t.Fatalf("BuildRequestFromMetadata returned error for create: %v", err)
+		}
+
+		_, err = client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+			LogicalPath: "/customers/declarest-cli",
+			Payload: map[string]any{
+				"realm":    "platform",
+				"clientId": "declarest-cli",
+			},
+		}, md, metadata.OperationUpdate)
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "/id") {
+			t.Fatalf("expected update validation error for missing id, got %v", err)
+		}
+	})
+
 	t.Run("required_attributes_accept_path_derived_fields", func(t *testing.T) {
 		t.Parallel()
 
@@ -1248,6 +1296,7 @@ func TestRequestAppliesMetadataValidationFromContext(t *testing.T) {
 			LogicalPath:    "/admin/realms/platform/clients",
 			CollectionPath: "/admin/realms/platform/clients",
 			Metadata: metadata.ResourceMetadata{
+				ID:                   "{{/id}}",
 				Alias:                "{{/clientId}}",
 				RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 			},

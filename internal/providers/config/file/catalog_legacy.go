@@ -51,8 +51,21 @@ var legacyCatalogKeyAliases = map[string]string{
 	"token-url":                "tokenURL",
 }
 
+var legacyCatalogDetectionTokens = buildLegacyCatalogDetectionTokens()
+
+func buildLegacyCatalogDetectionTokens() [][]byte {
+	tokens := make([][]byte, 0, len(legacyCatalogKeyAliases))
+	for key := range legacyCatalogKeyAliases {
+		tokens = append(tokens, []byte(key+":"))
+	}
+	return tokens
+}
+
 func normalizeLegacyCatalogYAML(data []byte) ([]byte, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
+		return data, nil
+	}
+	if !legacyCatalogMayNeedNormalization(data) {
 		return data, nil
 	}
 
@@ -61,8 +74,13 @@ func normalizeLegacyCatalogYAML(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	rewriteLegacyCatalogKeys(&root, "")
-	migrateLegacyCatalogFields(&root)
+	changed := rewriteLegacyCatalogKeys(&root, "")
+	if migrateLegacyCatalogFields(&root) {
+		changed = true
+	}
+	if !changed {
+		return data, nil
+	}
 
 	if root.Kind == yaml.DocumentNode && len(root.Content) == 1 {
 		return yaml.Marshal(root.Content[0])
@@ -70,15 +88,27 @@ func normalizeLegacyCatalogYAML(data []byte) ([]byte, error) {
 	return yaml.Marshal(&root)
 }
 
-func rewriteLegacyCatalogKeys(node *yaml.Node, parentKey string) {
+func legacyCatalogMayNeedNormalization(data []byte) bool {
+	for _, token := range legacyCatalogDetectionTokens {
+		if bytes.Contains(data, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func rewriteLegacyCatalogKeys(node *yaml.Node, parentKey string) bool {
 	if node == nil {
-		return
+		return false
 	}
 
+	changed := false
 	switch node.Kind {
 	case yaml.DocumentNode, yaml.SequenceNode:
 		for _, child := range node.Content {
-			rewriteLegacyCatalogKeys(child, parentKey)
+			if rewriteLegacyCatalogKeys(child, parentKey) {
+				changed = true
+			}
 		}
 	case yaml.MappingNode:
 		skipAliases := parentKey == "preferences" || parentKey == "defaultHeaders"
@@ -87,23 +117,30 @@ func rewriteLegacyCatalogKeys(node *yaml.Node, parentKey string) {
 			valueNode := node.Content[idx+1]
 			if !skipAliases {
 				if replacement, ok := legacyCatalogKeyAliases[keyNode.Value]; ok {
+					changed = true
 					keyNode.Value = replacement
 				}
 			}
-			rewriteLegacyCatalogKeys(valueNode, keyNode.Value)
+			if rewriteLegacyCatalogKeys(valueNode, keyNode.Value) {
+				changed = true
+			}
 		}
 	}
+	return changed
 }
 
-func migrateLegacyCatalogFields(node *yaml.Node) {
+func migrateLegacyCatalogFields(node *yaml.Node) bool {
 	if node == nil {
-		return
+		return false
 	}
 
+	changed := false
 	switch node.Kind {
 	case yaml.DocumentNode, yaml.SequenceNode:
 		for _, child := range node.Content {
-			migrateLegacyCatalogFields(child)
+			if migrateLegacyCatalogFields(child) {
+				changed = true
+			}
 		}
 	case yaml.MappingNode:
 		for idx := 0; idx+1 < len(node.Content); idx += 2 {
@@ -111,40 +148,49 @@ func migrateLegacyCatalogFields(node *yaml.Node) {
 			valueNode := node.Content[idx+1]
 			if keyNode.Value == "contexts" && valueNode.Kind == yaml.SequenceNode {
 				for _, contextNode := range valueNode.Content {
-					migrateLegacyContextFields(contextNode)
+					if migrateLegacyContextFields(contextNode) {
+						changed = true
+					}
 				}
 			}
-			migrateLegacyCatalogFields(valueNode)
+			if migrateLegacyCatalogFields(valueNode) {
+				changed = true
+			}
 		}
 	}
+	return changed
 }
 
-func migrateLegacyContextFields(contextNode *yaml.Node) {
+func migrateLegacyContextFields(contextNode *yaml.Node) bool {
 	if contextNode == nil || contextNode.Kind != yaml.MappingNode {
-		return
+		return false
 	}
 
 	repositoryNode := mappingValue(contextNode, "repository")
 	if repositoryNode == nil || repositoryNode.Kind != yaml.MappingNode {
-		return
+		return false
 	}
 
 	resourceFormatNode := mappingValue(repositoryNode, "resourceFormat")
 	if resourceFormatNode == nil {
-		return
+		return false
 	}
 
 	resourceFormat := strings.TrimSpace(resourceFormatNode.Value)
-	removeMappingEntry(repositoryNode, "resourceFormat")
+	changed := removeMappingEntry(repositoryNode, "resourceFormat")
 	if resourceFormat == "" {
-		return
+		return changed
 	}
 
-	preferencesNode := ensureMappingValue(contextNode, "preferences")
+	preferencesNode, created := ensureMappingValue(contextNode, "preferences")
+	if created {
+		changed = true
+	}
 	if mappingValue(preferencesNode, "preferredFormat") != nil {
-		return
+		return changed
 	}
 	setMappingScalar(preferencesNode, "preferredFormat", resourceFormat)
+	return true
 }
 
 func mappingValue(node *yaml.Node, key string) *yaml.Node {
@@ -159,30 +205,31 @@ func mappingValue(node *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-func removeMappingEntry(node *yaml.Node, key string) {
+func removeMappingEntry(node *yaml.Node, key string) bool {
 	if node == nil || node.Kind != yaml.MappingNode {
-		return
+		return false
 	}
 	for idx := 0; idx+1 < len(node.Content); idx += 2 {
 		if node.Content[idx].Value == key {
 			node.Content = append(node.Content[:idx], node.Content[idx+2:]...)
-			return
+			return true
 		}
 	}
+	return false
 }
 
-func ensureMappingValue(node *yaml.Node, key string) *yaml.Node {
+func ensureMappingValue(node *yaml.Node, key string) (*yaml.Node, bool) {
 	if node == nil || node.Kind != yaml.MappingNode {
-		return nil
+		return nil, false
 	}
 	if valueNode := mappingValue(node, key); valueNode != nil {
-		return valueNode
+		return valueNode, false
 	}
 
 	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}
 	valueNode := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 	node.Content = append(node.Content, keyNode, valueNode)
-	return valueNode
+	return valueNode, true
 }
 
 func setMappingScalar(node *yaml.Node, key string, value string) {

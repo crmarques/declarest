@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	managedserver "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 )
 
@@ -19,7 +20,7 @@ func findOpenAPIPathItem(document map[string]any, requestPath string) (string, m
 		return "", nil, false
 	}
 
-	normalizedRequest := normalizeRequestPath(requestPath)
+	normalizedRequest := managedserver.NormalizeRequestPath(requestPath)
 	if normalizedRequest == "" {
 		return "", nil, false
 	}
@@ -68,8 +69,8 @@ func findOpenAPIPathItem(document map[string]any, requestPath string) (string, m
 }
 
 func openAPIPathMatches(templatePath string, requestPath string) (int, bool) {
-	template := normalizeRequestPath(templatePath)
-	request := normalizeRequestPath(requestPath)
+	template := managedserver.NormalizeRequestPath(templatePath)
+	request := managedserver.NormalizeRequestPath(requestPath)
 	if template == request {
 		return 0, true
 	}

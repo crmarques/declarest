@@ -142,7 +142,7 @@ func (s *VaultSecretService) Init(ctx context.Context) error {
 }
 
 func (s *VaultSecretService) Store(ctx context.Context, key string, value string) error {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (s *VaultSecretService) Store(ctx context.Context, key string, value string
 }
 
 func (s *VaultSecretService) Get(ctx context.Context, key string) (string, error) {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return "", err
 	}
@@ -193,7 +193,7 @@ func (s *VaultSecretService) Get(ctx context.Context, key string) (string, error
 }
 
 func (s *VaultSecretService) Delete(ctx context.Context, key string) error {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func (s *VaultSecretService) List(ctx context.Context) ([]string, error) {
 				continue
 			}
 
-			key, err := normalizeSecretKey(joinVaultListPath(prefix, entry))
+			key, err := secretdomain.NormalizeKey(joinVaultListPath(prefix, entry))
 			if err != nil {
 				return nil, internalError("vault list response payload is invalid", err)
 			}

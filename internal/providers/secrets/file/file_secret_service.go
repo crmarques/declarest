@@ -145,7 +145,7 @@ func (s *FileSecretService) Init(context.Context) error {
 }
 
 func (s *FileSecretService) Store(_ context.Context, key string, value string) error {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (s *FileSecretService) Store(_ context.Context, key string, value string) e
 }
 
 func (s *FileSecretService) Get(_ context.Context, key string) (string, error) {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return "", err
 	}
@@ -192,7 +192,7 @@ func (s *FileSecretService) Get(_ context.Context, key string) (string, error) {
 }
 
 func (s *FileSecretService) Delete(_ context.Context, key string) error {
-	normalizedKey, err := normalizeSecretKey(key)
+	normalizedKey, err := secretdomain.NormalizeKey(key)
 	if err != nil {
 		return err
 	}
@@ -511,23 +511,6 @@ func parseEncryptionKey(raw string) ([]byte, error) {
 	}
 
 	return nil, faults.NewValidationError("secret-store.file.key must be 32-byte raw, base64, or hex", nil)
-}
-
-func normalizeSecretKey(key string) (string, error) {
-	trimmed := strings.TrimSpace(key)
-	trimmed = strings.Trim(trimmed, "/")
-	if trimmed == "" {
-		return "", faults.NewValidationError("secret key must not be empty", nil)
-	}
-
-	parts := strings.Split(trimmed, "/")
-	for _, part := range parts {
-		if part == "" || part == "." || part == ".." {
-			return "", faults.NewValidationError("secret key contains invalid path segment", nil)
-		}
-	}
-
-	return strings.Join(parts, "/"), nil
 }
 
 func countSet(values ...bool) int {

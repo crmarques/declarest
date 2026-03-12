@@ -88,6 +88,28 @@ default-editor: nano
 	}
 }
 
+func TestNormalizeLegacyCatalogYAMLPreservesCanonicalInput(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`
+# keep comments and formatting untouched when no migration is needed
+contexts:
+  - name: dev
+    repository:
+      filesystem:
+        baseDir: /tmp/repo
+currentContext: dev
+`)
+
+	normalized, err := normalizeLegacyCatalogYAML(input)
+	if err != nil {
+		t.Fatalf("normalizeLegacyCatalogYAML returned error: %v", err)
+	}
+	if string(normalized) != string(input) {
+		t.Fatalf("expected canonical catalog to remain unchanged, got %q", string(normalized))
+	}
+}
+
 func TestDecodeCatalogGitLocalAutoInitDefaultsTrueWhenOmitted(t *testing.T) {
 	t.Parallel()
 

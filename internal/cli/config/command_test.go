@@ -133,6 +133,38 @@ func TestPrintTemplateRejectsUnexpectedArguments(t *testing.T) {
 	}
 }
 
+func TestMigrateRewritesCatalogUsingEditorService(t *testing.T) {
+	t.Parallel()
+
+	service := &testContextService{
+		catalogValue: configdomain.ContextCatalog{
+			CurrentContext: "dev",
+			Contexts: []configdomain.Context{
+				{
+					Name: "dev",
+					Repository: configdomain.Repository{
+						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+					},
+				},
+			},
+		},
+	}
+
+	output, err := executeConfigCommand(t, service, &cliutil.GlobalFlags{}, "", "migrate")
+	if err != nil {
+		t.Fatalf("migrate returned error: %v", err)
+	}
+	if !service.replaceCatalogCalled {
+		t.Fatal("expected migrate to rewrite the catalog")
+	}
+	if service.replacedCatalog.CurrentContext != "dev" {
+		t.Fatalf("expected replaced catalog current context dev, got %q", service.replacedCatalog.CurrentContext)
+	}
+	if strings.TrimSpace(output) != "context catalog migrated" {
+		t.Fatalf("expected migrate output, got %q", output)
+	}
+}
+
 func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testing.T) {
 	t.Parallel()
 
@@ -1861,6 +1893,7 @@ type testContextService struct {
 	currentValue     configdomain.Context
 	resolveValue     configdomain.Context
 	resolveSelection configdomain.ContextSelection
+	catalogValue     configdomain.ContextCatalog
 
 	createdContext  configdomain.Context
 	createdContexts []configdomain.Context
@@ -1868,11 +1901,13 @@ type testContextService struct {
 	deletedName     string
 	renameFrom      string
 	renameTo        string
+	replacedCatalog configdomain.ContextCatalog
 
-	createCalled   bool
-	updateCalled   bool
-	validateCalled bool
-	resolveCalled  bool
+	createCalled         bool
+	updateCalled         bool
+	validateCalled       bool
+	resolveCalled        bool
+	replaceCatalogCalled bool
 }
 
 func (s *testContextService) Create(_ context.Context, cfg configdomain.Context) error {
@@ -1919,6 +1954,16 @@ func (s *testContextService) ResolveContext(_ context.Context, selection configd
 
 func (s *testContextService) Validate(context.Context, configdomain.Context) error {
 	s.validateCalled = true
+	return nil
+}
+
+func (s *testContextService) GetCatalog(context.Context) (configdomain.ContextCatalog, error) {
+	return s.catalogValue, nil
+}
+
+func (s *testContextService) ReplaceCatalog(_ context.Context, catalog configdomain.ContextCatalog) error {
+	s.replaceCatalogCalled = true
+	s.replacedCatalog = catalog
 	return nil
 }
 

@@ -28,7 +28,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 10. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync.
 11. `SyncPolicy` apply execution MUST invoke DeclaREST mutation workflows through `orchestrator.Orchestrator`, honor `spec.sync.force` and `spec.sync.prune`, and update status stats (`targeted`, `applied`, `pruned`, `failed`) from executed operations.
 12. `SyncPolicy` scheduling MUST requeue by the earliest due trigger between `spec.syncInterval` and `spec.fullResyncCron` (when configured), with invalid cron expressions treated as spec-validation failures.
-13. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
+13. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, enforce bounded read/write/idle HTTP timeouts, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
 14. Webhook-triggered repository refresh MUST be event-driven via `ResourceRepository` annotation changes and MUST not wait for `pollInterval`.
 
 ## Data Contracts
@@ -56,6 +56,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Branch-mismatched push webhook events MUST be acknowledged and ignored without status mutation.
 4. `spec.fullResyncCron` with no previous full sync MUST schedule immediate full sync eligibility.
 5. Non-overlapping source paths with shared dependency references MUST be accepted.
+6. Slow or idle webhook clients MUST be disconnected by bounded HTTP server timeouts rather than holding connections indefinitely.
 
 ## Examples
 1. Normal: `ResourceRepository` receives a valid authenticated push webhook for the tracked branch, webhook annotations are patched, and reconcile fetches a new revision before the next `pollInterval`.
@@ -63,7 +64,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 
 ## Verification Expectations
 1. CRD defaulting/validation and webhook admission checks MUST be covered by `api/v1alpha1/*_types_test.go` and `api/v1alpha1/webhook_test.go`.
-2. Webhook authentication, branch filtering, and annotation patch behavior MUST be covered by `internal/operator/controllers/repository_webhook_server_test.go`.
+2. Webhook authentication, branch filtering, annotation patch behavior, and timeout configuration MUST be covered by `internal/operator/controllers/repository_webhook_server_test.go`.
 3. Incremental/full sync planning and safe full-fallback paths MUST be covered by `internal/operator/controllers/syncpolicy_plan_test.go`.
 4. Full-resync schedule and requeue interval computation MUST be covered by `internal/operator/controllers/syncpolicy_schedule_test.go`.
 5. Path-overlap validation and dependency-sharing behavior MUST be covered by `internal/operator/controllers/syncpolicy_controller_test.go`.

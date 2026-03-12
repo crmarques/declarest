@@ -99,9 +99,7 @@ func newRequestMethodCommand(
 				return err
 			}
 
-			result, err := requestapp.Execute(command.Context(), requestapp.Dependencies{
-				Orchestrator: deps.Orchestrator,
-			}, requestapp.Request{
+			result, err := requestapp.Execute(command.Context(), cliutil.AppDependencies(deps), requestapp.Request{
 				Method:         methodUpper,
 				LogicalPath:    normalizedPath,
 				Body:           body,

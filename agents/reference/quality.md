@@ -72,7 +72,7 @@ Acceptance contracts:
 18. E2E component orchestration: dependency-aware hook ordering, parallel ready-batch execution, and cycle/missing-dependency failures.
 
 ### Authentication
-19. OAuth2 component auth: `client_credentials` token issuance and managed-server auth rejection when oauth2 config is missing or invalid.
+19. OAuth2 component auth: `client_credentials` token issuance, managed-server auth rejection when oauth2 config is missing or invalid, and bootstrap warnings when `managedServer.http.auth.oauth2.tokenURL` uses plain HTTP.
 20. mTLS component auth: only configured client certificates are accepted when mTLS is enabled.
 21. Basic-auth component auth: requests fail without valid credentials when basic auth is selected and succeed with configured username/password.
 22. Managed-server auth redaction: debug logging masks `Authorization` and custom auth header names defined by `managedServer.http.auth.customHeaders` unless `--verbose-insecure` is enabled, while non-auth headers remain visible.
@@ -187,7 +187,7 @@ Acceptance contracts:
 79. Git repository auto-init contract: git-backed repository status/history/check and git-backed repository mutation commit/status flows initialize a missing local `.git/` repository automatically and continue with normal operation semantics (including empty-history handling for fresh repos).
 
 ### Payload Validation
-80. Operation payload validation contract: `resource create|update` and metadata-resolved `resource request post|put|patch` enforce `resource.requiredAttributes` plus every JSON Pointer referenced by `resource.alias` and `resource.id` against the structured pre-transform resource payload, then enforce `validate.requiredAttributes`, jq `validate.assertions`, and OpenAPI-backed `validate.schemaRef` against the outgoing structured payload; path-derived template fields satisfy operation required attributes without mutating the transmitted body, validation failures short-circuit before remote HTTP execution, and raw text/octet-stream payloads skip resource-attribute presence checks while still rejecting structured operation validation rules.
+80. Operation payload validation contract: `resource create|update` and metadata-resolved `resource request post|put|patch` enforce `resource.requiredAttributes` plus every JSON Pointer referenced by `resource.alias` against the structured pre-transform resource payload; non-create mutations also enforce every JSON Pointer referenced by `resource.id`, while create MAY omit metadata-derived `resource.id` pointers unless they are explicitly declared by `resource.requiredAttributes` or operation validation; the same workflows then enforce `validate.requiredAttributes`, jq `validate.assertions`, and OpenAPI-backed `validate.schemaRef` against the outgoing structured payload; path-derived template fields satisfy operation required attributes without mutating the transmitted body, validation failures short-circuit before remote HTTP execution, and raw text/octet-stream payloads skip resource-attribute presence checks while still rejecting structured operation validation rules.
 
 ### E2E Platform and Runtime
 81. E2E metadata type contract: `run-e2e.sh` defaults `--metadata-type` to `bundle`; `bundle` mode skips component-local `openapi.yaml` wiring and uses shorthand `metadata.bundle` when mapped; `base-dir` mode uses a run-scoped copy of the component-local `metadata/` tree as `metadata.base-dir` and keeps local OpenAPI wiring.
@@ -201,7 +201,7 @@ Acceptance contracts:
 ### Throttling and Operator
 88. Managed-server request throttling contract: configured `max-concurrent-requests` and `queue-size` enforce bounded request admission, overflow returns typed `ConflictError`, shared throttling scopes apply across concurrent clients for one managed-server identity, and proxy environment variables merge with configured managed-server proxy fields unless an explicit empty proxy block disables them.
 89. SyncPolicy overlap contract: multiple SyncPolicies MAY share repository/managed-server/secret-store references, but overlapping source path/subpath scopes MUST fail deterministically even when references differ.
-90. Repository webhook security contract: git webhook receiver rejects invalid signatures/tokens and unsupported events, enforces payload size bounds, and only authenticated push events patch repository webhook-receipt annotations.
+90. Repository webhook security contract: git webhook receiver rejects invalid signatures/tokens and unsupported events, enforces payload size bounds plus bounded read/write/idle HTTP timeouts, and only authenticated push events patch repository webhook-receipt annotations.
 91. Operator webhook integration contract: operator profiles configure provider webhooks (`gitea|gitlab`) and webhook-backed pushes trigger reconcile/update behavior before the repository poll interval in operator-main coverage.
 92. Operator reconcile planning contract: sync planning deterministically selects `full` vs `incremental`, metadata/unknown-path diffs trigger safe fallback to full scope, and secret-version-hash changes force reconcile even when repository revision is unchanged.
 

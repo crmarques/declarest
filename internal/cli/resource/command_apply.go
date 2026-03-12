@@ -73,12 +73,7 @@ func newApplyCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 				}
 			}
 
-			result, err := mutateapp.Execute(runCtx, mutateapp.Dependencies{
-				Orchestrator: deps.Orchestrator,
-				Repository:   deps.Services.RepositoryStore(),
-				Metadata:     deps.Services.MetadataService(),
-				Secrets:      deps.Services.SecretProvider(),
-			}, mutateapp.Request{
+			result, err := mutateapp.Execute(runCtx, cliutil.AppDependencies(deps), mutateapp.Request{
 				Operation:        mutateapp.OperationApply,
 				LogicalPath:      mutationPath,
 				Recursive:        recursive,

@@ -591,6 +591,27 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		}
 	})
 
+	t.Run("warns_on_plain_http_oauth2_token_url", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarnings(&buf, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{
+					BaseURL: "https://example.com",
+					Auth: &config.HTTPAuth{
+						OAuth2: &config.OAuth2{
+							TokenURL: "http://auth.local/oauth/token",
+						},
+					},
+				},
+			},
+		})
+		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.auth.oauth2.token-url uses plain HTTP")) {
+			t.Fatalf("expected oauth2 token URL warning, got %q", buf.String())
+		}
+	})
+
 	t.Run("warns_on_plain_http_vault_address", func(t *testing.T) {
 		t.Parallel()
 
@@ -671,6 +692,11 @@ func TestEmitSecurityWarnings(t *testing.T) {
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com",
 					TLS:     &config.TLS{InsecureSkipVerify: true},
+					Auth: &config.HTTPAuth{
+						OAuth2: &config.OAuth2{
+							TokenURL: "http://auth.local/oauth/token",
+						},
+					},
 				},
 			},
 			SecretStore: &config.SecretStore{
@@ -694,6 +720,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		output := buf.String()
 		expectedSubstrings := []string{
 			"managed-server.http.base-url uses plain HTTP",
+			"managed-server.http.auth.oauth2.token-url uses plain HTTP",
 			"managed-server.http.tls.insecure-skip-verify",
 			"secret-store.vault.address uses plain HTTP",
 			"secret-store.vault.tls.insecure-skip-verify",
