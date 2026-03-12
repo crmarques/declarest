@@ -12,6 +12,7 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_LOG_DIR:=}"
 : "${E2E_CONTEXT_DIR:=}"
 : "${E2E_CONTEXT_FILE:=}"
+: "${E2E_BUILD_CACHE_DIR:=${E2E_ROOT_DIR}/.e2e-build}"
 : "${E2E_BIN:=}"
 : "${E2E_OPERATOR_BIN:=}"
 : "${E2E_OPERATOR_IMAGE:=}"
@@ -253,6 +254,47 @@ e2e_run_cmd() {
   fi
 
   return 0
+}
+
+e2e_go_build_target_is_stale() {
+  local target=$1
+  shift
+
+  if [[ ! -x "${target}" ]]; then
+    return 0
+  fi
+
+  local source_path
+  for source_path in "$@"; do
+    [[ -e "${source_path}" ]] || continue
+
+    if [[ -f "${source_path}" ]]; then
+      if [[ "${source_path}" -nt "${target}" ]]; then
+        return 0
+      fi
+      continue
+    fi
+
+    if find "${source_path}" -type f -name '*.go' -newer "${target}" -print -quit | grep -q .; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+e2e_stage_cached_binary() {
+  local cached_binary=$1
+  local target_binary=$2
+
+  [[ -f "${cached_binary}" ]] || {
+    e2e_die "cached binary not found: ${cached_binary}"
+    return 1
+  }
+
+  mkdir -p "$(dirname -- "${target_binary}")" || return 1
+  cp -f "${cached_binary}" "${target_binary}" || return 1
+  chmod +x "${target_binary}" || return 1
 }
 
 e2e_write_state_value() {

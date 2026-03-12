@@ -762,15 +762,6 @@ func metadataPathExistsRemotely(
 	return false, err
 }
 
-func cloneStringSlice(values []string) []string {
-	if values == nil {
-		return nil
-	}
-	items := make([]string, len(values))
-	copy(items, values)
-	return items
-}
-
 func isOperationPathRequiredError(err error, operation metadatadomain.Operation) bool {
 	if !faults.IsCategory(err, faults.ValidationError) {
 		return false

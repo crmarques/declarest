@@ -101,6 +101,8 @@ e2e_print_startup_execution_parameters() {
 }
 
 step_prepare_runtime() {
+  local cached_cli_bin
+
   if [[ -z "${E2E_RUN_ID}" ]]; then
     E2E_RUN_ID=$(date +%Y%m%d-%H%M%S)-$$
   fi
@@ -111,12 +113,13 @@ step_prepare_runtime() {
   E2E_CONTEXT_FILE="${E2E_RUN_DIR}/contexts.yaml"
   E2E_BIN="${E2E_RUN_DIR}/bin/declarest"
   E2E_OPERATOR_BIN="${E2E_ROOT_DIR}/.e2e-build/declarest-operator-manager-${E2E_RUN_ID}"
+  cached_cli_bin="${E2E_BUILD_CACHE_DIR}/declarest"
 
   if [[ -z "${E2E_EXECUTION_LOG}" ]]; then
     E2E_EXECUTION_LOG="${E2E_RUN_DIR}/execution.log"
   fi
 
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "$(dirname -- "${E2E_BIN}")" "$(dirname -- "${E2E_OPERATOR_BIN}")" || return 1
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}" "$(dirname -- "${E2E_BIN}")" "$(dirname -- "${E2E_OPERATOR_BIN}")" || return 1
   e2e_info "runtime paths run-dir=${E2E_RUN_DIR} state-dir=${E2E_STATE_DIR} log-dir=${E2E_LOG_DIR} context-file=${E2E_CONTEXT_FILE}"
   e2e_info "runtime binary path=${E2E_BIN}"
   e2e_runtime_state_record_platform || return 1
@@ -130,7 +133,27 @@ step_prepare_runtime() {
     cp -a "${E2E_BOOTSTRAP_LOG_DIR}/." "${E2E_LOG_DIR}/" 2>/dev/null || true
   fi
 
-  e2e_run_cmd go build -o "${E2E_BIN}" ./cmd/declarest || return 1
+  if e2e_go_build_target_is_stale \
+    "${cached_cli_bin}" \
+    "${E2E_ROOT_DIR}/go.mod" \
+    "${E2E_ROOT_DIR}/go.sum" \
+    "${E2E_ROOT_DIR}/api" \
+    "${E2E_ROOT_DIR}/cmd" \
+    "${E2E_ROOT_DIR}/config" \
+    "${E2E_ROOT_DIR}/debugctx" \
+    "${E2E_ROOT_DIR}/faults" \
+    "${E2E_ROOT_DIR}/internal" \
+    "${E2E_ROOT_DIR}/managedserver" \
+    "${E2E_ROOT_DIR}/metadata" \
+    "${E2E_ROOT_DIR}/orchestrator" \
+    "${E2E_ROOT_DIR}/repository" \
+    "${E2E_ROOT_DIR}/resource" \
+    "${E2E_ROOT_DIR}/secrets"; then
+    e2e_run_cmd go build -o "${cached_cli_bin}" ./cmd/declarest || return 1
+  else
+    e2e_info "using cached e2e cli binary path=${cached_cli_bin}"
+  fi
+  e2e_stage_cached_binary "${cached_cli_bin}" "${E2E_BIN}" || return 1
   if e2e_profile_is_operator; then
     local go_version
     go_version=$(e2e_resolve_go_version) || return 1
