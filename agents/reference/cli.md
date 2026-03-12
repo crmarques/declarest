@@ -84,7 +84,8 @@ Core resource commands:
 10. `template`.
 11. `edit`.
 12. `copy`.
-13. `request`.
+13. `defaults`.
+14. `request`.
 
 Selected command names:
 1. `context edit`.
@@ -104,20 +105,21 @@ Selected command names:
 15. `repository history`.
 16. `repository tree`.
 17. `resource request`.
-18. `secret set`.
-19. `secret get`.
-20. `secret list`.
-21. `secret delete`.
-22. `secret mask`.
-23. `secret resolve`.
-23. `secret normalize`.
-24. `secret detect`.
-25. `completion`.
-26. `version`.
-27. `server get base-url`.
-28. `server get token-url`.
-29. `server get access-token`.
-30. `server check`.
+18. `resource defaults`.
+19. `secret set`.
+20. `secret get`.
+21. `secret list`.
+22. `secret delete`.
+23. `secret mask`.
+24. `secret resolve`.
+25. `secret normalize`.
+26. `secret detect`.
+27. `completion`.
+28. `version`.
+29. `server get base-url`.
+30. `server get token-url`.
+31. `server get access-token`.
+32. `server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
@@ -203,21 +205,28 @@ Interactive context commands:
 42. `resource copy` MUST support positional `[path] [target-path]` and flag-driven `--path` plus `--target-path` inputs, and mismatched positional/flag target values MUST fail with `ValidationError`.
 43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
+### Resource Defaults
+45. `resource defaults get <path>` MUST read the raw repository `defaults.<ext>` object for one logical resource path and, when no defaults sidecar exists for a supported payload type, MUST print an empty object instead of `NotFound`.
+46. `resource defaults edit <path>` MUST open the raw defaults object in an editor using the inferred defaults payload format, allow empty edited content to clear the defaults sidecar, validate edited content against supported defaults-sidecar payload rules, and persist only the raw defaults object without flattening merged resource values.
+47. `resource defaults infer <path>` MUST infer defaults from direct local sibling resources under the same logical collection as the target resource, MUST print only the inferred defaults object, and MUST target one concrete repository resource path rather than a metadata selector path.
+48. `resource defaults infer --save` MUST persist the inferred defaults object into the target resource directory as `defaults.<ext>` and SHOULD reuse the target resource payload descriptor when no defaults sidecar exists yet.
+49. `resource defaults infer --managed-server` MUST create two temporary remote resources derived from the target local resource payload, compare the observed remote outputs against the probe inputs, infer only stable server-added defaults, and clean up both temporary remote resources before returning.
+50. `resource defaults infer --managed-server` MUST require `--yes`; omitting `--yes` MUST fail with `ValidationError` before any remote mutation.
 ### Secret Detect and Store Access
-44. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
-45. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
-46. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
-47. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resource.secretAttributes` for each detected resource path in scope.
-48. `secret detect --secret-attribute <pointer>` MUST apply only that detected JSON Pointer attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
-49. `secret set` MUST accept `secret set <key> <value>`, `secret set <path> <key> <value>`, `secret set --path <path> --key <key> <value>`, and `secret set <path>:<key> <value>`.
-50. `secret get` MUST accept `secret get <path> <pointer>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
-51. `secret delete` MUST accept the same single-secret target grammar as `secret get`.
-52. `secret list` MUST accept optional path selection from positional `<path>` or `--path`, optional `--recursive`, and both path forms MUST treat the path as a logical absolute path.
-53. `secret list` without a path MUST return all stored secret keys in deterministic order.
-54. `secret list <path>` and `secret list --path <path>` without `--recursive` MUST return only keys stored exactly at `<path>`, sorted deterministically, and MUST render those keys relative to the selected path.
-55. `secret list <path> --recursive` and `secret list --path <path> --recursive` MUST return keys stored at `<path>` plus descendant path-scoped keys under `<path>`, sorted deterministically, and MUST render descendant matches as the full relative path from the selected root (for example `/test/secrets/private-key:.`).
-56. `secret list` MUST return keys only and MUST NOT print plaintext secret values.
-57. `secret get <path>` and `secret get --path <path>` without an explicit key MUST fail with `ValidationError` and direct the user to `secret list`.
+51. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
+52. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
+53. `secret detect --fix` in input-payload mode MUST require a target path from positional `<path>` or `--path`.
+54. `secret detect --fix` in repository-scan mode MUST merge detected attributes into metadata `resource.secretAttributes` for each detected resource path in scope.
+55. `secret detect --secret-attribute <pointer>` MUST apply only that detected JSON Pointer attribute and MUST fail with `ValidationError` when the requested attribute is not detected in payload or repository scope.
+56. `secret set` MUST accept `secret set <key> <value>`, `secret set <path> <key> <value>`, `secret set --path <path> --key <key> <value>`, and `secret set <path>:<key> <value>`.
+57. `secret get` MUST accept `secret get <path> <pointer>`, `secret get --path <path> --key <pointer>`, and `secret get <path>:<pointer>` in addition to direct key mode (`secret get <key>`).
+58. `secret delete` MUST accept the same single-secret target grammar as `secret get`.
+59. `secret list` MUST accept optional path selection from positional `<path>` or `--path`, optional `--recursive`, and both path forms MUST treat the path as a logical absolute path.
+60. `secret list` without a path MUST return all stored secret keys in deterministic order.
+61. `secret list <path>` and `secret list --path <path>` without `--recursive` MUST return only keys stored exactly at `<path>`, sorted deterministically, and MUST render those keys relative to the selected path.
+62. `secret list <path> --recursive` and `secret list --path <path> --recursive` MUST return keys stored at `<path>` plus descendant path-scoped keys under `<path>`, sorted deterministically, and MUST render descendant matches as the full relative path from the selected root (for example `/test/secrets/private-key:.`).
+63. `secret list` MUST return keys only and MUST NOT print plaintext secret values.
+64. `secret get <path>` and `secret get --path <path>` without an explicit key MUST fail with `ValidationError` and direct the user to `secret list`.
 58. `secret get --key`, `secret set --key`, and `secret delete --key` MUST require `--path`.
 ### Context Commands
 49. Interactive context flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.

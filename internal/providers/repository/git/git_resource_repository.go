@@ -30,6 +30,7 @@ import (
 var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
 var _ repository.ResourceArtifactStore = (*GitResourceRepository)(nil)
+var _ repository.ResourceDefaultsStore = (*GitResourceRepository)(nil)
 
 var proxyEnvMu sync.Mutex
 var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
@@ -71,6 +72,13 @@ func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, co
 	return r.local.Save(ctx, logicalPath, content)
 }
 
+func (r *GitResourceRepository) SaveDefaults(ctx context.Context, logicalPath string, content resource.Content) error {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return err
+	}
+	return r.local.SaveDefaults(ctx, logicalPath, content)
+}
+
 func (r *GitResourceRepository) SaveResourceWithArtifacts(
 	ctx context.Context,
 	logicalPath string,
@@ -88,6 +96,13 @@ func (r *GitResourceRepository) Get(ctx context.Context, logicalPath string) (re
 		return resource.Content{}, err
 	}
 	return r.local.Get(ctx, logicalPath)
+}
+
+func (r *GitResourceRepository) GetDefaults(ctx context.Context, logicalPath string) (resource.Content, error) {
+	if err := r.ensureInitializedForOperation(ctx); err != nil {
+		return resource.Content{}, err
+	}
+	return r.local.GetDefaults(ctx, logicalPath)
 }
 
 func (r *GitResourceRepository) ReadResourceArtifact(ctx context.Context, logicalPath string, file string) ([]byte, error) {

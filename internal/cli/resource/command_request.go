@@ -198,6 +198,17 @@ func decodeOptionalRequestPayload(
 		}
 		return value, true, nil
 	}
+	if requestPayloadLooksLikeExistingFile(payloadArg) {
+		data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: payloadArg, ContentType: inputContentType})
+		if err != nil {
+			return resource.Content{}, false, err
+		}
+		value, err := cliutil.DecodeResourceContentInputData(data, inputContentType, payloadArg)
+		if err != nil {
+			return resource.Content{}, false, err
+		}
+		return value, true, nil
+	}
 
 	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{ContentType: inputContentType})
 	if err != nil {
@@ -207,7 +218,7 @@ func decodeOptionalRequestPayload(
 		return resource.Content{}, false, cliutil.ValidationError("flag --payload cannot be combined with stdin input", nil)
 	}
 
-	if allowInlinePayload && !requestPayloadLooksLikeExistingFile(payloadArg) {
+	if allowInlinePayload {
 		if cliutil.IsBinaryInputFormat(inputContentType) {
 			return resource.Content{}, false, cliutil.ValidationError("binary request payload requires --payload <path|-> or stdin", nil)
 		}
@@ -218,15 +229,7 @@ func decodeOptionalRequestPayload(
 		return value, true, nil
 	}
 
-	data, err := cliutil.ReadInput(command, cliutil.InputFlags{Payload: payloadArg, ContentType: inputContentType})
-	if err != nil {
-		return resource.Content{}, false, err
-	}
-	value, err := cliutil.DecodeResourceContentInputData(data, inputContentType, payloadArg)
-	if err != nil {
-		return resource.Content{}, false, err
-	}
-	return value, true, nil
+	return resource.Content{}, false, cliutil.ValidationError("invalid payload input", nil)
 }
 
 func parseRequestHeaders(values []string) (map[string]string, error) {

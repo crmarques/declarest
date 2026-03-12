@@ -38,10 +38,10 @@ type PayloadCodec struct {
 var payloadCodecs = []PayloadCodec{
 	{Type: PayloadTypeJSON, Extension: ".json", MediaType: "application/json", Structured: true},
 	{Type: PayloadTypeYAML, Extension: ".yaml", MediaType: "application/yaml", Structured: true},
+	{Type: PayloadTypeINI, Extension: ".ini", MediaType: "application/ini", Structured: true},
+	{Type: PayloadTypeProperties, Extension: ".properties", MediaType: "text/x-java-properties", Structured: true},
 	{Type: PayloadTypeXML, Extension: ".xml", MediaType: "application/xml", Text: true},
 	{Type: PayloadTypeHCL, Extension: ".hcl", MediaType: "application/hcl", Text: true},
-	{Type: PayloadTypeINI, Extension: ".ini", MediaType: "application/ini", Text: true},
-	{Type: PayloadTypeProperties, Extension: ".properties", MediaType: "text/x-java-properties", Text: true},
 	{Type: PayloadTypeText, Extension: ".txt", MediaType: "text/plain", Text: true},
 	{Type: PayloadTypeOctetStream, Extension: ".bin", MediaType: "application/octet-stream", Binary: true},
 }
@@ -255,6 +255,18 @@ func decodeStructuredPayload(data []byte, payloadType string) (Value, error) {
 			return nil, faults.NewValidationError("invalid yaml payload", err)
 		}
 		return Normalize(decoded)
+	case PayloadTypeINI:
+		decoded, err := decodeINIPayload(data)
+		if err != nil {
+			return nil, err
+		}
+		return Normalize(decoded)
+	case PayloadTypeProperties:
+		decoded, err := decodePropertiesPayload(data)
+		if err != nil {
+			return nil, err
+		}
+		return Normalize(decoded)
 	default:
 		decoder := json.NewDecoder(bytes.NewReader(data))
 		decoder.UseNumber()
@@ -280,6 +292,10 @@ func encodeStructuredPayload(value Value, payloadType string, pretty bool) ([]by
 			return nil, faults.NewValidationError("failed to encode yaml payload", err)
 		}
 		return encoded, nil
+	case PayloadTypeINI:
+		return encodeINIPayload(normalized)
+	case PayloadTypeProperties:
+		return encodePropertiesPayload(normalized)
 	default:
 		if pretty {
 			encoded, err := json.MarshalIndent(normalized, "", "  ")

@@ -115,6 +115,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 	listCommand := newListCommand(deps, globalFlags)
 	editCommand := newEditCommand(deps, globalFlags)
 	copyCommand := newCopyCommand(deps, globalFlags)
+	defaultsCommand := newDefaultsCommand(deps, globalFlags)
 	explainCommand := newExplainCommand(deps, globalFlags)
 	describeCommand := newDescribeCommand(deps, globalFlags)
 	templateCommand := newTemplateCommand(deps, globalFlags)
@@ -139,6 +140,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		listCommand,
 		editCommand,
 		copyCommand,
+		defaultsCommand,
 		explainCommand,
 		describeCommand,
 		templateCommand,

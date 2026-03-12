@@ -20,12 +20,12 @@ func (r *LocalResourceRepository) List(_ context.Context, logicalPath string, po
 		return nil, err
 	}
 
-	info, err := r.discoverPayloadFile(normalizedPath)
+	files, err := r.discoverPayloadFiles(normalizedPath)
 	if err != nil {
 		return nil, err
 	}
-	if info != nil {
-		return []resource.Resource{buildListedResource(normalizedPath, info)}, nil
+	if primary := files.primary(); primary != nil {
+		return []resource.Resource{buildListedResource(normalizedPath, primary)}, nil
 	}
 
 	collectionPath, err := r.collectionDirPath(normalizedPath)
@@ -45,11 +45,11 @@ func (r *LocalResourceRepository) Exists(_ context.Context, logicalPath string) 
 		return false, err
 	}
 
-	info, err := r.discoverPayloadFile(normalizedPath)
+	files, err := r.discoverPayloadFiles(normalizedPath)
 	if err != nil {
 		return false, err
 	}
-	if info != nil {
+	if files.primary() != nil {
 		return true, nil
 	}
 
@@ -87,12 +87,12 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 				logicalPath = "/" + logicalPath
 			}
 
-			info, infoErr := r.payloadFileInfoFromDir(logicalPath, filepath.Join(collectionPath, entry.Name()))
+			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filepath.Join(collectionPath, entry.Name()))
 			if infoErr != nil {
 				return nil, infoErr
 			}
-			if info != nil {
-				itemsByPath[logicalPath] = buildListedResource(logicalPath, info)
+			if primary := files.primary(); primary != nil {
+				itemsByPath[logicalPath] = buildListedResource(logicalPath, primary)
 			}
 			continue
 		}
@@ -139,12 +139,12 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		if !strings.HasPrefix(logicalPath, "/") {
 			logicalPath = "/" + logicalPath
 		}
-		info, infoErr := r.payloadFileInfoFromDir(logicalPath, filePath)
+		files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filePath)
 		if infoErr != nil {
 			return infoErr
 		}
-		if info != nil {
-			itemsByPath[logicalPath] = buildListedResource(logicalPath, info)
+		if primary := files.primary(); primary != nil {
+			itemsByPath[logicalPath] = buildListedResource(logicalPath, primary)
 		}
 		return nil
 	})

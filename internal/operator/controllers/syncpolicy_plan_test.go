@@ -53,8 +53,44 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 		t.Fatalf("unexpected metadata apply targets: got %#v want %#v", targets, expectedTargets)
 	}
 
-	removeFile(t, filepath.Join(repoDir, "customers", "bravo", "resource.json"))
+	writeFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.yaml"), "spec:\n  enabled: true\n")
+	revDefaults := commitAll(t, repo, "add acme defaults")
+
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, rev3, revDefaults, "/customers")
+	if err != nil {
+		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
+	}
+	targets = normalizeSyncApplyTargets(plan.applyTargets)
+	expectedTargets = []syncApplyTarget{{Path: "/customers/acme", Recursive: false}}
+	if !reflect.DeepEqual(targets, expectedTargets) {
+		t.Fatalf("unexpected defaults apply targets: got %#v want %#v", targets, expectedTargets)
+	}
+
+	removeFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.yaml"))
 	wt, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("repo.Worktree() error = %v", err)
+	}
+	if _, err := wt.Remove("customers/acme/defaults.yaml"); err != nil {
+		t.Fatalf("worktree remove defaults error = %v", err)
+	}
+	revDefaultsRemoved := commitAll(t, repo, "remove acme defaults")
+
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revDefaults, revDefaultsRemoved, "/customers")
+	if err != nil {
+		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
+	}
+	targets = normalizeSyncApplyTargets(plan.applyTargets)
+	expectedTargets = []syncApplyTarget{{Path: "/customers/acme", Recursive: false}}
+	if !reflect.DeepEqual(targets, expectedTargets) {
+		t.Fatalf("unexpected defaults removal apply targets: got %#v want %#v", targets, expectedTargets)
+	}
+	if len(plan.pruneTargets) != 0 {
+		t.Fatalf("expected no prune targets for defaults removal, got %#v", plan.pruneTargets)
+	}
+
+	removeFile(t, filepath.Join(repoDir, "customers", "bravo", "resource.json"))
+	wt, err = repo.Worktree()
 	if err != nil {
 		t.Fatalf("repo.Worktree() error = %v", err)
 	}
@@ -63,7 +99,7 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 	}
 	rev4 := commitAll(t, repo, "remove bravo")
 
-	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, rev3, rev4, "/customers")
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revDefaultsRemoved, rev4, "/customers")
 	if err != nil {
 		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
 	}

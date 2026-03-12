@@ -217,7 +217,45 @@ Failure expectation:
 1. `--mode items` with non-list input fails with `ValidationError`.
 2. `--mode invalid` fails with `ValidationError`.
 
-### Example 11: E2E Dependency-Aware Parallel Component Hooks
+### Example 11: Resource Defaults Infer and Save
+Goal: infer compact raw defaults for one repository resource without flattening effective desired state.
+
+Inputs:
+1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
+2. Two or more sibling repository resources in `/api/projects/defaults-sandbox/widgets`.
+3. Optional `resource defaults infer --save`.
+
+Execution:
+1. CLI resolves the target to one concrete local repository resource path.
+2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
+3. `resource defaults infer --save` persists the inferred object to `defaults.<ext>` for the target path.
+4. `resource defaults get` returns the raw defaults object, not the merged effective resource.
+
+Expected outputs:
+1. Output contains only shared default candidates.
+2. Saving defaults keeps `resource.<ext>` separate from `defaults.<ext>`.
+3. Subsequent repository-backed reads still expose the merged effective resource.
+
+### Example 12: Resource Defaults Managed-Server Probe Safety
+Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
+
+Inputs:
+1. Target resource path `/customers/acme`.
+2. `resource defaults infer /customers/acme --managed-server --yes`.
+
+Execution:
+1. CLI validates `--yes` before any remote mutation.
+2. Workflow clones the local resource payload twice, mutates identity fields to unique temporary values, and creates two temporary remote resources.
+3. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources.
+
+Expected outputs:
+1. Only stable server-added defaults remain in command output.
+2. Temporary probe resources are removed before the command returns.
+
+Failure expectation:
+1. Omitting `--yes` fails with `ValidationError` and performs no remote create.
+
+### Example 13: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
 
 Inputs:

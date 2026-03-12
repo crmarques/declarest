@@ -19,16 +19,18 @@ func (r *LocalResourceRepository) Delete(_ context.Context, logicalPath string, 
 		return err
 	}
 
-	info, err := r.discoverPayloadFile(normalizedPath)
+	files, err := r.discoverPayloadFiles(normalizedPath)
 	if err != nil {
 		return err
 	}
 
-	if info != nil {
-		if err := os.Remove(info.Path); err != nil {
-			return internalError("failed to remove resource payload", err)
+	if files.Resource != nil || files.Defaults != nil {
+		if err := r.removePayloadFile(files.Resource); err != nil {
+			return err
 		}
-		_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
+		if err := r.removePayloadFile(files.Defaults); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -64,15 +66,17 @@ func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) 
 				return internalError("failed to resolve collection resource path", relErr)
 			}
 			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
-			info, infoErr := r.payloadFileInfoFromDir(logicalPath, resourceDir)
+			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, resourceDir)
 			if infoErr != nil {
 				return infoErr
 			}
-			if info != nil {
-				if err := os.Remove(info.Path); err != nil {
-					return internalError("failed to delete resource from collection", err)
+			if files.Resource != nil || files.Defaults != nil {
+				if err := r.removePayloadFile(files.Resource); err != nil {
+					return err
 				}
-				_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
+				if err := r.removePayloadFile(files.Defaults); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -94,17 +98,19 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 				return relErr
 			}
 			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
-			info, infoErr := r.payloadFileInfoFromDir(logicalPath, filePath)
+			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filePath)
 			if infoErr != nil {
 				return infoErr
 			}
-			if info == nil {
+			if files.Resource == nil && files.Defaults == nil {
 				return nil
 			}
-			if err := os.Remove(info.Path); err != nil {
+			if err := r.removePayloadFile(files.Resource); err != nil {
 				return err
 			}
-			_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
+			if err := r.removePayloadFile(files.Defaults); err != nil {
+				return err
+			}
 			return nil
 		}
 		return nil

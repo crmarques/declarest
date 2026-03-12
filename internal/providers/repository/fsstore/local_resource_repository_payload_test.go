@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -118,5 +121,301 @@ func TestLocalResourceRepositorySavePreservesOpaqueKeyBytes(t *testing.T) {
 	}
 	if string(binaryValue.Bytes) != "private-key-bytes" {
 		t.Fatalf("expected original key bytes on readback, got %q", string(binaryValue.Bytes))
+	}
+}
+
+func TestLocalResourceRepositoryGetMergesDefaultsSidecar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+labels:
+  team: platform
+spec:
+  enabled: true
+  tags:
+    - default
+`)
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.yaml"), `
+spec:
+  enabled: false
+`)
+
+	content, err := repo.Get(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"labels": map[string]any{
+			"team": "platform",
+		},
+		"spec": map[string]any{
+			"enabled": false,
+			"tags":    []any{"default"},
+		},
+	}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected merged payload: got %#v want %#v", content.Value, want)
+	}
+}
+
+func TestLocalResourceRepositoryDefaultsOnlyResourceIsVisible(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+spec:
+  enabled: true
+`)
+
+	exists, err := repo.Exists(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Exists returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected defaults-only resource to exist")
+	}
+
+	items, err := repo.List(context.Background(), "/customers", repository.ListPolicy{})
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].LogicalPath != "/customers/acme" {
+		t.Fatalf("unexpected list items: %#v", items)
+	}
+}
+
+func TestLocalResourceRepositorySaveCompactsAgainstDefaultsSidecar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+labels:
+  team: platform
+spec:
+  enabled: true
+  tags:
+    - default
+`)
+
+	err := repo.Save(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"labels": map[string]any{
+				"team": "platform",
+			},
+			"spec": map[string]any{
+				"enabled": false,
+				"tags":    []any{"override"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	resourceBytes, err := os.ReadFile(filepath.Join(root, "customers", "acme", "resource.yaml"))
+	if err != nil {
+		t.Fatalf("expected compacted resource file: %v", err)
+	}
+	if string(resourceBytes) == "" {
+		t.Fatal("expected non-empty compacted resource file")
+	}
+
+	content, err := repo.Get(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	want := map[string]any{
+		"labels": map[string]any{
+			"team": "platform",
+		},
+		"spec": map[string]any{
+			"enabled": false,
+			"tags":    []any{"override"},
+		},
+	}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected merged payload after save: got %#v want %#v", content.Value, want)
+	}
+}
+
+func TestLocalResourceRepositorySaveRemovesRedundantOverrideFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+spec:
+  enabled: true
+`)
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.yaml"), `
+spec:
+  enabled: false
+`)
+
+	err := repo.Save(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"spec": map[string]any{
+				"enabled": true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "resource.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected redundant resource override to be removed, got stat err %v", err)
+	}
+}
+
+func TestLocalResourceRepositoryDeleteRemovesDefaultsSidecar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+spec:
+  enabled: true
+`)
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.yaml"), `
+spec:
+  enabled: false
+`)
+
+	if err := repo.Delete(context.Background(), "/customers/acme", repository.DeletePolicy{}); err != nil {
+		t.Fatalf("Delete returned error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "defaults.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected defaults sidecar to be removed, got stat err %v", err)
+	}
+}
+
+func TestLocalResourceRepositoryRejectsMismatchedDefaultsSidecarType(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+spec:
+  enabled: true
+`)
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.json"), `{"spec":{"enabled":false}}`)
+
+	_, err := repo.Get(context.Background(), "/customers/acme")
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestLocalResourceRepositoryGetDefaultsReturnsRawSidecar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+labels:
+  team: platform
+`)
+
+	content, err := repo.GetDefaults(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("GetDefaults returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"labels": map[string]any{
+			"team": "platform",
+		},
+	}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected defaults payload: got %#v want %#v", content.Value, want)
+	}
+}
+
+func TestLocalResourceRepositorySaveDefaultsUsesResourceDescriptor(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.properties"), "owner=platform\n")
+
+	if err := repo.SaveDefaults(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"region": "us-east-1",
+		},
+	}); err != nil {
+		t.Fatalf("SaveDefaults returned error: %v", err)
+	}
+
+	defaultsBytes, err := os.ReadFile(filepath.Join(root, "customers", "acme", "defaults.properties"))
+	if err != nil {
+		t.Fatalf("expected defaults.properties to be written: %v", err)
+	}
+	if string(defaultsBytes) != "region=us-east-1\n" {
+		t.Fatalf("unexpected defaults.properties contents: %q", string(defaultsBytes))
+	}
+}
+
+func TestLocalResourceRepositorySaveDefaultsRejectsUnsupportedPayloadType(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.key"), "private")
+
+	err := repo.SaveDefaults(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"region": "us-east-1",
+		},
+	})
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestLocalResourceRepositorySaveResourceWithArtifactsRejectsReservedDefaultsName(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	err := repo.SaveResourceWithArtifacts(
+		context.Background(),
+		"/customers/acme",
+		resource.Content{
+			Value: map[string]any{"name": "acme"},
+		},
+		[]repository.ResourceArtifact{
+			{File: "defaults.yaml", Content: []byte("x")},
+		},
+	)
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func writeRepositoryTestFile(t *testing.T, path string, content string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
 	}
 }

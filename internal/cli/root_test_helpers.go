@@ -734,6 +734,10 @@ type testRepository struct {
 	syncStatus      *repository.SyncReport
 	worktreeStatus  []repository.WorktreeStatusEntry
 	worktreeErr     error
+	defaults        map[string]resource.Content
+	saveDefaults    []savedResource
+	getDefaultsErr  error
+	saveDefaultsErr error
 }
 
 type testManagedServerClient struct {
@@ -799,6 +803,32 @@ func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error
 func (r *testRepository) Save(context.Context, string, resource.Content) error { return nil }
 func (r *testRepository) Get(context.Context, string) (resource.Content, error) {
 	return testContent(map[string]any{"id": "acme"}), nil
+}
+func (r *testRepository) GetDefaults(_ context.Context, logicalPath string) (resource.Content, error) {
+	if r.getDefaultsErr != nil {
+		return resource.Content{}, r.getDefaultsErr
+	}
+	if r.defaults != nil {
+		if value, found := r.defaults[logicalPath]; found {
+			return value, nil
+		}
+	}
+	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
+}
+func (r *testRepository) SaveDefaults(_ context.Context, logicalPath string, content resource.Content) error {
+	if r.saveDefaultsErr != nil {
+		return r.saveDefaultsErr
+	}
+	if r.defaults == nil {
+		r.defaults = map[string]resource.Content{}
+	}
+	r.defaults[logicalPath] = content
+	r.saveDefaults = append(r.saveDefaults, savedResource{
+		logicalPath: logicalPath,
+		value:       content.Value,
+		descriptor:  content.Descriptor,
+	})
+	return nil
 }
 
 func cloneTestStringMap(values map[string]string) map[string]string {

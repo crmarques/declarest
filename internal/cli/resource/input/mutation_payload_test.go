@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/internal/cli/cliutil"
@@ -41,6 +42,30 @@ func TestDecodeOptionalMutationPayloadInputReadsOpaqueFilePayload(t *testing.T) 
 	}
 	if string(binaryValue.Bytes) != "private-key-bytes" {
 		t.Fatalf("expected original file bytes, got %q", string(binaryValue.Bytes))
+	}
+}
+
+func TestDecodeOptionalMutationPayloadInputPrefersFilePayloadOverInheritedStdin(t *testing.T) {
+	t.Parallel()
+
+	command := &cobra.Command{}
+	command.SetIn(strings.NewReader("/api/projects/acme\n/api/projects/bravo\n"))
+
+	payloadFile := filepath.Join(t.TempDir(), "resource.json")
+	if err := os.WriteFile(payloadFile, []byte(`{"id":"acme"}`), 0o600); err != nil {
+		t.Fatalf("failed to write payload file: %v", err)
+	}
+
+	content, hasInput, err := DecodeOptionalMutationPayloadInput(command, cliutil.InputFlags{Payload: payloadFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !hasInput {
+		t.Fatal("expected explicit payload input")
+	}
+	expected := map[string]any{"id": "acme"}
+	if !reflect.DeepEqual(content.Value, expected) {
+		t.Fatalf("expected decoded file payload, got %#v", content.Value)
 	}
 }
 

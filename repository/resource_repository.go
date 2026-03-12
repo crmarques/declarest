@@ -20,6 +20,14 @@ type ResourceArtifact struct {
 	Content []byte
 }
 
+// ResourceDefaultsStore is an optional repository capability used by commands
+// that inspect or edit raw defaults sidecars alongside canonical resource
+// payload files.
+type ResourceDefaultsStore interface {
+	GetDefaults(ctx context.Context, logicalPath string) (resource.Content, error)
+	SaveDefaults(ctx context.Context, logicalPath string, content resource.Content) error
+}
+
 // ResourceArtifactStore is an optional repository capability used by workflows
 // that persist or read sidecar files associated with one logical resource.
 type ResourceArtifactStore interface {

@@ -21,6 +21,9 @@ func DecodeOptionalMutationPayloadInput(
 	if payloadArg == "" || payloadArg == "-" {
 		return DecodeOptionalPayloadInput(command, flags)
 	}
+	if payloadArgLooksLikeExistingFile(payloadArg) {
+		return DecodeOptionalPayloadInput(command, flags)
+	}
 
 	stdinData, err := cliutil.ReadOptionalInput(command, cliutil.InputFlags{})
 	if err != nil {
@@ -30,9 +33,6 @@ func DecodeOptionalMutationPayloadInput(
 		return resource.Content{}, false, cliutil.ValidationError("flag --payload cannot be combined with stdin input", nil)
 	}
 
-	if payloadArgLooksLikeExistingFile(payloadArg) {
-		return DecodeOptionalPayloadInput(command, flags)
-	}
 	if cliutil.IsBinaryInputFormat(flags.ContentType) {
 		return resource.Content{}, false, cliutil.ValidationError("binary payload input requires --payload <path|-> or stdin", nil)
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	managedserverhttp "github.com/crmarques/declarest/internal/providers/managedserver/http"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
+	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orch "github.com/crmarques/declarest/orchestrator"
@@ -224,6 +227,62 @@ func TestOrchestratorSaveAppliesPreferredFormatBeforePersisting(t *testing.T) {
 				t.Fatalf("expected saved payload type %q, got %q", tc.expectedPayloadType, repo.savedDescriptor.PayloadType)
 			}
 		})
+	}
+}
+
+func TestOrchestratorDiffUsesMergedDefaultsSidecarPayload(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	writeOrchestratorTestFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.yaml"), `
+id: acme
+spec:
+  enabled: true
+  tags:
+    - default
+`)
+	writeOrchestratorTestFile(t, filepath.Join(repoDir, "customers", "acme", "resource.yaml"), `
+spec:
+  enabled: false
+`)
+
+	repo := fsstore.NewLocalResourceRepository(repoDir)
+	serverManager := &fakeServer{
+		getValue: map[string]any{
+			"id": "acme",
+			"spec": map[string]any{
+				"enabled": false,
+				"tags":    []any{"default"},
+			},
+		},
+	}
+
+	orchestrator := &Orchestrator{
+		repository: repo,
+		server:     serverManager,
+	}
+
+	local, err := orchestrator.GetLocal(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("GetLocal returned error: %v", err)
+	}
+	wantLocal := map[string]any{
+		"id": "acme",
+		"spec": map[string]any{
+			"enabled": false,
+			"tags":    []any{"default"},
+		},
+	}
+	if !reflect.DeepEqual(local.Value, wantLocal) {
+		t.Fatalf("unexpected merged local payload: got %#v want %#v", local.Value, wantLocal)
+	}
+
+	items, err := orchestrator.Diff(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("Diff returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected no diff when remote matches merged local payload, got %#v", items)
 	}
 }
 
@@ -1950,6 +2009,17 @@ func testContentWithType(value any, payloadType string) resource.Content {
 	return resource.Content{
 		Value:      value,
 		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}),
+	}
+}
+
+func writeOrchestratorTestFile(t *testing.T, path string, content string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
 	}
 }
 

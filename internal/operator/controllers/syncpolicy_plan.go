@@ -91,6 +91,7 @@ func buildSyncExecutionPlan(
 
 	targets := normalizeSyncApplyTargets(incremental.applyTargets)
 	pruneTargets := stringSet(incremental.pruneTargets)
+	targets = filterPrunedApplyTargets(targets, pruneTargets)
 	return syncExecutionPlan{
 		Mode:         syncModeIncremental,
 		ApplyTargets: targets,
@@ -149,6 +150,7 @@ type repositoryPathKind int
 const (
 	repositoryPathKindNone repositoryPathKind = iota
 	repositoryPathKindPayload
+	repositoryPathKindDefaultsPayload
 	repositoryPathKindResourceMetadata
 	repositoryPathKindCollectionMetadata
 	repositoryPathKindUnknownConfig
@@ -184,6 +186,11 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 			return "", repositoryPathKindUnknownConfig
 		}
 		return "/" + dir, repositoryPathKindPayload
+	case "defaults":
+		if dir == "" {
+			return "", repositoryPathKindUnknownConfig
+		}
+		return "/" + dir, repositoryPathKindDefaultsPayload
 	case "metadata":
 		if filepath.Base(dir) == "_" {
 			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
@@ -211,7 +218,7 @@ func accumulateAddedPath(plan *incrementalSyncPlan, changedPath string, sourcePa
 			plan.requiresFull = true
 		}
 		return
-	case repositoryPathKindPayload, repositoryPathKindResourceMetadata:
+	case repositoryPathKindPayload, repositoryPathKindDefaultsPayload, repositoryPathKindResourceMetadata:
 		if !hasPathOverlap(logicalPath, sourcePath) {
 			return
 		}
@@ -239,7 +246,7 @@ func accumulateRemovedPath(plan *incrementalSyncPlan, changedPath string, source
 		if hasPathOverlap(logicalPath, sourcePath) {
 			plan.pruneTargets = append(plan.pruneTargets, logicalPath)
 		}
-	case repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata:
+	case repositoryPathKindDefaultsPayload, repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata:
 		accumulateAddedPath(plan, changedPath, sourcePath)
 	}
 }
@@ -319,6 +326,26 @@ func normalizeSyncApplyTargets(targets []syncApplyTarget) []syncApplyTarget {
 		filtered = append(filtered, candidate)
 	}
 
+	return filtered
+}
+
+func filterPrunedApplyTargets(targets []syncApplyTarget, pruneTargets []string) []syncApplyTarget {
+	if len(targets) == 0 || len(pruneTargets) == 0 {
+		return targets
+	}
+
+	pruned := make(map[string]struct{}, len(pruneTargets))
+	for _, target := range pruneTargets {
+		pruned[normalizeOverlapPath(target)] = struct{}{}
+	}
+
+	filtered := make([]syncApplyTarget, 0, len(targets))
+	for _, target := range targets {
+		if _, exists := pruned[normalizeOverlapPath(target.Path)]; exists && !target.Recursive {
+			continue
+		}
+		filtered = append(filtered, target)
+	}
 	return filtered
 }
 
