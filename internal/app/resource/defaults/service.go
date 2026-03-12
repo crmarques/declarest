@@ -236,13 +236,12 @@ func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (
 		return target{}, err
 	}
 
-	resolvedPath := normalizedPath
-	resourceContent, err := resolveLocalResourceContent(ctx, orchestratorService, normalizedPath)
+	resourceContent, resolvedPath, err := resolveTargetResourceContent(ctx, orchestratorService, logicalPath, normalizedPath)
 	if err != nil {
 		return target{}, err
 	}
 	if resolver, ok := orchestratorService.(localResourceResolver); ok {
-		item, resolveErr := resolver.ResolveLocalResource(ctx, normalizedPath)
+		item, resolveErr := resolver.ResolveLocalResource(ctx, resolvedPath)
 		if resolveErr == nil && strings.TrimSpace(item.LogicalPath) != "" {
 			resolvedPath = item.LogicalPath
 			resourceContent = resource.Content{
@@ -280,6 +279,65 @@ func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (
 		defaultsFound:     defaultsFound,
 		payloadDescriptor: payloadDescriptor,
 	}, nil
+}
+
+func resolveTargetResourceContent(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	rawPath string,
+	normalizedPath string,
+) (resource.Content, string, error) {
+	resourceContent, err := resolveLocalResourceContent(ctx, orchestratorService, normalizedPath)
+	if err == nil {
+		return resourceContent, normalizedPath, nil
+	}
+	if !faults.IsCategory(err, faults.NotFoundError) || !resource.HasExplicitCollectionTarget(rawPath) {
+		return resource.Content{}, "", err
+	}
+	return resolveSingleCollectionTargetResourceContent(ctx, orchestratorService, normalizedPath)
+}
+
+func resolveSingleCollectionTargetResourceContent(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	collectionPath string,
+) (resource.Content, string, error) {
+	items, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
+	if err != nil {
+		return resource.Content{}, "", err
+	}
+
+	resolvedPath := ""
+	for _, item := range items {
+		candidatePath := strings.TrimSpace(item.LogicalPath)
+		if candidatePath == "" {
+			continue
+		}
+		if _, ok := resource.ChildSegment(collectionPath, candidatePath); !ok {
+			continue
+		}
+		if resolvedPath != "" && candidatePath != resolvedPath {
+			return resource.Content{}, "", faults.NewValidationError(
+				fmt.Sprintf("logical path %q must target a concrete resource path", collectionPath),
+				nil,
+			)
+		}
+		resolvedPath = candidatePath
+	}
+
+	if resolvedPath == "" {
+		return resource.Content{}, "", faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("resource %q not found", collectionPath),
+			nil,
+		)
+	}
+
+	resourceContent, err := resolveLocalResourceContent(ctx, orchestratorService, resolvedPath)
+	if err != nil {
+		return resource.Content{}, "", err
+	}
+	return resourceContent, resolvedPath, nil
 }
 
 func requireDefaultsStore(deps Dependencies) (repository.ResourceDefaultsStore, error) {

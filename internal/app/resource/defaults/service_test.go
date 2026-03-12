@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
@@ -90,6 +91,83 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 	}
 	if orch.deleteCalls[0] != orch.createCalls[1].logicalPath || orch.deleteCalls[1] != orch.createCalls[0].logicalPath {
 		t.Fatalf("expected cleanup deletes in reverse order, got creates=%#v deletes=%#v", orch.createCalls, orch.deleteCalls)
+	}
+}
+
+func TestInferResolvesExplicitCollectionTargetToSingleDirectChild(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":      "platform",
+				"name":    "platform",
+				"owner":   "platform-team",
+				"enabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	result, err := Infer(context.Background(), deps, "/projects/", InferRequest{})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if result.ResolvedPath != "/projects/platform" {
+		t.Fatalf("expected resolved path /projects/platform, got %q", result.ResolvedPath)
+	}
+
+	want := map[string]any{}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferManagedServerResolvesExplicitCollectionTargetToSingleDirectChild(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":   "platform",
+				"name": "platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+
+	result, err := Infer(context.Background(), deps, "/projects/", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if result.ResolvedPath != "/projects/platform" {
+		t.Fatalf("expected resolved path /projects/platform, got %q", result.ResolvedPath)
+	}
+
+	want := map[string]any{"status": "active"}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+	if len(orch.createCalls) != 2 {
+		t.Fatalf("expected two temporary creates, got %#v", orch.createCalls)
+	}
+	if len(orch.deleteCalls) != 2 {
+		t.Fatalf("expected two cleanup deletes, got %#v", orch.deleteCalls)
+	}
+}
+
+func TestInferRejectsExplicitCollectionTargetWithMultipleDirectChildren(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+
+	_, err := Infer(context.Background(), deps, "/customers/", InferRequest{})
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "concrete resource path") {
+		t.Fatalf("expected concrete resource path guidance, got %v", err)
 	}
 }
 
@@ -314,27 +392,31 @@ func (f *fakeDefaultsServiceAccessor) ManagedServerClient() managedserver.Manage
 }
 
 func testDefaultsDeps() appdeps.Dependencies {
-	orch := &fakeDefaultsOrchestrator{
-		localContent: map[string]resource.Content{
-			"/customers/acme": {
-				Value: map[string]any{
-					"id":     "acme",
-					"name":   "acme",
-					"status": "custom-a",
-					"labels": map[string]any{"team": "platform"},
-				},
-				Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	return testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/customers/acme": {
+			Value: map[string]any{
+				"id":     "acme",
+				"name":   "acme",
+				"status": "custom-a",
+				"labels": map[string]any{"team": "platform"},
 			},
-			"/customers/beta": {
-				Value: map[string]any{
-					"id":     "beta",
-					"name":   "beta",
-					"status": "custom-b",
-					"labels": map[string]any{"team": "platform"},
-				},
-				Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
-			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
+		"/customers/beta": {
+			Value: map[string]any{
+				"id":     "beta",
+				"name":   "beta",
+				"status": "custom-b",
+				"labels": map[string]any{"team": "platform"},
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+}
+
+func testDefaultsDepsWithLocalContent(localContent map[string]resource.Content) appdeps.Dependencies {
+	orch := &fakeDefaultsOrchestrator{
+		localContent: localContent,
 	}
 	repo := &fakeDefaultsRepository{defaults: map[string]resource.Content{}}
 	md := &fakeDefaultsMetadata{items: map[string]metadata.ResourceMetadata{}}
