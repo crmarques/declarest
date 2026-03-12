@@ -6,6 +6,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
+	defaultsapp "github.com/crmarques/declarest/internal/app/resource/defaults"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -19,6 +20,7 @@ type ExecuteOptions struct {
 	Secret         bool
 	AllowPlaintext bool
 	Force          bool
+	PruneDefaults  bool
 
 	SecretAttributesEnabled   bool
 	RequestedSecretAttributes []string
@@ -97,6 +99,7 @@ func Execute(
 				options.AsOneResource,
 				options.Secret,
 				options.AllowPlaintext,
+				options.PruneDefaults,
 				options.SecretAttributesEnabled,
 				options.RequestedSecretAttributes,
 				options.Force,
@@ -142,6 +145,7 @@ func Execute(
 		options.AsOneResource,
 		options.Secret,
 		options.AllowPlaintext,
+		options.PruneDefaults,
 		options.SecretAttributesEnabled,
 		options.RequestedSecretAttributes,
 		options.Force,
@@ -182,6 +186,7 @@ func saveResolvedPathPayload(
 	asOneResource bool,
 	secret bool,
 	allowPlaintext bool,
+	pruneDefaults bool,
 	secretAttributesEnabled bool,
 	requestedSecretAttributes []string,
 	force bool,
@@ -205,6 +210,12 @@ func saveResolvedPathPayload(
 	}
 
 	if secret || autoWholeResourceSecret || asOneResource || (!asItems && !isListPayload) {
+		if pruneDefaults {
+			content, _, err = defaultsapp.CompactContentAgainstStoredDefaults(ctx, deps, resolvedPath, content)
+			if err != nil {
+				return err
+			}
+		}
 		if err := ensureSaveTargetAllowed(ctx, repositoryService, resolvedPath, force); err != nil {
 			return err
 		}
@@ -259,6 +270,19 @@ func saveResolvedPathPayload(
 	}
 	for idx := range entries {
 		entries[idx].Descriptor = content.Descriptor
+	}
+	if pruneDefaults {
+		for idx := range entries {
+			prunedContent, _, pruneErr := defaultsapp.CompactContentAgainstStoredDefaults(ctx, deps, entries[idx].LogicalPath, resource.Content{
+				Value:      entries[idx].Payload,
+				Descriptor: entries[idx].Descriptor,
+			})
+			if pruneErr != nil {
+				return pruneErr
+			}
+			entries[idx].Payload = prunedContent.Value
+			entries[idx].Descriptor = prunedContent.Descriptor
+		}
 	}
 	entries = filterSaveEntriesForSkipItems(resolvedPath, entries, skipItems)
 	if len(entries) == 0 {

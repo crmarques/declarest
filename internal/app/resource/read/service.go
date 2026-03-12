@@ -9,6 +9,7 @@ import (
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
+	defaultsapp "github.com/crmarques/declarest/internal/app/resource/defaults"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
@@ -31,6 +32,7 @@ type Request struct {
 	Source                   string
 	SkipItems                []string
 	ExplicitCollectionTarget bool
+	PruneDefaults            bool
 	ShowSecrets              bool
 	ShowMetadata             bool
 	ContextName              string
@@ -56,7 +58,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	if req.Source == SourceManagedServer && req.ExplicitCollectionTarget {
 		debugctx.Printf(ctx, "resource read treating %q as remote collection listing", req.LogicalPath)
-		result, err := renderRemoteCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems)
+		result, err := renderRemoteCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems, req.PruneDefaults)
 		if err == nil {
 			return result, nil
 		}
@@ -85,7 +87,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 		if req.Source == SourceRepository && (isNotFoundError(err) || isRootResourceError(err)) {
 			debugctx.Printf(ctx, "resource read treating %q as repository collection listing", req.LogicalPath)
-			return renderRepositoryCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems)
+			return renderRepositoryCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems, req.PruneDefaults)
 		}
 		if req.Source == SourceManagedServer && !req.ExplicitCollectionTarget && isNotFoundError(err) {
 			debugctx.Printf(ctx, "resource read attempting empty-collection fallback for %q after remote not found", req.LogicalPath)
@@ -96,6 +98,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 				req.LogicalPath,
 				req.ShowSecrets,
 				req.SkipItems,
+				req.PruneDefaults,
 			)
 			if fallbackErr == nil && handled {
 				return fallbackResult, nil
@@ -109,10 +112,18 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	debugctx.Printf(ctx, "resource read succeeded path=%q value_type=%T source=%q", req.LogicalPath, content.Value, req.Source)
 
+	metadataValue := content.Value
+	if req.PruneDefaults {
+		content, _, err = defaultsapp.CompactContentAgainstStoredDefaults(ctx, deps, req.LogicalPath, content)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+
 	rawValue := content.Value
 	var metadataSnapshot *metadatadomain.ResourceMetadata
 	if req.ShowMetadata {
-		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, rawValue)
+		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, metadataValue)
 		if err != nil {
 			return Result{}, err
 		}
@@ -122,6 +133,9 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	finalValue, err := prepareSecretsForOutput(ctx, deps, req.LogicalPath, rawValue, content.Descriptor, req.ShowSecrets)
 	if err != nil {
 		return Result{}, err
+	}
+	if req.PruneDefaults && finalValue == nil {
+		finalValue = map[string]any{}
 	}
 
 	outputValue := any(finalValue)
@@ -142,12 +156,13 @@ func renderRepositoryCollection(
 	logicalPath string,
 	showSecrets bool,
 	skipItems []string,
+	pruneDefaults bool,
 ) (Result, error) {
 	items, err := orchestratorService.ListLocal(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
 		return Result{}, err
 	}
-	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
+	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems, pruneDefaults)
 }
 
 func renderRemoteCollection(
@@ -157,12 +172,13 @@ func renderRemoteCollection(
 	logicalPath string,
 	showSecrets bool,
 	skipItems []string,
+	pruneDefaults bool,
 ) (Result, error) {
 	items, err := orchestratorService.ListRemote(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
 		return Result{}, err
 	}
-	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
+	return renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems, pruneDefaults)
 }
 
 func renderRemoteCollectionFallback(
@@ -172,6 +188,7 @@ func renderRemoteCollectionFallback(
 	logicalPath string,
 	showSecrets bool,
 	skipItems []string,
+	pruneDefaults bool,
 ) (bool, Result, error) {
 	items, err := orchestratorService.ListRemote(ctx, logicalPath, orchestrator.ListPolicy{})
 	if err != nil {
@@ -181,7 +198,7 @@ func renderRemoteCollectionFallback(
 		return false, Result{}, nil
 	}
 
-	result, err := renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems)
+	result, err := renderCollection(ctx, deps, logicalPath, items, showSecrets, skipItems, pruneDefaults)
 	if err != nil {
 		return true, Result{}, err
 	}
@@ -195,8 +212,28 @@ func renderCollection(
 	items []resource.Resource,
 	showSecrets bool,
 	skipItems []string,
+	pruneDefaults bool,
 ) (Result, error) {
 	items = resource.FilterCollectionItems(collectionPath, items, skipItems)
+	if pruneDefaults {
+		prunedItems := make([]resource.Resource, 0, len(items))
+		for _, item := range items {
+			prunedContent, _, err := defaultsapp.CompactContentAgainstStoredDefaults(ctx, deps, item.LogicalPath, resource.Content{
+				Value:      item.Payload,
+				Descriptor: item.PayloadDescriptor,
+			})
+			if err != nil {
+				return Result{}, err
+			}
+			item.Payload = prunedContent.Value
+			item.PayloadDescriptor = prunedContent.Descriptor
+			if item.Payload == nil {
+				item.Payload = map[string]any{}
+			}
+			prunedItems = append(prunedItems, item)
+		}
+		items = prunedItems
+	}
 	if !showSecrets {
 		maskedItems := make([]resource.Resource, 0, len(items))
 		for _, item := range items {

@@ -223,18 +223,20 @@ Goal: infer compact raw defaults for one repository resource without flattening 
 Inputs:
 1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
 2. Two or more sibling repository resources in `/api/projects/defaults-sandbox/widgets`.
-3. Optional `resource defaults infer --save`.
+3. Optional `resource defaults infer --save` or `resource defaults infer --check`.
 
 Execution:
 1. CLI resolves the target to one concrete local repository resource path.
 2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
 3. `resource defaults infer --save` persists the inferred object to `defaults.<ext>` for the target path.
-4. `resource defaults get` returns the raw defaults object, not the merged effective resource.
+4. `resource defaults infer --check` compares the inferred normalized object against the current defaults sidecar and fails when they differ.
+5. `resource defaults get` returns the raw defaults object, not the merged effective resource.
 
 Expected outputs:
 1. Output contains only shared default candidates.
 2. Saving defaults keeps `resource.<ext>` separate from `defaults.<ext>`.
-3. Subsequent repository-backed reads still expose the merged effective resource.
+3. `--check` succeeds only when the stored defaults sidecar matches the inferred normalized object.
+4. Subsequent repository-backed reads still expose the merged effective resource.
 
 ### Example 12: Resource Defaults Managed-Server Probe Safety
 Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
@@ -255,7 +257,25 @@ Expected outputs:
 Failure expectation:
 1. Omitting `--yes` fails with `ValidationError` and performs no remote create.
 
-### Example 13: E2E Dependency-Aware Parallel Component Hooks
+### Example 13: Resource Get and Save With Defaults Pruning
+Goal: compact effective local or remote payloads back to explicit overrides without editing the raw defaults sidecar.
+
+Inputs:
+1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
+2. Repository contains `defaults.<ext>` with stable fields such as `project` and `enabled`.
+3. Caller runs `resource get --prune-defaults` or `resource save --prune-defaults`.
+
+Execution:
+1. `resource get --prune-defaults` reads the effective payload from the selected source and compacts it against raw repository defaults before output.
+2. Repository and managed-server sources both use the same raw defaults sidecar for pruning.
+3. `resource save --prune-defaults` compacts the fetched or explicit payload before repository persistence; list saves prune per resolved item path.
+
+Expected outputs:
+1. Printed or saved payload retains only explicit override fields.
+2. When all fields are defaulted, `resource get --prune-defaults` prints `{}` instead of `null`.
+3. The raw `defaults.<ext>` sidecar remains unchanged.
+
+### Example 14: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
 
 Inputs:

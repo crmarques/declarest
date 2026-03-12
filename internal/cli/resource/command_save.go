@@ -27,6 +27,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	var secret bool
 	var allowPlaintext bool
 	var secretAttributes string
+	var pruneDefaults bool
 	var force bool
 	var push bool
 	var commitMessage string
@@ -100,6 +101,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 					AsOneResource:             asOneResource,
 					Secret:                    secret,
 					AllowPlaintext:            allowPlaintext,
+					PruneDefaults:             pruneDefaults,
 					Force:                     force,
 					SecretAttributesEnabled:   secretAttributesEnabled,
 					RequestedSecretAttributes: requestedSecretAttributes,
@@ -126,6 +128,7 @@ func newSaveCommand(deps cliutil.CommandDependencies) *cobra.Command {
 	command.Flags().BoolVar(&secret, "secret", false, "store the whole resource payload in the secret store and persist only a placeholder")
 	command.Flags().BoolVar(&allowPlaintext, "allow-plaintext", false, "acknowledge saving resources that may contain plaintext secrets")
 	command.Flags().StringVar(&secretAttributes, "secret-attributes", "", "detect, store, and mask individual secret attributes (optional comma-separated JSON pointers; structured payloads only)")
+	command.Flags().BoolVar(&pruneDefaults, "prune-defaults", false, "remove values already covered by repository defaults before saving")
 	command.Flags().BoolVar(&force, "force", false, "override existing repository resources")
 	command.Flags().BoolVar(&push, "push", false, "push git repository changes after save (git repositories with remote only)")
 	bindRepositoryCommitMessageFlags(command, &commitMessage)

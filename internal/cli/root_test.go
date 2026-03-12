@@ -538,6 +538,38 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
+	t.Run("prune_defaults_compacts_repository_output", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getLocalValues = map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":      "acme",
+				"enabled": true,
+				"profile": map[string]any{"tier": "gold"},
+			},
+		}
+		repo := deps.Services.RepositoryStore().(*testRepository)
+		repo.defaults = map[string]resource.Content{
+			"/customers/acme": testContent(map[string]any{
+				"enabled": true,
+				"profile": map[string]any{"tier": "gold"},
+			}),
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "repository", "--prune-defaults")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"id": "acme"`) {
+			t.Fatalf("expected id in pruned output, got %q", output)
+		}
+		if strings.Contains(output, `"enabled": true`) || strings.Contains(output, `"tier": "gold"`) {
+			t.Fatalf("expected defaults to be pruned from repository output, got %q", output)
+		}
+	})
+
 	t.Run("http_method_override_requires_remote_source", func(t *testing.T) {
 		t.Parallel()
 
@@ -557,6 +589,36 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 		if !strings.Contains(output, "\"source\": \"remote\"") {
 			t.Fatalf("expected remote source output, got %q", output)
+		}
+	})
+
+	t.Run("prune_defaults_compacts_managed_server_output", func(t *testing.T) {
+		t.Parallel()
+
+		deps := testDeps()
+		orchestrator := deps.Orchestrator.(*testOrchestrator)
+		orchestrator.getRemoteValue = map[string]any{
+			"id":      "acme",
+			"enabled": true,
+			"profile": map[string]any{"tier": "gold"},
+		}
+		repo := deps.Services.RepositoryStore().(*testRepository)
+		repo.defaults = map[string]resource.Content{
+			"/customers/acme": testContent(map[string]any{
+				"enabled": true,
+				"profile": map[string]any{"tier": "gold"},
+			}),
+		}
+
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-server", "--prune-defaults")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(output, `"id": "acme"`) {
+			t.Fatalf("expected id in pruned output, got %q", output)
+		}
+		if strings.Contains(output, `"enabled": true`) || strings.Contains(output, `"tier": "gold"`) {
+			t.Fatalf("expected defaults to be pruned from managed-server output, got %q", output)
 		}
 	})
 
@@ -1853,6 +1915,50 @@ func TestResourceSaveInputModes(t *testing.T) {
 		}
 		if saved["source"] != "remote" {
 			t.Fatalf("expected saved payload to come from remote source, got %#v", saved)
+		}
+	})
+
+	t.Run("prune_defaults_compacts_payload_before_save", func(t *testing.T) {
+		metadataService := newTestMetadata()
+		orchestrator := &testOrchestrator{
+			metadataService: metadataService,
+			getRemoteValue: map[string]any{
+				"id":      "acme",
+				"enabled": true,
+				"profile": map[string]any{"tier": "gold"},
+			},
+		}
+
+		deps := newResourceSaveDeps(orchestrator, metadataService)
+		repo := deps.Services.RepositoryStore().(*resourceSaveTestRepository)
+		repo.defaults = map[string]resource.Content{
+			"/customers/acme": testContent(map[string]any{
+				"enabled": true,
+				"profile": map[string]any{"tier": "gold"},
+			}),
+		}
+
+		_, err := executeForTest(
+			deps,
+			"",
+			"resource",
+			"save",
+			"/customers/acme",
+			"--prune-defaults",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(orchestrator.saveCalls) != 1 {
+			t.Fatalf("expected 1 save call, got %d", len(orchestrator.saveCalls))
+		}
+		saved, ok := orchestrator.saveCalls[0].value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected saved payload map, got %T", orchestrator.saveCalls[0].value)
+		}
+		want := map[string]any{"id": "acme"}
+		if !reflect.DeepEqual(saved, want) {
+			t.Fatalf("expected pruned payload %#v, got %#v", want, saved)
 		}
 	})
 
@@ -6126,8 +6232,23 @@ func TestResourceSaveHelpIncludesHandleSecretsFlag(t *testing.T) {
 	if !strings.Contains(output, "--push") {
 		t.Fatalf("expected --push in resource save help output, got %q", output)
 	}
+	if !strings.Contains(output, "--prune-defaults") {
+		t.Fatalf("expected --prune-defaults in resource save help output, got %q", output)
+	}
 	if strings.Contains(output, "--overwrite") {
 		t.Fatalf("expected legacy --overwrite flag to be hidden from resource save help output, got %q", output)
+	}
+}
+
+func TestResourceGetHelpIncludesPruneDefaultsFlag(t *testing.T) {
+	t.Parallel()
+
+	output, err := executeForTest(testDeps(), "", "resource", "get", "--help")
+	if err != nil {
+		t.Fatalf("expected resource get help output, got error: %v", err)
+	}
+	if !strings.Contains(output, "--prune-defaults") {
+		t.Fatalf("expected --prune-defaults in resource get help output, got %q", output)
 	}
 }
 

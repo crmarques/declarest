@@ -93,6 +93,98 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 	}
 }
 
+func TestCompactContentAgainstStoredDefaultsReturnsOnlyOverrides(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	repo := deps.Repository.(*fakeDefaultsRepository)
+	repo.defaults["/customers/acme"] = resource.Content{
+		Value: map[string]any{
+			"status": "active",
+			"labels": map[string]any{"team": "platform"},
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+
+	content, pruned, err := CompactContentAgainstStoredDefaults(context.Background(), deps, "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"id":     "acme",
+			"name":   "acme",
+			"status": "active",
+			"labels": map[string]any{"team": "platform"},
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	})
+	if err != nil {
+		t.Fatalf("CompactContentAgainstStoredDefaults returned error: %v", err)
+	}
+	if !pruned {
+		t.Fatal("expected defaults pruning to be applied")
+	}
+
+	want := map[string]any{
+		"id":   "acme",
+		"name": "acme",
+	}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected pruned payload: got %#v want %#v", content.Value, want)
+	}
+}
+
+func TestCheckMatchesStoredDefaultsWhenInferredDefaultsAreEqual(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	repo := deps.Repository.(*fakeDefaultsRepository)
+	repo.defaults["/customers/acme"] = resource.Content{
+		Value: map[string]any{
+			"labels": map[string]any{"team": "platform"},
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+
+	result, err := Check(context.Background(), deps, "/customers/acme", CheckRequest{})
+	if err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+	if !result.Matches {
+		t.Fatalf("expected matching defaults, got %#v vs %#v", result.CurrentContent.Value, result.InferredContent.Value)
+	}
+}
+
+func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	repo := deps.Repository.(*fakeDefaultsRepository)
+	repo.defaults["/customers/acme"] = resource.Content{
+		Value: map[string]any{
+			"status": "inactive",
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/customers/acme": {
+				ID:    "{{/id}}",
+				Alias: "{{/name}}",
+			},
+		},
+	}
+
+	result, err := Check(context.Background(), deps, "/customers/acme", CheckRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+	if result.Matches {
+		t.Fatalf("expected mismatching defaults, got %#v vs %#v", result.CurrentContent.Value, result.InferredContent.Value)
+	}
+	want := map[string]any{"status": "active"}
+	if !reflect.DeepEqual(result.InferredContent.Value, want) {
+		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.InferredContent.Value, want)
+	}
+}
+
 type fakeDefaultsOrchestrator struct {
 	orchestratordomain.Orchestrator
 	localContent map[string]resource.Content

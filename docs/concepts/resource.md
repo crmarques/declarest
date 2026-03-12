@@ -1,10 +1,10 @@
 # Resource Files
 
-A resource is a logical object stored in the repository as `resource.<ext>`, using the trusted media type from the managed-server response or explicit payload input.
+A resource is a logical object stored in the repository as `resource.<ext>`, using the trusted media type from the managed-server response or explicit payload input. When shared values make the resource file noisy, you can also keep them in an optional sibling `defaults.<ext>` sidecar.
 
 ## File naming
 
-The payload filename is always `resource.<ext>`.
+The main payload filename is always `resource.<ext>`. When defaults sidecars are supported for that payload type, the companion filename is `defaults.<ext>`.
 
 Examples:
 
@@ -18,12 +18,35 @@ Examples:
 
 Examples for logical path `/corporations/acme`:
 
-- payload: `customers/acme/resource.json` (or another `resource.<ext>`)
-- resource-only metadata (optional): `customers/acme/metadata.yaml`
+- payload: `corporations/acme/resource.json` (or another `resource.<ext>`)
+- defaults sidecar (optional): `corporations/acme/defaults.json`
+- resource-only metadata (optional): `corporations/acme/metadata.yaml`
 
 Collection metadata for `/customers/`:
 
 - `customers/_/metadata.yaml`
+
+## Defaults sidecars
+
+Use a defaults sidecar when many resources in the same collection share the same object fields and you want `resource.<ext>` to keep only explicit overrides. DeclaREST reads the effective desired state as:
+
+- `defaults.<ext>` merged with `resource.<ext>`
+- object keys merge recursively
+- arrays are replaced as a whole
+- explicit values in `resource.<ext>` override the defaults, including `null`
+
+Current defaults-sidecar support is intentionally narrow: use it with merge-capable object payloads such as `json`, `yaml`, `ini`, and `properties`. Opaque or non-merge-friendly formats stay single-file resources for now.
+
+Typical workflow:
+
+```bash
+declarest resource defaults infer /corporations/acme
+declarest resource defaults infer /corporations/acme --save
+declarest resource defaults get /corporations/acme
+declarest resource get --source repository /corporations/acme --prune-defaults
+```
+
+That lets the repository keep shared defaults in one sidecar while normal repository-backed reads, diffs, and apply flows still use the merged effective resource.
 
 ## Resource payloads vs collection payloads
 

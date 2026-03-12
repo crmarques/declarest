@@ -19,6 +19,7 @@ That’s it. Your configuration lives in Git, with full history, pull requests, 
 - **Stable logical paths** — use `/corporations/acme` instead of raw endpoint URLs
 - **Git as source of truth** — review changes before they hit the API
 - **Metadata-driven adaptation** — works with APIs that aren’t clean REST
+- **Compact repository layout** — optional `defaults.<ext>` sidecars keep shared values out of `resource.<ext>`
 - **Secret placeholders** — no plaintext credentials in your repository
 - **Two modes** — CLI for on-demand work, Kubernetes Operator for continuous sync
 
@@ -45,7 +46,7 @@ Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`
 
 ## Capabilities snapshot
 
-- **Resource workflows:** read/list/save/diff/explain/apply/create/update/delete/edit/copy
+- **Resource workflows:** read/list/save/diff/explain/apply/create/update/delete/edit/copy, raw defaults management, and `--prune-defaults` compaction
 - **Metadata workflows:** infer/render/set/resolve overrides for custom API shapes
 - **Secret workflows:** detect/store/mask/resolve with save-time safeguards
 - **Repository workflows:** status/tree/history/commit/refresh/push/reset/clean

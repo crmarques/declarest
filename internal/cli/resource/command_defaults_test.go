@@ -3,6 +3,8 @@ package resource
 import (
 	"bytes"
 	"context"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
@@ -82,15 +84,89 @@ func TestDefaultsInferCommandRequiresYesForManagedServer(t *testing.T) {
 	}
 }
 
+func TestDefaultsInferCommandRejectsSaveAndCheckTogether(t *testing.T) {
+	command := newDefaultsInferCommand(cliutil.CommandDependencies{}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/customers/acme", "--save", "--check"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	err := command.ExecuteContext(context.Background())
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestDefaultsInferCommandCheckFailsWhenStoredDefaultsDoNotMatch(t *testing.T) {
+	repo := &fakeDefaultsCommandRepository{
+		defaults: map[string]resourcedomain.Content{
+			"/customers/acme": {
+				Value: map[string]any{"labels": map[string]any{"team": "security"}},
+				Descriptor: resourcedomain.NormalizePayloadDescriptor(
+					resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+				),
+			},
+		},
+	}
+	command := newDefaultsInferCommand(cliutil.CommandDependencies{
+		Orchestrator: &fakeDefaultsCommandOrchestrator{
+			localContent: map[string]resourcedomain.Content{
+				"/customers/acme": {
+					Value: map[string]any{"id": "acme", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+				"/customers/beta": {
+					Value: map[string]any{"id": "beta", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+			},
+		},
+		Contexts: fakeEditContextService{context: editTestContext()},
+		Services: &fakeEditServiceAccessor{
+			store:    repo,
+			metadata: fakeEditMetadataService{},
+		},
+	}, &cliutil.GlobalFlags{Output: cliutil.OutputJSON})
+	stdout := &bytes.Buffer{}
+	command.SetArgs([]string{"/customers/acme", "--check"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(stdout)
+	command.SetErr(&bytes.Buffer{})
+
+	err := command.ExecuteContext(context.Background())
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"team": "platform"`) {
+		t.Fatalf("expected inferred defaults output, got %q", stdout.String())
+	}
+}
+
 type fakeDefaultsCommandOrchestrator struct {
 	orchestratordomain.Orchestrator
-	content resourcedomain.Content
+	content      resourcedomain.Content
+	localContent map[string]resourcedomain.Content
 }
 
 func (f *fakeDefaultsCommandOrchestrator) ResolveLocalResource(
 	_ context.Context,
 	logicalPath string,
 ) (resourcedomain.Resource, error) {
+	if f.localContent != nil {
+		content, found := f.localContent[logicalPath]
+		if !found {
+			return resourcedomain.Resource{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+		}
+		return resourcedomain.Resource{
+			LogicalPath:       logicalPath,
+			Payload:           content.Value,
+			PayloadDescriptor: content.Descriptor,
+		}, nil
+	}
 	return resourcedomain.Resource{
 		LogicalPath:       logicalPath,
 		Payload:           f.content.Value,
@@ -98,8 +174,29 @@ func (f *fakeDefaultsCommandOrchestrator) ResolveLocalResource(
 	}, nil
 }
 
-func (f *fakeDefaultsCommandOrchestrator) GetLocal(_ context.Context, _ string) (resourcedomain.Content, error) {
+func (f *fakeDefaultsCommandOrchestrator) GetLocal(_ context.Context, logicalPath string) (resourcedomain.Content, error) {
+	if f.localContent != nil {
+		content, found := f.localContent[logicalPath]
+		if !found {
+			return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "not found", nil)
+		}
+		return content, nil
+	}
 	return f.content, nil
+}
+
+func (f *fakeDefaultsCommandOrchestrator) ListLocal(_ context.Context, logicalPath string, _ orchestratordomain.ListPolicy) ([]resourcedomain.Resource, error) {
+	if f.localContent == nil {
+		return nil, nil
+	}
+	items := make([]resourcedomain.Resource, 0, len(f.localContent))
+	for candidate := range f.localContent {
+		if path.Dir(candidate) != logicalPath {
+			continue
+		}
+		items = append(items, resourcedomain.Resource{LogicalPath: candidate})
+	}
+	return items, nil
 }
 
 type fakeDefaultsCommandRepository struct {

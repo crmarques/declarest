@@ -158,6 +158,7 @@ func newDefaultsEditCommand(deps cliutil.CommandDependencies, globalFlags *cliut
 func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFlags) *cobra.Command {
 	var pathFlag string
 	var save bool
+	var check bool
 	var managedServer bool
 	var yes bool
 
@@ -166,14 +167,19 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 		Short: "Infer raw defaults values for a resource",
 		Example: strings.Join([]string{
 			"  declarest resource defaults infer /customers/acme",
+			"  declarest resource defaults infer /customers/acme --check",
 			"  declarest resource defaults infer /customers/acme --save",
 			"  declarest resource defaults infer /customers/acme --managed-server --yes",
+			"  declarest resource defaults infer /customers/acme --managed-server --check --yes",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			resolvedPath, err := cliutil.ResolvePathInput(pathFlag, args, true)
 			if err != nil {
 				return err
+			}
+			if save && check {
+				return cliutil.ValidationError("flags --save and --check cannot be combined", nil)
 			}
 			if managedServer && !yes {
 				return cliutil.ValidationError("flag --yes is required with --managed-server because temporary remote resources will be created", nil)
@@ -189,6 +195,36 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 					return err
 				}
 				cfg = activeCfg
+			}
+
+			if check {
+				result, checkErr := defaultsapp.Check(
+					command.Context(),
+					deps,
+					resolvedPath,
+					defaultsapp.CheckRequest{ManagedServer: managedServer},
+				)
+				if checkErr != nil {
+					return checkErr
+				}
+
+				outputFormat, outputErr := cliutil.ResolvePayloadAwareOutputFormat(command.Context(), deps, globalFlags, result.InferredContent)
+				if outputErr != nil {
+					return outputErr
+				}
+				if outputErr := cliutil.WriteOutput(command, outputFormat, result.InferredContent.Value, nil); outputErr != nil {
+					return outputErr
+				}
+				if !result.Matches {
+					return cliutil.ValidationError(
+						fmt.Sprintf(
+							"resource defaults check failed for %q: inferred defaults do not match the current defaults sidecar; rerun with --save to update it",
+							result.ResolvedPath,
+						),
+						nil,
+					)
+				}
+				return nil
 			}
 
 			inferred, err := defaultsapp.Infer(
@@ -229,6 +265,7 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 	cliutil.RegisterPathFlagCompletion(command, deps)
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&save, "save", false, "save inferred defaults into the repository")
+	command.Flags().BoolVar(&check, "check", false, "infer defaults and fail if they do not match the current defaults sidecar")
 	command.Flags().BoolVar(&managedServer, "managed-server", false, "probe the managed server by creating temporary resources before inferring defaults")
 	command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm managed-server temporary resource creation")
 	return command

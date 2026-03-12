@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,9 +26,20 @@ type InferRequest struct {
 	ManagedServer bool
 }
 
+type CheckRequest struct {
+	ManagedServer bool
+}
+
 type Result struct {
 	ResolvedPath string
 	Content      resource.Content
+}
+
+type CheckResult struct {
+	ResolvedPath    string
+	InferredContent resource.Content
+	CurrentContent  resource.Content
+	Matches         bool
 }
 
 type target struct {
@@ -110,6 +122,99 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 			Descriptor: resolvedTarget.payloadDescriptor,
 		},
 	}, nil
+}
+
+func Check(ctx context.Context, deps Dependencies, logicalPath string, request CheckRequest) (CheckResult, error) {
+	inferred, err := Infer(ctx, deps, logicalPath, InferRequest{ManagedServer: request.ManagedServer})
+	if err != nil {
+		return CheckResult{}, err
+	}
+
+	current, err := Get(ctx, deps, inferred.ResolvedPath)
+	if err != nil {
+		return CheckResult{}, err
+	}
+
+	inferredValue := normalizeEmptyDefaultsValue(inferred.Content.Value)
+	currentValue := normalizeEmptyDefaultsValue(current.Content.Value)
+
+	inferredNormalized, err := resource.Normalize(inferredValue)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	currentNormalized, err := resource.Normalize(currentValue)
+	if err != nil {
+		return CheckResult{}, err
+	}
+
+	inferred.Content.Value = inferredNormalized
+	current.Content.Value = currentNormalized
+
+	return CheckResult{
+		ResolvedPath:    inferred.ResolvedPath,
+		InferredContent: inferred.Content,
+		CurrentContent:  current.Content,
+		Matches:         reflect.DeepEqual(currentNormalized, inferredNormalized),
+	}, nil
+}
+
+func CompactContentAgainstStoredDefaults(
+	ctx context.Context,
+	deps Dependencies,
+	logicalPath string,
+	content resource.Content,
+) (resource.Content, bool, error) {
+	resolvedPath, err := resource.NormalizeLogicalPath(logicalPath)
+	if err != nil {
+		return resource.Content{}, false, err
+	}
+	if resolvedPath == "/" {
+		return resource.Content{}, false, faults.NewValidationError("logical path must target a resource, not root", nil)
+	}
+
+	defaultsStore, err := requireDefaultsStore(deps)
+	if err != nil {
+		return resource.Content{}, false, err
+	}
+
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	if err != nil {
+		return resource.Content{}, false, err
+	}
+	if resolver, ok := orchestratorService.(localResourceResolver); ok {
+		item, resolveErr := resolver.ResolveLocalResource(ctx, resolvedPath)
+		if resolveErr == nil && strings.TrimSpace(item.LogicalPath) != "" {
+			resolvedPath = item.LogicalPath
+		} else if resolveErr != nil && !faults.IsCategory(resolveErr, faults.NotFoundError) {
+			return resource.Content{}, false, resolveErr
+		}
+	}
+
+	defaultsContent, defaultsFound, err := readDefaultsContent(ctx, defaultsStore, resolvedPath)
+	if err != nil {
+		return resource.Content{}, false, err
+	}
+	if !defaultsFound {
+		return content, false, nil
+	}
+	if err := resource.ValidateDefaultsSidecarValue(defaultsContent.Value); err != nil {
+		return resource.Content{}, false, err
+	}
+
+	prunedValue, err := resource.CompactAgainstDefaults(content.Value, defaultsContent.Value)
+	if err != nil {
+		return resource.Content{}, false, err
+	}
+
+	descriptor := content.Descriptor
+	if !resource.IsPayloadDescriptorExplicit(descriptor) && resource.IsPayloadDescriptorExplicit(defaultsContent.Descriptor) {
+		descriptor = resource.NormalizePayloadDescriptor(defaultsContent.Descriptor)
+	}
+
+	return resource.Content{
+		Value:      prunedValue,
+		Descriptor: descriptor,
+	}, true, nil
 }
 
 func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (target, error) {

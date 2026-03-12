@@ -947,7 +947,8 @@ func (r *testRepository) WorktreeStatus(context.Context) ([]repository.WorktreeS
 }
 
 type resourceSaveTestRepository struct {
-	values map[string]resource.Value
+	values   map[string]resource.Value
+	defaults map[string]resource.Content
 }
 
 func (r *resourceSaveTestRepository) Save(_ context.Context, logicalPath string, content resource.Content) error {
@@ -965,6 +966,23 @@ func (r *resourceSaveTestRepository) Get(_ context.Context, logicalPath string) 
 		}
 	}
 	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+}
+
+func (r *resourceSaveTestRepository) GetDefaults(_ context.Context, logicalPath string) (resource.Content, error) {
+	if r.defaults != nil {
+		if content, found := r.defaults[logicalPath]; found {
+			return content, nil
+		}
+	}
+	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource defaults %q not found", logicalPath), nil)
+}
+
+func (r *resourceSaveTestRepository) SaveDefaults(_ context.Context, logicalPath string, content resource.Content) error {
+	if r.defaults == nil {
+		r.defaults = map[string]resource.Content{}
+	}
+	r.defaults[logicalPath] = content
+	return nil
 }
 
 func (r *resourceSaveTestRepository) Delete(_ context.Context, _ string, _ repository.DeletePolicy) error {

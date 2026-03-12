@@ -17,6 +17,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	var pathFlag string
 	var sourceFlag string
 	var excludeItemsFlag []string
+	var pruneDefaults bool
 	var showSecrets bool
 	var showMetadata bool
 	var httpMethod string
@@ -72,6 +73,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 				Source:                   source,
 				SkipItems:                excludeItems,
 				ExplicitCollectionTarget: readapp.HasCollectionTargetMarker(requestedPath),
+				PruneDefaults:            pruneDefaults,
 				ShowSecrets:              showSecrets,
 				ShowMetadata:             showMetadata,
 				ContextName: func() string {
@@ -111,6 +113,7 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	bindReadSourceFlags(command, &sourceFlag)
 	bindExcludeFlag(command, &excludeItemsFlag)
+	command.Flags().BoolVar(&pruneDefaults, "prune-defaults", false, "remove values already covered by repository defaults before printing output")
 	command.Flags().BoolVar(&showSecrets, "show-secrets", false, "reveal masked secret values (both attribute-level and whole-resource secrets)")
 	command.Flags().BoolVar(&showMetadata, "show-metadata", false, "include rendered metadata snapshot in output")
 	bindHTTPMethodFlag(command, &httpMethod)

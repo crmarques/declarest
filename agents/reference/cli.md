@@ -163,6 +163,7 @@ Interactive context commands:
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
 18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operations.*` directives under the metadata section.
 19. `resource get|list` MUST support `--exclude <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
+20. `resource get --prune-defaults` MUST compact the returned payload against any repository `defaults.<ext>` sidecar for the same logical path before output, for both repository and managed-server sources; when every field is defaulted, the printed payload MUST be an empty object rather than `null`.
 20. `resource list` MUST support `--source <managed-server|repository>`.
 21. `resource list` MUST default to `--source managed-server`.
 22. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
@@ -195,6 +196,7 @@ Interactive context commands:
 43. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
 44. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
 45. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
+46. `resource save --prune-defaults` MUST compact the fetched or explicit payload against any repository `defaults.<ext>` sidecar for the same logical path before repository persistence; for list saves, pruning MUST apply per resolved item path.
 ### Secret Placeholder Resolution
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
@@ -210,8 +212,9 @@ Interactive context commands:
 46. `resource defaults edit <path>` MUST open the raw defaults object in an editor using the inferred defaults payload format, allow empty edited content to clear the defaults sidecar, validate edited content against supported defaults-sidecar payload rules, and persist only the raw defaults object without flattening merged resource values.
 47. `resource defaults infer <path>` MUST infer defaults from direct local sibling resources under the same logical collection as the target resource, MUST print only the inferred defaults object, and MUST target one concrete repository resource path rather than a metadata selector path.
 48. `resource defaults infer --save` MUST persist the inferred defaults object into the target resource directory as `defaults.<ext>` and SHOULD reuse the target resource payload descriptor when no defaults sidecar exists yet.
-49. `resource defaults infer --managed-server` MUST create two temporary remote resources derived from the target local resource payload, compare the observed remote outputs against the probe inputs, infer only stable server-added defaults, and clean up both temporary remote resources before returning.
-50. `resource defaults infer --managed-server` MUST require `--yes`; omitting `--yes` MUST fail with `ValidationError` before any remote mutation.
+49. `resource defaults infer --check` MUST print the inferred defaults object and MUST fail with `ValidationError` when the inferred normalized object does not match the current raw defaults sidecar; `--save` and `--check` MUST be rejected when combined.
+50. `resource defaults infer --managed-server` MUST create two temporary remote resources derived from the target local resource payload, compare the observed remote outputs against the probe inputs, infer only stable server-added defaults, and clean up both temporary remote resources before returning.
+51. `resource defaults infer --managed-server` MUST require `--yes`; omitting `--yes` MUST fail with `ValidationError` before any remote mutation.
 ### Secret Detect and Store Access
 51. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
 52. `secret detect` without input payload (`--payload <path|->` or stdin) MUST scan local repository resources recursively under positional `<path>`/`--path`, defaulting to `/` when path is omitted.
@@ -227,7 +230,7 @@ Interactive context commands:
 62. `secret list <path> --recursive` and `secret list --path <path> --recursive` MUST return keys stored at `<path>` plus descendant path-scoped keys under `<path>`, sorted deterministically, and MUST render descendant matches as the full relative path from the selected root (for example `/test/secrets/private-key:.`).
 63. `secret list` MUST return keys only and MUST NOT print plaintext secret values.
 64. `secret get <path>` and `secret get --path <path>` without an explicit key MUST fail with `ValidationError` and direct the user to `secret list`.
-58. `secret get --key`, `secret set --key`, and `secret delete --key` MUST require `--path`.
+65. `secret get --key`, `secret set --key`, and `secret delete --key` MUST require `--path`.
 ### Context Commands
 49. Interactive context flows MUST fail fast with `ValidationError` when invoked without required arguments in non-interactive environments.
 50. `context show` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`; when neither is provided it MUST require interactive context selection.
@@ -429,22 +432,25 @@ Interactive context commands:
 14. `declarest resource get /customers/acme` reads remote state by default.
 15. `declarest resource get /customers/acme --source repository` reads local repository state.
 16. `declarest resource get /customers --source repository` lists repository resources under `/customers`, mirroring `declarest resource list /customers --source repository`.
-17. `declarest resource list /customers` lists remote resources by default.
-18. `declarest resource list /customers --source repository` lists repository resources.
-19. `declarest resource list /customers --output text` prints one `<alias> (<id>)` line per listed item using metadata-derived identity when available.
-19. `declarest resource delete /customers/acme --yes` deletes from the remote server by default.
-20. `declarest resource delete /customers/acme --yes --source both` deletes from both remote server and repository.
-21. `declarest resource save /customers/acme` fetches remote state and saves it into repository for `/customers/acme`.
-22. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
-23. `declarest resource save /customers --mode single < list.json` stores the list payload in one resource file.
-24. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
-25. `declarest resource save /customers/acme --allow-plaintext < payload.json` bypasses plaintext-secret save guard.
-26. `declarest resource save /customers/acme < payload.json` with metadata `resource.secretAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
-27. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resource.secretAttributes`.
-28. `declarest resource save /customers/acme --secret-attributes=/password < payload.json` handles only `/password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
-29. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --force` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
-30. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --force` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
-31. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
+17. `declarest resource get /customers/acme --source repository --prune-defaults` prints only the non-default override fields from the local effective resource payload.
+18. `declarest resource get /customers/acme --prune-defaults` reads remote state and prints only fields not already covered by the local repository defaults sidecar.
+19. `declarest resource list /customers` lists remote resources by default.
+20. `declarest resource list /customers --source repository` lists repository resources.
+21. `declarest resource list /customers --output text` prints one `<alias> (<id>)` line per listed item using metadata-derived identity when available.
+22. `declarest resource delete /customers/acme --yes` deletes from the remote server by default.
+23. `declarest resource delete /customers/acme --yes --source both` deletes from both remote server and repository.
+24. `declarest resource save /customers/acme` fetches remote state and saves it into repository for `/customers/acme`.
+25. `declarest resource save /customers < list.json` stores each list item as its own resource when `list.json` is a list payload.
+26. `declarest resource save /customers --mode single < list.json` stores the list payload in one resource file.
+27. `declarest resource save /customers/acme < payload.json` fails with `ValidationError` when plaintext secret candidates are detected.
+28. `declarest resource save /customers/acme --allow-plaintext < payload.json` bypasses plaintext-secret save guard.
+29. `declarest resource save /customers/acme < payload.json` with metadata `resource.secretAttributes: [/credentials/authValue]` stores and masks `/credentials/authValue` automatically before repository persistence.
+30. `declarest resource save /customers/acme --secret-attributes < payload.json` stores all detected secrets, masks payload values with placeholders, and updates metadata `resource.secretAttributes`.
+31. `declarest resource save /customers/acme --secret-attributes=/password < payload.json` handles only `/password`; if other candidates remain, command fails with warning listing only the unhandled candidates unless `--allow-plaintext` is set.
+32. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --force` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
+33. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --force` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
+34. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
+32. `declarest resource save /customers/acme --prune-defaults` fetches remote state, removes fields already covered by `defaults.<ext>`, and persists only the remaining overrides.
 32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resource.secretAttributes` for `/customers/acme`.
 33. `declarest secret detect /customers/acme --fix --secret-attribute /password < payload.json` writes only `/password` from detected candidates.
 34. `declarest secret set /customers/acme /apiToken token-123` stores one path-scoped secret under `/customers/acme:/apiToken`.
