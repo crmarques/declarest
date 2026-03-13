@@ -49,7 +49,8 @@ This repository uses a componentized Bash e2e harness.
 - `--managed-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
 - `--managed-server-mtls [<true|false>]` (default: `false`)
 - `--managed-server-proxy [<true|false>]` (default: `false`)
-- `--metadata-type <base-dir|bundle>` (default: `bundle`)
+- `--metadata-source <bundle|dir>` (default: `bundle`)
+  - legacy alias: `--metadata-type <bundle|base-dir>`
 - `--repo-type <name>`
 - `--git-provider <name>`
 - `--git-provider-connection <local|remote>`
@@ -67,8 +68,8 @@ Use `--validate-components` to run plugin/component contract validation (manifes
 When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 When `--managed-server-proxy true`, generated contexts include `managedServer.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
-`--metadata-type bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
-`--metadata-type base-dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
+`--metadata-source bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
+`--metadata-source dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring. Legacy `--metadata-type base-dir` remains accepted and normalizes to the same `dir` behavior.
 
 Cleanup behavior:
 

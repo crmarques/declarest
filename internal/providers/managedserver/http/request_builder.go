@@ -18,12 +18,13 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	var err error
 	if g.metadataRenderer != nil {
 		spec, err = g.metadataRenderer.RenderOperationSpecForResource(ctx, metadata.ResourceOperationSpecInput{
-			LogicalPath:    resolvedResource.LogicalPath,
-			CollectionPath: resolvedResource.CollectionPath,
-			LocalAlias:     resolvedResource.LocalAlias,
-			RemoteID:       resolvedResource.RemoteID,
-			Metadata:       md,
-			Payload:        resolvedResource.Payload,
+			LogicalPath:       resolvedResource.LogicalPath,
+			CollectionPath:    resolvedResource.CollectionPath,
+			LocalAlias:        resolvedResource.LocalAlias,
+			RemoteID:          resolvedResource.RemoteID,
+			PayloadDescriptor: resolvedResource.PayloadDescriptor,
+			Metadata:          md,
+			Payload:           resolvedResource.Payload,
 		}, operation)
 		if err != nil {
 			return metadata.OperationSpec{}, err

@@ -73,7 +73,13 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 				return err
 			}
 			if !overridesOnly {
-				item = metadatadomain.MergeResourceMetadata(metadatadomain.DefaultResourceMetadata(), item)
+				debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
+				return cliutil.WriteOutput(
+					command,
+					outputFormat,
+					metadatadomain.DisplayResourceMetadataView(item),
+					nil,
+				)
 			}
 			debugctx.Printf(command.Context(), "metadata get succeeded path=%q", resolvedPath)
 
@@ -657,7 +663,7 @@ func resolvedMetadataForGet(
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
-	if metadataHasOverrides(resolved) {
+	if metadatadomain.HasResourceMetadataDirectives(resolved) {
 		return resolved, nil
 	}
 
@@ -687,16 +693,6 @@ func metadataPathContainsReservedSegment(logicalPath string) bool {
 		return true
 	}
 	return strings.HasSuffix(normalized, "/_") || strings.Contains(normalized, "/_/")
-}
-
-func metadataHasOverrides(item metadatadomain.ResourceMetadata) bool {
-	return strings.TrimSpace(item.ID) != "" ||
-		strings.TrimSpace(item.Alias) != "" ||
-		strings.TrimSpace(item.RemoteCollectionPath) != "" ||
-		item.Secret != nil ||
-		item.SecretAttributes != nil ||
-		item.Operations != nil ||
-		item.Transforms != nil
 }
 
 func resolveOpenAPISpec(

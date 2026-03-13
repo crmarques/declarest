@@ -10,6 +10,8 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+const ResourceDefaultFormatAny = "any"
+
 // NormalizeResourceFormat normalizes payload types for internal callers that
 // still use the historical helper name.
 func NormalizeResourceFormat(value string) string {
@@ -38,11 +40,110 @@ func ResourceFormatExtension(value string) (string, error) {
 	return resource.PayloadExtension(format)
 }
 
+func NormalizeResourceDefaultFormat(value string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	switch trimmed {
+	case "":
+		return ""
+	case ResourceDefaultFormatAny:
+		return ResourceDefaultFormatAny
+	default:
+		return resource.NormalizePayloadType(trimmed)
+	}
+}
+
+func ValidateResourceDefaultFormat(value string) (string, error) {
+	normalized := NormalizeResourceDefaultFormat(value)
+	if normalized == "" {
+		return "", nil
+	}
+	if normalized == ResourceDefaultFormatAny {
+		return normalized, nil
+	}
+	return ValidateResourceFormat(normalized)
+}
+
+func ResourceDefaultFormatAllowsMixedItems(value string) bool {
+	return NormalizeResourceDefaultFormat(value) == ResourceDefaultFormatAny
+}
+
 func EffectivePayloadType(metadata ResourceMetadata, fallback string) (string, error) {
 	if strings.TrimSpace(metadata.PayloadType) != "" {
 		return ValidateResourceFormat(metadata.PayloadType)
 	}
 	return ValidateResourceFormat(fallback)
+}
+
+func ResolveTemplatePayloadDescriptor(
+	metadata ResourceMetadata,
+	payload any,
+	descriptor resource.PayloadDescriptor,
+) resource.PayloadDescriptor {
+	activeDescriptor := descriptor
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
+		activeDescriptor = explicitDescriptorFromPayloadValue(payload)
+	}
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) && strings.TrimSpace(metadata.PayloadType) != "" {
+		activeDescriptor = resource.PayloadDescriptor{PayloadType: metadata.PayloadType}
+	}
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
+		activeDescriptor = InferPayloadDescriptor(payload)
+	}
+	return resource.NormalizePayloadDescriptor(activeDescriptor)
+}
+
+func ApplyPayloadTemplateScope(
+	scope map[string]any,
+	metadata ResourceMetadata,
+	payload any,
+	descriptor resource.PayloadDescriptor,
+) {
+	if scope == nil {
+		return
+	}
+
+	activeDescriptor := ResolveTemplatePayloadDescriptor(metadata, payload, descriptor)
+	scope["payloadType"] = activeDescriptor.PayloadType
+	scope["payloadMediaType"] = activeDescriptor.MediaType
+	scope["payloadExtension"] = activeDescriptor.Extension
+	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(activeDescriptor.MediaType) != "" {
+		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
+			scope["contentType"] = activeDescriptor.MediaType
+		}
+	}
+}
+
+func InferPayloadDescriptor(value any) resource.PayloadDescriptor {
+	if descriptor := explicitDescriptorFromPayloadValue(value); resource.IsPayloadDescriptorExplicit(descriptor) {
+		return resource.NormalizePayloadDescriptor(descriptor)
+	}
+
+	value = unwrapPayloadContentValue(value)
+	switch typed := value.(type) {
+	case nil:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	case resource.BinaryValue:
+		return resource.DefaultOctetStreamDescriptor()
+	case *resource.BinaryValue:
+		if typed != nil {
+			return resource.DefaultOctetStreamDescriptor()
+		}
+	case string:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
+	}
+
+	normalized, err := resource.Normalize(value)
+	if err != nil {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	}
+	switch normalized.(type) {
+	case string:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
+	case resource.BinaryValue:
+		return resource.DefaultOctetStreamDescriptor()
+	default:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	}
 }
 
 // TemplateFuncMap returns metadata template helpers evaluated against the
@@ -98,6 +199,9 @@ func TemplateFuncMap(scope map[string]any) template.FuncMap {
 		"json_pointer": resolveJSONPointer,
 		"payload_type": resolveScopePayloadType,
 		"payload_media_type": func(arg any) (string, error) {
+			if mediaType := strings.TrimSpace(scopeString(scopeValue(scope, "payloadMediaType"))); mediaType != "" {
+				return mediaType, nil
+			}
 			payloadType, err := resolveScopePayloadType(arg)
 			if err != nil {
 				return "", err
@@ -105,6 +209,9 @@ func TemplateFuncMap(scope map[string]any) template.FuncMap {
 			return ResourceFormatMediaType(payloadType)
 		},
 		"payload_extension": func(arg any) (string, error) {
+			if extension := strings.TrimSpace(scopeString(scopeValue(scope, "payloadExtension"))); extension != "" {
+				return extension, nil
+			}
 			payloadType, err := resolveScopePayloadType(arg)
 			if err != nil {
 				return "", err
@@ -119,6 +226,30 @@ func scopeValue(scope map[string]any, key string) any {
 		return nil
 	}
 	return scope[key]
+}
+
+func unwrapPayloadContentValue(value any) any {
+	switch typed := value.(type) {
+	case resource.Content:
+		return typed.Value
+	case *resource.Content:
+		if typed != nil {
+			return typed.Value
+		}
+	}
+	return value
+}
+
+func explicitDescriptorFromPayloadValue(value any) resource.PayloadDescriptor {
+	switch typed := value.(type) {
+	case resource.Content:
+		return typed.Descriptor
+	case *resource.Content:
+		if typed != nil {
+			return typed.Descriptor
+		}
+	}
+	return resource.PayloadDescriptor{}
 }
 
 func templateScalarString(value any) (string, bool) {

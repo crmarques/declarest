@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"path"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
+	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -53,6 +56,16 @@ type target struct {
 type localResourceResolver interface {
 	ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error)
 }
+
+type managedServerAuthCacheInvalidator interface {
+	InvalidateAuthCache()
+}
+
+const (
+	managedServerProbeReadAttempts    = 8
+	managedServerProbeReadMinAttempts = 4
+	managedServerProbeReadDelay       = 250 * time.Millisecond
+)
 
 func Get(ctx context.Context, deps Dependencies, logicalPath string) (Result, error) {
 	resolvedTarget, err := resolveTarget(ctx, deps, logicalPath)
@@ -488,7 +501,7 @@ func inferFromManagedServer(
 	defer func() {
 		var cleanupErr error
 		for idx := len(tempPaths) - 1; idx >= 0; idx-- {
-			deleteErr := orchestratorService.Delete(ctx, tempPaths[idx], orchestratordomain.DeletePolicy{})
+			deleteErr := cleanupManagedServerProbe(ctx, deps, orchestratorService, tempPaths[idx])
 			if deleteErr != nil {
 				cleanupErr = errors.Join(
 					cleanupErr,
@@ -514,11 +527,13 @@ func inferFromManagedServer(
 	}
 	tempPaths = append(tempPaths, secondPath)
 
-	firstRemote, err := orchestratorService.GetRemote(ctx, firstPath)
+	invalidateManagedServerAuthCache(deps)
+
+	firstRemote, err := readManagedServerProbeContent(ctx, orchestratorService, firstPath)
 	if err != nil {
 		return nil, err
 	}
-	secondRemote, err := orchestratorService.GetRemote(ctx, secondPath)
+	secondRemote, err := readManagedServerProbeContent(ctx, orchestratorService, secondPath)
 	if err != nil {
 		return nil, err
 	}
@@ -529,6 +544,132 @@ func inferFromManagedServer(
 	}
 	outputs := []resource.Value{firstRemote.Value, secondRemote.Value}
 	return resource.InferCreatedDefaults(inputs, outputs)
+}
+
+func invalidateManagedServerAuthCache(deps Dependencies) {
+	if deps.Services == nil {
+		return
+	}
+	managedServerClient := deps.Services.ManagedServerClient()
+	if managedServerClient == nil {
+		return
+	}
+	invalidator, ok := managedServerClient.(managedServerAuthCacheInvalidator)
+	if !ok {
+		return
+	}
+	invalidator.InvalidateAuthCache()
+}
+
+func readManagedServerProbeContent(
+	ctx context.Context,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPath string,
+) (resource.Content, error) {
+	var (
+		lastContent    resource.Content
+		lastNormalized resource.Value
+		stableReads    int
+	)
+
+	for attempt := 0; attempt < managedServerProbeReadAttempts; attempt++ {
+		content, err := orchestratorService.GetRemote(ctx, logicalPath)
+		if err != nil {
+			return resource.Content{}, err
+		}
+
+		normalized, err := resource.Normalize(content.Value)
+		if err != nil {
+			return resource.Content{}, err
+		}
+		content.Value = normalized
+
+		if attempt > 0 && reflect.DeepEqual(normalized, lastNormalized) {
+			stableReads++
+		} else {
+			stableReads = 1
+		}
+
+		lastContent = content
+		lastNormalized = normalized
+
+		if attempt+1 >= managedServerProbeReadMinAttempts && stableReads >= 2 {
+			return lastContent, nil
+		}
+		if attempt+1 == managedServerProbeReadAttempts {
+			break
+		}
+		if waitErr := waitForManagedServerCleanupRetry(ctx, managedServerProbeReadDelay); waitErr != nil {
+			return resource.Content{}, waitErr
+		}
+	}
+
+	return lastContent, nil
+}
+
+func cleanupManagedServerProbe(
+	ctx context.Context,
+	deps Dependencies,
+	orchestratorService orchestratordomain.Orchestrator,
+	logicalPath string,
+) error {
+	deleteErr := orchestratorService.Delete(ctx, logicalPath, orchestratordomain.DeletePolicy{})
+	if deleteErr == nil || faults.IsCategory(deleteErr, faults.NotFoundError) {
+		return nil
+	}
+	if !faults.IsCategory(deleteErr, faults.AuthError) {
+		return deleteErr
+	}
+
+	retryErr := retryManagedServerProbeDelete(ctx, deps, logicalPath)
+	if retryErr == nil || faults.IsCategory(retryErr, faults.NotFoundError) {
+		return nil
+	}
+	return errors.Join(deleteErr, retryErr)
+}
+
+func retryManagedServerProbeDelete(ctx context.Context, deps Dependencies, logicalPath string) error {
+	if deps.Services == nil {
+		return faults.NewValidationError("managed-server cleanup retry requires service accessor", nil)
+	}
+	managedServerClient := deps.Services.ManagedServerClient()
+	if managedServerClient == nil {
+		return faults.NewValidationError("managed-server cleanup retry requires managed-server client", nil)
+	}
+
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if invalidator, ok := managedServerClient.(managedServerAuthCacheInvalidator); ok {
+			invalidator.InvalidateAuthCache()
+		}
+		_, err := managedServerClient.Request(ctx, managedserverdomain.RequestSpec{
+			Method: http.MethodDelete,
+			Path:   logicalPath,
+		})
+		if err == nil || faults.IsCategory(err, faults.NotFoundError) {
+			return nil
+		}
+		lastErr = err
+		if !faults.IsCategory(err, faults.AuthError) || attempt == 1 {
+			break
+		}
+		if waitErr := waitForManagedServerCleanupRetry(ctx, 250*time.Millisecond); waitErr != nil {
+			return errors.Join(lastErr, waitErr)
+		}
+	}
+	return lastErr
+}
+
+func waitForManagedServerCleanupRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func buildManagedServerProbePayload(
@@ -574,29 +715,168 @@ func buildManagedServerProbePayload(
 
 	tempName := "declarest-defaults-" + label + "-" + strings.ToLower(uuid.NewString()[:8])
 	next := resource.DeepCopyValue(payload)
+	replacedPointers := map[string]struct{}{}
 
 	if aliasOK {
 		next, err = resource.SetJSONPointerValue(next, aliasPointer, tempName)
 		if err != nil {
 			return resource.Content{}, "", err
 		}
+		replacedPointers[aliasPointer] = struct{}{}
 	}
 	if idOK {
 		next, err = resource.SetJSONPointerValue(next, idPointer, tempName)
 		if err != nil {
 			return resource.Content{}, "", err
 		}
+		replacedPointers[idPointer] = struct{}{}
 	}
 
 	nextPayload, ok := next.(map[string]any)
 	if !ok {
 		return resource.Content{}, "", faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
 	}
+	nextPayload, err = applyManagedServerProbeIdentityFallback(logicalPath, payload, nextPayload, tempName, replacedPointers, aliasPointer, idPointer)
+	if err != nil {
+		return resource.Content{}, "", err
+	}
 
 	return resource.Content{
 		Value:      nextPayload,
 		Descriptor: content.Descriptor,
 	}, joinLogicalPath(collectionPathFor(logicalPath), tempName), nil
+}
+
+func applyManagedServerProbeIdentityFallback(
+	logicalPath string,
+	originalPayload map[string]any,
+	nextPayload map[string]any,
+	tempName string,
+	replacedPointers map[string]struct{},
+	identityPointers ...string,
+) (map[string]any, error) {
+	identityValues, err := managedServerProbeIdentityValues(logicalPath, originalPayload, identityPointers...)
+	if err != nil {
+		return nil, err
+	}
+	if len(identityValues) == 0 {
+		return nextPayload, nil
+	}
+
+	allowedKeys := managedServerProbeIdentityFieldKeys(logicalPath)
+	current := nextPayload
+	for key, rawValue := range originalPayload {
+		value, ok := rawValue.(string)
+		if !ok || !matchesManagedServerProbeIdentityValue(identityValues, value) {
+			continue
+		}
+
+		pointer := resource.JSONPointerForObjectKey(key)
+		if _, alreadyReplaced := replacedPointers[pointer]; alreadyReplaced {
+			continue
+		}
+		if _, allowed := allowedKeys[canonicalManagedServerProbeFieldKey(key)]; !allowed {
+			continue
+		}
+
+		updated, err := resource.SetJSONPointerValue(current, pointer, tempName)
+		if err != nil {
+			return nil, err
+		}
+		objectValue, ok := updated.(map[string]any)
+		if !ok {
+			return nil, faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+		}
+		current = objectValue
+	}
+
+	return current, nil
+}
+
+func managedServerProbeIdentityValues(
+	logicalPath string,
+	payload map[string]any,
+	identityPointers ...string,
+) (map[string]struct{}, error) {
+	values := map[string]struct{}{}
+	addManagedServerProbeIdentityValue(values, path.Base(strings.TrimSpace(logicalPath)))
+
+	for _, pointer := range identityPointers {
+		value, found, err := resource.LookupJSONPointerString(payload, pointer)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			addManagedServerProbeIdentityValue(values, value)
+		}
+	}
+
+	return values, nil
+}
+
+func addManagedServerProbeIdentityValue(values map[string]struct{}, value string) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == "/" || trimmed == "." {
+		return
+	}
+	values[trimmed] = struct{}{}
+}
+
+func matchesManagedServerProbeIdentityValue(values map[string]struct{}, value string) bool {
+	_, ok := values[strings.TrimSpace(value)]
+	return ok
+}
+
+func managedServerProbeIdentityFieldKeys(logicalPath string) map[string]struct{} {
+	keys := map[string]struct{}{}
+	for _, candidate := range []string{"id", "name", "slug", "key", "code", "alias", "identifier", "uid"} {
+		addManagedServerProbeIdentityFieldKey(keys, candidate)
+	}
+
+	collectionSegments := resource.SplitLogicalPathSegments(collectionPathFor(logicalPath))
+	if len(collectionSegments) == 0 {
+		return keys
+	}
+
+	collectionName := collectionSegments[len(collectionSegments)-1]
+	singularName := singularManagedServerProbeIdentityField(collectionName)
+	for _, candidate := range []string{
+		collectionName,
+		singularName,
+		singularName + "id",
+		singularName + "name",
+	} {
+		addManagedServerProbeIdentityFieldKey(keys, candidate)
+	}
+	return keys
+}
+
+func addManagedServerProbeIdentityFieldKey(keys map[string]struct{}, value string) {
+	canonical := canonicalManagedServerProbeFieldKey(value)
+	if canonical == "" {
+		return
+	}
+	keys[canonical] = struct{}{}
+}
+
+func canonicalManagedServerProbeFieldKey(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	replacer := strings.NewReplacer("-", "", "_", "", " ", "")
+	return replacer.Replace(normalized)
+}
+
+func singularManagedServerProbeIdentityField(value string) string {
+	trimmed := strings.TrimSpace(value)
+	switch {
+	case strings.HasSuffix(trimmed, "ies") && len(trimmed) > len("ies"):
+		return trimmed[:len(trimmed)-len("ies")] + "y"
+	case strings.HasSuffix(trimmed, "ses") && len(trimmed) > len("ses"):
+		return strings.TrimSuffix(trimmed, "es")
+	case strings.HasSuffix(trimmed, "s") && !strings.HasSuffix(trimmed, "ss") && len(trimmed) > 1:
+		return strings.TrimSuffix(trimmed, "s")
+	default:
+		return trimmed
+	}
 }
 
 func resolveSecretsForManagedServerProbe(

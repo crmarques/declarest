@@ -4,7 +4,7 @@ import (
 	"maps"
 	"path"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/crmarques/declarest/resource"
@@ -28,13 +28,7 @@ func promoteInferTargetFromOpenAPI(target inferTarget, openAPISpec any) inferTar
 		return target
 	}
 
-	keys := make([]string, 0, len(pathDefinitions))
-	for pathKey := range pathDefinitions {
-		keys = append(keys, pathKey)
-	}
-	sort.Strings(keys)
-
-	for _, pathKey := range keys {
+	for _, pathKey := range slices.Sorted(maps.Keys(pathDefinitions)) {
 		segments := splitPathSegments(pathKey)
 		if len(segments) != len(target.Segments)+1 {
 			continue
@@ -82,7 +76,7 @@ func removeDefaultOperationSpecs(
 	}
 
 	filtered := make(map[string]OperationSpec, len(operations))
-	keys := sortedOperationKeys(operations)
+	keys := slices.Sorted(maps.Keys(operations))
 	for _, key := range keys {
 		spec := operations[key]
 		defaultSpec, hasDefault := defaults[key]
@@ -110,7 +104,7 @@ func normalizeOperationSpecForComparison(spec OperationSpec) OperationSpec {
 		Path:        strings.TrimSpace(spec.Path),
 		Accept:      strings.TrimSpace(spec.Accept),
 		ContentType: strings.TrimSpace(spec.ContentType),
-		Body:        spec.Body,
+		Body:        resource.DeepCopyValue(spec.Body),
 		Transforms:  normalizeTransformStepsForComparison(spec.Transforms),
 		Validate:    normalizeOperationValidationSpecForComparison(spec.Validate),
 	}
@@ -180,13 +174,7 @@ func openAPIPathDefinitions(openAPISpec any) map[string]map[string]struct{} {
 	}
 
 	result := make(map[string]map[string]struct{}, len(pathsMap))
-	keys := make([]string, 0, len(pathsMap))
-	for pathKey := range pathsMap {
-		keys = append(keys, pathKey)
-	}
-	sort.Strings(keys)
-
-	for _, pathKey := range keys {
+	for _, pathKey := range slices.Sorted(maps.Keys(pathsMap)) {
 		methods := openAPIPathMethods(pathsMap[pathKey])
 		if len(methods) == 0 {
 			continue
@@ -219,13 +207,7 @@ func selectOpenAPICandidate(
 	pathDefinitions map[string]map[string]struct{},
 ) openAPICandidate {
 	best := openAPICandidate{score: -1}
-	keys := make([]string, 0, len(pathDefinitions))
-	for pathKey := range pathDefinitions {
-		keys = append(keys, pathKey)
-	}
-	sort.Strings(keys)
-
-	for _, pathKey := range keys {
+	for _, pathKey := range slices.Sorted(maps.Keys(pathDefinitions)) {
 		templateSegments := splitPathSegments(pathKey)
 		if len(templateSegments) != expectedSegments {
 			continue

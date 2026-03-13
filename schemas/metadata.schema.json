@@ -70,6 +70,20 @@
         "octet-stream"
       ]
     },
+    "defaultFormat": {
+      "type": "string",
+      "enum": [
+        "json",
+        "yaml",
+        "xml",
+        "hcl",
+        "ini",
+        "properties",
+        "text",
+        "octet-stream",
+        "any"
+      ]
+    },
     "identityTemplate": {
       "type": "string",
       "description": "Identity template string using canonical JSON Pointer placeholders such as {{/id}}, one-level shorthand such as {{id}}, or raw JSON Pointer shorthand such as /id."
@@ -213,8 +227,8 @@
         "payloadType": {
           "$ref": "#/$defs/payloadType"
         },
-        "preferredFormat": {
-          "$ref": "#/$defs/payloadType"
+        "defaultFormat": {
+          "$ref": "#/$defs/defaultFormat"
         },
         "secret": {
           "type": "boolean"

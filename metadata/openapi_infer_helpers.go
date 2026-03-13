@@ -191,31 +191,52 @@ func inferMetadataFromOpenAPISpec(
 	if len(operations) == 0 {
 		return ResourceMetadata{}, resourceIdentityAttribute, resourceSchemaAttributes
 	}
-	payloadType := inferOpenAPIMetadataPayloadType(collectionCandidate, resourceCandidate, pathItems, openAPISpec)
+	payloadTypeCandidates := inferOpenAPIMetadataPayloadTypes(collectionCandidate, resourceCandidate, pathItems, openAPISpec)
 	return ResourceMetadata{
 		RemoteCollectionPath: collectionPath,
 		Operations:           operations,
-		PayloadType:          payloadType,
+		PayloadType:          inferredOpenAPIMetadataPayloadType(payloadTypeCandidates),
+		DefaultFormat:        inferredOpenAPIMetadataDefaultFormat(payloadTypeCandidates),
 	}, resourceIdentityAttribute, resourceSchemaAttributes
 }
 
-func inferOpenAPIMetadataPayloadType(
+func inferOpenAPIMetadataPayloadTypes(
 	collectionCandidate openAPICandidate,
 	resourceCandidate openAPICandidate,
 	pathItems map[string]map[string]any,
 	openAPISpec any,
-) string {
+) []string {
 	seen := map[string]struct{}{}
 	collectOpenAPICandidatePayloadTypes(seen, collectionCandidate, pathItems, openAPISpec)
 	collectOpenAPICandidatePayloadTypes(seen, resourceCandidate, pathItems, openAPISpec)
-	if len(seen) != 1 {
-		return ""
+	if len(seen) == 0 {
+		return nil
 	}
 
+	payloadTypes := make([]string, 0, len(seen))
 	for payloadType := range seen {
-		return payloadType
+		payloadTypes = append(payloadTypes, payloadType)
 	}
-	return ""
+	sort.Strings(payloadTypes)
+	return payloadTypes
+}
+
+func inferredOpenAPIMetadataPayloadType(payloadTypes []string) string {
+	if len(payloadTypes) != 1 {
+		return ""
+	}
+	return payloadTypes[0]
+}
+
+func inferredOpenAPIMetadataDefaultFormat(payloadTypes []string) string {
+	switch len(payloadTypes) {
+	case 0:
+		return ""
+	case 1:
+		return payloadTypes[0]
+	default:
+		return ResourceDefaultFormatAny
+	}
 }
 
 func collectOpenAPICandidatePayloadTypes(

@@ -2,6 +2,8 @@ package fsmetadata
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
@@ -18,6 +20,11 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 			return err
 		}
 		resolvedPayloadType = payloadType
+	}
+	if strings.TrimSpace(metadata.DefaultFormat) != "" {
+		if _, err := metadatadomain.ValidateResourceDefaultFormat(metadata.DefaultFormat); err != nil {
+			return err
+		}
 	}
 
 	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
@@ -48,7 +55,7 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		return err
 	}
 
-	keys := sortedOperationKeys(metadata.Operations)
+	keys := slices.Sorted(maps.Keys(metadata.Operations))
 	for _, key := range keys {
 		if !metadatadomain.Operation(key).IsValid() {
 			return faults.NewValidationError(fmt.Sprintf("unsupported metadata operation %q", key), nil)
@@ -66,6 +73,9 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		if err := validateOperationValidationSpec(metadatadomain.Operation(key), operationSpec.Validate); err != nil {
 			return err
 		}
+		if err := metadatadomain.ValidateOperationSpecTemplates(fmt.Sprintf("operation %q", key), operationSpec); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -78,10 +88,13 @@ func validateStructuredOnlyMetadataFields(
 		return nil
 	}
 
+	structuredPayloadTypes := "json, yaml, ini, properties"
+
 	if strings.TrimSpace(metadata.ID) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.id requires structured payload type (json, yaml); got %q",
+				"resource.id requires structured payload type (%s); got %q",
+				structuredPayloadTypes,
 				payloadType,
 			),
 			nil,
@@ -90,7 +103,8 @@ func validateStructuredOnlyMetadataFields(
 	if strings.TrimSpace(metadata.Alias) != "" {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.alias requires structured payload type (json, yaml); got %q",
+				"resource.alias requires structured payload type (%s); got %q",
+				structuredPayloadTypes,
 				payloadType,
 			),
 			nil,
@@ -99,7 +113,8 @@ func validateStructuredOnlyMetadataFields(
 	if len(metadata.SecretAttributes) > 0 {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.secretAttributes requires structured payload type (json, yaml); got %q; use resource.secret: true for whole-resource secrets",
+				"resource.secretAttributes requires structured payload type (%s); got %q; use resource.secret: true for whole-resource secrets",
+				structuredPayloadTypes,
 				payloadType,
 			),
 			nil,
@@ -108,7 +123,8 @@ func validateStructuredOnlyMetadataFields(
 	if len(metadata.RequiredAttributes) > 0 {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.requiredAttributes requires structured payload type (json, yaml); got %q",
+				"resource.requiredAttributes requires structured payload type (%s); got %q",
+				structuredPayloadTypes,
 				payloadType,
 			),
 			nil,
@@ -117,7 +133,8 @@ func validateStructuredOnlyMetadataFields(
 	if len(metadata.ExternalizedAttributes) > 0 {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"resource.externalizedAttributes requires structured payload type (json, yaml); got %q",
+				"resource.externalizedAttributes requires structured payload type (%s); got %q",
+				structuredPayloadTypes,
 				payloadType,
 			),
 			nil,

@@ -26,7 +26,7 @@ func (r *Orchestrator) saveLocalResource(
 		return err
 	}
 
-	content = r.applyPreferredFormat(content, resolvedMetadata)
+	content = r.applyDefaultFormat(content, resolvedMetadata)
 
 	entries, err := metadata.ResolveExternalizedAttributes(resolvedMetadata)
 	if err != nil {

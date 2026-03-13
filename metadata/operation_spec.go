@@ -7,7 +7,7 @@ import (
 	"maps"
 	"path"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -176,9 +176,17 @@ func InferFromOpenAPI(ctx context.Context, logicalPath string, request Inference
 func InferFromOpenAPISpec(
 	_ context.Context,
 	logicalPath string,
-	_ InferenceRequest,
+	request InferenceRequest,
 	openAPISpec any,
 ) (ResourceMetadata, error) {
+	if request.Recursive {
+		return ResourceMetadata{}, faults.NewTypedError(
+			faults.ValidationError,
+			"recursive metadata inference is not yet supported",
+			nil,
+		)
+	}
+
 	target, err := parseInferTarget(logicalPath)
 	if err != nil {
 		return ResourceMetadata{}, err
@@ -251,7 +259,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 		RequiredAttributes:     cloneStringSlice(inferred.RequiredAttributes),
 		RemoteCollectionPath:   inferred.RemoteCollectionPath,
 		PayloadType:            inferred.PayloadType,
-		PreferredFormat:        inferred.PreferredFormat,
+		DefaultFormat:          inferred.DefaultFormat,
+		Secret:                 cloneBoolPointer(inferred.Secret),
 		SecretAttributes:       cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
@@ -276,7 +285,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 	rendered := OperationSpec{
 		Query:      maps.Clone(spec.Query),
 		Headers:    maps.Clone(spec.Headers),
-		Body:       spec.Body,
+		Body:       resource.DeepCopyValue(spec.Body),
 		Transforms: cloneTransformSteps(spec.Transforms),
 		Validate:   cloneOperationValidationSpec(spec.Validate),
 	}
@@ -298,7 +307,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 	if err != nil {
 		return OperationSpec{}, err
 	}
-	for _, key := range sortedMapKeys(rendered.Query) {
+	for _, key := range slices.Sorted(maps.Keys(rendered.Query)) {
 		value, renderErr := renderTemplateString("query."+key, rendered.Query[key], scope)
 		if renderErr != nil {
 			return OperationSpec{}, renderErr
@@ -306,7 +315,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 		rendered.Query[key] = value
 	}
 
-	for _, key := range sortedMapKeys(rendered.Headers) {
+	for _, key := range slices.Sorted(maps.Keys(rendered.Headers)) {
 		value, renderErr := renderTemplateString("headers."+key, rendered.Headers[key], scope)
 		if renderErr != nil {
 			return OperationSpec{}, renderErr
@@ -329,6 +338,56 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 	}
 
 	return rendered, nil
+}
+
+// ValidateOperationSpecTemplates parses (but does not execute) all template
+// strings in an OperationSpec. This catches malformed template syntax at
+// metadata write time rather than deferring errors to render time.
+func ValidateOperationSpecTemplates(label string, spec OperationSpec) error {
+	validate := func(field string, raw string) error {
+		if !strings.Contains(raw, "{{") {
+			return nil
+		}
+		rewritten := rewriteMetadataTemplateSyntax(raw)
+		_, err := template.New(field).Funcs(TemplateFuncMap(nil)).Parse(rewritten)
+		if err != nil {
+			return faults.NewTypedError(
+				faults.ValidationError,
+				fmt.Sprintf("invalid metadata template for %s %s", label, field),
+				err,
+			)
+		}
+		return nil
+	}
+
+	if err := validate("method", spec.Method); err != nil {
+		return err
+	}
+	if err := validate("path", spec.Path); err != nil {
+		return err
+	}
+	if err := validate("accept", spec.Accept); err != nil {
+		return err
+	}
+	if err := validate("contentType", spec.ContentType); err != nil {
+		return err
+	}
+	for key, value := range spec.Query {
+		if err := validate("query."+key, value); err != nil {
+			return err
+		}
+	}
+	for key, value := range spec.Headers {
+		if err := validate("headers."+key, value); err != nil {
+			return err
+		}
+	}
+	for idx, step := range spec.Transforms {
+		if err := validate(fmt.Sprintf("transforms[%d].jqExpression", idx), step.JQExpression); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func renderTemplateString(field string, raw string, scope map[string]any) (string, error) {
@@ -370,15 +429,6 @@ func buildTemplateScopeFromValue(value any) (map[string]any, error) {
 	scope["value"] = value
 
 	return scope, nil
-}
-
-func sortedMapKeys(values map[string]string) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 var openAPIPathParameterSegmentPattern = regexp.MustCompile(`^\{([^{}]+)\}$`)

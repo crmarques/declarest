@@ -72,6 +72,7 @@ test_summary_includes_required_fields() {
   output=$(ui_print_summary)
   assert_contains "${output}" "E2E Summary"
   assert_contains "${output}" "Execution Parameters"
+  assert_contains "${output}" "metadata-source: bundle (default)"
   assert_contains "${output}" "profile: cli-basic (default)"
   assert_contains "${output}" "repository-type: filesystem (default)"
   assert_contains "${output}" "container-engine: podman (default)"

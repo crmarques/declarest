@@ -123,7 +123,13 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	rawValue := content.Value
 	var metadataSnapshot *metadatadomain.ResourceMetadata
 	if req.ShowMetadata {
-		snapshot, err := renderMetadataSnapshot(ctx, deps, req.LogicalPath, metadataValue)
+		snapshot, err := renderMetadataSnapshot(
+			ctx,
+			deps,
+			req.LogicalPath,
+			metadataValue,
+			content.Descriptor,
+		)
 		if err != nil {
 			return Result{}, err
 		}
@@ -371,6 +377,7 @@ func renderMetadataSnapshot(
 	deps Dependencies,
 	logicalPath string,
 	rawValue resource.Value,
+	descriptor resource.PayloadDescriptor,
 ) (metadatadomain.ResourceMetadata, error) {
 	metadataService, err := appdeps.RequireMetadataService(deps)
 	if err != nil {
@@ -386,7 +393,13 @@ func renderMetadataSnapshot(
 		resolvedMetadata,
 	)
 
-	return metadataRender.RenderResourceMetadata(ctx, logicalPath, merged, rawValue)
+	return metadataRender.RenderResourceMetadataWithDescriptor(
+		ctx,
+		logicalPath,
+		merged,
+		rawValue,
+		descriptor,
+	)
 }
 
 func isNotFoundError(err error) bool {

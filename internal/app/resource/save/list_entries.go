@@ -174,12 +174,69 @@ func resolveSaveEntryFromResourceShape(item map[string]any) (saveEntry, bool, er
 	}
 	// payloadValue was already normalized by resolveSaveEntriesForItems.
 	normalizedPayload := payloadValue
+	descriptor, err := resolveSaveEntryPayloadDescriptor(item)
+	if err != nil {
+		return saveEntry{}, false, err
+	}
 
 	return saveEntry{
 		LogicalPath: normalizedPath,
 		Payload:     normalizedPayload,
-		Descriptor:  resource.PayloadDescriptor{},
+		Descriptor:  descriptor,
 	}, true, nil
+}
+
+func resolveSaveEntryPayloadDescriptor(item map[string]any) (resource.PayloadDescriptor, error) {
+	rawDescriptor, found := item["PayloadDescriptor"]
+	if !found {
+		return resource.PayloadDescriptor{}, nil
+	}
+
+	descriptorMap, ok := rawDescriptor.(map[string]any)
+	if !ok {
+		return resource.PayloadDescriptor{}, faults.NewValidationError(
+			`resource list entry "PayloadDescriptor" must be an object`,
+			nil,
+		)
+	}
+
+	payloadType, err := optionalSaveEntryDescriptorField(descriptorMap, "PayloadType")
+	if err != nil {
+		return resource.PayloadDescriptor{}, err
+	}
+	mediaType, err := optionalSaveEntryDescriptorField(descriptorMap, "MediaType")
+	if err != nil {
+		return resource.PayloadDescriptor{}, err
+	}
+	extension, err := optionalSaveEntryDescriptorField(descriptorMap, "Extension")
+	if err != nil {
+		return resource.PayloadDescriptor{}, err
+	}
+	if strings.TrimSpace(payloadType) == "" && strings.TrimSpace(mediaType) == "" && strings.TrimSpace(extension) == "" {
+		return resource.PayloadDescriptor{}, nil
+	}
+
+	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
+		PayloadType: payloadType,
+		MediaType:   mediaType,
+		Extension:   extension,
+	}), nil
+}
+
+func optionalSaveEntryDescriptorField(value map[string]any, key string) (string, error) {
+	raw, found := value[key]
+	if !found || raw == nil {
+		return "", nil
+	}
+
+	text, ok := raw.(string)
+	if !ok {
+		return "", faults.NewValidationError(
+			fmt.Sprintf(`resource list entry "PayloadDescriptor.%s" must be a string`, key),
+			nil,
+		)
+	}
+	return text, nil
 }
 
 func buildLogicalPathForSave(collectionPath string, alias string) (string, error) {

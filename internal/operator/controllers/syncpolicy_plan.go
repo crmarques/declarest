@@ -150,7 +150,7 @@ type repositoryPathKind int
 const (
 	repositoryPathKindNone repositoryPathKind = iota
 	repositoryPathKindPayload
-	repositoryPathKindDefaultsPayload
+	repositoryPathKindCollectionDefaultsPayload
 	repositoryPathKindResourceMetadata
 	repositoryPathKindCollectionMetadata
 	repositoryPathKindUnknownConfig
@@ -176,7 +176,7 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 	}
 
 	// Reserved metadata namespace directories must not be interpreted as payload.
-	if strings.Contains("/"+value, "/_/") && base != "metadata" {
+	if strings.Contains("/"+value, "/_/") && base != "metadata" && base != "defaults" {
 		return "", repositoryPathKindUnknownConfig
 	}
 
@@ -190,7 +190,14 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 		if dir == "" {
 			return "", repositoryPathKindUnknownConfig
 		}
-		return "/" + dir, repositoryPathKindDefaultsPayload
+		if filepath.Base(dir) == "_" {
+			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
+			if collectionDir == "." || collectionDir == "" {
+				return "/", repositoryPathKindCollectionDefaultsPayload
+			}
+			return "/" + collectionDir, repositoryPathKindCollectionDefaultsPayload
+		}
+		return "/" + dir, repositoryPathKindUnknownConfig
 	case "metadata":
 		if filepath.Base(dir) == "_" {
 			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
@@ -218,12 +225,12 @@ func accumulateAddedPath(plan *incrementalSyncPlan, changedPath string, sourcePa
 			plan.requiresFull = true
 		}
 		return
-	case repositoryPathKindPayload, repositoryPathKindDefaultsPayload, repositoryPathKindResourceMetadata:
+	case repositoryPathKindPayload, repositoryPathKindResourceMetadata:
 		if !hasPathOverlap(logicalPath, sourcePath) {
 			return
 		}
 		plan.applyTargets = append(plan.applyTargets, syncApplyTarget{Path: logicalPath, Recursive: false})
-	case repositoryPathKindCollectionMetadata:
+	case repositoryPathKindCollectionMetadata, repositoryPathKindCollectionDefaultsPayload:
 		targetPath, ok := scopedCollectionMetadataTarget(logicalPath, sourcePath)
 		if !ok {
 			return
@@ -246,7 +253,7 @@ func accumulateRemovedPath(plan *incrementalSyncPlan, changedPath string, source
 		if hasPathOverlap(logicalPath, sourcePath) {
 			plan.pruneTargets = append(plan.pruneTargets, logicalPath)
 		}
-	case repositoryPathKindDefaultsPayload, repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata:
+	case repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata, repositoryPathKindCollectionDefaultsPayload:
 		accumulateAddedPath(plan, changedPath, sourcePath)
 	}
 }

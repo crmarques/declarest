@@ -118,7 +118,7 @@ func buildOrchestratorFromResolvedContext(
 
 	var orchestratorOpts []internalorchestrator.Option
 	if preferredFormat := resolvePreferredFormat(metadataSource, resolvedContext); preferredFormat != "" {
-		orchestratorOpts = append(orchestratorOpts, internalorchestrator.WithPreferredFormat(preferredFormat))
+		orchestratorOpts = append(orchestratorOpts, internalorchestrator.WithDefaultFormat(preferredFormat))
 	}
 
 	return internalorchestrator.New(

@@ -3809,7 +3809,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("get_omits_nil_fields", func(t *testing.T) {
+	t.Run("get_expands_unset_fields_with_default_values", func(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
@@ -3830,10 +3830,23 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get error: %v", err)
 		}
-		if strings.Contains(output, "\"operations\": null") ||
-			strings.Contains(output, "\"filter\": null") ||
-			strings.Contains(output, "\"suppress\": null") {
-			t.Fatalf("expected metadata get output without null fields, got %q", output)
+		for _, expected := range []string{
+			"\"requiredAttributes\": []",
+			"\"remoteCollectionPath\": \"\"",
+			"\"payloadType\": \"\"",
+			"\"defaultFormat\": \"\"",
+			"\"secret\": false",
+			"\"externalizedAttributes\": []",
+			"\"defaults\": {",
+			"\"transforms\": []",
+			"\"validate\": {",
+			"\"assertions\": []",
+			"\"schemaRef\": \"\"",
+			"\"body\": null",
+		} {
+			if !strings.Contains(output, expected) {
+				t.Fatalf("expected metadata get output to include %s, got %q", expected, output)
+			}
 		}
 	})
 

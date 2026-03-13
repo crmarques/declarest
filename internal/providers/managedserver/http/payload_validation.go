@@ -3,8 +3,10 @@ package http
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -240,7 +242,7 @@ func augmentSchemaValidationPayload(
 	}
 
 	merged := resource.DeepCopyValue(payloadObject)
-	for _, pointer := range sortedMapKeysAny(derivedFields) {
+	for _, pointer := range slices.Sorted(maps.Keys(derivedFields)) {
 		if _, allowed := allowedPointers[pointer]; !allowed {
 			continue
 		}
@@ -1029,16 +1031,4 @@ func dotPath(base string, field string) string {
 		return "$." + trimmedField
 	}
 	return base + "." + trimmedField
-}
-
-func sortedMapKeysAny(values map[string]any) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

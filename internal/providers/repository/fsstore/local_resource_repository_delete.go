@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crmarques/declarest/internal/providers/fsutil"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )
@@ -26,9 +25,6 @@ func (r *LocalResourceRepository) Delete(_ context.Context, logicalPath string, 
 
 	if files.Resource != nil || files.Defaults != nil {
 		if err := r.removePayloadFile(files.Resource); err != nil {
-			return err
-		}
-		if err := r.removePayloadFile(files.Defaults); err != nil {
 			return err
 		}
 		return nil
@@ -66,15 +62,12 @@ func (r *LocalResourceRepository) deleteCollectionDirect(collectionPath string) 
 				return internalError("failed to resolve collection resource path", relErr)
 			}
 			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
-			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, resourceDir)
+			files, infoErr := r.discoverPayloadFiles(logicalPath)
 			if infoErr != nil {
 				return infoErr
 			}
 			if files.Resource != nil || files.Defaults != nil {
 				if err := r.removePayloadFile(files.Resource); err != nil {
-					return err
-				}
-				if err := r.removePayloadFile(files.Defaults); err != nil {
 					return err
 				}
 			}
@@ -98,7 +91,7 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 				return relErr
 			}
 			logicalPath := "/" + strings.TrimPrefix(filepath.ToSlash(relativeDir), "/")
-			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filePath)
+			files, infoErr := r.discoverPayloadFiles(logicalPath)
 			if infoErr != nil {
 				return infoErr
 			}
@@ -106,9 +99,6 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 				return nil
 			}
 			if err := r.removePayloadFile(files.Resource); err != nil {
-				return err
-			}
-			if err := r.removePayloadFile(files.Defaults); err != nil {
 				return err
 			}
 			return nil
@@ -122,8 +112,4 @@ func (r *LocalResourceRepository) deleteCollectionRecursive(collectionPath strin
 		return internalError("failed to recursively delete collection resources", err)
 	}
 	return nil
-}
-
-func (r *LocalResourceRepository) cleanupEmptyParents(startDir string) error {
-	return fsutil.CleanupEmptyParents(startDir, r.baseDir)
 }

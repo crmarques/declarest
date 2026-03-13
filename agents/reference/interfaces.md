@@ -133,7 +133,7 @@ Invariants:
 3. exact placeholder directives (for example `{{secret .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
 4. opaque binary payloads MUST use `resource.BinaryValue` instead of raw `[]byte`.
 5. when a whole resource payload is persisted as the exact placeholder `{{secret .}}`, workflow-specific resolution MUST treat `.` as the root payload scope for that logical path.
-6. repository-backed desired-state resolution MAY compose one effective merge-capable object payload from sibling `defaults.<ext>` and `resource.<ext>` files; when both files exist, object fields MUST deep-merge, arrays MUST replace, explicit `resource.<ext>` values MUST win, supported defaults-sidecar codecs are `json|yaml|ini|properties`, and non-object or unsupported payload types MUST fail defaults-sidecar validation instead of being merged implicitly.
+6. repository-backed desired-state resolution MAY compose one effective merge-capable object payload from metadata-root `defaults.<ext>` overlays plus `resource.<ext>` files; when both files exist, object fields MUST deep-merge, arrays MUST replace, explicit `resource.<ext>` values MUST win, supported defaults-sidecar codecs are `json|yaml|ini|properties`, and non-object or unsupported payload types MUST fail defaults-sidecar validation instead of being merged implicitly.
 
 ### Type: `resource.BinaryValue`
 Represents opaque binary payload content.
@@ -149,7 +149,7 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `preferredFormat` persistence hint; when omitted, `id` and `alias` default to `/id` for identity resolution.
+1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `defaultFormat` persistence hint; `defaultFormat` MUST accept the supported payload formats plus `any`, and when omitted `id` and `alias` default to `/id` for identity resolution.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
 3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
 4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
@@ -209,8 +209,9 @@ Required fields:
 2. `CollectionPath`.
 3. `LocalAlias`.
 4. `RemoteID`.
-5. `Metadata`.
-6. `Payload`.
+5. `PayloadDescriptor`.
+6. `Metadata`.
+7. `Payload`.
 
 ### Type: `metadata.Operation`
 Represents the supported operation identifiers.
@@ -444,8 +445,8 @@ Method families:
 1. `Save/Get/Delete(policy)/List(policy)/Exists`.
 
 Invariants:
-1. `Get` MUST return the effective desired payload for one logical resource, including deterministic repository-sidecar composition such as `defaults.<ext>` when supported by the active backend.
-2. When a repository backend supports sibling defaults sidecars, `Save` MUST preserve that layout by compacting the effective payload against `defaults.<ext>` before writing `resource.<ext>` instead of flattening defaulted fields back into the override file.
+1. `Get` MUST return the effective desired payload for one logical resource, including deterministic defaults-sidecar composition such as metadata-root `defaults.<ext>` overlays when supported by the active backend.
+2. When a repository backend supports defaults sidecars, `Save` MUST preserve that layout by compacting the effective payload against the resolved `defaults.<ext>` overlay before writing `resource.<ext>` instead of flattening defaulted fields back into the override file.
 
 ### Interface: `repository.ResourceDefaultsStore`
 Responsibilities:
@@ -457,8 +458,8 @@ Method families:
 2. `SaveDefaults`.
 
 Invariants:
-1. `GetDefaults` MUST return only the raw defaults object stored in `defaults.<ext>` and MUST NOT merge values from `resource.<ext>`.
-2. `SaveDefaults` MUST preserve or infer a merge-capable payload descriptor (`json|yaml|ini|properties`) from explicit input, existing defaults file, sibling `resource.<ext>`, or metadata before writing `defaults.<ext>`.
+1. `GetDefaults` MUST return only the raw defaults object stored in the resolved defaults sidecar `defaults.<ext>` and MUST NOT merge values from `resource.<ext>`.
+2. `SaveDefaults` MUST preserve or infer a merge-capable payload descriptor (`json|yaml|ini|properties`) from explicit input, existing defaults file, metadata-sidecar format hints, sibling `resource.<ext>`, or metadata before writing `defaults.<ext>`.
 3. Saving an empty defaults object MAY remove the physical `defaults.<ext>` file, but subsequent `resource defaults get` workflows MUST still surface an empty object for supported payload types.
 
 ### Interface: `repository.ResourceArtifactStore`

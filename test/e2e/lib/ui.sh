@@ -353,7 +353,7 @@ ui_execution_parameter_lines() {
 
   ui_execution_parameter_line 'profile' "${E2E_PROFILE:-n/a}" "$(ui_execution_parameter_source 'profile')"
   ui_execution_parameter_line 'platform' "${E2E_PLATFORM:-n/a}" "$(ui_execution_parameter_source 'platform')"
-  ui_execution_parameter_line 'metadata-type' "${E2E_METADATA:-n/a}" "$(ui_execution_parameter_source 'metadata')"
+  ui_execution_parameter_line 'metadata-source' "${E2E_METADATA:-n/a}" "$(ui_execution_parameter_source 'metadata')"
   ui_execution_parameter_line 'managed-server' "${E2E_MANAGED_SERVER:-n/a}" "$(ui_execution_parameter_source 'managed-server')"
   ui_execution_parameter_line 'managed-server-connection' "${E2E_MANAGED_SERVER_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'managed-server-connection')"
   ui_execution_parameter_line 'managed-server-auth-type' "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" "$(ui_execution_parameter_source 'managed-server-auth-type')"

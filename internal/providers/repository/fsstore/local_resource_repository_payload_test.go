@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/faults"
@@ -130,7 +131,7 @@ func TestLocalResourceRepositoryGetMergesDefaultsSidecar(t *testing.T) {
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 labels:
   team: platform
 spec:
@@ -162,13 +163,13 @@ spec:
 	}
 }
 
-func TestLocalResourceRepositoryDefaultsOnlyResourceIsVisible(t *testing.T) {
+func TestLocalResourceRepositoryCollectionDefaultsDoNotMakeResourceVisible(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 spec:
   enabled: true
 `)
@@ -177,16 +178,33 @@ spec:
 	if err != nil {
 		t.Fatalf("Exists returned error: %v", err)
 	}
-	if !exists {
-		t.Fatal("expected defaults-only resource to exist")
+	if exists {
+		t.Fatal("expected collection defaults alone to not make the resource exist")
 	}
 
 	items, err := repo.List(context.Background(), "/customers", repository.ListPolicy{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
-	if len(items) != 1 || items[0].LogicalPath != "/customers/acme" {
+	if len(items) != 0 {
 		t.Fatalf("unexpected list items: %#v", items)
+	}
+}
+
+func TestLocalResourceRepositoryRejectsLegacyResourceDefaultsSidecar(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), "spec:\n  enabled: true\n")
+
+	_, err := repo.Get(context.Background(), "/customers/acme")
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "unsupported per-resource defaults files") {
+		t.Fatalf("expected legacy defaults error message, got %v", err)
 	}
 }
 
@@ -196,7 +214,7 @@ func TestLocalResourceRepositorySaveCompactsAgainstDefaultsSidecar(t *testing.T)
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 labels:
   team: platform
 spec:
@@ -252,7 +270,7 @@ func TestLocalResourceRepositorySaveRemovesRedundantOverrideFile(t *testing.T) {
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 spec:
   enabled: true
 `)
@@ -272,18 +290,22 @@ spec:
 		t.Fatalf("Save returned error: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "resource.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("expected redundant resource override to be removed, got stat err %v", err)
+	resourceBytes, err := os.ReadFile(filepath.Join(root, "customers", "acme", "resource.yaml"))
+	if err != nil {
+		t.Fatalf("expected explicit empty override file, got %v", err)
+	}
+	if string(resourceBytes) != "{}\n" {
+		t.Fatalf("unexpected explicit empty override contents: %q", string(resourceBytes))
 	}
 }
 
-func TestLocalResourceRepositoryDeleteRemovesDefaultsSidecar(t *testing.T) {
+func TestLocalResourceRepositoryDeletePreservesCollectionDefaultsSidecar(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 spec:
   enabled: true
 `)
@@ -296,26 +318,30 @@ spec:
 		t.Fatalf("Delete returned error: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(root, "customers", "acme", "defaults.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("expected defaults sidecar to be removed, got stat err %v", err)
+	if _, err := os.Stat(filepath.Join(root, "customers", "_", "defaults.yaml")); err != nil {
+		t.Fatalf("expected collection defaults sidecar to remain, got stat err %v", err)
 	}
 }
 
-func TestLocalResourceRepositoryRejectsMismatchedDefaultsSidecarType(t *testing.T) {
+func TestLocalResourceRepositoryAcceptsJSONResourceWithYAMLCollectionDefaults(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 spec:
   enabled: true
 `)
 	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.json"), `{"spec":{"enabled":false}}`)
 
-	_, err := repo.Get(context.Background(), "/customers/acme")
-	if !faults.IsCategory(err, faults.ValidationError) {
-		t.Fatalf("expected validation error, got %v", err)
+	content, err := repo.Get(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("expected JSON resource + YAML defaults to be accepted, got %v", err)
+	}
+	want := map[string]any{"spec": map[string]any{"enabled": false}}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected merged payload: got %#v want %#v", content.Value, want)
 	}
 }
 
@@ -325,7 +351,7 @@ func TestLocalResourceRepositoryGetDefaultsReturnsRawSidecar(t *testing.T) {
 	root := t.TempDir()
 	repo := NewLocalResourceRepository(root)
 
-	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "defaults.yaml"), `
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), `
 labels:
   team: platform
 `)
@@ -345,7 +371,105 @@ labels:
 	}
 }
 
-func TestLocalResourceRepositorySaveDefaultsUsesResourceDescriptor(t *testing.T) {
+func TestLocalResourceRepositorySaveDefaultsUsesCollectionResourceDescriptor(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "metadata.yaml"), "resource:\n  id: '{{/id}}'\n")
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.json"), "{\"owner\":\"platform\"}\n")
+
+	if err := repo.SaveDefaults(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"region": "us-east-1",
+		},
+	}); err != nil {
+		t.Fatalf("SaveDefaults returned error: %v", err)
+	}
+
+	defaultsBytes, err := os.ReadFile(filepath.Join(root, "customers", "_", "defaults.json"))
+	if err != nil {
+		t.Fatalf("expected defaults.json to be written in metadata selector dir: %v", err)
+	}
+	if !strings.Contains(string(defaultsBytes), `"region": "us-east-1"`) {
+		t.Fatalf("unexpected defaults.json contents: %q", string(defaultsBytes))
+	}
+	if _, err := os.Stat(filepath.Join(root, "customers", "_", "defaults.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected metadata format hint to not force defaults.yaml, got stat err %v", err)
+	}
+}
+
+func TestLocalResourceRepositorySaveDefaultsUsesSeparateMetadataBaseDir(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	metadataRoot := t.TempDir()
+	repo := NewLocalResourceRepository(root, metadataRoot)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.yaml"), "owner: platform\n")
+
+	if err := repo.SaveDefaults(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"region": "us-east-1",
+		},
+	}); err != nil {
+		t.Fatalf("SaveDefaults returned error: %v", err)
+	}
+
+	defaultsPath := filepath.Join(metadataRoot, "customers", "_", "defaults.yaml")
+	defaultsBytes, err := os.ReadFile(defaultsPath)
+	if err != nil {
+		t.Fatalf("expected defaults.yaml in separate metadata base dir: %v", err)
+	}
+	if string(defaultsBytes) != "region: us-east-1\n" {
+		t.Fatalf("unexpected defaults.yaml contents: %q", string(defaultsBytes))
+	}
+	if _, err := os.Stat(filepath.Join(root, "customers", "_", "defaults.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected repository root to not receive defaults.yaml, got stat err %v", err)
+	}
+
+	defaultsContent, err := repo.GetDefaults(context.Background(), "/customers/acme")
+	if err != nil {
+		t.Fatalf("GetDefaults returned error: %v", err)
+	}
+	wantDefaults := map[string]any{"region": "us-east-1"}
+	if !reflect.DeepEqual(defaultsContent.Value, wantDefaults) {
+		t.Fatalf("unexpected defaults payload: got %#v want %#v", defaultsContent.Value, wantDefaults)
+	}
+}
+
+func TestLocalResourceRepositorySaveDefaultsPreservesExistingDescriptor(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := NewLocalResourceRepository(root)
+
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "_", "defaults.yaml"), "region: us-east-1\n")
+	writeRepositoryTestFile(t, filepath.Join(root, "customers", "acme", "resource.json"), "{\"owner\":\"platform\"}\n")
+
+	if err := repo.SaveDefaults(context.Background(), "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"region": "us-west-2",
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}); err != nil {
+		t.Fatalf("SaveDefaults returned error: %v", err)
+	}
+
+	defaultsBytes, err := os.ReadFile(filepath.Join(root, "customers", "_", "defaults.yaml"))
+	if err != nil {
+		t.Fatalf("expected existing defaults.yaml to be preserved: %v", err)
+	}
+	if string(defaultsBytes) != "region: us-west-2\n" {
+		t.Fatalf("unexpected defaults.yaml contents: %q", string(defaultsBytes))
+	}
+	if _, err := os.Stat(filepath.Join(root, "customers", "_", "defaults.json")); !os.IsNotExist(err) {
+		t.Fatalf("expected existing defaults sidecar codec to be preserved, got stat err %v", err)
+	}
+}
+
+func TestLocalResourceRepositorySaveDefaultsUsesResourceDescriptorWhenNonJSONYAML(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -361,9 +485,9 @@ func TestLocalResourceRepositorySaveDefaultsUsesResourceDescriptor(t *testing.T)
 		t.Fatalf("SaveDefaults returned error: %v", err)
 	}
 
-	defaultsBytes, err := os.ReadFile(filepath.Join(root, "customers", "acme", "defaults.properties"))
+	defaultsBytes, err := os.ReadFile(filepath.Join(root, "customers", "_", "defaults.properties"))
 	if err != nil {
-		t.Fatalf("expected defaults.properties to be written: %v", err)
+		t.Fatalf("expected defaults.properties to be written in metadata selector dir: %v", err)
 	}
 	if string(defaultsBytes) != "region=us-east-1\n" {
 		t.Fatalf("unexpected defaults.properties contents: %q", string(defaultsBytes))

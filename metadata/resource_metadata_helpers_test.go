@@ -56,24 +56,24 @@ func TestMergeResourceMetadataOverlaysWholeResourceSecretPointer(t *testing.T) {
 	}
 }
 
-func TestCloneResourceMetadataPreservesPreferredFormat(t *testing.T) {
+func TestCloneResourceMetadataPreservesDefaultFormat(t *testing.T) {
 	t.Parallel()
 
-	cloned := CloneResourceMetadata(ResourceMetadata{PreferredFormat: "yaml"})
-	if cloned.PreferredFormat != "yaml" {
-		t.Fatalf("expected cloned preferredFormat yaml, got %#v", cloned)
+	cloned := CloneResourceMetadata(ResourceMetadata{DefaultFormat: "yaml"})
+	if cloned.DefaultFormat != "yaml" {
+		t.Fatalf("expected cloned defaultFormat yaml, got %#v", cloned)
 	}
 }
 
-func TestMergeResourceMetadataOverlaysPreferredFormat(t *testing.T) {
+func TestMergeResourceMetadataOverlaysDefaultFormat(t *testing.T) {
 	t.Parallel()
 
 	merged := MergeResourceMetadata(
-		ResourceMetadata{PreferredFormat: "json"},
-		ResourceMetadata{PreferredFormat: "yaml"},
+		ResourceMetadata{DefaultFormat: "json"},
+		ResourceMetadata{DefaultFormat: "yaml"},
 	)
-	if merged.PreferredFormat != "yaml" {
-		t.Fatalf("expected merged preferredFormat yaml, got %#v", merged)
+	if merged.DefaultFormat != "yaml" {
+		t.Fatalf("expected merged defaultFormat yaml, got %#v", merged)
 	}
 }
 
@@ -101,5 +101,126 @@ func TestMergeResourceMetadataOverlaysRequiredAttributes(t *testing.T) {
 	)
 	if !reflect.DeepEqual(merged.RequiredAttributes, []string{"/realm", "/clientId"}) {
 		t.Fatalf("expected merged requiredAttributes to use overlay, got %#v", merged.RequiredAttributes)
+	}
+}
+
+func TestHasResourceMetadataDirectivesRecognizesNonIdentityOverrides(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		metadata ResourceMetadata
+	}{
+		{
+			name:     "required_attributes",
+			metadata: ResourceMetadata{RequiredAttributes: []string{}},
+		},
+		{
+			name:     "payload_type",
+			metadata: ResourceMetadata{PayloadType: "text"},
+		},
+		{
+			name:     "default_format",
+			metadata: ResourceMetadata{DefaultFormat: "yaml"},
+		},
+		{
+			name:     "externalized_attributes",
+			metadata: ResourceMetadata{ExternalizedAttributes: []ExternalizedAttribute{}},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if !HasResourceMetadataDirectives(tt.metadata) {
+				t.Fatalf("expected metadata directives to be detected for %#v", tt.metadata)
+			}
+		})
+	}
+}
+
+func TestCloneResourceMetadataDeepCopiesBody(t *testing.T) {
+	t.Parallel()
+
+	originalBody := map[string]any{"key": "original"}
+	original := ResourceMetadata{
+		Operations: map[string]OperationSpec{
+			"create": {Body: originalBody},
+		},
+	}
+	cloned := CloneResourceMetadata(original)
+
+	clonedBody := cloned.Operations["create"].Body.(map[string]any)
+	clonedBody["key"] = "mutated"
+
+	if original.Operations["create"].Body.(map[string]any)["key"] != "original" {
+		t.Fatal("expected original Body to remain unchanged after mutating clone")
+	}
+}
+
+func TestMergeOperationSpecDeepCopiesBody(t *testing.T) {
+	t.Parallel()
+
+	baseBody := map[string]any{"field": "base"}
+	base := OperationSpec{Body: baseBody}
+	overlay := OperationSpec{}
+
+	merged := MergeOperationSpec(base, overlay)
+
+	mergedBody := merged.Body.(map[string]any)
+	mergedBody["field"] = "mutated"
+
+	if baseBody["field"] != "base" {
+		t.Fatal("expected base Body to remain unchanged after mutating merged result")
+	}
+}
+
+func TestMergeOperationSpecEmptyMapClearsInheritedHeaders(t *testing.T) {
+	t.Parallel()
+
+	base := OperationSpec{Headers: map[string]string{"X-Custom": "value"}}
+	overlay := OperationSpec{Headers: map[string]string{}}
+
+	merged := MergeOperationSpec(base, overlay)
+	if len(merged.Headers) != 0 {
+		t.Fatalf("expected empty overlay headers to clear inherited headers, got %v", merged.Headers)
+	}
+}
+
+func TestMergeOperationSpecNilMapPreservesInheritedHeaders(t *testing.T) {
+	t.Parallel()
+
+	base := OperationSpec{Headers: map[string]string{"X-Custom": "value"}}
+	overlay := OperationSpec{Headers: nil}
+
+	merged := MergeOperationSpec(base, overlay)
+	if merged.Headers["X-Custom"] != "value" {
+		t.Fatalf("expected nil overlay headers to preserve inherited headers, got %v", merged.Headers)
+	}
+}
+
+func TestMergeResourceMetadataStringFieldCannotBeClearedToEmpty(t *testing.T) {
+	t.Parallel()
+
+	base := ResourceMetadata{ID: "{{/id}}"}
+	overlay := ResourceMetadata{ID: ""}
+
+	merged := MergeResourceMetadata(base, overlay)
+	if merged.ID != "{{/id}}" {
+		t.Fatalf("expected empty overlay ID to preserve base ID, got %q", merged.ID)
+	}
+}
+
+func TestMergeResourceMetadataSecretExplicitFalseOverridesTrue(t *testing.T) {
+	t.Parallel()
+
+	base := ResourceMetadata{Secret: boolPointer(true)}
+	overlay := ResourceMetadata{Secret: boolPointer(false)}
+
+	merged := MergeResourceMetadata(base, overlay)
+	if merged.Secret == nil || *merged.Secret != false {
+		t.Fatalf("expected explicit false to override true, got %v", merged.Secret)
 	}
 }

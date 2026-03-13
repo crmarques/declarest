@@ -394,12 +394,3 @@ func collectionPathForLogicalPath(logicalPath string) string {
 	}
 	return collectionPath
 }
-
-func sortedOperationKeys(values map[string]metadatadomain.OperationSpec) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}

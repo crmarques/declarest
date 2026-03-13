@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ type payloadFileInfo struct {
 	Path       string
 	Name       string
 	Descriptor resource.PayloadDescriptor
+	Shared     bool
 }
 
 type resourcePayloadFiles struct {
@@ -26,6 +28,9 @@ type resourcePayloadFiles struct {
 func (f resourcePayloadFiles) primary() *payloadFileInfo {
 	if f.Resource != nil {
 		return f.Resource
+	}
+	if f.Defaults != nil && f.Defaults.Shared {
+		return nil
 	}
 	return f.Defaults
 }
@@ -46,7 +51,23 @@ func (r *LocalResourceRepository) discoverPayloadFiles(logicalPath string) (reso
 	if err != nil {
 		return resourcePayloadFiles{}, err
 	}
-	return r.payloadFilesInfoFromDir(logicalPath, resourceDir)
+	files, err := r.payloadFilesInfoFromDir(logicalPath, resourceDir)
+	if err != nil {
+		return resourcePayloadFiles{}, err
+	}
+
+	metadataDefaults, err := r.metadataDefaultsFileInfo(logicalPath)
+	if err != nil {
+		return resourcePayloadFiles{}, err
+	}
+	if metadataDefaults != nil {
+		files.Defaults = metadataDefaults
+	}
+
+	if err := validateDefaultsPayloadFiles(logicalPath, files); err != nil {
+		return resourcePayloadFiles{}, err
+	}
+	return files, nil
 }
 
 func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, dirPath string) (resourcePayloadFiles, error) {
@@ -59,7 +80,7 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 	}
 
 	resourceCandidates := make([]string, 0, 1)
-	defaultCandidates := make([]string, 0, 1)
+	legacyDefaultsCandidates := make([]string, 0, 1)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -68,7 +89,7 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 		case strings.HasPrefix(entry.Name(), "resource."):
 			resourceCandidates = append(resourceCandidates, entry.Name())
 		case strings.HasPrefix(entry.Name(), "defaults."):
-			defaultCandidates = append(defaultCandidates, entry.Name())
+			legacyDefaultsCandidates = append(legacyDefaultsCandidates, entry.Name())
 		}
 	}
 
@@ -76,19 +97,56 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 	if err != nil {
 		return resourcePayloadFiles{}, err
 	}
-	defaultsInfo, err := payloadFileInfoFromCandidates(logicalPath, dirPath, "defaults", defaultCandidates)
-	if err != nil {
-		return resourcePayloadFiles{}, err
+	if len(legacyDefaultsCandidates) > 0 {
+		sort.Strings(legacyDefaultsCandidates)
+		return resourcePayloadFiles{}, faults.NewValidationError(
+			fmt.Sprintf(
+				"resource %q uses unsupported per-resource defaults files: %s; move defaults to %s",
+				logicalPath,
+				strings.Join(legacyDefaultsCandidates, ", "),
+				path.Join(collectionSelectorPath(logicalPath), "_", "defaults.<ext>"),
+			),
+			nil,
+		)
 	}
 
 	files := resourcePayloadFiles{
 		Resource: resourceInfo,
-		Defaults: defaultsInfo,
-	}
-	if err := validateDefaultsPayloadFiles(logicalPath, files); err != nil {
-		return resourcePayloadFiles{}, err
 	}
 	return files, nil
+}
+
+func (r *LocalResourceRepository) metadataDefaultsFileInfo(logicalPath string) (*payloadFileInfo, error) {
+	defaultsDir, err := r.collectionDefaultsDirPath(logicalPath)
+	if err != nil {
+		return nil, err
+	}
+	info, err := payloadFileInfoFromCandidates(logicalPath, defaultsDir, "defaults", payloadFileCandidatesFromDir(defaultsDir, "defaults"))
+	if err != nil {
+		return nil, err
+	}
+	if info != nil {
+		info.Shared = true
+	}
+	return info, nil
+}
+
+func payloadFileCandidatesFromDir(dirPath string, prefix string) []string {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil
+	}
+
+	candidates := make([]string, 0, 1)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), prefix+".") {
+			candidates = append(candidates, entry.Name())
+		}
+	}
+	return candidates
 }
 
 func (r *LocalResourceRepository) resolvePayloadTarget(
@@ -126,7 +184,10 @@ func (r *LocalResourceRepository) resolveDefaultsTarget(
 		return payloadFileInfo{}, resourcePayloadFiles{}, err
 	}
 
-	desired := desiredDefaultsPayloadDescriptor(content, files)
+	desired, err := r.desiredDefaultsPayloadDescriptor(logicalPath, content, files)
+	if err != nil {
+		return payloadFileInfo{}, resourcePayloadFiles{}, err
+	}
 	if !resource.SupportsDefaultsOverlayPayloadType(desired.PayloadType) {
 		return payloadFileInfo{}, resourcePayloadFiles{}, faults.NewValidationError(
 			fmt.Sprintf(
@@ -140,7 +201,7 @@ func (r *LocalResourceRepository) resolveDefaultsTarget(
 		return payloadFileInfo{}, resourcePayloadFiles{}, err
 	}
 
-	canonicalPath, err := r.collectionDirPath(logicalPath)
+	canonicalPath, err := r.collectionDefaultsDirPath(logicalPath)
 	if err != nil {
 		return payloadFileInfo{}, resourcePayloadFiles{}, err
 	}
@@ -149,6 +210,7 @@ func (r *LocalResourceRepository) resolveDefaultsTarget(
 		Path:       filepath.Join(canonicalPath, "defaults"+desired.Extension),
 		Name:       "defaults" + desired.Extension,
 		Descriptor: desired,
+		Shared:     true,
 	}
 	return target, files, nil
 }
@@ -169,17 +231,63 @@ func desiredPayloadDescriptor(content resource.Content, existing resourcePayload
 	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
 }
 
-func desiredDefaultsPayloadDescriptor(content resource.Content, existing resourcePayloadFiles) resource.PayloadDescriptor {
-	if resource.IsPayloadDescriptorExplicit(content.Descriptor) {
-		return resource.NormalizePayloadDescriptor(content.Descriptor)
-	}
+func (r *LocalResourceRepository) desiredDefaultsPayloadDescriptor(
+	logicalPath string,
+	content resource.Content,
+	existing resourcePayloadFiles,
+) (resource.PayloadDescriptor, error) {
 	if existing.Defaults != nil {
-		return existing.Defaults.Descriptor
+		return existing.Defaults.Descriptor, nil
+	}
+	if resource.IsPayloadDescriptorExplicit(content.Descriptor) {
+		return resource.NormalizePayloadDescriptor(content.Descriptor), nil
 	}
 	if existing.Resource != nil {
-		return existing.Resource.Descriptor
+		return existing.Resource.Descriptor, nil
 	}
-	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+
+	if descriptor, ok, err := r.metadataDefaultsDescriptorHint(logicalPath, existing.Resource); err != nil {
+		return resource.PayloadDescriptor{}, err
+	} else if ok {
+		return descriptor, nil
+	}
+
+	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), nil
+}
+
+func (r *LocalResourceRepository) metadataDefaultsDescriptorHint(
+	logicalPath string,
+	resourceInfo *payloadFileInfo,
+) (resource.PayloadDescriptor, bool, error) {
+	defaultsDir, err := r.collectionDefaultsDirPath(logicalPath)
+	if err != nil {
+		return resource.PayloadDescriptor{}, false, err
+	}
+
+	for _, candidate := range []string{"metadata.yaml", "metadata.json"} {
+		descriptor, ok := resource.PayloadDescriptorForFileName(candidate)
+		if !ok {
+			continue
+		}
+		candidatePath := filepath.Join(defaultsDir, candidate)
+		if _, err := os.Stat(candidatePath); err == nil {
+			if resourceInfo == nil || resource.ValidateDefaultsSidecarDescriptor(descriptor, resourceInfo.Descriptor) == nil {
+				return descriptor, true, nil
+			}
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return resource.PayloadDescriptor{}, false, internalError("failed to inspect metadata defaults format hint", err)
+		}
+	}
+
+	if resourceInfo == nil {
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), true, nil
+	}
+	switch resource.NormalizePayloadDescriptor(resourceInfo.Descriptor).PayloadType {
+	case resource.PayloadTypeJSON, resource.PayloadTypeYAML:
+		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), true, nil
+	default:
+		return resource.PayloadDescriptor{}, false, nil
+	}
 }
 
 func payloadFileInfoFromCandidates(

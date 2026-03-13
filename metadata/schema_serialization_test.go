@@ -651,12 +651,12 @@ func TestResourceMetadataUnmarshalJSONPromotesMediaHeadersFromHTTPHeaders(t *tes
 	}
 }
 
-func TestResourceMetadataPreferredFormatJSONRoundtrip(t *testing.T) {
+func TestResourceMetadataDefaultFormatJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
-		ID:              "{{/id}}",
-		PreferredFormat: "yaml",
+		ID:            "{{/id}}",
+		DefaultFormat: "yaml",
 	}
 
 	encoded, err := json.Marshal(original)
@@ -669,15 +669,15 @@ func TestResourceMetadataPreferredFormatJSONRoundtrip(t *testing.T) {
 		t.Fatalf("unmarshal returned error: %v", err)
 	}
 
-	if decoded.PreferredFormat != "yaml" {
-		t.Fatalf("expected preferredFormat=yaml, got %q", decoded.PreferredFormat)
+	if decoded.DefaultFormat != "yaml" {
+		t.Fatalf("expected defaultFormat=yaml, got %q", decoded.DefaultFormat)
 	}
 	if decoded.ID != "{{/id}}" {
 		t.Fatalf("expected id={{/id}}, got %q", decoded.ID)
 	}
 }
 
-func TestResourceMetadataPreferredFormatOmittedWhenEmpty(t *testing.T) {
+func TestResourceMetadataDefaultFormatOmittedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
@@ -698,7 +698,16 @@ func TestResourceMetadataPreferredFormatOmittedWhenEmpty(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected resource object, got %#v", raw["resource"])
 	}
-	if _, found := resourceObj["preferredFormat"]; found {
-		t.Fatalf("expected preferredFormat to be omitted when empty, got %#v", resourceObj)
+	if _, found := resourceObj["defaultFormat"]; found {
+		t.Fatalf("expected defaultFormat to be omitted when empty, got %#v", resourceObj)
+	}
+}
+
+func TestResourceMetadataPreferredFormatIsRejected(t *testing.T) {
+	t.Parallel()
+
+	_, err := DecodeResourceMetadataJSON([]byte(`{"resource":{"preferredFormat":"yaml"}}`))
+	if err == nil {
+		t.Fatal("expected preferredFormat to be rejected")
 	}
 }

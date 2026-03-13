@@ -22,7 +22,13 @@ func RenderResourceMetadata(
 	metadataValue metadata.ResourceMetadata,
 	payload resource.Value,
 ) (metadata.ResourceMetadata, error) {
-	return RenderResourceMetadataWithFormat(ctx, logicalPath, metadataValue, payload, "json")
+	return RenderResourceMetadataWithDescriptor(
+		ctx,
+		logicalPath,
+		metadataValue,
+		payload,
+		resource.PayloadDescriptor{},
+	)
 }
 
 // RenderResourceMetadataWithFormat renders metadata using the provided payload
@@ -33,6 +39,24 @@ func RenderResourceMetadataWithFormat(
 	metadataValue metadata.ResourceMetadata,
 	payload resource.Value,
 	payloadType string,
+) (metadata.ResourceMetadata, error) {
+	return RenderResourceMetadataWithDescriptor(
+		ctx,
+		logicalPath,
+		metadataValue,
+		payload,
+		resource.PayloadDescriptor{PayloadType: payloadType},
+	)
+}
+
+// RenderResourceMetadataWithDescriptor renders metadata using the provided
+// payload descriptor for payload-aware template helpers.
+func RenderResourceMetadataWithDescriptor(
+	ctx context.Context,
+	logicalPath string,
+	metadataValue metadata.ResourceMetadata,
+	payload resource.Value,
+	descriptor resource.PayloadDescriptor,
 ) (metadata.ResourceMetadata, error) {
 	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
 	if err != nil {
@@ -51,26 +75,19 @@ func RenderResourceMetadataWithFormat(
 
 	defaultCollection := defaultCollectionPath(normalizedPath)
 	resolvedResource := resource.Resource{
-		LogicalPath:    normalizedPath,
-		CollectionPath: defaultCollection,
-		LocalAlias:     alias,
-		RemoteID:       remoteID,
-		Payload:        normalizedPayload,
+		LogicalPath:       normalizedPath,
+		CollectionPath:    defaultCollection,
+		LocalAlias:        alias,
+		RemoteID:          remoteID,
+		Payload:           normalizedPayload,
+		PayloadDescriptor: descriptor,
 	}
 
 	scope, err := templatescope.BuildResourceScope(resolvedResource, metadataValue)
 	if err != nil {
 		return metadata.ResourceMetadata{}, err
 	}
-	descriptor := resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType})
-	scope["payloadType"] = descriptor.PayloadType
-	scope["payloadMediaType"] = descriptor.MediaType
-	scope["payloadExtension"] = descriptor.Extension
-	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(descriptor.MediaType) != "" {
-		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
-			scope["contentType"] = descriptor.MediaType
-		}
-	}
+	metadata.ApplyPayloadTemplateScope(scope, metadataValue, normalizedPayload, descriptor)
 
 	resolvedCollectionPath, err := resolveCollectionPath(metadataValue.RemoteCollectionPath, scope)
 	if err != nil {

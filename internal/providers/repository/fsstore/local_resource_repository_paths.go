@@ -10,6 +10,13 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
+func (r *LocalResourceRepository) defaultsBaseDir() string {
+	if strings.TrimSpace(r.metadataBaseDir) != "" {
+		return r.metadataBaseDir
+	}
+	return r.baseDir
+}
+
 func (r *LocalResourceRepository) canonicalPayloadFilePath(logicalPath string, payloadType string) (string, error) {
 	if r.baseDir == "" {
 		return "", faults.NewValidationError("repository base directory must not be empty", nil)
@@ -29,6 +36,41 @@ func (r *LocalResourceRepository) canonicalPayloadFilePath(logicalPath string, p
 		return "", faults.NewValidationError("logical path escapes repository base directory", nil)
 	}
 	return filePath, nil
+}
+
+func collectionSelectorPath(logicalPath string) string {
+	trimmed := strings.TrimSpace(logicalPath)
+	if trimmed == "" || trimmed == "/" {
+		return "/"
+	}
+	parent := path.Dir(trimmed)
+	if parent == "." || parent == "" {
+		return "/"
+	}
+	return parent
+}
+
+func (r *LocalResourceRepository) collectionDefaultsDirPath(logicalPath string) (string, error) {
+	baseDir := r.defaultsBaseDir()
+	if baseDir == "" {
+		return "", faults.NewValidationError("metadata base directory must not be empty", nil)
+	}
+
+	selectorPath := collectionSelectorPath(logicalPath)
+	if selectorPath == "/" {
+		targetPath := filepath.Join(baseDir, "_")
+		if !fsutil.IsPathUnderRoot(baseDir, targetPath) {
+			return "", faults.NewValidationError("logical path escapes metadata base directory", nil)
+		}
+		return targetPath, nil
+	}
+
+	relative := strings.TrimPrefix(selectorPath, "/")
+	targetPath := filepath.Join(baseDir, filepath.FromSlash(relative), "_")
+	if !fsutil.IsPathUnderRoot(baseDir, targetPath) {
+		return "", faults.NewValidationError("logical path escapes metadata base directory", nil)
+	}
+	return targetPath, nil
 }
 
 func (r *LocalResourceRepository) collectionDirPath(logicalPath string) (string, error) {

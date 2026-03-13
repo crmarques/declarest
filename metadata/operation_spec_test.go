@@ -725,6 +725,9 @@ func TestInferFromOpenAPIInfersOctetStreamPayloadType(t *testing.T) {
 	if inferred.PayloadType != resource.PayloadTypeOctetStream {
 		t.Fatalf("expected octet-stream payload type, got %q", inferred.PayloadType)
 	}
+	if inferred.DefaultFormat != resource.PayloadTypeOctetStream {
+		t.Fatalf("expected octet-stream defaultFormat, got %q", inferred.DefaultFormat)
+	}
 	if inferred.Operations[string(OperationCreate)].Validate != nil {
 		t.Fatalf("expected binary create validation to be omitted, got %#v", inferred.Operations[string(OperationCreate)].Validate)
 	}
@@ -950,18 +953,121 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIPayloadTypeDefaults(t *testi
 	}
 }
 
-func TestCompactInferredMetadataDefaultsPreservesPreferredFormat(t *testing.T) {
+func TestInferFromOpenAPISpecUsesAnyDefaultFormatForMixedPayloadTypes(t *testing.T) {
+	t.Parallel()
+
+	openAPISpec := map[string]any{
+		"paths": map[string]any{
+			"/files": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"type": "array",
+										"items": map[string]any{
+											"type": "object",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"post": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"type": "object",
+								},
+							},
+						},
+					},
+				},
+			},
+			"/files/{id}": map[string]any{
+				"get": map[string]any{
+					"responses": map[string]any{
+						"200": map[string]any{
+							"content": map[string]any{
+								"application/xml": map[string]any{
+									"schema": map[string]any{
+										"type": "string",
+									},
+								},
+							},
+						},
+					},
+				},
+				"put": map[string]any{
+					"requestBody": map[string]any{
+						"content": map[string]any{
+							"application/xml": map[string]any{
+								"schema": map[string]any{
+									"type": "string",
+								},
+							},
+						},
+					},
+				},
+				"delete": map[string]any{},
+			},
+		},
+	}
+
+	inferred, err := InferFromOpenAPISpec(context.Background(), "/files", InferenceRequest{}, openAPISpec)
+	if err != nil {
+		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
+	}
+	if inferred.PayloadType != "" {
+		t.Fatalf("expected mixed payload types to omit payloadType, got %q", inferred.PayloadType)
+	}
+	if inferred.DefaultFormat != ResourceDefaultFormatAny {
+		t.Fatalf("expected mixed payload types to infer defaultFormat any, got %q", inferred.DefaultFormat)
+	}
+}
+
+func TestCompactInferredMetadataDefaultsPreservesDefaultFormat(t *testing.T) {
 	t.Parallel()
 
 	compact, err := CompactInferredMetadataDefaults("/admin/realms", ResourceMetadata{
-		PreferredFormat: "yaml",
+		DefaultFormat: "yaml",
 	}, nil)
 	if err != nil {
 		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
 	}
-	if compact.PreferredFormat != "yaml" {
-		t.Fatalf("expected preferredFormat yaml, got %#v", compact.PreferredFormat)
+	if compact.DefaultFormat != "yaml" {
+		t.Fatalf("expected defaultFormat yaml, got %#v", compact.DefaultFormat)
 	}
+}
+
+func TestCompactInferredMetadataDefaultsPreservesSecret(t *testing.T) {
+	t.Parallel()
+
+	secret := true
+	compact, err := CompactInferredMetadataDefaults("/admin/realms", ResourceMetadata{
+		Secret: &secret,
+	}, nil)
+	if err != nil {
+		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
+	}
+	if compact.Secret == nil || !*compact.Secret {
+		t.Fatalf("expected secret to be preserved as true, got %v", compact.Secret)
+	}
+}
+
+func TestInferFromOpenAPIRejectsRecursiveRequest(t *testing.T) {
+	t.Parallel()
+
+	_, err := InferFromOpenAPISpec(
+		context.Background(),
+		"/admin/realms",
+		InferenceRequest{Recursive: true},
+		nil,
+	)
+	assertValidationError(t, err)
 }
 
 func TestHasOpenAPIPath(t *testing.T) {
@@ -1004,6 +1110,29 @@ func TestHasOpenAPIPath(t *testing.T) {
 	if exists {
 		t.Fatal("expected /admin/unknown/ to be missing from OpenAPI paths")
 	}
+}
+
+func TestValidateOperationSpecTemplatesAcceptsValidTemplate(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateOperationSpecTemplates("get", OperationSpec{
+		Method:  "GET",
+		Path:    "./{{json_pointer \"/id\"}}",
+		Accept:  "{{payload_media_type .}}",
+		Headers: map[string]string{"X-Realm": "{{json_pointer \"/realm\"}}"},
+	})
+	if err != nil {
+		t.Fatalf("expected valid templates to pass, got %v", err)
+	}
+}
+
+func TestValidateOperationSpecTemplatesRejectsMalformedTemplate(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateOperationSpecTemplates("get", OperationSpec{
+		Path: "{{if .}}",
+	})
+	assertValidationError(t, err)
 }
 
 func assertValidationError(t *testing.T, err error) {

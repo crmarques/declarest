@@ -157,6 +157,224 @@ func TestInferManagedServerResolvesExplicitCollectionTargetToSingleDirectChild(t
 	}
 }
 
+func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/admin/realms/acme": {
+			Value: map[string]any{
+				"realm":                "acme",
+				"displayName":          "acme",
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+
+	result, err := Infer(context.Background(), deps, "/admin/realms/", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if result.ResolvedPath != "/admin/realms/acme" {
+		t.Fatalf("expected resolved path /admin/realms/acme, got %q", result.ResolvedPath)
+	}
+
+	want := map[string]any{"status": "active"}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+
+	if len(orch.createCalls) != 2 {
+		t.Fatalf("expected two temporary creates, got %#v", orch.createCalls)
+	}
+	for _, call := range orch.createCalls {
+		payload, ok := call.content.Value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", call.content.Value)
+		}
+		tempName := path.Base(call.logicalPath)
+		if got := payload["realm"]; got != tempName {
+			t.Fatalf("expected realm %q for %q, got %#v", tempName, call.logicalPath, got)
+		}
+		if got := payload["displayName"]; got != "acme" {
+			t.Fatalf("expected displayName to remain unchanged, got %#v", got)
+		}
+	}
+}
+
+func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/customers/acme": {
+				ID:    "{{/id}}",
+				Alias: "{{/name}}",
+			},
+		},
+	}
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	orch.deleteErr = faults.NewTypedError(faults.AuthError, "remote request failed with status 403: forbidden", nil)
+
+	managedServerClient := &fakeDefaultsManagedServerClient{}
+	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
+	serviceAccessor.managedServer = managedServerClient
+
+	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	want := map[string]any{"status": "active"}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+	if len(orch.deleteCalls) != 2 {
+		t.Fatalf("expected two orchestrator delete attempts, got %#v", orch.deleteCalls)
+	}
+	if managedServerClient.invalidateCalls != 3 {
+		t.Fatalf("expected one probe-read invalidation plus two delete-retry invalidations, got %d", managedServerClient.invalidateCalls)
+	}
+	if len(managedServerClient.requestCalls) != 2 {
+		t.Fatalf("expected two direct managed-server delete retries, got %#v", managedServerClient.requestCalls)
+	}
+	for _, call := range managedServerClient.requestCalls {
+		if call.Method != "DELETE" {
+			t.Fatalf("expected DELETE retry request, got %#v", call)
+		}
+		if !strings.HasPrefix(call.Path, "/customers/declarest-defaults-probe-") {
+			t.Fatalf("unexpected retry path %q", call.Path)
+		}
+	}
+}
+
+func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":          "platform",
+				"displayName": "Platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	orch.getRemoteFn = func(item savedResource, call int) (resource.Content, error) {
+		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
+		payload["status"] = "active"
+		if call >= 3 {
+			payload["tier"] = "standard"
+		}
+		payload["id"] = path.Base(item.logicalPath)
+		return resource.Content{
+			Value:      payload,
+			Descriptor: item.content.Descriptor,
+		}, nil
+	}
+
+	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"status": "active",
+		"tier":   "standard",
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":          "platform",
+				"displayName": "Platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	orch.getRemoteFn = func(item savedResource, _ int) (resource.Content, error) {
+		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
+		payload["status"] = "active"
+		payload["smtpServer"] = map[string]any{}
+		payload["id"] = path.Base(item.logicalPath)
+		return resource.Content{
+			Value:      payload,
+			Descriptor: item.content.Descriptor,
+		}, nil
+	}
+
+	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"smtpServer": map[string]any{},
+		"status":     "active",
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T) {
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":          "platform",
+				"displayName": "Platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	managedServerClient := &fakeDefaultsManagedServerClient{}
+	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
+	serviceAccessor.managedServer = managedServerClient
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	orch.getRemoteFn = func(item savedResource, _ int) (resource.Content, error) {
+		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
+		payload["status"] = "active"
+		if managedServerClient.invalidateCalls > 0 {
+			payload["tier"] = "standard"
+		}
+		payload["id"] = path.Base(item.logicalPath)
+		return resource.Content{
+			Value:      payload,
+			Descriptor: item.content.Descriptor,
+		}, nil
+	}
+
+	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"status": "active",
+		"tier":   "standard",
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+	if managedServerClient.invalidateCalls != 1 {
+		t.Fatalf("expected one auth cache invalidation before probe reads, got %d", managedServerClient.invalidateCalls)
+	}
+}
+
 func TestInferRejectsExplicitCollectionTargetWithMultipleDirectChildren(t *testing.T) {
 	t.Parallel()
 
@@ -202,6 +420,40 @@ func TestCompactContentAgainstStoredDefaultsReturnsOnlyOverrides(t *testing.T) {
 
 	want := map[string]any{
 		"id":   "acme",
+		"name": "acme",
+	}
+	if !reflect.DeepEqual(content.Value, want) {
+		t.Fatalf("unexpected pruned payload: got %#v want %#v", content.Value, want)
+	}
+}
+
+func TestCompactContentAgainstStoredDefaultsRemovesSharedEmptyObjects(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	repo := deps.Repository.(*fakeDefaultsRepository)
+	repo.defaults["/customers/acme"] = resource.Content{
+		Value: map[string]any{
+			"smtpServer": map[string]any{},
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+
+	content, pruned, err := CompactContentAgainstStoredDefaults(context.Background(), deps, "/customers/acme", resource.Content{
+		Value: map[string]any{
+			"name":       "acme",
+			"smtpServer": map[string]any{},
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	})
+	if err != nil {
+		t.Fatalf("CompactContentAgainstStoredDefaults returned error: %v", err)
+	}
+	if !pruned {
+		t.Fatal("expected defaults pruning to be applied")
+	}
+
+	want := map[string]any{
 		"name": "acme",
 	}
 	if !reflect.DeepEqual(content.Value, want) {
@@ -268,6 +520,9 @@ type fakeDefaultsOrchestrator struct {
 	localContent map[string]resource.Content
 	createCalls  []savedResource
 	deleteCalls  []string
+	deleteErr    error
+	getRemoteFn  func(item savedResource, call int) (resource.Content, error)
+	getCalls     map[string]int
 }
 
 type savedResource struct {
@@ -317,6 +572,13 @@ func (f *fakeDefaultsOrchestrator) GetRemote(_ context.Context, logicalPath stri
 		if item.logicalPath != logicalPath {
 			continue
 		}
+		if f.getCalls == nil {
+			f.getCalls = map[string]int{}
+		}
+		f.getCalls[logicalPath]++
+		if f.getRemoteFn != nil {
+			return f.getRemoteFn(item, f.getCalls[logicalPath])
+		}
 		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
 		payload["status"] = "active"
 		payload["id"] = path.Base(logicalPath)
@@ -331,7 +593,32 @@ func (f *fakeDefaultsOrchestrator) GetRemote(_ context.Context, logicalPath stri
 
 func (f *fakeDefaultsOrchestrator) Delete(_ context.Context, logicalPath string, _ orchestratordomain.DeletePolicy) error {
 	f.deleteCalls = append(f.deleteCalls, logicalPath)
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	return nil
+}
+
+type fakeDefaultsManagedServerClient struct {
+	managedserver.ManagedServerClient
+	invalidateCalls int
+	requestCalls    []managedserver.RequestSpec
+	requestErr      error
+}
+
+func (f *fakeDefaultsManagedServerClient) InvalidateAuthCache() {
+	f.invalidateCalls++
+}
+
+func (f *fakeDefaultsManagedServerClient) Request(
+	_ context.Context,
+	spec managedserver.RequestSpec,
+) (resource.Content, error) {
+	f.requestCalls = append(f.requestCalls, spec)
+	if f.requestErr != nil {
+		return resource.Content{}, f.requestErr
+	}
+	return resource.Content{}, nil
 }
 
 type fakeDefaultsRepository struct {
@@ -378,9 +665,10 @@ func (f *fakeDefaultsMetadata) ResolveForPath(_ context.Context, logicalPath str
 }
 
 type fakeDefaultsServiceAccessor struct {
-	store    repository.ResourceStore
-	metadata metadata.MetadataService
-	secrets  secretdomain.SecretProvider
+	store         repository.ResourceStore
+	metadata      metadata.MetadataService
+	secrets       secretdomain.SecretProvider
+	managedServer managedserver.ManagedServerClient
 }
 
 func (f *fakeDefaultsServiceAccessor) RepositoryStore() repository.ResourceStore   { return f.store }
@@ -388,7 +676,7 @@ func (f *fakeDefaultsServiceAccessor) RepositorySync() repository.RepositorySync
 func (f *fakeDefaultsServiceAccessor) MetadataService() metadata.MetadataService   { return f.metadata }
 func (f *fakeDefaultsServiceAccessor) SecretProvider() secretdomain.SecretProvider { return f.secrets }
 func (f *fakeDefaultsServiceAccessor) ManagedServerClient() managedserver.ManagedServerClient {
-	return nil
+	return f.managedServer
 }
 
 func testDefaultsDeps() appdeps.Dependencies {

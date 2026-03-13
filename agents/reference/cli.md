@@ -149,7 +149,7 @@ Interactive context commands:
 7. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
 8. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
 9. `metadata infer` MUST expose only supported inference options and MUST NOT register placeholder flags for unsupported recursive behavior.
-10. `metadata get` MUST return resolved repository metadata overrides merged with default metadata fields by default; `metadata get --overrides-only` MUST return only the resolved/inferred override object without merged defaults.
+10. `metadata get` MUST return resolved repository metadata in the full canonical nested schema by default, explicitly filling unset attributes with deterministic default values (for example empty strings, `false`, empty arrays/maps, default operation entries, and `null` for unset operation bodies); it MUST preserve metadata helper placeholders such as `{{payload_media_type .}}` rather than rendering them; `metadata get --overrides-only` MUST return only the resolved/inferred override object without those expanded defaults.
 11. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
 12. Mutations from stdin MUST validate payload format before side effects.
 13. Option conflicts MUST produce usage errors.
@@ -161,9 +161,9 @@ Interactive context commands:
 15. `resource get` MUST default to `--source managed-server`, and remote reads MUST attempt the literal path first then list/filter by metadata-derived identity when the literal read returns `NotFound`; when metadata path rendering cannot derive required template fields from the requested logical path alone, the command MUST attempt one parent-collection list, find a unique alias/id match, and rerender the read with that matched candidate payload before surfacing the original validation error.
 16. `resource get` MUST redact values for metadata-declared `resource.secretAttributes` using `{{secret .}}` placeholders for both `--source repository` and `--source managed-server` output by default.
 17. `resource get --show-secrets` MUST disable metadata-driven output redaction and print plaintext values.
-18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operations.*` directives under the metadata section.
+18. `resource get --show-metadata` MUST include the rendered metadata snapshot (default metadata merged with overrides) alongside the payload, presenting resolved `operations.*` directives under the metadata section and resolving payload-aware helper tokens such as `{{payload_media_type .}}` against the active payload descriptor.
 19. `resource get|list` MUST support `--exclude <item[,item...]>` to exclude matching collection items by direct child path segment, resolved alias, or resolved ID when the command returns a collection result.
-20. `resource get --prune-defaults` MUST compact the returned payload against any repository `defaults.<ext>` sidecar for the same logical path before output, for both repository and managed-server sources; when every field is defaulted, the printed payload MUST be an empty object rather than `null`.
+20. `resource get --prune-defaults` MUST compact the returned payload against any resolved metadata-root `defaults.<ext>` sidecar for the same logical path before output, for both repository and managed-server sources; when every field is defaulted, the printed payload MUST be an empty object rather than `null`.
 20. `resource list` MUST support `--source <managed-server|repository>`.
 21. `resource list` MUST default to `--source managed-server`.
 22. `resource list` MUST support `--recursive` and default to non-recursive direct-child listing.
@@ -196,7 +196,7 @@ Interactive context commands:
 43. `resource save` MUST automatically use whole-resource secret storage for single-resource saves when metadata declares `resource.secret: true` and `--secret-attributes` is not selected.
 44. `resource save --secret-attributes` MUST accept an optional comma-separated attribute list, MUST require structured payloads (`json|yaml`), and MUST reject non-structured payloads with guidance toward `--secret`.
 45. `resource save --secret-attributes` MUST detect plaintext secret attributes, store handled values in the configured secret store using path-scoped keys, replace handled payload values with `{{secret .}}` placeholders, and merge handled JSON Pointer attributes into metadata `resource.secretAttributes` for the saved logical path.
-46. `resource save --prune-defaults` MUST compact the fetched or explicit payload against any repository `defaults.<ext>` sidecar for the same logical path before repository persistence; for list saves, pruning MUST apply per resolved item path.
+46. `resource save --prune-defaults` MUST compact the fetched or explicit payload against any resolved metadata-root `defaults.<ext>` sidecar for the same logical path before repository persistence; for list saves, pruning MUST apply per resolved item path.
 ### Secret Placeholder Resolution
 37. Resource payload placeholder resolution for remote workflows MUST resolve `{{secret .}}` as `<logical-path>:<json-pointer>` for attribute-scoped placeholders, MUST resolve an exact whole-resource `{{secret .}}` payload as `<logical-path>:.`, and MUST resolve `{{secret <custom-key>}}` as `<logical-path>:<custom-key>`.
 38. When `resource save --secret-attributes` handles only a subset of detected candidates, the command MUST fail with the same plaintext-secret warning using only unhandled candidates that are not metadata-declared, unless `--allow-plaintext` is set.
@@ -208,12 +208,12 @@ Interactive context commands:
 43. `resource copy --override-attributes` MUST accept JSON Pointer assignments (`/a=b,/c=d,/e/f/g=h`) and apply them to object payloads before save validation.
 44. `resource copy` MUST read the source path from the local repository first and, when that lookup returns `NotFoundError`, retry the source read from the remote server before applying overrides and save validation.
 ### Resource Defaults
-45. `resource defaults get <path>` MUST read the raw repository `defaults.<ext>` object for one logical resource path and, when no defaults sidecar exists for a supported payload type, MUST print an empty object instead of `NotFound`.
+45. `resource defaults get <path>` MUST read the raw metadata-root `defaults.<ext>` object resolved for one logical resource path and, when no defaults sidecar exists for a supported payload type, MUST print an empty object instead of `NotFound`.
 46. `resource defaults edit <path>` MUST open the raw defaults object in an editor using the inferred defaults payload format, allow empty edited content to clear the defaults sidecar, validate edited content against supported defaults-sidecar payload rules, and persist only the raw defaults object without flattening merged resource values.
 47. `resource defaults infer <path>` MUST infer defaults from direct local sibling resources under the same logical collection as the target resource, MUST print only the inferred defaults object, and MUST target one concrete repository resource path rather than a metadata selector path.
-48. `resource defaults infer --save` MUST persist the inferred defaults object into the target resource directory as `defaults.<ext>` and SHOULD reuse the target resource payload descriptor when no defaults sidecar exists yet.
+48. `resource defaults infer --save` MUST persist the inferred defaults object into the target collection metadata selector directory as `defaults.<ext>` (for example `<collection-path>/_/defaults.<ext>`), MUST preserve the existing defaults-sidecar codec when one already exists, MUST otherwise prefer the target collection's effective merge-capable resource payload type when it is known, and SHOULD fall back to JSON or YAML only when no merge-capable resource payload type is resolved.
 49. `resource defaults infer --check` MUST print the inferred defaults object and MUST fail with `ValidationError` when the inferred normalized object does not match the current raw defaults sidecar; `--save` and `--check` MUST be rejected when combined.
-50. `resource defaults infer --managed-server` MUST create two temporary remote resources derived from the target local resource payload, compare the observed remote outputs against the probe inputs, infer only stable server-added defaults, and clean up both temporary remote resources before returning.
+50. `resource defaults infer --managed-server` MUST create two temporary remote resources derived from the target local resource payload, compare the observed remote outputs against the probe inputs, infer only stable server-added defaults (including stable empty-object fields), and clean up both temporary remote resources before returning.
 51. `resource defaults infer --managed-server` MUST require `--yes`; omitting `--yes` MUST fail with `ValidationError` before any remote mutation.
 ### Secret Detect and Store Access
 51. `secret detect` MUST support optional `--fix` to persist detected attributes into metadata `resource.secretAttributes`.
@@ -329,7 +329,7 @@ Interactive context commands:
 17. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
 18. Text-mode binary diff output MUST render a deterministic whole-payload message indicating that binary content differs instead of attempting field-level rendering.
 ### Metadata and Binary Output
-16. Metadata command structured output (`metadata get|resolve|infer`) MUST omit nil directive fields instead of emitting `null` entries.
+16. Metadata command structured output MUST keep compact omit-empty persistence semantics for `metadata resolve|infer` and for `metadata get --overrides-only`, while default `metadata get` MUST emit the full canonical nested metadata shape with explicit default values for unset attributes.
 17. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
@@ -450,7 +450,7 @@ Interactive context commands:
 32. `declarest resource save /projects/platform/secrets/private-key --payload private.key --secret --force` stores the full `.key` payload in the secret store under `/projects/platform/secrets/private-key:.`, persists `resource.secret: true`, and writes only `{{secret .}}` to `/projects/platform/secrets/private-key/resource.key`.
 33. `declarest resource save /projects/platform/secrets/private-key --payload missing/private.key --force` fails instead of saving the literal string `missing/private.key` into repository content because the payload token is treated as a file path.
 34. `declarest --context git resource save /customers/acme --payload payload.json --force --push` saves locally, commits, and pushes to the configured git remote even when `repository.git.remote.autoSync` is disabled.
-32. `declarest resource save /customers/acme --prune-defaults` fetches remote state, removes fields already covered by `defaults.<ext>`, and persists only the remaining overrides.
+32. `declarest resource save /customers/acme --prune-defaults` fetches remote state, removes fields already covered by the resolved metadata-root `defaults.<ext>`, and persists only the remaining overrides.
 32. `declarest secret detect /customers/acme --fix < payload.json` detects secret attributes and writes them to metadata `resource.secretAttributes` for `/customers/acme`.
 33. `declarest secret detect /customers/acme --fix --secret-attribute /password < payload.json` writes only `/password` from detected candidates.
 34. `declarest secret set /customers/acme /apiToken token-123` stores one path-scoped secret under `/customers/acme:/apiToken`.

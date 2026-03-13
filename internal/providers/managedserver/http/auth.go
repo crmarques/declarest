@@ -31,6 +31,16 @@ type authConfig struct {
 	customHeaders []config.HeaderTokenAuth
 }
 
+func (g *Client) InvalidateAuthCache() {
+	if g == nil {
+		return
+	}
+	g.oauthMu.Lock()
+	defer g.oauthMu.Unlock()
+	g.oauthAccessToken = ""
+	g.oauthExpiresAt = time.Time{}
+}
+
 func (c authConfig) shouldRedactHeader(name string) bool {
 	if strings.EqualFold(strings.TrimSpace(name), "Authorization") {
 		return true

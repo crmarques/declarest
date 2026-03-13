@@ -44,8 +44,9 @@ Key terms:
 4. Compare behavior MUST ignore fields declared by metadata suppression/filter rules.
 5. Non-unique alias in the same collection is a conflict and MUST be surfaced.
 6. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`; every JSON Pointer referenced by configured `resource.alias` MUST count as required even when `resource.requiredAttributes` omits it; and every JSON Pointer referenced by configured `resource.id` MUST count as required for non-create mutations while create MAY omit metadata-derived `resource.id` pointers unless they are explicitly declared elsewhere.
-7. Local desired state for one logical resource MAY be composed from a structured-object `defaults.<ext>` sidecar plus `resource.<ext>` overrides; object fields deep-merge, arrays replace, and explicit override values win deterministically.
-8. `defaults.<ext>` content MUST represent stable desired-state defaults that are safe to resend to the managed server and MUST NOT be used for volatile observed-only fields such as timestamps, versions, generated IDs, or status blocks.
+7. Local desired state for one logical resource MAY be composed from a structured-object metadata-root `defaults.<ext>` sidecar plus `resource.<ext>` overrides; object fields deep-merge, arrays replace, and explicit override values win deterministically.
+8. Collection metadata `resource.defaultFormat: any` MUST allow child resources in the same collection to preserve or supply different payload descriptors during save workflows instead of coercing the whole collection to one repository format.
+9. `defaults.<ext>` content MUST represent stable desired-state defaults that are safe to resend to the managed server and MUST NOT be used for volatile observed-only fields such as timestamps, versions, generated IDs, or status blocks.
 
 ## Failure Modes
 1. Alias collision causing ambiguous target resolution.
@@ -60,7 +61,8 @@ Key terms:
 4. Collection has zero items and metadata inference still required.
 5. Structured update transforms remove an alias field from the outgoing body after resource-level validation already confirmed it exists in the source payload.
 6. Structured create payloads can omit a server-assigned `resource.id` while update still requires that ID when metadata declares it.
-7. A resource stores `/spec/enabled: false` in `resource.yaml` while `defaults.yaml` still declares `/spec/enabled: true`; the explicit override MUST win and stay persisted in `resource.yaml`.
+7. `resource.defaultFormat: any` on `/customers/_` lets `/customers/acme` keep `resource.yaml` while `/customers/beta` keeps `resource.json` during one collection save.
+8. A resource stores `/spec/enabled: false` in `/customers/acme/resource.yaml` while `/customers/_/defaults.yaml` still declares `/spec/enabled: true`; the explicit override MUST win and stay persisted in `resource.yaml`.
 
 ## Examples
 1. Local path `/customers/acme` maps to collection `/customers`, alias `acme`, and remote ID from rendered `resource.id` when configured.
@@ -68,4 +70,5 @@ Key terms:
 3. Diff operation suppresses `/updatedAt` and `/lastSeen` before comparison to avoid false drift.
 4. Metadata with `resource.alias: "{{/clientId}}"` and `resource.requiredAttributes: [/realm]` still requires `/clientId` in a structured create/update payload even when an operation transform later excludes `/clientId` from the transmitted body.
 5. Metadata with `resource.id: "{{/id}}"`, `resource.alias: "{{/clientId}}"`, and `resource.requiredAttributes: [/realm]` can create a resource from `{realm, clientId}` when the server assigns the ID, but update still requires `/id` unless another validation layer supplies it.
-6. `/customers/acme/defaults.yaml` can hold shared fields such as labels and policy defaults while `/customers/acme/resource.yaml` keeps only the differing overrides; runtime desired state is the merged object, not either file alone.
+6. `resource.defaultFormat: any` on `/customers/_` allows one collection save to preserve `/customers/acme/resource.yaml` and `/customers/beta/resource.json` instead of normalizing both to one suffix.
+7. `/customers/_/defaults.yaml` can hold shared fields such as labels and policy defaults while `/customers/acme/resource.yaml` keeps only the differing overrides; runtime desired state is the merged object, not either file alone.

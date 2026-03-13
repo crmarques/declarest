@@ -69,7 +69,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateValue, metadata, resource.PayloadDescriptor{})
+	metadatadomain.ApplyPayloadTemplateScope(templateValue, metadata, value, resource.PayloadDescriptor{})
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, metadata, operation, templateValue)
 	if err != nil {
@@ -98,11 +98,12 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 	operation metadatadomain.Operation,
 ) (metadatadomain.OperationSpec, error) {
 	resolvedResource := resource.Resource{
-		LogicalPath:    input.LogicalPath,
-		CollectionPath: input.CollectionPath,
-		LocalAlias:     input.LocalAlias,
-		RemoteID:       input.RemoteID,
-		Payload:        input.Payload,
+		LogicalPath:       input.LogicalPath,
+		CollectionPath:    input.CollectionPath,
+		LocalAlias:        input.LocalAlias,
+		RemoteID:          input.RemoteID,
+		Payload:           input.Payload,
+		PayloadDescriptor: input.PayloadDescriptor,
 	}
 
 	debugctx.Printf(
@@ -126,7 +127,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 	}
 
 	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
-	if metadataEmpty(resolvedMetadata) {
+	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
 		resolvedMetadata, err = s.ResolveForPath(ctx, targetPath)
 		if err != nil {
 			if faults.IsCategory(err, faults.NotFoundError) {
@@ -155,7 +156,12 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateScope, resolvedMetadata, resolvedResource.PayloadDescriptor)
+	metadatadomain.ApplyPayloadTemplateScope(
+		templateScope,
+		resolvedMetadata,
+		resolvedResource.Payload,
+		resolvedResource.PayloadDescriptor,
+	)
 
 	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
 	if err != nil {
@@ -316,54 +322,4 @@ func aliasForTemplateScopeLogicalPath(logicalPath string) string {
 		return "/"
 	}
 	return path.Base(trimmed)
-}
-
-func metadataEmpty(value metadatadomain.ResourceMetadata) bool {
-	return strings.TrimSpace(value.ID) == "" &&
-		strings.TrimSpace(value.Alias) == "" &&
-		strings.TrimSpace(value.RemoteCollectionPath) == "" &&
-		strings.TrimSpace(value.PayloadType) == "" &&
-		value.Secret == nil &&
-		value.SecretAttributes == nil &&
-		value.ExternalizedAttributes == nil &&
-		value.Operations == nil &&
-		value.Transforms == nil
-}
-
-func applyPayloadTemplateScope(
-	scope map[string]any,
-	metadata metadatadomain.ResourceMetadata,
-	descriptor resource.PayloadDescriptor,
-) {
-	if scope == nil {
-		return
-	}
-
-	activeDescriptor := descriptor
-	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
-		if strings.TrimSpace(metadata.PayloadType) != "" {
-			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: metadata.PayloadType})
-		} else {
-			activeDescriptor = payloadDescriptorFromScopeValue(scope["payload"])
-		}
-	}
-	scope["payloadType"] = activeDescriptor.PayloadType
-	scope["payloadMediaType"] = activeDescriptor.MediaType
-	scope["payloadExtension"] = activeDescriptor.Extension
-	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(activeDescriptor.MediaType) != "" {
-		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
-			scope["contentType"] = activeDescriptor.MediaType
-		}
-	}
-}
-
-func payloadDescriptorFromScopeValue(value any) resource.PayloadDescriptor {
-	switch value.(type) {
-	case string:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
-	case resource.BinaryValue, *resource.BinaryValue:
-		return resource.DefaultOctetStreamDescriptor()
-	default:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-	}
 }

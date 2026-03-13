@@ -25,7 +25,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 7. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
 8. `SecretStore` reconcile MUST enforce provider one-of constraints (`vault` or `file`), ensure file-backed storage dependencies when required, and set `status.resolvedPath` only for file-backed stores.
 9. `SyncPolicy` reconcile MUST validate referenced dependency resources, compute a secret-version hash from referenced Secret `resourceVersion` values, and trigger full sync when generation, secret hash, or full-resync schedule requires it.
-10. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync, while sibling resource sidecars such as `defaults.<ext>` MUST resolve to the parent logical resource target instead of a synthetic child path.
+10. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync, metadata-root collection defaults sidecars such as `/_/defaults.<ext>` MUST resolve to the affected collection target instead of a synthetic child path, and unsupported legacy per-resource defaults sidecars MUST remain in the unknown/unsupported bucket rather than receiving incremental resource targeting.
 11. `SyncPolicy` apply execution MUST invoke DeclaREST mutation workflows through `orchestrator.Orchestrator`, honor `spec.sync.force` and `spec.sync.prune`, and update status stats (`targeted`, `applied`, `pruned`, `failed`) from executed operations.
 12. `SyncPolicy` scheduling MUST requeue by the earliest due trigger between `spec.syncInterval` and `spec.fullResyncCron` (when configured), with invalid cron expressions treated as spec-validation failures.
 13. Repository webhook receiver MUST accept only authenticated provider events for configured repositories, enforce payload-size bounds, enforce bounded read/write/idle HTTP timeouts, accept only push events for the configured branch, and patch webhook receipt annotations before returning success.
@@ -57,7 +57,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 4. `spec.fullResyncCron` with no previous full sync MUST schedule immediate full sync eligibility.
 5. Non-overlapping source paths with shared dependency references MUST be accepted.
 6. Slow or idle webhook clients MUST be disconnected by bounded HTTP server timeouts rather than holding connections indefinitely.
-7. A change to `customers/acme/defaults.yaml` SHOULD produce an incremental apply target for `/customers/acme`, while an unknown sibling file under that resource directory still triggers safe full fallback.
+7. A change to `customers/_/defaults.yaml` SHOULD produce an incremental apply target for `/customers`, while `customers/acme/defaults.yaml` or any other unknown sibling file under a resource directory still triggers safe full fallback.
 
 ## Examples
 1. Normal: `ResourceRepository` receives a valid authenticated push webhook for the tracked branch, webhook annotations are patched, and reconcile fetches a new revision before the next `pollInterval`.

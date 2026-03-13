@@ -147,21 +147,42 @@ e2e_parse_managed_server_auth_type_value() {
   esac
 }
 
-e2e_parse_metadata_type_value() {
-  local raw_value=$1
+e2e_parse_metadata_source_value() {
+  local flag=$1
+  local raw_value=$2
 
   case "${raw_value,,}" in
     bundle)
       printf 'bundle\n'
+      return 0
+      ;;
+    dir)
+      if [[ "${flag}" == '--metadata-source' ]]; then
+        printf 'dir\n'
+        return 0
+      fi
       ;;
     base-dir)
-      printf 'base-dir\n'
-      ;;
-    *)
-      e2e_die "invalid --metadata-type value: ${raw_value} (allowed: base-dir, bundle)"
-      return 1
+      if [[ "${flag}" == '--metadata-type' ]]; then
+        printf 'dir\n'
+        return 0
+      fi
       ;;
   esac
+
+  case "${flag}" in
+    --metadata-source)
+      e2e_die "invalid --metadata-source value: ${raw_value} (allowed: bundle, dir)"
+      ;;
+    --metadata-type)
+      e2e_die "invalid --metadata-type value: ${raw_value} (allowed: bundle, base-dir)"
+      ;;
+    *)
+      e2e_die "invalid metadata source value: ${raw_value}"
+      ;;
+  esac
+
+  return 1
 }
 
 e2e_parse_platform_value() {
@@ -225,9 +246,10 @@ Component selection (choose values for each flag; see notes below):
   --managed-server-proxy [<true|false>]                default: false
     true  : Inject managedServer.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
     false : Keep managed-server proxy unset in generated contexts.
-  --metadata-type <base-dir|bundle>                 default: bundle
+  --metadata-source <bundle|dir>                    default: bundle
     bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
-    base-dir  : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
+    dir       : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
+    legacy alias: --metadata-type <bundle|base-dir>
   --repo-type <filesystem|git>                        default: filesystem
     filesystem : Use the local filesystem repository backend.
     git        : Use the git repository backend (requires a git provider selection).
@@ -279,7 +301,7 @@ Examples:
   ./run-e2e.sh --platform kubernetes --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
   ./run-e2e.sh --platform compose --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
   ./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-type base-dir
+  ./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source dir
   ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitlab --managed-server simple-api-server
   ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitea --managed-server simple-api-server
   ./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file
@@ -336,7 +358,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata-source|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -455,12 +477,13 @@ e2e_parse_args() {
         E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${proxy_value}") || return 1
         e2e_mark_explicit 'managed-server-proxy'
         ;;
-      --metadata-type)
+      --metadata-source|--metadata-type)
+        local metadata_flag=$1
         [[ $# -ge 2 ]] || {
-          e2e_die '--metadata-type requires a value'
+          e2e_die "${metadata_flag} requires a value"
           return 1
         }
-        E2E_METADATA=$(e2e_parse_metadata_type_value "$2") || return 1
+        E2E_METADATA=$(e2e_parse_metadata_source_value "${metadata_flag}" "$2") || return 1
         e2e_mark_explicit 'metadata'
         shift 2
         ;;
@@ -578,7 +601,7 @@ e2e_parse_args() {
       fi
     fi
   fi
-  E2E_METADATA=$(e2e_parse_metadata_type_value "${E2E_METADATA}") || return 1
+  E2E_METADATA=$(e2e_parse_metadata_source_value '--metadata-source' "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
 

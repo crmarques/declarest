@@ -2,8 +2,25 @@ package metadata
 
 import (
 	"maps"
-	"sort"
+	"slices"
+	"strings"
+
+	"github.com/crmarques/declarest/resource"
 )
+
+func HasResourceMetadataDirectives(value ResourceMetadata) bool {
+	return strings.TrimSpace(value.ID) != "" ||
+		strings.TrimSpace(value.Alias) != "" ||
+		value.RequiredAttributes != nil ||
+		strings.TrimSpace(value.RemoteCollectionPath) != "" ||
+		strings.TrimSpace(value.PayloadType) != "" ||
+		strings.TrimSpace(value.DefaultFormat) != "" ||
+		value.Secret != nil ||
+		value.SecretAttributes != nil ||
+		value.ExternalizedAttributes != nil ||
+		value.Operations != nil ||
+		value.Transforms != nil
+}
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
@@ -12,7 +29,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		RequiredAttributes:     cloneStringSlice(value.RequiredAttributes),
 		RemoteCollectionPath:   value.RemoteCollectionPath,
 		PayloadType:            value.PayloadType,
-		PreferredFormat:        value.PreferredFormat,
+		DefaultFormat:          value.DefaultFormat,
 		Secret:                 cloneBoolPointer(value.Secret),
 		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
@@ -28,7 +45,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 			Headers:     maps.Clone(operationSpec.Headers),
 			Accept:      operationSpec.Accept,
 			ContentType: operationSpec.ContentType,
-			Body:        operationSpec.Body,
+			Body:        resource.DeepCopyValue(operationSpec.Body),
 			Transforms:  cloneTransformSteps(operationSpec.Transforms),
 			Validate:    cloneOperationValidationSpec(operationSpec.Validate),
 		}
@@ -44,7 +61,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		RequiredAttributes:     cloneStringSlice(base.RequiredAttributes),
 		RemoteCollectionPath:   base.RemoteCollectionPath,
 		PayloadType:            base.PayloadType,
-		PreferredFormat:        base.PreferredFormat,
+		DefaultFormat:          base.DefaultFormat,
 		Secret:                 cloneBoolPointer(base.Secret),
 		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
@@ -67,8 +84,8 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	if overlay.PayloadType != "" {
 		merged.PayloadType = overlay.PayloadType
 	}
-	if overlay.PreferredFormat != "" {
-		merged.PreferredFormat = overlay.PreferredFormat
+	if overlay.DefaultFormat != "" {
+		merged.DefaultFormat = overlay.DefaultFormat
 	}
 	if overlay.Secret != nil {
 		merged.Secret = cloneBoolPointer(overlay.Secret)
@@ -83,7 +100,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		if merged.Operations == nil {
 			merged.Operations = map[string]OperationSpec{}
 		}
-		keys := sortedOperationKeys(overlay.Operations)
+		keys := slices.Sorted(maps.Keys(overlay.Operations))
 		for _, key := range keys {
 			merged.Operations[key] = MergeOperationSpec(merged.Operations[key], overlay.Operations[key])
 		}
@@ -115,15 +132,6 @@ func cloneExternalizedAttributes(values []ExternalizedAttribute) []ExternalizedA
 	return cloned
 }
 
-func cloneBoolPointer(value *bool) *bool {
-	if value == nil {
-		return nil
-	}
-
-	cloned := *value
-	return &cloned
-}
-
 func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec {
 	merged := OperationSpec{
 		Method:      base.Method,
@@ -132,7 +140,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 		Headers:     maps.Clone(base.Headers),
 		Accept:      base.Accept,
 		ContentType: base.ContentType,
-		Body:        base.Body,
+		Body:        resource.DeepCopyValue(base.Body),
 		Transforms:  cloneTransformSteps(base.Transforms),
 		Validate:    cloneOperationValidationSpec(base.Validate),
 	}
@@ -150,7 +158,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 			if merged.Query == nil {
 				merged.Query = make(map[string]string, len(overlay.Query))
 			}
-			keys := sortedMapKeys(overlay.Query)
+			keys := slices.Sorted(maps.Keys(overlay.Query))
 			for _, key := range keys {
 				merged.Query[key] = overlay.Query[key]
 			}
@@ -163,7 +171,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 			if merged.Headers == nil {
 				merged.Headers = make(map[string]string, len(overlay.Headers))
 			}
-			keys := sortedMapKeys(overlay.Headers)
+			keys := slices.Sorted(maps.Keys(overlay.Headers))
 			for _, key := range keys {
 				merged.Headers[key] = overlay.Headers[key]
 			}
@@ -186,15 +194,6 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 	return merged
 }
 
-func sortedOperationKeys(values map[string]OperationSpec) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec {
 	if values == nil {
 		return nil
@@ -209,7 +208,7 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 			Headers:     maps.Clone(value.Headers),
 			Accept:      value.Accept,
 			ContentType: value.ContentType,
-			Body:        value.Body,
+			Body:        resource.DeepCopyValue(value.Body),
 			Transforms:  cloneTransformSteps(value.Transforms),
 			Validate:    cloneOperationValidationSpec(value.Validate),
 		}
@@ -267,13 +266,4 @@ func mergeOperationValidationSpec(
 	}
 
 	return merged
-}
-
-func cloneStringSlice(values []string) []string {
-	if values == nil {
-		return nil
-	}
-	cloned := make([]string, len(values))
-	copy(cloned, values)
-	return cloned
 }

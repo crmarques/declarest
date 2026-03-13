@@ -2,7 +2,8 @@ package resource
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -91,8 +92,8 @@ func encodeINIPayload(value any) ([]byte, error) {
 		}
 		rootKeys = append(rootKeys, key)
 	}
-	sort.Strings(rootKeys)
-	sort.Strings(sectionKeys)
+	slices.Sort(rootKeys)
+	slices.Sort(sectionKeys)
 
 	lines := make([]string, 0, len(rootKeys)+len(sectionKeys)*2)
 	for _, key := range rootKeys {
@@ -110,7 +111,7 @@ func encodeINIPayload(value any) ([]byte, error) {
 		}
 		lines = append(lines, fmt.Sprintf("[%s]", section))
 
-		keys := sortedMapKeys(sectionMap)
+		keys := slices.Sorted(maps.Keys(sectionMap))
 		for _, key := range keys {
 			text, err := stringifyStructuredTextScalar(sectionMap[key], "ini")
 			if err != nil {
@@ -300,7 +301,7 @@ func encodePropertiesPayload(value any) ([]byte, error) {
 		return nil, faults.NewValidationError("failed to encode properties payload", fmt.Errorf("properties payload requires an object"))
 	}
 
-	keys := sortedMapKeys(root)
+	keys := slices.Sorted(maps.Keys(root))
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
 		text, err := stringifyStructuredTextScalar(root[key], "properties")
@@ -397,13 +398,4 @@ func stringifyStructuredTextScalar(value any, payloadType string) (string, error
 	default:
 		return fmt.Sprint(typed), nil
 	}
-}
-
-func sortedMapKeys(values map[string]any) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

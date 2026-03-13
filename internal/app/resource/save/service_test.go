@@ -118,6 +118,13 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		if !ok || len(items) != 1 {
 			t.Fatalf("expected one list payload item, got %#v", value.Value)
 		}
+		entry, ok := items[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected resource entry map, got %T", items[0])
+		}
+		if entry["LogicalPath"] != "/admin/realms/master/user-registry/AD PRD/mappers/alpha" {
+			t.Fatalf("expected logical path to be preserved, got %#v", entry)
+		}
 		if len(remoteReader.getCalls) != 0 {
 			t.Fatalf("expected no remote get calls, got %#v", remoteReader.getCalls)
 		}
@@ -162,6 +169,13 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		items, ok := value.Value.([]any)
 		if !ok || len(items) != 2 {
 			t.Fatalf("expected two list payload items, got %#v", value.Value)
+		}
+		entry, ok := items[1].(map[string]any)
+		if !ok {
+			t.Fatalf("expected resource entry map, got %T", items[1])
+		}
+		if entry["LogicalPath"] != "/admin/realms/master/user-registry/AD PRD/mappers/beta" {
+			t.Fatalf("expected beta logical path to be preserved, got %#v", entry)
 		}
 		if !reflect.DeepEqual(remoteReader.getCalls, []string{"/admin/realms/master/user-registry/AD PRD/mappers"}) {
 			t.Fatalf("expected one get call, got %#v", remoteReader.getCalls)
@@ -262,9 +276,13 @@ func TestResolveSaveRemoteValue(t *testing.T) {
 		if !ok || len(items) != 1 {
 			t.Fatalf("expected one filtered list payload item, got %#v", value.Value)
 		}
-		payload, ok := items[0].(map[string]any)
+		entry, ok := items[0].(map[string]any)
 		if !ok {
-			t.Fatalf("expected payload map, got %T", items[0])
+			t.Fatalf("expected resource entry map, got %T", items[0])
+		}
+		payload, ok := entry["Payload"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected payload map, got %#v", entry["Payload"])
 		}
 		if payload["realm"] != "tenant-a" {
 			t.Fatalf("expected tenant-a payload after skip filter, got %#v", payload)
@@ -316,6 +334,34 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 		}
 		if entries[0].LogicalPath != "/customers/alpha" || entries[1].LogicalPath != "/customers/zeta" {
 			t.Fatalf("expected deterministic sorted paths, got %#v", entries)
+		}
+	})
+
+	t.Run("resource_entry_shape_preserves_payload_descriptor", func(t *testing.T) {
+		t.Parallel()
+
+		entries, err := resolveSaveEntriesForItems(context.Background(), Dependencies{}, "/ignored", []any{
+			map[string]any{
+				"LogicalPath": "/customers/alpha",
+				"Payload":     map[string]any{"id": "alpha"},
+				"PayloadDescriptor": map[string]any{
+					"PayloadType": "yaml",
+					"MediaType":   "application/yaml",
+					"Extension":   ".yml",
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("resolveSaveEntriesForItems returned error: %v", err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if entries[0].Descriptor.PayloadType != resourcedomain.PayloadTypeYAML {
+			t.Fatalf("expected yaml payload type, got %#v", entries[0].Descriptor)
+		}
+		if entries[0].Descriptor.Extension != ".yml" {
+			t.Fatalf("expected .yml extension, got %#v", entries[0].Descriptor)
 		}
 	})
 
@@ -393,6 +439,76 @@ func TestResolveSaveEntriesForItems(t *testing.T) {
 			map[string]any{"LogicalPath": "/customers/acme"},
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
+	})
+}
+
+func TestSaveListPayloadFromResourcesPreservesDescriptors(t *testing.T) {
+	t.Parallel()
+
+	content := saveListPayloadFromResources([]resourcedomain.Resource{
+		{
+			LogicalPath: "/customers/alpha",
+			Payload:     map[string]any{"id": "alpha"},
+			PayloadDescriptor: resourcedomain.NormalizePayloadDescriptor(resourcedomain.PayloadDescriptor{
+				PayloadType: resourcedomain.PayloadTypeYAML,
+				Extension:   ".yml",
+			}),
+		},
+	})
+
+	items, ok := content.Value.([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected one resource entry, got %#v", content.Value)
+	}
+	entry, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected resource entry map, got %T", items[0])
+	}
+	descriptor, ok := entry["PayloadDescriptor"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload descriptor map, got %#v", entry["PayloadDescriptor"])
+	}
+	if descriptor["PayloadType"] != resourcedomain.PayloadTypeYAML {
+		t.Fatalf("expected yaml payload descriptor, got %#v", descriptor)
+	}
+	if descriptor["Extension"] != ".yml" {
+		t.Fatalf("expected .yml extension, got %#v", descriptor)
+	}
+}
+
+func TestResolveCollectionDefaultFormat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("preserves default format any", func(t *testing.T) {
+		t.Parallel()
+
+		resolved, err := resolveCollectionDefaultFormat(context.Background(), Dependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{DefaultFormat: metadatadomain.ResourceDefaultFormatAny},
+			},
+		}, "/customers")
+		if err != nil {
+			t.Fatalf("resolveCollectionDefaultFormat returned error: %v", err)
+		}
+		if resolved != metadatadomain.ResourceDefaultFormatAny {
+			t.Fatalf("expected defaultFormat any, got %q", resolved)
+		}
+	})
+
+	t.Run("normalizes concrete default format", func(t *testing.T) {
+		t.Parallel()
+
+		resolved, err := resolveCollectionDefaultFormat(context.Background(), Dependencies{
+			Metadata: &fakeSaveMetadataService{
+				resolved: metadatadomain.ResourceMetadata{DefaultFormat: "  YaMl  "},
+			},
+		}, "/customers")
+		if err != nil {
+			t.Fatalf("resolveCollectionDefaultFormat returned error: %v", err)
+		}
+		if resolved != resourcedomain.PayloadTypeYAML {
+			t.Fatalf("expected yaml defaultFormat, got %q", resolved)
+		}
 	})
 }
 

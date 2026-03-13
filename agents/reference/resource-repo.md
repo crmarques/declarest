@@ -29,19 +29,20 @@ Define local repository semantics for resource persistence, metadata storage, pa
 12. Git-backed repositories MAY configure authenticated webhook signaling; repository webhook receivers MUST verify provider-specific signatures/tokens before triggering reconcile (detailed receiver behavior is defined in `agents/reference/k8s-operator.md`).
 13. Resource and collection metadata sidecars MUST support `metadata.yaml` and `metadata.json`, MUST prefer `metadata.yaml` when both exist, and SHOULD write `metadata.yaml` by default.
 14. When `resource save --secret` is selected or metadata-driven whole-resource secret handling applies, the repository payload file MUST preserve the original descriptor-derived suffix and MUST contain only the exact root placeholder encoded for that payload type (for example raw `{{secret .}}` bytes for octet-stream files).
-15. One logical resource MAY also include one optional sibling defaults sidecar at `<logical-path>/defaults.<ext>`; when present, repository reads MUST treat it as part of the same logical resource instead of a separate resource path.
-16. `defaults.<ext>` and `resource.<ext>` MUST resolve to the same effective merge-capable payload type, and defaults-sidecar support MUST reject mismatched suffix/type combinations with a typed validation or conflict error before workflow use.
-17. Defaults sidecars MUST be supported only for merge-capable object payload codecs (`json`, `yaml`, `ini`, `properties`); array-root payloads, scalar-root payloads, `xml`, `hcl`, generic text, `octet-stream`, and whole-resource-secret payloads MUST fail defaults-sidecar validation instead of being merged implicitly.
-18. Repository reads for resources with both `defaults.<ext>` and `resource.<ext>` MUST expose the effective payload produced by deep-merging object fields, replacing arrays, and letting explicit `resource.<ext>` values override defaults deterministically.
-19. Repository writes for resources with `defaults.<ext>` MUST compact the effective payload against the defaults before writing `resource.<ext>` so unchanged defaulted fields do not get flattened back into the override file.
-20. Resource delete workflows MUST remove both `resource.<ext>` and an existing sibling `defaults.<ext>` for the same logical path.
-21. Repository implementations that expose raw defaults-sidecar editing MUST provide a separate read/write capability for `defaults.<ext>` so CLI workflows can inspect or edit defaults without flattening them into effective resource payloads.
-22. Sidecar artifact writes MUST reject reserved sibling payload names such as `resource.<ext>` or `defaults.<ext>` so artifact workflows cannot overwrite canonical payload/defaults files.
+15. One logical collection MAY also include one optional metadata-root defaults sidecar at `<collection-path>/_/defaults.<ext>`; when present, repository reads for direct child resources under that collection MUST treat it as part of each logical resource instead of as a separate resource path.
+16. Resource directories MUST NOT contain per-resource defaults files at `<logical-path>/defaults.<ext>`; encountering that legacy layout MUST fail repository-backed workflows with `ValidationError` and remediation toward `<collection-path>/_/defaults.<ext>`.
+17. `defaults.<ext>` and `resource.<ext>` MUST resolve to compatible merge-capable payload types before workflow use; JSON and YAML defaults MUST interoperate with JSON or YAML resource payloads, while unsupported or incompatible combinations MUST fail with a typed validation or conflict error.
+18. Defaults sidecars MUST be supported only for merge-capable object payload codecs (`json`, `yaml`, `ini`, `properties`); array-root payloads, scalar-root payloads, `xml`, `hcl`, generic text, `octet-stream`, and whole-resource-secret payloads MUST fail defaults-sidecar validation instead of being merged implicitly.
+19. Repository reads for resources with both collection defaults and `resource.<ext>` MUST expose the effective payload produced by deep-merging object fields, replacing arrays, and letting explicit `resource.<ext>` values override defaults deterministically.
+20. Repository writes for resources with resolved `defaults.<ext>` MUST compact the effective payload against the defaults before writing `resource.<ext>` so unchanged defaulted fields do not get flattened back into the override file; when a collection-level defaults sidecar makes every field defaulted, repository persistence MUST still keep an explicit empty override file so the logical resource remains present.
+21. Resource delete workflows MUST remove `resource.<ext>` overrides but MUST NOT remove collection-level metadata defaults sidecars.
+22. Repository implementations that expose raw defaults-sidecar editing MUST provide a separate read/write capability for metadata-root `defaults.<ext>` so CLI workflows can inspect or edit defaults without flattening them into effective resource payloads, MUST preserve an existing defaults-sidecar codec when rewriting that sidecar, MUST otherwise prefer the target collection's merge-capable resource payload type when creating a new defaults sidecar, and SHOULD fall back to JSON or YAML only when no merge-capable resource payload type is resolved.
+23. Sidecar artifact writes MUST reject reserved sibling payload names such as `resource.<ext>` or `defaults.<ext>` so artifact workflows cannot overwrite canonical payload/defaults files.
 
 ## Data Contracts
 Layout contract:
 1. Canonical resource payload at `<logical-path>/resource.<ext>`.
-2. Optional merge-capable object defaults sidecar at `<logical-path>/defaults.<ext>`.
+2. Optional merge-capable object defaults sidecar at `<collection-path>/_/defaults.<ext>`.
 3. Collection metadata at `<collection-path>/_/metadata.yaml` by default, with `metadata.json` also accepted.
 4. Resource metadata at `<logical-path>/metadata.yaml` by default, with `metadata.json` also accepted.
 5. Optional repository control artifacts under repo-specific hidden directory.
@@ -68,9 +69,10 @@ Policy contracts:
 6. History requested from a repository backend that does not support local VCS history.
 7. Push requested on a freshly auto-initialized git repo without a local HEAD/commit.
 8. Webhook payload rejected due to invalid provider signature/token.
-9. `defaults.<ext>` uses a mismatched suffix or unsupported payload type/shape for the sibling `resource.<ext>`.
-10. Multiple defaults sidecars match one logical resource.
-11. An artifact write attempts to use a reserved payload sidecar name such as `defaults.yaml`.
+9. A repository still contains a legacy per-resource defaults file at `<logical-path>/defaults.<ext>`.
+10. `defaults.<ext>` uses an incompatible or unsupported payload type/shape for the effective resource payload.
+11. Multiple defaults sidecars match one logical collection scope.
+12. An artifact write attempts to use a reserved payload sidecar name such as `defaults.yaml`.
 
 ## Edge Cases
 1. Rename required after alias change while keeping payload unchanged.
@@ -86,8 +88,9 @@ Policy contracts:
 11. Clean requested on a filesystem repository context.
 12. Valid push webhook arrives for a branch that does not match the configured repository branch and is ignored without mutation.
 13. Both `metadata.yaml` and `metadata.json` exist for one selector path; repository-backed metadata resolution uses the YAML sidecar deterministically.
-14. `defaults.yaml` declares an object field that `resource.yaml` explicitly sets to `null`; the effective payload MUST keep the explicit `null` override instead of restoring the default.
-15. A resource has `defaults.yaml` but no `resource.yaml`; repository reads still treat the logical resource as present and repository writes preserve the split by compacting new effective values into `resource.yaml`.
+14. `customers/_/defaults.yaml` declares an object field that `customers/acme/resource.yaml` explicitly sets to `null`; the effective payload MUST keep the explicit `null` override instead of restoring the default.
+15. A collection has `_/defaults.yaml` and a child resource compacts entirely to defaults; repository writes preserve logical resource presence with an explicit empty `resource.<ext>` override file rather than deleting the resource.
+16. A repository still contains `customers/acme/defaults.yaml` from an older layout; repository-backed defaults workflows MUST fail with `ValidationError` and direct the user to move that file under `customers/_/defaults.yaml`.
 
 ## Examples
 1. Save `/customers/acme` in JSON context writes `/customers/acme/resource.json`.
@@ -106,5 +109,5 @@ Policy contracts:
 14. `repository tree` returns directories like `admin/realms/acme/user-registry/AD PRD` and omits `.git/`, `_/`, and payload/metadata files.
 15. A valid authenticated git push webhook updates repository webhook receipt annotations and triggers immediate repository reconcile without waiting for the next poll interval.
 16. When `/customers/_/metadata.yaml` and `/customers/_/metadata.json` both exist, metadata reads resolve `/customers/_/metadata.yaml` deterministically.
-17. `/customers/acme/defaults.yaml` plus `/customers/acme/resource.yaml` behaves as one logical resource; `Get(/customers/acme)` returns the merged object and `Save(/customers/acme)` writes only fields that differ from `defaults.yaml` back into `resource.yaml`.
-18. `/customers/acme/resource.properties` plus `defaults.properties` merges and compacts Java-properties key/value objects just like JSON/YAML resources.
+17. `/customers/_/defaults.yaml` plus `/customers/acme/resource.yaml` behaves as one logical resource; `Get(/customers/acme)` returns the merged object and `Save(/customers/acme)` writes only fields that differ from `defaults.yaml` back into `resource.yaml`.
+18. `/customers/_/defaults.properties` plus `/customers/acme/resource.properties` merges and compacts Java-properties key/value objects just like JSON/YAML resources.

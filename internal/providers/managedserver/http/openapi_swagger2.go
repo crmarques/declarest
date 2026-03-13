@@ -1,6 +1,10 @@
 package http
 
-import "strings"
+import (
+	"maps"
+	"slices"
+	"strings"
+)
 
 func normalizeOpenAPIDocument(document map[string]any) map[string]any {
 	if len(document) == 0 || !isSwagger2Document(document) {
@@ -71,7 +75,7 @@ func augmentSwagger2PathOperations(document map[string]any) {
 	globalConsumes := openAPIMediaTypeList(document["consumes"])
 	globalProduces := openAPIMediaTypeList(document["produces"])
 
-	for _, pathKey := range sortedMapKeysAny(paths) {
+	for _, pathKey := range slices.Sorted(maps.Keys(paths)) {
 		pathItem, ok := asStringAnyMap(paths[pathKey])
 		if !ok {
 			continue
@@ -80,7 +84,7 @@ func augmentSwagger2PathOperations(document map[string]any) {
 		pathConsumes := mergeOpenAPIMediaTypeList(pathItem["consumes"], globalConsumes)
 		pathProduces := mergeOpenAPIMediaTypeList(pathItem["produces"], globalProduces)
 
-		for _, method := range sortedMapKeysAny(pathItem) {
+		for _, method := range slices.Sorted(maps.Keys(pathItem)) {
 			if !isOpenAPIHTTPMethod(method) {
 				continue
 			}
@@ -196,7 +200,7 @@ func augmentSwagger2OperationResponseContent(document map[string]any, operation 
 	}
 
 	mediaTypes := effectiveOpenAPIMediaTypes(produces)
-	for _, status := range sortedMapKeysAny(responses) {
+	for _, status := range slices.Sorted(maps.Keys(responses)) {
 		responseValue := responses[status]
 		resolvedResponse, ok := resolveOpenAPIValueRef(document, responseValue, map[string]struct{}{}, 0)
 		if !ok {

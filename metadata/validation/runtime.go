@@ -2,7 +2,8 @@ package validation
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
@@ -248,7 +249,7 @@ func MergePayloadFields(payload resource.Value, derivedFields map[string]any) re
 	}
 
 	merged := resource.DeepCopyValue(baseObject)
-	for _, pointer := range sortedMapKeysAny(derivedFields) {
+	for _, pointer := range slices.Sorted(maps.Keys(derivedFields)) {
 		if _, found, err := resource.LookupJSONPointer(merged, pointer); err == nil && found {
 			continue
 		}
@@ -261,13 +262,4 @@ func MergePayloadFields(payload resource.Value, derivedFields map[string]any) re
 	}
 
 	return merged
-}
-
-func sortedMapKeysAny(values map[string]any) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

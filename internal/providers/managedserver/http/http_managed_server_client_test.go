@@ -277,6 +277,95 @@ func TestBuildRequestFromMetadataDefaultsUseJSONWhenNoPayloadTypeIsConfigured(t 
 	}
 }
 
+func TestBuildRequestFromMetadataDefaultsUseTextForRawStringPayload(t *testing.T) {
+	t.Parallel()
+
+	client := mustManagedServerClient(t, config.HTTPServer{
+		BaseURL: "https://example.com/api",
+		Auth: &config.HTTPAuth{
+			CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+		},
+	})
+	md := metadata.ResourceMetadata{
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationCreate): {
+				Path: "/notes",
+				Headers: map[string]string{
+					"X-Content-Type": "{{index . \"contentType\"}}",
+				},
+			},
+		},
+	}
+
+	spec, err := client.BuildRequestFromMetadata(context.Background(), resource.Resource{
+		LogicalPath: "/notes/readme",
+		Payload:     "hello",
+	}, md, metadata.OperationCreate)
+	if err != nil {
+		t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+	}
+
+	if spec.Accept != "text/plain" {
+		t.Fatalf("expected default accept text/plain, got %q", spec.Accept)
+	}
+	if spec.ContentType != "text/plain" {
+		t.Fatalf("expected default content type text/plain, got %q", spec.ContentType)
+	}
+	if spec.Headers["X-Content-Type"] != "text/plain" {
+		t.Fatalf("expected rendered contentType header text/plain, got %+v", spec.Headers)
+	}
+}
+
+func TestBuildRequestFromMetadataRendererUsesExplicitPayloadDescriptorInTemplates(t *testing.T) {
+	t.Parallel()
+
+	service := fsmetadata.NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+	if err := service.Set(ctx, "/keys/private-key", metadata.ResourceMetadata{
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationUpdate): {
+				Path: "/keys/private-key",
+				Headers: map[string]string{
+					"X-Extension": "{{payload_extension .}}",
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	md, err := service.ResolveForPath(ctx, "/keys/private-key")
+	if err != nil {
+		t.Fatalf("ResolveForPath returned error: %v", err)
+	}
+
+	client := mustManagedServerClient(
+		t,
+		config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{Header: "Authorization", Prefix: "Bearer", Value: "token"}},
+			},
+		},
+		WithMetadataRenderer(service),
+	)
+
+	spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+		LogicalPath: "/keys/private-key",
+		Payload:     resource.BinaryValue{Bytes: []byte("secret")},
+		PayloadDescriptor: resource.PayloadDescriptor{
+			Extension: ".key",
+		},
+	}, md, metadata.OperationUpdate)
+	if err != nil {
+		t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+	}
+
+	if spec.Headers["X-Extension"] != ".key" {
+		t.Fatalf("expected rendered payload extension .key, got %+v", spec.Headers)
+	}
+}
+
 func TestBuildRequestFromMetadataHTTPMethodOverrideFromContext(t *testing.T) {
 	t.Parallel()
 
@@ -1891,6 +1980,63 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		}
 		if got := atomic.LoadInt32(&tokenRequests); got != 1 {
 			t.Fatalf("expected one oauth token request, got %d", got)
+		}
+	})
+
+	t.Run("oauth2_cache_invalidation_forces_new_token_request", func(t *testing.T) {
+		t.Parallel()
+
+		var tokenRequests int32
+		var tokenSequence int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/oauth/token":
+				atomic.AddInt32(&tokenRequests, 1)
+				sequence := atomic.AddInt32(&tokenSequence, 1)
+				_, _ = fmt.Fprintf(w, `{"access_token":"oauth-token-%d","expires_in":3600}`, sequence)
+			case "/resource":
+				authorization := r.Header.Get("Authorization")
+				if authorization != "Bearer oauth-token-1" && authorization != "Bearer oauth-token-2" {
+					t.Fatalf("unexpected bearer token header %q", authorization)
+				}
+				_, _ = fmt.Fprint(w, `{"ok":true}`)
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(server.Close)
+
+		client := mustManagedServerClient(t, config.HTTPServer{
+			BaseURL: server.URL,
+			Auth: &config.HTTPAuth{
+				OAuth2: &config.OAuth2{
+					TokenURL:     server.URL + "/oauth/token",
+					GrantType:    config.OAuthClientCreds,
+					ClientID:     "client",
+					ClientSecret: "secret",
+				},
+			},
+		})
+
+		md := metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {Path: "/resource"},
+			},
+		}
+		resource := resource.Resource{LogicalPath: "/customers/acme"}
+		if _, err := client.Get(context.Background(), resource, md); err != nil {
+			t.Fatalf("first Get returned error: %v", err)
+		}
+		if _, err := client.Get(context.Background(), resource, md); err != nil {
+			t.Fatalf("second Get returned error: %v", err)
+		}
+		client.InvalidateAuthCache()
+		if _, err := client.Get(context.Background(), resource, md); err != nil {
+			t.Fatalf("third Get returned error: %v", err)
+		}
+
+		if got := atomic.LoadInt32(&tokenRequests); got != 2 {
+			t.Fatalf("expected two oauth token requests after cache invalidation, got %d", got)
 		}
 	})
 

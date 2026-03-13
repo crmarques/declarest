@@ -1,6 +1,10 @@
 package metadata
 
-import "context"
+import (
+	"context"
+
+	"github.com/crmarques/declarest/resource"
+)
 
 type MetadataStore interface {
 	Get(ctx context.Context, logicalPath string) (ResourceMetadata, error)
@@ -17,12 +21,13 @@ type OperationSpecRenderer interface {
 }
 
 type ResourceOperationSpecInput struct {
-	LogicalPath    string
-	CollectionPath string
-	LocalAlias     string
-	RemoteID       string
-	Metadata       ResourceMetadata
-	Payload        any
+	LogicalPath       string
+	CollectionPath    string
+	LocalAlias        string
+	RemoteID          string
+	PayloadDescriptor resource.PayloadDescriptor
+	Metadata          ResourceMetadata
+	Payload           any
 }
 
 // ResourceOperationSpecRenderer is an optional metadata capability used by

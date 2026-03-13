@@ -86,7 +86,18 @@ func saveListPayloadFromResources(items []resource.Resource) resource.Content {
 
 	payload := make([]any, 0, len(sorted))
 	for _, item := range sorted {
-		payload = append(payload, item.Payload)
+		entry := map[string]any{
+			"LogicalPath": item.LogicalPath,
+			"Payload":     item.Payload,
+		}
+		if resource.IsPayloadDescriptorExplicit(item.PayloadDescriptor) {
+			entry["PayloadDescriptor"] = map[string]any{
+				"PayloadType": item.PayloadDescriptor.PayloadType,
+				"MediaType":   item.PayloadDescriptor.MediaType,
+				"Extension":   item.PayloadDescriptor.Extension,
+			}
+		}
+		payload = append(payload, entry)
 	}
 	descriptor := sorted[0].PayloadDescriptor
 	if !resource.IsPayloadDescriptorExplicit(descriptor) {

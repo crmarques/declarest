@@ -26,7 +26,7 @@ test_parses_validate_components_flag() {
 test_defaults_metadata_type_to_bundle() {
   reload_args_lib
   e2e_parse_args
-  assert_eq "${E2E_METADATA}" "bundle" "expected metadata type default to bundle"
+  assert_eq "${E2E_METADATA}" "bundle" "expected metadata source default to bundle"
 }
 
 test_defaults_platform_to_kubernetes() {
@@ -87,10 +87,40 @@ test_parses_managed_server_proxy_flag() {
   assert_eq "${E2E_MANAGED_SERVER_PROXY}" "false" "expected managed-server proxy flag to parse explicit false"
 }
 
-test_parses_metadata_type_flag() {
+test_parses_metadata_source_flag() {
   reload_args_lib
-  e2e_parse_args --metadata-type bundle
-  assert_eq "${E2E_METADATA}" "bundle" "expected metadata type to be parsed"
+  e2e_parse_args --metadata-source bundle
+  assert_eq "${E2E_METADATA}" "bundle" "expected metadata source to be parsed"
+}
+
+test_parses_legacy_metadata_type_alias() {
+  reload_args_lib
+  e2e_parse_args --metadata-type base-dir
+  assert_eq "${E2E_METADATA}" "dir" "expected legacy metadata type alias to normalize to dir"
+}
+
+test_rejects_invalid_metadata_source_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_args --metadata-source nope 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid --metadata-source value"
+}
+
+test_rejects_base_dir_value_for_new_metadata_source_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_args --metadata-source base-dir 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "1"
+  assert_contains "${output}" "invalid --metadata-source value"
 }
 
 test_rejects_invalid_metadata_type_flag() {
@@ -166,7 +196,19 @@ test_cleanup_parser_treats_validate_mode_as_workload_flag() {
   assert_contains "${output}" "cannot be combined with workload flags"
 }
 
-test_cleanup_parser_treats_metadata_type_flag_as_workload_flag() {
+test_cleanup_parser_treats_metadata_source_flag_as_workload_flag() {
+  reload_args_lib
+  local output status
+  set +e
+  output=$(e2e_parse_cleanup_args --clean-all --metadata-source bundle 2>&1)
+  status=$?
+  set -e
+
+  assert_status "${status}" "2"
+  assert_contains "${output}" "cannot be combined with workload flags"
+}
+
+test_cleanup_parser_treats_legacy_metadata_type_flag_as_workload_flag() {
   reload_args_lib
   local output status
   set +e
@@ -217,7 +259,8 @@ test_usage_mentions_validate_flag_and_no_none_managed_server() {
   assert_contains "${output}" "--profile <cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full>"
   assert_contains "${output}" "--validate-components"
   assert_contains "${output}" "--platform <compose|kubernetes>"
-  assert_contains "${output}" "--metadata-type <base-dir|bundle>"
+  assert_contains "${output}" "--metadata-source <bundle|dir>"
+  assert_contains "${output}" "legacy alias: --metadata-type <bundle|base-dir>"
   assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header>"
   assert_contains "${output}" "--managed-server-proxy [<true|false>]"
   assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
@@ -238,14 +281,18 @@ test_parses_operator_automated_profile
 test_rejects_invalid_platform_flag
 test_parses_managed_server_auth_type_flag
 test_parses_managed_server_proxy_flag
-test_parses_metadata_type_flag
+test_parses_metadata_source_flag
+test_parses_legacy_metadata_type_alias
+test_rejects_invalid_metadata_source_flag
+test_rejects_base_dir_value_for_new_metadata_source_flag
 test_rejects_invalid_metadata_type_flag
 test_rejects_legacy_metadata_flag
 test_rejects_legacy_managed_server_auth_flags
 test_rejects_managed_server_none
 test_rejects_managed_server_proxy_without_urls
 test_cleanup_parser_treats_validate_mode_as_workload_flag
-test_cleanup_parser_treats_metadata_type_flag_as_workload_flag
+test_cleanup_parser_treats_metadata_source_flag_as_workload_flag
+test_cleanup_parser_treats_legacy_metadata_type_flag_as_workload_flag
 test_cleanup_parser_treats_managed_server_proxy_flag_as_workload_flag
 test_cleanup_parser_treats_platform_flag_as_workload_flag
 test_usage_mentions_validate_flag_and_no_none_managed_server

@@ -174,7 +174,7 @@ func TestOrchestratorSaveExternalizesWildcardArrayAttributes(t *testing.T) {
 	}
 }
 
-func TestOrchestratorSaveAppliesPreferredFormatBeforePersisting(t *testing.T) {
+func TestOrchestratorSaveAppliesDefaultFormatBeforePersisting(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -204,6 +204,13 @@ func TestOrchestratorSaveAppliesPreferredFormatBeforePersisting(t *testing.T) {
 			content:             testContentWithType(map[string]any{"name": "ACME"}, resource.PayloadTypeJSON),
 			expectedPayloadType: resource.PayloadTypeJSON,
 		},
+		{
+			name:                "metadata any leaves descriptor unset",
+			orchestratorFormat:  resource.PayloadTypeYAML,
+			metadataFormat:      metadatadomain.ResourceDefaultFormatAny,
+			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
+			expectedPayloadType: "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -214,10 +221,10 @@ func TestOrchestratorSaveAppliesPreferredFormatBeforePersisting(t *testing.T) {
 			repo := &fakeRepository{}
 			orchestrator := New(
 				repo,
-				&fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{PreferredFormat: tc.metadataFormat}},
+				&fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{DefaultFormat: tc.metadataFormat}},
 				nil,
 				nil,
-				WithPreferredFormat(tc.orchestratorFormat),
+				WithDefaultFormat(tc.orchestratorFormat),
 			)
 
 			if err := orchestrator.Save(context.Background(), "/customers/acme", tc.content); err != nil {
@@ -234,7 +241,7 @@ func TestOrchestratorDiffUsesMergedDefaultsSidecarPayload(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
-	writeOrchestratorTestFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.yaml"), `
+	writeOrchestratorTestFile(t, filepath.Join(repoDir, "customers", "_", "defaults.yaml"), `
 id: acme
 spec:
   enabled: true

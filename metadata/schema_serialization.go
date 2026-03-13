@@ -9,6 +9,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// Wire types below map between the nested JSON/YAML schema shape
+// (resource: / operations:) and the flat canonical ResourceMetadata.
+// They handle pointer-to-slice conversions for omitempty semantics,
+// Accept/Content-Type header promotion, and the stringListWire
+// scalar-or-array flexibility. These types must stay in sync with the
+// canonical types in types.go; see TestDisplayTypesMatchCanonicalFieldCount
+// for drift detection on the display-facing counterparts.
 type resourceMetadataWire struct {
 	Resource   *resourceWire   `json:"resource,omitempty" yaml:"resource,omitempty"`
 	Operations *operationsWire `json:"operations,omitempty" yaml:"operations,omitempty"`
@@ -20,7 +27,7 @@ type resourceWire struct {
 	RequiredAttributes     *[]string                    `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
 	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
-	PreferredFormat        string                       `json:"preferredFormat,omitempty" yaml:"preferredFormat,omitempty"`
+	DefaultFormat          string                       `json:"defaultFormat,omitempty" yaml:"defaultFormat,omitempty"`
 	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       *[]string                    `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
@@ -191,7 +198,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		Alias:                metadata.Alias,
 		RemoteCollectionPath: metadata.RemoteCollectionPath,
 		PayloadType:          metadata.PayloadType,
-		PreferredFormat:      metadata.PreferredFormat,
+		DefaultFormat:        metadata.DefaultFormat,
 		Secret:               cloneBoolPointer(metadata.Secret),
 	}
 	if metadata.RequiredAttributes != nil {
@@ -263,8 +270,8 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 		if resource.PayloadType != "" {
 			metadata.PayloadType = resource.PayloadType
 		}
-		if resource.PreferredFormat != "" {
-			metadata.PreferredFormat = resource.PreferredFormat
+		if resource.DefaultFormat != "" {
+			metadata.DefaultFormat = resource.DefaultFormat
 		}
 		if resource.Secret != nil {
 			metadata.Secret = cloneBoolPointer(resource.Secret)
@@ -308,7 +315,7 @@ func hasResourceInfo(resource resourceWire) bool {
 		resource.RequiredAttributes != nil ||
 		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(resource.PayloadType) != "" ||
-		strings.TrimSpace(resource.PreferredFormat) != "" ||
+		strings.TrimSpace(resource.DefaultFormat) != "" ||
 		resource.Secret != nil ||
 		resource.SecretAttributes != nil ||
 		resource.ExternalizedAttributes != nil
@@ -554,51 +561,6 @@ func lookupHeaderCaseInsensitive(headers map[string]string, name string) (value 
 		}
 	}
 	return "", "", false
-}
-
-func stringPointer(value string) *string {
-	return &value
-}
-
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
-func stringSlicePointer(values []string) *[]string {
-	if values == nil {
-		return nil
-	}
-
-	cloned := make([]string, len(values))
-	copy(cloned, values)
-	return &cloned
-}
-
-func stringMapPointer(values map[string]string) *map[string]string {
-	if values == nil {
-		return nil
-	}
-
-	cloned := make(map[string]string, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return &cloned
-}
-
-func headerMapWirePointer(values map[string]string) *headerMapWire {
-	if values == nil {
-		return nil
-	}
-
-	cloned := make(headerMapWire, len(values))
-	for key, value := range values {
-		cloned[key] = value
-	}
-	return &cloned
 }
 
 func decodeHeaderMapWireJSON(data []byte) (map[string]string, error) {

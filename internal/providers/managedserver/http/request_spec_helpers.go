@@ -26,7 +26,7 @@ func resolveOperationSpecTemplates(
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	applyPayloadTemplateScope(templateScope, md, descriptor)
+	metadata.ApplyPayloadTemplateScope(templateScope, md, resolvedResource.Payload, descriptor)
 
 	templateMetadata := metadata.ResourceMetadata{
 		RemoteCollectionPath: md.RemoteCollectionPath,
@@ -90,21 +90,18 @@ func (g *Client) requestFallbackDescriptor(
 	if typed, ok := spec.Body.(resource.Content); ok && resource.IsPayloadDescriptorExplicit(typed.Descriptor) {
 		return resource.NormalizePayloadDescriptor(typed.Descriptor)
 	}
-	return payloadDescriptorFromValue(spec.Body)
+	return metadata.InferPayloadDescriptor(spec.Body)
 }
 
 func (g *Client) requestBodyDescriptor(
 	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) resource.PayloadDescriptor {
-	switch {
-	case resource.IsPayloadDescriptorExplicit(resolvedResource.PayloadDescriptor):
-		return resource.NormalizePayloadDescriptor(resolvedResource.PayloadDescriptor)
-	case strings.TrimSpace(md.PayloadType) != "":
-		return g.metadataPayloadDescriptor(md)
-	default:
-		return payloadDescriptorFromValue(resolvedResource.Payload)
-	}
+	return metadata.ResolveTemplatePayloadDescriptor(
+		md,
+		resolvedResource.Payload,
+		resolvedResource.PayloadDescriptor,
+	)
 }
 
 func (g *Client) genericRequestBodyDescriptor(requestSpec managedserver.RequestSpec) resource.PayloadDescriptor {
@@ -118,7 +115,7 @@ func (g *Client) genericRequestBodyDescriptor(requestSpec managedserver.RequestS
 	case resource.IsBinaryValue(requestSpec.Body.Value):
 		return resource.DefaultOctetStreamDescriptor()
 	default:
-		return payloadDescriptorFromValue(requestSpec.Body.Value)
+		return metadata.InferPayloadDescriptor(requestSpec.Body)
 	}
 }
 
@@ -126,14 +123,11 @@ func (g *Client) payloadTemplateScopeDescriptor(
 	md metadata.ResourceMetadata,
 	resolvedResource resource.Resource,
 ) resource.PayloadDescriptor {
-	switch {
-	case resource.IsPayloadDescriptorExplicit(resolvedResource.PayloadDescriptor):
-		return resource.NormalizePayloadDescriptor(resolvedResource.PayloadDescriptor)
-	case strings.TrimSpace(md.PayloadType) != "":
-		return g.metadataPayloadDescriptor(md)
-	default:
-		return payloadDescriptorFromValue(resolvedResource.Payload)
-	}
+	return metadata.ResolveTemplatePayloadDescriptor(
+		md,
+		resolvedResource.Payload,
+		resolvedResource.PayloadDescriptor,
+	)
 }
 
 func operationSpecFromMetadata(md metadata.ResourceMetadata, operation metadata.Operation) (metadata.OperationSpec, bool, bool, bool, bool) {
@@ -209,59 +203,6 @@ func cloneStringSlice(values []string) []string {
 	cloned := make([]string, len(values))
 	copy(cloned, values)
 	return cloned
-}
-
-func applyPayloadTemplateScope(scope map[string]any, md metadata.ResourceMetadata, descriptor resource.PayloadDescriptor) {
-	if scope == nil {
-		return
-	}
-
-	activeDescriptor := descriptor
-	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
-		if strings.TrimSpace(md.PayloadType) != "" {
-			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: md.PayloadType})
-		} else {
-			activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-		}
-	}
-	scope["payloadType"] = activeDescriptor.PayloadType
-	scope["payloadMediaType"] = activeDescriptor.MediaType
-	scope["payloadExtension"] = activeDescriptor.Extension
-	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(activeDescriptor.MediaType) != "" {
-		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
-			scope["contentType"] = activeDescriptor.MediaType
-		}
-	}
-}
-
-func payloadDescriptorFromValue(value any) resource.PayloadDescriptor {
-	value = unwrapContentValue(value)
-
-	switch typed := value.(type) {
-	case nil:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-	case resource.BinaryValue:
-		return resource.DefaultOctetStreamDescriptor()
-	case *resource.BinaryValue:
-		if typed != nil {
-			return resource.DefaultOctetStreamDescriptor()
-		}
-	case string:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
-	}
-
-	normalized, err := resource.Normalize(value)
-	if err != nil {
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-	}
-	switch normalized.(type) {
-	case string:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeText})
-	case resource.BinaryValue:
-		return resource.DefaultOctetStreamDescriptor()
-	default:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-	}
 }
 
 func joinBaseAndRequestPath(basePath string, requestPath string) string {

@@ -367,12 +367,13 @@ func (r *Orchestrator) renderOperationSpec(
 
 	if renderer, ok := r.metadata.(metadata.ResourceOperationSpecRenderer); ok {
 		spec, err := renderer.RenderOperationSpecForResource(ctx, metadata.ResourceOperationSpecInput{
-			LogicalPath:    templateResource.LogicalPath,
-			CollectionPath: templateResource.CollectionPath,
-			LocalAlias:     templateResource.LocalAlias,
-			RemoteID:       templateResource.RemoteID,
-			Metadata:       metadataCopy,
-			Payload:        templateResource.Payload,
+			LogicalPath:       templateResource.LogicalPath,
+			CollectionPath:    templateResource.CollectionPath,
+			LocalAlias:        templateResource.LocalAlias,
+			RemoteID:          templateResource.RemoteID,
+			PayloadDescriptor: templateResource.PayloadDescriptor,
+			Metadata:          metadataCopy,
+			Payload:           templateResource.Payload,
 		}, operation)
 		if err != nil {
 			return metadata.OperationSpec{}, err
@@ -387,7 +388,12 @@ func (r *Orchestrator) renderOperationSpec(
 	if err != nil {
 		return metadata.OperationSpec{}, err
 	}
-	applyOrchestratorPayloadScope(scope, metadataCopy, templateResource.PayloadDescriptor)
+	metadata.ApplyPayloadTemplateScope(
+		scope,
+		metadataCopy,
+		templateResource.Payload,
+		templateResource.PayloadDescriptor,
+	)
 
 	spec, err := metadata.ResolveOperationSpecWithScope(ctx, metadataCopy, operation, scope)
 	if err != nil {
@@ -397,28 +403,4 @@ func (r *Orchestrator) renderOperationSpec(
 		spec.Method = overrideMethod
 	}
 	return spec, nil
-}
-
-func applyOrchestratorPayloadScope(
-	scope map[string]any,
-	md metadata.ResourceMetadata,
-	descriptor resource.PayloadDescriptor,
-) {
-	if scope == nil {
-		return
-	}
-
-	activeDescriptor := resource.NormalizePayloadDescriptor(descriptor)
-	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) && strings.TrimSpace(md.PayloadType) != "" {
-		activeDescriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: md.PayloadType})
-	}
-
-	scope["payloadType"] = activeDescriptor.PayloadType
-	scope["payloadMediaType"] = activeDescriptor.MediaType
-	scope["payloadExtension"] = activeDescriptor.Extension
-	if _, exists := scope["contentType"]; !exists && strings.TrimSpace(activeDescriptor.MediaType) != "" {
-		if _, isPayloadMap := scope["payload"].(map[string]any); !isPayloadMap {
-			scope["contentType"] = activeDescriptor.MediaType
-		}
-	}
 }

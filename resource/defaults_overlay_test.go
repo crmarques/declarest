@@ -182,7 +182,7 @@ func TestValidateDefaultsSidecarDescriptor(t *testing.T) {
 
 	err = ValidateDefaultsSidecarDescriptor(
 		PayloadDescriptor{Extension: ".yaml"},
-		PayloadDescriptor{Extension: ".json"},
+		PayloadDescriptor{Extension: ".properties"},
 	)
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected validation error for mismatched payload types, got %v", err)
@@ -231,6 +231,31 @@ func TestInferDefaultsFromValues(t *testing.T) {
 		"labels": map[string]any{
 			"team": "platform",
 		},
+	}
+	if !reflect.DeepEqual(inferred, want) {
+		t.Fatalf("unexpected inferred defaults: got %#v want %#v", inferred, want)
+	}
+}
+
+func TestInferDefaultsFromValuesKeepsSharedEmptyObjects(t *testing.T) {
+	t.Parallel()
+
+	inferred, err := InferDefaultsFromValues(
+		map[string]any{
+			"name":       "acme",
+			"smtpServer": map[string]any{},
+		},
+		map[string]any{
+			"name":       "beta",
+			"smtpServer": map[string]any{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("InferDefaultsFromValues() error = %v", err)
+	}
+
+	want := map[string]any{
+		"smtpServer": map[string]any{},
 	}
 	if !reflect.DeepEqual(inferred, want) {
 		t.Fatalf("unexpected inferred defaults: got %#v want %#v", inferred, want)

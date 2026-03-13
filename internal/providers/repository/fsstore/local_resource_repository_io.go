@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/providers/fsutil"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 )
@@ -43,6 +44,9 @@ func (r *LocalResourceRepository) Save(_ context.Context, logicalPath string, co
 		if err != nil {
 			return err
 		}
+	}
+	if normalizedValue == nil && existingFiles.Defaults != nil && existingFiles.Defaults.Shared {
+		normalizedValue = map[string]any{}
 	}
 	content.Value = normalizedValue
 	content.Descriptor = targetInfo.Descriptor
@@ -178,6 +182,9 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 			return err
 		}
 	}
+	if normalizedValue == nil && existingFiles.Defaults != nil && existingFiles.Defaults.Shared {
+		normalizedValue = map[string]any{}
+	}
 	content.Value = normalizedValue
 	content.Descriptor = targetInfo.Descriptor
 
@@ -260,6 +267,9 @@ func (r *LocalResourceRepository) Get(_ context.Context, logicalPath string) (re
 		return resource.Content{}, err
 	}
 	if files.Resource == nil && files.Defaults == nil {
+		return resource.Content{}, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
+	}
+	if files.Resource == nil && files.Defaults != nil && files.Defaults.Shared {
 		return resource.Content{}, notFoundError(fmt.Sprintf("resource %q not found", normalizedPath))
 	}
 
@@ -383,6 +393,10 @@ func (r *LocalResourceRepository) removePayloadFile(info *payloadFileInfo) error
 	if err := os.Remove(info.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return internalError("failed to remove resource payload", err)
 	}
-	_ = r.cleanupEmptyParents(filepath.Dir(info.Path))
+	rootDir := r.baseDir
+	if info.Shared {
+		rootDir = r.defaultsBaseDir()
+	}
+	_ = fsutil.CleanupEmptyParents(filepath.Dir(info.Path), rootDir)
 	return nil
 }

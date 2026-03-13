@@ -113,7 +113,7 @@ func ValidateDefaultsSidecarDescriptor(defaults PayloadDescriptor, overrides Pay
 	}
 
 	resolvedOverrides := NormalizePayloadDescriptor(overrides)
-	if resolvedOverrides.PayloadType != resolvedDefaults.PayloadType {
+	if !defaultsOverlayPayloadTypesCompatible(resolvedDefaults.PayloadType, resolvedOverrides.PayloadType) {
 		return faults.NewValidationError(
 			fmt.Sprintf(
 				"defaults sidecar payload type %q does not match resource payload type %q",
@@ -125,6 +125,24 @@ func ValidateDefaultsSidecarDescriptor(defaults PayloadDescriptor, overrides Pay
 	}
 
 	return nil
+}
+
+func defaultsOverlayPayloadTypesCompatible(defaultsType string, overridesType string) bool {
+	normalizedDefaults := NormalizePayloadType(defaultsType)
+	normalizedOverrides := NormalizePayloadType(overridesType)
+	if normalizedDefaults == normalizedOverrides {
+		return true
+	}
+	return isJSONYAMLDefaultsOverlayType(normalizedDefaults) && isJSONYAMLDefaultsOverlayType(normalizedOverrides)
+}
+
+func isJSONYAMLDefaultsOverlayType(payloadType string) bool {
+	switch NormalizePayloadType(payloadType) {
+	case PayloadTypeJSON, PayloadTypeYAML:
+		return true
+	default:
+		return false
+	}
 }
 
 func InferDefaultsFromValues(values ...Value) (Value, error) {
@@ -260,7 +278,7 @@ func intersectObjectDefaults(left map[string]any, right map[string]any) map[stri
 		rightObject, rightIsObject := rightValue.(map[string]any)
 		if leftIsObject && rightIsObject {
 			nested := intersectObjectDefaults(leftObject, rightObject)
-			if len(nested) > 0 {
+			if len(nested) > 0 || (len(leftObject) == 0 && len(rightObject) == 0) {
 				result[key] = nested
 			}
 			continue

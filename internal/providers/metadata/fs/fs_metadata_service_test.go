@@ -544,7 +544,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 				PayloadType: "text",
 				ID:          "{{/id}}",
 			},
-			want: "resource.id requires structured payload type (json, yaml)",
+			want: "resource.id requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "alias_from_attribute_requires_structured_payload",
@@ -552,7 +552,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 				PayloadType: "text",
 				Alias:       "{{/name}}",
 			},
-			want: "resource.alias requires structured payload type (json, yaml)",
+			want: "resource.alias requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "secret_in_attributes_requires_structured_payload",
@@ -561,7 +561,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 				SecretAttributes: []string{"/password"},
 			},
 			wantAll: []string{
-				"resource.secretAttributes requires structured payload type (json, yaml)",
+				"resource.secretAttributes requires structured payload type (json, yaml, ini, properties)",
 				"resource.secret: true",
 			},
 		},
@@ -571,7 +571,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 				PayloadType:        "text",
 				RequiredAttributes: []string{"/name"},
 			},
-			want: "resource.requiredAttributes requires structured payload type (json, yaml)",
+			want: "resource.requiredAttributes requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "externalized_attributes_requires_structured_payload",
@@ -581,7 +581,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 					{Path: "/script", File: "script.sh"},
 				},
 			},
-			want: "resource.externalizedAttributes requires structured payload type (json, yaml)",
+			want: "resource.externalizedAttributes requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "whole_resource_secret_and_secret_attributes_are_mutually_exclusive",
@@ -627,6 +627,35 @@ func TestFSMetadataValidationRejectsInvalidResourceRequiredAttributes(t *testing
 	if err == nil || !strings.Contains(err.Error(), "resource.requiredAttributes[0] must be a valid JSON pointer") {
 		t.Fatalf("expected resource.requiredAttributes pointer validation error, got %v", err)
 	}
+}
+
+func TestFSMetadataValidationDefaultFormat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts any", func(t *testing.T) {
+		t.Parallel()
+
+		service := NewFSMetadataService(t.TempDir())
+		err := service.Set(context.Background(), "/customers/_", metadatadomain.ResourceMetadata{
+			DefaultFormat: metadatadomain.ResourceDefaultFormatAny,
+		})
+		if err != nil {
+			t.Fatalf("expected defaultFormat any to validate, got %v", err)
+		}
+	})
+
+	t.Run("rejects unsupported format", func(t *testing.T) {
+		t.Parallel()
+
+		service := NewFSMetadataService(t.TempDir())
+		err := service.Set(context.Background(), "/customers/_", metadatadomain.ResourceMetadata{
+			DefaultFormat: "toml",
+		})
+		assertTypedCategory(t, err, faults.ValidationError)
+		if !strings.Contains(err.Error(), `unsupported payload type "toml"`) {
+			t.Fatalf("expected unsupported payload type error, got %q", err.Error())
+		}
+	})
 }
 
 func TestFSMetadataSetOmitsNilFieldsFromStoredYAML(t *testing.T) {

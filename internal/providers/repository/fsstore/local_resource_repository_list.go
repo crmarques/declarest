@@ -87,7 +87,7 @@ func (r *LocalResourceRepository) listDirect(baseLogicalPath string, collectionP
 				logicalPath = "/" + logicalPath
 			}
 
-			files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filepath.Join(collectionPath, entry.Name()))
+			files, infoErr := r.discoverPayloadFiles(logicalPath)
 			if infoErr != nil {
 				return nil, infoErr
 			}
@@ -139,7 +139,7 @@ func (r *LocalResourceRepository) listRecursive(baseLogicalPath string, collecti
 		if !strings.HasPrefix(logicalPath, "/") {
 			logicalPath = "/" + logicalPath
 		}
-		files, infoErr := r.payloadFilesInfoFromDir(logicalPath, filePath)
+		files, infoErr := r.discoverPayloadFiles(logicalPath)
 		if infoErr != nil {
 			return infoErr
 		}

@@ -3,10 +3,12 @@ package save
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	defaultsapp "github.com/crmarques/declarest/internal/app/resource/defaults"
+	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -268,8 +270,19 @@ func saveResolvedPathPayload(
 	if err != nil {
 		return err
 	}
+	collectionDefaultFormat, err := resolveCollectionDefaultFormat(ctx, deps, resolvedPath)
+	if err != nil {
+		return err
+	}
 	for idx := range entries {
-		entries[idx].Descriptor = content.Descriptor
+		switch {
+		case metadatadomain.ResourceDefaultFormatAllowsMixedItems(collectionDefaultFormat):
+			continue
+		case strings.TrimSpace(collectionDefaultFormat) != "":
+			entries[idx].Descriptor = resource.PayloadDescriptor{}
+		case !resource.IsPayloadDescriptorExplicit(entries[idx].Descriptor):
+			entries[idx].Descriptor = content.Descriptor
+		}
 	}
 	if pruneDefaults {
 		for idx := range entries {
@@ -366,4 +379,12 @@ func saveResolvedPathPayload(
 	}
 
 	return nil
+}
+
+func resolveCollectionDefaultFormat(ctx context.Context, deps Dependencies, logicalPath string) (string, error) {
+	resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, logicalPath)
+	if err != nil {
+		return "", err
+	}
+	return metadatadomain.NormalizeResourceDefaultFormat(resolvedMetadata.DefaultFormat), nil
 }

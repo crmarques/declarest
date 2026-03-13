@@ -22,7 +22,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 5. TLS configuration errors MUST fail fast during initialization.
 6. Bootstrap wiring MUST warn when `managedServer.http.baseURL` or `managedServer.http.auth.oauth2.tokenURL` use plain HTTP because credentials may be transmitted in cleartext.
 7. HTTP response errors MUST preserve status code and response body context.
-8. OpenAPI-derived defaults SHOULD improve request correctness but MUST NOT override explicit metadata unless requested.
+8. OpenAPI-derived defaults SHOULD improve request correctness, SHOULD infer metadata `resource.defaultFormat` from managed-server payload formats (using `any` when multiple deterministic formats are advertised), but MUST NOT override explicit metadata unless requested.
 9. List responses MUST be normalized into deterministic `resource.Resource` ordering.
 10. Resolved `operations.list.transforms[*].jqExpression` steps MUST be executed against decoded list payload before list-shape extraction and identity mapping.
 11. List-operation `jq` expressions MAY call `resource("<logical-path>")`; resolution MUST use a context-provided logical-path resolver when available.
@@ -85,14 +85,15 @@ Request throttling fields:
 5. Validation schema reference is configured but OpenAPI request-body/schema pointer cannot be resolved.
 6. Swagger 2.0 operation omits `parameters[in=body].schema`; `validate.schemaRef=openapi:request-body` fails with `ValidationError`.
 7. Two concurrent sync workflows targeting the same managed server share one throttle scope and one queue budget.
-8. OpenAPI advertises `application/octet-stream` or `format: binary`, and the resolved payload type becomes `octet-stream`.
-9. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
-10. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
-11. Structured mutation validation can require `/clientId` from `resource.alias: "{{/clientId}}"` even when an operation transform removes `/clientId` from the outgoing request body afterward.
-12. Custom auth header names other than `Authorization` still require debug-log redaction when they come from `managedServer.http.auth.customHeaders`.
-13. A direct resource `get` or `delete` path that cannot render `operations.get.path` or `operations.delete.path` from the requested logical segment alone can still succeed when the parent collection list yields exactly one candidate whose rendered alias matches that segment and whose payload supplies the missing template fields.
-14. Plain HTTP OAuth2 token URLs emit a bootstrap warning but remain allowed for explicitly insecure local-development contexts.
-15. Structured create payloads can omit metadata-derived `/id` when the remote server assigns the resource ID, while update for the same scope still fails fast if `/id` is missing.
+8. OpenAPI advertises `application/octet-stream` or `format: binary`, and the resolved payload type plus inferred metadata `resource.defaultFormat` become `octet-stream`.
+9. OpenAPI advertises both JSON and XML representations for one logical resource collection, and metadata inference leaves `resource.payloadType` unset while setting `resource.defaultFormat: any`.
+10. Raw request execution uses metadata-rendered `Accept` and `Content-Type` instead of falling back to JSON-only defaults.
+11. Metadata-rendered update operations can target raw `resource.key` payloads, preserve the raw request body, and still resolve `Content-Type` from the active payload descriptor.
+12. Structured mutation validation can require `/clientId` from `resource.alias: "{{/clientId}}"` even when an operation transform removes `/clientId` from the outgoing request body afterward.
+13. Custom auth header names other than `Authorization` still require debug-log redaction when they come from `managedServer.http.auth.customHeaders`.
+14. A direct resource `get` or `delete` path that cannot render `operations.get.path` or `operations.delete.path` from the requested logical segment alone can still succeed when the parent collection list yields exactly one candidate whose rendered alias matches that segment and whose payload supplies the missing template fields.
+15. Plain HTTP OAuth2 token URLs emit a bootstrap warning but remain allowed for explicitly insecure local-development contexts.
+16. Structured create payloads can omit metadata-derived `/id` when the remote server assigns the resource ID, while update for the same scope still fails fast if `/id` is missing.
 
 ## Examples
 1. `Get` operation uses `operations.get.path` plus payload-type-aware default `Accept`.

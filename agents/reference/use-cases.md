@@ -228,13 +228,13 @@ Inputs:
 Execution:
 1. CLI resolves the target to one concrete local repository resource path.
 2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
-3. `resource defaults infer --save` persists the inferred object to `defaults.<ext>` for the target path.
+3. `resource defaults infer --save` persists the inferred object to the collection metadata selector `defaults.<ext>` for the target path, reusing the collection resource payload type when it is merge-capable (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` when the widget collection stores `resource.json`).
 4. `resource defaults infer --check` compares the inferred normalized object against the current defaults sidecar and fails when they differ.
 5. `resource defaults get` returns the raw defaults object, not the merged effective resource.
 
 Expected outputs:
 1. Output contains only shared default candidates.
-2. Saving defaults keeps `resource.<ext>` separate from `defaults.<ext>`.
+2. Saving defaults keeps `resource.<ext>` separate from the collection metadata `defaults.<ext>` sidecar.
 3. `--check` succeeds only when the stored defaults sidecar matches the inferred normalized object.
 4. Subsequent repository-backed reads still expose the merged effective resource.
 
@@ -251,7 +251,7 @@ Execution:
 3. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources.
 
 Expected outputs:
-1. Only stable server-added defaults remain in command output.
+1. Only stable server-added defaults remain in command output, including stable empty-object fields such as `smtpServer: {}` when the server returns them consistently.
 2. Temporary probe resources are removed before the command returns.
 
 Failure expectation:
@@ -262,7 +262,7 @@ Goal: compact effective local or remote payloads back to explicit overrides with
 
 Inputs:
 1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
-2. Repository contains `defaults.<ext>` with stable fields such as `project` and `enabled`.
+2. Repository contains `defaults.<ext>` with stable fields such as `project`, `enabled`, or empty-object defaults like `smtpServer: {}`.
 3. Caller runs `resource get --prune-defaults` or `resource save --prune-defaults`.
 
 Execution:
@@ -310,6 +310,43 @@ Expected outputs:
 Failure expectation:
 1. Dependency selector referencing a non-selected component fails with actionable dependency error.
 2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
+
+### Example 33: E2E Metadata Source Directory Mode
+Goal: select run-scoped managed-server metadata from the component metadata directory.
+
+Inputs:
+1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source dir`.
+2. Selected managed-server component with checked-in `metadata/` fixtures.
+
+Execution:
+1. Runner parses `--metadata-source dir`.
+2. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
+3. Generated context points `metadata.base-dir` at that run-scoped copy.
+4. Runner keeps local `managedServer.http.openapi` wiring enabled for the selected component.
+
+Expected outputs:
+1. Generated context uses the run-scoped metadata copy rather than the checked-in fixture directory.
+2. Local OpenAPI wiring remains enabled.
+3. Checked-in component metadata directories remain unchanged after the run.
+
+### Example 34: E2E Metadata Source Legacy Alias (Corner)
+Goal: preserve compatibility for older metadata mode flag spelling while normalizing to the canonical metadata-source contract.
+
+Inputs:
+1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-type base-dir`.
+2. Selected managed-server component with checked-in `metadata/` fixtures.
+
+Execution:
+1. Runner parses the legacy flag/value pair and normalizes the effective metadata source to `dir`.
+2. Runner prepares the same run-scoped metadata workspace used by `--metadata-source dir`.
+3. Final summary renders the canonical execution parameter label/value as `metadata-source: dir`.
+
+Expected outputs:
+1. Runtime behavior matches `--metadata-source dir`.
+2. Summary output reports the canonical metadata-source selection.
+
+Failure expectation:
+1. `run-e2e.sh --metadata-source base-dir` fails with `ValidationError` before runtime startup.
 
 ### Example 12: Metadata Sidecar YAML Preference With JSON Fallback
 Goal: persist metadata in YAML by default while keeping existing JSON sidecars readable.
@@ -733,3 +770,42 @@ Expected outputs:
 
 Failure expectation:
 1. If the runtime validates only the transformed outgoing body or allows the missing alias to pass, the contract is breached.
+
+### Example 35: Collection Save With `resource.defaultFormat: any`
+Goal: preserve mixed child payload formats during one collection save.
+
+Inputs:
+1. Collection metadata at `/customers/_` with `resource.defaultFormat: any`.
+2. Incoming collection payload whose items resolve to `/customers/acme` and `/customers/beta`.
+3. Existing repository state where `/customers/acme/resource.yaml` already exists and `/customers/beta/resource.json` already exists, or item descriptors explicitly identify different formats.
+
+Execution:
+1. User runs `resource save /customers` with the mixed collection payload.
+2. Runtime resolves one logical child path per item using metadata identity rules.
+3. Repository persistence preserves each child item's explicit or existing payload descriptor instead of coercing the whole collection to one format.
+
+Expected outputs:
+1. `/customers/acme/resource.yaml` remains YAML and `/customers/beta/resource.json` remains JSON after the save.
+2. Collection save succeeds without rewriting both children to one shared suffix.
+
+Failure expectation:
+1. If one collection-level descriptor rewrites every child to the same suffix despite `defaultFormat: any`, the contract is breached.
+
+### Example 36: Metadata View vs Rendered Metadata Snapshot
+Goal: keep `metadata get` and `resource get --show-metadata` boundaries explicit for payload-aware helper tokens.
+
+Inputs:
+1. Metadata containing `operations.get.accept: "{{payload_media_type .}}"` and `operations.create.headers.X-Content-Type: "{{index . \"contentType\"}}"`.
+2. Resource payload stored or fetched as raw text or octet-stream.
+
+Execution:
+1. User runs `metadata get <path>`.
+2. User runs `resource get <path> --show-metadata`.
+
+Expected outputs:
+1. `metadata get` prints the canonical metadata view with helper placeholders still present.
+2. `resource get --show-metadata` prints a rendered metadata snapshot where payload-aware helper tokens resolve from the active descriptor (for example `text/plain`, `application/octet-stream`, or an explicit extension-backed descriptor).
+3. Non-payload templates that still depend on unresolved payload fields remain untouched in `metadata get`.
+
+Failure expectation:
+1. If `metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.
