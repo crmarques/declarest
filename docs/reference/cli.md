@@ -83,10 +83,11 @@ declarest resource defaults edit /corporations/acme
 declarest resource defaults infer /corporations/acme
 declarest resource defaults infer /corporations/acme --save
 declarest resource defaults infer /corporations/acme --check
+declarest resource defaults infer /corporations/acme --managed-server --wait 2s --yes
 declarest resource defaults infer /corporations/acme --managed-server --check --yes
 ```
 
-Use this command family to keep raw shared values in `defaults.<ext>` while the rest of the CLI still works with the merged effective resource. Use `--save` to persist inferred defaults, `--check` to validate the current sidecar without changing it, and do not combine those two flags. `resource defaults infer --managed-server` probes server-added defaults by creating temporary remote resources, so it requires `--yes`.
+Use this command family to keep raw shared values in `defaults.<ext>` while the rest of the CLI still works with the merged effective resource. Use `--save` to persist inferred defaults, `--check` to validate the current sidecar without changing it, and do not combine those two flags. `resource defaults infer --managed-server` probes server-added defaults by creating temporary remote resources, so it requires `--yes`. Add `--wait <duration|seconds>` when the managed server needs extra time before the first probe readback; bare integers are treated as seconds.
 
 ### Mutate remote state
 

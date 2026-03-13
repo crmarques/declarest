@@ -63,6 +63,78 @@ wait_for_git_receive_pack() {
   return 1
 }
 
+gitlab_should_retry_api_status() {
+  local status=$1
+  local stderr_output=$2
+
+  case "${status}" in
+    7|52|56)
+      return 0
+      ;;
+    22)
+      if [[ -z "${stderr_output}" ]]; then
+        return 0
+      fi
+      if grep -Eq 'The requested URL returned error: 50[234]' <<<"${stderr_output}"; then
+        return 0
+      fi
+      ;;
+  esac
+
+  return 1
+}
+
+gitlab_api_retry_curl() {
+  local target=$1
+  shift
+
+  local attempts=${wait_attempts}
+  local interval_seconds=${wait_interval_seconds}
+  local stderr_file
+  local response=''
+  local stderr_output=''
+  local status=0
+  local i
+
+  stderr_file=$(mktemp)
+  for ((i = 1; i <= attempts; i++)); do
+    : >"${stderr_file}"
+
+    set +e
+    response=$("$@" 2>"${stderr_file}")
+    status=$?
+    set -e
+
+    if ((status == 0)); then
+      rm -f "${stderr_file}"
+      printf '%s' "${response}"
+      return 0
+    fi
+
+    stderr_output=$(<"${stderr_file}")
+    if ! gitlab_should_retry_api_status "${status}" "${stderr_output}"; then
+      rm -f "${stderr_file}"
+      if [[ -n "${stderr_output}" ]]; then
+        printf '%s\n' "${stderr_output}" >&2
+      fi
+      return "${status}"
+    fi
+
+    if ((i % 12 == 0)); then
+      printf 'gitlab api pending (%d/%d): %s\n' "${i}" "${attempts}" "${target}" >&2
+    fi
+
+    sleep "${interval_seconds}"
+  done
+
+  rm -f "${stderr_file}"
+  if [[ -n "${stderr_output}" ]]; then
+    printf '%s\n' "${stderr_output}" >&2
+  fi
+  printf 'gitlab api did not become ready after %d attempts (%ss interval): %s\n' "${attempts}" "${interval_seconds}" "${target}" >&2
+  return 1
+}
+
 wait_for "${GITLAB_BASE_URL}/users/sign_in"
 
 oauth_token=''
@@ -91,33 +163,33 @@ fi
 gitlab_api_get() {
   local url=$1
   if [[ "${api_auth_mode}" == 'bearer' ]]; then
-    curl -fsS -H "Authorization: Bearer ${oauth_token}" "${url}"
+    gitlab_api_retry_curl "${url}" curl -fsS -H "Authorization: Bearer ${oauth_token}" "${url}"
     return 0
   fi
 
-  curl -fsS -u "root:${GITLAB_ROOT_PASSWORD}" "${url}"
+  gitlab_api_retry_curl "${url}" curl -fsS -u "root:${GITLAB_ROOT_PASSWORD}" "${url}"
 }
 
 gitlab_api_post() {
   local url=$1
   shift
   if [[ "${api_auth_mode}" == 'bearer' ]]; then
-    curl -fsS -X POST -H "Authorization: Bearer ${oauth_token}" "${url}" "$@"
+    gitlab_api_retry_curl "${url}" curl -fsS -X POST -H "Authorization: Bearer ${oauth_token}" "${url}" "$@"
     return 0
   fi
 
-  curl -fsS -X POST -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
+  gitlab_api_retry_curl "${url}" curl -fsS -X POST -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
 }
 
 gitlab_api_put() {
   local url=$1
   shift
   if [[ "${api_auth_mode}" == 'bearer' ]]; then
-    curl -fsS -X PUT -H "Authorization: Bearer ${oauth_token}" "${url}" "$@"
+    gitlab_api_retry_curl "${url}" curl -fsS -X PUT -H "Authorization: Bearer ${oauth_token}" "${url}" "$@"
     return 0
   fi
 
-  curl -fsS -X PUT -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
+  gitlab_api_retry_curl "${url}" curl -fsS -X PUT -u "root:${GITLAB_ROOT_PASSWORD}" "${url}" "$@"
 }
 
 branch_name=${GIT_REMOTE_BRANCH:-main}

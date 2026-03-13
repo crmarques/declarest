@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
@@ -94,7 +95,7 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 	}
 }
 
-func TestInferResolvesExplicitCollectionTargetToSingleDirectChild(t *testing.T) {
+func TestInferRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -109,21 +110,18 @@ func TestInferResolvesExplicitCollectionTargetToSingleDirectChild(t *testing.T) 
 		},
 	})
 
-	result, err := Infer(context.Background(), deps, "/projects/", InferRequest{})
-	if err != nil {
-		t.Fatalf("Infer returned error: %v", err)
-	}
-	if result.ResolvedPath != "/projects/platform" {
-		t.Fatalf("expected resolved path /projects/platform, got %q", result.ResolvedPath)
-	}
-
-	want := map[string]any{}
-	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.Content.Value, want)
+	for _, requestedPath := range []string{"/projects", "/projects/"} {
+		requestedPath := requestedPath
+		t.Run(requestedPath, func(t *testing.T) {
+			_, err := Infer(context.Background(), deps, requestedPath, InferRequest{})
+			if !faults.IsCategory(err, faults.NotFoundError) {
+				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+			}
+		})
 	}
 }
 
-func TestInferManagedServerResolvesExplicitCollectionTargetToSingleDirectChild(t *testing.T) {
+func TestInferManagedServerRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -137,23 +135,21 @@ func TestInferManagedServerResolvesExplicitCollectionTargetToSingleDirectChild(t
 	})
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
-	result, err := Infer(context.Background(), deps, "/projects/", InferRequest{ManagedServer: true})
-	if err != nil {
-		t.Fatalf("Infer returned error: %v", err)
-	}
-	if result.ResolvedPath != "/projects/platform" {
-		t.Fatalf("expected resolved path /projects/platform, got %q", result.ResolvedPath)
+	for _, requestedPath := range []string{"/projects", "/projects/"} {
+		requestedPath := requestedPath
+		t.Run(requestedPath, func(t *testing.T) {
+			_, err := Infer(context.Background(), deps, requestedPath, InferRequest{ManagedServer: true})
+			if !faults.IsCategory(err, faults.NotFoundError) {
+				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+			}
+		})
 	}
 
-	want := map[string]any{"status": "active"}
-	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	if len(orch.createCalls) != 0 {
+		t.Fatalf("expected no temporary creates for collection-path inference, got %#v", orch.createCalls)
 	}
-	if len(orch.createCalls) != 2 {
-		t.Fatalf("expected two temporary creates, got %#v", orch.createCalls)
-	}
-	if len(orch.deleteCalls) != 2 {
-		t.Fatalf("expected two cleanup deletes, got %#v", orch.deleteCalls)
+	if len(orch.deleteCalls) != 0 {
+		t.Fatalf("expected no cleanup deletes for collection-path inference, got %#v", orch.deleteCalls)
 	}
 }
 
@@ -173,7 +169,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
-	result, err := Infer(context.Background(), deps, "/admin/realms/", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/admin/realms/acme", InferRequest{ManagedServer: true})
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -201,6 +197,29 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 		if got := payload["displayName"]; got != "acme" {
 			t.Fatalf("expected displayName to remain unchanged, got %#v", got)
 		}
+	}
+}
+
+func TestInferFromManagedServerIgnoresStoredDefaultsSidecarValues(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+	repo := deps.Repository.(*fakeDefaultsRepository)
+	repo.defaults["/customers/acme"] = resource.Content{
+		Value: map[string]any{
+			"tier": "gold",
+		},
+		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+	}
+
+	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{"status": "active"}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
 }
 
@@ -285,6 +304,45 @@ func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
 		"status": "active",
 		"tier":   "standard",
 	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferFromManagedServerWaitsBeforeFirstProbeRead(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/projects/platform": {
+			Value: map[string]any{
+				"id":          "platform",
+				"displayName": "Platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	wait := 25 * time.Millisecond
+
+	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{
+		ManagedServer: true,
+		Wait:          wait,
+	})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if orch.lastCreateAt.IsZero() {
+		t.Fatal("expected create timestamp to be recorded")
+	}
+	if orch.firstGetRemoteAt.IsZero() {
+		t.Fatal("expected first remote read timestamp to be recorded")
+	}
+	if delay := orch.firstGetRemoteAt.Sub(orch.lastCreateAt); delay < wait {
+		t.Fatalf("expected first remote read delay >= %s, got %s", wait, delay)
+	}
+
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
@@ -375,17 +433,14 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 	}
 }
 
-func TestInferRejectsExplicitCollectionTargetWithMultipleDirectChildren(t *testing.T) {
+func TestInferRejectsCollectionPathWithMultipleDirectChildren(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDeps()
 
 	_, err := Infer(context.Background(), deps, "/customers/", InferRequest{})
-	if !faults.IsCategory(err, faults.ValidationError) {
-		t.Fatalf("expected validation error, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "concrete resource path") {
-		t.Fatalf("expected concrete resource path guidance, got %v", err)
+	if !faults.IsCategory(err, faults.NotFoundError) {
+		t.Fatalf("expected not found error, got %v", err)
 	}
 }
 
@@ -517,12 +572,14 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 
 type fakeDefaultsOrchestrator struct {
 	orchestratordomain.Orchestrator
-	localContent map[string]resource.Content
-	createCalls  []savedResource
-	deleteCalls  []string
-	deleteErr    error
-	getRemoteFn  func(item savedResource, call int) (resource.Content, error)
-	getCalls     map[string]int
+	localContent     map[string]resource.Content
+	createCalls      []savedResource
+	deleteCalls      []string
+	deleteErr        error
+	getRemoteFn      func(item savedResource, call int) (resource.Content, error)
+	getCalls         map[string]int
+	lastCreateAt     time.Time
+	firstGetRemoteAt time.Time
 }
 
 type savedResource struct {
@@ -564,10 +621,14 @@ func (f *fakeDefaultsOrchestrator) ListLocal(_ context.Context, logicalPath stri
 
 func (f *fakeDefaultsOrchestrator) Create(_ context.Context, logicalPath string, content resource.Content) (resource.Resource, error) {
 	f.createCalls = append(f.createCalls, savedResource{logicalPath: logicalPath, content: content})
+	f.lastCreateAt = time.Now()
 	return resource.Resource{LogicalPath: logicalPath}, nil
 }
 
 func (f *fakeDefaultsOrchestrator) GetRemote(_ context.Context, logicalPath string) (resource.Content, error) {
+	if f.firstGetRemoteAt.IsZero() {
+		f.firstGetRemoteAt = time.Now()
+	}
 	for _, item := range f.createCalls {
 		if item.logicalPath != logicalPath {
 			continue

@@ -3,7 +3,9 @@ package resource
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	configdomain "github.com/crmarques/declarest/config"
 	defaultsapp "github.com/crmarques/declarest/internal/app/resource/defaults"
@@ -160,6 +162,7 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 	var save bool
 	var check bool
 	var managedServer bool
+	var waitValue string
 	var yes bool
 
 	command := &cobra.Command{
@@ -170,6 +173,7 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 			"  declarest resource defaults infer /customers/acme --check",
 			"  declarest resource defaults infer /customers/acme --save",
 			"  declarest resource defaults infer /customers/acme --managed-server --yes",
+			"  declarest resource defaults infer /customers/acme --managed-server --wait 2s --yes",
 			"  declarest resource defaults infer /customers/acme --managed-server --check --yes",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
@@ -178,8 +182,15 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 			if err != nil {
 				return err
 			}
+			wait, waitSet, err := parseManagedServerDefaultsWait(waitValue)
+			if err != nil {
+				return err
+			}
 			if save && check {
 				return cliutil.ValidationError("flags --save and --check cannot be combined", nil)
+			}
+			if waitSet && !managedServer {
+				return cliutil.ValidationError("flag --wait requires --managed-server", nil)
 			}
 			if managedServer && !yes {
 				return cliutil.ValidationError("flag --yes is required with --managed-server because temporary remote resources will be created", nil)
@@ -202,7 +213,10 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 					command.Context(),
 					deps,
 					resolvedPath,
-					defaultsapp.CheckRequest{ManagedServer: managedServer},
+					defaultsapp.CheckRequest{
+						ManagedServer: managedServer,
+						Wait:          wait,
+					},
 				)
 				if checkErr != nil {
 					return checkErr
@@ -231,7 +245,10 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 				command.Context(),
 				deps,
 				resolvedPath,
-				defaultsapp.InferRequest{ManagedServer: managedServer},
+				defaultsapp.InferRequest{
+					ManagedServer: managedServer,
+					Wait:          wait,
+				},
 			)
 			if err != nil {
 				return err
@@ -267,6 +284,30 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 	command.Flags().BoolVar(&save, "save", false, "save inferred defaults into the repository")
 	command.Flags().BoolVar(&check, "check", false, "infer defaults and fail if they do not match the current defaults sidecar")
 	command.Flags().BoolVar(&managedServer, "managed-server", false, "probe the managed server by creating temporary resources before inferring defaults")
+	command.Flags().StringVar(&waitValue, "wait", "", "with --managed-server, wait this long before reading temporary probe resources (for example 2s or 500ms; bare integers mean seconds)")
 	command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm managed-server temporary resource creation")
 	return command
+}
+
+func parseManagedServerDefaultsWait(value string) (time.Duration, bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, false, nil
+	}
+
+	if seconds, err := strconv.Atoi(trimmed); err == nil {
+		if seconds < 0 {
+			return 0, true, cliutil.ValidationError("flag --wait must be non-negative", nil)
+		}
+		return time.Duration(seconds) * time.Second, true, nil
+	}
+
+	wait, err := time.ParseDuration(trimmed)
+	if err != nil {
+		return 0, true, cliutil.ValidationError("flag --wait must be a Go duration like 2s or a whole number of seconds", err)
+	}
+	if wait < 0 {
+		return 0, true, cliutil.ValidationError("flag --wait must be non-negative", nil)
+	}
+	return wait, true, nil
 }

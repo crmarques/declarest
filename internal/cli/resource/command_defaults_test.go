@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
@@ -143,6 +144,86 @@ func TestDefaultsInferCommandCheckFailsWhenStoredDefaultsDoNotMatch(t *testing.T
 	}
 	if !strings.Contains(stdout.String(), `"team": "platform"`) {
 		t.Fatalf("expected inferred defaults output, got %q", stdout.String())
+	}
+}
+
+func TestDefaultsInferCommandRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	for _, requestedPath := range []string{"/projects", "/projects/"} {
+		requestedPath := requestedPath
+		t.Run(requestedPath, func(t *testing.T) {
+			t.Parallel()
+
+			repo := &fakeDefaultsCommandRepository{}
+			command := newDefaultsInferCommand(cliutil.CommandDependencies{
+				Orchestrator: &fakeDefaultsCommandOrchestrator{
+					localContent: map[string]resourcedomain.Content{
+						"/projects/platform": {
+							Value: map[string]any{"id": "platform", "name": "platform"},
+							Descriptor: resourcedomain.NormalizePayloadDescriptor(
+								resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+							),
+						},
+					},
+				},
+				Services: &fakeEditServiceAccessor{
+					store:    repo,
+					metadata: fakeEditMetadataService{},
+				},
+			}, &cliutil.GlobalFlags{})
+			command.SetArgs([]string{requestedPath})
+			command.SetIn(bytes.NewBuffer(nil))
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+
+			err := command.ExecuteContext(context.Background())
+			if !faults.IsCategory(err, faults.NotFoundError) {
+				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+			}
+		})
+	}
+}
+
+func TestParseManagedServerDefaultsWait(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    time.Duration
+		wantSet bool
+		wantErr bool
+	}{
+		{name: "empty", input: "", wantSet: false},
+		{name: "bare_seconds", input: "2", want: 2 * time.Second, wantSet: true},
+		{name: "duration", input: "750ms", want: 750 * time.Millisecond, wantSet: true},
+		{name: "negative_seconds", input: "-1", wantErr: true},
+		{name: "invalid", input: "later", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, gotSet, err := parseManagedServerDefaultsWait(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for input %q", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for input %q: %v", tc.input, err)
+			}
+			if gotSet != tc.wantSet {
+				t.Fatalf("expected set=%t, got %t", tc.wantSet, gotSet)
+			}
+			if got != tc.want {
+				t.Fatalf("expected wait %s, got %s", tc.want, got)
+			}
+		})
 	}
 }
 

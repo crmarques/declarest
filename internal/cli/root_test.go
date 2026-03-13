@@ -122,6 +122,63 @@ func TestRootWithoutArgsShowsHelp(t *testing.T) {
 	}
 }
 
+func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requires_managed_server", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--wait", "1s")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--managed-server") {
+			t.Fatalf("expected --managed-server validation message, got %v", err)
+		}
+	})
+
+	t.Run("rejects_invalid_duration", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--managed-server", "--yes", "--wait", "later")
+		assertTypedCategory(t, err, faults.ValidationError)
+		if err == nil || !strings.Contains(err.Error(), "--wait") {
+			t.Fatalf("expected --wait validation message, got %v", err)
+		}
+	})
+
+	t.Run("accepts_wait_with_managed_server", func(t *testing.T) {
+		t.Parallel()
+
+		metadataService := newTestMetadata()
+		orchestrator := &testOrchestrator{
+			metadataService: metadataService,
+			getRemoteValue:  map[string]any{"status": "active"},
+		}
+		deps := testDepsWith(orchestrator, metadataService)
+
+		output, err := executeForTest(
+			deps,
+			"",
+			"resource", "defaults", "infer",
+			"/customers/acme",
+			"--managed-server",
+			"--yes",
+			"--wait", "1ms",
+		)
+		if err != nil {
+			t.Fatalf("unexpected managed-server defaults infer error: %v", err)
+		}
+		if !strings.Contains(output, "\"status\": \"active\"") {
+			t.Fatalf("expected managed-server defaults output, got %q", output)
+		}
+		if len(orchestrator.createCalls) != 2 {
+			t.Fatalf("expected two temporary creates, got %#v", orchestrator.createCalls)
+		}
+		if len(orchestrator.getRemoteCalls) == 0 {
+			t.Fatal("expected managed-server probe reads to be executed")
+		}
+	})
+}
+
 func TestMissingPositionalParameterValidationPrintsUsage(t *testing.T) {
 	t.Parallel()
 

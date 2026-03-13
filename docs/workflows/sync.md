@@ -61,10 +61,11 @@ If you want to probe server-added defaults instead of inferring from repository 
 
 ```bash
 declarest resource defaults infer /corporations/acme --managed-server --yes
+declarest resource defaults infer /corporations/acme --managed-server --wait 2s --yes
 declarest resource defaults infer /corporations/acme --managed-server --check --yes
 ```
 
-`--managed-server` creates temporary remote resources and removes them before the command returns, so it intentionally requires `--yes`.
+`--managed-server` creates temporary remote resources and removes them before the command returns, so it intentionally requires `--yes`. Add `--wait <duration|seconds>` when the managed server needs extra time between probe creation and the first readback; bare integers are treated as seconds.
 
 ### Print or save only explicit overrides
 

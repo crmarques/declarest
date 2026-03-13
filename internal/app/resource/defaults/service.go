@@ -27,10 +27,12 @@ type Dependencies = appdeps.Dependencies
 
 type InferRequest struct {
 	ManagedServer bool
+	Wait          time.Duration
 }
 
 type CheckRequest struct {
 	ManagedServer bool
+	Wait          time.Duration
 }
 
 type Result struct {
@@ -120,7 +122,7 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 
 	var inferred resource.Value
 	if request.ManagedServer {
-		inferred, err = inferFromManagedServer(ctx, deps, resolvedTarget)
+		inferred, err = inferFromManagedServer(ctx, deps, resolvedTarget, request)
 	} else {
 		inferred, err = inferFromRepository(ctx, deps, resolvedTarget)
 	}
@@ -138,7 +140,10 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 }
 
 func Check(ctx context.Context, deps Dependencies, logicalPath string, request CheckRequest) (CheckResult, error) {
-	inferred, err := Infer(ctx, deps, logicalPath, InferRequest{ManagedServer: request.ManagedServer})
+	inferred, err := Infer(ctx, deps, logicalPath, InferRequest{
+		ManagedServer: request.ManagedServer,
+		Wait:          request.Wait,
+	})
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -194,13 +199,10 @@ func CompactContentAgainstStoredDefaults(
 	if err != nil {
 		return resource.Content{}, false, err
 	}
-	if resolver, ok := orchestratorService.(localResourceResolver); ok {
-		item, resolveErr := resolver.ResolveLocalResource(ctx, resolvedPath)
-		if resolveErr == nil && strings.TrimSpace(item.LogicalPath) != "" {
-			resolvedPath = item.LogicalPath
-		} else if resolveErr != nil && !faults.IsCategory(resolveErr, faults.NotFoundError) {
-			return resource.Content{}, false, resolveErr
-		}
+	if item, resolveErr := resolveResolvedLocalTarget(ctx, orchestratorService, resolvedPath); resolveErr == nil {
+		resolvedPath = item.LogicalPath
+	} else if !faults.IsCategory(resolveErr, faults.NotFoundError) {
+		return resource.Content{}, false, resolveErr
 	}
 
 	defaultsContent, defaultsFound, err := readDefaultsContent(ctx, defaultsStore, resolvedPath)
@@ -249,21 +251,14 @@ func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (
 		return target{}, err
 	}
 
-	resourceContent, resolvedPath, err := resolveTargetResourceContent(ctx, orchestratorService, logicalPath, normalizedPath)
+	resolvedResource, err := resolveResolvedLocalTarget(ctx, orchestratorService, normalizedPath)
 	if err != nil {
 		return target{}, err
 	}
-	if resolver, ok := orchestratorService.(localResourceResolver); ok {
-		item, resolveErr := resolver.ResolveLocalResource(ctx, resolvedPath)
-		if resolveErr == nil && strings.TrimSpace(item.LogicalPath) != "" {
-			resolvedPath = item.LogicalPath
-			resourceContent = resource.Content{
-				Value:      item.Payload,
-				Descriptor: item.PayloadDescriptor,
-			}
-		} else if resolveErr != nil && !faults.IsCategory(resolveErr, faults.NotFoundError) {
-			return target{}, resolveErr
-		}
+	resolvedPath := resolvedResource.LogicalPath
+	resourceContent := resource.Content{
+		Value:      resolvedResource.Payload,
+		Descriptor: resolvedResource.PayloadDescriptor,
 	}
 
 	defaultsContent, defaultsFound, err := readDefaultsContent(ctx, defaultsStore, resolvedPath)
@@ -294,63 +289,24 @@ func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (
 	}, nil
 }
 
-func resolveTargetResourceContent(
+func resolveResolvedLocalTarget(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
-	rawPath string,
 	normalizedPath string,
-) (resource.Content, string, error) {
-	resourceContent, err := resolveLocalResourceContent(ctx, orchestratorService, normalizedPath)
-	if err == nil {
-		return resourceContent, normalizedPath, nil
+) (resource.Resource, error) {
+	if resolver, ok := orchestratorService.(localResourceResolver); ok {
+		return resolver.ResolveLocalResource(ctx, normalizedPath)
 	}
-	if !faults.IsCategory(err, faults.NotFoundError) || !resource.HasExplicitCollectionTarget(rawPath) {
-		return resource.Content{}, "", err
-	}
-	return resolveSingleCollectionTargetResourceContent(ctx, orchestratorService, normalizedPath)
-}
-
-func resolveSingleCollectionTargetResourceContent(
-	ctx context.Context,
-	orchestratorService orchestratordomain.Orchestrator,
-	collectionPath string,
-) (resource.Content, string, error) {
-	items, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
+	content, err := orchestratorService.GetLocal(ctx, normalizedPath)
 	if err != nil {
-		return resource.Content{}, "", err
+		return resource.Resource{}, err
 	}
-
-	resolvedPath := ""
-	for _, item := range items {
-		candidatePath := strings.TrimSpace(item.LogicalPath)
-		if candidatePath == "" {
-			continue
-		}
-		if _, ok := resource.ChildSegment(collectionPath, candidatePath); !ok {
-			continue
-		}
-		if resolvedPath != "" && candidatePath != resolvedPath {
-			return resource.Content{}, "", faults.NewValidationError(
-				fmt.Sprintf("logical path %q must target a concrete resource path", collectionPath),
-				nil,
-			)
-		}
-		resolvedPath = candidatePath
-	}
-
-	if resolvedPath == "" {
-		return resource.Content{}, "", faults.NewTypedError(
-			faults.NotFoundError,
-			fmt.Sprintf("resource %q not found", collectionPath),
-			nil,
-		)
-	}
-
-	resourceContent, err := resolveLocalResourceContent(ctx, orchestratorService, resolvedPath)
-	if err != nil {
-		return resource.Content{}, "", err
-	}
-	return resourceContent, resolvedPath, nil
+	return resource.Resource{
+		LogicalPath:       normalizedPath,
+		CollectionPath:    collectionPathFor(normalizedPath),
+		Payload:           content.Value,
+		PayloadDescriptor: content.Descriptor,
+	}, nil
 }
 
 func requireDefaultsStore(deps Dependencies) (repository.ResourceDefaultsStore, error) {
@@ -363,18 +319,6 @@ func requireDefaultsStore(deps Dependencies) (repository.ResourceDefaultsStore, 
 		return nil, faults.NewValidationError("resource defaults are not supported by the configured repository", nil)
 	}
 	return defaultsStore, nil
-}
-
-func resolveLocalResourceContent(
-	ctx context.Context,
-	orchestratorService orchestratordomain.Orchestrator,
-	logicalPath string,
-) (resource.Content, error) {
-	content, err := orchestratorService.GetLocal(ctx, logicalPath)
-	if err != nil {
-		return resource.Content{}, err
-	}
-	return content, nil
 }
 
 func readDefaultsContent(
@@ -472,6 +416,7 @@ func inferFromManagedServer(
 	ctx context.Context,
 	deps Dependencies,
 	resolvedTarget target,
+	request InferRequest,
 ) (_ resource.Value, err error) {
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
@@ -526,6 +471,12 @@ func inferFromManagedServer(
 		return nil, err
 	}
 	tempPaths = append(tempPaths, secondPath)
+
+	if request.Wait > 0 {
+		if err := waitForManagedServerDelay(ctx, request.Wait); err != nil {
+			return nil, err
+		}
+	}
 
 	invalidateManagedServerAuthCache(deps)
 
@@ -599,7 +550,7 @@ func readManagedServerProbeContent(
 		if attempt+1 == managedServerProbeReadAttempts {
 			break
 		}
-		if waitErr := waitForManagedServerCleanupRetry(ctx, managedServerProbeReadDelay); waitErr != nil {
+		if waitErr := waitForManagedServerDelay(ctx, managedServerProbeReadDelay); waitErr != nil {
 			return resource.Content{}, waitErr
 		}
 	}
@@ -653,14 +604,14 @@ func retryManagedServerProbeDelete(ctx context.Context, deps Dependencies, logic
 		if !faults.IsCategory(err, faults.AuthError) || attempt == 1 {
 			break
 		}
-		if waitErr := waitForManagedServerCleanupRetry(ctx, 250*time.Millisecond); waitErr != nil {
+		if waitErr := waitForManagedServerDelay(ctx, 250*time.Millisecond); waitErr != nil {
 			return errors.Join(lastErr, waitErr)
 		}
 	}
 	return lastErr
 }
 
-func waitForManagedServerCleanupRetry(ctx context.Context, delay time.Duration) error {
+func waitForManagedServerDelay(ctx context.Context, delay time.Duration) error {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 

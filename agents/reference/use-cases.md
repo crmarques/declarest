@@ -244,11 +244,13 @@ Goal: infer server-added defaults by probing create behavior without leaving orp
 Inputs:
 1. Target resource path `/customers/acme`.
 2. `resource defaults infer /customers/acme --managed-server --yes`.
+3. Optional `--wait 2s` when the managed server needs extra time before probe readback stabilizes.
 
 Execution:
 1. CLI validates `--yes` before any remote mutation.
-2. Workflow clones the local resource payload twice, mutates identity fields to unique temporary values, and creates two temporary remote resources.
-3. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources.
+2. Workflow clones the target local resource payload twice, mutates identity fields to unique temporary values, and creates two temporary remote resources.
+3. When `--wait` is set, workflow pauses for the requested interval after creating the temporary resources and before the first probe readback.
+4. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources without consulting sibling repository resources or stored defaults-sidecar values for inferred-value selection.
 
 Expected outputs:
 1. Only stable server-added defaults remain in command output, including stable empty-object fields such as `smtpServer: {}` when the server returns them consistently.
