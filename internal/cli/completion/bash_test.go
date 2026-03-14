@@ -190,6 +190,33 @@ func TestNormalizeBashFlagSuggestionsDoesNotInjectFilenamesIntoCompoptNospace(t 
 	}
 }
 
+func TestNormalizeBashFlagSuggestionsUsesCursorScopedWordsForCustomCompletion(t *testing.T) {
+	t.Parallel()
+
+	raw := strings.Join([]string{
+		`    args=("${words[@]:1}")`,
+		`    # Disable ActiveHelp which is not supported for bash completion v1`,
+		`    requestComp="DECLAREST_ACTIVE_HELP=0 ${words[0]} __completeNoDesc ${args[*]}"`,
+		``,
+		`    lastParam=${words[$((${#words[@]}-1))]}`,
+		"",
+	}, "\n")
+
+	normalized := string(normalizeBashFlagSuggestions([]byte(raw)))
+	if !strings.Contains(normalized, `completedWords=("${words[@]:0:$((cword+1))}")`) {
+		t.Fatalf("expected custom completion to truncate words to the active cursor, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `args=("${completedWords[@]:1}")`) {
+		t.Fatalf("expected custom completion args to be rebuilt from cursor-scoped words, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `requestComp="DECLAREST_ACTIVE_HELP=0 ${completedWords[0]} __completeNoDesc ${args[*]}"`) {
+		t.Fatalf("expected requestComp to use cursor-scoped words, got %q", normalized)
+	}
+	if !strings.Contains(normalized, `lastParam=${completedWords[$((${#completedWords[@]}-1))]}`) {
+		t.Fatalf("expected lastParam to use cursor-scoped words, got %q", normalized)
+	}
+}
+
 func TestNormalizeBashFlagSuggestionsDisablesFilenameModeForCommandLoop(t *testing.T) {
 	t.Parallel()
 

@@ -412,18 +412,19 @@ Interactive context commands:
 16. `resource save /admin/realms/_/clients/test` expands wildcard realms, skips `NotFound` resources for missing `test` clients, and fails only when no realm contains a match.
 17. `resource diff` collection targets include only direct-child local resources and exclude nested descendants.
 18. Completion for a templated OpenAPI path segment with a partial value (for example `/admin/rea`) returns canonical concrete collection candidates (for example `/admin/realms/`) when local/remote/OpenAPI context provides them and suppresses template placeholder segments (`{...}`) from completion output.
-19. `version` and context-catalog management commands (for example `context list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
-20. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
-21. `context add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
-22. `context print-template` works without a configured current context and still renders the full template.
-23. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
-24. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
-24. Interactive `context add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
-25. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
-25. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
-26. `server get token-url` or `server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
-27. `server check` fails when the configured GET probe returns an error or non-success outcome.
-28. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
+19. Shell completion invoked with the cursor inside a positional path token and trailing arguments still present on the command line (for example `declarest resource get /adm<cursor> --source managed-server`) MUST complete the path token at the cursor position instead of treating the later arguments as already-consumed positional inputs.
+20. `version` and context-catalog management commands (for example `context list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
+21. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
+22. `context add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
+23. `context print-template` works without a configured current context and still renders the full template.
+24. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
+25. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
+26. Interactive `context add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
+27. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
+28. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
+29. `server get token-url` or `server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
+30. `server check` fails when the configured GET probe returns an error or non-success outcome.
+31. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -502,22 +503,23 @@ Interactive context commands:
 53. `declarest secret detect /customers --fix` scans local resources under `/customers` and updates metadata `resource.secretAttributes` for detected resource paths.
 54. `declarest completion bash` prints completion script even when no current context is configured.
 55. `declarest` shell tab completion at root suggests `help` and does not suggest internal helper names.
-56. `declarest resource` prints resource command help even when no current context is configured.
-57. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--yes` is required.
-58. `declarest resource request delete /customers/acme --yes` executes a direct managed-server DELETE request.
-59. `declarest resource request delete /customers --yes --recursive` issues delete requests for all repository resources under `/customers`.
-60. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `resource.id` template resolves or reverse-matches the provided path segment when no literal repository resource exists.
-61. `declarest resource delete /admin/realms/master/clients/account --yes --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
-62. `declarest resource get /admin/realms/ --exclude master,realm1` returns the remaining realm payloads after excluding those collection items.
-63. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
-64. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
-65. `declarest resource diff /customers` compares direct-child repository resources in `/customers` and prints grouped normalized diff sections for changed resources only.
-66. `declarest resource diff /customers --recursive --list` prints only differing descendant resource paths in stable order under `/customers`.
-67. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
-68. `declarest resource diff /admin/realms/payments --color always` renders a colored unified diff even when stdout is not a terminal.
-68. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
-69. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
-70. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
+56. `declarest resource get /adm --source managed-server` with the cursor still inside `/adm` completes `/admin/` even when later tokens remain on the command line.
+57. `declarest resource` prints resource command help even when no current context is configured.
+58. `declarest resource request delete /customers/acme` fails with `ValidationError` because `--yes` is required.
+59. `declarest resource request delete /customers/acme --yes` executes a direct managed-server DELETE request.
+60. `declarest resource request delete /customers --yes --recursive` issues delete requests for all repository resources under `/customers`.
+61. `declarest resource apply /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` applies the local client resource whose metadata `resource.id` template resolves or reverse-matches the provided path segment when no literal repository resource exists.
+62. `declarest resource delete /admin/realms/master/clients/account --yes --source managed-server` retries deletion using metadata-resolved remote ID when the literal delete path is not found.
+63. `declarest resource get /admin/realms/ --exclude master,realm1` returns the remaining realm payloads after excluding those collection items.
+64. `declarest resource save /admin/realms/_/clients/` expands wildcard realms and saves clients from all matched realms.
+65. `declarest resource save /admin/realms/_/clients/test` expands wildcard realms and saves each matched `test` client resource path.
+66. `declarest resource diff /customers` compares direct-child repository resources in `/customers` and prints grouped normalized diff sections for changed resources only.
+67. `declarest resource diff /customers --recursive --list` prints only differing descendant resource paths in stable order under `/customers`.
+68. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
+69. `declarest resource diff /admin/realms/payments --color always` renders a colored unified diff even when stdout is not a terminal.
+70. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
+71. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
+72. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
 71. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
 72. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
 73. `declarest resource request delete /customers --yes --recursive` prints no response bodies by default and only the final status footer.

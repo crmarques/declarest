@@ -13,6 +13,14 @@ var (
 	bashEmptyArrayAppendPattern         = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*\+=\s*\(\s*\)\s*$`)
 	bashOutCompgenLoopPattern           = regexp.MustCompile(`(?m)^\s*while IFS='' read -r comp; do\s*\n\s*COMPREPLY\+=\("\$comp"\)\s*\n\s*done < <\(compgen\s+-W\s+"?\$\{?out\}?"?\s+--\s+"?\$\{?cur\}?"?\)\s*$`)
 	bashReplyCompgenLoopPattern         = regexp.MustCompile(`(?m)^\s*while IFS='' read -r comp; do\s*\n\s*COMPREPLY\+=\("\$comp"\)\s*\n\s*done < <\(compgen -W "\$\{completions\[\*\]\}" -- "\$cur"\)\s*$`)
+	bashArgsLine                        = []byte(`    args=("${words[@]:1}")`)
+	bashCursorAwareArgsLines            = []byte(`    local completedWords
+    completedWords=("${words[@]:0:$((cword+1))}")
+    args=("${completedWords[@]:1}")`)
+	bashRequestCompLine            = []byte(`    requestComp="DECLAREST_ACTIVE_HELP=0 ${words[0]} __completeNoDesc ${args[*]}"`)
+	bashCursorAwareRequestCompLine = []byte(`    requestComp="DECLAREST_ACTIVE_HELP=0 ${completedWords[0]} __completeNoDesc ${args[*]}"`)
+	bashLastParamLine              = []byte(`    lastParam=${words[$((${#words[@]}-1))]}`)
+	bashCursorAwareLastParamLine   = []byte(`    lastParam=${completedWords[$((${#completedWords[@]}-1))]}`)
 )
 
 func newBashCommand() *cobra.Command {
@@ -48,6 +56,9 @@ func normalizeBashFlagSuggestions(script []byte) []byte {
 		filtered = append(filtered, normalizedLine)
 	}
 	normalized := bytes.Join(filtered, []byte{'\n'})
+	normalized = bytes.ReplaceAll(normalized, bashArgsLine, bashCursorAwareArgsLines)
+	normalized = bytes.ReplaceAll(normalized, bashRequestCompLine, bashCursorAwareRequestCompLine)
+	normalized = bytes.ReplaceAll(normalized, bashLastParamLine, bashCursorAwareLastParamLine)
 
 	// Bash `compgen -W` emits raw candidates. Quote each candidate when adding
 	// to COMPREPLY so values containing spaces stay a single shell token.
