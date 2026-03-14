@@ -104,6 +104,34 @@ func TestMergeResourceMetadataOverlaysRequiredAttributes(t *testing.T) {
 	}
 }
 
+func TestCloneResourceMetadataClonesSelector(t *testing.T) {
+	t.Parallel()
+
+	original := ResourceMetadata{
+		Selector: &SelectorSpec{Descendants: boolPointer(true)},
+	}
+	cloned := CloneResourceMetadata(original)
+
+	if !cloned.Selector.AllowsDescendants() {
+		t.Fatalf("expected cloned selector descendants=true, got %#v", cloned.Selector)
+	}
+	if cloned.Selector == original.Selector || cloned.Selector.Descendants == original.Selector.Descendants {
+		t.Fatal("expected cloned selector pointers to be independent")
+	}
+}
+
+func TestMergeResourceMetadataDoesNotMergeSelector(t *testing.T) {
+	t.Parallel()
+
+	merged := MergeResourceMetadata(
+		ResourceMetadata{Selector: &SelectorSpec{Descendants: boolPointer(true)}},
+		ResourceMetadata{Selector: &SelectorSpec{Descendants: boolPointer(true)}},
+	)
+	if merged.Selector != nil {
+		t.Fatalf("expected selector to stay out of merged runtime metadata, got %#v", merged.Selector)
+	}
+}
+
 func TestHasResourceMetadataDirectivesRecognizesNonIdentityOverrides(t *testing.T) {
 	t.Parallel()
 
@@ -138,6 +166,16 @@ func TestHasResourceMetadataDirectivesRecognizesNonIdentityOverrides(t *testing.
 				t.Fatalf("expected metadata directives to be detected for %#v", tt.metadata)
 			}
 		})
+	}
+}
+
+func TestHasResourceMetadataDirectivesIgnoresSelectorOnlyMetadata(t *testing.T) {
+	t.Parallel()
+
+	if HasResourceMetadataDirectives(ResourceMetadata{
+		Selector: &SelectorSpec{Descendants: boolPointer(true)},
+	}) {
+		t.Fatal("expected selector-only metadata to not count as runtime directives")
 	}
 }
 

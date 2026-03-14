@@ -16,6 +16,9 @@ func TestDisplayResourceMetadataViewExpandsUnsetFields(t *testing.T) {
 	if view.Resource.ID != "{{/realm}}" {
 		t.Fatalf("expected id override, got %q", view.Resource.ID)
 	}
+	if view.Selector.Descendants {
+		t.Fatalf("expected default selector.descendants=false, got %#v", view.Selector)
+	}
 	if view.Resource.Alias != "{{/realm}}" {
 		t.Fatalf("expected alias override, got %q", view.Resource.Alias)
 	}
@@ -77,8 +80,9 @@ func TestDisplayResourceMetadataViewPreservesConfiguredValues(t *testing.T) {
 	t.Parallel()
 
 	view := DisplayResourceMetadataView(ResourceMetadata{
-		Format: "yaml",
-		Secret: boolPointer(true),
+		Selector: &SelectorSpec{Descendants: boolPointer(true)},
+		Format:   "yaml",
+		Secret:   boolPointer(true),
 		RequiredAttributes: []string{
 			"/realm",
 		},
@@ -117,6 +121,9 @@ func TestDisplayResourceMetadataViewPreservesConfiguredValues(t *testing.T) {
 	if view.Resource.Format != "yaml" {
 		t.Fatalf("expected format yaml, got %q", view.Resource.Format)
 	}
+	if !view.Selector.Descendants {
+		t.Fatalf("expected selector.descendants=true, got %#v", view.Selector)
+	}
 	if !view.Resource.Secret {
 		t.Fatalf("expected secret=true, got %#v", view.Resource.Secret)
 	}
@@ -151,14 +158,14 @@ func TestDisplayResourceMetadataViewPreservesConfiguredValues(t *testing.T) {
 func TestDisplayTypesMatchCanonicalFieldCount(t *testing.T) {
 	t.Parallel()
 
-	// ResourceMetadata has Operations and Transforms which map to the separate
-	// displayOperationsWire section, so displayResourceWire should have
-	// NumField(ResourceMetadata) - 2 (Operations, Transforms) fields.
+	// ResourceMetadata has Selector, Operations, and Transforms outside the
+	// displayResourceWire section, so displayResourceWire should have
+	// NumField(ResourceMetadata) - 3 fields.
 	resourceFields := reflect.TypeOf(ResourceMetadata{}).NumField()
 	displayResourceFields := reflect.TypeOf(displayResourceWire{}).NumField()
-	if displayResourceFields != resourceFields-2 {
+	if displayResourceFields != resourceFields-3 {
 		t.Fatalf("displayResourceWire has %d fields but ResourceMetadata has %d (expected %d display fields); update display types",
-			displayResourceFields, resourceFields, resourceFields-2)
+			displayResourceFields, resourceFields, resourceFields-3)
 	}
 
 	// TransformStep ↔ displayTransformStepWire should match exactly.

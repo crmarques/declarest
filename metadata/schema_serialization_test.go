@@ -12,6 +12,7 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 	t.Parallel()
 
 	value := ResourceMetadata{
+		Selector:             &SelectorSpec{Descendants: boolPointer(true)},
 		ID:                   "{{/id}}",
 		Alias:                "{{/name}}",
 		RequiredAttributes:   []string{"/name", "/realm"},
@@ -65,6 +66,13 @@ func TestResourceMetadataMarshalJSONUsesNestedSchema(t *testing.T) {
 
 	if _, found := decoded["idAttribute"]; found {
 		t.Fatalf("expected nested metadata schema without flat idAttribute, got %#v", decoded)
+	}
+	selector, ok := decoded["selector"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected selector object, got %#v", decoded["selector"])
+	}
+	if selector["descendants"] != true {
+		t.Fatalf("expected selector.descendants=true, got %#v", selector["descendants"])
 	}
 
 	resource, ok := decoded["resource"].(map[string]any)
@@ -249,6 +257,40 @@ func TestResourceMetadataWholeResourceSecretRoundTrip(t *testing.T) {
 	}
 	if !decoded.IsWholeResourceSecret() {
 		t.Fatalf("expected whole-resource secret round-trip, got %#v", decoded)
+	}
+}
+
+func TestResourceMetadataSelectorRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	value := ResourceMetadata{
+		Selector: &SelectorSpec{Descendants: boolPointer(true)},
+	}
+
+	jsonEncoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("json marshal returned error: %v", err)
+	}
+
+	var jsonDecoded ResourceMetadata
+	if err := json.Unmarshal(jsonEncoded, &jsonDecoded); err != nil {
+		t.Fatalf("json unmarshal returned error: %v", err)
+	}
+	if !jsonDecoded.Selector.AllowsDescendants() {
+		t.Fatalf("expected json selector round-trip, got %#v", jsonDecoded.Selector)
+	}
+
+	yamlEncoded, err := yaml.Marshal(value)
+	if err != nil {
+		t.Fatalf("yaml marshal returned error: %v", err)
+	}
+
+	var yamlDecoded ResourceMetadata
+	if err := yaml.Unmarshal(yamlEncoded, &yamlDecoded); err != nil {
+		t.Fatalf("yaml unmarshal returned error: %v", err)
+	}
+	if !yamlDecoded.Selector.AllowsDescendants() {
+		t.Fatalf("expected yaml selector round-trip, got %#v", yamlDecoded.Selector)
 	}
 }
 

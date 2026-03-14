@@ -3,6 +3,7 @@ package fsmetadata
 import (
 	"context"
 	"path"
+	"sort"
 	"strings"
 
 	debugctx "github.com/crmarques/declarest/debugctx"
@@ -12,6 +13,15 @@ import (
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
 )
+
+type metadataSnapshotRenderer interface {
+	RenderMetadataSnapshot(
+		ctx context.Context,
+		logicalPath string,
+		payload resource.Value,
+		descriptor resource.PayloadDescriptor,
+	) (metadatadomain.ResourceMetadata, error)
+}
 
 func (s *FSMetadataService) RenderOperationSpec(
 	ctx context.Context,
@@ -46,7 +56,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		operation,
 	)
 
-	metadata, err := s.ResolveForPath(ctx, logicalPath)
+	resolved, err := s.resolveForPathWithContext(ctx, logicalPath)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -58,7 +68,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	templateValue, err := buildTemplateValue(target.path, metadata, value, operation)
+	templateValue, err := buildTemplateValue(target, resolved, value, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -69,9 +79,9 @@ func (s *FSMetadataService) RenderOperationSpec(
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
-	metadatadomain.ApplyPayloadTemplateScope(templateValue, metadata, value, resource.PayloadDescriptor{})
+	metadatadomain.ApplyPayloadTemplateScope(templateValue, resolved.metadata, value, resource.PayloadDescriptor{})
 
-	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, metadata, operation, templateValue)
+	spec, err := metadatadomain.ResolveOperationSpecWithScope(ctx, resolved.metadata, operation, templateValue)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -90,6 +100,35 @@ func (s *FSMetadataService) RenderOperationSpec(
 		spec.Path,
 	)
 	return spec, nil
+}
+
+func (s *FSMetadataService) RenderMetadataSnapshot(
+	ctx context.Context,
+	logicalPath string,
+	payload resource.Value,
+	descriptor resource.PayloadDescriptor,
+) (metadatadomain.ResourceMetadata, error) {
+	target, err := normalizeResolvePath(logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+
+	resolved, err := s.resolveForPathWithContext(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	resolved.metadata = metadatadomain.MergeResourceMetadata(
+		metadatadomain.DefaultResourceMetadata(),
+		resolved.metadata,
+	)
+
+	return renderMetadataSnapshotWithResolvedContext(
+		ctx,
+		target,
+		resolved,
+		payload,
+		descriptor,
+	)
 }
 
 func (s *FSMetadataService) RenderOperationSpecForResource(
@@ -126,26 +165,28 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
-	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
-		resolvedMetadata, err = s.ResolveForPath(ctx, resolvedResource.LogicalPath)
-		if err != nil {
-			if faults.IsCategory(err, faults.NotFoundError) {
-				resolvedMetadata = metadatadomain.ResourceMetadata{}
-			} else {
-				debugctx.Printf(
-					ctx,
-					"metadata fs render-resource resolve failed logical_path=%q operation=%q error=%v",
-					target.path,
-					operation,
-					err,
-				)
-				return metadatadomain.OperationSpec{}, err
-			}
+	resolved, err := s.resolveForPathWithContext(ctx, resolvedResource.LogicalPath)
+	if err != nil {
+		if faults.IsCategory(err, faults.NotFoundError) {
+			resolved = resolvedMetadataResult{}
+		} else {
+			debugctx.Printf(
+				ctx,
+				"metadata fs render-resource resolve failed logical_path=%q operation=%q error=%v",
+				target.path,
+				operation,
+				err,
+			)
+			return metadatadomain.OperationSpec{}, err
 		}
 	}
+	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
+	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
+		resolvedMetadata = resolved.metadata
+	}
+	resolved.metadata = resolvedMetadata
 
-	templateScope, err := buildTemplateScopeForResource(target.path, resolvedMetadata, resolvedResource, operation)
+	templateScope, err := buildTemplateScopeForResource(target, resolved, resolvedResource, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -186,19 +227,20 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 }
 
 func buildTemplateValue(
-	logicalPath string,
-	metadata metadatadomain.ResourceMetadata,
+	target resolvedPathTarget,
+	resolved resolvedMetadataResult,
 	value any,
 	operation metadatadomain.Operation,
 ) (map[string]any, error) {
+	effectiveTarget := targetForOperation(target, operation)
 	normalizedPayload, err := resource.Normalize(value)
 	if err != nil {
 		return nil, err
 	}
 
 	alias, remoteID, err := resolveTemplateScopeIdentity(
-		logicalPath,
-		metadata,
+		target.path,
+		resolved.metadata,
 		normalizedPayload,
 		"",
 		"",
@@ -208,21 +250,27 @@ func buildTemplateValue(
 		return nil, err
 	}
 
-	return templatescope.BuildResourceScope(resource.Resource{
-		LogicalPath:    logicalPath,
-		CollectionPath: collectionPathForLogicalPath(logicalPath),
+	scope, err := templatescope.BuildResourceScopeWithOptions(resource.Resource{
+		LogicalPath:    target.path,
+		CollectionPath: collectionPathForTarget(effectiveTarget),
 		LocalAlias:     alias,
 		RemoteID:       remoteID,
 		Payload:        normalizedPayload,
-	}, metadata)
+	}, resolved.metadata, scopeOptionsForResolvedTarget(resolved.descendant))
+	if err != nil {
+		return nil, err
+	}
+	applyDescendantScope(scope, effectiveTarget, resolved.descendant)
+	return scope, nil
 }
 
 func buildTemplateScopeForResource(
-	logicalPath string,
-	resolvedMetadata metadatadomain.ResourceMetadata,
+	target resolvedPathTarget,
+	resolved resolvedMetadataResult,
 	resolvedResource resource.Resource,
 	operation metadatadomain.Operation,
 ) (map[string]any, error) {
+	effectiveTarget := targetForOperation(target, operation)
 	normalizedPayload, err := resource.Normalize(resolvedResource.Payload)
 	if err != nil {
 		return nil, err
@@ -230,7 +278,7 @@ func buildTemplateScopeForResource(
 
 	collectionPath := strings.TrimSpace(resolvedResource.CollectionPath)
 	if collectionPath == "" {
-		collectionPath = collectionPathForLogicalPath(logicalPath)
+		collectionPath = collectionPathForTarget(effectiveTarget)
 	} else {
 		collectionPath, err = resource.NormalizeLogicalPath(collectionPath)
 		if err != nil {
@@ -239,8 +287,8 @@ func buildTemplateScopeForResource(
 	}
 
 	localAlias, remoteID, err := resolveTemplateScopeIdentity(
-		logicalPath,
-		resolvedMetadata,
+		target.path,
+		resolved.metadata,
 		normalizedPayload,
 		resolvedResource.LocalAlias,
 		resolvedResource.RemoteID,
@@ -250,13 +298,18 @@ func buildTemplateScopeForResource(
 		return nil, err
 	}
 
-	return templatescope.BuildResourceScope(resource.Resource{
-		LogicalPath:    logicalPath,
+	scope, err := templatescope.BuildResourceScopeWithOptions(resource.Resource{
+		LogicalPath:    target.path,
 		CollectionPath: collectionPath,
 		LocalAlias:     localAlias,
 		RemoteID:       remoteID,
 		Payload:        normalizedPayload,
-	}, resolvedMetadata)
+	}, resolved.metadata, scopeOptionsForResolvedTarget(resolved.descendant))
+	if err != nil {
+		return nil, err
+	}
+	applyDescendantScope(scope, effectiveTarget, resolved.descendant)
+	return scope, nil
 }
 
 func resolveTemplateScopeIdentity(
@@ -322,4 +375,136 @@ func aliasForTemplateScopeLogicalPath(logicalPath string) string {
 		return "/"
 	}
 	return path.Base(trimmed)
+}
+
+func collectionPathForTarget(target resolvedPathTarget) string {
+	if target.collection {
+		return target.path
+	}
+	return collectionPathForLogicalPath(target.path)
+}
+
+func targetForOperation(
+	target resolvedPathTarget,
+	operation metadatadomain.Operation,
+) resolvedPathTarget {
+	if target.collection || operation != metadatadomain.OperationList {
+		return target
+	}
+	return resolvedPathTarget{
+		path:       target.path,
+		collection: true,
+	}
+}
+
+func scopeOptionsForResolvedTarget(
+	descendant *descendantRuntimeContext,
+) templatescope.ResourceScopeOptions {
+	if descendant == nil || strings.TrimSpace(descendant.matchedCollectionPath) == "" {
+		return templatescope.ResourceScopeOptions{}
+	}
+	return templatescope.ResourceScopeOptions{
+		DerivedCollectionPath: descendant.matchedCollectionPath,
+	}
+}
+
+func applyDescendantScope(
+	scope map[string]any,
+	target resolvedPathTarget,
+	descendant *descendantRuntimeContext,
+) {
+	if descendant == nil || len(scope) == 0 {
+		return
+	}
+
+	scope["descendantCollectionPath"] = descendantSuffix(
+		descendant.matchedCollectionPath,
+		collectionPathForTarget(target),
+	)
+	scope["descendantPath"] = descendantSuffix(
+		descendant.matchedCollectionPath,
+		target.path,
+	)
+}
+
+func descendantSuffix(root string, candidate string) string {
+	trimmedRoot := strings.TrimSpace(root)
+	trimmedCandidate := strings.TrimSpace(candidate)
+	if trimmedRoot == "" || trimmedCandidate == "" {
+		return ""
+	}
+	if trimmedRoot == trimmedCandidate {
+		return ""
+	}
+	if trimmedRoot == "/" {
+		if trimmedCandidate == "/" {
+			return ""
+		}
+		return trimmedCandidate
+	}
+	prefix := trimmedRoot + "/"
+	if !strings.HasPrefix(trimmedCandidate, prefix) {
+		return ""
+	}
+	return trimmedCandidate[len(trimmedRoot):]
+}
+
+func renderMetadataSnapshotWithResolvedContext(
+	ctx context.Context,
+	target resolvedPathTarget,
+	resolved resolvedMetadataResult,
+	payload resource.Value,
+	descriptor resource.PayloadDescriptor,
+) (metadatadomain.ResourceMetadata, error) {
+	scope, err := buildTemplateScopeForResource(target, resolved, resource.Resource{
+		LogicalPath:       target.path,
+		CollectionPath:    collectionPathForTarget(target),
+		Payload:           payload,
+		PayloadDescriptor: descriptor,
+	}, metadatadomain.OperationGet)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	metadatadomain.ApplyPayloadTemplateScope(scope, resolved.metadata, payload, descriptor)
+
+	rendered := metadatadomain.CloneResourceMetadata(resolved.metadata)
+	rendered.RemoteCollectionPath, err = renderRemoteCollectionPath(rendered.RemoteCollectionPath, scope)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+
+	operationNames := make([]string, 0, len(rendered.Operations))
+	for key := range rendered.Operations {
+		operationNames = append(operationNames, key)
+	}
+	sort.Strings(operationNames)
+
+	renderedOperations := make(map[string]metadatadomain.OperationSpec, len(operationNames))
+	for _, key := range operationNames {
+		spec, err := metadatadomain.ResolveOperationSpecWithScope(
+			ctx,
+			resolved.metadata,
+			metadatadomain.Operation(key),
+			scope,
+		)
+		if err != nil {
+			return metadatadomain.ResourceMetadata{}, err
+		}
+		renderedOperations[key] = spec
+	}
+	rendered.Operations = renderedOperations
+
+	return rendered, nil
+}
+
+func renderRemoteCollectionPath(raw string, scope map[string]any) (string, error) {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		return "", nil
+	}
+	rendered, err := metadatadomain.RenderTemplateString("remoteCollectionPath", candidate, scope)
+	if err != nil {
+		return "", err
+	}
+	return metadatadomain.NormalizeRenderedOperationPath(rendered), nil
 }

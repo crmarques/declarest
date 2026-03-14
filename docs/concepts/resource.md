@@ -38,9 +38,9 @@ Use `resource.defaults` when many resources in the same collection share the sam
 resource:
   defaults:
     mode: inherit
-    value: "{{include defaults.yaml}}"
+    value: "{% raw %}{{include defaults.yaml}}{% endraw %}"
     profiles:
-      prod: "{{include defaults-prod.yaml}}"
+      prod: "{% raw %}{{include defaults-prod.yaml}}{% endraw %}"
 ```
 
 DeclaREST resolves the effective desired state as:

@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/metadata"
@@ -116,6 +117,24 @@ func TestResolveAliasAndRemoteIDForListItemDefaultsIdentityToIDPointer(t *testin
 	}
 	if alias != "42" || remoteID != "42" {
 		t.Fatalf("expected alias/remoteID 42, got alias=%q remoteID=%q", alias, remoteID)
+	}
+}
+
+func TestResolveAliasAndRemoteIDRejectsSlashfulRenderedID(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := ResolveAliasAndRemoteID(
+		"/projects/platform/secrets/path/to/db-password",
+		metadata.ResourceMetadata{
+			ID: "{{/fullPath}}",
+		},
+		map[string]any{"fullPath": "path/to/db-password"},
+	)
+	if err == nil {
+		t.Fatal("expected slashful resource.id render to be rejected")
+	}
+	if !strings.Contains(err.Error(), `resource.id rendered invalid logical path segment "path/to/db-password"`) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

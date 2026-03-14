@@ -56,7 +56,7 @@ declarest resource defaults edit /corporations/acme
 declarest resource defaults config get /corporations/acme
 ```
 
-By default, `edit` and `infer --save` store the baseline object in a selector-local `defaults.<ext>` file and wire metadata to it with `{{include defaults.<ext>}}`.
+By default, `edit` and `infer --save` store the baseline object in a selector-local `defaults.<ext>` file and wire metadata to it with `{% raw %}{{include defaults.<ext>}}{% endraw %}`.
 
 Use `declarest resource defaults infer /corporations/acme --check` in CI or local validation to confirm the current resolved defaults still match what DeclaREST would infer today.
 

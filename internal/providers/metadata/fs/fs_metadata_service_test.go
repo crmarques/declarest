@@ -11,6 +11,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/resource"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -293,6 +294,58 @@ func TestFSMetadataResolveForPathIntermediaryPlaceholderSelectors(t *testing.T) 
 	}
 }
 
+func TestFSMetadataResolveForPathRequiresExplicitDescendantOptIn(t *testing.T) {
+	t.Parallel()
+
+	baseMetadata := metadatadomain.ResourceMetadata{
+		ID:                   "{{/name}}",
+		Alias:                "{{/name}}",
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "./{{/id}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: ".",
+			},
+		},
+	}
+
+	t.Run("without_selector_descendants", func(t *testing.T) {
+		t.Parallel()
+
+		service := NewFSMetadataService(t.TempDir())
+		ctx := context.Background()
+		mustSetMetadata(t, service, ctx, "/projects/_/secrets/_", baseMetadata)
+
+		resolved, err := service.ResolveForPath(ctx, "/projects/platform/secrets/path/to/db-password")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+		if metadatadomain.HasResourceMetadataDirectives(resolved) {
+			t.Fatalf("expected nested secret path to stay unmatched without selector.descendants, got %#v", resolved)
+		}
+	})
+
+	t.Run("with_selector_descendants", func(t *testing.T) {
+		t.Parallel()
+
+		service := NewFSMetadataService(t.TempDir())
+		ctx := context.Background()
+		metadata := metadatadomain.CloneResourceMetadata(baseMetadata)
+		metadata.Selector = &metadatadomain.SelectorSpec{Descendants: boolPointer(true)}
+		mustSetMetadata(t, service, ctx, "/projects/_/secrets/_", metadata)
+
+		resolved, err := service.ResolveForPath(ctx, "/projects/platform/secrets/path/to/db-password")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+		if resolved.RemoteCollectionPath != "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}" {
+			t.Fatalf("expected descendant-enabled metadata to resolve, got %#v", resolved)
+		}
+	})
+}
+
 func TestFSMetadataResolveCollectionChildrenSupportsIntermediarySelectors(t *testing.T) {
 	t.Parallel()
 
@@ -436,6 +489,122 @@ func TestFSMetadataRenderOperationSpecSupportsRemoteCollectionPathIndirection(t 
 	}
 }
 
+func TestFSMetadataRenderOperationSpecSupportsDescendantScopedCollections(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/projects/_/secrets/_", metadatadomain.ResourceMetadata{
+		Selector:             &metadatadomain.SelectorSpec{Descendants: boolPointer(true)},
+		ID:                   "{{/name}}",
+		Alias:                "{{/name}}",
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "./{{/id}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: ".",
+			},
+		},
+	})
+
+	tests := []struct {
+		name      string
+		path      string
+		operation metadatadomain.Operation
+		payload   any
+		wantPath  string
+	}{
+		{
+			name:      "immediate_resource",
+			path:      "/projects/platform/secrets/db-password",
+			operation: metadatadomain.OperationGet,
+			payload:   map[string]any{"name": "db-password"},
+			wantPath:  "/storage/keys/project/platform/db-password",
+		},
+		{
+			name:      "nested_resource",
+			path:      "/projects/platform/secrets/path/to/db-password",
+			operation: metadatadomain.OperationGet,
+			payload:   map[string]any{"name": "db-password"},
+			wantPath:  "/storage/keys/project/platform/path/to/db-password",
+		},
+		{
+			name:      "immediate_collection",
+			path:      "/projects/platform/secrets",
+			operation: metadatadomain.OperationList,
+			payload:   map[string]any{},
+			wantPath:  "/storage/keys/project/platform",
+		},
+		{
+			name:      "nested_collection",
+			path:      "/projects/platform/secrets/path/to",
+			operation: metadatadomain.OperationList,
+			payload:   map[string]any{},
+			wantPath:  "/storage/keys/project/platform/path/to",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			spec, err := service.RenderOperationSpec(ctx, tt.path, tt.operation, tt.payload)
+			if err != nil {
+				t.Fatalf("RenderOperationSpec returned error: %v", err)
+			}
+			if spec.Path != tt.wantPath {
+				t.Fatalf("expected path %q, got %q", tt.wantPath, spec.Path)
+			}
+		})
+	}
+}
+
+func TestFSMetadataRenderMetadataSnapshotUsesDescendantScope(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	mustSetMetadata(t, service, ctx, "/projects/_/secrets/_", metadatadomain.ResourceMetadata{
+		Selector:             &metadatadomain.SelectorSpec{Descendants: boolPointer(true)},
+		ID:                   "{{/name}}",
+		Alias:                "{{/name}}",
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}",
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationGet): {
+				Path: "./{{/id}}",
+			},
+			string(metadatadomain.OperationList): {
+				Path: ".",
+			},
+		},
+	})
+
+	rendered, err := service.RenderMetadataSnapshot(
+		ctx,
+		"/projects/platform/secrets/path/to/db-password",
+		map[string]any{"name": "db-password"},
+		resource.PayloadDescriptor{},
+	)
+	if err != nil {
+		t.Fatalf("RenderMetadataSnapshot returned error: %v", err)
+	}
+
+	if rendered.RemoteCollectionPath != "/storage/keys/project/platform/path/to" {
+		t.Fatalf("expected rendered remote collection path, got %q", rendered.RemoteCollectionPath)
+	}
+	if rendered.Operations[string(metadatadomain.OperationGet)].Path != "/storage/keys/project/platform/path/to/db-password" {
+		t.Fatalf("expected rendered get path, got %#v", rendered.Operations[string(metadatadomain.OperationGet)])
+	}
+	if rendered.Operations[string(metadatadomain.OperationList)].Path != "/storage/keys/project/platform/path/to" {
+		t.Fatalf("expected rendered list path, got %#v", rendered.Operations[string(metadatadomain.OperationList)])
+	}
+}
+
 func TestFSMetadataRenderOperationSpecListDoesNotRequireItemIdentityPayload(t *testing.T) {
 	t.Parallel()
 
@@ -526,6 +695,21 @@ func TestFSMetadataValidationAcceptsIdentityPointerShorthand(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("expected identity pointer shorthand to validate, got %v", err)
+	}
+}
+
+func TestFSMetadataValidationRejectsSelectorDescendantsOnResourceMetadata(t *testing.T) {
+	t.Parallel()
+
+	service := NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+
+	err := service.Set(ctx, "/projects/platform/secrets/db-password", metadatadomain.ResourceMetadata{
+		Selector: &metadatadomain.SelectorSpec{Descendants: boolPointer(true)},
+	})
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !strings.Contains(err.Error(), "selector.descendants is only supported on collection metadata") {
+		t.Fatalf("expected selector.descendants validation error, got %v", err)
 	}
 }
 
@@ -941,4 +1125,8 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 	if typedErr.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }

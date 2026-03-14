@@ -38,7 +38,7 @@ Key terms:
 5. Template Context: data scope used to render metadata templates.
 
 ## Business Rules
-1. Collection metadata applies by inheritance only where explicitly allowed.
+1. Root collection metadata is global, while non-root collection metadata applies only to its matched collection root and immediate resource items unless `selector.descendants: true` enables deeper descendants.
 2. Resource-level metadata overrides collection-level metadata.
 3. Repo-local metadata overlays override shared metadata-source directives for the same logical path, regardless of selector specificity across sources.
 4. Array fields in metadata are replace, not deep-merge.
@@ -48,6 +48,7 @@ Key terms:
 8. Local desired state for one logical resource MAY be composed from resolved metadata `resource.defaults` plus raw `resource.<ext>` overrides; object fields deep-merge, arrays replace, and explicit override values win deterministically.
 9. Collection metadata `resource.format: any` MUST allow child resources in the same collection to preserve or supply different payload descriptors during save workflows instead of coercing the whole collection to one repository format.
 10. `resource.defaults` baseline values and profiles MUST represent stable desired-state defaults that are safe to resend to the managed server and MUST NOT be used for volatile observed-only fields such as timestamps, versions, generated IDs, or status blocks.
+11. `resource.id` and `resource.alias` remain logical-segment identities; nested descendant branches MUST use template scope helpers such as `descendantPath` instead of slashful rendered IDs.
 
 ## Failure Modes
 1. Alias collision causing ambiguous target resolution.
@@ -57,7 +58,7 @@ Key terms:
 
 ## Edge Cases
 1. Resource exists remotely but local alias changed.
-2. Metadata wildcard applies to nested descendants with partial overrides.
+2. Descendant-enabled collection metadata applies to nested descendants with partial overrides, while non-enabled collection metadata stops at the matched collection root plus immediate items.
 3. Resource payload contains fields with both secret and non-secret siblings.
 4. Collection has zero items and metadata inference still required.
 5. Structured update transforms remove an alias field from the outgoing body after resource-level validation already confirmed it exists in the source payload.

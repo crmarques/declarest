@@ -24,6 +24,7 @@ func HasResourceMetadataDirectives(value ResourceMetadata) bool {
 
 func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 	cloned := ResourceMetadata{
+		Selector:               CloneSelectorSpec(value.Selector),
 		ID:                     value.ID,
 		Alias:                  value.Alias,
 		RequiredAttributes:     cloneStringSlice(value.RequiredAttributes),
@@ -56,6 +57,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 
 func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) ResourceMetadata {
 	merged := ResourceMetadata{
+		Selector:               nil,
 		ID:                     base.ID,
 		Alias:                  base.Alias,
 		RequiredAttributes:     cloneStringSlice(base.RequiredAttributes),
@@ -108,6 +110,16 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	}
 
 	return merged
+}
+
+func CloneSelectorSpec(value *SelectorSpec) *SelectorSpec {
+	if value == nil {
+		return nil
+	}
+
+	return &SelectorSpec{
+		Descendants: cloneBoolPointer(value.Descendants),
+	}
 }
 
 func cloneExternalizedAttributes(values []ExternalizedAttribute) []ExternalizedAttribute {

@@ -69,21 +69,34 @@ func (s *LayeredMetadataService) Unset(ctx context.Context, logicalPath string) 
 }
 
 func (s *LayeredMetadataService) ResolveForPath(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
-	merged := metadatadomain.ResourceMetadata{}
+	result, err := s.resolveForPathWithContext(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	return result.metadata, nil
+}
+
+func (s *LayeredMetadataService) resolveForPathWithContext(
+	ctx context.Context,
+	logicalPath string,
+) (resolvedMetadataResult, error) {
+	merged := resolvedMetadataResult{}
 
 	if s != nil && s.shared != nil {
-		resolved, err := s.shared.ResolveForPath(ctx, logicalPath)
+		resolved, err := s.shared.resolveForPathWithContext(ctx, logicalPath)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, err
+			return resolvedMetadataResult{}, err
 		}
-		merged = metadatadomain.MergeResourceMetadata(merged, resolved)
+		merged.metadata = metadatadomain.MergeResourceMetadata(merged.metadata, resolved.metadata)
+		merged.descendant = preferDescendantContext(merged.descendant, resolved.descendant)
 	}
 	if s != nil && s.local != nil {
-		resolved, err := s.local.ResolveForPath(ctx, logicalPath)
+		resolved, err := s.local.resolveForPathWithContext(ctx, logicalPath)
 		if err != nil {
-			return metadatadomain.ResourceMetadata{}, err
+			return resolvedMetadataResult{}, err
 		}
-		merged = metadatadomain.MergeResourceMetadata(merged, resolved)
+		merged.metadata = metadatadomain.MergeResourceMetadata(merged.metadata, resolved.metadata)
+		merged.descendant = preferDescendantContext(merged.descendant, resolved.descendant)
 	}
 
 	return merged, nil
@@ -100,18 +113,41 @@ func (s *LayeredMetadataService) RenderOperationSpec(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	resolvedMetadata, err := s.ResolveForPath(ctx, logicalPath)
+	resolved, err := s.resolveForPathWithContext(ctx, logicalPath)
 	if err != nil {
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	templateValue, err := buildTemplateValue(target.path, resolvedMetadata, value, operation)
+	templateValue, err := buildTemplateValue(target, resolved, value, operation)
 	if err != nil {
 		return metadatadomain.OperationSpec{}, err
 	}
-	metadatadomain.ApplyPayloadTemplateScope(templateValue, resolvedMetadata, value, resource.PayloadDescriptor{})
+	metadatadomain.ApplyPayloadTemplateScope(templateValue, resolved.metadata, value, resource.PayloadDescriptor{})
 
-	return metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateValue)
+	return metadatadomain.ResolveOperationSpecWithScope(ctx, resolved.metadata, operation, templateValue)
+}
+
+func (s *LayeredMetadataService) RenderMetadataSnapshot(
+	ctx context.Context,
+	logicalPath string,
+	payload resource.Value,
+	descriptor resource.PayloadDescriptor,
+) (metadatadomain.ResourceMetadata, error) {
+	target, err := normalizeResolvePath(logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+
+	resolved, err := s.resolveForPathWithContext(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	resolved.metadata = metadatadomain.MergeResourceMetadata(
+		metadatadomain.DefaultResourceMetadata(),
+		resolved.metadata,
+	)
+
+	return renderMetadataSnapshotWithResolvedContext(ctx, target, resolved, payload, descriptor)
 }
 
 func (s *LayeredMetadataService) RenderOperationSpecForResource(
@@ -133,19 +169,21 @@ func (s *LayeredMetadataService) RenderOperationSpecForResource(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
-	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
-		resolvedMetadata, err = s.ResolveForPath(ctx, resolvedResource.LogicalPath)
-		if err != nil {
-			if faults.IsCategory(err, faults.NotFoundError) {
-				resolvedMetadata = metadatadomain.ResourceMetadata{}
-			} else {
-				return metadatadomain.OperationSpec{}, err
-			}
+	resolved, err := s.resolveForPathWithContext(ctx, resolvedResource.LogicalPath)
+	if err != nil {
+		if faults.IsCategory(err, faults.NotFoundError) {
+			resolved = resolvedMetadataResult{}
+		} else {
+			return metadatadomain.OperationSpec{}, err
 		}
 	}
+	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
+	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
+		resolvedMetadata = resolved.metadata
+	}
+	resolved.metadata = resolvedMetadata
 
-	templateScope, err := buildTemplateScopeForResource(target.path, resolvedMetadata, resolvedResource, operation)
+	templateScope, err := buildTemplateScopeForResource(target, resolved, resolvedResource, operation)
 	if err != nil {
 		return metadatadomain.OperationSpec{}, err
 	}

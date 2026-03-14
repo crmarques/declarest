@@ -48,6 +48,15 @@ type OutputWithMetadata struct {
 	Metadata metadatadomain.ResourceMetadata `json:"metadata" yaml:"metadata"`
 }
 
+type metadataSnapshotRenderer interface {
+	RenderMetadataSnapshot(
+		ctx context.Context,
+		logicalPath string,
+		payload resource.Value,
+		descriptor resource.PayloadDescriptor,
+	) (metadatadomain.ResourceMetadata, error)
+}
+
 func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error) {
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
@@ -392,6 +401,10 @@ func renderMetadataSnapshot(
 		metadatadomain.DefaultResourceMetadata(),
 		resolvedMetadata,
 	)
+
+	if renderer, ok := metadataService.(metadataSnapshotRenderer); ok {
+		return renderer.RenderMetadataSnapshot(ctx, logicalPath, rawValue, descriptor)
+	}
 
 	return metadataRender.RenderResourceMetadataWithDescriptor(
 		ctx,

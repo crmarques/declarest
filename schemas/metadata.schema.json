@@ -5,6 +5,9 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "selector": {
+      "$ref": "#/$defs/selector"
+    },
     "resource": {
       "$ref": "#/$defs/resource"
     },
@@ -127,6 +130,15 @@
     "identityTemplate": {
       "type": "string",
       "description": "Identity template string using canonical JSON Pointer placeholders such as {{/id}}, one-level shorthand such as {{id}}, or raw JSON Pointer shorthand such as /id."
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "descendants": {
+          "type": "boolean"
+        }
+      }
     },
     "validationAssertion": {
       "type": "object",

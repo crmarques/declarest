@@ -14,13 +14,38 @@ import (
 	metadatadomain "github.com/crmarques/declarest/metadata"
 )
 
+type selectorMatch struct {
+	selector          string
+	matchedCollection string
+}
+
+type descendantRuntimeContext struct {
+	matchedCollectionPath string
+}
+
+type resolvedMetadataResult struct {
+	metadata   metadatadomain.ResourceMetadata
+	descendant *descendantRuntimeContext
+}
+
 func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	result, err := s.resolveForPathWithContext(ctx, logicalPath)
+	if err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+	return result.metadata, nil
+}
+
+func (s *FSMetadataService) resolveForPathWithContext(
+	ctx context.Context,
+	logicalPath string,
+) (resolvedMetadataResult, error) {
 	debugctx.Printf(ctx, "metadata fs resolve start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
 	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
 		debugctx.Printf(ctx, "metadata fs resolve invalid logical_path=%q error=%v", logicalPath, err)
-		return metadatadomain.ResourceMetadata{}, err
+		return resolvedMetadataResult{}, err
 	}
 	debugctx.Printf(
 		ctx,
@@ -30,15 +55,15 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 		target.collection,
 	)
 
-	merged := metadatadomain.ResourceMetadata{}
+	result := resolvedMetadataResult{metadata: metadatadomain.ResourceMetadata{}}
 
-	apply := func(selector string, kind metadataPathKind) error {
-		targetMetadataPath, pathErr := s.metadataFilePath(selector, kind)
+	apply := func(match selectorMatch, kind metadataPathKind) error {
+		targetMetadataPath, pathErr := s.metadataFilePath(match.selector, kind)
 		if pathErr != nil {
 			debugctx.Printf(
 				ctx,
 				"metadata fs resolve resolve-path failed selector=%q kind=%q error=%v",
-				selector,
+				match.selector,
 				metadataPathKindName(kind),
 				pathErr,
 			)
@@ -47,17 +72,17 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 		debugctx.Printf(
 			ctx,
 			"metadata fs resolve lookup selector=%q kind=%q file=%q",
-			selector,
+			match.selector,
 			metadataPathKindName(kind),
 			targetMetadataPath,
 		)
 
-		item, found, err := s.tryReadMetadata(selector, kind)
+		item, found, err := s.tryReadMetadata(match.selector, kind)
 		if err != nil {
 			debugctx.Printf(
 				ctx,
 				"metadata fs resolve failed selector=%q kind=%q file=%q error=%v",
-				selector,
+				match.selector,
 				metadataPathKindName(kind),
 				targetMetadataPath,
 				err,
@@ -68,90 +93,199 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 			debugctx.Printf(
 				ctx,
 				"metadata fs resolve miss selector=%q kind=%q file=%q",
-				selector,
+				match.selector,
 				metadataPathKindName(kind),
 				targetMetadataPath,
 			)
 			return nil
 		}
-		resolvedItem, resolveErr := s.resolveMetadataDefaults(ctx, selector, kind, item)
+		resolvedItem, resolveErr := s.resolveMetadataDefaults(ctx, match.selector, kind, item)
 		if resolveErr != nil {
 			return resolveErr
 		}
-		merged = metadatadomain.MergeResourceMetadata(merged, resolvedItem)
+
+		if kind == metadataPathCollection && !collectionMetadataAppliesToTarget(target, match.matchedCollection, resolvedItem.Selector) {
+			debugctx.Printf(
+				ctx,
+				"metadata fs resolve skip selector=%q kind=%q matched_collection=%q target=%q",
+				match.selector,
+				metadataPathKindName(kind),
+				match.matchedCollection,
+				target.path,
+			)
+			return nil
+		}
+
+		result.metadata = metadatadomain.MergeResourceMetadata(result.metadata, resolvedItem)
+		if kind == metadataPathCollection && resolvedItem.Selector.AllowsDescendants() {
+			result.descendant = preferDescendantContext(
+				result.descendant,
+				&descendantRuntimeContext{matchedCollectionPath: match.matchedCollection},
+			)
+		}
 		debugctx.Printf(
 			ctx,
-			"metadata fs resolve hit selector=%q kind=%q file=%q",
-			selector,
+			"metadata fs resolve hit selector=%q kind=%q file=%q matched_collection=%q",
+			match.selector,
 			metadataPathKindName(kind),
 			targetMetadataPath,
+			match.matchedCollection,
 		)
 		return nil
 	}
 
-	if err := apply("/", metadataPathCollection); err != nil {
-		return metadatadomain.ResourceMetadata{}, err
+	if err := apply(selectorMatch{selector: "/", matchedCollection: "/"}, metadataPathCollection); err != nil {
+		return resolvedMetadataResult{}, err
 	}
 
 	segments := splitPathSegments(target.path)
-	parentSelectors := []string{"/"}
+	parentMatches := []selectorMatch{{selector: "/", matchedCollection: "/"}}
 	for _, segment := range segments {
-		wildcardCandidates := make(map[string]struct{})
-		literalCandidates := make(map[string]struct{})
-		nextParents := make(map[string]struct{})
+		wildcardCandidates := map[string]selectorMatch{}
+		literalCandidates := map[string]selectorMatch{}
+		nextParents := map[string]selectorMatch{}
 
-		for _, parentSelector := range parentSelectors {
-			wildcards, literals, err := s.matchingCollectionCandidates(parentSelector, segment)
+		for _, parentMatch := range parentMatches {
+			wildcards, literals, err := s.matchingCollectionCandidates(parentMatch.selector, segment)
 			if err != nil {
 				debugctx.Printf(
 					ctx,
 					"metadata fs resolve match failed parent=%q segment=%q error=%v",
-					parentSelector,
+					parentMatch.selector,
 					segment,
 					err,
 				)
-				return metadatadomain.ResourceMetadata{}, err
+				return resolvedMetadataResult{}, err
 			}
 
 			for _, selector := range wildcards {
-				wildcardCandidates[selector] = struct{}{}
-				nextParents[selector] = struct{}{}
+				match := selectorMatch{
+					selector:          selector,
+					matchedCollection: joinConcreteCollectionPath(parentMatch.matchedCollection, segment),
+				}
+				wildcardCandidates[selectorMatchKey(match)] = match
+				nextParents[selectorMatchKey(match)] = match
 			}
 			for _, selector := range literals {
-				literalCandidates[selector] = struct{}{}
-				nextParents[selector] = struct{}{}
+				match := selectorMatch{
+					selector:          selector,
+					matchedCollection: joinConcreteCollectionPath(parentMatch.matchedCollection, segment),
+				}
+				literalCandidates[selectorMatchKey(match)] = match
+				nextParents[selectorMatchKey(match)] = match
 			}
 		}
 
-		for _, selector := range sortedSelectorKeys(wildcardCandidates) {
-			if err := apply(selector, metadataPathCollection); err != nil {
-				return metadatadomain.ResourceMetadata{}, err
+		for _, match := range sortedSelectorMatches(wildcardCandidates) {
+			if err := apply(match, metadataPathCollection); err != nil {
+				return resolvedMetadataResult{}, err
 			}
 		}
-		for _, selector := range sortedSelectorKeys(literalCandidates) {
-			if err := apply(selector, metadataPathCollection); err != nil {
-				return metadatadomain.ResourceMetadata{}, err
+		for _, match := range sortedSelectorMatches(literalCandidates) {
+			if err := apply(match, metadataPathCollection); err != nil {
+				return resolvedMetadataResult{}, err
 			}
 		}
 
-		parentSelectors = sortedSelectorKeys(nextParents)
-		if len(parentSelectors) == 0 {
+		parentMatches = sortedSelectorMatches(nextParents)
+		if len(parentMatches) == 0 {
 			break
 		}
 	}
 
 	if !target.collection && target.path != "/" {
-		if err := apply(target.path, metadataPathResource); err != nil {
-			return metadatadomain.ResourceMetadata{}, err
+		if err := apply(selectorMatch{selector: target.path, matchedCollection: collectionPathForLogicalPath(target.path)}, metadataPathResource); err != nil {
+			return resolvedMetadataResult{}, err
 		}
 	}
 
-	if _, err := metadatadomain.ResolveEffectiveDefaults(merged.Defaults); err != nil {
-		return metadatadomain.ResourceMetadata{}, err
+	if _, err := metadatadomain.ResolveEffectiveDefaults(result.metadata.Defaults); err != nil {
+		return resolvedMetadataResult{}, err
 	}
 
 	debugctx.Printf(ctx, "metadata fs resolve done logical_path=%q normalized=%q", logicalPath, target.path)
-	return merged, nil
+	return result, nil
+}
+
+func collectionMetadataAppliesToTarget(
+	target resolvedPathTarget,
+	matchedCollection string,
+	selector *metadatadomain.SelectorSpec,
+) bool {
+	if matchedCollection == "/" {
+		return true
+	}
+	if target.path == matchedCollection {
+		return true
+	}
+
+	targetCollection := target.path
+	if !target.collection {
+		targetCollection = collectionPathForLogicalPath(target.path)
+	}
+	if targetCollection == matchedCollection {
+		return true
+	}
+	if !selector.AllowsDescendants() {
+		return false
+	}
+	return isDescendantCollectionPath(matchedCollection, targetCollection)
+}
+
+func isDescendantCollectionPath(ancestor string, candidate string) bool {
+	if ancestor == "/" {
+		return candidate != "/"
+	}
+	return strings.HasPrefix(candidate, ancestor+"/")
+}
+
+func preferDescendantContext(
+	current *descendantRuntimeContext,
+	next *descendantRuntimeContext,
+) *descendantRuntimeContext {
+	if next == nil {
+		return current
+	}
+	if current == nil {
+		return next
+	}
+	if selectorDepth(next.matchedCollectionPath) >= selectorDepth(current.matchedCollectionPath) {
+		return next
+	}
+	return current
+}
+
+func selectorDepth(value string) int {
+	return len(splitPathSegments(value))
+}
+
+func joinConcreteCollectionPath(parent string, segment string) string {
+	if parent == "/" {
+		return "/" + segment
+	}
+	return parent + "/" + segment
+}
+
+func selectorMatchKey(value selectorMatch) string {
+	return value.selector + "\x00" + value.matchedCollection
+}
+
+func sortedSelectorMatches(values map[string]selectorMatch) []selectorMatch {
+	if len(values) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	result := make([]selectorMatch, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, values[key])
+	}
+	return result
 }
 
 // ResolveCollectionChildren returns literal child collection selector segments

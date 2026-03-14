@@ -213,6 +213,44 @@ func TestBuildResourceScopeInjectsPluralLogicalCollectionFields(t *testing.T) {
 	}
 }
 
+func TestBuildResourceScopeWithOptionsUsesDerivedCollectionPath(t *testing.T) {
+	t.Parallel()
+
+	scope, err := BuildResourceScopeWithOptions(resource.Resource{
+		LogicalPath:    "/projects/platform/secrets/path/to/db-password",
+		CollectionPath: "/projects/platform/secrets/path/to",
+		LocalAlias:     "db-password",
+		RemoteID:       "db-password",
+		Payload:        map[string]any{"name": "db-password"},
+	}, metadata.ResourceMetadata{
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}",
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationGet): {
+				Path: "./{{/id}}",
+			},
+		},
+	}, ResourceScopeOptions{
+		DerivedCollectionPath: "/projects/platform/secrets",
+	})
+	if err != nil {
+		t.Fatalf("BuildResourceScopeWithOptions returned error: %v", err)
+	}
+
+	if scope["project"] != "platform" {
+		t.Fatalf("expected derived project in scope, got %#v", scope["project"])
+	}
+	if _, exists := scope["secret"]; exists {
+		t.Fatalf("expected descendant path suffix not to become secret field, got %#v", scope["secret"])
+	}
+	payloadMap, ok := scope["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected payload map in scope, got %T", scope["payload"])
+	}
+	if _, exists := payloadMap["secret"]; exists {
+		t.Fatalf("expected payload map to avoid bogus secret field, got %#v", payloadMap["secret"])
+	}
+}
+
 func TestBuildResourceScopeInjectsJQResourceDerivedPathFields(t *testing.T) {
 	t.Parallel()
 

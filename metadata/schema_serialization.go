@@ -18,8 +18,13 @@ import (
 // canonical types in types.go; see TestDisplayTypesMatchCanonicalFieldCount
 // for drift detection on the display-facing counterparts.
 type resourceMetadataWire struct {
+	Selector   *selectorWire   `json:"selector,omitempty" yaml:"selector,omitempty"`
 	Resource   *resourceWire   `json:"resource,omitempty" yaml:"resource,omitempty"`
 	Operations *operationsWire `json:"operations,omitempty" yaml:"operations,omitempty"`
+}
+
+type selectorWire struct {
+	Descendants *bool `json:"descendants,omitempty" yaml:"descendants,omitempty"`
 }
 
 type resourceWire struct {
@@ -200,6 +205,9 @@ func EffectiveRemoteCollectionPath(md ResourceMetadata, fallback string) string 
 
 func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 	wire := resourceMetadataWire{}
+	if hasSelectorInfo(metadata.Selector) {
+		wire.Selector = selectorSpecToWire(metadata.Selector)
+	}
 
 	resource := resourceWire{
 		ID:                   metadata.ID,
@@ -259,6 +267,9 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 
 func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, error) {
 	metadata := ResourceMetadata{}
+	if wire.Selector != nil {
+		metadata.Selector = selectorSpecFromWire(wire.Selector)
+	}
 
 	if wire.Resource != nil {
 		resource := wire.Resource
@@ -315,6 +326,34 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 	}
 
 	return metadata, nil
+}
+
+func hasSelectorInfo(value *SelectorSpec) bool {
+	return value != nil && value.Descendants != nil
+}
+
+func selectorSpecToWire(value *SelectorSpec) *selectorWire {
+	if !hasSelectorInfo(value) {
+		return nil
+	}
+
+	return &selectorWire{
+		Descendants: cloneBoolPointer(value.Descendants),
+	}
+}
+
+func selectorSpecFromWire(value *selectorWire) *SelectorSpec {
+	if value == nil {
+		return nil
+	}
+
+	decoded := &SelectorSpec{
+		Descendants: cloneBoolPointer(value.Descendants),
+	}
+	if !hasSelectorInfo(decoded) {
+		return nil
+	}
+	return decoded
 }
 
 func hasResourceInfo(resource resourceWire) bool {

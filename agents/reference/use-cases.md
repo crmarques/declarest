@@ -829,3 +829,26 @@ Failure expectation:
 
 Failure expectation:
 1. If `resource metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.
+
+### Example 38: Descendant-Scoped Rundeck Secret Paths
+Goal: support nested secret folders under one collection selector without slashful resource IDs.
+
+Inputs:
+1. Collection metadata at `/projects/_/secrets/_/metadata.yaml` with `selector.descendants: true`.
+2. `resource.remoteCollectionPath: /storage/keys/project/{{/project}}{{/descendantCollectionPath}}`.
+3. Relative operation paths such as `operations.get.path: ./{{/id}}` and `operations.list.path: .`.
+4. Logical targets `/projects/platform/secrets/db-password`, `/projects/platform/secrets/path/to/db-password`, and `/projects/platform/secrets/path/to`.
+
+Execution:
+1. Metadata resolution matches the `/projects/_/secrets/_` selector at concrete root `/projects/platform/secrets`.
+2. Render scope derives `project=platform`, `descendantPath`, and `descendantCollectionPath` from that matched root instead of from the full nested logical suffix.
+3. Managed-server request building renders relative operation paths against the descendant-aware remote collection path.
+
+Expected outputs:
+1. `/projects/platform/secrets/db-password` renders `/storage/keys/project/platform/db-password`.
+2. `/projects/platform/secrets/path/to/db-password` renders `/storage/keys/project/platform/path/to/db-password`.
+3. `resource list /projects/platform/secrets/path/to` renders `/storage/keys/project/platform/path/to`.
+4. `resource.id` stays segment-safe (`db-password`) and never becomes `path/to/db-password`.
+
+Failure expectation:
+1. If nested secret paths inherit without `selector.descendants: true`, derive bogus plural fields such as `secret=path`, or require slashful `resource.id` values, the contract is breached.

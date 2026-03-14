@@ -13,6 +13,10 @@ import (
 
 var jqResourcePathPattern = regexp.MustCompile(`resource\(\s*"((?:[^"\\]|\\.)*)"\s*\)`)
 
+type ResourceScopeOptions struct {
+	DerivedCollectionPath string
+}
+
 func BuildOperationScope(
 	logicalPath string,
 	collectionPath string,
@@ -51,9 +55,21 @@ func BuildOperationScope(
 }
 
 func BuildResourceScope(resource resource.Resource, md metadata.ResourceMetadata) (map[string]any, error) {
+	return BuildResourceScopeWithOptions(resource, md, ResourceScopeOptions{})
+}
+
+func BuildResourceScopeWithOptions(
+	resource resource.Resource,
+	md metadata.ResourceMetadata,
+	options ResourceScopeOptions,
+) (map[string]any, error) {
 	collectionPath := resource.CollectionPath
 	if strings.TrimSpace(collectionPath) == "" {
 		collectionPath = collectionPathForLogicalPath(resource.LogicalPath)
+	}
+	derivedCollectionPath := strings.TrimSpace(options.DerivedCollectionPath)
+	if derivedCollectionPath == "" {
+		derivedCollectionPath = collectionPath
 	}
 
 	scope, err := BuildOperationScope(
@@ -82,7 +98,7 @@ func BuildResourceScope(resource resource.Resource, md metadata.ResourceMetadata
 			payloadMap[trimmedKey] = trimmedValue
 		}
 	}
-	for key, value := range deriveFieldsFromLogicalCollectionPath(collectionPath) {
+	for key, value := range deriveFieldsFromLogicalCollectionPath(derivedCollectionPath) {
 		trimmedKey := strings.TrimSpace(key)
 		trimmedValue := strings.TrimSpace(value)
 		if trimmedKey == "" || trimmedValue == "" {

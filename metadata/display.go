@@ -3,8 +3,13 @@ package metadata
 import "maps"
 
 type displayResourceMetadata struct {
+	Selector   displaySelectorWire   `json:"selector" yaml:"selector"`
 	Resource   displayResourceWire   `json:"resource" yaml:"resource"`
 	Operations displayOperationsWire `json:"operations" yaml:"operations"`
+}
+
+type displaySelectorWire struct {
+	Descendants bool `json:"descendants" yaml:"descendants"`
 }
 
 type displayResourceWire struct {
@@ -84,6 +89,9 @@ func DisplayResourceMetadataView(value ResourceMetadata) displayResourceMetadata
 	expanded := MergeResourceMetadata(DefaultResourceMetadata(), value)
 
 	return displayResourceMetadata{
+		Selector: displaySelectorWire{
+			Descendants: value.Selector.AllowsDescendants(),
+		},
 		Resource: displayResourceWire{
 			ID:                     expanded.ID,
 			Alias:                  expanded.Alias,

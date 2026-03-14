@@ -60,19 +60,25 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 43. When an enabled externalized-attribute `path` uses one or more `*` wildcard array tokens, repository workflows MUST materialize concrete artifact file names deterministically by appending matched wildcard indices before the configured file extension (for example `script.sh` -> `script-0.sh`), and placeholder rendering/expansion MUST use that concrete file path.
 44. Repository-backed payload workflows (`save`, `apply`, `create`, `update`, `diff`) MUST replace configured include placeholders with sidecar file contents before downstream payload transforms or identity resolution when the stored payload value matches the configured placeholder template exactly.
 45. Changes to the persisted metadata wire shape or metadata validation contract MUST update `schemas/metadata.schema.json` in the same change; that schema MUST describe the canonical nested metadata structure and MUST NOT reintroduce legacy flat aliases.
+46. `selector.descendants` MAY be persisted only on collection metadata, MUST default to disabled, and MUST opt a non-root matched collection selector into deeper descendant inheritance beyond its exact collection root and immediate resource items.
+47. Non-root collection metadata without `selector.descendants: true` MUST apply only to the matched collection root and its immediate resource items; the root selector `/` remains global.
+48. When multiple descendant-enabled collection selectors apply, render-time descendant scope MUST use the deepest matched collection root after normal source and specificity precedence.
+49. Descendant-enabled template scope MUST expose `descendantPath` and `descendantCollectionPath` as slash-prefixed suffixes from the matched collection root to the handled target path or target collection path, and MUST expose `""` when the handled target is exactly at that root.
+50. Descendant scope fields MUST remain render-only helpers and MUST NOT be merged into payload mutation input, required-attribute validation input, or effective resolved metadata snapshots returned by `ResolveForPath`.
 
 ## Data Contracts
 Supported metadata groups:
-1. `resource`: identity, required-attribute, format, defaults, whole-resource-secret, secret-attribute, and collection directives.
-2. `resource.defaults`: defaults layering directives (`mode`, `useProfiles`, `value`, `profiles`), where `value` and `profiles[*]` accept one inline object or one deterministic include placeholder.
-3. `resource.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` is one JSON Pointer string and arrays use numeric or `*` wildcard tokens.
-4. `operations.create/update/delete/get/compare/list`: operation-specific directives.
-5. `operations.defaults.transforms`: shared ordered transform pipeline applied before operation-specific pipelines.
-6. Operation wire fields: `path`, `method`, `query`, `headers`, `body` (including media headers such as `Accept` and `Content-Type` as `headers` entries).
-7. Transform wire fields: `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, `transforms[*].jqExpression`.
-8. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
-9. Resource-level attribute requirement fields: `requiredAttributes`.
-10. Resource-level secret detection fields: `secret`, `secretAttributes`.
+1. `selector`: persisted collection-selector directives (`descendants`) that control deep inheritance eligibility but do not merge into resolved metadata.
+2. `resource`: identity, required-attribute, format, defaults, whole-resource-secret, secret-attribute, and collection directives.
+3. `resource.defaults`: defaults layering directives (`mode`, `useProfiles`, `value`, `profiles`), where `value` and `profiles[*]` accept one inline object or one deterministic include placeholder.
+4. `resource.externalizedAttributes[*]`: sidecar payload directives (`path`, `file`, optional `template|mode|saveBehavior|renderBehavior|enabled`), where `path` is one JSON Pointer string and arrays use numeric or `*` wildcard tokens.
+5. `operations.create/update/delete/get/compare/list`: operation-specific directives.
+6. `operations.defaults.transforms`: shared ordered transform pipeline applied before operation-specific pipelines.
+7. Operation wire fields: `path`, `method`, `query`, `headers`, `body` (including media headers such as `Accept` and `Content-Type` as `headers` entries).
+8. Transform wire fields: `transforms[*].selectAttributes`, `transforms[*].excludeAttributes`, `transforms[*].jqExpression`.
+9. Operation validation wire fields: `validate.requiredAttributes`, `validate.assertions[*].message`, `validate.assertions[*].jq`, `validate.schemaRef`.
+10. Resource-level attribute requirement fields: `requiredAttributes`.
+11. Resource-level secret detection fields: `secret`, `secretAttributes`.
 
 Operation selector contract:
 1. API boundaries MUST use typed `metadata.Operation` values.
@@ -88,14 +94,17 @@ Template context contract:
 3. Context attributes: logical path, logical collection path, effective remote collection path, alias, remote ID.
 4. Relative references allowed with `../` traversal semantics bound to ancestor levels.
 5. Canonical JSON Pointer placeholders such as `{{/id}}`, one-level shorthand such as `{{id}}`, and helper functions `payload_type`, `payload_media_type`, and `payload_extension` with root-scope call form `{{... .}}`.
-6. Compatibility alias `contentType` populated from the active payload media type when the payload map does not already define `contentType`.
+6. Descendant-enabled collection selectors add `descendantPath` and `descendantCollectionPath` as render-only helpers derived from the deepest matched collection root.
+7. Compatibility alias `contentType` populated from the active payload media type when the payload map does not already define `contentType`.
 
 ## Layering Algorithm
 1. Start with engine defaults.
 2. Collect matching collection metadata candidates from root to target collection.
-3. For each depth, apply wildcard then literal candidate in stable order.
-4. Apply target resource metadata last.
-5. Normalize merged result and validate required fields for requested operation.
+3. Apply root selector `/` globally.
+4. For each depth, apply wildcard then literal candidate in stable order.
+5. Non-root collection selectors apply only at their matched collection root and immediate resource items unless `selector.descendants` is enabled.
+6. Apply target resource metadata last.
+7. Normalize merged result and validate required fields for requested operation.
 
 ## Failure Modes
 1. Missing required operation path after all layers resolve.
@@ -127,6 +136,7 @@ Template context contract:
 21. Structured create payloads MAY omit metadata-derived `resource.id` values when the remote server assigns IDs, but non-create mutations still require those `resource.id` pointers unless explicit validation rules provide them another way.
 22. `resource.defaults.useProfiles: []` MUST clear inherited profile selection while leaving inherited baseline defaults intact when `mode` remains `inherit`.
 23. `resource.defaults.mode: ignore` can still select ancestor-defined profiles explicitly, while `mode: replace` cannot because ancestor profile catalogs are removed from resolution.
+24. Nested descendant paths under a descendant-enabled collection selector MUST keep plural path-field inference anchored to the matched collection root so logical suffix folders do not create bogus fields such as `secret=path`.
 
 ## Examples
 1. `/customers/_` defines `operations.get.path: /api/customers/{{/id}}`; `/customers/acme/metadata` overrides only `operations.get.headers`.
@@ -152,3 +162,4 @@ Template context contract:
 21. `operations.get.path: /api/customers/{{id}}` is valid shorthand for `/api/customers/{{/id}}`, but docs and inferred output SHOULD prefer the canonical `{{/id}}` form.
 22. `resource.format: any` on `/customers/_` allows `/customers/acme/resource.yaml` and `/customers/beta/resource.json` to coexist, and collection save workflows MUST not coerce both children to one repository format.
 23. `resource.id: "{{/id}}"`, `resource.alias: "{{/clientId}}"`, and `resource.requiredAttributes: ["/realm"]` allow a structured create payload with `/realm` and `/clientId` only when the server assigns `/id`, while update for that same scope still requires `/id` unless operation validation already declares a different source.
+24. For selector `/projects/_/secrets/_` with `selector.descendants: true`, `resource.remoteCollectionPath: /storage/keys/project/{{/project}}{{/descendantCollectionPath}}`, and `operations.get.path: ./{{/id}}`, rendering `/projects/platform/secrets/path/to/db-password` resolves to `/storage/keys/project/platform/path/to/db-password` while `operations.list.path: .` on `/projects/platform/secrets/path/to` resolves to `/storage/keys/project/platform/path/to`.

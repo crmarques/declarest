@@ -988,6 +988,106 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 	})
 }
 
+func TestBuildRequestFromMetadataSupportsDescendantScopedRundeckSecrets(t *testing.T) {
+	t.Parallel()
+
+	service := fsmetadata.NewFSMetadataService(t.TempDir())
+	ctx := context.Background()
+	if err := service.Set(ctx, "/projects/_/secrets/_", metadata.ResourceMetadata{
+		Selector:             &metadata.SelectorSpec{Descendants: boolPointer(true)},
+		ID:                   "{{/name}}",
+		Alias:                "{{/name}}",
+		RemoteCollectionPath: "/storage/keys/project/{{/project}}{{/descendantCollectionPath}}",
+		Operations: map[string]metadata.OperationSpec{
+			string(metadata.OperationCreate): {
+				Path: "./{{/id}}",
+			},
+			string(metadata.OperationUpdate): {
+				Path: "./{{/id}}",
+			},
+			string(metadata.OperationDelete): {
+				Path: "./{{/id}}",
+			},
+			string(metadata.OperationGet): {
+				Path: "./{{/id}}",
+			},
+			string(metadata.OperationCompare): {
+				Path: "./{{/id}}",
+			},
+			string(metadata.OperationList): {
+				Path: ".",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Set metadata returned error: %v", err)
+	}
+
+	client := mustManagedServerClient(
+		t,
+		config.HTTPServer{
+			BaseURL: "https://example.com/api",
+			Auth: &config.HTTPAuth{
+				CustomHeaders: []config.HeaderTokenAuth{{
+					Header: "Authorization",
+					Prefix: "Bearer",
+					Value:  "token",
+				}},
+			},
+		},
+		WithMetadataRenderer(service),
+	)
+
+	resourcePath := "/projects/platform/secrets/path/to/db-password"
+	md, err := service.ResolveForPath(ctx, resourcePath)
+	if err != nil {
+		t.Fatalf("ResolveForPath returned error: %v", err)
+	}
+
+	for _, operation := range []metadata.Operation{
+		metadata.OperationGet,
+		metadata.OperationCreate,
+		metadata.OperationUpdate,
+		metadata.OperationDelete,
+		metadata.OperationCompare,
+	} {
+		operation := operation
+		t.Run(string(operation), func(t *testing.T) {
+			t.Parallel()
+
+			spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+				LogicalPath: resourcePath,
+				Payload: map[string]any{
+					"name":    "db-password",
+					"content": "super-secret",
+				},
+			}, md, operation)
+			if err != nil {
+				t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+			}
+			if spec.Path != "/storage/keys/project/platform/path/to/db-password" {
+				t.Fatalf("expected descendant-scoped secret path, got %q", spec.Path)
+			}
+		})
+	}
+
+	collectionPath := "/projects/platform/secrets/path/to"
+	collectionMetadata, err := service.ResolveForPath(ctx, collectionPath)
+	if err != nil {
+		t.Fatalf("ResolveForPath collection returned error: %v", err)
+	}
+
+	listSpec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+		LogicalPath:    collectionPath,
+		CollectionPath: collectionPath,
+	}, collectionMetadata, metadata.OperationList)
+	if err != nil {
+		t.Fatalf("BuildRequestFromMetadata list returned error: %v", err)
+	}
+	if listSpec.Path != "/storage/keys/project/platform/path/to" {
+		t.Fatalf("expected descendant-scoped list path, got %q", listSpec.Path)
+	}
+}
+
 func TestBuildRequestFromMetadataValidatesOperationPayloadRules(t *testing.T) {
 	t.Parallel()
 
@@ -3229,4 +3329,8 @@ func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory)
 	if typedErr.Category != category {
 		t.Fatalf("expected %q category, got %q", category, typedErr.Category)
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }

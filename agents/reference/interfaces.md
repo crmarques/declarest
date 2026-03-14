@@ -149,14 +149,15 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, and optional `format` directive; `format` MUST accept the supported payload formats plus `any`, drives default repository/request media behavior when concrete, and when omitted `id` and `alias` default to `/id` for identity resolution.
-2. `resource` secret mapping (`secret`, `secretAttributes`).
-3. `resource` defaults mapping (`defaults.mode`, `defaults.useProfiles`, `defaults.value`, `defaults.profiles`) for metadata-native defaults layering; `defaults.value` and `defaults.profiles[*]` MUST accept either one structured object or one exact include placeholder pointing to deterministic selector-local files named `defaults.<ext>` or `defaults-<profile>.<ext>`.
-4. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
-5. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
-6. operation wire fields (`path`, `method`, `query`, `headers`, `body`, `transforms[*].{selectAttributes,excludeAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `headers` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
-7. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
-8. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
+1. top-level selector mapping (`selector.descendants`) for persisted collection-selector scope; it MUST be accepted only on collection metadata and MUST NOT be treated as a mergeable resolved directive.
+2. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, and optional `format` directive; `format` MUST accept the supported payload formats plus `any`, drives default repository/request media behavior when concrete, and when omitted `id` and `alias` default to `/id` for identity resolution.
+3. `resource` secret mapping (`secret`, `secretAttributes`).
+4. `resource` defaults mapping (`defaults.mode`, `defaults.useProfiles`, `defaults.value`, `defaults.profiles`) for metadata-native defaults layering; `defaults.value` and `defaults.profiles[*]` MUST accept either one structured object or one exact include placeholder pointing to deterministic selector-local files named `defaults.<ext>` or `defaults-<profile>.<ext>`.
+5. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
+6. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
+7. operation wire fields (`path`, `method`, `query`, `headers`, `body`, `transforms[*].{selectAttributes,excludeAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `headers` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+8. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
+9. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}`, plus descendant-scope helpers `{{/descendantPath}}` and `{{/descendantCollectionPath}}` when a descendant-enabled collection selector matched the handled target; `resource.id` and `resource.alias` remain segment-safe and MUST NOT resolve to slashful values.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.

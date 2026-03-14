@@ -12,7 +12,7 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
+func validateResourceMetadata(kind metadataPathKind, metadata metadatadomain.ResourceMetadata) error {
 	resolvedPayloadType := ""
 	if strings.TrimSpace(metadata.Format) != "" {
 		payloadType, err := metadatadomain.ValidateResourceFormat(metadata.Format)
@@ -24,6 +24,9 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		}
 	}
 	if err := metadatadomain.ValidateDefaultsSpec(metadata.Defaults); err != nil {
+		return err
+	}
+	if err := validateSelectorSpec(kind, metadata.Selector); err != nil {
 		return err
 	}
 
@@ -78,6 +81,16 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 		}
 	}
 	return nil
+}
+
+func validateSelectorSpec(kind metadataPathKind, spec *metadatadomain.SelectorSpec) error {
+	if spec == nil || spec.Descendants == nil {
+		return nil
+	}
+	if kind == metadataPathCollection {
+		return nil
+	}
+	return faults.NewValidationError("selector.descendants is only supported on collection metadata", nil)
 }
 
 func validateStructuredOnlyMetadataFields(

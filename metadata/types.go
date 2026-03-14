@@ -16,7 +16,16 @@ type InferenceRequest struct {
 	Recursive bool
 }
 
+type SelectorSpec struct {
+	Descendants *bool `json:"descendants,omitempty" yaml:"descendants,omitempty"`
+}
+
+func (s *SelectorSpec) AllowsDescendants() bool {
+	return s != nil && s.Descendants != nil && *s.Descendants
+}
+
 type ResourceMetadata struct {
+	Selector               *SelectorSpec            `json:"selector,omitempty" yaml:"selector,omitempty"`
 	ID                     string                   `json:"id,omitempty" yaml:"id,omitempty"`
 	Alias                  string                   `json:"alias,omitempty" yaml:"alias,omitempty"`
 	RequiredAttributes     []string                 `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`

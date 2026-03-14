@@ -59,13 +59,12 @@ func (s *FSMetadataService) Get(ctx context.Context, logicalPath string) (metada
 func (s *FSMetadataService) Set(ctx context.Context, logicalPath string, metadata metadatadomain.ResourceMetadata) error {
 	debugctx.Printf(ctx, "metadata fs set start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
-	if err := validateResourceMetadata(metadata); err != nil {
+	selector, kind, err := parseMetadataPath(logicalPath)
+	if err != nil {
 		debugctx.Printf(ctx, "metadata fs set invalid logical_path=%q error=%v", logicalPath, err)
 		return err
 	}
-
-	selector, kind, err := parseMetadataPath(logicalPath)
-	if err != nil {
+	if err := validateResourceMetadata(kind, metadata); err != nil {
 		debugctx.Printf(ctx, "metadata fs set invalid logical_path=%q error=%v", logicalPath, err)
 		return err
 	}
@@ -91,7 +90,7 @@ func (s *FSMetadataService) Set(ctx context.Context, logicalPath string, metadat
 		targetPath,
 	)
 
-	if err := s.writeMetadataFile(targetPath, metadata); err != nil {
+	if err := s.writeMetadataFile(targetPath, kind, metadata); err != nil {
 		debugctx.Printf(ctx, "metadata fs set failed logical_path=%q file=%q error=%v", logicalPath, targetPath, err)
 		return err
 	}
@@ -162,7 +161,7 @@ func (s *FSMetadataService) tryReadMetadata(selector string, kind metadataPathKi
 	}
 
 	for _, candidate := range candidates {
-		item, err := s.readMetadataFile(candidate.path, candidate.yaml)
+		item, err := s.readMetadataFile(candidate.path, candidate.yaml, kind)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
@@ -174,26 +173,30 @@ func (s *FSMetadataService) tryReadMetadata(selector string, kind metadataPathKi
 	return metadatadomain.ResourceMetadata{}, false, nil
 }
 
-func (s *FSMetadataService) readMetadataFile(targetPath string, yaml bool) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) readMetadataFile(targetPath string, yaml bool, kind metadataPathKind) (metadatadomain.ResourceMetadata, error) {
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
 
-	item, err := s.decodeMetadata(data, yaml)
+	item, err := s.decodeMetadata(data, yaml, kind)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
 	return item, nil
 }
 
-func (s *FSMetadataService) writeMetadataFile(targetPath string, metadata metadatadomain.ResourceMetadata) error {
+func (s *FSMetadataService) writeMetadataFile(
+	targetPath string,
+	kind metadataPathKind,
+	metadata metadatadomain.ResourceMetadata,
+) error {
 	yaml, err := metadataPathUsesYAML(targetPath)
 	if err != nil {
 		return err
 	}
 
-	encoded, err := s.encodeMetadata(metadata, yaml)
+	encoded, err := s.encodeMetadata(metadata, yaml, kind)
 	if err != nil {
 		return err
 	}
@@ -234,7 +237,7 @@ func (s *FSMetadataService) writeMetadataFile(targetPath string, metadata metada
 	return nil
 }
 
-func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool) (metadatadomain.ResourceMetadata, error) {
+func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool, kind metadataPathKind) (metadatadomain.ResourceMetadata, error) {
 	var (
 		decoded metadatadomain.ResourceMetadata
 		err     error
@@ -253,15 +256,15 @@ func (s *FSMetadataService) decodeMetadata(data []byte, yaml bool) (metadatadoma
 		}
 	}
 
-	if err := validateResourceMetadata(decoded); err != nil {
+	if err := validateResourceMetadata(kind, decoded); err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
 
 	return decoded, nil
 }
 
-func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetadata, yaml bool) ([]byte, error) {
-	if err := validateResourceMetadata(metadata); err != nil {
+func (s *FSMetadataService) encodeMetadata(metadata metadatadomain.ResourceMetadata, yaml bool, kind metadataPathKind) ([]byte, error) {
+	if err := validateResourceMetadata(kind, metadata); err != nil {
 		return nil, err
 	}
 
