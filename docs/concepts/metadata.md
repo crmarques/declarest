@@ -9,6 +9,7 @@ If your API is inconsistent, nested, RPC-ish, or mixed-type, metadata becomes th
 
 ### Resource identity and path mapping
 
+- `selector.descendants`
 - `resource.id`
 - `resource.alias`
 - `resource.remoteCollectionPath`
@@ -63,6 +64,30 @@ declarest resource metadata infer /corporations/acme --apply
 
 Use inference as a starting point, then refine manually for edge cases.
 
+## Descendant-aware collection metadata
+
+By default, non-root collection metadata applies to the matched collection itself and its immediate resource items.
+If the logical tree needs deeper nested folders under that same rule, enable `selector.descendants`.
+
+Example:
+
+```yaml
+selector:
+  descendants: true
+resource:
+  id: "{% raw %}{{/name}}{% endraw %}"
+  alias: "{% raw %}{{/name}}{% endraw %}"
+  remoteCollectionPath: "{% raw %}/storage/keys/project/{{/project}}{{/descendantCollectionPath}}{% endraw %}"
+operations:
+  list:
+    path: .
+  get:
+    path: "{% raw %}./{{/id}}{% endraw %}"
+```
+
+This lets a logical path such as `/projects/platform/secrets/path/to/db-password` render against the backend subtree `/storage/keys/project/platform/path/to/db-password`.
+Inside descendant-enabled selectors, `{{/descendantCollectionPath}}` renders the collection suffix below the matched root and `{{/descendantPath}}` renders the full resource suffix.
+
 ## Externalized text attributes
 
 Use `resource.externalizedAttributes` when one or more string fields should live in sibling files instead of inline in `resource.yaml`.
@@ -72,9 +97,9 @@ Example metadata:
 ```yaml
 resource:
   externalizedAttributes:
-    - path: ["script"]
+    - path: /script
       file: "script.sh"
-    - path: ["sequence", "commands", "*", "script"]
+    - path: /sequence/commands/*/script
       file: "script.sh"
 ```
 

@@ -109,6 +109,42 @@ Templates can resolve values from:
 This means `remoteCollectionPath` templates can still work even when the current payload does not include a field directly, as long as the logical path/ancestor context provides it.
 Plural logical collection segments such as `/projects/<project>/...` also remain available as fallback template fields.
 
+## Descendant-aware collection selectors
+
+Some APIs expose one backend subtree while you want deeper logical folders beneath the same selector.
+Use `selector.descendants: true` on collection metadata when that rule must keep applying below the matched collection root.
+
+Rundeck key storage is a good example:
+
+```json
+{
+  "selector": {
+    "descendants": true
+  },
+  "resource": {
+    "id": "{% raw %}`{{/name}}`{% endraw %}",
+    "alias": "{% raw %}`{{/name}}`{% endraw %}",
+    "remoteCollectionPath": "{% raw %}/storage/keys/project/{{/project}}{{/descendantCollectionPath}}{% endraw %}"
+  },
+  "operations": {
+    "list": {
+      "path": "."
+    },
+    "get": {
+      "path": "{% raw %}./{{/id}}{% endraw %}"
+    }
+  }
+}
+```
+
+With that selector:
+
+- `/projects/platform/secrets/path/to/` renders list operations against `/storage/keys/project/platform/path/to`
+- `/projects/platform/secrets/path/to/db-password` renders get/update/delete against `/storage/keys/project/platform/path/to/db-password`
+- `{{/descendantCollectionPath}}` carries the nested collection suffix, while `{{/descendantPath}}` carries the full nested resource suffix
+
+This keeps the logical repository tree readable without hardcoding every deeper folder level in metadata.
+
 ## Validation loop for custom path modeling
 
 Use this loop whenever you add or change path overrides:
