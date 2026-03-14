@@ -201,7 +201,6 @@ if [[ -z "${project_id}" ]]; then
   gitlab_api_post "${GITLAB_BASE_URL}/api/v4/projects" \
     --data-urlencode "name=${GITLAB_PROJECT_NAME}" \
     --data-urlencode 'visibility=private' \
-    --data-urlencode 'initialize_with_readme=true' \
     --data-urlencode "default_branch=${branch_name}" >/dev/null
 fi
 

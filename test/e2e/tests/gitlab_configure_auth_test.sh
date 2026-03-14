@@ -203,6 +203,108 @@ EOF
 
 test_configure_auth_waits_for_git_receive_pack_before_exit
 
+test_configure_auth_creates_empty_project_for_seed_push() {
+  local tmp
+  tmp=$(new_temp_dir)
+
+  local bin_dir="${tmp}/bin"
+  mkdir -p "${bin_dir}"
+  local project_lookup_counter="${tmp}/project-lookup-count"
+  printf '0\n' >"${project_lookup_counter}"
+
+  cat >"${bin_dir}/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+method='GET'
+url=''
+for ((idx = 1; idx <= $#; idx++)); do
+  arg=${!idx}
+  case "${arg}" in
+    -X)
+      idx=$((idx + 1))
+      method=${!idx}
+      ;;
+    http://*|https://*)
+      url=${arg}
+      ;;
+  esac
+done
+
+printf '%s %s\n' "${method}" "${url}" >> "${E2E_TEST_CAPTURE_FILE}"
+
+case "${url}" in
+  */users/sign_in)
+    exit 0
+    ;;
+  */oauth/token)
+    printf '{"access_token":"test-token"}\n'
+    exit 0
+    ;;
+  */api/v4/projects?search=*)
+    count=$(cat "${E2E_TEST_PROJECT_LOOKUP_COUNTER}")
+    count=$((count + 1))
+    printf '%s\n' "${count}" > "${E2E_TEST_PROJECT_LOOKUP_COUNTER}"
+    if ((count == 1)); then
+      printf '[]\n'
+      exit 0
+    fi
+    printf '[{"id":1,"path_with_namespace":"root/declarest-e2e"}]\n'
+    exit 0
+    ;;
+  */api/v4/projects)
+    printf '%s\n' "$*" > "${E2E_TEST_PROJECT_CREATE_ARGS_FILE}"
+    printf '{}\n'
+    exit 0
+    ;;
+  */root/declarest-e2e.git/info/refs?service=git-receive-pack)
+    printf '001f# service=git-receive-pack\n0000'
+    exit 0
+    ;;
+  *)
+    printf '{}\n'
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "${bin_dir}/curl"
+
+  local state_file="${tmp}/state.env"
+  cat >"${state_file}" <<'EOF'
+GITLAB_BASE_URL=http://127.0.0.1:3000
+GITLAB_ROOT_PASSWORD=test-password
+GITLAB_PROJECT_NAME=declarest-e2e
+GITLAB_PROJECT_PATH=root/declarest-e2e
+GIT_REMOTE_BRANCH=main
+EOF
+
+  local curl_capture="${tmp}/curl.log"
+  local create_args_file="${tmp}/project-create-args.log"
+  local output status
+  set +e
+  output=$(
+    PATH="${bin_dir}:${PATH}" \
+      E2E_COMPONENT_STATE_FILE="${state_file}" \
+      E2E_COMPONENT_CONNECTION='local' \
+      E2E_TEST_CAPTURE_FILE="${curl_capture}" \
+      E2E_TEST_PROJECT_LOOKUP_COUNTER="${project_lookup_counter}" \
+      E2E_TEST_PROJECT_CREATE_ARGS_FILE="${create_args_file}" \
+      bash "${E2E_SCRIPT_DIR}/components/git-provider/gitlab/scripts/configure-auth.sh" 2>&1
+  )
+  status=$?
+  set -e
+
+  assert_status "${status}" "0"
+  assert_eq "${output}" "" "expected empty-project bootstrap to complete without extra output"
+
+  local create_args
+  create_args=$(cat "${create_args_file}")
+  assert_contains "${create_args}" "--data-urlencode default_branch=main"
+  assert_not_contains "${create_args}" "initialize_with_readme=true"
+}
+
+test_configure_auth_creates_empty_project_for_seed_push
+
 test_configure_auth_retries_transient_gitlab_api_bootstrap_failures() {
   local tmp
   tmp=$(new_temp_dir)
