@@ -132,15 +132,15 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 
 		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--wait", "1s")
 		assertTypedCategory(t, err, faults.ValidationError)
-		if err == nil || !strings.Contains(err.Error(), "--managed-server") {
-			t.Fatalf("expected --managed-server validation message, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "--from") {
+			t.Fatalf("expected --from validation message, got %v", err)
 		}
 	})
 
 	t.Run("rejects_invalid_duration", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--managed-server", "--yes", "--wait", "later")
+		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--from", "managed-server", "--yes", "--wait", "later")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--wait") {
 			t.Fatalf("expected --wait validation message, got %v", err)
@@ -154,6 +154,7 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 		orchestrator := &testOrchestrator{
 			metadataService: metadataService,
 			getRemoteValue:  map[string]any{"status": "active"},
+			localList:       []resource.Resource{{LogicalPath: "/customers/acme", LocalAlias: "acme"}},
 		}
 		deps := testDepsWith(orchestrator, metadataService)
 
@@ -162,7 +163,7 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 			"",
 			"resource", "defaults", "infer",
 			"/customers/acme",
-			"--managed-server",
+			"--from", "managed-server",
 			"--yes",
 			"--wait", "1ms",
 		)
@@ -195,6 +196,7 @@ func TestResourceDefaultsInferManagedServerIgnoresResolvedDefaultsInProbeInput(t
 			},
 		},
 		getRemoteValue: map[string]any{"status": "active"},
+		localList:      []resource.Resource{{LogicalPath: "/customers/acme", LocalAlias: "acme"}},
 	}
 	deps := testDepsWith(orchestrator, metadataService)
 	deps.Services.(*testServiceAccessor).store.(*testRepository).defaults = map[string]resource.Content{
@@ -206,7 +208,7 @@ func TestResourceDefaultsInferManagedServerIgnoresResolvedDefaultsInProbeInput(t
 		"",
 		"resource", "defaults", "infer",
 		"/customers/acme",
-		"--managed-server",
+		"--from", "managed-server",
 		"--yes",
 	)
 	if err != nil {

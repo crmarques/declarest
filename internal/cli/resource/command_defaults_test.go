@@ -71,9 +71,22 @@ func TestDefaultsEditCommandClearsDefaultsWhenEditorIsEmpty(t *testing.T) {
 	}
 }
 
-func TestDefaultsInferCommandRequiresYesForManagedServer(t *testing.T) {
+func TestDefaultsInferCommandRequiresYesForManagedServerSource(t *testing.T) {
 	command := newDefaultsInferCommand(cliutil.CommandDependencies{}, &cliutil.GlobalFlags{})
-	command.SetArgs([]string{"/customers/acme", "--managed-server"})
+	command.SetArgs([]string{"/customers/acme", "--from", "managed-server"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	err := command.ExecuteContext(context.Background())
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestDefaultsInferCommandRejectsWaitWithoutManagedServerSource(t *testing.T) {
+	command := newDefaultsInferCommand(cliutil.CommandDependencies{}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/customers/acme", "--wait", "1s"})
 	command.SetIn(bytes.NewBuffer(nil))
 	command.SetOut(&bytes.Buffer{})
 	command.SetErr(&bytes.Buffer{})
@@ -230,11 +243,15 @@ func TestDefaultsInferCommandSaveWritesToExplicitMetadataBaseDir(t *testing.T) {
 	}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/customers/acme", "--save"})
 	command.SetIn(bytes.NewBuffer(nil))
-	command.SetOut(&bytes.Buffer{})
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
 	command.SetErr(&bytes.Buffer{})
 
 	if err := command.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("ExecuteContext returned error: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected --save to suppress stdout output, got %q", stdout.String())
 	}
 
 	sharedMetadataPath := filepath.Join(metadataDir, "customers", "_", "metadata.yaml")
@@ -283,11 +300,15 @@ func TestDefaultsInferCommandSaveWritesBundleBackedDefaultsToRepoOverlay(t *test
 	}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/customers/acme", "--save"})
 	command.SetIn(bytes.NewBuffer(nil))
-	command.SetOut(&bytes.Buffer{})
+	stdout := &bytes.Buffer{}
+	command.SetOut(stdout)
 	command.SetErr(&bytes.Buffer{})
 
 	if err := command.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("ExecuteContext returned error: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected --save to suppress stdout output, got %q", stdout.String())
 	}
 
 	repoMetadataPath := filepath.Join(repoDir, "customers", "_", "metadata.yaml")
@@ -363,12 +384,14 @@ func (f *fakeDefaultsCommandOrchestrator) ResolveLocalResource(
 		}
 		return resourcedomain.Resource{
 			LogicalPath:       logicalPath,
+			LocalAlias:        path.Base(logicalPath),
 			Payload:           content.Value,
 			PayloadDescriptor: content.Descriptor,
 		}, nil
 	}
 	return resourcedomain.Resource{
 		LogicalPath:       logicalPath,
+		LocalAlias:        path.Base(logicalPath),
 		Payload:           f.content.Value,
 		PayloadDescriptor: f.content.Descriptor,
 	}, nil

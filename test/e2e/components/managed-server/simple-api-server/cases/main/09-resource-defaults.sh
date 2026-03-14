@@ -65,7 +65,10 @@ EOF
 
   case_run_declarest resource defaults infer "${alpha_path}" --save -o json
   case_expect_success
-  case_expect_output_contains '"enabled": true'
+  if [ -n "${CASE_LAST_STDOUT}" ]; then
+    printf 'expected resource defaults infer --save to suppress stdout, got %s\n' "${CASE_LAST_STDOUT}" >&2
+    return 1
+  fi
 
   case_run_declarest resource defaults infer "${alpha_path}" --check -o json
   case_expect_success
@@ -115,13 +118,14 @@ EOF
     return 1
   fi
 
-  case_run_declarest resource defaults infer "${project_path}" --managed-server
+  case_run_declarest resource defaults infer "${alpha_path}" --from managed-server
   case_expect_failure
   case_expect_output_contains '--yes'
 
-  case_run_declarest resource defaults infer "${project_path}" --managed-server --yes -o json
+  case_run_declarest resource defaults infer "${alpha_path}" --from managed-server --yes -o json
   case_expect_success
-  case_expect_output_contains '{}'
+  case_expect_output_contains '"enabled": true'
+  case_expect_output_contains '"project": "defaults-sandbox"'
 
   case_run_declarest resource list "${collection_path}" --source managed-server -o json
   case_expect_success

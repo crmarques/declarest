@@ -19,6 +19,14 @@ import (
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
+func managedServerInferRequest() InferRequest {
+	return InferRequest{Sources: []InferSource{InferSourceManagedServer}}
+}
+
+func managedServerCheckRequest() CheckRequest {
+	return CheckRequest{Sources: []InferSource{InferSourceManagedServer}}
+}
+
 func TestGetReturnsEmptyObjectWhenDefaultsSidecarIsMissing(t *testing.T) {
 	t.Parallel()
 
@@ -72,25 +80,31 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 		},
 	}
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
 	want := map[string]any{
+		"labels": map[string]any{
+			"team": "platform",
+		},
 		"status": "active",
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
 
-	if len(orch.createCalls) != 2 {
-		t.Fatalf("expected two temporary creates, got %#v", orch.createCalls)
+	if len(orch.createCalls) != 4 {
+		t.Fatalf("expected four temporary creates, got %#v", orch.createCalls)
 	}
-	if len(orch.deleteCalls) != 2 {
-		t.Fatalf("expected two cleanup deletes, got %#v", orch.deleteCalls)
+	if len(orch.deleteCalls) != 4 {
+		t.Fatalf("expected four cleanup deletes, got %#v", orch.deleteCalls)
 	}
-	if orch.deleteCalls[0] != orch.createCalls[1].logicalPath || orch.deleteCalls[1] != orch.createCalls[0].logicalPath {
+	if orch.deleteCalls[0] != orch.createCalls[3].logicalPath ||
+		orch.deleteCalls[1] != orch.createCalls[2].logicalPath ||
+		orch.deleteCalls[2] != orch.createCalls[1].logicalPath ||
+		orch.deleteCalls[3] != orch.createCalls[0].logicalPath {
 		t.Fatalf("expected cleanup deletes in reverse order, got creates=%#v deletes=%#v", orch.createCalls, orch.deleteCalls)
 	}
 }
@@ -184,12 +198,15 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms"},
 	}
 
-	want := map[string]any{"status": "active"}
+	want := map[string]any{
+		"organizationsEnabled": true,
+		"status":               "active",
+	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := Infer(context.Background(), deps, tc.requestedPath, InferRequest{ManagedServer: true})
+			result, err := Infer(context.Background(), deps, tc.requestedPath, managedServerInferRequest())
 			if err != nil {
 				t.Fatalf("Infer returned error: %v", err)
 			}
@@ -202,8 +219,8 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 		})
 	}
 
-	if len(orch.createCalls) != len(tests)*2 {
-		t.Fatalf("expected %d temporary creates, got %#v", len(tests)*2, orch.createCalls)
+	if len(orch.createCalls) != len(tests)*4 {
+		t.Fatalf("expected %d temporary creates, got %#v", len(tests)*4, orch.createCalls)
 	}
 	for idx, call := range orch.createCalls {
 		payload, ok := call.content.Value.(map[string]any)
@@ -229,11 +246,19 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"realm":                "master",
+				"displayName":          "master",
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
 	})
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
-	result, err := Infer(context.Background(), deps, "/admin/realms/acme", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/admin/realms/acme", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -241,13 +266,16 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 		t.Fatalf("expected resolved path /admin/realms, got %q", result.ResolvedPath)
 	}
 
-	want := map[string]any{"status": "active"}
+	want := map[string]any{
+		"organizationsEnabled": true,
+		"status":               "active",
+	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
 
-	if len(orch.createCalls) != 2 {
-		t.Fatalf("expected two temporary creates, got %#v", orch.createCalls)
+	if len(orch.createCalls) != 4 {
+		t.Fatalf("expected four temporary creates, got %#v", orch.createCalls)
 	}
 	for _, call := range orch.createCalls {
 		payload, ok := call.content.Value.(map[string]any)
@@ -258,8 +286,9 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 		if got := payload["realm"]; got != tempName {
 			t.Fatalf("expected realm %q for %q, got %#v", tempName, call.logicalPath, got)
 		}
-		if got := payload["displayName"]; got != "acme" {
-			t.Fatalf("expected displayName to remain unchanged, got %#v", got)
+		displayName, ok := payload["displayName"].(string)
+		if !ok || (displayName != "acme" && displayName != "master") {
+			t.Fatalf("expected displayName to remain unchanged, got %#v", payload["displayName"])
 		}
 	}
 }
@@ -306,7 +335,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -348,22 +377,25 @@ func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
 	serviceAccessor.managedServer = managedServerClient
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
-	want := map[string]any{"status": "active"}
+	want := map[string]any{
+		"labels": map[string]any{"team": "platform"},
+		"status": "active",
+	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
-	if len(orch.deleteCalls) != 2 {
-		t.Fatalf("expected two orchestrator delete attempts, got %#v", orch.deleteCalls)
+	if len(orch.deleteCalls) != 4 {
+		t.Fatalf("expected four orchestrator delete attempts, got %#v", orch.deleteCalls)
 	}
-	if managedServerClient.invalidateCalls != 3 {
-		t.Fatalf("expected one probe-read invalidation plus two delete-retry invalidations, got %d", managedServerClient.invalidateCalls)
+	if managedServerClient.invalidateCalls != 5 {
+		t.Fatalf("expected one probe-read invalidation plus four delete-retry invalidations, got %d", managedServerClient.invalidateCalls)
 	}
-	if len(managedServerClient.requestCalls) != 2 {
-		t.Fatalf("expected two direct managed-server delete retries, got %#v", managedServerClient.requestCalls)
+	if len(managedServerClient.requestCalls) != 4 {
+		t.Fatalf("expected four direct managed-server delete retries, got %#v", managedServerClient.requestCalls)
 	}
 	for _, call := range managedServerClient.requestCalls {
 		if call.Method != "DELETE" {
@@ -384,6 +416,13 @@ func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
+		"/projects/tenant": {
+			Value: map[string]any{
+				"id":          "tenant",
+				"displayName": "Tenant",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
 	})
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
@@ -400,7 +439,7 @@ func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -425,14 +464,21 @@ func TestInferFromManagedServerWaitsBeforeFirstProbeRead(t *testing.T) {
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
+		"/projects/tenant": {
+			Value: map[string]any{
+				"id":          "tenant",
+				"displayName": "Tenant",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
 	})
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 	wait := 25 * time.Millisecond
 
 	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{
-		ManagedServer: true,
-		Wait:          wait,
+		Sources: []InferSource{InferSourceManagedServer},
+		Wait:    wait,
 	})
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
@@ -464,6 +510,13 @@ func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
+		"/projects/tenant": {
+			Value: map[string]any{
+				"id":          "tenant",
+				"displayName": "Tenant",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
 	})
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
@@ -478,7 +531,7 @@ func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -498,6 +551,13 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 			Value: map[string]any{
 				"id":          "platform",
 				"displayName": "Platform",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/projects/tenant": {
+			Value: map[string]any{
+				"id":          "tenant",
+				"displayName": "Tenant",
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
@@ -521,7 +581,7 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{ManagedServer: true})
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -553,6 +613,114 @@ func TestInferCollectionPathWithMultipleDirectChildrenUsesSharedDefaults(t *test
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferItemsRestrictsRepositorySamplesByAlias(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/customers/acme": {
+			Value: map[string]any{
+				"id":     "acme",
+				"name":   "acme",
+				"labels": map[string]any{"team": "platform", "region": "east"},
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/customers/beta": {
+			Value: map[string]any{
+				"id":     "beta",
+				"name":   "beta",
+				"labels": map[string]any{"team": "platform", "region": "west"},
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/customers/gamma": {
+			Value: map[string]any{
+				"id":     "gamma",
+				"name":   "gamma",
+				"labels": map[string]any{"team": "security", "region": "west"},
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{
+		Items: []string{"acme", "beta"},
+	})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"labels": map[string]any{"team": "platform"},
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected inferred defaults for selected aliases: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/admin/realms/acme": {
+			Value: map[string]any{
+				"realm":                "acme",
+				"displayName":          "Acme",
+				"organizationsEnabled": false,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"realm":                "master",
+				"displayName":          "Master",
+				"organizationsEnabled": false,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/other": {
+			Value: map[string]any{
+				"realm":                "other",
+				"displayName":          "Other",
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+
+	result, err := Infer(context.Background(), deps, "/admin/realms", InferRequest{
+		Sources: []InferSource{InferSourceManagedServer},
+		Items:   []string{"acme", "master"},
+	})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"organizationsEnabled": false,
+		"status":               "active",
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected managed-server defaults for selected aliases: got %#v want %#v", result.Content.Value, want)
+	}
+}
+
+func TestInferItemsFailsWhenAliasDoesNotExist(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDeps()
+
+	_, err := Infer(context.Background(), deps, "/customers", InferRequest{
+		Items: []string{"missing"},
+	})
+	if !faults.IsCategory(err, faults.ValidationError) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "items alias not found") {
+		t.Fatalf("expected missing alias validation message, got %v", err)
 	}
 }
 
@@ -669,14 +837,17 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 		},
 	}
 
-	result, err := Check(context.Background(), deps, "/customers/acme", CheckRequest{ManagedServer: true})
+	result, err := Check(context.Background(), deps, "/customers/acme", managedServerCheckRequest())
 	if err != nil {
 		t.Fatalf("Check returned error: %v", err)
 	}
 	if result.Matches {
 		t.Fatalf("expected mismatching defaults, got %#v vs %#v", result.CurrentContent.Value, result.InferredContent.Value)
 	}
-	want := map[string]any{"status": "active"}
+	want := map[string]any{
+		"labels": map[string]any{"team": "platform"},
+		"status": "active",
+	}
 	if !reflect.DeepEqual(result.InferredContent.Value, want) {
 		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.InferredContent.Value, want)
 	}
@@ -707,6 +878,7 @@ func (f *fakeDefaultsOrchestrator) ResolveLocalResource(_ context.Context, logic
 	return resource.Resource{
 		LogicalPath:       logicalPath,
 		CollectionPath:    collectionPathFor(logicalPath),
+		LocalAlias:        path.Base(logicalPath),
 		Payload:           content.Value,
 		PayloadDescriptor: content.Descriptor,
 	}, nil

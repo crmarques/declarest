@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,19 +20,27 @@ import (
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
-	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
 type Dependencies = appdeps.Dependencies
 
+type InferSource string
+
+const (
+	InferSourceRepository    InferSource = "repository"
+	InferSourceManagedServer InferSource = "managed-server"
+)
+
 type InferRequest struct {
-	ManagedServer bool
-	Wait          time.Duration
+	Sources []InferSource
+	Items   []string
+	Wait    time.Duration
 }
 
 type CheckRequest struct {
-	ManagedServer bool
-	Wait          time.Duration
+	Sources []InferSource
+	Items   []string
+	Wait    time.Duration
 }
 
 type Result struct {
@@ -54,6 +63,12 @@ type target struct {
 	defaultsContent   resource.Content
 	defaultsFound     bool
 	payloadDescriptor resource.PayloadDescriptor
+}
+
+type inferTemplateItem struct {
+	logicalPath  string
+	localAlias   string
+	localContent resource.Content
 }
 
 type localResourceResolver interface {
@@ -100,12 +115,28 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 		return Result{}, err
 	}
 
-	var inferred resource.Value
-	if request.ManagedServer {
-		inferred, err = inferFromManagedServer(ctx, deps, resolvedTarget, request)
-	} else {
-		inferred, err = inferFromRepository(ctx, deps, resolvedTarget)
+	sources, err := normalizeInferSources(request.Sources)
+	if err != nil {
+		return Result{}, err
 	}
+
+	samples := make([]resource.Value, 0, 8)
+	if inferSourcesInclude(sources, InferSourceRepository) {
+		repositorySamples, sampleErr := inferFromRepository(ctx, deps, resolvedTarget, request)
+		if sampleErr != nil {
+			return Result{}, sampleErr
+		}
+		samples = append(samples, repositorySamples...)
+	}
+	if inferSourcesInclude(sources, InferSourceManagedServer) {
+		managedServerSamples, sampleErr := inferFromManagedServer(ctx, deps, resolvedTarget, request)
+		if sampleErr != nil {
+			return Result{}, sampleErr
+		}
+		samples = append(samples, managedServerSamples...)
+	}
+
+	inferred, err := resource.InferDefaultsFromValues(samples...)
 	if err != nil {
 		return Result{}, err
 	}
@@ -121,8 +152,9 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 
 func Check(ctx context.Context, deps Dependencies, logicalPath string, request CheckRequest) (CheckResult, error) {
 	inferred, err := Infer(ctx, deps, logicalPath, InferRequest{
-		ManagedServer: request.ManagedServer,
-		Wait:          request.Wait,
+		Sources: request.Sources,
+		Items:   request.Items,
+		Wait:    request.Wait,
 	})
 	if err != nil {
 		return CheckResult{}, err
@@ -311,35 +343,67 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func inferFromRepository(ctx context.Context, deps Dependencies, resolvedTarget target) (resource.Value, error) {
-	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+func normalizeInferSources(sources []InferSource) ([]InferSource, error) {
+	if len(sources) == 0 {
+		return []InferSource{InferSourceRepository}, nil
+	}
+
+	normalized := make([]InferSource, 0, len(sources))
+	seen := make(map[InferSource]struct{}, len(sources))
+	for _, source := range sources {
+		trimmed := InferSource(strings.TrimSpace(string(source)))
+		switch trimmed {
+		case InferSourceRepository, InferSourceManagedServer:
+		default:
+			return nil, faults.NewValidationError(
+				"defaults inference sources must be repository and/or managed-server",
+				nil,
+			)
+		}
+		if _, found := seen[trimmed]; found {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil, faults.NewValidationError(
+			"defaults inference sources must be repository and/or managed-server",
+			nil,
+		)
+	}
+	return normalized, nil
+}
+
+func inferSourcesInclude(sources []InferSource, target InferSource) bool {
+	for _, source := range sources {
+		if source == target {
+			return true
+		}
+	}
+	return false
+}
+
+func inferFromRepository(
+	ctx context.Context,
+	deps Dependencies,
+	resolvedTarget target,
+	request InferRequest,
+) ([]resource.Value, error) {
+	selectedItems, err := resolveInferTemplateItems(ctx, deps, resolvedTarget.scopePath, request.Items)
 	if err != nil {
 		return nil, err
 	}
 
-	collectionPath := collectionPathFor(resolvedTarget.logicalPath)
-	items, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
-	if err != nil {
-		return nil, err
-	}
-
-	samples := make([]resource.Value, 0, len(items))
+	samples := make([]resource.Value, 0, len(selectedItems))
 	targetPayloadType := resource.NormalizePayloadDescriptor(resolvedTarget.payloadDescriptor).PayloadType
-	for _, item := range items {
-		if item.LogicalPath == "" {
+	for _, item := range selectedItems {
+		if resource.NormalizePayloadDescriptor(item.localContent.Descriptor).PayloadType != targetPayloadType {
 			continue
 		}
-		content, getErr := orchestratorService.GetLocal(ctx, item.LogicalPath)
-		if getErr != nil {
-			return nil, getErr
-		}
-		if resource.NormalizePayloadDescriptor(content.Descriptor).PayloadType != targetPayloadType {
-			continue
-		}
-		samples = append(samples, content.Value)
+		samples = append(samples, item.localContent.Value)
 	}
-
-	return resource.InferDefaultsFromValues(samples...)
+	return samples, nil
 }
 
 func inferFromManagedServer(
@@ -347,7 +411,7 @@ func inferFromManagedServer(
 	deps Dependencies,
 	resolvedTarget target,
 	request InferRequest,
-) (_ resource.Value, err error) {
+) (_ []resource.Value, err error) {
 	orchestratorService, err := appdeps.RequireOrchestrator(deps)
 	if err != nil {
 		return nil, err
@@ -358,26 +422,13 @@ func inferFromManagedServer(
 		return nil, err
 	}
 
-	md, err := metadataService.ResolveForPath(ctx, resolvedTarget.logicalPath)
+	selectedItems, err := resolveInferTemplateItems(ctx, deps, resolvedTarget.scopePath, request.Items)
 	if err != nil {
 		return nil, err
 	}
 
-	probeContent, err := resolveManagedServerProbeContent(ctx, deps, resolvedTarget)
-	if err != nil {
-		return nil, err
-	}
-
-	firstPayload, firstPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, probeContent, "probe-1")
-	if err != nil {
-		return nil, err
-	}
-	secondPayload, secondPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, probeContent, "probe-2")
-	if err != nil {
-		return nil, err
-	}
-
-	tempPaths := []string{}
+	probes := make([]managedServerProbe, 0, len(selectedItems)*2)
+	tempPaths := make([]string, 0, len(selectedItems)*2)
 	defer func() {
 		var cleanupErr error
 		for idx := len(tempPaths) - 1; idx >= 0; idx-- {
@@ -397,15 +448,41 @@ func inferFromManagedServer(
 		}
 	}()
 
-	if _, err := orchestratorService.Create(ctx, firstPath, firstPayload); err != nil {
-		return nil, err
-	}
-	tempPaths = append(tempPaths, firstPath)
+	for _, item := range selectedItems {
+		md, metadataErr := metadataService.ResolveForPath(ctx, item.logicalPath)
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
 
-	if _, err := orchestratorService.Create(ctx, secondPath, secondPayload); err != nil {
-		return nil, err
+		rawContent, rawErr := resolveManagedServerProbeContent(ctx, deps, item.logicalPath)
+		if rawErr != nil {
+			return nil, rawErr
+		}
+		if !resource.IsPayloadDescriptorExplicit(rawContent.Descriptor) && resource.IsPayloadDescriptorExplicit(item.localContent.Descriptor) {
+			rawContent.Descriptor = item.localContent.Descriptor
+		}
+
+		firstPayload, firstPath, buildErr := buildManagedServerProbePayload(item.logicalPath, md, rawContent, "probe-1")
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		secondPayload, secondPath, buildErr := buildManagedServerProbePayload(item.logicalPath, md, rawContent, "probe-2")
+		if buildErr != nil {
+			return nil, buildErr
+		}
+
+		if _, createErr := orchestratorService.Create(ctx, firstPath, firstPayload); createErr != nil {
+			return nil, createErr
+		}
+		tempPaths = append(tempPaths, firstPath)
+		probes = append(probes, managedServerProbe{path: firstPath})
+
+		if _, createErr := orchestratorService.Create(ctx, secondPath, secondPayload); createErr != nil {
+			return nil, createErr
+		}
+		tempPaths = append(tempPaths, secondPath)
+		probes = append(probes, managedServerProbe{path: secondPath})
 	}
-	tempPaths = append(tempPaths, secondPath)
 
 	if request.Wait > 0 {
 		if err := waitForManagedServerDelay(ctx, request.Wait); err != nil {
@@ -415,57 +492,28 @@ func inferFromManagedServer(
 
 	invalidateManagedServerAuthCache(deps)
 
-	firstRemote, err := readManagedServerProbeContent(ctx, orchestratorService, firstPath)
-	if err != nil {
-		return nil, err
+	outputs := make([]resource.Value, 0, len(probes))
+	for _, probe := range probes {
+		remoteContent, readErr := readManagedServerProbeContent(ctx, orchestratorService, probe.path)
+		if readErr != nil {
+			return nil, readErr
+		}
+		outputs = append(outputs, remoteContent.Value)
 	}
-	secondRemote, err := readManagedServerProbeContent(ctx, orchestratorService, secondPath)
-	if err != nil {
-		return nil, err
-	}
-
-	inputs := []resource.Value{
-		nil,
-		nil,
-	}
-	inputs[0], err = managedServerProbeInputValue(ctx, deps, resolvedTarget, firstPath, firstPayload)
-	if err != nil {
-		return nil, err
-	}
-	inputs[1], err = managedServerProbeInputValue(ctx, deps, resolvedTarget, secondPath, secondPayload)
-	if err != nil {
-		return nil, err
-	}
-	outputs := []resource.Value{firstRemote.Value, secondRemote.Value}
-	return resource.InferCreatedDefaults(inputs, outputs)
+	return outputs, nil
 }
 
-func resolveManagedServerProbeContent(ctx context.Context, deps Dependencies, resolvedTarget target) (resource.Content, error) {
+type managedServerProbe struct {
+	path string
+}
+
+func resolveManagedServerProbeContent(ctx context.Context, deps Dependencies, logicalPath string) (resource.Content, error) {
 	store, err := appdeps.RequireResourceStore(deps)
 	if err != nil {
 		return resource.Content{}, err
 	}
 
-	content, err := store.Get(ctx, resolvedTarget.logicalPath)
-	if err != nil {
-		return resource.Content{}, err
-	}
-
-	if !resource.IsPayloadDescriptorExplicit(content.Descriptor) && resource.IsPayloadDescriptorExplicit(resolvedTarget.resourceContent.Descriptor) {
-		content.Descriptor = resolvedTarget.resourceContent.Descriptor
-	}
-	return content, nil
-}
-
-func managedServerProbeInputValue(
-	ctx context.Context,
-	deps Dependencies,
-	resolvedTarget target,
-	logicalPath string,
-	content resource.Content,
-) (resource.Value, error) {
-	inputValue := resolveSecretsForManagedServerProbe(ctx, deps.SecretProvider(), logicalPath, content)
-	return inputValue, nil
+	return store.Get(ctx, logicalPath)
 }
 
 func invalidateManagedServerAuthCache(deps Dependencies) {
@@ -801,28 +849,112 @@ func singularManagedServerProbeIdentityField(value string) string {
 	}
 }
 
-func resolveSecretsForManagedServerProbe(
+func resolveInferTemplateItems(
 	ctx context.Context,
-	provider secretdomain.SecretProvider,
-	logicalPath string,
-	content resource.Content,
-) resource.Value {
-	if provider == nil {
-		return content.Value
+	deps Dependencies,
+	collectionPath string,
+	aliases []string,
+) ([]inferTemplateItem, error) {
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	if err != nil {
+		return nil, err
 	}
 
-	resolved, err := secretdomain.ResolvePayloadDirectivesForResource(
-		content.Value,
-		logicalPath,
-		content.Descriptor,
-		func(key string) (string, error) {
-			return provider.Get(ctx, key)
-		},
-	)
+	listedItems, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
 	if err != nil {
-		return content.Value
+		return nil, err
 	}
-	return resolved
+
+	candidatePaths := make([]string, 0, len(listedItems))
+	for _, item := range listedItems {
+		candidatePath := strings.TrimSpace(item.LogicalPath)
+		if candidatePath == "" {
+			continue
+		}
+		if _, ok := resource.ChildSegment(collectionPath, candidatePath); !ok {
+			continue
+		}
+		candidatePaths = append(candidatePaths, candidatePath)
+	}
+	if len(candidatePaths) == 0 {
+		return nil, faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("resource %q not found", collectionPath),
+			nil,
+		)
+	}
+	sort.Strings(candidatePaths)
+
+	items := make([]inferTemplateItem, 0, len(candidatePaths))
+	byAlias := make(map[string]inferTemplateItem, len(candidatePaths))
+	for _, logicalPath := range candidatePaths {
+		item, itemErr := resolveInferTemplateItem(ctx, deps, logicalPath)
+		if itemErr != nil {
+			return nil, itemErr
+		}
+		items = append(items, item)
+
+		aliasKey := strings.TrimSpace(item.localAlias)
+		if aliasKey == "" {
+			continue
+		}
+		if existing, found := byAlias[aliasKey]; found && existing.logicalPath != item.logicalPath {
+			return nil, faults.NewConflictError(
+				fmt.Sprintf("multiple collection items match alias %q", aliasKey),
+				nil,
+			)
+		}
+		byAlias[aliasKey] = item
+	}
+
+	if len(aliases) == 0 {
+		return items, nil
+	}
+
+	selected := make([]inferTemplateItem, 0, len(aliases))
+	missing := make([]string, 0)
+	for _, alias := range aliases {
+		item, found := byAlias[alias]
+		if !found {
+			missing = append(missing, alias)
+			continue
+		}
+		selected = append(selected, item)
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, faults.NewValidationError(
+			fmt.Sprintf("items alias not found: %s", strings.Join(missing, ", ")),
+			nil,
+		)
+	}
+	return selected, nil
+}
+
+func resolveInferTemplateItem(ctx context.Context, deps Dependencies, logicalPath string) (inferTemplateItem, error) {
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	if err != nil {
+		return inferTemplateItem{}, err
+	}
+
+	resolvedResource, err := resolveResolvedLocalTarget(ctx, orchestratorService, logicalPath)
+	if err != nil {
+		return inferTemplateItem{}, err
+	}
+
+	localAlias := strings.TrimSpace(resolvedResource.LocalAlias)
+	if localAlias == "" {
+		localAlias = path.Base(logicalPath)
+	}
+
+	return inferTemplateItem{
+		logicalPath: logicalPath,
+		localAlias:  localAlias,
+		localContent: resource.Content{
+			Value:      resolvedResource.Payload,
+			Descriptor: resolvedResource.PayloadDescriptor,
+		},
+	}, nil
 }
 
 func chooseDefaultsDescriptor(candidate resource.PayloadDescriptor, fallback resource.PayloadDescriptor) resource.PayloadDescriptor {
