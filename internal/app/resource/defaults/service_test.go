@@ -267,7 +267,16 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 	t.Parallel()
 
-	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+	rawContent := map[string]resource.Content{
+		"/customers/acme": {
+			Value: map[string]any{
+				"id":   "acme",
+				"name": "acme",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	}
+	localContent := map[string]resource.Content{
 		"/customers/acme": {
 			Value: map[string]any{
 				"id":     "acme",
@@ -276,7 +285,8 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
-	})
+	}
+	deps := testDefaultsDepsWithRepositoryAndLocalContent(rawContent, localContent)
 	repo := deps.Repository.(*fakeDefaultsRepository)
 	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
@@ -284,15 +294,37 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 		},
 		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 	}
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	orch.getRemoteFn = func(item savedResource, call int) (resource.Content, error) {
+		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
+		payload["status"] = "active"
+		payload["id"] = path.Base(item.logicalPath)
+		payload["name"] = path.Base(item.logicalPath)
+		return resource.Content{
+			Value:      payload,
+			Descriptor: item.content.Descriptor,
+		}, nil
+	}
 
 	result, err := Infer(context.Background(), deps, "/customers/acme", InferRequest{ManagedServer: true})
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
-	want := map[string]any{}
+	want := map[string]any{
+		"status": "active",
+	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+	}
+	for _, call := range orch.createCalls {
+		payload, ok := call.content.Value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", call.content.Value)
+		}
+		if _, exists := payload["status"]; exists {
+			t.Fatalf("expected probe payload to ignore stored defaults, got %#v", payload)
+		}
 	}
 }
 
@@ -764,18 +796,37 @@ func (f *fakeDefaultsManagedServerClient) Request(
 
 type fakeDefaultsRepository struct {
 	repository.ResourceStore
+	content  map[string]resource.Content
 	defaults map[string]resource.Content
 }
 
-func (f *fakeDefaultsRepository) Save(context.Context, string, resource.Content) error { return nil }
-func (f *fakeDefaultsRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
-	return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
-}
-func (f *fakeDefaultsRepository) Delete(context.Context, string, repository.DeletePolicy) error {
+func (f *fakeDefaultsRepository) Save(_ context.Context, logicalPath string, content resource.Content) error {
+	if f.content == nil {
+		f.content = map[string]resource.Content{}
+	}
+	f.content[logicalPath] = content
 	return nil
 }
-func (f *fakeDefaultsRepository) List(context.Context, string, repository.ListPolicy) ([]resource.Resource, error) {
-	return nil, nil
+func (f *fakeDefaultsRepository) Get(_ context.Context, logicalPath string) (resource.Content, error) {
+	content, found := f.content[logicalPath]
+	if !found {
+		return resource.Content{}, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("resource %q not found", logicalPath), nil)
+	}
+	return content, nil
+}
+func (f *fakeDefaultsRepository) Delete(_ context.Context, logicalPath string, _ repository.DeletePolicy) error {
+	delete(f.content, logicalPath)
+	return nil
+}
+func (f *fakeDefaultsRepository) List(_ context.Context, logicalPath string, _ repository.ListPolicy) ([]resource.Resource, error) {
+	items := make([]resource.Resource, 0, len(f.content))
+	for candidate := range f.content {
+		if collectionPathFor(candidate) != logicalPath {
+			continue
+		}
+		items = append(items, resource.Resource{LogicalPath: candidate})
+	}
+	return items, nil
 }
 func (f *fakeDefaultsRepository) Exists(context.Context, string) (bool, error) { return false, nil }
 func (f *fakeDefaultsRepository) GetDefaults(_ context.Context, logicalPath string) (resource.Content, error) {
@@ -877,10 +928,20 @@ func testDefaultsDeps() appdeps.Dependencies {
 }
 
 func testDefaultsDepsWithLocalContent(localContent map[string]resource.Content) appdeps.Dependencies {
+	return testDefaultsDepsWithRepositoryAndLocalContent(localContent, localContent)
+}
+
+func testDefaultsDepsWithRepositoryAndLocalContent(
+	repositoryContent map[string]resource.Content,
+	localContent map[string]resource.Content,
+) appdeps.Dependencies {
 	orch := &fakeDefaultsOrchestrator{
 		localContent: localContent,
 	}
-	repo := &fakeDefaultsRepository{defaults: map[string]resource.Content{}}
+	repo := &fakeDefaultsRepository{
+		content:  repositoryContent,
+		defaults: map[string]resource.Content{},
+	}
 	md := &fakeDefaultsMetadata{items: map[string]metadata.ResourceMetadata{}, defaults: &repo.defaults}
 
 	return appdeps.Dependencies{

@@ -59,7 +59,11 @@ declarest resource list /customers/
 declarest resource list /customers/ --output text
 declarest resource explain /corporations/acme
 declarest resource diff /corporations/acme
+declarest resource diff /corporations --recursive
+declarest resource diff /corporations --recursive --list
 ```
+
+`resource diff` defaults to normalized unified text output. For one resource, it prints one grouped section. For collection paths, it prints one section per changed resource, skips unchanged resources by default, and `--list` prints only the drifting logical paths. Add `--color always` to force ANSI coloring, or use `-o json|yaml` when you need structured `DiffEntry` output for automation.
 
 ### Import/save into repository
 

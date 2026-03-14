@@ -20,7 +20,7 @@ func TestLayeredMetadataServiceResolveForPathAppliesRepoLocalPrecedence(t *testi
 	localDir := t.TempDir()
 	shared := NewFSMetadataService(sharedDir)
 	local := NewFSMetadataService(localDir)
-	service := NewLayeredFSMetadataService(sharedDir, localDir)
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteLocal)
 	ctx := context.Background()
 
 	mustSetMetadata(t, shared, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
@@ -59,7 +59,7 @@ func TestLayeredMetadataServiceGetSetUnsetTargetsLocalOverlay(t *testing.T) {
 	sharedDir := t.TempDir()
 	localDir := t.TempDir()
 	shared := NewFSMetadataService(sharedDir)
-	service := NewLayeredFSMetadataService(sharedDir, localDir)
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteLocal)
 	ctx := context.Background()
 
 	mustSetMetadata(t, shared, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
@@ -103,6 +103,47 @@ func TestLayeredMetadataServiceGetSetUnsetTargetsLocalOverlay(t *testing.T) {
 	}
 }
 
+func TestLayeredMetadataServiceGetSetUnsetTargetsSharedSource(t *testing.T) {
+	t.Parallel()
+
+	sharedDir := t.TempDir()
+	localDir := t.TempDir()
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteShared)
+	ctx := context.Background()
+
+	sharedMetadata := metadatadomain.ResourceMetadata{Alias: "{{/name}}"}
+	if err := service.Set(ctx, "/customers/acme", sharedMetadata); err != nil {
+		t.Fatalf("Set returned error: %v", err)
+	}
+
+	got, err := service.Get(ctx, "/customers/acme")
+	if err != nil {
+		t.Fatalf("Get returned error after Set: %v", err)
+	}
+	if !reflect.DeepEqual(got, sharedMetadata) {
+		t.Fatalf("expected shared metadata %#v, got %#v", sharedMetadata, got)
+	}
+
+	sharedPath := filepath.Join(sharedDir, "customers", "acme", "metadata.yaml")
+	if _, err := os.Stat(sharedPath); err != nil {
+		t.Fatalf("expected shared metadata file %q, got %v", sharedPath, err)
+	}
+	localPath := filepath.Join(localDir, "customers", "acme", "metadata.yaml")
+	if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected local overlay file %q to remain absent, got %v", localPath, err)
+	}
+
+	if err := service.Unset(ctx, "/customers/acme"); err != nil {
+		t.Fatalf("Unset returned error: %v", err)
+	}
+	if _, err := service.Get(ctx, "/customers/acme"); !faults.IsCategory(err, faults.NotFoundError) {
+		t.Fatalf("expected Get to return not found after shared unset, got %v", err)
+	}
+	if _, err := os.Stat(sharedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected shared metadata file %q to be removed, got %v", sharedPath, err)
+	}
+}
+
 func TestLayeredMetadataServiceCollectionResolversUnionSources(t *testing.T) {
 	t.Parallel()
 
@@ -110,7 +151,7 @@ func TestLayeredMetadataServiceCollectionResolversUnionSources(t *testing.T) {
 	localDir := t.TempDir()
 	shared := NewFSMetadataService(sharedDir)
 	local := NewFSMetadataService(localDir)
-	service := NewLayeredFSMetadataService(sharedDir, localDir)
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteLocal)
 	ctx := context.Background()
 
 	mustSetMetadata(t, shared, ctx, "/admin/realms/_/user-registry/_/mappers/_", metadatadomain.ResourceMetadata{
@@ -146,7 +187,7 @@ func TestLayeredMetadataServiceDefaultsArtifactsWriteToLocalOverlay(t *testing.T
 	sharedDir := t.TempDir()
 	localDir := t.TempDir()
 	shared := NewFSMetadataService(sharedDir)
-	service := NewLayeredFSMetadataService(sharedDir, localDir)
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteLocal)
 	ctx := context.Background()
 
 	if err := shared.WriteDefaultsArtifact(ctx, "/customers/", "defaults.yaml", resource.Content{
@@ -184,10 +225,43 @@ func TestLayeredMetadataServiceDefaultsArtifactsWriteToLocalOverlay(t *testing.T
 	}
 }
 
+func TestLayeredMetadataServiceDefaultsArtifactsWriteToSharedSource(t *testing.T) {
+	t.Parallel()
+
+	sharedDir := t.TempDir()
+	localDir := t.TempDir()
+	service := NewLayeredFSMetadataService(sharedDir, localDir, LayeredMetadataWriteShared)
+	ctx := context.Background()
+
+	if err := service.WriteDefaultsArtifact(ctx, "/customers/_", "defaults.yaml", resource.Content{
+		Value: map[string]any{"shared": true},
+	}); err != nil {
+		t.Fatalf("WriteDefaultsArtifact returned error: %v", err)
+	}
+
+	content, err := service.ReadDefaultsArtifact(ctx, "/customers/_", "defaults.yaml")
+	if err != nil {
+		t.Fatalf("ReadDefaultsArtifact returned error after shared write: %v", err)
+	}
+	value, ok := content.Value.(map[string]any)
+	if !ok || value["shared"] != true {
+		t.Fatalf("expected shared defaults artifact payload, got %#v", content.Value)
+	}
+
+	sharedPath := filepath.Join(sharedDir, "customers", "_", "defaults.yaml")
+	if _, err := os.Stat(sharedPath); err != nil {
+		t.Fatalf("expected shared defaults artifact %q, got %v", sharedPath, err)
+	}
+	localPath := filepath.Join(localDir, "customers", "_", "defaults.yaml")
+	if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected local defaults artifact %q to remain absent, got %v", localPath, err)
+	}
+}
+
 func TestLayeredMetadataServiceNilConfigurationReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	service := NewLayeredFSMetadataService("", "")
+	service := NewLayeredFSMetadataService("", "", LayeredMetadataWriteLocal)
 	_, err := service.Get(context.Background(), "/customers/acme")
 	if err == nil {
 		t.Fatal("expected Get error for nil configuration")

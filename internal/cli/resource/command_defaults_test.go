@@ -3,13 +3,17 @@ package resource
 import (
 	"bytes"
 	"context"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
+	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -191,6 +195,112 @@ func TestDefaultsInferCommandAcceptsCollectionAndResourcePaths(t *testing.T) {
 				t.Fatalf("expected inferred defaults output for %q, got %q", requestedPath, stdout.String())
 			}
 		})
+	}
+}
+
+func TestDefaultsInferCommandSaveWritesToExplicitMetadataBaseDir(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	metadataDir := t.TempDir()
+	metadataService := fsmetadata.NewLayeredFSMetadataService(metadataDir, repoDir, fsmetadata.LayeredMetadataWriteShared)
+
+	command := newDefaultsInferCommand(cliutil.CommandDependencies{
+		Orchestrator: &fakeDefaultsCommandOrchestrator{
+			localContent: map[string]resourcedomain.Content{
+				"/customers/acme": {
+					Value: map[string]any{"id": "acme", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+				"/customers/beta": {
+					Value: map[string]any{"id": "beta", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+			},
+		},
+		Contexts: fakeEditContextService{context: defaultsTestContext(repoDir, metadataDir, "")},
+		Services: &fakeEditServiceAccessor{
+			store:    &fakeDefaultsCommandRepository{},
+			metadata: metadataService,
+		},
+	}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/customers/acme", "--save"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext returned error: %v", err)
+	}
+
+	sharedMetadataPath := filepath.Join(metadataDir, "customers", "_", "metadata.yaml")
+	if _, err := os.Stat(sharedMetadataPath); err != nil {
+		t.Fatalf("expected shared metadata file %q, got %v", sharedMetadataPath, err)
+	}
+	sharedDefaultsPath := filepath.Join(metadataDir, "customers", "_", "defaults.json")
+	if _, err := os.Stat(sharedDefaultsPath); err != nil {
+		t.Fatalf("expected shared defaults artifact %q, got %v", sharedDefaultsPath, err)
+	}
+	repoDefaultsPath := filepath.Join(repoDir, "customers", "_", "defaults.json")
+	if _, err := os.Stat(repoDefaultsPath); !os.IsNotExist(err) {
+		t.Fatalf("expected repo-local defaults artifact %q to remain absent, got %v", repoDefaultsPath, err)
+	}
+}
+
+func TestDefaultsInferCommandSaveWritesBundleBackedDefaultsToRepoOverlay(t *testing.T) {
+	t.Parallel()
+
+	repoDir := t.TempDir()
+	sharedDir := t.TempDir()
+	metadataService := fsmetadata.NewLayeredFSMetadataService(sharedDir, repoDir, fsmetadata.LayeredMetadataWriteLocal)
+
+	command := newDefaultsInferCommand(cliutil.CommandDependencies{
+		Orchestrator: &fakeDefaultsCommandOrchestrator{
+			localContent: map[string]resourcedomain.Content{
+				"/customers/acme": {
+					Value: map[string]any{"id": "acme", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+				"/customers/beta": {
+					Value: map[string]any{"id": "beta", "labels": map[string]any{"team": "platform"}},
+					Descriptor: resourcedomain.NormalizePayloadDescriptor(
+						resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+					),
+				},
+			},
+		},
+		Contexts: fakeEditContextService{context: defaultsTestContext(repoDir, "", "keycloak-bundle:0.0.1")},
+		Services: &fakeEditServiceAccessor{
+			store:    &fakeDefaultsCommandRepository{},
+			metadata: metadataService,
+		},
+	}, &cliutil.GlobalFlags{})
+	command.SetArgs([]string{"/customers/acme", "--save"})
+	command.SetIn(bytes.NewBuffer(nil))
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext returned error: %v", err)
+	}
+
+	repoMetadataPath := filepath.Join(repoDir, "customers", "_", "metadata.yaml")
+	if _, err := os.Stat(repoMetadataPath); err != nil {
+		t.Fatalf("expected repo-local metadata file %q, got %v", repoMetadataPath, err)
+	}
+	repoDefaultsPath := filepath.Join(repoDir, "customers", "_", "defaults.json")
+	if _, err := os.Stat(repoDefaultsPath); err != nil {
+		t.Fatalf("expected repo-local defaults artifact %q, got %v", repoDefaultsPath, err)
+	}
+	sharedDefaultsPath := filepath.Join(sharedDir, "customers", "_", "defaults.json")
+	if _, err := os.Stat(sharedDefaultsPath); !os.IsNotExist(err) {
+		t.Fatalf("expected shared defaults artifact %q to remain absent, got %v", sharedDefaultsPath, err)
 	}
 }
 
@@ -384,4 +494,23 @@ func (f *fakeDefaultsCommandMetadata) DeleteDefaultsArtifact(_ context.Context, 
 		delete(f.artifacts, logicalPath+"::"+file)
 	}
 	return nil
+}
+
+func defaultsTestContext(repoDir string, metadataDir string, bundle string) configdomain.Context {
+	context := configdomain.Context{
+		Name: "defaults-test",
+		Repository: configdomain.Repository{
+			Filesystem: &configdomain.FilesystemRepository{
+				BaseDir: repoDir,
+			},
+		},
+		ManagedServer: &configdomain.ManagedServer{},
+	}
+	if metadataDir != "" || bundle != "" {
+		context.Metadata = configdomain.Metadata{
+			BaseDir: metadataDir,
+			Bundle:  bundle,
+		}
+	}
+	return context
 }

@@ -141,7 +141,7 @@ With that selector:
 
 - `/projects/platform/secrets/path/to/` renders list operations against `/storage/keys/project/platform/path/to`
 - `/projects/platform/secrets/path/to/db-password` renders get/update/delete against `/storage/keys/project/platform/path/to/db-password`
-- `{{/descendantCollectionPath}}` carries the nested collection suffix, while `{{/descendantPath}}` carries the full nested resource suffix
+- {% raw %}`{{/descendantCollectionPath}}`{% endraw %} carries the nested collection suffix, while {% raw %}`{{/descendantPath}}`{% endraw %} carries the full nested resource suffix
 
 This keeps the logical repository tree readable without hardcoding every deeper folder level in metadata.
 

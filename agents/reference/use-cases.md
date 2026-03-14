@@ -228,13 +228,13 @@ Inputs:
 Execution:
 1. CLI resolves the input to the logical collection `/api/projects/defaults-sandbox/widgets`; collection-path inputs with or without a trailing `/` remain equivalent, and concrete resource inputs still resolve to that same collection.
 2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
-3. `resource defaults infer --save` persists the inferred object to the collection metadata selector directory as `defaults.<ext>` and updates `resource.defaults.value` to the exact include placeholder for that file, reusing the collection resource payload type when it supports file-backed defaults (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` plus `resource.defaults.value: "{{include defaults.json}}"` when the widget collection stores `resource.json`).
+3. `resource defaults infer --save` persists the inferred object to the collection metadata selector directory as `defaults.<ext>` under the active writable metadata target and updates `resource.defaults.value` to the exact include placeholder for that file, reusing the collection resource payload type when it supports file-backed defaults (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` plus `resource.defaults.value: "{{include defaults.json}}"` when the widget collection stores `resource.json`).
 4. `resource defaults infer --check` compares the inferred normalized object against the current resolved defaults object for that collection scope and fails when they differ.
 5. `resource defaults get` returns the effective resolved defaults object, while `resource defaults config get` returns the raw persisted `resource.defaults` block with include placeholders intact.
 
 Expected outputs:
 1. Output contains only shared default candidates.
-2. Saving defaults keeps `resource.<ext>` separate from the collection metadata defaults artifact and its `resource.defaults` include reference.
+2. Saving defaults keeps `resource.<ext>` separate from the collection metadata defaults artifact and its `resource.defaults` include reference, writing to explicit `metadata.baseDir` when configured and otherwise to the repo-local overlay for bundle-backed contexts.
 3. `--check` succeeds only when the resolved defaults object matches the inferred normalized object.
 4. Subsequent repository-backed reads still expose the merged effective resource.
 
@@ -809,11 +809,11 @@ Expected outputs:
 2. `resource get --show-metadata` prints a rendered metadata snapshot where payload-aware helper tokens resolve from the active descriptor (for example `text/plain`, `application/octet-stream`, or an explicit extension-backed descriptor).
 3. Non-payload templates that still depend on unresolved payload fields remain untouched in `resource metadata get`.
 
-### Example 37: Repo-Local Metadata Overlay Overrides Shared Metadata
-Goal: let repository-local metadata refine bundle or shared metadata without mutating the shared source.
+### Example 37: Repo-Local Metadata Overlay Overrides Bundle Metadata
+Goal: let repository-local metadata refine bundle metadata without mutating the extracted bundle source.
 
 Inputs:
-1. Shared metadata source defines `/customers/_/metadata.yaml` with `resource.id: "{{/id}}"` and `resource.format: yaml`.
+1. Bundle-provided shared metadata defines `/customers/_/metadata.yaml` with `resource.id: "{{/id}}"` and `resource.format: yaml`.
 2. Repository-local overlay defines `/customers/acme/metadata.yaml` with `resource.alias: "{{/name}}"` and `resource.format: json`.
 
 Execution:
@@ -822,10 +822,10 @@ Execution:
 
 Expected outputs:
 1. Resolved metadata keeps `resource.id` from the shared source and overrides `resource.alias` plus `resource.format` from the repo-local overlay.
-2. Metadata mutation writes only the repo-local sidecar and leaves the shared metadata source unchanged.
+2. Metadata mutation writes only the repo-local sidecar and leaves the extracted bundle metadata source unchanged.
 
 Failure expectation:
-1. If resolution ignores the repo-local override or metadata mutation rewrites the shared bundle/base-dir source, the contract is breached.
+1. If resolution ignores the repo-local override or metadata mutation rewrites the extracted bundle source, the contract is breached.
 
 Failure expectation:
 1. If `resource metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.
@@ -852,3 +852,42 @@ Expected outputs:
 
 Failure expectation:
 1. If nested secret paths inherit without `selector.descendants: true`, derive bogus plural fields such as `secret=path`, or require slashful `resource.id` values, the contract is breached.
+
+### Example 39: Recursive Grouped Resource Diff
+Goal: review drift for one collection subtree without noise from unchanged resources.
+
+Inputs:
+1. Requested path `/customers`.
+2. Local repository resources `/customers/acme`, `/customers/beta`, and `/customers/nested/gamma`.
+3. Compare results where `/customers/acme` is changed, `/customers/beta` is unchanged, and `/customers/nested/gamma` is missing on the managed server.
+
+Execution:
+1. User runs `declarest resource diff /customers --recursive`.
+2. CLI resolves recursive repository targets in stable logical-path order.
+3. Diff output renders one unified-diff section for `/customers/acme` and one grouped section for `/customers/nested/gamma`.
+
+Expected outputs:
+1. `/customers/beta` is omitted from text sections because it has no drift.
+2. Output order is `/customers/acme` before `/customers/nested/gamma`.
+3. Final summary reports deterministic counts for changed, removed, and unchanged resources.
+
+### Example 40: Diff List-Only Mode (Corner)
+Goal: produce path-only drift output for automation without rendering full unified diffs.
+
+Inputs:
+1. Requested path `/customers`.
+2. Recursive repository targets with both changed and unchanged resources.
+3. Command `declarest resource diff /customers --recursive --list --output json`.
+
+Execution:
+1. CLI resolves recursive repository targets.
+2. CLI computes compare results for each target.
+3. CLI filters out unchanged resources and serializes only the remaining logical paths.
+
+Expected outputs:
+1. Text output prints one logical path per line in stable order.
+2. Structured output is a stable array of path strings.
+3. No full unified-diff sections are rendered in `--list` mode.
+
+Failure expectation:
+1. Invalid `--color` values fail with `ValidationError` before diff rendering.

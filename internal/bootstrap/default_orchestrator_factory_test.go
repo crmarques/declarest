@@ -21,6 +21,8 @@ import (
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
+	"github.com/crmarques/declarest/metadata"
+	"github.com/crmarques/declarest/resource"
 )
 
 func TestBuildOrchestratorWiring(t *testing.T) {
@@ -64,13 +66,13 @@ func TestBuildOrchestratorWiring(t *testing.T) {
 		t.Parallel()
 
 		tempDir := t.TempDir()
-		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.11.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.14.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.11
+version: 0.0.14
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle
@@ -128,17 +130,77 @@ paths: {}
 		}
 	})
 
+	t.Run("explicit_metadata_base_dir_writes_to_shared_source", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		repoDir := filepath.Join(tempDir, "repo")
+		metadataDir := filepath.Join(tempDir, "metadata")
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "shared-metadata",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: repoDir},
+				},
+				Metadata: config.Metadata{
+					BaseDir: metadataDir,
+				},
+			},
+		}
+
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "shared-metadata"})
+		if err != nil {
+			t.Fatalf("buildOrchestrator returned error: %v", err)
+		}
+		if _, ok := orch.MetadataService().(*fsmetadata.LayeredMetadataService); !ok {
+			t.Fatalf("expected LayeredMetadataService for explicit metadata.baseDir, got %T", orch.MetadataService())
+		}
+
+		if err := orch.MetadataService().Set(context.Background(), "/customers/_", metadata.ResourceMetadata{
+			Defaults: &metadata.DefaultsSpec{Value: metadata.DefaultsIncludePlaceholder("defaults.yaml")},
+		}); err != nil {
+			t.Fatalf("Set returned error: %v", err)
+		}
+		artifactStore, ok := orch.MetadataService().(metadata.DefaultsArtifactStore)
+		if !ok {
+			t.Fatalf("expected DefaultsArtifactStore, got %T", orch.MetadataService())
+		}
+		if err := artifactStore.WriteDefaultsArtifact(context.Background(), "/customers/_", "defaults.yaml", resource.Content{
+			Value: map[string]any{"team": "platform"},
+		}); err != nil {
+			t.Fatalf("WriteDefaultsArtifact returned error: %v", err)
+		}
+
+		sharedMetadataPath := filepath.Join(metadataDir, "customers", "_", "metadata.yaml")
+		if _, err := os.Stat(sharedMetadataPath); err != nil {
+			t.Fatalf("expected shared metadata file %q, got %v", sharedMetadataPath, err)
+		}
+		sharedDefaultsPath := filepath.Join(metadataDir, "customers", "_", "defaults.yaml")
+		if _, err := os.Stat(sharedDefaultsPath); err != nil {
+			t.Fatalf("expected shared defaults artifact %q, got %v", sharedDefaultsPath, err)
+		}
+		repoMetadataPath := filepath.Join(repoDir, "customers", "_", "metadata.yaml")
+		if _, err := os.Stat(repoMetadataPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected repo-local metadata file %q to remain absent, got %v", repoMetadataPath, err)
+		}
+		repoDefaultsPath := filepath.Join(repoDir, "customers", "_", "defaults.yaml")
+		if _, err := os.Stat(repoDefaultsPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected repo-local defaults artifact %q to remain absent, got %v", repoDefaultsPath, err)
+		}
+	})
+
 	t.Run("metadata_bundle_file_local_archive", func(t *testing.T) {
 		t.Parallel()
 
 		tempDir := t.TempDir()
-		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.11.tar.gz")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.15.tar.gz")
 		writeBundleArchiveForTest(t, archivePath, map[string]string{
 			"bundle.yaml": `
 apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: keycloak-bundle
-version: 0.0.11
+version: 0.0.15
 description: Keycloak metadata bundle.
 declarest:
   shorthand: keycloak-bundle
@@ -193,6 +255,70 @@ paths: {}
 		}
 		if specMap["openapi"] != "3.0.0" {
 			t.Fatalf("expected bundled openapi version 3.0.0, got %v", specMap["openapi"])
+		}
+	})
+
+	t.Run("metadata_bundle_writes_to_repo_overlay", func(t *testing.T) {
+		t.Parallel()
+
+		tempDir := t.TempDir()
+		repoDir := filepath.Join(tempDir, "repo")
+		archivePath := filepath.Join(tempDir, "keycloak-bundle-0.0.11.tar.gz")
+		writeBundleArchiveForTest(t, archivePath, map[string]string{
+			"bundle.yaml": `
+apiVersion: declarest.io/v1alpha1
+kind: MetadataBundle
+name: keycloak-bundle
+version: 0.0.11
+description: Keycloak metadata bundle.
+declarest:
+  shorthand: keycloak-bundle
+  metadataRoot: metadata
+distribution:
+  artifactTemplate: keycloak-bundle-{version}.tar.gz
+`,
+			"metadata/admin/realms/_/metadata.json": `{}`,
+		})
+
+		contextService := &fakeContextService{
+			resolvedContext: config.Context{
+				Name: "bundle-write-target",
+				Repository: config.Repository{
+					Filesystem: &config.FilesystemRepository{BaseDir: repoDir},
+				},
+				Metadata: config.Metadata{
+					Bundle: archivePath,
+				},
+			},
+		}
+
+		orch, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "bundle-write-target"})
+		if err != nil {
+			t.Fatalf("buildOrchestrator returned error: %v", err)
+		}
+
+		if err := orch.MetadataService().Set(context.Background(), "/customers/_", metadata.ResourceMetadata{
+			Defaults: &metadata.DefaultsSpec{Value: metadata.DefaultsIncludePlaceholder("defaults.yaml")},
+		}); err != nil {
+			t.Fatalf("Set returned error: %v", err)
+		}
+		artifactStore, ok := orch.MetadataService().(metadata.DefaultsArtifactStore)
+		if !ok {
+			t.Fatalf("expected DefaultsArtifactStore, got %T", orch.MetadataService())
+		}
+		if err := artifactStore.WriteDefaultsArtifact(context.Background(), "/customers/_", "defaults.yaml", resource.Content{
+			Value: map[string]any{"team": "platform"},
+		}); err != nil {
+			t.Fatalf("WriteDefaultsArtifact returned error: %v", err)
+		}
+
+		repoMetadataPath := filepath.Join(repoDir, "customers", "_", "metadata.yaml")
+		if _, err := os.Stat(repoMetadataPath); err != nil {
+			t.Fatalf("expected repo-local metadata file %q, got %v", repoMetadataPath, err)
+		}
+		repoDefaultsPath := filepath.Join(repoDir, "customers", "_", "defaults.yaml")
+		if _, err := os.Stat(repoDefaultsPath); err != nil {
+			t.Fatalf("expected repo-local defaults artifact %q, got %v", repoDefaultsPath, err)
 		}
 	})
 

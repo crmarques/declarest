@@ -15,13 +15,24 @@ var _ metadatadomain.DefaultsArtifactStore = (*LayeredMetadataService)(nil)
 var _ metadatadomain.CollectionChildrenResolver = (*LayeredMetadataService)(nil)
 var _ metadatadomain.CollectionWildcardResolver = (*LayeredMetadataService)(nil)
 
+type LayeredMetadataWriteTarget string
+
+const (
+	LayeredMetadataWriteShared LayeredMetadataWriteTarget = "shared"
+	LayeredMetadataWriteLocal  LayeredMetadataWriteTarget = "local"
+)
+
 type LayeredMetadataService struct {
 	shared   *FSMetadataService
 	local    *FSMetadataService
 	writable *FSMetadataService
 }
 
-func NewLayeredFSMetadataService(sharedBaseDir string, localBaseDir string) *LayeredMetadataService {
+func NewLayeredFSMetadataService(
+	sharedBaseDir string,
+	localBaseDir string,
+	writeTarget LayeredMetadataWriteTarget,
+) *LayeredMetadataService {
 	sharedBaseDir = strings.TrimSpace(sharedBaseDir)
 	localBaseDir = strings.TrimSpace(localBaseDir)
 
@@ -35,9 +46,18 @@ func NewLayeredFSMetadataService(sharedBaseDir string, localBaseDir string) *Lay
 		local = NewFSMetadataService(localBaseDir)
 	}
 
-	writable := local
-	if writable == nil {
+	var writable *FSMetadataService
+	switch writeTarget {
+	case LayeredMetadataWriteShared:
 		writable = shared
+		if writable == nil {
+			writable = local
+		}
+	default:
+		writable = local
+		if writable == nil {
+			writable = shared
+		}
 	}
 
 	return &LayeredMetadataService{

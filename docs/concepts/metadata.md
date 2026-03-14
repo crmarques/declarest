@@ -86,7 +86,7 @@ operations:
 ```
 
 This lets a logical path such as `/projects/platform/secrets/path/to/db-password` render against the backend subtree `/storage/keys/project/platform/path/to/db-password`.
-Inside descendant-enabled selectors, `{{/descendantCollectionPath}}` renders the collection suffix below the matched root and `{{/descendantPath}}` renders the full resource suffix.
+Inside descendant-enabled selectors, {% raw %}`{{/descendantCollectionPath}}`{% endraw %} renders the collection suffix below the matched root and {% raw %}`{{/descendantPath}}`{% endraw %} renders the full resource suffix.
 
 ## Externalized text attributes
 

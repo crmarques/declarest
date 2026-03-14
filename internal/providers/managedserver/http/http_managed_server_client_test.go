@@ -656,6 +656,57 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		}
 	})
 
+	t.Run("project_list_derives_name_from_fallback_fields", func(t *testing.T) {
+		t.Parallel()
+
+		md, err := service.ResolveForPath(ctx, "/projects")
+		if err != nil {
+			t.Fatalf("ResolveForPath returned error: %v", err)
+		}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/projects" {
+				t.Fatalf("expected list request path /projects, got %q", r.URL.Path)
+			}
+			_, _ = fmt.Fprint(
+				w,
+				`[
+				  {"url":"https://rundeck.example/api/57/project/alpha","description":"Alpha"},
+				  {"config":{"project.name":"beta"},"description":"Beta"},
+				  {"unexpected":"skip-me"}
+				]`,
+			)
+		}))
+		t.Cleanup(server.Close)
+
+		client := mustManagedServerClient(
+			t,
+			config.HTTPServer{
+				BaseURL: server.URL,
+				Auth: &config.HTTPAuth{
+					CustomHeaders: []config.HeaderTokenAuth{{
+						Header: "Authorization",
+						Prefix: "Bearer",
+						Value:  "token",
+					}},
+				},
+			},
+			WithMetadataRenderer(service),
+		)
+
+		items, err := client.List(ctx, "/projects", md)
+		if err != nil {
+			t.Fatalf("List returned error: %v", err)
+		}
+
+		if len(items) != 2 {
+			t.Fatalf("expected 2 normalized list items, got %d", len(items))
+		}
+		if items[0].LogicalPath != "/projects/alpha" || items[1].LogicalPath != "/projects/beta" {
+			t.Fatalf("unexpected logical paths: %#v", items)
+		}
+	})
+
 	t.Run("project_update_uses_config_body", func(t *testing.T) {
 		t.Parallel()
 
@@ -984,6 +1035,85 @@ func TestBuildRequestFromMetadataRundeckFixtureSelectors(t *testing.T) {
 		}
 		if spec.Body != nil {
 			t.Fatalf("expected GET request to have no body, got %#v", spec.Body)
+		}
+	})
+
+	t.Run("secret_get_normalizes_singleton_array_metadata", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			name     string
+			path     string
+			payload  map[string]any
+			input    []any
+			expected map[string]any
+		}{
+			{
+				name:    "password_secret",
+				path:    "/projects/platform/secrets/path/to/db-password",
+				payload: map[string]any{"name": "db-password"},
+				input: []any{
+					map[string]any{
+						"name": "db-password",
+						"meta": map[string]any{
+							"Rundeck-key-type":     "password",
+							"Rundeck-content-type": "application/x-rundeck-data-password",
+						},
+					},
+				},
+				expected: map[string]any{
+					"name":        "db-password",
+					"type":        "password",
+					"contentType": "application/x-rundeck-data-password",
+				},
+			},
+			{
+				name:    "infra_secret",
+				path:    "/projects/platform/infra-secrets/public-key",
+				payload: map[string]any{"name": "public-key"},
+				input: []any{
+					map[string]any{
+						"name": "public-key",
+						"meta": map[string]any{
+							"Rundeck-key-type":     "public",
+							"Rundeck-content-type": "application/pgp-keys",
+						},
+					},
+				},
+				expected: map[string]any{
+					"name":        "public-key",
+					"type":        "public",
+					"contentType": "application/pgp-keys",
+				},
+			},
+		}
+
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				md, err := service.ResolveForPath(ctx, tc.path)
+				if err != nil {
+					t.Fatalf("ResolveForPath returned error: %v", err)
+				}
+
+				spec, err := client.BuildRequestFromMetadata(ctx, resource.Resource{
+					LogicalPath: tc.path,
+					Payload:     tc.payload,
+				}, md, metadata.OperationGet)
+				if err != nil {
+					t.Fatalf("BuildRequestFromMetadata returned error: %v", err)
+				}
+
+				value, err := client.applyOperationPayloadTransforms(ctx, tc.input, spec)
+				if err != nil {
+					t.Fatalf("applyOperationPayloadTransforms returned error: %v", err)
+				}
+				if !reflect.DeepEqual(tc.expected, value) {
+					t.Fatalf("unexpected normalized secret payload %#v", value)
+				}
+			})
 		}
 	})
 }

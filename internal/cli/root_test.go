@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/crmarques/declarest/faults"
+	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
@@ -211,8 +212,8 @@ func TestResourceDefaultsInferManagedServerIgnoresResolvedDefaultsInProbeInput(t
 	if err != nil {
 		t.Fatalf("unexpected managed-server defaults infer error: %v", err)
 	}
-	if strings.TrimSpace(output) != "{}" {
-		t.Fatalf("expected empty managed-server defaults output, got %q", output)
+	if !strings.Contains(output, "\"status\": \"active\"") {
+		t.Fatalf("expected managed-server defaults output to include the server-added status, got %q", output)
 	}
 }
 
@@ -5988,7 +5989,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 		}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		output, err := executeForTest(deps, "", "resource", "diff", idPath)
+		output, err := executeForTest(deps, "", "resource", "diff", idPath, "--output", "json")
 		if err != nil {
 			t.Fatalf("unexpected diff fallback error: %v", err)
 		}
@@ -6019,7 +6020,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 		assertTypedCategory(t, err, faults.NotFoundError)
 	})
 
-	t.Run("text_output_uses_relative_dot_path_and_local_remote_values", func(t *testing.T) {
+	t.Run("text_output_groups_normalized_unified_diff_for_single_resource", func(t *testing.T) {
 		t.Parallel()
 
 		const targetPath = "/admin/realms/payments"
@@ -6029,39 +6030,142 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 			localList: []resource.Resource{
 				{LogicalPath: targetPath},
 			},
-			diffValues: map[string][]resource.DiffEntry{
+			diffDocuments: map[string]resourcediffapp.Document{
 				targetPath: {
-					{
-						ResourcePath: targetPath,
-						Path:         "/attributes/clientOfflineSessionIdleTimeout",
-						Operation:    "add",
-						Local:        nil,
-						Remote:       "0",
+					ResourcePath: targetPath,
+					Local: resource.Content{
+						Value: map[string]any{
+							"attributes": map[string]any{
+								"clientOfflineSessionIdleTimeout": nil,
+							},
+							"displayName": "Payments Realm",
+						},
+						Descriptor: resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON},
 					},
-					{
-						ResourcePath: targetPath,
-						Path:         "/displayName",
-						Operation:    "replace",
-						Local:        "Payments Realm",
-						Remote:       "Payments Realm 2",
+					Remote: resource.Content{
+						Value: map[string]any{
+							"attributes": map[string]any{
+								"clientOfflineSessionIdleTimeout": "0",
+							},
+							"displayName": "Payments Realm 2",
+						},
+						Descriptor: resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON},
+					},
+					Entries: []resource.DiffEntry{
+						{
+							ResourcePath: targetPath,
+							Path:         "/attributes/clientOfflineSessionIdleTimeout",
+							Operation:    "add",
+							Local:        nil,
+							Remote:       "0",
+						},
+						{
+							ResourcePath: targetPath,
+							Path:         "/displayName",
+							Operation:    "replace",
+							Local:        "Payments Realm",
+							Remote:       "Payments Realm 2",
+						},
 					},
 				},
 			},
 		}
 		deps := testDepsWith(orchestrator, orchestrator.metadataService)
 
-		output, err := executeForTest(deps, "", "resource", "diff", targetPath, "--output", "text")
+		output, err := executeForTest(deps, "", "resource", "diff", targetPath, "--color", "never")
 		if err != nil {
 			t.Fatalf("unexpected diff text output error: %v", err)
 		}
 
-		expectedOutput := strings.Join([]string{
-			".attributes.clientOfflineSessionIdleTimeout [Local=null] => [Remote=\"0\"]",
-			".displayName [Local=\"Payments Realm\"] => [Remote=\"Payments Realm 2\"]",
-		}, "\n") + "\n"
-		if output != expectedOutput {
-			t.Fatalf("expected text output %q, got %q", expectedOutput, output)
+		expectedFragments := []string{
+			targetPath + " [CHANGED]",
+			"--- repository",
+			"+++ managed-server",
+			"@@",
+			`-    "clientOfflineSessionIdleTimeout": null`,
+			`+    "clientOfflineSessionIdleTimeout": "0"`,
+			`-  "displayName": "Payments Realm"`,
+			`+  "displayName": "Payments Realm 2"`,
 		}
+		for _, fragment := range expectedFragments {
+			if !strings.Contains(output, fragment) {
+				t.Fatalf("expected diff text output to contain %q, got %q", fragment, output)
+			}
+		}
+	})
+
+	t.Run("recursive_list_output_is_sorted_and_includes_descendants", func(t *testing.T) {
+		t.Parallel()
+
+		orchestrator := &testOrchestrator{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/beta"},
+				{LogicalPath: "/customers/acme"},
+				{LogicalPath: "/customers/nested/gamma"},
+			},
+			diffDocuments: map[string]resourcediffapp.Document{
+				"/customers/acme": {
+					ResourcePath: "/customers/acme",
+					Local:        resource.Content{Value: map[string]any{"name": "Acme"}},
+					Remote:       resource.Content{Value: map[string]any{"name": "Acme Corp"}},
+					Entries: []resource.DiffEntry{
+						{ResourcePath: "/customers/acme", Path: "/name", Operation: "replace"},
+					},
+				},
+				"/customers/beta": {
+					ResourcePath: "/customers/beta",
+					Local:        resource.Content{Value: map[string]any{"name": "Beta"}},
+					Remote:       resource.Content{Value: map[string]any{"name": "Beta"}},
+				},
+				"/customers/nested/gamma": {
+					ResourcePath: "/customers/nested/gamma",
+					Local:        resource.Content{Value: map[string]any{"name": "Gamma"}},
+					Remote:       resource.Content{Value: nil},
+					Entries: []resource.DiffEntry{
+						{ResourcePath: "/customers/nested/gamma", Path: "", Operation: "replace"},
+					},
+				},
+			},
+		}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
+
+		output, err := executeForTest(deps, "", "resource", "diff", "/customers", "--recursive", "--list")
+		if err != nil {
+			t.Fatalf("unexpected recursive list diff error: %v", err)
+		}
+
+		expectedCalls := []string{"/customers/acme", "/customers/beta", "/customers/nested/gamma"}
+		if !reflect.DeepEqual(orchestrator.diffCalls, expectedCalls) {
+			t.Fatalf("expected recursive diff calls %#v, got %#v", expectedCalls, orchestrator.diffCalls)
+		}
+		if !containsListCall(orchestrator.listLocalDetail, "/customers", true) {
+			t.Fatalf("expected recursive local target resolution, got %#v", orchestrator.listLocalDetail)
+		}
+
+		expectedOutput := strings.Join([]string{
+			"/customers/acme",
+			"/customers/nested/gamma",
+			"",
+		}, "\n")
+		if output != expectedOutput {
+			t.Fatalf("expected list output %q, got %q", expectedOutput, output)
+		}
+	})
+
+	t.Run("invalid_color_flag_fails_validation", func(t *testing.T) {
+		t.Parallel()
+
+		orchestrator := &testOrchestrator{
+			metadataService: newTestMetadata(),
+			localList: []resource.Resource{
+				{LogicalPath: "/customers/acme"},
+			},
+		}
+		deps := testDepsWith(orchestrator, orchestrator.metadataService)
+
+		_, err := executeForTest(deps, "", "resource", "diff", "/customers/acme", "--color", "blue")
+		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
 	t.Run("json_output_splits_resource_path_and_pointer_for_single_resource", func(t *testing.T) {

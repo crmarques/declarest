@@ -130,6 +130,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 	commandmeta.MarkEmitsExecutionStatus(deleteCommand)
 	commandmeta.MarkEmitsExecutionStatus(editCommand)
 	commandmeta.MarkEmitsExecutionStatus(copyCommand)
+	commandmeta.MarkTextDefaultStructuredOutput(diffCommand)
 
 	command.AddCommand(
 		getCommand,

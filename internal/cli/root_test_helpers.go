@@ -11,6 +11,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	clitestkit "github.com/crmarques/declarest/internal/cli/testkit"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	metadatadomain "github.com/crmarques/declarest/metadata"
@@ -286,6 +287,7 @@ type testOrchestrator struct {
 	updateCalls      []savedResource
 	diffCalls        []string
 	diffValues       map[string][]resource.DiffEntry
+	diffDocuments    map[string]resourcediffapp.Document
 	diffErr          error
 	getLocalValues   map[string]resource.Value
 	localList        []resource.Resource
@@ -496,14 +498,52 @@ func (r *testOrchestrator) Diff(_ context.Context, logicalPath string) ([]resour
 	if r.diffErr != nil {
 		return nil, r.diffErr
 	}
+	document, ok := r.lookupDiffDocument(logicalPath)
+	if ok {
+		items := make([]resource.DiffEntry, len(document.Entries))
+		copy(items, document.Entries)
+		return items, nil
+	}
+	return []resource.DiffEntry{{ResourcePath: logicalPath, Path: "", Operation: "noop"}}, nil
+}
+
+func (r *testOrchestrator) DiffDocument(_ context.Context, logicalPath string) (resourcediffapp.Document, error) {
+	r.diffCalls = append(r.diffCalls, logicalPath)
+	if r.diffErr != nil {
+		return resourcediffapp.Document{}, r.diffErr
+	}
+	if document, ok := r.lookupDiffDocument(logicalPath); ok {
+		return cloneDiffDocument(document), nil
+	}
+	return resourcediffapp.Document{
+		ResourcePath: logicalPath,
+		Entries:      []resource.DiffEntry{{ResourcePath: logicalPath, Path: "", Operation: "noop"}},
+	}, nil
+}
+
+func (r *testOrchestrator) lookupDiffDocument(logicalPath string) (resourcediffapp.Document, bool) {
+	if r.diffDocuments != nil {
+		if document, ok := r.diffDocuments[logicalPath]; ok {
+			return document, true
+		}
+	}
 	if r.diffValues != nil {
 		if value, ok := r.diffValues[logicalPath]; ok {
 			items := make([]resource.DiffEntry, len(value))
 			copy(items, value)
-			return items, nil
+			return resourcediffapp.Document{
+				ResourcePath: logicalPath,
+				Entries:      items,
+			}, true
 		}
 	}
-	return []resource.DiffEntry{{ResourcePath: logicalPath, Path: "", Operation: "noop"}}, nil
+	return resourcediffapp.Document{}, false
+}
+
+func cloneDiffDocument(document resourcediffapp.Document) resourcediffapp.Document {
+	cloned := document
+	cloned.Entries = append([]resource.DiffEntry(nil), document.Entries...)
+	return cloned
 }
 func (r *testOrchestrator) Template(_ context.Context, _ string, content resource.Content) (resource.Content, error) {
 	return content, nil

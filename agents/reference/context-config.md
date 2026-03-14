@@ -31,7 +31,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 14. `metadata` MUST define at most one source: `baseDir`, `bundle`, or `bundleFile`.
 15. `metadata.baseDir` MUST default to the selected repository baseDir when all metadata sources are unset.
 16. Persisted context YAML MUST omit `metadata.baseDir` when it equals repository baseDir.
-17. When a repository baseDir exists and the resolved metadata source baseDir differs from that repository baseDir, runtime MUST merge the shared metadata source with repo-local metadata sidecars rooted at the repository baseDir, using the repo-local tree as the highest-priority writable overlay.
+17. When a repository baseDir exists and the resolved metadata source baseDir differs from that repository baseDir, runtime MUST merge the shared metadata source with repo-local metadata sidecars rooted at the repository baseDir; repo-local overlays remain highest priority for resolution, but the writable target MUST be the explicit `metadata.baseDir` source when configured and MUST be the repo-local tree when the shared source comes from `metadata.bundle` or `metadata.bundleFile`.
 18. Every context MUST define at least one of `repository` or `managedServer`.
 19. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 20. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.

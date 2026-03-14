@@ -9,6 +9,7 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -308,19 +309,27 @@ func (r *Orchestrator) ListRemote(ctx context.Context, logicalPath string, polic
 }
 
 func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource.DiffEntry, error) {
-	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
+	document, err := r.DiffDocument(ctx, logicalPath)
 	if err != nil {
 		return nil, err
+	}
+	return document.Entries, nil
+}
+
+func (r *Orchestrator) DiffDocument(ctx context.Context, logicalPath string) (resourcediffapp.Document, error) {
+	localResource, err := r.resolveLocalResourceForRead(ctx, logicalPath)
+	if err != nil {
+		return resourcediffapp.Document{}, err
 	}
 
 	resolvedResource, resourceMd, err := r.buildResourceInfo(ctx, localResource.LogicalPath, contentFromResource(localResource))
 	if err != nil {
-		return nil, err
+		return resourcediffapp.Document{}, err
 	}
 
 	localForCompare, err := r.resolvePayloadForRemote(ctx, resolvedResource.LogicalPath, contentFromResource(resolvedResource))
 	if err != nil {
-		return nil, err
+		return resourcediffapp.Document{}, err
 	}
 	resolvedResource.Payload = localForCompare.Value
 	resolvedResource.PayloadDescriptor = localForCompare.Descriptor
@@ -330,23 +339,20 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 		if faults.IsCategory(err, faults.NotFoundError) {
 			remoteValue = resource.Content{}
 		} else {
-			return nil, err
+			return resourcediffapp.Document{}, err
 		}
 	}
 
-	var remotePayload resource.Value
-	if remoteValue.Value != nil {
-		remotePayload = remoteValue.Value
-	}
+	remoteForCompare := resource.Content{Value: remoteValue.Value, Descriptor: remoteValue.Descriptor}
 	localTransformed, remoteTransformed, err := r.resolveComparedPayloads(
 		ctx,
 		resolvedResource,
 		resourceMd,
 		localForCompare,
-		resource.Content{Value: remotePayload, Descriptor: remoteValue.Descriptor},
+		remoteForCompare,
 	)
 	if err != nil {
-		return nil, err
+		return resourcediffapp.Document{}, err
 	}
 
 	items := buildDiffEntries(resolvedResource.LogicalPath, localTransformed, remoteTransformed)
@@ -359,7 +365,18 @@ func (r *Orchestrator) Diff(ctx context.Context, logicalPath string) ([]resource
 		}
 		return items[i].ResourcePath < items[j].ResourcePath
 	})
-	return items, nil
+	return resourcediffapp.Document{
+		ResourcePath: resolvedResource.LogicalPath,
+		Local: resource.Content{
+			Value:      localTransformed,
+			Descriptor: localForCompare.Descriptor,
+		},
+		Remote: resource.Content{
+			Value:      remoteTransformed,
+			Descriptor: remoteValue.Descriptor,
+		},
+		Entries: items,
+	}, nil
 }
 
 func (r *Orchestrator) resolveComparedPayloads(

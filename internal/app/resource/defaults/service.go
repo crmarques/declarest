@@ -363,11 +363,16 @@ func inferFromManagedServer(
 		return nil, err
 	}
 
-	firstPayload, firstPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, resolvedTarget.resourceContent, "probe-1")
+	probeContent, err := resolveManagedServerProbeContent(ctx, deps, resolvedTarget)
 	if err != nil {
 		return nil, err
 	}
-	secondPayload, secondPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, resolvedTarget.resourceContent, "probe-2")
+
+	firstPayload, firstPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, probeContent, "probe-1")
+	if err != nil {
+		return nil, err
+	}
+	secondPayload, secondPath, err := buildManagedServerProbePayload(resolvedTarget.logicalPath, md, probeContent, "probe-2")
 	if err != nil {
 		return nil, err
 	}
@@ -433,6 +438,23 @@ func inferFromManagedServer(
 	}
 	outputs := []resource.Value{firstRemote.Value, secondRemote.Value}
 	return resource.InferCreatedDefaults(inputs, outputs)
+}
+
+func resolveManagedServerProbeContent(ctx context.Context, deps Dependencies, resolvedTarget target) (resource.Content, error) {
+	store, err := appdeps.RequireResourceStore(deps)
+	if err != nil {
+		return resource.Content{}, err
+	}
+
+	content, err := store.Get(ctx, resolvedTarget.logicalPath)
+	if err != nil {
+		return resource.Content{}, err
+	}
+
+	if !resource.IsPayloadDescriptorExplicit(content.Descriptor) && resource.IsPayloadDescriptorExplicit(resolvedTarget.resourceContent.Descriptor) {
+		content.Descriptor = resolvedTarget.resourceContent.Descriptor
+	}
+	return content, nil
 }
 
 func managedServerProbeInputValue(

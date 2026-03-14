@@ -20,6 +20,8 @@ operations:
         path: /project/{{/id}}
     list:
         path: /projects
+        transforms:
+            - jqExpression: 'map(select(type == "object") | . + {name: (.name // ."project.name" // .project // ((.config | if type == "object" then .["project.name"] else null end) // (.url // "" | split("/") | last)))} | select((.name // "") != ""))'
     compare:
         path: /project/{{/id}}/config
         transforms:

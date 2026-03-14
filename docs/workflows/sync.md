@@ -86,9 +86,14 @@ This is useful when you want repository reads and refreshes to preserve the comp
 
 ```bash
 declarest resource diff /corporations/acme
+declarest resource diff /corporations --recursive
+declarest resource diff /corporations --recursive --list
+declarest resource diff /corporations/acme --color always
 ```
 
-Use `-o text` for concise line-oriented output or `-o json|yaml` for automation.
+Default output is a normalized unified diff grouped by resource. For collection paths, unchanged resources are skipped from text sections and DeclaREST prints a summary count at the end.
+
+Use `--list` when you only want the drifting resource paths, or `-o json|yaml` when you need structured automation data.
 
 ## 5. Apply back to the API
 

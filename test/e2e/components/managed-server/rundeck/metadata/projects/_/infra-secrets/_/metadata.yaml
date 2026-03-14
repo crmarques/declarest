@@ -16,7 +16,7 @@ operations:
     headers:
       - Accept: application/json
     transforms:
-      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
+      - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
   update:
     method: PUT
     path: /storage/keys/project/{{/project}}/{{/id}}
@@ -38,4 +38,4 @@ operations:
     headers:
       - Accept: application/json
     transforms:
-      - jqExpression: 'if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'
+      - jqExpression: '(if type == "array" then (.[0] // {}) else . end) | if type == "object" and has("meta") then {name: (.name // "{{/id}}"), type: (.meta["Rundeck-key-type"] // "private"), contentType: (.meta["Rundeck-content-type"] // (if (.meta["Rundeck-key-type"] // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} else {name: (.name // "{{/id}}"), type: (.type // (if (.contentType // "") == "application/pgp-keys" then "public" else "private" end)), contentType: (.contentType // (if (.type // "") == "public" then "application/pgp-keys" else "application/octet-stream" end))} end'

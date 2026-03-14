@@ -57,7 +57,11 @@ func buildOrchestratorFromResolvedContext(
 	if metadataSource.BaseDir != "" {
 		switch {
 		case repoBaseDir != "" && filepath.Clean(repoBaseDir) != filepath.Clean(metadataSource.BaseDir):
-			metadataService = fsmetadata.NewLayeredFSMetadataService(metadataSource.BaseDir, repoBaseDir)
+			metadataService = fsmetadata.NewLayeredFSMetadataService(
+				metadataSource.BaseDir,
+				repoBaseDir,
+				metadataSource.WriteTarget,
+			)
 		default:
 			metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
 		}
@@ -136,6 +140,7 @@ type metadataSourceResolution struct {
 	BaseDir           string
 	OpenAPI           string
 	DeprecatedWarning string
+	WriteTarget       fsmetadata.LayeredMetadataWriteTarget
 }
 
 func resolvedRepositoryBaseDir(ctx config.Context) string {
@@ -203,18 +208,28 @@ func resolveMetadataSource(ctx context.Context, context config.Context) (metadat
 			BaseDir:           resolution.MetadataDir,
 			OpenAPI:           resolution.OpenAPI,
 			DeprecatedWarning: resolution.DeprecatedWarning,
+			WriteTarget:       fsmetadata.LayeredMetadataWriteLocal,
 		}, nil
 	}
 
 	if context.Metadata.BaseDir != "" {
-		return metadataSourceResolution{BaseDir: context.Metadata.BaseDir}, nil
+		return metadataSourceResolution{
+			BaseDir:     context.Metadata.BaseDir,
+			WriteTarget: fsmetadata.LayeredMetadataWriteShared,
+		}, nil
 	}
 
 	switch {
 	case context.Repository.Filesystem != nil:
-		return metadataSourceResolution{BaseDir: context.Repository.Filesystem.BaseDir}, nil
+		return metadataSourceResolution{
+			BaseDir:     context.Repository.Filesystem.BaseDir,
+			WriteTarget: fsmetadata.LayeredMetadataWriteShared,
+		}, nil
 	case context.Repository.Git != nil:
-		return metadataSourceResolution{BaseDir: context.Repository.Git.Local.BaseDir}, nil
+		return metadataSourceResolution{
+			BaseDir:     context.Repository.Git.Local.BaseDir,
+			WriteTarget: fsmetadata.LayeredMetadataWriteShared,
+		}, nil
 	default:
 		return metadataSourceResolution{}, nil
 	}
