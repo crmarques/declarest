@@ -25,11 +25,8 @@ func TestDisplayResourceMetadataViewExpandsUnsetFields(t *testing.T) {
 	if view.Resource.RemoteCollectionPath != "" {
 		t.Fatalf("expected empty remoteCollectionPath, got %q", view.Resource.RemoteCollectionPath)
 	}
-	if view.Resource.PayloadType != "" {
-		t.Fatalf("expected empty payloadType, got %q", view.Resource.PayloadType)
-	}
-	if view.Resource.DefaultFormat != "" {
-		t.Fatalf("expected empty defaultFormat, got %q", view.Resource.DefaultFormat)
+	if view.Resource.Format != "" {
+		t.Fatalf("expected empty format, got %q", view.Resource.Format)
 	}
 	if view.Resource.Secret {
 		t.Fatalf("expected default secret=false, got %#v", view.Resource.Secret)
@@ -53,8 +50,8 @@ func TestDisplayResourceMetadataViewExpandsUnsetFields(t *testing.T) {
 	if len(view.Operations.Get.Query) != 0 {
 		t.Fatalf("expected empty get query, got %#v", view.Operations.Get.Query)
 	}
-	if view.Operations.Get.Headers["Accept"] != "{{payload_media_type .}}" {
-		t.Fatalf("expected payload-aware accept header, got %#v", view.Operations.Get.Headers)
+	if len(view.Operations.Get.Headers) != 0 {
+		t.Fatalf("expected empty default get headers, got %#v", view.Operations.Get.Headers)
 	}
 	if view.Operations.Get.Body != nil {
 		t.Fatalf("expected nil default body, got %#v", view.Operations.Get.Body)
@@ -71,8 +68,8 @@ func TestDisplayResourceMetadataViewExpandsUnsetFields(t *testing.T) {
 	if view.Operations.Get.Validate.SchemaRef != "" {
 		t.Fatalf("expected empty validate.schemaRef, got %q", view.Operations.Get.Validate.SchemaRef)
 	}
-	if view.Operations.Create.Headers["Content-Type"] != "{{payload_media_type .}}" {
-		t.Fatalf("expected payload-aware content-type header, got %#v", view.Operations.Create.Headers)
+	if len(view.Operations.Create.Headers) != 0 {
+		t.Fatalf("expected empty default create headers, got %#v", view.Operations.Create.Headers)
 	}
 }
 
@@ -80,8 +77,8 @@ func TestDisplayResourceMetadataViewPreservesConfiguredValues(t *testing.T) {
 	t.Parallel()
 
 	view := DisplayResourceMetadataView(ResourceMetadata{
-		DefaultFormat: "yaml",
-		Secret:        boolPointer(true),
+		Format: "yaml",
+		Secret: boolPointer(true),
 		RequiredAttributes: []string{
 			"/realm",
 		},
@@ -117,8 +114,8 @@ func TestDisplayResourceMetadataViewPreservesConfiguredValues(t *testing.T) {
 		},
 	})
 
-	if view.Resource.DefaultFormat != "yaml" {
-		t.Fatalf("expected defaultFormat yaml, got %q", view.Resource.DefaultFormat)
+	if view.Resource.Format != "yaml" {
+		t.Fatalf("expected format yaml, got %q", view.Resource.Format)
 	}
 	if !view.Resource.Secret {
 		t.Fatalf("expected secret=true, got %#v", view.Resource.Secret)

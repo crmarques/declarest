@@ -88,7 +88,7 @@ Optional fields:
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
-2. on-disk catalog readers MUST accept documented legacy aliases (for example `current-ctx`, `base-dir`, `managed-server`, `secret-store`, and `repository.resource-format`) and MUST normalize them before strict decoding.
+2. on-disk catalog readers MUST accept documented legacy aliases (for example `current-ctx`, `base-dir`, `managed-server`, and `secret-store`) and MUST normalize them before strict decoding.
 3. unknown keys MUST fail strict decoding after legacy-alias normalization.
 
 One-of invariants:
@@ -149,7 +149,7 @@ Invariants:
 Holds behavior directives for a resource or collection.
 
 Contract groups:
-1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `defaultFormat` persistence hint; `defaultFormat` MUST accept the supported payload formats plus `any`, and when omitted `id` and `alias` default to `/id` for identity resolution.
+1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, and optional `format` directive; `format` MUST accept the supported payload formats plus `any`, drives default repository/request media behavior when concrete, and when omitted `id` and `alias` default to `/id` for identity resolution.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
 3. `resource` defaults mapping (`defaults.mode`, `defaults.useProfiles`, `defaults.value`, `defaults.profiles`) for metadata-native defaults layering; `defaults.value` and `defaults.profiles[*]` MUST accept either one structured object or one exact include placeholder pointing to deterministic selector-local files named `defaults.<ext>` or `defaults-<profile>.<ext>`.
 4. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).

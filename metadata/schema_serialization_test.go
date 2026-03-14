@@ -651,12 +651,12 @@ func TestResourceMetadataUnmarshalJSONPromotesMediaHeadersFromHTTPHeaders(t *tes
 	}
 }
 
-func TestResourceMetadataDefaultFormatJSONRoundtrip(t *testing.T) {
+func TestResourceMetadataFormatJSONRoundtrip(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
-		ID:            "{{/id}}",
-		DefaultFormat: "yaml",
+		ID:     "{{/id}}",
+		Format: "yaml",
 	}
 
 	encoded, err := json.Marshal(original)
@@ -669,15 +669,15 @@ func TestResourceMetadataDefaultFormatJSONRoundtrip(t *testing.T) {
 		t.Fatalf("unmarshal returned error: %v", err)
 	}
 
-	if decoded.DefaultFormat != "yaml" {
-		t.Fatalf("expected defaultFormat=yaml, got %q", decoded.DefaultFormat)
+	if decoded.Format != "yaml" {
+		t.Fatalf("expected format=yaml, got %q", decoded.Format)
 	}
 	if decoded.ID != "{{/id}}" {
 		t.Fatalf("expected id={{/id}}, got %q", decoded.ID)
 	}
 }
 
-func TestResourceMetadataDefaultFormatOmittedWhenEmpty(t *testing.T) {
+func TestResourceMetadataFormatOmittedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	original := ResourceMetadata{
@@ -698,16 +698,21 @@ func TestResourceMetadataDefaultFormatOmittedWhenEmpty(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected resource object, got %#v", raw["resource"])
 	}
-	if _, found := resourceObj["defaultFormat"]; found {
-		t.Fatalf("expected defaultFormat to be omitted when empty, got %#v", resourceObj)
+	if _, found := resourceObj["format"]; found {
+		t.Fatalf("expected format to be omitted when empty, got %#v", resourceObj)
 	}
 }
 
-func TestResourceMetadataPreferredFormatIsRejected(t *testing.T) {
+func TestResourceMetadataLegacyFormatFieldsAreRejected(t *testing.T) {
 	t.Parallel()
 
-	_, err := DecodeResourceMetadataJSON([]byte(`{"resource":{"preferredFormat":"yaml"}}`))
-	if err == nil {
-		t.Fatal("expected preferredFormat to be rejected")
+	for _, payload := range []string{
+		`{"resource":{"preferredFormat":"yaml"}}`,
+		`{"resource":{"payloadType":"yaml"}}`,
+		`{"resource":{"defaultFormat":"yaml"}}`,
+	} {
+		if _, err := DecodeResourceMetadataJSON([]byte(payload)); err == nil {
+			t.Fatalf("expected legacy field payload to be rejected: %s", payload)
+		}
 	}
 }

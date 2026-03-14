@@ -12,7 +12,7 @@ type ResourceDescription struct {
 	Path           string                 `json:"path" yaml:"path"`
 	Collection     bool                   `json:"collection" yaml:"collection"`
 	Identity       *IdentityDescription   `json:"identity,omitempty" yaml:"identity,omitempty"`
-	PayloadType    string                 `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
+	Format         string                 `json:"format,omitempty" yaml:"format,omitempty"`
 	CollectionPath string                 `json:"collectionPath,omitempty" yaml:"collectionPath,omitempty"`
 	Operations     []OperationDescription `json:"operations,omitempty" yaml:"operations,omitempty"`
 	Schemas        []SchemaDescription    `json:"schemas,omitempty" yaml:"schemas,omitempty"`
@@ -86,7 +86,7 @@ func DescribeResource(
 		}
 	}
 
-	desc.PayloadType = md.PayloadType
+	desc.Format = md.Format
 	desc.CollectionPath = md.RemoteCollectionPath
 	desc.RequiredFields = md.RequiredAttributes
 	desc.SecretFields = md.SecretAttributes

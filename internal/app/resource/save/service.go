@@ -270,15 +270,15 @@ func saveResolvedPathPayload(
 	if err != nil {
 		return err
 	}
-	collectionDefaultFormat, err := resolveCollectionDefaultFormat(ctx, deps, resolvedPath)
+	collectionFormat, err := resolveCollectionFormat(ctx, deps, resolvedPath)
 	if err != nil {
 		return err
 	}
 	for idx := range entries {
 		switch {
-		case metadatadomain.ResourceDefaultFormatAllowsMixedItems(collectionDefaultFormat):
+		case metadatadomain.ResourceFormatAllowsMixedItems(collectionFormat):
 			continue
-		case strings.TrimSpace(collectionDefaultFormat) != "":
+		case strings.TrimSpace(collectionFormat) != "":
 			entries[idx].Descriptor = resource.PayloadDescriptor{}
 		case !resource.IsPayloadDescriptorExplicit(entries[idx].Descriptor):
 			entries[idx].Descriptor = content.Descriptor
@@ -381,10 +381,10 @@ func saveResolvedPathPayload(
 	return nil
 }
 
-func resolveCollectionDefaultFormat(ctx context.Context, deps Dependencies, logicalPath string) (string, error) {
+func resolveCollectionFormat(ctx context.Context, deps Dependencies, logicalPath string) (string, error) {
 	resolvedMetadata, err := resolveMetadataForSecretCheck(ctx, deps, logicalPath)
 	if err != nil {
 		return "", err
 	}
-	return metadatadomain.NormalizeResourceDefaultFormat(resolvedMetadata.DefaultFormat), nil
+	return metadatadomain.NormalizeResourceFormat(resolvedMetadata.Format), nil
 }

@@ -49,7 +49,7 @@ func resourcePayloadEditType(
 		if err != nil {
 			return "", err
 		}
-		if strings.TrimSpace(md.PayloadType) != "" {
+		if strings.TrimSpace(md.Format) != "" {
 			return metadata.EffectivePayloadType(md, resourcedomain.PayloadTypeJSON)
 		}
 	}

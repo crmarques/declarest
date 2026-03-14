@@ -473,9 +473,9 @@ func TestFSMetadataRenderOperationSpecSupportsResourceFormatTemplateFunc(t *test
 	ctx := context.Background()
 
 	mustSetMetadata(t, service, ctx, "/customers/acme", metadatadomain.ResourceMetadata{
-		ID:          "{{/id}}",
-		Alias:       "{{/id}}",
-		PayloadType: "yaml",
+		ID:     "{{/id}}",
+		Alias:  "{{/id}}",
+		Format: "yaml",
 		Operations: map[string]metadatadomain.OperationSpec{
 			string(metadatadomain.OperationGet): {
 				Path:   "/api/customers/{{/id}}",
@@ -543,23 +543,23 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 		{
 			name: "id_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType: "text",
-				ID:          "{{/id}}",
+				Format: "text",
+				ID:     "{{/id}}",
 			},
 			want: "resource.id requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "alias_from_attribute_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType: "text",
-				Alias:       "{{/name}}",
+				Format: "text",
+				Alias:  "{{/name}}",
 			},
 			want: "resource.alias requires structured payload type (json, yaml, ini, properties)",
 		},
 		{
 			name: "secret_in_attributes_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:      "text",
+				Format:           "text",
 				SecretAttributes: []string{"/password"},
 			},
 			wantAll: []string{
@@ -570,7 +570,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 		{
 			name: "required_attributes_require_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType:        "text",
+				Format:             "text",
 				RequiredAttributes: []string{"/name"},
 			},
 			want: "resource.requiredAttributes requires structured payload type (json, yaml, ini, properties)",
@@ -578,7 +578,7 @@ func TestFSMetadataValidationStructuredOnlyFields(t *testing.T) {
 		{
 			name: "externalized_attributes_requires_structured_payload",
 			meta: metadatadomain.ResourceMetadata{
-				PayloadType: "text",
+				Format: "text",
 				ExternalizedAttributes: []metadatadomain.ExternalizedAttribute{
 					{Path: "/script", File: "script.sh"},
 				},
@@ -631,7 +631,7 @@ func TestFSMetadataValidationRejectsInvalidResourceRequiredAttributes(t *testing
 	}
 }
 
-func TestFSMetadataValidationDefaultFormat(t *testing.T) {
+func TestFSMetadataValidationFormat(t *testing.T) {
 	t.Parallel()
 
 	t.Run("accepts any", func(t *testing.T) {
@@ -639,10 +639,10 @@ func TestFSMetadataValidationDefaultFormat(t *testing.T) {
 
 		service := NewFSMetadataService(t.TempDir())
 		err := service.Set(context.Background(), "/customers/_", metadatadomain.ResourceMetadata{
-			DefaultFormat: metadatadomain.ResourceDefaultFormatAny,
+			Format: metadatadomain.ResourceFormatAny,
 		})
 		if err != nil {
-			t.Fatalf("expected defaultFormat any to validate, got %v", err)
+			t.Fatalf("expected format any to validate, got %v", err)
 		}
 	})
 
@@ -651,7 +651,7 @@ func TestFSMetadataValidationDefaultFormat(t *testing.T) {
 
 		service := NewFSMetadataService(t.TempDir())
 		err := service.Set(context.Background(), "/customers/_", metadatadomain.ResourceMetadata{
-			DefaultFormat: "toml",
+			Format: "toml",
 		})
 		assertTypedCategory(t, err, faults.ValidationError)
 		if !strings.Contains(err.Error(), `unsupported payload type "toml"`) {

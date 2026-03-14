@@ -179,35 +179,30 @@ func TestOrchestratorSaveAppliesDefaultFormatBeforePersisting(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		orchestratorFormat  string
 		metadataFormat      string
 		content             resource.Content
 		expectedPayloadType string
 	}{
 		{
-			name:                "orchestrator default used for implicit descriptor",
-			orchestratorFormat:  resource.PayloadTypeYAML,
-			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
-			expectedPayloadType: resource.PayloadTypeYAML,
-		},
-		{
-			name:                "metadata overrides orchestrator default",
-			orchestratorFormat:  resource.PayloadTypeJSON,
+			name:                "metadata format used for implicit descriptor",
 			metadataFormat:      resource.PayloadTypeYAML,
 			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
 			expectedPayloadType: resource.PayloadTypeYAML,
 		},
 		{
 			name:                "explicit descriptor remains unchanged",
-			orchestratorFormat:  resource.PayloadTypeYAML,
 			metadataFormat:      resource.PayloadTypeYAML,
 			content:             testContentWithType(map[string]any{"name": "ACME"}, resource.PayloadTypeJSON),
 			expectedPayloadType: resource.PayloadTypeJSON,
 		},
 		{
 			name:                "metadata any leaves descriptor unset",
-			orchestratorFormat:  resource.PayloadTypeYAML,
-			metadataFormat:      metadatadomain.ResourceDefaultFormatAny,
+			metadataFormat:      metadatadomain.ResourceFormatAny,
+			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
+			expectedPayloadType: "",
+		},
+		{
+			name:                "empty metadata leaves descriptor unset",
 			content:             resource.Content{Value: map[string]any{"name": "ACME"}},
 			expectedPayloadType: "",
 		},
@@ -221,10 +216,9 @@ func TestOrchestratorSaveAppliesDefaultFormatBeforePersisting(t *testing.T) {
 			repo := &fakeRepository{}
 			orchestrator := New(
 				repo,
-				&fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{DefaultFormat: tc.metadataFormat}},
+				&fakeMetadata{resolveValue: metadatadomain.ResourceMetadata{Format: tc.metadataFormat}},
 				nil,
 				nil,
-				WithDefaultFormat(tc.orchestratorFormat),
 			)
 
 			if err := orchestrator.Save(context.Background(), "/customers/acme", tc.content); err != nil {

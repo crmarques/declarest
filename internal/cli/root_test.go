@@ -1276,7 +1276,9 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if _, hasAccept := getOp["accept"]; hasAccept {
 			t.Fatalf("expected get.accept to be omitted from metadata output, got %#v", getOp["accept"])
 		}
-		assertOperationHTTPHeaderValue(t, getOp, "Accept", "application/json")
+		if headers, ok := getOp["headers"].(map[string]any); !ok || len(headers) != 0 {
+			t.Fatalf("expected get.headers without synthetic defaults, got %#v", getOp["headers"])
+		}
 		createOp, ok := operations["create"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected create operation, got %#v", operations["create"])
@@ -1290,8 +1292,9 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if _, hasContentType := createOp["contentType"]; hasContentType {
 			t.Fatalf("expected create.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
 		}
-		assertOperationHTTPHeaderValue(t, createOp, "Accept", "application/json")
-		assertOperationHTTPHeaderValue(t, createOp, "Content-Type", "application/json")
+		if headers, ok := createOp["headers"].(map[string]any); !ok || len(headers) != 0 {
+			t.Fatalf("expected create.headers without synthetic defaults, got %#v", createOp["headers"])
+		}
 	})
 
 	t.Run("show_metadata_flag_uses_payload_descriptor_not_output_format", func(t *testing.T) {
@@ -1343,7 +1346,9 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if _, hasAccept := getOp["accept"]; hasAccept {
 			t.Fatalf("expected get.accept to be omitted from metadata output, got %#v", getOp["accept"])
 		}
-		assertOperationHTTPHeaderValue(t, getOp, "Accept", "application/json")
+		if headers, ok := getOp["headers"].(map[string]any); !ok || len(headers) != 0 {
+			t.Fatalf("expected get.headers without synthetic defaults, got %#v", getOp["headers"])
+		}
 		createOp, ok := operations["create"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected create operation, got %#v", operations["create"])
@@ -1351,7 +1356,9 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		if _, hasContentType := createOp["contentType"]; hasContentType {
 			t.Fatalf("expected create.contentType to be omitted from metadata output, got %#v", createOp["contentType"])
 		}
-		assertOperationHTTPHeaderValue(t, createOp, "Content-Type", "application/json")
+		if headers, ok := createOp["headers"].(map[string]any); !ok || len(headers) != 0 {
+			t.Fatalf("expected create.headers without synthetic defaults, got %#v", createOp["headers"])
+		}
 	})
 }
 
@@ -3931,8 +3938,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		for _, expected := range []string{
 			"\"requiredAttributes\": []",
 			"\"remoteCollectionPath\": \"\"",
-			"\"payloadType\": \"\"",
-			"\"defaultFormat\": \"\"",
+			"\"format\": \"\"",
 			"\"secret\": false",
 			"\"externalizedAttributes\": []",
 			"\"defaults\": {",
@@ -4010,12 +4016,6 @@ func TestMetadataPathCommands(t *testing.T) {
 		if !strings.Contains(output, "\"headers\": {") {
 			t.Fatalf("expected canonical headers field in metadata get output, got %q", output)
 		}
-		if !strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
-			t.Fatalf("expected payload-aware Accept header placeholder in metadata get output, got %q", output)
-		}
-		if !strings.Contains(output, "\"Content-Type\": \"{{payload_media_type .}}\"") {
-			t.Fatalf("expected Content-Type header in metadata get output, got %q", output)
-		}
 		if strings.Contains(output, "\"accept\":") {
 			t.Fatalf("expected metadata get output without accept field, got %q", output)
 		}
@@ -4055,14 +4055,11 @@ func TestMetadataPathCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected metadata get error: %v", err)
 		}
-		if !strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
-			t.Fatalf("expected payload-aware Accept header placeholder in metadata get output, got %q", output)
-		}
-		if !strings.Contains(output, "\"Content-Type\": \"{{payload_media_type .}}\"") {
-			t.Fatalf("expected payload-aware Content-Type header placeholder in metadata get output, got %q", output)
-		}
 		if strings.Contains(output, "\"accept\":") || strings.Contains(output, "\"contentType\":") {
 			t.Fatalf("expected metadata get output without accept/contentType fields, got %q", output)
+		}
+		if strings.Contains(output, "\"Accept\":") || strings.Contains(output, "\"Content-Type\":") {
+			t.Fatalf("expected metadata get output without synthetic http header defaults, got %q", output)
 		}
 	})
 
@@ -4139,7 +4136,7 @@ func TestMetadataPathCommands(t *testing.T) {
 			t.Fatalf("expected merged default operations in metadata get fallback output, got %q", output)
 		}
 		if !strings.Contains(output, "\"method\": \"GET\"") ||
-			!strings.Contains(output, "\"Accept\": \"{{payload_media_type .}}\"") {
+			!strings.Contains(output, "\"headers\": {}") {
 			t.Fatalf("expected canonical metadata operation fields in fallback output, got %q", output)
 		}
 	})

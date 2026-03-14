@@ -27,8 +27,7 @@ type resourceWire struct {
 	Alias                  string                       `json:"alias,omitempty" yaml:"alias,omitempty"`
 	RequiredAttributes     *[]string                    `json:"requiredAttributes,omitempty" yaml:"requiredAttributes,omitempty"`
 	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
-	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
-	DefaultFormat          string                       `json:"defaultFormat,omitempty" yaml:"defaultFormat,omitempty"`
+	Format                 string                       `json:"format,omitempty" yaml:"format,omitempty"`
 	Defaults               *defaultsSpecWire            `json:"defaults,omitempty" yaml:"defaults,omitempty"`
 	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       *[]string                    `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
@@ -206,8 +205,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		ID:                   metadata.ID,
 		Alias:                metadata.Alias,
 		RemoteCollectionPath: metadata.RemoteCollectionPath,
-		PayloadType:          metadata.PayloadType,
-		DefaultFormat:        metadata.DefaultFormat,
+		Format:               metadata.Format,
 		Defaults:             defaultsSpecToWire(metadata.Defaults),
 		Secret:               cloneBoolPointer(metadata.Secret),
 	}
@@ -277,11 +275,8 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 		if remoteCollectionPath != "" {
 			metadata.RemoteCollectionPath = remoteCollectionPath
 		}
-		if resource.PayloadType != "" {
-			metadata.PayloadType = resource.PayloadType
-		}
-		if resource.DefaultFormat != "" {
-			metadata.DefaultFormat = resource.DefaultFormat
+		if resource.Format != "" {
+			metadata.Format = resource.Format
 		}
 		if resource.Defaults != nil {
 			metadata.Defaults = defaultsSpecFromWire(resource.Defaults)
@@ -327,8 +322,7 @@ func hasResourceInfo(resource resourceWire) bool {
 		strings.TrimSpace(resource.Alias) != "" ||
 		resource.RequiredAttributes != nil ||
 		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
-		strings.TrimSpace(resource.PayloadType) != "" ||
-		strings.TrimSpace(resource.DefaultFormat) != "" ||
+		strings.TrimSpace(resource.Format) != "" ||
 		resource.Defaults != nil ||
 		resource.Secret != nil ||
 		resource.SecretAttributes != nil ||

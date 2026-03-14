@@ -100,8 +100,8 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 	}
 
 	descriptor := resource.PayloadDescriptor{}
-	if strings.TrimSpace(resolvedMetadata.PayloadType) != "" {
-		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resolvedMetadata.PayloadType})
+	if format := metadata.NormalizeResourceFormat(resolvedMetadata.Format); format != "" && !metadata.ResourceFormatAllowsMixedItems(format) {
+		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: format})
 	}
 
 	return resource.Resource{

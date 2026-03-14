@@ -1,8 +1,6 @@
 package orchestrator
 
 import (
-	"strings"
-
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -21,8 +19,10 @@ func effectiveMetadataDefaults(
 	}
 
 	descriptor := fallback
-	if !resource.IsPayloadDescriptorExplicit(descriptor) && strings.TrimSpace(md.PayloadType) != "" {
-		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: md.PayloadType})
+	if !resource.IsPayloadDescriptorExplicit(descriptor) {
+		if format := metadata.NormalizeResourceFormat(md.Format); format != "" && !metadata.ResourceFormatAllowsMixedItems(format) {
+			descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: format})
+		}
 	}
 	if !resource.IsPayloadDescriptorExplicit(descriptor) {
 		descriptor = resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})

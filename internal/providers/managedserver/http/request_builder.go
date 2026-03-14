@@ -70,10 +70,10 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 	}
 
 	bodyDescriptor := g.requestBodyDescriptor(resolvedResource, md)
+	acceptDescriptor := g.requestAcceptDescriptor(operation, resolvedResource, md, bodyDescriptor)
 	if strings.TrimSpace(spec.Accept) == "" {
-		spec.Accept, err = g.defaultResourceMediaType(bodyDescriptor)
-		if err != nil {
-			return metadata.OperationSpec{}, err
+		if mediaType, mediaErr := g.defaultResourceMediaType(acceptDescriptor); mediaErr == nil {
+			spec.Accept = mediaType
 		}
 	}
 
@@ -82,9 +82,8 @@ func (g *Client) BuildRequestFromMetadata(ctx context.Context, resolvedResource 
 			return metadata.OperationSpec{}, err
 		}
 		if strings.TrimSpace(spec.ContentType) == "" {
-			spec.ContentType, err = g.defaultResourceMediaType(bodyDescriptor)
-			if err != nil {
-				return metadata.OperationSpec{}, err
+			if mediaType, mediaErr := g.defaultResourceMediaType(bodyDescriptor); mediaErr == nil {
+				spec.ContentType = mediaType
 			}
 		}
 		if spec.Body == nil {

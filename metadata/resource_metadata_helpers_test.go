@@ -56,24 +56,24 @@ func TestMergeResourceMetadataOverlaysWholeResourceSecretPointer(t *testing.T) {
 	}
 }
 
-func TestCloneResourceMetadataPreservesDefaultFormat(t *testing.T) {
+func TestCloneResourceMetadataPreservesFormat(t *testing.T) {
 	t.Parallel()
 
-	cloned := CloneResourceMetadata(ResourceMetadata{DefaultFormat: "yaml"})
-	if cloned.DefaultFormat != "yaml" {
-		t.Fatalf("expected cloned defaultFormat yaml, got %#v", cloned)
+	cloned := CloneResourceMetadata(ResourceMetadata{Format: "yaml"})
+	if cloned.Format != "yaml" {
+		t.Fatalf("expected cloned format yaml, got %#v", cloned)
 	}
 }
 
-func TestMergeResourceMetadataOverlaysDefaultFormat(t *testing.T) {
+func TestMergeResourceMetadataOverlaysFormat(t *testing.T) {
 	t.Parallel()
 
 	merged := MergeResourceMetadata(
-		ResourceMetadata{DefaultFormat: "json"},
-		ResourceMetadata{DefaultFormat: "yaml"},
+		ResourceMetadata{Format: "json"},
+		ResourceMetadata{Format: "yaml"},
 	)
-	if merged.DefaultFormat != "yaml" {
-		t.Fatalf("expected merged defaultFormat yaml, got %#v", merged)
+	if merged.Format != "yaml" {
+		t.Fatalf("expected merged format yaml, got %#v", merged)
 	}
 }
 
@@ -116,12 +116,12 @@ func TestHasResourceMetadataDirectivesRecognizesNonIdentityOverrides(t *testing.
 			metadata: ResourceMetadata{RequiredAttributes: []string{}},
 		},
 		{
-			name:     "payload_type",
-			metadata: ResourceMetadata{PayloadType: "text"},
+			name:     "format",
+			metadata: ResourceMetadata{Format: "text"},
 		},
 		{
-			name:     "default_format",
-			metadata: ResourceMetadata{DefaultFormat: "yaml"},
+			name:     "mixed_format",
+			metadata: ResourceMetadata{Format: "any"},
 		},
 		{
 			name:     "externalized_attributes",

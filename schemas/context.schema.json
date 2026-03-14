@@ -45,19 +45,6 @@
     }
   ],
   "$defs": {
-    "payloadType": {
-      "type": "string",
-      "enum": [
-        "json",
-        "yaml",
-        "xml",
-        "hcl",
-        "ini",
-        "properties",
-        "text",
-        "octet-stream"
-      ]
-    },
     "stringMap": {
       "type": "object",
       "additionalProperties": {
@@ -805,11 +792,6 @@
     },
     "preferences": {
       "type": "object",
-      "properties": {
-        "preferredFormat": {
-          "$ref": "#/$defs/payloadType"
-        }
-      },
       "additionalProperties": {
         "type": "string"
       }

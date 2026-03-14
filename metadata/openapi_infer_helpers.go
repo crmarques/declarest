@@ -195,8 +195,7 @@ func inferMetadataFromOpenAPISpec(
 	return ResourceMetadata{
 		RemoteCollectionPath: collectionPath,
 		Operations:           operations,
-		PayloadType:          inferredOpenAPIMetadataPayloadType(payloadTypeCandidates),
-		DefaultFormat:        inferredOpenAPIMetadataDefaultFormat(payloadTypeCandidates),
+		Format:               inferredOpenAPIMetadataFormat(payloadTypeCandidates),
 	}, resourceIdentityAttribute, resourceSchemaAttributes
 }
 
@@ -221,21 +220,14 @@ func inferOpenAPIMetadataPayloadTypes(
 	return payloadTypes
 }
 
-func inferredOpenAPIMetadataPayloadType(payloadTypes []string) string {
-	if len(payloadTypes) != 1 {
-		return ""
-	}
-	return payloadTypes[0]
-}
-
-func inferredOpenAPIMetadataDefaultFormat(payloadTypes []string) string {
+func inferredOpenAPIMetadataFormat(payloadTypes []string) string {
 	switch len(payloadTypes) {
 	case 0:
 		return ""
 	case 1:
 		return payloadTypes[0]
 	default:
-		return ResourceDefaultFormatAny
+		return ResourceFormatAny
 	}
 }
 

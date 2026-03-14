@@ -13,8 +13,7 @@ func HasResourceMetadataDirectives(value ResourceMetadata) bool {
 		strings.TrimSpace(value.Alias) != "" ||
 		value.RequiredAttributes != nil ||
 		strings.TrimSpace(value.RemoteCollectionPath) != "" ||
-		strings.TrimSpace(value.PayloadType) != "" ||
-		strings.TrimSpace(value.DefaultFormat) != "" ||
+		strings.TrimSpace(value.Format) != "" ||
 		HasDefaultsSpecDirectives(value.Defaults) ||
 		value.Secret != nil ||
 		value.SecretAttributes != nil ||
@@ -29,8 +28,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		Alias:                  value.Alias,
 		RequiredAttributes:     cloneStringSlice(value.RequiredAttributes),
 		RemoteCollectionPath:   value.RemoteCollectionPath,
-		PayloadType:            value.PayloadType,
-		DefaultFormat:          value.DefaultFormat,
+		Format:                 value.Format,
 		Defaults:               CloneDefaultsSpec(value.Defaults),
 		Secret:                 cloneBoolPointer(value.Secret),
 		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
@@ -62,8 +60,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		Alias:                  base.Alias,
 		RequiredAttributes:     cloneStringSlice(base.RequiredAttributes),
 		RemoteCollectionPath:   base.RemoteCollectionPath,
-		PayloadType:            base.PayloadType,
-		DefaultFormat:          base.DefaultFormat,
+		Format:                 base.Format,
 		Defaults:               CloneDefaultsSpec(base.Defaults),
 		Secret:                 cloneBoolPointer(base.Secret),
 		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
@@ -84,11 +81,8 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	if overlay.RemoteCollectionPath != "" {
 		merged.RemoteCollectionPath = overlay.RemoteCollectionPath
 	}
-	if overlay.PayloadType != "" {
-		merged.PayloadType = overlay.PayloadType
-	}
-	if overlay.DefaultFormat != "" {
-		merged.DefaultFormat = overlay.DefaultFormat
+	if overlay.Format != "" {
+		merged.Format = overlay.Format
 	}
 	merged.Defaults = MergeDefaultsSpec(merged.Defaults, overlay.Defaults)
 	if overlay.Secret != nil {

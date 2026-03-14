@@ -476,38 +476,38 @@ func TestSaveListPayloadFromResourcesPreservesDescriptors(t *testing.T) {
 	}
 }
 
-func TestResolveCollectionDefaultFormat(t *testing.T) {
+func TestResolveCollectionFormat(t *testing.T) {
 	t.Parallel()
 
-	t.Run("preserves default format any", func(t *testing.T) {
+	t.Run("preserves format any", func(t *testing.T) {
 		t.Parallel()
 
-		resolved, err := resolveCollectionDefaultFormat(context.Background(), Dependencies{
+		resolved, err := resolveCollectionFormat(context.Background(), Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{DefaultFormat: metadatadomain.ResourceDefaultFormatAny},
+				resolved: metadatadomain.ResourceMetadata{Format: metadatadomain.ResourceFormatAny},
 			},
 		}, "/customers")
 		if err != nil {
-			t.Fatalf("resolveCollectionDefaultFormat returned error: %v", err)
+			t.Fatalf("resolveCollectionFormat returned error: %v", err)
 		}
-		if resolved != metadatadomain.ResourceDefaultFormatAny {
-			t.Fatalf("expected defaultFormat any, got %q", resolved)
+		if resolved != metadatadomain.ResourceFormatAny {
+			t.Fatalf("expected format any, got %q", resolved)
 		}
 	})
 
-	t.Run("normalizes concrete default format", func(t *testing.T) {
+	t.Run("normalizes concrete format", func(t *testing.T) {
 		t.Parallel()
 
-		resolved, err := resolveCollectionDefaultFormat(context.Background(), Dependencies{
+		resolved, err := resolveCollectionFormat(context.Background(), Dependencies{
 			Metadata: &fakeSaveMetadataService{
-				resolved: metadatadomain.ResourceMetadata{DefaultFormat: "  YaMl  "},
+				resolved: metadatadomain.ResourceMetadata{Format: "  YaMl  "},
 			},
 		}, "/customers")
 		if err != nil {
-			t.Fatalf("resolveCollectionDefaultFormat returned error: %v", err)
+			t.Fatalf("resolveCollectionFormat returned error: %v", err)
 		}
 		if resolved != resourcedomain.PayloadTypeYAML {
-			t.Fatalf("expected yaml defaultFormat, got %q", resolved)
+			t.Fatalf("expected yaml format, got %q", resolved)
 		}
 	})
 }

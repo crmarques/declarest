@@ -16,6 +16,14 @@ func TestRenderResourceMetadataWithFormatRendersResourceFormatTemplate(t *testin
 		metadatadomain.ResourceMetadata{
 			ID:    "{{/id}}",
 			Alias: "{{/id}}",
+			Operations: map[string]metadatadomain.OperationSpec{
+				string(metadatadomain.OperationGet): {
+					Accept: "{{payload_media_type .}}",
+				},
+				string(metadatadomain.OperationCreate): {
+					ContentType: "{{payload_media_type .}}",
+				},
+			},
 		},
 	)
 
@@ -48,7 +56,11 @@ func TestRenderResourceMetadataInfersTextPayloadDescriptorForTemplates(t *testin
 		metadatadomain.DefaultResourceMetadata(),
 		metadatadomain.ResourceMetadata{
 			Operations: map[string]metadatadomain.OperationSpec{
+				string(metadatadomain.OperationGet): {
+					Accept: "{{payload_media_type .}}",
+				},
 				string(metadatadomain.OperationCreate): {
+					ContentType: "{{payload_media_type .}}",
 					Headers: map[string]string{
 						"X-Content-Type": "{{index . \"contentType\"}}",
 					},
@@ -89,6 +101,7 @@ func TestRenderResourceMetadataWithDescriptorPreservesExplicitPayloadExtension(t
 		metadatadomain.ResourceMetadata{
 			Operations: map[string]metadatadomain.OperationSpec{
 				string(metadatadomain.OperationGet): {
+					Accept: "{{payload_media_type .}}",
 					Query: map[string]string{
 						"extension": "{{payload_extension .}}",
 					},

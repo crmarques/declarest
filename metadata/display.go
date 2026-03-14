@@ -12,8 +12,7 @@ type displayResourceWire struct {
 	Alias                  string                             `json:"alias" yaml:"alias"`
 	RequiredAttributes     []string                           `json:"requiredAttributes" yaml:"requiredAttributes"`
 	RemoteCollectionPath   string                             `json:"remoteCollectionPath" yaml:"remoteCollectionPath"`
-	PayloadType            string                             `json:"payloadType" yaml:"payloadType"`
-	DefaultFormat          string                             `json:"defaultFormat" yaml:"defaultFormat"`
+	Format                 string                             `json:"format" yaml:"format"`
 	Defaults               displayDefaultsSpec                `json:"defaults" yaml:"defaults"`
 	Secret                 bool                               `json:"secret" yaml:"secret"`
 	SecretAttributes       []string                           `json:"secretAttributes" yaml:"secretAttributes"`
@@ -90,8 +89,7 @@ func DisplayResourceMetadataView(value ResourceMetadata) displayResourceMetadata
 			Alias:                  expanded.Alias,
 			RequiredAttributes:     cloneStringSliceOrEmpty(expanded.RequiredAttributes),
 			RemoteCollectionPath:   expanded.RemoteCollectionPath,
-			PayloadType:            expanded.PayloadType,
-			DefaultFormat:          expanded.DefaultFormat,
+			Format:                 expanded.Format,
 			Defaults:               displayDefaults(expanded.Defaults),
 			Secret:                 expanded.IsWholeResourceSecret(),
 			SecretAttributes:       cloneStringSliceOrEmpty(expanded.SecretAttributes),

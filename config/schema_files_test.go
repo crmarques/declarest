@@ -86,11 +86,15 @@ func TestMachineReadableSchemasRemainParseableAndWired(t *testing.T) {
 	if _, ok := resourceProperties["alias"]; !ok {
 		t.Fatal("expected metadata resource schema to define alias")
 	}
-	if _, ok := resourceProperties["defaultFormat"]; !ok {
-		t.Fatal("expected metadata resource schema to define defaultFormat")
+	if _, ok := resourceProperties["format"]; !ok {
+		t.Fatal("expected metadata resource schema to define format")
 	}
 	if _, ok := resourceProperties["externalizedAttributes"]; !ok {
 		t.Fatal("expected metadata resource schema to define externalizedAttributes")
+	}
+	preferencesDef := objectProperty(t, contextDefs, "preferences")
+	if _, ok := preferencesDef["properties"]; ok {
+		t.Fatalf("expected context preferences schema to avoid documented format-specific properties, got %#v", preferencesDef["properties"])
 	}
 }
 

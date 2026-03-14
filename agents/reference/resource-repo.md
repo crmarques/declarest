@@ -75,7 +75,7 @@ Policy contracts:
 2. Simultaneous metadata and resource path updates in one operation.
 3. Empty collection list with metadata present.
 4. Reset requested with uncommitted local changes.
-5. Existing payload suffix is unknown but metadata `payloadType` still resolves runtime behavior.
+5. Existing payload suffix is unknown but concrete metadata `resource.format` still resolves runtime behavior.
 6. Opaque file input uses an unknown suffix (for example `.key`) and persistence keeps `resource.key` with octet-stream semantics instead of rewriting to `resource.bin`.
 7. Whole-resource secret saves keep the original payload suffix while replacing the repository payload with an exact root placeholder.
 8. Auto-commit-enabled CLI repository mutations run while unrelated git worktree changes are present.

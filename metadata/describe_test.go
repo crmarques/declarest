@@ -10,7 +10,7 @@ func TestDescribeResourceBasicMetadata(t *testing.T) {
 	md := ResourceMetadata{
 		ID:                   "{{/id}}",
 		Alias:                "{{/clientId}}",
-		PayloadType:          "json",
+		Format:               "json",
 		RemoteCollectionPath: "/admin/realms/{{/realm}}/clients",
 		Operations: map[string]OperationSpec{
 			"get":    {Method: "GET", Path: "/admin/realms/{{/realm}}/clients/{{/clientId}}"},
@@ -32,8 +32,8 @@ func TestDescribeResourceBasicMetadata(t *testing.T) {
 	if desc.Identity.ID != "{{/id}}" {
 		t.Fatalf("expected identity id, got %q", desc.Identity.ID)
 	}
-	if desc.PayloadType != "json" {
-		t.Fatalf("expected payload type json, got %q", desc.PayloadType)
+	if desc.Format != "json" {
+		t.Fatalf("expected format json, got %q", desc.Format)
 	}
 	if len(desc.Operations) != 5 {
 		t.Fatalf("expected 5 operations, got %d", len(desc.Operations))
@@ -412,8 +412,8 @@ func TestDescribeResourceNoOpenAPI(t *testing.T) {
 	t.Parallel()
 
 	md := ResourceMetadata{
-		ID:          "{{/id}}",
-		PayloadType: "json",
+		ID:     "{{/id}}",
+		Format: "json",
 		Operations: map[string]OperationSpec{
 			"get": {Method: "GET", Path: "/api/items/{{/id}}"},
 		},

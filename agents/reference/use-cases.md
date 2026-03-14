@@ -773,11 +773,11 @@ Expected outputs:
 Failure expectation:
 1. If the runtime validates only the transformed outgoing body or allows the missing alias to pass, the contract is breached.
 
-### Example 35: Collection Save With `resource.defaultFormat: any`
+### Example 35: Collection Save With `resource.format: any`
 Goal: preserve mixed child payload formats during one collection save.
 
 Inputs:
-1. Collection metadata at `/customers/_` with `resource.defaultFormat: any`.
+1. Collection metadata at `/customers/_` with `resource.format: any`.
 2. Incoming collection payload whose items resolve to `/customers/acme` and `/customers/beta`.
 3. Existing repository state where `/customers/acme/resource.yaml` already exists and `/customers/beta/resource.json` already exists, or item descriptors explicitly identify different formats.
 
@@ -791,7 +791,7 @@ Expected outputs:
 2. Collection save succeeds without rewriting both children to one shared suffix.
 
 Failure expectation:
-1. If one collection-level descriptor rewrites every child to the same suffix despite `defaultFormat: any`, the contract is breached.
+1. If one collection-level descriptor rewrites every child to the same suffix despite `format: any`, the contract is breached.
 
 ### Example 36: Metadata View vs Rendered Metadata Snapshot
 Goal: keep `resource metadata get` and `resource get --show-metadata` boundaries explicit for payload-aware helper tokens.
@@ -808,6 +808,24 @@ Expected outputs:
 1. `resource metadata get` prints the canonical metadata view with helper placeholders still present.
 2. `resource get --show-metadata` prints a rendered metadata snapshot where payload-aware helper tokens resolve from the active descriptor (for example `text/plain`, `application/octet-stream`, or an explicit extension-backed descriptor).
 3. Non-payload templates that still depend on unresolved payload fields remain untouched in `resource metadata get`.
+
+### Example 37: Repo-Local Metadata Overlay Overrides Shared Metadata
+Goal: let repository-local metadata refine bundle or shared metadata without mutating the shared source.
+
+Inputs:
+1. Shared metadata source defines `/customers/_/metadata.yaml` with `resource.id: "{{/id}}"` and `resource.format: yaml`.
+2. Repository-local overlay defines `/customers/acme/metadata.yaml` with `resource.alias: "{{/name}}"` and `resource.format: json`.
+
+Execution:
+1. Runtime resolves metadata for `/customers/acme`.
+2. User edits metadata for `/customers/acme` through `resource metadata set` or `resource metadata edit`.
+
+Expected outputs:
+1. Resolved metadata keeps `resource.id` from the shared source and overrides `resource.alias` plus `resource.format` from the repo-local overlay.
+2. Metadata mutation writes only the repo-local sidecar and leaves the shared metadata source unchanged.
+
+Failure expectation:
+1. If resolution ignores the repo-local override or metadata mutation rewrites the shared bundle/base-dir source, the contract is breached.
 
 Failure expectation:
 1. If `resource metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.

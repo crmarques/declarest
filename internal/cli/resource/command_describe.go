@@ -127,10 +127,10 @@ func renderDescribeText(w io.Writer, desc metadata.ResourceDescription) error {
 		}
 	}
 
-	if desc.PayloadType != "" || desc.CollectionPath != "" {
+	if desc.Format != "" || desc.CollectionPath != "" {
 		fmt.Fprintf(w, "\nMetadata\n")
-		if desc.PayloadType != "" {
-			fmt.Fprintf(w, "  payload type: %s\n", desc.PayloadType)
+		if desc.Format != "" {
+			fmt.Fprintf(w, "  format:       %s\n", desc.Format)
 		}
 		if desc.CollectionPath != "" {
 			fmt.Fprintf(w, "  collection:   %s\n", desc.CollectionPath)

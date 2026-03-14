@@ -14,16 +14,13 @@ import (
 
 func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 	resolvedPayloadType := ""
-	if strings.TrimSpace(metadata.PayloadType) != "" {
-		payloadType, err := metadatadomain.ValidateResourceFormat(metadata.PayloadType)
+	if strings.TrimSpace(metadata.Format) != "" {
+		payloadType, err := metadatadomain.ValidateResourceFormat(metadata.Format)
 		if err != nil {
 			return err
 		}
-		resolvedPayloadType = payloadType
-	}
-	if strings.TrimSpace(metadata.DefaultFormat) != "" {
-		if _, err := metadatadomain.ValidateResourceDefaultFormat(metadata.DefaultFormat); err != nil {
-			return err
+		if !metadatadomain.ResourceFormatAllowsMixedItems(payloadType) {
+			resolvedPayloadType = payloadType
 		}
 	}
 	if err := metadatadomain.ValidateDefaultsSpec(metadata.Defaults); err != nil {
@@ -181,7 +178,7 @@ func validateStructuredPayloadDirectives(
 			}
 		}
 	}
-	if strings.TrimSpace(payloadType) == "" || payloadType == metadatadomain.NormalizeResourceFormat("json") || payloadType == metadatadomain.NormalizeResourceFormat("yaml") {
+	if strings.TrimSpace(payloadType) == "" || resource.IsStructuredPayloadType(payloadType) {
 		return nil
 	}
 	if len(mutations) == 0 && validate == nil {

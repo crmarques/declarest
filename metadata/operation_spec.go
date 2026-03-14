@@ -258,8 +258,7 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 		Alias:                  inferred.Alias,
 		RequiredAttributes:     cloneStringSlice(inferred.RequiredAttributes),
 		RemoteCollectionPath:   inferred.RemoteCollectionPath,
-		PayloadType:            inferred.PayloadType,
-		DefaultFormat:          inferred.DefaultFormat,
+		Format:                 inferred.Format,
 		Secret:                 cloneBoolPointer(inferred.Secret),
 		SecretAttributes:       cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
@@ -274,8 +273,8 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 	if strings.TrimSpace(compact.RemoteCollectionPath) == strings.TrimSpace(defaults.RemoteCollectionPath) {
 		compact.RemoteCollectionPath = ""
 	}
-	if strings.TrimSpace(compact.PayloadType) == strings.TrimSpace(defaults.PayloadType) {
-		compact.PayloadType = ""
+	if strings.TrimSpace(compact.Format) == strings.TrimSpace(defaults.Format) {
+		compact.Format = ""
 	}
 
 	return compact, nil

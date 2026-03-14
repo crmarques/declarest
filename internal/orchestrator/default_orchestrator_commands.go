@@ -379,12 +379,14 @@ func (r *Orchestrator) resolveComparedPayloads(
 		payloadType = strings.TrimSpace(resolvedResource.PayloadDescriptor.PayloadType)
 	}
 	if payloadType == "" {
-		payloadType = strings.TrimSpace(resourceMd.PayloadType)
+		if format := metadata.NormalizeResourceFormat(resourceMd.Format); format != "" && !metadata.ResourceFormatAllowsMixedItems(format) {
+			payloadType = format
+		}
 	}
 	if payloadType == "" {
 		payloadType = resource.PayloadTypeJSON
 	}
-	payloadType, payloadTypeErr := metadata.ValidateResourceFormat(payloadType)
+	payloadType, payloadTypeErr := metadata.ValidateConcreteResourceFormat(payloadType)
 	if payloadTypeErr != nil {
 		return nil, nil, payloadTypeErr
 	}
@@ -447,8 +449,10 @@ func compareInputForWholeResourceOpaquePayload(
 	descriptor resource.PayloadDescriptor,
 ) resource.Value {
 	resolved := descriptor
-	if !resource.IsPayloadDescriptorExplicit(resolved) && strings.TrimSpace(resourceMd.PayloadType) != "" {
-		resolved = resource.PayloadDescriptor{PayloadType: resourceMd.PayloadType}
+	if !resource.IsPayloadDescriptorExplicit(resolved) {
+		if format := metadata.NormalizeResourceFormat(resourceMd.Format); format != "" && !metadata.ResourceFormatAllowsMixedItems(format) {
+			resolved = resource.PayloadDescriptor{PayloadType: format}
+		}
 	}
 	resolved = resource.NormalizePayloadDescriptor(resolved)
 	input := map[string]any{}

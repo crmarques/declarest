@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/crmarques/declarest/config"
@@ -51,9 +52,15 @@ func buildOrchestratorFromResolvedContext(
 		return nil, err
 	}
 
+	repoBaseDir := resolvedRepositoryBaseDir(resolvedContext)
 	var metadataService metadata.MetadataService
 	if metadataSource.BaseDir != "" {
-		metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
+		switch {
+		case repoBaseDir != "" && filepath.Clean(repoBaseDir) != filepath.Clean(metadataSource.BaseDir):
+			metadataService = fsmetadata.NewLayeredFSMetadataService(metadataSource.BaseDir, repoBaseDir)
+		default:
+			metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
+		}
 		if strings.TrimSpace(metadataSource.DeprecatedWarning) != "" {
 			_, _ = fmt.Fprintf(os.Stderr, "warning: %s\n", metadataSource.DeprecatedWarning)
 		}
@@ -62,15 +69,9 @@ func buildOrchestratorFromResolvedContext(
 	var repo repository.ResourceStore
 	switch {
 	case resolvedContext.Repository.Filesystem != nil:
-		repo = fsstore.NewLocalResourceRepository(
-			resolvedContext.Repository.Filesystem.BaseDir,
-			metadataSource.BaseDir,
-		)
+		repo = fsstore.NewLocalResourceRepository(resolvedContext.Repository.Filesystem.BaseDir)
 	case resolvedContext.Repository.Git != nil:
-		repo = gitrepository.NewGitResourceRepository(
-			*resolvedContext.Repository.Git,
-			metadataSource.BaseDir,
-		)
+		repo = gitrepository.NewGitResourceRepository(*resolvedContext.Repository.Git)
 	}
 
 	var srv managedserver.ManagedServerClient
@@ -116,17 +117,11 @@ func buildOrchestratorFromResolvedContext(
 		}
 	}
 
-	var orchestratorOpts []internalorchestrator.Option
-	if preferredFormat := resolvePreferredFormat(metadataSource, resolvedContext); preferredFormat != "" {
-		orchestratorOpts = append(orchestratorOpts, internalorchestrator.WithDefaultFormat(preferredFormat))
-	}
-
 	return internalorchestrator.New(
 		repo,
 		metadataService,
 		srv,
 		sec,
-		orchestratorOpts...,
 	), nil
 }
 
@@ -140,18 +135,18 @@ func effectiveOpenAPISource(configOpenAPI string, metadataOpenAPI string) string
 type metadataSourceResolution struct {
 	BaseDir           string
 	OpenAPI           string
-	PreferredFormat   string
 	DeprecatedWarning string
 }
 
-// resolvePreferredFormat returns the effective preferred format for the
-// orchestrator. Context preferences override the bundle manifest value.
-func resolvePreferredFormat(metadataSource metadataSourceResolution, ctx config.Context) string {
-	candidate := strings.TrimSpace(metadataSource.PreferredFormat)
-	if contextPref := strings.TrimSpace(ctx.Preferences["preferredFormat"]); contextPref != "" {
-		candidate = contextPref
+func resolvedRepositoryBaseDir(ctx config.Context) string {
+	switch {
+	case ctx.Repository.Filesystem != nil:
+		return strings.TrimSpace(ctx.Repository.Filesystem.BaseDir)
+	case ctx.Repository.Git != nil:
+		return strings.TrimSpace(ctx.Repository.Git.Local.BaseDir)
+	default:
+		return ""
 	}
-	return candidate
 }
 
 func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
@@ -207,7 +202,6 @@ func resolveMetadataSource(ctx context.Context, context config.Context) (metadat
 		return metadataSourceResolution{
 			BaseDir:           resolution.MetadataDir,
 			OpenAPI:           resolution.OpenAPI,
-			PreferredFormat:   strings.TrimSpace(resolution.Manifest.Declarest.PreferredFormat),
 			DeprecatedWarning: resolution.DeprecatedWarning,
 		}, nil
 	}

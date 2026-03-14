@@ -30,7 +30,7 @@ func (g *Client) validateOperationPayload(
 	if descriptor := unwrapContentDescriptor(spec.Body); resource.IsPayloadDescriptorExplicit(descriptor) {
 		payloadType = resource.NormalizePayloadDescriptor(descriptor).PayloadType
 	}
-	if strings.TrimSpace(md.PayloadType) == "" {
+	if strings.TrimSpace(md.Format) == "" || metadata.ResourceFormatAllowsMixedItems(md.Format) {
 		if inferred, ok := resource.PayloadTypeForMediaType(spec.ContentType); ok {
 			payloadType = inferred
 		}

@@ -189,11 +189,11 @@ func TestResolveOperationSpecWithScopeSupportsPayloadTemplateFunc(t *testing.T) 
 		if err != nil {
 			t.Fatalf("ResolveOperationSpecWithScope returned error: %v", err)
 		}
-		if spec.Accept != "application/json" {
-			t.Fatalf("expected accept application/json, got %q", spec.Accept)
+		if spec.Accept != "" {
+			t.Fatalf("expected empty accept without concrete payload context, got %q", spec.Accept)
 		}
-		if spec.ContentType != "application/json" {
-			t.Fatalf("expected contentType application/json, got %q", spec.ContentType)
+		if spec.ContentType != "application/" {
+			t.Fatalf("expected contentType template to render without payload_type fallback, got %q", spec.ContentType)
 		}
 	})
 
@@ -652,7 +652,7 @@ func TestInferFromOpenAPISetsOperationValidationFromRequestBodySchema(t *testing
 	}
 }
 
-func TestInferFromOpenAPIInfersOctetStreamPayloadType(t *testing.T) {
+func TestInferFromOpenAPIInfersOctetStreamFormat(t *testing.T) {
 	t.Parallel()
 
 	openAPISpec := map[string]any{
@@ -722,11 +722,8 @@ func TestInferFromOpenAPIInfersOctetStreamPayloadType(t *testing.T) {
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
 
-	if inferred.PayloadType != resource.PayloadTypeOctetStream {
-		t.Fatalf("expected octet-stream payload type, got %q", inferred.PayloadType)
-	}
-	if inferred.DefaultFormat != resource.PayloadTypeOctetStream {
-		t.Fatalf("expected octet-stream defaultFormat, got %q", inferred.DefaultFormat)
+	if inferred.Format != resource.PayloadTypeOctetStream {
+		t.Fatalf("expected octet-stream format, got %q", inferred.Format)
 	}
 	if inferred.Operations[string(OperationCreate)].Validate != nil {
 		t.Fatalf("expected binary create validation to be omitted, got %#v", inferred.Operations[string(OperationCreate)].Validate)
@@ -873,7 +870,7 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIValidationDefaults(t *testin
 	}
 }
 
-func TestCompactInferredMetadataDefaultsOmitsOpenAPIPayloadTypeDefaults(t *testing.T) {
+func TestCompactInferredMetadataDefaultsOmitsOpenAPIFormatDefaults(t *testing.T) {
 	t.Parallel()
 
 	openAPISpec := map[string]any{
@@ -948,12 +945,12 @@ func TestCompactInferredMetadataDefaultsOmitsOpenAPIPayloadTypeDefaults(t *testi
 		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
 	}
 
-	if compact.PayloadType != "" {
-		t.Fatalf("expected inferred payloadType default to be omitted, got %q", compact.PayloadType)
+	if compact.Format != "" {
+		t.Fatalf("expected inferred format default to be omitted, got %q", compact.Format)
 	}
 }
 
-func TestInferFromOpenAPISpecUsesAnyDefaultFormatForMixedPayloadTypes(t *testing.T) {
+func TestInferFromOpenAPISpecUsesAnyFormatForMixedPayloadTypes(t *testing.T) {
 	t.Parallel()
 
 	openAPISpec := map[string]any{
@@ -1021,25 +1018,22 @@ func TestInferFromOpenAPISpecUsesAnyDefaultFormatForMixedPayloadTypes(t *testing
 	if err != nil {
 		t.Fatalf("InferFromOpenAPISpec returned error: %v", err)
 	}
-	if inferred.PayloadType != "" {
-		t.Fatalf("expected mixed payload types to omit payloadType, got %q", inferred.PayloadType)
-	}
-	if inferred.DefaultFormat != ResourceDefaultFormatAny {
-		t.Fatalf("expected mixed payload types to infer defaultFormat any, got %q", inferred.DefaultFormat)
+	if inferred.Format != ResourceFormatAny {
+		t.Fatalf("expected mixed payload types to infer format any, got %q", inferred.Format)
 	}
 }
 
-func TestCompactInferredMetadataDefaultsPreservesDefaultFormat(t *testing.T) {
+func TestCompactInferredMetadataDefaultsPreservesFormat(t *testing.T) {
 	t.Parallel()
 
 	compact, err := CompactInferredMetadataDefaults("/admin/realms", ResourceMetadata{
-		DefaultFormat: "yaml",
+		Format: "yaml",
 	}, nil)
 	if err != nil {
 		t.Fatalf("CompactInferredMetadataDefaults returned error: %v", err)
 	}
-	if compact.DefaultFormat != "yaml" {
-		t.Fatalf("expected defaultFormat yaml, got %#v", compact.DefaultFormat)
+	if compact.Format != "yaml" {
+		t.Fatalf("expected format yaml, got %#v", compact.Format)
 	}
 }
 

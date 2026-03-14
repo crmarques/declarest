@@ -57,20 +57,7 @@
         }
       ]
     },
-    "payloadType": {
-      "type": "string",
-      "enum": [
-        "json",
-        "yaml",
-        "xml",
-        "hcl",
-        "ini",
-        "properties",
-        "text",
-        "octet-stream"
-      ]
-    },
-    "defaultFormat": {
+    "resourceFormat": {
       "type": "string",
       "enum": [
         "json",
@@ -277,11 +264,8 @@
           "type": "string",
           "description": "Template string that can render metadata scope attributes using canonical JSON Pointer placeholders such as {{/realm}} or one-level shorthand such as {{realm}}."
         },
-        "payloadType": {
-          "$ref": "#/$defs/payloadType"
-        },
-        "defaultFormat": {
-          "$ref": "#/$defs/defaultFormat"
+        "format": {
+          "$ref": "#/$defs/resourceFormat"
         },
         "defaults": {
           "$ref": "#/$defs/defaultsSpec"
@@ -327,19 +311,17 @@
         {
           "if": {
             "properties": {
-              "payloadType": {
+              "format": {
                 "enum": [
                   "xml",
                   "hcl",
-                  "ini",
-                  "properties",
                   "text",
                   "octet-stream"
                 ]
               }
             },
             "required": [
-              "payloadType"
+              "format"
             ]
           },
           "then": {

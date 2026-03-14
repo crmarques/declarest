@@ -10,68 +10,73 @@ import (
 	"github.com/crmarques/declarest/resource"
 )
 
-const ResourceDefaultFormatAny = "any"
+const ResourceFormatAny = "any"
 
-// NormalizeResourceFormat normalizes payload types for internal callers that
-// still use the historical helper name.
 func NormalizeResourceFormat(value string) string {
-	return resource.NormalizePayloadType(value)
-}
-
-// ValidateResourceFormat validates payload types for internal callers that
-// still use the historical helper name.
-func ValidateResourceFormat(value string) (string, error) {
-	return resource.ValidatePayloadType(value)
-}
-
-func ResourceFormatMediaType(value string) (string, error) {
-	format, err := ValidateResourceFormat(value)
-	if err != nil {
-		return "", err
-	}
-	return resource.PayloadMediaType(format)
-}
-
-func ResourceFormatExtension(value string) (string, error) {
-	format, err := ValidateResourceFormat(value)
-	if err != nil {
-		return "", err
-	}
-	return resource.PayloadExtension(format)
-}
-
-func NormalizeResourceDefaultFormat(value string) string {
 	trimmed := strings.ToLower(strings.TrimSpace(value))
 	switch trimmed {
 	case "":
 		return ""
-	case ResourceDefaultFormatAny:
-		return ResourceDefaultFormatAny
+	case ResourceFormatAny:
+		return ResourceFormatAny
 	default:
 		return resource.NormalizePayloadType(trimmed)
 	}
 }
 
-func ValidateResourceDefaultFormat(value string) (string, error) {
-	normalized := NormalizeResourceDefaultFormat(value)
+func ValidateResourceFormat(value string) (string, error) {
+	normalized := NormalizeResourceFormat(value)
 	if normalized == "" {
 		return "", nil
 	}
-	if normalized == ResourceDefaultFormatAny {
+	if normalized == ResourceFormatAny {
 		return normalized, nil
 	}
-	return ValidateResourceFormat(normalized)
+	return resource.ValidatePayloadType(normalized)
 }
 
-func ResourceDefaultFormatAllowsMixedItems(value string) bool {
-	return NormalizeResourceDefaultFormat(value) == ResourceDefaultFormatAny
+func ValidateConcreteResourceFormat(value string) (string, error) {
+	format, err := ValidateResourceFormat(value)
+	if err != nil {
+		return "", err
+	}
+	if format == ResourceFormatAny {
+		return "", faults.NewValidationError("resource format must be concrete", nil)
+	}
+	return format, nil
+}
+
+func ResourceFormatMediaType(value string) (string, error) {
+	format, err := ValidateConcreteResourceFormat(value)
+	if err != nil {
+		return "", err
+	}
+	if format == "" {
+		return "", nil
+	}
+	return resource.PayloadMediaType(format)
+}
+
+func ResourceFormatExtension(value string) (string, error) {
+	format, err := ValidateConcreteResourceFormat(value)
+	if err != nil {
+		return "", err
+	}
+	if format == "" {
+		return "", nil
+	}
+	return resource.PayloadExtension(format)
+}
+
+func ResourceFormatAllowsMixedItems(value string) bool {
+	return NormalizeResourceFormat(value) == ResourceFormatAny
 }
 
 func EffectivePayloadType(metadata ResourceMetadata, fallback string) (string, error) {
-	if strings.TrimSpace(metadata.PayloadType) != "" {
-		return ValidateResourceFormat(metadata.PayloadType)
+	if format := NormalizeResourceFormat(metadata.Format); format != "" && format != ResourceFormatAny {
+		return ValidateConcreteResourceFormat(format)
 	}
-	return ValidateResourceFormat(fallback)
+	return resource.ValidatePayloadType(fallback)
 }
 
 func ResolveTemplatePayloadDescriptor(
@@ -83,8 +88,10 @@ func ResolveTemplatePayloadDescriptor(
 	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
 		activeDescriptor = explicitDescriptorFromPayloadValue(payload)
 	}
-	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) && strings.TrimSpace(metadata.PayloadType) != "" {
-		activeDescriptor = resource.PayloadDescriptor{PayloadType: metadata.PayloadType}
+	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
+		if format := NormalizeResourceFormat(metadata.Format); format != "" && format != ResourceFormatAny {
+			activeDescriptor = resource.PayloadDescriptor{PayloadType: format}
+		}
 	}
 	if !resource.IsPayloadDescriptorExplicit(activeDescriptor) {
 		activeDescriptor = InferPayloadDescriptor(payload)
@@ -171,7 +178,7 @@ func TemplateFuncMap(scope map[string]any) template.FuncMap {
 				candidate = descriptor.PayloadType
 			}
 		}
-		return ValidateResourceFormat(candidate)
+		return ValidateConcreteResourceFormat(candidate)
 	}
 
 	resolveJSONPointer := func(pointer string) (string, error) {

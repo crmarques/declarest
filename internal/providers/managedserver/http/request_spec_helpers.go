@@ -30,7 +30,7 @@ func resolveOperationSpecTemplates(
 
 	templateMetadata := metadata.ResourceMetadata{
 		RemoteCollectionPath: md.RemoteCollectionPath,
-		PayloadType:          md.PayloadType,
+		Format:               md.Format,
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},
@@ -45,15 +45,19 @@ func resolveOperationSpecTemplates(
 }
 
 func (g *Client) metadataPayloadDescriptor(md metadata.ResourceMetadata) resource.PayloadDescriptor {
-	if strings.TrimSpace(md.PayloadType) == "" {
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
+	format := metadata.NormalizeResourceFormat(md.Format)
+	if format == "" || metadata.ResourceFormatAllowsMixedItems(format) {
+		return resource.PayloadDescriptor{}
 	}
 	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{
-		PayloadType: md.PayloadType,
+		PayloadType: format,
 	})
 }
 
 func (g *Client) defaultResourceMediaType(descriptor resource.PayloadDescriptor) (string, error) {
+	if !resource.IsPayloadDescriptorExplicit(descriptor) {
+		return "", faults.NewValidationError("payload descriptor is not concrete", nil)
+	}
 	mediaType := resource.NormalizePayloadDescriptor(descriptor).MediaType
 	if strings.TrimSpace(mediaType) == "" {
 		return "", faults.NewValidationError("invalid payload media type", nil)
@@ -102,6 +106,27 @@ func (g *Client) requestBodyDescriptor(
 		resolvedResource.Payload,
 		resolvedResource.PayloadDescriptor,
 	)
+}
+
+func (g *Client) requestAcceptDescriptor(
+	operation metadata.Operation,
+	resolvedResource resource.Resource,
+	md metadata.ResourceMetadata,
+	bodyDescriptor resource.PayloadDescriptor,
+) resource.PayloadDescriptor {
+	if resource.IsPayloadDescriptorExplicit(resolvedResource.PayloadDescriptor) {
+		return resource.NormalizePayloadDescriptor(resolvedResource.PayloadDescriptor)
+	}
+
+	if descriptor := g.metadataPayloadDescriptor(md); resource.IsPayloadDescriptorExplicit(descriptor) {
+		return descriptor
+	}
+
+	if operationRequiresBody(operation) && resource.IsPayloadDescriptorExplicit(bodyDescriptor) {
+		return resource.NormalizePayloadDescriptor(bodyDescriptor)
+	}
+
+	return resource.PayloadDescriptor{}
 }
 
 func (g *Client) genericRequestBodyDescriptor(requestSpec managedserver.RequestSpec) resource.PayloadDescriptor {

@@ -22,12 +22,12 @@ func TestResolvedMetadataForGetKeepsResolvedMetadataOnlyOverrides(t *testing.T) 
 		metadata metadatadomain.ResourceMetadata
 	}{
 		{
-			name:     "default_format",
-			metadata: metadatadomain.ResourceMetadata{DefaultFormat: "yaml"},
+			name:     "format",
+			metadata: metadatadomain.ResourceMetadata{Format: "yaml"},
 		},
 		{
-			name:     "payload_type",
-			metadata: metadatadomain.ResourceMetadata{PayloadType: "text"},
+			name:     "text_format",
+			metadata: metadatadomain.ResourceMetadata{Format: "text"},
 		},
 		{
 			name:     "required_attributes",
