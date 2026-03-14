@@ -147,10 +147,12 @@ func TestDefaultsInferCommandCheckFailsWhenStoredDefaultsDoNotMatch(t *testing.T
 	}
 }
 
-func TestDefaultsInferCommandRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
+func TestDefaultsInferCommandAcceptsCollectionAndResourcePaths(t *testing.T) {
 	t.Parallel()
 
-	for _, requestedPath := range []string{"/projects", "/projects/"} {
+	tests := []string{"/admin/realms", "/admin/realms/", "/admin/realms/master"}
+
+	for _, requestedPath := range tests {
 		requestedPath := requestedPath
 		t.Run(requestedPath, func(t *testing.T) {
 			t.Parallel()
@@ -159,8 +161,14 @@ func TestDefaultsInferCommandRejectsCollectionPathWithOrWithoutTrailingSlash(t *
 			command := newDefaultsInferCommand(cliutil.CommandDependencies{
 				Orchestrator: &fakeDefaultsCommandOrchestrator{
 					localContent: map[string]resourcedomain.Content{
-						"/projects/platform": {
-							Value: map[string]any{"id": "platform", "name": "platform"},
+						"/admin/realms/acme": {
+							Value: map[string]any{"realm": "acme", "enabled": true, "sslRequired": "external"},
+							Descriptor: resourcedomain.NormalizePayloadDescriptor(
+								resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
+							),
+						},
+						"/admin/realms/master": {
+							Value: map[string]any{"realm": "master", "enabled": true, "sslRequired": "external"},
 							Descriptor: resourcedomain.NormalizePayloadDescriptor(
 								resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
 							),
@@ -171,15 +179,21 @@ func TestDefaultsInferCommandRejectsCollectionPathWithOrWithoutTrailingSlash(t *
 					store:    repo,
 					metadata: fakeEditMetadataService{},
 				},
-			}, &cliutil.GlobalFlags{})
+			}, &cliutil.GlobalFlags{Output: cliutil.OutputJSON})
+			stdout := &bytes.Buffer{}
 			command.SetArgs([]string{requestedPath})
 			command.SetIn(bytes.NewBuffer(nil))
-			command.SetOut(&bytes.Buffer{})
+			command.SetOut(stdout)
 			command.SetErr(&bytes.Buffer{})
 
-			err := command.ExecuteContext(context.Background())
-			if !faults.IsCategory(err, faults.NotFoundError) {
-				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+			if err := command.ExecuteContext(context.Background()); err != nil {
+				t.Fatalf("expected success for %q, got %v", requestedPath, err)
+			}
+			if !strings.Contains(stdout.String(), `"enabled": true`) {
+				t.Fatalf("expected inferred defaults output for %q, got %q", requestedPath, stdout.String())
+			}
+			if !strings.Contains(stdout.String(), `"sslRequired": "external"`) {
+				t.Fatalf("expected inferred defaults output for %q, got %q", requestedPath, stdout.String())
 			}
 		})
 	}

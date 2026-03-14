@@ -221,12 +221,12 @@ Failure expectation:
 Goal: infer compact raw defaults for one repository resource without flattening effective desired state.
 
 Inputs:
-1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
+1. Target collection path `/api/projects/defaults-sandbox/widgets` or target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
 2. Two or more sibling repository resources in `/api/projects/defaults-sandbox/widgets`.
 3. Optional `resource defaults infer --save` or `resource defaults infer --check`.
 
 Execution:
-1. CLI resolves the target to one concrete local repository resource path.
+1. CLI resolves the input to the logical collection `/api/projects/defaults-sandbox/widgets`; collection-path inputs with or without a trailing `/` remain equivalent, and concrete resource inputs still resolve to that same collection.
 2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
 3. `resource defaults infer --save` persists the inferred object to the collection metadata selector `defaults.<ext>` for the target path, reusing the collection resource payload type when it is merge-capable (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` when the widget collection stores `resource.json`).
 4. `resource defaults infer --check` compares the inferred normalized object against the current defaults sidecar and fails when they differ.

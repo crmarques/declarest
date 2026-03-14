@@ -95,61 +95,125 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 	}
 }
 
-func TestInferRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
+func TestInferAcceptsCollectionAndResourcePathsForSameCollection(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
-		"/projects/platform": {
+		"/admin/realms/acme": {
 			Value: map[string]any{
-				"id":      "platform",
-				"name":    "platform",
-				"owner":   "platform-team",
-				"enabled": true,
+				"id":          "acme-id",
+				"realm":       "acme",
+				"enabled":     true,
+				"sslRequired": "external",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"id":          "master-id",
+				"realm":       "master",
+				"enabled":     true,
+				"sslRequired": "external",
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
 	})
 
-	for _, requestedPath := range []string{"/projects", "/projects/"} {
-		requestedPath := requestedPath
-		t.Run(requestedPath, func(t *testing.T) {
-			_, err := Infer(context.Background(), deps, requestedPath, InferRequest{})
-			if !faults.IsCategory(err, faults.NotFoundError) {
-				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+	tests := []struct {
+		name             string
+		requestedPath    string
+		wantResolvedPath string
+	}{
+		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms/acme"},
+		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms/acme"},
+		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms/master"},
+	}
+
+	want := map[string]any{
+		"enabled":     true,
+		"sslRequired": "external",
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := Infer(context.Background(), deps, tc.requestedPath, InferRequest{})
+			if err != nil {
+				t.Fatalf("Infer returned error: %v", err)
+			}
+			if result.ResolvedPath != tc.wantResolvedPath {
+				t.Fatalf("expected resolved path %q, got %q", tc.wantResolvedPath, result.ResolvedPath)
+			}
+			if !reflect.DeepEqual(result.Content.Value, want) {
+				t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.Content.Value, want)
 			}
 		})
 	}
 }
 
-func TestInferManagedServerRejectsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
+func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
-		"/projects/platform": {
+		"/admin/realms/acme": {
 			Value: map[string]any{
-				"id":   "platform",
-				"name": "platform",
+				"realm":                "acme",
+				"displayName":          "acme",
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"realm":                "master",
+				"displayName":          "master",
+				"organizationsEnabled": true,
 			},
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
 	})
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
-	for _, requestedPath := range []string{"/projects", "/projects/"} {
-		requestedPath := requestedPath
-		t.Run(requestedPath, func(t *testing.T) {
-			_, err := Infer(context.Background(), deps, requestedPath, InferRequest{ManagedServer: true})
-			if !faults.IsCategory(err, faults.NotFoundError) {
-				t.Fatalf("expected not found for %q, got %v", requestedPath, err)
+	tests := []struct {
+		name             string
+		requestedPath    string
+		wantResolvedPath string
+	}{
+		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms/acme"},
+		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms/acme"},
+		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms/master"},
+	}
+
+	want := map[string]any{"status": "active"}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := Infer(context.Background(), deps, tc.requestedPath, InferRequest{ManagedServer: true})
+			if err != nil {
+				t.Fatalf("Infer returned error: %v", err)
+			}
+			if result.ResolvedPath != tc.wantResolvedPath {
+				t.Fatalf("expected resolved path %q, got %q", tc.wantResolvedPath, result.ResolvedPath)
+			}
+			if !reflect.DeepEqual(result.Content.Value, want) {
+				t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 			}
 		})
 	}
 
-	if len(orch.createCalls) != 0 {
-		t.Fatalf("expected no temporary creates for collection-path inference, got %#v", orch.createCalls)
+	if len(orch.createCalls) != len(tests)*2 {
+		t.Fatalf("expected %d temporary creates, got %#v", len(tests)*2, orch.createCalls)
 	}
-	if len(orch.deleteCalls) != 0 {
-		t.Fatalf("expected no cleanup deletes for collection-path inference, got %#v", orch.deleteCalls)
+	for idx, call := range orch.createCalls {
+		payload, ok := call.content.Value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", call.content.Value)
+		}
+		tempName := path.Base(call.logicalPath)
+		if got := payload["realm"]; got != tempName {
+			t.Fatalf("expected realm %q for create %d (%q), got %#v", tempName, idx, call.logicalPath, got)
+		}
 	}
 }
 
@@ -203,11 +267,20 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 func TestInferFromManagedServerIgnoresStoredDefaultsSidecarValues(t *testing.T) {
 	t.Parallel()
 
-	deps := testDefaultsDeps()
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/customers/acme": {
+			Value: map[string]any{
+				"id":     "acme",
+				"name":   "acme",
+				"status": "active",
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
 	repo := deps.Repository.(*fakeDefaultsRepository)
 	repo.defaults["/customers/acme"] = resource.Content{
 		Value: map[string]any{
-			"tier": "gold",
+			"status": "active",
 		},
 		Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 	}
@@ -433,14 +506,21 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 	}
 }
 
-func TestInferRejectsCollectionPathWithMultipleDirectChildren(t *testing.T) {
+func TestInferCollectionPathWithMultipleDirectChildrenUsesSharedDefaults(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDeps()
 
-	_, err := Infer(context.Background(), deps, "/customers/", InferRequest{})
-	if !faults.IsCategory(err, faults.NotFoundError) {
-		t.Fatalf("expected not found error, got %v", err)
+	result, err := Infer(context.Background(), deps, "/customers/", InferRequest{})
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"labels": map[string]any{"team": "platform"},
+	}
+	if !reflect.DeepEqual(result.Content.Value, want) {
+		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.Content.Value, want)
 	}
 }
 

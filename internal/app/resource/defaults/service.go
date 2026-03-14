@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -115,7 +116,7 @@ func Save(ctx context.Context, deps Dependencies, logicalPath string, content re
 }
 
 func Infer(ctx context.Context, deps Dependencies, logicalPath string, request InferRequest) (Result, error) {
-	resolvedTarget, err := resolveTarget(ctx, deps, logicalPath)
+	resolvedTarget, err := resolveInferTarget(ctx, deps, logicalPath)
 	if err != nil {
 		return Result{}, err
 	}
@@ -174,6 +175,66 @@ func Check(ctx context.Context, deps Dependencies, logicalPath string, request C
 		CurrentContent:  current.Content,
 		Matches:         reflect.DeepEqual(currentNormalized, inferredNormalized),
 	}, nil
+}
+
+func resolveInferTarget(ctx context.Context, deps Dependencies, logicalPath string) (target, error) {
+	parsedPath, err := resource.ParseRawPathWithOptions(logicalPath, resource.RawPathParseOptions{})
+	if err != nil {
+		return target{}, err
+	}
+	if parsedPath.Normalized == "/" {
+		return target{}, faults.NewValidationError("logical path must target a resource or collection, not root", nil)
+	}
+
+	if !parsedPath.ExplicitCollectionTarget {
+		resolvedTarget, resolveErr := resolveTarget(ctx, deps, parsedPath.Normalized)
+		if resolveErr == nil {
+			return resolvedTarget, nil
+		}
+		if !faults.IsCategory(resolveErr, faults.NotFoundError) {
+			return target{}, resolveErr
+		}
+	}
+
+	collectionTargetPath, err := resolveCollectionInferTargetPath(ctx, deps, parsedPath.Normalized)
+	if err != nil {
+		return target{}, err
+	}
+	return resolveTarget(ctx, deps, collectionTargetPath)
+}
+
+func resolveCollectionInferTargetPath(ctx context.Context, deps Dependencies, collectionPath string) (string, error) {
+	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	if err != nil {
+		return "", err
+	}
+
+	items, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
+	if err != nil {
+		return "", err
+	}
+
+	directChildren := make([]string, 0, len(items))
+	for _, item := range items {
+		candidatePath := strings.TrimSpace(item.LogicalPath)
+		if candidatePath == "" {
+			continue
+		}
+		if _, ok := resource.ChildSegment(collectionPath, candidatePath); !ok {
+			continue
+		}
+		directChildren = append(directChildren, candidatePath)
+	}
+	if len(directChildren) == 0 {
+		return "", faults.NewTypedError(
+			faults.NotFoundError,
+			fmt.Sprintf("resource %q not found", collectionPath),
+			nil,
+		)
+	}
+
+	sort.Strings(directChildren)
+	return directChildren[0], nil
 }
 
 func CompactContentAgainstStoredDefaults(
@@ -490,11 +551,47 @@ func inferFromManagedServer(
 	}
 
 	inputs := []resource.Value{
-		resolveSecretsForManagedServerProbe(ctx, deps.SecretProvider(), firstPath, firstPayload),
-		resolveSecretsForManagedServerProbe(ctx, deps.SecretProvider(), secondPath, secondPayload),
+		nil,
+		nil,
+	}
+	inputs[0], err = managedServerProbeInputValue(ctx, deps, resolvedTarget, firstPath, firstPayload)
+	if err != nil {
+		return nil, err
+	}
+	inputs[1], err = managedServerProbeInputValue(ctx, deps, resolvedTarget, secondPath, secondPayload)
+	if err != nil {
+		return nil, err
 	}
 	outputs := []resource.Value{firstRemote.Value, secondRemote.Value}
 	return resource.InferCreatedDefaults(inputs, outputs)
+}
+
+func managedServerProbeInputValue(
+	ctx context.Context,
+	deps Dependencies,
+	resolvedTarget target,
+	logicalPath string,
+	content resource.Content,
+) (resource.Value, error) {
+	inputValue := resolveSecretsForManagedServerProbe(ctx, deps.SecretProvider(), logicalPath, content)
+	if !resolvedTarget.defaultsFound {
+		return inputValue, nil
+	}
+
+	defaultsValue := resolveSecretsForManagedServerProbe(
+		ctx,
+		deps.SecretProvider(),
+		resolvedTarget.logicalPath,
+		resolvedTarget.defaultsContent,
+	)
+	compacted, err := resource.CompactAgainstDefaults(inputValue, defaultsValue)
+	if err != nil {
+		return nil, err
+	}
+	if compacted == nil {
+		return map[string]any{}, nil
+	}
+	return compacted, nil
 }
 
 func invalidateManagedServerAuthCache(deps Dependencies) {

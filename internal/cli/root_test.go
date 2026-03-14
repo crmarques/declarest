@@ -179,6 +179,42 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 	})
 }
 
+func TestResourceDefaultsInferManagedServerIgnoresSavedDefaultsInProbeInput(t *testing.T) {
+	t.Parallel()
+
+	metadataService := newTestMetadata()
+	orchestrator := &testOrchestrator{
+		metadataService: metadataService,
+		getLocalValues: map[string]resource.Value{
+			"/customers/acme": map[string]any{
+				"id":     "acme",
+				"name":   "acme",
+				"status": "active",
+			},
+		},
+		getRemoteValue: map[string]any{"status": "active"},
+	}
+	deps := testDepsWith(orchestrator, metadataService)
+	deps.Services.(*testServiceAccessor).store.(*testRepository).defaults = map[string]resource.Content{
+		"/customers/acme": testContent(map[string]any{"status": "active"}),
+	}
+
+	output, err := executeForTest(
+		deps,
+		"",
+		"resource", "defaults", "infer",
+		"/customers/acme",
+		"--managed-server",
+		"--yes",
+	)
+	if err != nil {
+		t.Fatalf("unexpected managed-server defaults infer error: %v", err)
+	}
+	if !strings.Contains(output, "\"status\": \"active\"") {
+		t.Fatalf("expected managed-server defaults output, got %q", output)
+	}
+}
+
 func TestMissingPositionalParameterValidationPrintsUsage(t *testing.T) {
 	t.Parallel()
 
