@@ -9,6 +9,7 @@ import (
 
 var _ metadatadomain.MetadataService = (*FSMetadataService)(nil)
 var _ metadatadomain.ResourceOperationSpecRenderer = (*FSMetadataService)(nil)
+var _ metadatadomain.DefaultsArtifactStore = (*FSMetadataService)(nil)
 
 type metadataPathKind int
 

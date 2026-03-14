@@ -43,7 +43,7 @@ func MergeWithDefaults(defaults Value, overrides Value) (Value, error) {
 	}
 	defaultObject, ok := normalizedDefaults.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("defaults sidecar requires a structured object payload", nil)
+		return nil, faults.NewValidationError("resource defaults require a structured object payload", nil)
 	}
 
 	if overrides == nil {
@@ -56,7 +56,7 @@ func MergeWithDefaults(defaults Value, overrides Value) (Value, error) {
 	}
 	overrideObject, ok := normalizedOverrides.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("resource payload overrides must be a structured object when defaults sidecar is present", nil)
+		return nil, faults.NewValidationError("resource payload overrides must be a structured object when resource defaults are present", nil)
 	}
 
 	return Normalize(mergeObjectWithDefaults(defaultObject, overrideObject))
@@ -73,7 +73,7 @@ func CompactAgainstDefaults(value Value, defaults Value) (Value, error) {
 	}
 	defaultObject, ok := normalizedDefaults.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("defaults sidecar requires a structured object payload", nil)
+		return nil, faults.NewValidationError("resource defaults require a structured object payload", nil)
 	}
 
 	if value == nil {
@@ -86,7 +86,7 @@ func CompactAgainstDefaults(value Value, defaults Value) (Value, error) {
 	}
 	valueObject, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return nil, faults.NewValidationError("effective payload must be a structured object when defaults sidecar is present", nil)
+		return nil, faults.NewValidationError("effective payload must be a structured object when resource defaults are present", nil)
 	}
 
 	compacted := compactObjectAgainstDefaults(valueObject, defaultObject)
@@ -101,7 +101,7 @@ func ValidateDefaultsSidecarDescriptor(defaults PayloadDescriptor, overrides Pay
 	if !SupportsDefaultsOverlayPayloadType(resolvedDefaults.PayloadType) {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"defaults sidecar requires merge-capable payload type (json, yaml, ini, properties); got %q",
+				"resource defaults require merge-capable payload type (json, yaml, ini, properties); got %q",
 				resolvedDefaults.PayloadType,
 			),
 			nil,
@@ -116,7 +116,7 @@ func ValidateDefaultsSidecarDescriptor(defaults PayloadDescriptor, overrides Pay
 	if !defaultsOverlayPayloadTypesCompatible(resolvedDefaults.PayloadType, resolvedOverrides.PayloadType) {
 		return faults.NewValidationError(
 			fmt.Sprintf(
-				"defaults sidecar payload type %q does not match resource payload type %q",
+				"resource defaults payload type %q does not match resource payload type %q",
 				resolvedDefaults.PayloadType,
 				resolvedOverrides.PayloadType,
 			),
@@ -206,7 +206,7 @@ func InferCreatedDefaults(inputs []Value, outputs []Value) (Value, error) {
 
 func ValidateDefaultsSidecarValue(defaults Value) error {
 	if defaults == nil {
-		return faults.NewValidationError("defaults sidecar requires a structured object payload", nil)
+		return faults.NewValidationError("resource defaults require a structured object payload", nil)
 	}
 
 	normalizedDefaults, err := Normalize(defaults)
@@ -214,7 +214,7 @@ func ValidateDefaultsSidecarValue(defaults Value) error {
 		return err
 	}
 	if _, ok := normalizedDefaults.(map[string]any); !ok {
-		return faults.NewValidationError("defaults sidecar requires a structured object payload", nil)
+		return faults.NewValidationError("resource defaults require a structured object payload", nil)
 	}
 	return nil
 }

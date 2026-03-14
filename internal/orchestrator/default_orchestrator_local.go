@@ -29,6 +29,14 @@ func (r *Orchestrator) resolveLocalResourceForRead(
 
 	content, err := manager.Get(ctx, normalizedPath)
 	if err == nil {
+		resolvedMetadata, metadataErr := r.resolveMetadataForPath(ctx, normalizedPath, true)
+		if metadataErr != nil {
+			return resource.Resource{}, metadataErr
+		}
+		content, _, metadataErr = mergeContentWithMetadataDefaults(content, resolvedMetadata)
+		if metadataErr != nil {
+			return resource.Resource{}, metadataErr
+		}
 		normalizedValue, normalizeErr := resource.Normalize(content.Value)
 		if normalizeErr != nil {
 			return resource.Resource{}, normalizeErr
@@ -119,6 +127,10 @@ func (r *Orchestrator) hydrateLocalFallbackCandidate(
 	candidateContent, getErr := manager.Get(ctx, candidate.LogicalPath)
 	if getErr != nil {
 		return resource.Resource{}, getErr
+	}
+	candidateContent, _, defaultsErr := mergeContentWithMetadataDefaults(candidateContent, md)
+	if defaultsErr != nil {
+		return resource.Resource{}, defaultsErr
 	}
 
 	candidateContent, expandErr := r.expandExternalizedPayload(ctx, candidate.LogicalPath, md, candidateContent)

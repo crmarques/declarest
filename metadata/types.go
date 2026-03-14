@@ -23,6 +23,7 @@ type ResourceMetadata struct {
 	RemoteCollectionPath   string                   `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                   `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	DefaultFormat          string                   `json:"defaultFormat,omitempty" yaml:"defaultFormat,omitempty"`
+	Defaults               *DefaultsSpec            `json:"defaults,omitempty" yaml:"defaults,omitempty"`
 	Secret                 *bool                    `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       []string                 `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes []ExternalizedAttribute  `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`

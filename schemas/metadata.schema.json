@@ -84,6 +84,59 @@
         "any"
       ]
     },
+    "defaultsMode": {
+      "type": "string",
+      "enum": [
+        "inherit",
+        "ignore",
+        "replace"
+      ]
+    },
+    "defaultsIncludeValue": {
+      "type": "string",
+      "pattern": "^\\{\\{include defaults(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?\\.(?:yaml|yml|json|properties)\\}\\}$"
+    },
+    "defaultsEntry": {
+      "oneOf": [
+        {
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/defaultsIncludeValue"
+        }
+      ]
+    },
+    "defaultsProfiles": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/defaultsEntry"
+      }
+    },
+    "defaultsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/defaultsMode"
+        },
+        "useProfiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          }
+        },
+        "value": {
+          "$ref": "#/$defs/defaultsEntry"
+        },
+        "profiles": {
+          "$ref": "#/$defs/defaultsProfiles"
+        }
+      }
+    },
     "identityTemplate": {
       "type": "string",
       "description": "Identity template string using canonical JSON Pointer placeholders such as {{/id}}, one-level shorthand such as {{id}}, or raw JSON Pointer shorthand such as /id."
@@ -229,6 +282,9 @@
         },
         "defaultFormat": {
           "$ref": "#/$defs/defaultFormat"
+        },
+        "defaults": {
+          "$ref": "#/$defs/defaultsSpec"
         },
         "secret": {
           "type": "boolean"

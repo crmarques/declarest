@@ -44,18 +44,21 @@ declarest resource get --source repository /corporations/acme
 declarest metadata get /corporations/acme
 ```
 
-### Keep shared values in `defaults.<ext>`
+### Keep shared values in metadata-backed defaults
 
-When many sibling resources share the same object fields, infer a defaults sidecar and keep `resource.<ext>` focused on explicit overrides:
+When many sibling resources share the same object fields, infer collection defaults and keep `resource.<ext>` focused on explicit overrides:
 
 ```bash
 declarest resource defaults infer /corporations/acme
 declarest resource defaults infer /corporations/acme --save
 declarest resource defaults get /corporations/acme
 declarest resource defaults edit /corporations/acme
+declarest resource defaults config get /corporations/acme
 ```
 
-Use `declarest resource defaults infer /corporations/acme --check` in CI or local validation to confirm the saved defaults sidecar still matches what DeclaREST would infer today.
+By default, `edit` and `infer --save` store the baseline object in a selector-local `defaults.<ext>` file and wire metadata to it with `{{include defaults.<ext>}}`.
+
+Use `declarest resource defaults infer /corporations/acme --check` in CI or local validation to confirm the current resolved defaults still match what DeclaREST would infer today.
 
 If you want to probe server-added defaults instead of inferring from repository siblings, use managed-server probing explicitly:
 
@@ -69,7 +72,7 @@ declarest resource defaults infer /corporations/acme --managed-server --check --
 
 ### Print or save only explicit overrides
 
-After a defaults sidecar exists, you can compact merged payloads back to just the non-default values:
+After metadata defaults exist, you can compact merged payloads back to just the non-default values:
 
 ```bash
 declarest resource get --source repository /corporations/acme --prune-defaults
@@ -77,7 +80,7 @@ declarest resource get /corporations/acme --prune-defaults
 declarest resource save /corporations/acme --prune-defaults --force
 ```
 
-This is useful when you want repository reads and refreshes to preserve the compact split between `defaults.<ext>` and `resource.<ext>`.
+This is useful when you want repository reads and refreshes to preserve the compact split between metadata-managed defaults and `resource.<ext>`.
 
 ## 4. Diff local desired state against remote actual state
 

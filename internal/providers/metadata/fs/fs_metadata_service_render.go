@@ -27,7 +27,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		value,
 	)
 
-	targetPath, err := normalizeResolvePath(logicalPath)
+	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -42,28 +42,28 @@ func (s *FSMetadataService) RenderOperationSpec(
 		ctx,
 		"metadata fs render normalized logical_path=%q normalized=%q operation=%q",
 		logicalPath,
-		targetPath,
+		target.path,
 		operation,
 	)
 
-	metadata, err := s.ResolveForPath(ctx, targetPath)
+	metadata, err := s.ResolveForPath(ctx, logicalPath)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
 			"metadata fs render resolve failed logical_path=%q operation=%q error=%v",
-			targetPath,
+			target.path,
 			operation,
 			err,
 		)
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	templateValue, err := buildTemplateValue(targetPath, metadata, value, operation)
+	templateValue, err := buildTemplateValue(target.path, metadata, value, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
 			"metadata fs render template-value failed logical_path=%q operation=%q error=%v",
-			targetPath,
+			target.path,
 			operation,
 			err,
 		)
@@ -76,7 +76,7 @@ func (s *FSMetadataService) RenderOperationSpec(
 		debugctx.Printf(
 			ctx,
 			"metadata fs render failed logical_path=%q operation=%q error=%v",
-			targetPath,
+			target.path,
 			operation,
 			err,
 		)
@@ -114,7 +114,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		resolvedResource.Payload,
 	)
 
-	targetPath, err := normalizeResolvePath(resolvedResource.LogicalPath)
+	target, err := normalizeResolvePath(resolvedResource.LogicalPath)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
@@ -128,7 +128,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 
 	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
 	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
-		resolvedMetadata, err = s.ResolveForPath(ctx, targetPath)
+		resolvedMetadata, err = s.ResolveForPath(ctx, resolvedResource.LogicalPath)
 		if err != nil {
 			if faults.IsCategory(err, faults.NotFoundError) {
 				resolvedMetadata = metadatadomain.ResourceMetadata{}
@@ -136,7 +136,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 				debugctx.Printf(
 					ctx,
 					"metadata fs render-resource resolve failed logical_path=%q operation=%q error=%v",
-					targetPath,
+					target.path,
 					operation,
 					err,
 				)
@@ -145,12 +145,12 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		}
 	}
 
-	templateScope, err := buildTemplateScopeForResource(targetPath, resolvedMetadata, resolvedResource, operation)
+	templateScope, err := buildTemplateScopeForResource(target.path, resolvedMetadata, resolvedResource, operation)
 	if err != nil {
 		debugctx.Printf(
 			ctx,
 			"metadata fs render-resource template-scope failed logical_path=%q operation=%q error=%v",
-			targetPath,
+			target.path,
 			operation,
 			err,
 		)
@@ -168,7 +168,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 		debugctx.Printf(
 			ctx,
 			"metadata fs render-resource failed logical_path=%q operation=%q error=%v",
-			targetPath,
+			target.path,
 			operation,
 			err,
 		)
@@ -178,7 +178,7 @@ func (s *FSMetadataService) RenderOperationSpecForResource(
 	debugctx.Printf(
 		ctx,
 		"metadata fs render-resource done logical_path=%q operation=%q resolved_path=%q",
-		targetPath,
+		target.path,
 		operation,
 		spec.Path,
 	)

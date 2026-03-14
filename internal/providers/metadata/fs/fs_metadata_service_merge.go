@@ -26,6 +26,9 @@ func validateResourceMetadata(metadata metadatadomain.ResourceMetadata) error {
 			return err
 		}
 	}
+	if err := metadatadomain.ValidateDefaultsSpec(metadata.Defaults); err != nil {
+		return err
+	}
 
 	if _, err := metadatadomain.ResolveExternalizedAttributes(metadata); err != nil {
 		return err
@@ -134,6 +137,16 @@ func validateStructuredOnlyMetadataFields(
 		return faults.NewValidationError(
 			fmt.Sprintf(
 				"resource.externalizedAttributes requires structured payload type (%s); got %q",
+				structuredPayloadTypes,
+				payloadType,
+			),
+			nil,
+		)
+	}
+	if metadatadomain.HasDefaultsSpecDirectives(metadata.Defaults) {
+		return faults.NewValidationError(
+			fmt.Sprintf(
+				"resource.defaults requires structured payload type (%s); got %q",
 				structuredPayloadTypes,
 				payloadType,
 			),

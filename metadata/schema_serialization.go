@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"maps"
+	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -28,9 +29,17 @@ type resourceWire struct {
 	RemoteCollectionPath   string                       `json:"remoteCollectionPath,omitempty" yaml:"remoteCollectionPath,omitempty"`
 	PayloadType            string                       `json:"payloadType,omitempty" yaml:"payloadType,omitempty"`
 	DefaultFormat          string                       `json:"defaultFormat,omitempty" yaml:"defaultFormat,omitempty"`
+	Defaults               *defaultsSpecWire            `json:"defaults,omitempty" yaml:"defaults,omitempty"`
 	Secret                 *bool                        `json:"secret,omitempty" yaml:"secret,omitempty"`
 	SecretAttributes       *[]string                    `json:"secretAttributes,omitempty" yaml:"secretAttributes,omitempty"`
 	ExternalizedAttributes *[]externalizedAttributeWire `json:"externalizedAttributes,omitempty" yaml:"externalizedAttributes,omitempty"`
+}
+
+type defaultsSpecWire struct {
+	Mode        string          `json:"mode,omitempty" yaml:"mode,omitempty"`
+	UseProfiles *[]string       `json:"useProfiles,omitempty" yaml:"useProfiles,omitempty"`
+	Value       any             `json:"value,omitempty" yaml:"value,omitempty"`
+	Profiles    *map[string]any `json:"profiles,omitempty" yaml:"profiles,omitempty"`
 }
 
 type externalizedAttributeWire struct {
@@ -199,6 +208,7 @@ func resourceMetadataToWire(metadata ResourceMetadata) resourceMetadataWire {
 		RemoteCollectionPath: metadata.RemoteCollectionPath,
 		PayloadType:          metadata.PayloadType,
 		DefaultFormat:        metadata.DefaultFormat,
+		Defaults:             defaultsSpecToWire(metadata.Defaults),
 		Secret:               cloneBoolPointer(metadata.Secret),
 	}
 	if metadata.RequiredAttributes != nil {
@@ -273,6 +283,9 @@ func resourceMetadataFromWire(wire resourceMetadataWire) (ResourceMetadata, erro
 		if resource.DefaultFormat != "" {
 			metadata.DefaultFormat = resource.DefaultFormat
 		}
+		if resource.Defaults != nil {
+			metadata.Defaults = defaultsSpecFromWire(resource.Defaults)
+		}
 		if resource.Secret != nil {
 			metadata.Secret = cloneBoolPointer(resource.Secret)
 		}
@@ -316,9 +329,66 @@ func hasResourceInfo(resource resourceWire) bool {
 		strings.TrimSpace(resource.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(resource.PayloadType) != "" ||
 		strings.TrimSpace(resource.DefaultFormat) != "" ||
+		resource.Defaults != nil ||
 		resource.Secret != nil ||
 		resource.SecretAttributes != nil ||
 		resource.ExternalizedAttributes != nil
+}
+
+func defaultsSpecToWire(value *DefaultsSpec) *defaultsSpecWire {
+	if !HasDefaultsSpecDirectives(value) {
+		return nil
+	}
+
+	wire := &defaultsSpecWire{
+		Mode:  value.Mode,
+		Value: cloneDefaultsEntry(value.Value),
+	}
+	if value.UseProfiles != nil {
+		wire.UseProfiles = stringSlicePointer(value.UseProfiles)
+	}
+	if value.Profiles != nil {
+		profiles := make(map[string]any, len(value.Profiles))
+		keys := make([]string, 0, len(value.Profiles))
+		for key := range value.Profiles {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			profiles[key] = cloneDefaultsEntry(value.Profiles[key])
+		}
+		wire.Profiles = &profiles
+	}
+	return wire
+}
+
+func defaultsSpecFromWire(value *defaultsSpecWire) *DefaultsSpec {
+	if value == nil {
+		return nil
+	}
+
+	decoded := &DefaultsSpec{
+		Mode:  value.Mode,
+		Value: cloneDefaultsEntry(value.Value),
+	}
+	if value.UseProfiles != nil {
+		decoded.UseProfiles = cloneStringSlice(*value.UseProfiles)
+	}
+	if value.Profiles != nil {
+		decoded.Profiles = make(map[string]any, len(*value.Profiles))
+		keys := make([]string, 0, len(*value.Profiles))
+		for key := range *value.Profiles {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			decoded.Profiles[key] = cloneDefaultsEntry((*value.Profiles)[key])
+		}
+	}
+	if !HasDefaultsSpecDirectives(decoded) {
+		return nil
+	}
+	return decoded
 }
 
 func hasOperationsInfo(info operationsWire) bool {

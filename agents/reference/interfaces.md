@@ -133,7 +133,7 @@ Invariants:
 3. exact placeholder directives (for example `{{secret .}}`, `{{payload_type .}}`, `{{payload_media_type .}}`, `{{payload_extension .}}`, and metadata-configured externalized-attribute include placeholders) MUST remain string values until workflow-specific resolution.
 4. opaque binary payloads MUST use `resource.BinaryValue` instead of raw `[]byte`.
 5. when a whole resource payload is persisted as the exact placeholder `{{secret .}}`, workflow-specific resolution MUST treat `.` as the root payload scope for that logical path.
-6. repository-backed desired-state resolution MAY compose one effective merge-capable object payload from metadata-root `defaults.<ext>` overlays plus `resource.<ext>` files; when both files exist, object fields MUST deep-merge, arrays MUST replace, explicit `resource.<ext>` values MUST win, supported defaults-sidecar codecs are `json|yaml|ini|properties`, and non-object or unsupported payload types MUST fail defaults-sidecar validation instead of being merged implicitly.
+6. orchestrator and CLI workflows MAY compose one effective merge-capable object payload from resolved metadata `resource.defaults` plus raw `resource.<ext>` repository payloads; metadata-managed defaults artifacts MUST be referenced only through exact include placeholders such as `{{include defaults.yaml}}` or `{{include defaults-prod.properties}}`, arrays MUST replace, explicit `resource.<ext>` values MUST win, supported defaults artifact codecs are `json|yaml|yml|properties`, and non-object or unsupported payload types MUST fail defaults validation instead of being merged implicitly.
 
 ### Type: `resource.BinaryValue`
 Represents opaque binary payload content.
@@ -151,11 +151,12 @@ Holds behavior directives for a resource or collection.
 Contract groups:
 1. `resource` identity mapping (`id`, `alias`, `requiredAttributes`), optional `remoteCollectionPath` override, optional `payloadType` override, and optional `defaultFormat` persistence hint; `defaultFormat` MUST accept the supported payload formats plus `any`, and when omitted `id` and `alias` default to `/id` for identity resolution.
 2. `resource` secret mapping (`secret`, `secretAttributes`).
-3. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
-4. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
-5. operation wire fields (`path`, `method`, `query`, `headers`, `body`, `transforms[*].{selectAttributes,excludeAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `headers` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
-6. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
-7. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
+3. `resource` defaults mapping (`defaults.mode`, `defaults.useProfiles`, `defaults.value`, `defaults.profiles`) for metadata-native defaults layering; `defaults.value` and `defaults.profiles[*]` MUST accept either one structured object or one exact include placeholder pointing to deterministic selector-local files named `defaults.<ext>` or `defaults-<profile>.<ext>`.
+4. `resource` externalized attribute mapping (`externalizedAttributes[*].{path,file,template,mode,saveBehavior,renderBehavior,enabled}`).
+5. `operations` directives (`create`, `update`, `delete`, `get`, `compare`, `list`).
+6. operation wire fields (`path`, `method`, `query`, `headers`, `body`, `transforms[*].{selectAttributes,excludeAttributes,jqExpression}`, `validate.requiredAttributes`, `validate.assertions[*].{message,jq}`, `validate.schemaRef`), where attribute references use RFC 6901 JSON Pointer strings and media headers use `headers` entries (for example `Accept`, `Content-Type`) instead of separate wire fields.
+7. `operations.defaults.transforms` is an ordered pipeline applied before operation-specific `transforms`.
+8. metadata template helper functions include `{{payload_type .}}`, `{{payload_media_type .}}`, and `{{payload_extension .}}` for payload-type-aware values in template-rendered metadata string fields.
 
 ### Type: `metadata.OperationSpec`
 Represents resolved operation request intent.
@@ -445,22 +446,8 @@ Method families:
 1. `Save/Get/Delete(policy)/List(policy)/Exists`.
 
 Invariants:
-1. `Get` MUST return the effective desired payload for one logical resource, including deterministic defaults-sidecar composition such as metadata-root `defaults.<ext>` overlays when supported by the active backend.
-2. When a repository backend supports defaults sidecars, `Save` MUST preserve that layout by compacting the effective payload against the resolved `defaults.<ext>` overlay before writing `resource.<ext>` instead of flattening defaulted fields back into the override file.
-
-### Interface: `repository.ResourceDefaultsStore`
-Responsibilities:
-1. Read raw defaults sidecars without merging them into effective resource payloads.
-2. Persist raw defaults sidecars for repository-backed edit/infer workflows.
-
-Method families:
-1. `GetDefaults`.
-2. `SaveDefaults`.
-
-Invariants:
-1. `GetDefaults` MUST return only the raw defaults object stored in the resolved defaults sidecar `defaults.<ext>` and MUST NOT merge values from `resource.<ext>`.
-2. `SaveDefaults` MUST preserve or infer a merge-capable payload descriptor (`json|yaml|ini|properties`) from explicit input, existing defaults file, metadata-sidecar format hints, sibling `resource.<ext>`, or metadata before writing `defaults.<ext>`.
-3. Saving an empty defaults object MAY remove the physical `defaults.<ext>` file, but subsequent `resource defaults get` workflows MUST still surface an empty object for supported payload types.
+1. `Get` MUST return only the raw persisted payload for one logical resource from `resource.<ext>` and MUST NOT merge metadata defaults into that repository response.
+2. `Save` MUST persist only the raw repository payload for `resource.<ext>` and MUST NOT write metadata defaults artifacts or flatten metadata-resolved defaults into repository-owned payload discovery.
 
 ### Interface: `repository.ResourceArtifactStore`
 Responsibilities:
@@ -523,13 +510,28 @@ Composition:
 ### Interface: `metadata.MetadataStore`
 Responsibilities:
 1. Read and persist metadata overrides by logical path.
+2. Preserve raw persisted include placeholders for `resource.defaults`.
 
 Method families:
 1. `Get/Set/Unset`.
 
+### Interface: `metadata.DefaultsArtifactStore`
+Responsibilities:
+1. Read and persist deterministic selector-local defaults artifacts referenced by `resource.defaults`.
+2. Enforce defaults-artifact filename safety and path scoping.
+
+Method families:
+1. `ReadDefaultsArtifact/WriteDefaultsArtifact/DeleteDefaultsArtifact`.
+
+Invariants:
+1. Reads and writes MUST be scoped to the owning metadata selector directory and MUST reject traversal or arbitrary filenames.
+2. Supported artifact names MUST be limited to deterministic defaults names such as `defaults.<ext>` and `defaults-<profile>.<ext>`.
+3. Supported codecs MUST be `json|yaml|yml|properties`, and stored payloads MUST decode to structured objects.
+
 ### Interface: `metadata.MetadataResolver`
 Responsibilities:
 1. Resolve layered metadata for a logical path.
+2. Expand include-backed `resource.defaults` entries before returning resolved metadata.
 
 Method families:
 1. `ResolveForPath`.

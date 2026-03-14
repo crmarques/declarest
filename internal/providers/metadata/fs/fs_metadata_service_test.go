@@ -509,7 +509,9 @@ func TestFSMetadataValidation(t *testing.T) {
 	assertTypedCategory(t, err, faults.ValidationError)
 
 	_, err = service.ResolveForPath(ctx, "/customers/*")
-	assertTypedCategory(t, err, faults.ValidationError)
+	if err != nil {
+		t.Fatalf("expected selector path resolution to succeed, got %v", err)
+	}
 }
 
 func TestFSMetadataValidationAcceptsIdentityPointerShorthand(t *testing.T) {

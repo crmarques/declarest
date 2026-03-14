@@ -19,7 +19,7 @@ That’s it. Your configuration lives in Git, with full history, pull requests, 
 - **Stable logical paths** — use `/corporations/acme` instead of raw endpoint URLs
 - **Git as source of truth** — review changes before they hit the API
 - **Metadata-driven adaptation** — works with APIs that aren’t clean REST
-- **Compact repository layout** — optional `defaults.<ext>` sidecars keep shared values out of `resource.<ext>`
+- **Compact repository layout** — metadata-backed defaults keep shared values out of `resource.<ext>`
 - **Secret placeholders** — no plaintext credentials in your repository
 - **Two modes** — CLI for on-demand work, Kubernetes Operator for continuous sync
 

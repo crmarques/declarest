@@ -26,13 +26,13 @@ func TestDefaultsEditCommandClearsDefaultsWhenEditorIsEmpty(t *testing.T) {
 		editTempFile = previousEditTempFile
 	}()
 
-	repo := &fakeDefaultsCommandRepository{
-		defaults: map[string]resourcedomain.Content{
+	repo := &fakeDefaultsCommandRepository{}
+	md := &fakeDefaultsCommandMetadata{
+		items: map[string]metadatadomain.ResourceMetadata{
 			"/customers/acme": {
-				Value: map[string]any{"labels": map[string]any{"team": "platform"}},
-				Descriptor: resourcedomain.NormalizePayloadDescriptor(
-					resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
-				),
+				Defaults: &metadatadomain.DefaultsSpec{
+					Value: map[string]any{"labels": map[string]any{"team": "platform"}},
+				},
 			},
 		},
 	}
@@ -50,7 +50,7 @@ func TestDefaultsEditCommandClearsDefaultsWhenEditorIsEmpty(t *testing.T) {
 		Contexts: fakeEditContextService{context: editTestContext()},
 		Services: &fakeEditServiceAccessor{
 			store:    repo,
-			metadata: fakeEditMetadataService{},
+			metadata: md,
 		},
 	}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/customers/acme"})
@@ -62,13 +62,8 @@ func TestDefaultsEditCommandClearsDefaultsWhenEditorIsEmpty(t *testing.T) {
 		t.Fatalf("ExecuteContext returned error: %v", err)
 	}
 
-	if len(repo.saveDefaultsCalls) != 1 {
-		t.Fatalf("expected one SaveDefaults call, got %#v", repo.saveDefaultsCalls)
-	}
-	saved := repo.saveDefaultsCalls[0]
-	value, ok := saved.value.Value.(map[string]any)
-	if !ok || len(value) != 0 {
-		t.Fatalf("expected empty defaults object, got %#v", saved.value.Value)
+	if item, found := md.items["/customers/acme"]; found && item.Defaults != nil {
+		t.Fatalf("expected local defaults to be cleared, got %#v", item.Defaults)
 	}
 }
 
@@ -99,13 +94,13 @@ func TestDefaultsInferCommandRejectsSaveAndCheckTogether(t *testing.T) {
 }
 
 func TestDefaultsInferCommandCheckFailsWhenStoredDefaultsDoNotMatch(t *testing.T) {
-	repo := &fakeDefaultsCommandRepository{
-		defaults: map[string]resourcedomain.Content{
-			"/customers/acme": {
-				Value: map[string]any{"labels": map[string]any{"team": "security"}},
-				Descriptor: resourcedomain.NormalizePayloadDescriptor(
-					resourcedomain.PayloadDescriptor{PayloadType: resourcedomain.PayloadTypeJSON},
-				),
+	repo := &fakeDefaultsCommandRepository{}
+	md := &fakeDefaultsCommandMetadata{
+		items: map[string]metadatadomain.ResourceMetadata{
+			"/customers/_": {
+				Defaults: &metadatadomain.DefaultsSpec{
+					Value: map[string]any{"labels": map[string]any{"team": "security"}},
+				},
 			},
 		},
 	}
@@ -129,7 +124,7 @@ func TestDefaultsInferCommandCheckFailsWhenStoredDefaultsDoNotMatch(t *testing.T
 		Contexts: fakeEditContextService{context: editTestContext()},
 		Services: &fakeEditServiceAccessor{
 			store:    repo,
-			metadata: fakeEditMetadataService{},
+			metadata: md,
 		},
 	}, &cliutil.GlobalFlags{Output: cliutil.OutputJSON})
 	stdout := &bytes.Buffer{}
@@ -177,7 +172,7 @@ func TestDefaultsInferCommandAcceptsCollectionAndResourcePaths(t *testing.T) {
 				},
 				Services: &fakeEditServiceAccessor{
 					store:    repo,
-					metadata: fakeEditMetadataService{},
+					metadata: &fakeDefaultsCommandMetadata{items: map[string]metadatadomain.ResourceMetadata{}},
 				},
 			}, &cliutil.GlobalFlags{Output: cliutil.OutputJSON})
 			stdout := &bytes.Buffer{}
@@ -336,4 +331,57 @@ func (fakeDefaultsCommandRepository) Exists(context.Context, string) (bool, erro
 
 type fakeDefaultsCommandMetadata struct {
 	metadatadomain.MetadataService
+	items     map[string]metadatadomain.ResourceMetadata
+	artifacts map[string]resourcedomain.Content
+}
+
+func (f *fakeDefaultsCommandMetadata) Get(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	if item, found := f.items[logicalPath]; found {
+		return item, nil
+	}
+	return metadatadomain.ResourceMetadata{}, faults.NewTypedError(faults.NotFoundError, "metadata not found", nil)
+}
+
+func (f *fakeDefaultsCommandMetadata) Set(_ context.Context, logicalPath string, item metadatadomain.ResourceMetadata) error {
+	if f.items == nil {
+		f.items = map[string]metadatadomain.ResourceMetadata{}
+	}
+	f.items[logicalPath] = item
+	return nil
+}
+
+func (f *fakeDefaultsCommandMetadata) Unset(_ context.Context, logicalPath string) error {
+	delete(f.items, logicalPath)
+	return nil
+}
+
+func (f *fakeDefaultsCommandMetadata) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	if item, found := f.items[logicalPath]; found {
+		return item, nil
+	}
+	return metadatadomain.ResourceMetadata{}, nil
+}
+
+func (f *fakeDefaultsCommandMetadata) ReadDefaultsArtifact(_ context.Context, logicalPath string, file string) (resourcedomain.Content, error) {
+	if f.artifacts != nil {
+		if content, found := f.artifacts[logicalPath+"::"+file]; found {
+			return content, nil
+		}
+	}
+	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults artifact not found", nil)
+}
+
+func (f *fakeDefaultsCommandMetadata) WriteDefaultsArtifact(_ context.Context, logicalPath string, file string, content resourcedomain.Content) error {
+	if f.artifacts == nil {
+		f.artifacts = map[string]resourcedomain.Content{}
+	}
+	f.artifacts[logicalPath+"::"+file] = content
+	return nil
+}
+
+func (f *fakeDefaultsCommandMetadata) DeleteDefaultsArtifact(_ context.Context, logicalPath string, file string) error {
+	if f.artifacts != nil {
+		delete(f.artifacts, logicalPath+"::"+file)
+	}
+	return nil
 }

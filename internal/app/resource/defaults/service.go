@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
-	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -49,6 +47,8 @@ type CheckResult struct {
 }
 
 type target struct {
+	scopePath         string
+	metadataPath      string
 	logicalPath       string
 	resourceContent   resource.Content
 	defaultsContent   resource.Content
@@ -85,34 +85,13 @@ func Get(ctx context.Context, deps Dependencies, logicalPath string) (Result, er
 	}
 
 	return Result{
-		ResolvedPath: resolvedTarget.logicalPath,
+		ResolvedPath: resolvedTarget.scopePath,
 		Content:      content,
 	}, nil
 }
 
 func Save(ctx context.Context, deps Dependencies, logicalPath string, content resource.Content) (Result, error) {
-	resolvedTarget, err := resolveTarget(ctx, deps, logicalPath)
-	if err != nil {
-		return Result{}, err
-	}
-
-	defaultsStore, err := requireDefaultsStore(deps)
-	if err != nil {
-		return Result{}, err
-	}
-
-	content.Descriptor = chooseDefaultsDescriptor(content.Descriptor, resolvedTarget.payloadDescriptor)
-	if err := defaultsStore.SaveDefaults(ctx, resolvedTarget.logicalPath, content); err != nil {
-		return Result{}, err
-	}
-
-	return Result{
-		ResolvedPath: resolvedTarget.logicalPath,
-		Content: resource.Content{
-			Value:      normalizeEmptyDefaultsValue(content.Value),
-			Descriptor: content.Descriptor,
-		},
-	}, nil
+	return saveBaseline(ctx, deps, logicalPath, content)
 }
 
 func Infer(ctx context.Context, deps Dependencies, logicalPath string, request InferRequest) (Result, error) {
@@ -132,7 +111,7 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 	}
 
 	return Result{
-		ResolvedPath: resolvedTarget.logicalPath,
+		ResolvedPath: resolvedTarget.scopePath,
 		Content: resource.Content{
 			Value:      inferred,
 			Descriptor: resolvedTarget.payloadDescriptor,
@@ -149,9 +128,13 @@ func Check(ctx context.Context, deps Dependencies, logicalPath string, request C
 		return CheckResult{}, err
 	}
 
-	current, err := Get(ctx, deps, inferred.ResolvedPath)
+	currentTarget, err := resolveInferTarget(ctx, deps, logicalPath)
 	if err != nil {
 		return CheckResult{}, err
+	}
+	current := Result{
+		ResolvedPath: currentTarget.scopePath,
+		Content:      currentTarget.defaultsContent,
 	}
 
 	inferredValue := normalizeEmptyDefaultsValue(inferred.Content.Value)
@@ -170,7 +153,7 @@ func Check(ctx context.Context, deps Dependencies, logicalPath string, request C
 	current.Content.Value = currentNormalized
 
 	return CheckResult{
-		ResolvedPath:    inferred.ResolvedPath,
+		ResolvedPath:    currentTarget.scopePath,
 		InferredContent: inferred.Content,
 		CurrentContent:  current.Content,
 		Matches:         reflect.DeepEqual(currentNormalized, inferredNormalized),
@@ -186,55 +169,58 @@ func resolveInferTarget(ctx context.Context, deps Dependencies, logicalPath stri
 		return target{}, faults.NewValidationError("logical path must target a resource or collection, not root", nil)
 	}
 
-	if !parsedPath.ExplicitCollectionTarget {
-		resolvedTarget, resolveErr := resolveTarget(ctx, deps, parsedPath.Normalized)
-		if resolveErr == nil {
-			return resolvedTarget, nil
+	pathDescriptor, err := metadata.ParsePathDescriptor(logicalPath)
+	if err != nil {
+		return target{}, err
+	}
+	collectionTargetPath := pathDescriptor.Selector
+	concretePath := ""
+	resourceContent := resource.Content{}
+
+	if !parsedPath.ExplicitCollectionTarget && !pathDescriptor.Collection {
+		orchestratorService, orchestratorErr := appdeps.RequireOrchestrator(deps)
+		if orchestratorErr != nil {
+			return target{}, orchestratorErr
 		}
-		if !faults.IsCategory(resolveErr, faults.NotFoundError) {
+		resolvedResource, resolveErr := resolveResolvedLocalTarget(ctx, orchestratorService, parsedPath.Normalized)
+		if resolveErr == nil {
+			collectionTargetPath = collectionPathFor(resolvedResource.LogicalPath)
+			concretePath = resolvedResource.LogicalPath
+			resourceContent = resource.Content{
+				Value:      resolvedResource.Payload,
+				Descriptor: resolvedResource.PayloadDescriptor,
+			}
+		} else if !faults.IsCategory(resolveErr, faults.NotFoundError) {
 			return target{}, resolveErr
 		}
 	}
 
-	collectionTargetPath, err := resolveCollectionInferTargetPath(ctx, deps, parsedPath.Normalized)
+	if concretePath == "" {
+		concretePath, resourceContent, err = resolveFirstCollectionResource(ctx, deps, collectionTargetPath)
+		if err != nil {
+			return target{}, err
+		}
+	}
+
+	metadataPath := collectionMetadataPath(collectionTargetPath)
+	payloadDescriptor, err := resolveTargetPayloadDescriptor(ctx, deps, metadataPath, resourceContent.Descriptor)
 	if err != nil {
 		return target{}, err
 	}
-	return resolveTarget(ctx, deps, collectionTargetPath)
-}
-
-func resolveCollectionInferTargetPath(ctx context.Context, deps Dependencies, collectionPath string) (string, error) {
-	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	defaultsContent, defaultsFound, err := resolveEffectiveDefaultsForPath(ctx, deps, metadataPath, payloadDescriptor)
 	if err != nil {
-		return "", err
+		return target{}, err
 	}
 
-	items, err := orchestratorService.ListLocal(ctx, collectionPath, orchestratordomain.ListPolicy{})
-	if err != nil {
-		return "", err
-	}
-
-	directChildren := make([]string, 0, len(items))
-	for _, item := range items {
-		candidatePath := strings.TrimSpace(item.LogicalPath)
-		if candidatePath == "" {
-			continue
-		}
-		if _, ok := resource.ChildSegment(collectionPath, candidatePath); !ok {
-			continue
-		}
-		directChildren = append(directChildren, candidatePath)
-	}
-	if len(directChildren) == 0 {
-		return "", faults.NewTypedError(
-			faults.NotFoundError,
-			fmt.Sprintf("resource %q not found", collectionPath),
-			nil,
-		)
-	}
-
-	sort.Strings(directChildren)
-	return directChildren[0], nil
+	return target{
+		scopePath:         collectionTargetPath,
+		metadataPath:      metadataPath,
+		logicalPath:       concretePath,
+		resourceContent:   resourceContent,
+		defaultsContent:   defaultsContent,
+		defaultsFound:     defaultsFound,
+		payloadDescriptor: resource.NormalizePayloadDescriptor(resourceContent.Descriptor),
+	}, nil
 }
 
 func CompactContentAgainstStoredDefaults(
@@ -251,30 +237,12 @@ func CompactContentAgainstStoredDefaults(
 		return resource.Content{}, false, faults.NewValidationError("logical path must target a resource, not root", nil)
 	}
 
-	defaultsStore, err := requireDefaultsStore(deps)
-	if err != nil {
-		return resource.Content{}, false, err
-	}
-
-	orchestratorService, err := appdeps.RequireOrchestrator(deps)
-	if err != nil {
-		return resource.Content{}, false, err
-	}
-	if item, resolveErr := resolveResolvedLocalTarget(ctx, orchestratorService, resolvedPath); resolveErr == nil {
-		resolvedPath = item.LogicalPath
-	} else if !faults.IsCategory(resolveErr, faults.NotFoundError) {
-		return resource.Content{}, false, resolveErr
-	}
-
-	defaultsContent, defaultsFound, err := readDefaultsContent(ctx, defaultsStore, resolvedPath)
+	defaultsContent, defaultsFound, err := resolveEffectiveDefaultsForPath(ctx, deps, resolvedPath, content.Descriptor)
 	if err != nil {
 		return resource.Content{}, false, err
 	}
 	if !defaultsFound {
 		return content, false, nil
-	}
-	if err := resource.ValidateDefaultsSidecarValue(defaultsContent.Value); err != nil {
-		return resource.Content{}, false, err
 	}
 
 	prunedValue, err := resource.CompactAgainstDefaults(content.Value, defaultsContent.Value)
@@ -294,59 +262,23 @@ func CompactContentAgainstStoredDefaults(
 }
 
 func resolveTarget(ctx context.Context, deps Dependencies, logicalPath string) (target, error) {
-	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
-	if err != nil {
-		return target{}, err
-	}
-	if normalizedPath == "/" {
-		return target{}, faults.NewValidationError("logical path must target a resource, not root", nil)
-	}
-
-	orchestratorService, err := appdeps.RequireOrchestrator(deps)
+	scope, err := resolveScopeTarget(ctx, deps, logicalPath)
 	if err != nil {
 		return target{}, err
 	}
 
-	defaultsStore, err := requireDefaultsStore(deps)
+	defaultsContent, defaultsFound, err := resolveEffectiveDefaultsForPath(ctx, deps, scope.metadataPath, scope.payloadDescriptor)
 	if err != nil {
 		return target{}, err
 	}
-
-	resolvedResource, err := resolveResolvedLocalTarget(ctx, orchestratorService, normalizedPath)
-	if err != nil {
-		return target{}, err
-	}
-	resolvedPath := resolvedResource.LogicalPath
-	resourceContent := resource.Content{
-		Value:      resolvedResource.Payload,
-		Descriptor: resolvedResource.PayloadDescriptor,
-	}
-
-	defaultsContent, defaultsFound, err := readDefaultsContent(ctx, defaultsStore, resolvedPath)
-	if err != nil {
-		return target{}, err
-	}
-
-	payloadDescriptor, err := resolveDefaultsPayloadDescriptor(ctx, deps, resolvedPath, defaultsContent, defaultsFound, resourceContent)
-	if err != nil {
-		return target{}, err
-	}
-	if err := validateDefaultsDescriptor(payloadDescriptor); err != nil {
-		return target{}, err
-	}
-	if !resource.IsPayloadDescriptorExplicit(resourceContent.Descriptor) {
-		resourceContent.Descriptor = payloadDescriptor
-	}
-	if defaultsFound && !resource.IsPayloadDescriptorExplicit(defaultsContent.Descriptor) {
-		defaultsContent.Descriptor = payloadDescriptor
-	}
-
 	return target{
-		logicalPath:       resolvedPath,
-		resourceContent:   resourceContent,
+		scopePath:         scope.scopePath,
+		metadataPath:      scope.metadataPath,
+		logicalPath:       firstNonEmpty(scope.concretePath, scope.scopePath),
+		resourceContent:   scope.resourceContent,
 		defaultsContent:   defaultsContent,
 		defaultsFound:     defaultsFound,
-		payloadDescriptor: payloadDescriptor,
+		payloadDescriptor: scope.payloadDescriptor,
 	}, nil
 }
 
@@ -370,76 +302,13 @@ func resolveResolvedLocalTarget(
 	}, nil
 }
 
-func requireDefaultsStore(deps Dependencies) (repository.ResourceDefaultsStore, error) {
-	store, err := appdeps.RequireResourceStore(deps)
-	if err != nil {
-		return nil, err
-	}
-	defaultsStore, ok := store.(repository.ResourceDefaultsStore)
-	if !ok {
-		return nil, faults.NewValidationError("resource defaults are not supported by the configured repository", nil)
-	}
-	return defaultsStore, nil
-}
-
-func readDefaultsContent(
-	ctx context.Context,
-	store repository.ResourceDefaultsStore,
-	logicalPath string,
-) (resource.Content, bool, error) {
-	content, err := store.GetDefaults(ctx, logicalPath)
-	if err == nil {
-		return content, true, nil
-	}
-	if faults.IsCategory(err, faults.NotFoundError) {
-		return resource.Content{}, false, nil
-	}
-	return resource.Content{}, false, err
-}
-
-func resolveDefaultsPayloadDescriptor(
-	ctx context.Context,
-	deps Dependencies,
-	logicalPath string,
-	defaultsContent resource.Content,
-	defaultsFound bool,
-	resourceContent resource.Content,
-) (resource.PayloadDescriptor, error) {
-	if defaultsFound && resource.IsPayloadDescriptorExplicit(defaultsContent.Descriptor) {
-		return resource.NormalizePayloadDescriptor(defaultsContent.Descriptor), nil
-	}
-	if resource.IsPayloadDescriptorExplicit(resourceContent.Descriptor) {
-		return resource.NormalizePayloadDescriptor(resourceContent.Descriptor), nil
-	}
-
-	metadataService := deps.MetadataService()
-	if metadataService != nil {
-		md, err := metadataService.ResolveForPath(ctx, logicalPath)
-		if err != nil {
-			return resource.PayloadDescriptor{}, err
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
 		}
-		payloadType, err := metadata.EffectivePayloadType(md, resource.PayloadTypeJSON)
-		if err != nil {
-			return resource.PayloadDescriptor{}, err
-		}
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: payloadType}), nil
 	}
-
-	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}), nil
-}
-
-func validateDefaultsDescriptor(descriptor resource.PayloadDescriptor) error {
-	resolved := resource.NormalizePayloadDescriptor(descriptor)
-	if resource.SupportsDefaultsOverlayPayloadType(resolved.PayloadType) {
-		return nil
-	}
-	return faults.NewValidationError(
-		fmt.Sprintf(
-			"resource defaults are supported only for merge-capable payload types (json, yaml, ini, properties); got %q",
-			resolved.PayloadType,
-		),
-		nil,
-	)
+	return ""
 }
 
 func inferFromRepository(ctx context.Context, deps Dependencies, resolvedTarget target) (resource.Value, error) {
@@ -574,24 +443,7 @@ func managedServerProbeInputValue(
 	content resource.Content,
 ) (resource.Value, error) {
 	inputValue := resolveSecretsForManagedServerProbe(ctx, deps.SecretProvider(), logicalPath, content)
-	if !resolvedTarget.defaultsFound {
-		return inputValue, nil
-	}
-
-	defaultsValue := resolveSecretsForManagedServerProbe(
-		ctx,
-		deps.SecretProvider(),
-		resolvedTarget.logicalPath,
-		resolvedTarget.defaultsContent,
-	)
-	compacted, err := resource.CompactAgainstDefaults(inputValue, defaultsValue)
-	if err != nil {
-		return nil, err
-	}
-	if compacted == nil {
-		return map[string]any{}, nil
-	}
-	return compacted, nil
+	return inputValue, nil
 }
 
 func invalidateManagedServerAuthCache(deps Dependencies) {

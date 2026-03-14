@@ -138,6 +138,7 @@ func (a *testServiceAccessor) ManagedServerClient() managedserverdomain.ManagedS
 func testDepsWith(orch *testOrchestrator, metadataService *testMetadata) Dependencies {
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
+	metadataService.defaults = &repositoryService.defaults
 	managedServerClient := &testManagedServerClient{accessToken: "test-access-token"}
 
 	services := &testServiceAccessor{
@@ -161,6 +162,7 @@ func newResourceSaveDeps(orch *testOrchestrator, metadataService *testMetadata) 
 	accessor := deps.Services.(*testServiceAccessor)
 	accessor.store = repositoryService
 	accessor.sync = repositoryService
+	metadataService.defaults = &repositoryService.defaults
 	return deps
 }
 
@@ -563,6 +565,7 @@ type testMetadata struct {
 	collectionChildren          map[string][]string
 	wildcardChildren            map[string]bool
 	rejectSelectorPathInResolve bool
+	defaults                    *map[string]resource.Content
 }
 
 func newTestMetadata() *testMetadata {
@@ -600,6 +603,7 @@ func (s *testMetadata) Unset(_ context.Context, logicalPath string) error {
 }
 
 func (s *testMetadata) ResolveForPath(_ context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
+	resolved := metadatadomain.ResourceMetadata{}
 	if s.rejectSelectorPathInResolve && strings.Contains(logicalPath, "/_/") {
 		return metadatadomain.ResourceMetadata{}, faults.NewTypedError(
 			faults.ValidationError,
@@ -607,10 +611,44 @@ func (s *testMetadata) ResolveForPath(_ context.Context, logicalPath string) (me
 			nil,
 		)
 	}
-	if metadata, found := s.items[logicalPath]; found {
-		return metadata, nil
+	if inheritedPath, ok := testCollectionMetadataPath(logicalPath); ok {
+		if metadata, found := s.items[inheritedPath]; found {
+			resolved = metadatadomain.MergeResourceMetadata(resolved, metadata)
+		}
+		if s.defaults != nil {
+			if value, found := (*s.defaults)[inheritedPath]; found {
+				resolved = metadatadomain.MergeResourceMetadata(resolved, metadatadomain.ResourceMetadata{
+					Defaults: &metadatadomain.DefaultsSpec{Value: value.Value},
+				})
+			}
+		}
 	}
-	return metadatadomain.ResourceMetadata{}, nil
+	if metadata, found := s.items[logicalPath]; found {
+		resolved = metadatadomain.MergeResourceMetadata(resolved, metadata)
+	}
+	if s.defaults != nil {
+		if value, found := (*s.defaults)[logicalPath]; found {
+			resolved = metadatadomain.MergeResourceMetadata(resolved, metadatadomain.ResourceMetadata{
+				Defaults: &metadatadomain.DefaultsSpec{Value: value.Value},
+			})
+		}
+	}
+	return resolved, nil
+}
+
+func testCollectionMetadataPath(logicalPath string) (string, bool) {
+	trimmed := strings.TrimSpace(logicalPath)
+	if trimmed == "" || trimmed == "/" || strings.HasSuffix(trimmed, "/_") {
+		return "", false
+	}
+	collectionPath := path.Dir(trimmed)
+	if collectionPath == "." {
+		collectionPath = "/"
+	}
+	if collectionPath == "/" {
+		return "/_", true
+	}
+	return path.Clean(collectionPath) + "/_", true
 }
 
 func (s *testMetadata) RenderOperationSpec(

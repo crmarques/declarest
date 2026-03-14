@@ -96,6 +96,29 @@ func (s *FSMetadataService) selectorDirPath(selector string) (string, error) {
 	return targetPath, nil
 }
 
+func (s *FSMetadataService) metadataSelectorDirPath(selector string, kind metadataPathKind) (string, error) {
+	var targetPath string
+	switch kind {
+	case metadataPathCollection:
+		if selector == "/" {
+			targetPath = filepath.Join(s.baseDir, "_")
+			break
+		}
+		targetPath = filepath.Join(s.baseDir, filepath.FromSlash(strings.TrimPrefix(selector, "/")), "_")
+	case metadataPathResource:
+		if selector == "/" {
+			return "", faults.NewValidationError("resource metadata path must not target root", nil)
+		}
+		targetPath = filepath.Join(s.baseDir, filepath.FromSlash(strings.TrimPrefix(selector, "/")))
+	default:
+		return "", internalError("unsupported metadata path kind", nil)
+	}
+	if !isPathUnderRoot(s.baseDir, targetPath) {
+		return "", faults.NewValidationError("metadata path escapes metadata base directory", nil)
+	}
+	return targetPath, nil
+}
+
 func parseMetadataPath(logicalPath string) (string, metadataPathKind, error) {
 	pathDescriptor, err := metadatadomain.ParsePathDescriptor(logicalPath)
 	if err != nil {

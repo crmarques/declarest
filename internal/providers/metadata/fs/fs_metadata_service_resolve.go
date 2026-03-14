@@ -12,18 +12,23 @@ import (
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
 	metadatadomain "github.com/crmarques/declarest/metadata"
-	"github.com/crmarques/declarest/resource"
 )
 
 func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath string) (metadatadomain.ResourceMetadata, error) {
 	debugctx.Printf(ctx, "metadata fs resolve start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
-	targetPath, err := normalizeResolvePath(logicalPath)
+	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
 		debugctx.Printf(ctx, "metadata fs resolve invalid logical_path=%q error=%v", logicalPath, err)
 		return metadatadomain.ResourceMetadata{}, err
 	}
-	debugctx.Printf(ctx, "metadata fs resolve normalized logical_path=%q normalized=%q", logicalPath, targetPath)
+	debugctx.Printf(
+		ctx,
+		"metadata fs resolve normalized logical_path=%q normalized=%q collection=%t",
+		logicalPath,
+		target.path,
+		target.collection,
+	)
 
 	merged := metadatadomain.ResourceMetadata{}
 
@@ -69,7 +74,11 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 			)
 			return nil
 		}
-		merged = metadatadomain.MergeResourceMetadata(merged, item)
+		resolvedItem, resolveErr := s.resolveMetadataDefaults(ctx, selector, kind, item)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		merged = metadatadomain.MergeResourceMetadata(merged, resolvedItem)
 		debugctx.Printf(
 			ctx,
 			"metadata fs resolve hit selector=%q kind=%q file=%q",
@@ -84,7 +93,7 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 		return metadatadomain.ResourceMetadata{}, err
 	}
 
-	segments := splitPathSegments(targetPath)
+	segments := splitPathSegments(target.path)
 	parentSelectors := []string{"/"}
 	for _, segment := range segments {
 		wildcardCandidates := make(map[string]struct{})
@@ -131,13 +140,17 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 		}
 	}
 
-	if targetPath != "/" {
-		if err := apply(targetPath, metadataPathResource); err != nil {
+	if !target.collection && target.path != "/" {
+		if err := apply(target.path, metadataPathResource); err != nil {
 			return metadatadomain.ResourceMetadata{}, err
 		}
 	}
 
-	debugctx.Printf(ctx, "metadata fs resolve done logical_path=%q normalized=%q", logicalPath, targetPath)
+	if _, err := metadatadomain.ResolveEffectiveDefaults(merged.Defaults); err != nil {
+		return metadatadomain.ResourceMetadata{}, err
+	}
+
+	debugctx.Printf(ctx, "metadata fs resolve done logical_path=%q normalized=%q", logicalPath, target.path)
 	return merged, nil
 }
 
@@ -148,15 +161,15 @@ func (s *FSMetadataService) ResolveForPath(ctx context.Context, logicalPath stri
 func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error) {
 	debugctx.Printf(ctx, "metadata fs resolve-children start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
-	targetPath, err := normalizeResolvePath(logicalPath)
+	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
 		debugctx.Printf(ctx, "metadata fs resolve-children invalid logical_path=%q error=%v", logicalPath, err)
 		return nil, err
 	}
 
-	parentSelectors, err := s.matchingParentSelectors(targetPath)
+	parentSelectors, err := s.matchingParentSelectors(target.path)
 	if err != nil {
-		debugctx.Printf(ctx, "metadata fs resolve-children match failed logical_path=%q error=%v", targetPath, err)
+		debugctx.Printf(ctx, "metadata fs resolve-children match failed logical_path=%q error=%v", target.path, err)
 		return nil, err
 	}
 	if len(parentSelectors) == 0 {
@@ -195,7 +208,7 @@ func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logic
 		ctx,
 		"metadata fs resolve-children done logical_path=%q normalized=%q children=%v",
 		logicalPath,
-		targetPath,
+		target.path,
 		resolved,
 	)
 	return resolved, nil
@@ -208,15 +221,15 @@ func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logic
 func (s *FSMetadataService) HasCollectionWildcardChild(ctx context.Context, logicalPath string) (bool, error) {
 	debugctx.Printf(ctx, "metadata fs wildcard-child check start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
-	targetPath, err := normalizeResolvePath(logicalPath)
+	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
 		debugctx.Printf(ctx, "metadata fs wildcard-child invalid logical_path=%q error=%v", logicalPath, err)
 		return false, err
 	}
 
-	parentSelectors, err := s.matchingParentSelectors(targetPath)
+	parentSelectors, err := s.matchingParentSelectors(target.path)
 	if err != nil {
-		debugctx.Printf(ctx, "metadata fs wildcard-child match failed logical_path=%q error=%v", targetPath, err)
+		debugctx.Printf(ctx, "metadata fs wildcard-child match failed logical_path=%q error=%v", target.path, err)
 		return false, err
 	}
 	if len(parentSelectors) == 0 {
@@ -350,19 +363,21 @@ func sortedSelectorKeys(values map[string]struct{}) []string {
 	return keys
 }
 
-func normalizeResolvePath(logicalPath string) (string, error) {
-	normalizedPath, err := resource.NormalizeLogicalPath(logicalPath)
+type resolvedPathTarget struct {
+	path       string
+	collection bool
+}
+
+func normalizeResolvePath(logicalPath string) (resolvedPathTarget, error) {
+	descriptor, err := metadatadomain.ParsePathDescriptor(logicalPath)
 	if err != nil {
-		return "", err
+		return resolvedPathTarget{}, err
 	}
 
-	for _, segment := range splitPathSegments(normalizedPath) {
-		if hasWildcardPattern(segment) {
-			return "", faults.NewValidationError("resolve path must not contain wildcard segments", nil)
-		}
-	}
-
-	return normalizedPath, nil
+	return resolvedPathTarget{
+		path:       descriptor.Selector,
+		collection: descriptor.Collection,
+	}, nil
 }
 
 func splitPathSegments(value string) []string {

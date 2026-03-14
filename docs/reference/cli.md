@@ -17,7 +17,7 @@ declarest <group> <command> --help
 - `context` - manage contexts and validation
 - `metadata` - inspect, infer, render, set, unset, and resolve metadata
 - `repository` - manage local repository state
-- `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, raw defaults sidecars, plus raw requests and template rendering
+- `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, metadata-backed defaults, plus raw requests and template rendering
 - `server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
@@ -75,11 +75,16 @@ declarest resource save /customers/ --mode auto
 declarest resource save /customers/ --mode single
 ```
 
-### Defaults sidecars
+### Metadata-backed defaults
 
 ```bash
 declarest resource defaults get /corporations/acme
 declarest resource defaults edit /corporations/acme
+declarest resource defaults config get /corporations/acme
+declarest resource defaults config edit /corporations/acme
+declarest resource defaults profile get /corporations/acme prod
+declarest resource defaults profile edit /corporations/acme prod
+declarest resource defaults profile delete /corporations/acme prod
 declarest resource defaults infer /corporations/acme
 declarest resource defaults infer /corporations/acme --save
 declarest resource defaults infer /corporations/acme --check
@@ -87,7 +92,7 @@ declarest resource defaults infer /corporations/acme --managed-server --wait 2s 
 declarest resource defaults infer /corporations/acme --managed-server --check --yes
 ```
 
-Use this command family to keep raw shared values in `defaults.<ext>` while the rest of the CLI still works with the merged effective resource. Use `--save` to persist inferred defaults, `--check` to validate the current sidecar without changing it, and do not combine those two flags. `resource defaults infer --managed-server` probes server-added defaults by creating temporary remote resources, so it requires `--yes`. Add `--wait <duration|seconds>` when the managed server needs extra time before the first probe readback; bare integers are treated as seconds.
+Use this command family to keep shared values in `resource.defaults`, usually backed by deterministic selector-local files such as `defaults.yaml` and `defaults-<profile>.yaml`, while the rest of the CLI still works with the merged effective resource. `get` prints resolved defaults, `config get` prints the raw persisted metadata block, and `profile` manages named defaults profiles. Use `--save` to persist inferred baseline defaults, `--check` to validate the current resolved defaults without changing them, and do not combine those two flags. `resource defaults infer --managed-server` probes server-added defaults by creating temporary remote resources, so it requires `--yes`. Add `--wait <duration|seconds>` when the managed server needs extra time before the first probe readback; bare integers are treated as seconds.
 
 ### Mutate remote state
 
@@ -118,7 +123,7 @@ Useful flags for mutation and payload-driven workflows:
 - `--recursive` for collection recursion on supported commands
 - `--force` on `resource apply` to execute update even when compare output has no drift
 - `--mode <auto|items|single>` on `resource save` to choose between automatic list fan-out, forced item fan-out, or single-resource persistence
-- `--prune-defaults` on `resource get|save` to remove fields already covered by repository `defaults.<ext>` sidecars from printed or persisted payloads
+- `--prune-defaults` on `resource get|save` to remove fields already covered by resolved metadata defaults from printed or persisted payloads
 - `--refresh` (apply/create/update)
 - `--http-method <METHOD>` override for remote calls
 - `--message <text>` overrides the default git commit message on `resource save`, `resource copy`, and repository-backed `resource delete`
@@ -225,7 +230,7 @@ These commands are useful when debugging auth or connectivity independently from
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
 - Status lines are printed to stderr by default; use `--no-status` when piping stdout.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.
-- `resource defaults get` prints the raw defaults sidecar object; when no defaults file exists yet for a supported payload type, it returns an empty object.
+- `resource defaults get` prints the effective resolved defaults object; when no defaults are resolved yet, it returns an empty object.
 
 ## Recommended debug sequence for advanced metadata issues
 

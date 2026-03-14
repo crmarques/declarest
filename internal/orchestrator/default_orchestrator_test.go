@@ -237,7 +237,7 @@ func TestOrchestratorSaveAppliesDefaultFormatBeforePersisting(t *testing.T) {
 	}
 }
 
-func TestOrchestratorDiffUsesMergedDefaultsSidecarPayload(t *testing.T) {
+func TestOrchestratorDiffUsesResolvedMetadataDefaultsPayload(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
@@ -254,6 +254,14 @@ spec:
 `)
 
 	repo := fsstore.NewLocalResourceRepository(repoDir)
+	metadataService := fsmetadata.NewFSMetadataService(repoDir)
+	if err := metadataService.Set(context.Background(), "/customers/", metadatadomain.ResourceMetadata{
+		Defaults: &metadatadomain.DefaultsSpec{
+			Value: metadatadomain.DefaultsIncludePlaceholder("defaults.yaml"),
+		},
+	}); err != nil {
+		t.Fatalf("metadata set returned error: %v", err)
+	}
 	serverManager := &fakeServer{
 		getValue: map[string]any{
 			"id": "acme",
@@ -266,6 +274,7 @@ spec:
 
 	orchestrator := &Orchestrator{
 		repository: repo,
+		metadata:   metadataService,
 		server:     serverManager,
 	}
 

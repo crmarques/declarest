@@ -124,9 +124,9 @@ func TestInferAcceptsCollectionAndResourcePathsForSameCollection(t *testing.T) {
 		requestedPath    string
 		wantResolvedPath string
 	}{
-		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms/acme"},
-		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms/acme"},
-		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms/master"},
+		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms"},
+		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms"},
+		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms"},
 	}
 
 	want := map[string]any{
@@ -179,9 +179,9 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 		requestedPath    string
 		wantResolvedPath string
 	}{
-		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms/acme"},
-		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms/acme"},
-		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms/master"},
+		{name: "collection_without_trailing_slash", requestedPath: "/admin/realms", wantResolvedPath: "/admin/realms"},
+		{name: "collection_with_trailing_slash", requestedPath: "/admin/realms/", wantResolvedPath: "/admin/realms"},
+		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms"},
 	}
 
 	want := map[string]any{"status": "active"}
@@ -237,8 +237,8 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
-	if result.ResolvedPath != "/admin/realms/acme" {
-		t.Fatalf("expected resolved path /admin/realms/acme, got %q", result.ResolvedPath)
+	if result.ResolvedPath != "/admin/realms" {
+		t.Fatalf("expected resolved path /admin/realms, got %q", result.ResolvedPath)
 	}
 
 	want := map[string]any{"status": "active"}
@@ -264,7 +264,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 	}
 }
 
-func TestInferFromManagedServerIgnoresStoredDefaultsSidecarValues(t *testing.T) {
+func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -278,7 +278,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsSidecarValues(t *testing.T) 
 		},
 	})
 	repo := deps.Repository.(*fakeDefaultsRepository)
-	repo.defaults["/customers/acme"] = resource.Content{
+	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
 			"status": "active",
 		},
@@ -290,7 +290,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsSidecarValues(t *testing.T) 
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
-	want := map[string]any{"status": "active"}
+	want := map[string]any{}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
@@ -529,7 +529,7 @@ func TestCompactContentAgainstStoredDefaultsReturnsOnlyOverrides(t *testing.T) {
 
 	deps := testDefaultsDeps()
 	repo := deps.Repository.(*fakeDefaultsRepository)
-	repo.defaults["/customers/acme"] = resource.Content{
+	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
 			"status": "active",
 			"labels": map[string]any{"team": "platform"},
@@ -567,7 +567,7 @@ func TestCompactContentAgainstStoredDefaultsRemovesSharedEmptyObjects(t *testing
 
 	deps := testDefaultsDeps()
 	repo := deps.Repository.(*fakeDefaultsRepository)
-	repo.defaults["/customers/acme"] = resource.Content{
+	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
 			"smtpServer": map[string]any{},
 		},
@@ -601,7 +601,7 @@ func TestCheckMatchesStoredDefaultsWhenInferredDefaultsAreEqual(t *testing.T) {
 
 	deps := testDefaultsDeps()
 	repo := deps.Repository.(*fakeDefaultsRepository)
-	repo.defaults["/customers/acme"] = resource.Content{
+	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
 			"labels": map[string]any{"team": "platform"},
 		},
@@ -622,7 +622,7 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 
 	deps := testDefaultsDeps()
 	repo := deps.Repository.(*fakeDefaultsRepository)
-	repo.defaults["/customers/acme"] = resource.Content{
+	repo.defaults["/customers/_"] = resource.Content{
 		Value: map[string]any{
 			"status": "inactive",
 		},
@@ -795,14 +795,47 @@ func (f *fakeDefaultsRepository) SaveDefaults(_ context.Context, logicalPath str
 
 type fakeDefaultsMetadata struct {
 	metadata.MetadataService
-	items map[string]metadata.ResourceMetadata
+	items    map[string]metadata.ResourceMetadata
+	defaults *map[string]resource.Content
 }
 
 func (f *fakeDefaultsMetadata) ResolveForPath(_ context.Context, logicalPath string) (metadata.ResourceMetadata, error) {
-	if item, found := f.items[logicalPath]; found {
-		return item, nil
+	resolved := metadata.ResourceMetadata{}
+	if inheritedPath, ok := fakeCollectionMetadataPath(logicalPath); ok {
+		if item, found := f.items[inheritedPath]; found {
+			resolved = metadata.MergeResourceMetadata(resolved, item)
+		}
+		if f.defaults != nil {
+			if value, found := (*f.defaults)[inheritedPath]; found {
+				resolved = metadata.MergeResourceMetadata(resolved, metadata.ResourceMetadata{
+					Defaults: &metadata.DefaultsSpec{Value: value.Value},
+				})
+			}
+		}
 	}
-	return metadata.ResourceMetadata{}, nil
+	if item, found := f.items[logicalPath]; found {
+		resolved = metadata.MergeResourceMetadata(resolved, item)
+	}
+	if f.defaults != nil {
+		if value, found := (*f.defaults)[logicalPath]; found {
+			resolved = metadata.MergeResourceMetadata(resolved, metadata.ResourceMetadata{
+				Defaults: &metadata.DefaultsSpec{Value: value.Value},
+			})
+		}
+	}
+	return resolved, nil
+}
+
+func fakeCollectionMetadataPath(logicalPath string) (string, bool) {
+	trimmed := strings.TrimSpace(logicalPath)
+	if trimmed == "" || trimmed == "/" || strings.HasSuffix(trimmed, "/_") {
+		return "", false
+	}
+	collectionPath := path.Dir(trimmed)
+	if collectionPath == "." {
+		collectionPath = "/"
+	}
+	return collectionMetadataPath(collectionPath), true
 }
 
 type fakeDefaultsServiceAccessor struct {
@@ -848,7 +881,7 @@ func testDefaultsDepsWithLocalContent(localContent map[string]resource.Content) 
 		localContent: localContent,
 	}
 	repo := &fakeDefaultsRepository{defaults: map[string]resource.Content{}}
-	md := &fakeDefaultsMetadata{items: map[string]metadata.ResourceMetadata{}}
+	md := &fakeDefaultsMetadata{items: map[string]metadata.ResourceMetadata{}, defaults: &repo.defaults}
 
 	return appdeps.Dependencies{
 		Orchestrator: orch,

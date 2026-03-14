@@ -150,7 +150,6 @@ type repositoryPathKind int
 const (
 	repositoryPathKindNone repositoryPathKind = iota
 	repositoryPathKindPayload
-	repositoryPathKindCollectionDefaultsPayload
 	repositoryPathKindResourceMetadata
 	repositoryPathKindCollectionMetadata
 	repositoryPathKindUnknownConfig
@@ -164,7 +163,7 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 
 	ext := strings.ToLower(filepath.Ext(value))
 	switch ext {
-	case ".json", ".yaml", ".yml":
+	case ".json", ".yaml", ".yml", ".properties", ".ini":
 	default:
 		return "", repositoryPathKindNone
 	}
@@ -176,7 +175,10 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 	}
 
 	// Reserved metadata namespace directories must not be interpreted as payload.
-	if strings.Contains("/"+value, "/_/") && base != "metadata" && base != "defaults" {
+	if strings.Contains("/"+value, "/_/") &&
+		base != "metadata" &&
+		base != "defaults" &&
+		!strings.HasPrefix(base, "defaults-") {
 		return "", repositoryPathKindUnknownConfig
 	}
 
@@ -187,17 +189,20 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 		}
 		return "/" + dir, repositoryPathKindPayload
 	case "defaults":
+		if !supportsDefaultsArtifactExtension(ext) {
+			return "", repositoryPathKindUnknownConfig
+		}
 		if dir == "" {
 			return "", repositoryPathKindUnknownConfig
 		}
 		if filepath.Base(dir) == "_" {
 			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
 			if collectionDir == "." || collectionDir == "" {
-				return "/", repositoryPathKindCollectionDefaultsPayload
+				return "/", repositoryPathKindCollectionMetadata
 			}
-			return "/" + collectionDir, repositoryPathKindCollectionDefaultsPayload
+			return "/" + collectionDir, repositoryPathKindCollectionMetadata
 		}
-		return "/" + dir, repositoryPathKindUnknownConfig
+		return "/" + dir, repositoryPathKindResourceMetadata
 	case "metadata":
 		if filepath.Base(dir) == "_" {
 			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
@@ -211,7 +216,42 @@ func classifyRepositoryPath(raw string) (string, repositoryPathKind) {
 		}
 		return "/" + dir, repositoryPathKindResourceMetadata
 	default:
+		if strings.HasPrefix(base, "defaults-") {
+			if !supportsDefaultsArtifactExtension(ext) {
+				return "", repositoryPathKindUnknownConfig
+			}
+			if dir == "" {
+				return "", repositoryPathKindUnknownConfig
+			}
+			if filepath.Base(dir) == "_" {
+				collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
+				if collectionDir == "." || collectionDir == "" {
+					return "/", repositoryPathKindCollectionMetadata
+				}
+				return "/" + collectionDir, repositoryPathKindCollectionMetadata
+			}
+			return "/" + dir, repositoryPathKindResourceMetadata
+		}
+		if filepath.Base(dir) == "_" {
+			collectionDir := strings.Trim(filepath.ToSlash(filepath.Dir(dir)), "/")
+			if collectionDir == "." || collectionDir == "" {
+				return "/", repositoryPathKindCollectionMetadata
+			}
+			return "/" + collectionDir, repositoryPathKindCollectionMetadata
+		}
+		if dir == "" {
+			return "", repositoryPathKindUnknownConfig
+		}
 		return "/" + strings.Trim(strings.TrimSuffix(value, ext), "/"), repositoryPathKindPayload
+	}
+}
+
+func supportsDefaultsArtifactExtension(ext string) bool {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".json", ".yaml", ".yml", ".properties":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -230,7 +270,7 @@ func accumulateAddedPath(plan *incrementalSyncPlan, changedPath string, sourcePa
 			return
 		}
 		plan.applyTargets = append(plan.applyTargets, syncApplyTarget{Path: logicalPath, Recursive: false})
-	case repositoryPathKindCollectionMetadata, repositoryPathKindCollectionDefaultsPayload:
+	case repositoryPathKindCollectionMetadata:
 		targetPath, ok := scopedCollectionMetadataTarget(logicalPath, sourcePath)
 		if !ok {
 			return
@@ -253,7 +293,7 @@ func accumulateRemovedPath(plan *incrementalSyncPlan, changedPath string, source
 		if hasPathOverlap(logicalPath, sourcePath) {
 			plan.pruneTargets = append(plan.pruneTargets, logicalPath)
 		}
-	case repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata, repositoryPathKindCollectionDefaultsPayload:
+	case repositoryPathKindResourceMetadata, repositoryPathKindCollectionMetadata:
 		accumulateAddedPath(plan, changedPath, sourcePath)
 	}
 }

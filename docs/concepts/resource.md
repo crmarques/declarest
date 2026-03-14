@@ -1,10 +1,13 @@
 # Resource Files
 
-A resource is a logical object stored in the repository as `resource.<ext>`, using the trusted media type from the managed-server response or explicit payload input. When shared values make the resource file noisy, you can also keep them in an optional sibling `defaults.<ext>` sidecar.
+A resource is a logical object stored in the repository as `resource.<ext>`, using the trusted media type from the managed-server response or explicit payload input. When shared values make the resource file noisy, keep them in metadata-native `resource.defaults`, usually backed by selector-local files such as `defaults.yaml` referenced through exact include placeholders.
 
 ## File naming
 
-The main payload filename is always `resource.<ext>`. When defaults sidecars are supported for that payload type, the companion filename is `defaults.<ext>`.
+The main payload filename is always `resource.<ext>`. Metadata-managed defaults files use deterministic selector-local names:
+
+- baseline defaults: `defaults.<ext>`
+- named profile defaults: `defaults-<profile>.<ext>`
 
 Examples:
 
@@ -19,23 +22,35 @@ Examples:
 Examples for logical path `/corporations/acme`:
 
 - payload: `corporations/acme/resource.json` (or another `resource.<ext>`)
-- defaults sidecar (optional): `corporations/acme/defaults.json`
 - resource-only metadata (optional): `corporations/acme/metadata.yaml`
+- resource-scoped defaults file (optional): `corporations/acme/defaults.json`
+- resource-scoped profile file (optional): `corporations/acme/defaults-prod.json`
 
 Collection metadata for `/customers/`:
 
 - `customers/_/metadata.yaml`
 
-## Defaults sidecars
+## Metadata-backed defaults
 
-Use a defaults sidecar when many resources in the same collection share the same object fields and you want `resource.<ext>` to keep only explicit overrides. DeclaREST reads the effective desired state as:
+Use `resource.defaults` when many resources in the same collection share the same object fields and you want `resource.<ext>` to keep only explicit overrides. The usual persisted shape is:
 
-- `defaults.<ext>` merged with `resource.<ext>`
+```yaml
+resource:
+  defaults:
+    mode: inherit
+    value: "{{include defaults.yaml}}"
+    profiles:
+      prod: "{{include defaults-prod.yaml}}"
+```
+
+DeclaREST resolves the effective desired state as:
+
+- resolved metadata defaults merged with `resource.<ext>`
 - object keys merge recursively
 - arrays are replaced as a whole
 - explicit values in `resource.<ext>` override the defaults, including `null`
 
-Current defaults-sidecar support is intentionally narrow: use it with merge-capable object payloads such as `json`, `yaml`, `ini`, and `properties`. Opaque or non-merge-friendly formats stay single-file resources for now.
+File-backed defaults are intentionally narrow: use `json`, `yaml`, `yml`, or `properties`, and only with merge-capable object payloads. Opaque or non-merge-friendly formats stay single-file resources for now.
 
 Typical workflow:
 
@@ -43,10 +58,11 @@ Typical workflow:
 declarest resource defaults infer /corporations/acme
 declarest resource defaults infer /corporations/acme --save
 declarest resource defaults get /corporations/acme
+declarest resource defaults config get /corporations/acme
 declarest resource get --source repository /corporations/acme --prune-defaults
 ```
 
-That lets the repository keep shared defaults in one sidecar while normal repository-backed reads, diffs, and apply flows still use the merged effective resource.
+That lets the repository keep shared defaults under metadata control while normal repository-backed reads, diffs, and apply flows still use the merged effective resource.
 
 ## Resource payloads vs collection payloads
 

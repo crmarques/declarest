@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,13 +25,7 @@ type resourcePayloadFiles struct {
 }
 
 func (f resourcePayloadFiles) primary() *payloadFileInfo {
-	if f.Resource != nil {
-		return f.Resource
-	}
-	if f.Defaults != nil && f.Defaults.Shared {
-		return nil
-	}
-	return f.Defaults
+	return f.Resource
 }
 
 func firstMetadataBaseDir(values []string) string {
@@ -51,23 +44,7 @@ func (r *LocalResourceRepository) discoverPayloadFiles(logicalPath string) (reso
 	if err != nil {
 		return resourcePayloadFiles{}, err
 	}
-	files, err := r.payloadFilesInfoFromDir(logicalPath, resourceDir)
-	if err != nil {
-		return resourcePayloadFiles{}, err
-	}
-
-	metadataDefaults, err := r.metadataDefaultsFileInfo(logicalPath)
-	if err != nil {
-		return resourcePayloadFiles{}, err
-	}
-	if metadataDefaults != nil {
-		files.Defaults = metadataDefaults
-	}
-
-	if err := validateDefaultsPayloadFiles(logicalPath, files); err != nil {
-		return resourcePayloadFiles{}, err
-	}
-	return files, nil
+	return r.payloadFilesInfoFromDir(logicalPath, resourceDir)
 }
 
 func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, dirPath string) (resourcePayloadFiles, error) {
@@ -80,7 +57,6 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 	}
 
 	resourceCandidates := make([]string, 0, 1)
-	legacyDefaultsCandidates := make([]string, 0, 1)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -88,8 +64,6 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 		switch {
 		case strings.HasPrefix(entry.Name(), "resource."):
 			resourceCandidates = append(resourceCandidates, entry.Name())
-		case strings.HasPrefix(entry.Name(), "defaults."):
-			legacyDefaultsCandidates = append(legacyDefaultsCandidates, entry.Name())
 		}
 	}
 
@@ -97,38 +71,11 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 	if err != nil {
 		return resourcePayloadFiles{}, err
 	}
-	if len(legacyDefaultsCandidates) > 0 {
-		sort.Strings(legacyDefaultsCandidates)
-		return resourcePayloadFiles{}, faults.NewValidationError(
-			fmt.Sprintf(
-				"resource %q uses unsupported per-resource defaults files: %s; move defaults to %s",
-				logicalPath,
-				strings.Join(legacyDefaultsCandidates, ", "),
-				path.Join(collectionSelectorPath(logicalPath), "_", "defaults.<ext>"),
-			),
-			nil,
-		)
-	}
 
 	files := resourcePayloadFiles{
 		Resource: resourceInfo,
 	}
 	return files, nil
-}
-
-func (r *LocalResourceRepository) metadataDefaultsFileInfo(logicalPath string) (*payloadFileInfo, error) {
-	defaultsDir, err := r.collectionDefaultsDirPath(logicalPath)
-	if err != nil {
-		return nil, err
-	}
-	info, err := payloadFileInfoFromCandidates(logicalPath, defaultsDir, "defaults", payloadFileCandidatesFromDir(defaultsDir, "defaults"))
-	if err != nil {
-		return nil, err
-	}
-	if info != nil {
-		info.Shared = true
-	}
-	return info, nil
 }
 
 func payloadFileCandidatesFromDir(dirPath string, prefix string) []string {
@@ -159,9 +106,6 @@ func (r *LocalResourceRepository) resolvePayloadTarget(
 	}
 
 	desired := desiredPayloadDescriptor(content, files)
-	if err := validateDesiredDescriptorWithDefaults(files, desired); err != nil {
-		return payloadFileInfo{}, resourcePayloadFiles{}, err
-	}
 	canonicalPath, err := r.canonicalPayloadFilePath(logicalPath, desired.Extension)
 	if err != nil {
 		return payloadFileInfo{}, resourcePayloadFiles{}, err
@@ -221,9 +165,6 @@ func desiredPayloadDescriptor(content resource.Content, existing resourcePayload
 	}
 	if existing.Resource != nil {
 		return existing.Resource.Descriptor
-	}
-	if existing.Defaults != nil {
-		return existing.Defaults.Descriptor
 	}
 	if resource.IsBinaryValue(content.Value) {
 		return resource.DefaultOctetStreamDescriptor()

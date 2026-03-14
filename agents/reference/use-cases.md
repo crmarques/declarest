@@ -218,7 +218,7 @@ Failure expectation:
 2. `--mode invalid` fails with `ValidationError`.
 
 ### Example 11: Resource Defaults Infer and Save
-Goal: infer compact raw defaults for one repository resource without flattening effective desired state.
+Goal: infer compact baseline defaults for one repository collection without flattening effective desired state.
 
 Inputs:
 1. Target collection path `/api/projects/defaults-sandbox/widgets` or target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
@@ -228,14 +228,14 @@ Inputs:
 Execution:
 1. CLI resolves the input to the logical collection `/api/projects/defaults-sandbox/widgets`; collection-path inputs with or without a trailing `/` remain equivalent, and concrete resource inputs still resolve to that same collection.
 2. Defaults inference compares direct local sibling resources under the same collection and extracts only equal object fields.
-3. `resource defaults infer --save` persists the inferred object to the collection metadata selector `defaults.<ext>` for the target path, reusing the collection resource payload type when it is merge-capable (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` when the widget collection stores `resource.json`).
-4. `resource defaults infer --check` compares the inferred normalized object against the current defaults sidecar and fails when they differ.
-5. `resource defaults get` returns the raw defaults object, not the merged effective resource.
+3. `resource defaults infer --save` persists the inferred object to the collection metadata selector directory as `defaults.<ext>` and updates `resource.defaults.value` to the exact include placeholder for that file, reusing the collection resource payload type when it supports file-backed defaults (for example `/api/projects/defaults-sandbox/widgets/_/defaults.json` plus `resource.defaults.value: "{{include defaults.json}}"` when the widget collection stores `resource.json`).
+4. `resource defaults infer --check` compares the inferred normalized object against the current resolved defaults object for that collection scope and fails when they differ.
+5. `resource defaults get` returns the effective resolved defaults object, while `resource defaults config get` returns the raw persisted `resource.defaults` block with include placeholders intact.
 
 Expected outputs:
 1. Output contains only shared default candidates.
-2. Saving defaults keeps `resource.<ext>` separate from the collection metadata `defaults.<ext>` sidecar.
-3. `--check` succeeds only when the stored defaults sidecar matches the inferred normalized object.
+2. Saving defaults keeps `resource.<ext>` separate from the collection metadata defaults artifact and its `resource.defaults` include reference.
+3. `--check` succeeds only when the resolved defaults object matches the inferred normalized object.
 4. Subsequent repository-backed reads still expose the merged effective resource.
 
 ### Example 12: Resource Defaults Managed-Server Probe Safety
@@ -250,7 +250,7 @@ Execution:
 1. CLI validates `--yes` before any remote mutation.
 2. Workflow clones the target local resource payload twice, mutates identity fields to unique temporary values, and creates two temporary remote resources.
 3. When `--wait` is set, workflow pauses for the requested interval after creating the temporary resources and before the first probe readback.
-4. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources without consulting sibling repository resources or stored defaults-sidecar values for inferred-value selection.
+4. Workflow reads both created resources, subtracts shared explicit input values, infers only stable server-added defaults, and deletes both temporary remote resources without consulting sibling repository resources or current resolved defaults for inferred-value selection.
 
 Expected outputs:
 1. Only stable server-added defaults remain in command output, including stable empty-object fields such as `smtpServer: {}` when the server returns them consistently.
@@ -260,22 +260,22 @@ Failure expectation:
 1. Omitting `--yes` fails with `ValidationError` and performs no remote create.
 
 ### Example 13: Resource Get and Save With Defaults Pruning
-Goal: compact effective local or remote payloads back to explicit overrides without editing the raw defaults sidecar.
+Goal: compact effective local or remote payloads back to explicit overrides without editing metadata-managed defaults artifacts.
 
 Inputs:
 1. Target resource path `/api/projects/defaults-sandbox/widgets/defaults-alpha`.
-2. Repository contains `defaults.<ext>` with stable fields such as `project`, `enabled`, or empty-object defaults like `smtpServer: {}`.
+2. Metadata contains `resource.defaults` that resolves through `defaults.<ext>` with stable fields such as `project`, `enabled`, or empty-object defaults like `smtpServer: {}`.
 3. Caller runs `resource get --prune-defaults` or `resource save --prune-defaults`.
 
 Execution:
-1. `resource get --prune-defaults` reads the effective payload from the selected source and compacts it against raw repository defaults before output.
-2. Repository and managed-server sources both use the same raw defaults sidecar for pruning.
+1. `resource get --prune-defaults` reads the effective payload from the selected source and compacts it against resolved metadata defaults before output.
+2. Repository and managed-server sources both use the same resolved metadata defaults object for pruning.
 3. `resource save --prune-defaults` compacts the fetched or explicit payload before repository persistence; list saves prune per resolved item path.
 
 Expected outputs:
 1. Printed or saved payload retains only explicit override fields.
 2. When all fields are defaulted, `resource get --prune-defaults` prints `{}` instead of `null`.
-3. The raw `defaults.<ext>` sidecar remains unchanged.
+3. The raw metadata `resource.defaults` block and its referenced defaults artifacts remain unchanged.
 
 ### Example 14: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.

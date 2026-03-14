@@ -180,6 +180,26 @@ func (fakeEditMetadataService) Get(context.Context, string) (metadatadomain.Reso
 	return metadatadomain.ResourceMetadata{}, nil
 }
 
+func (fakeEditMetadataService) Set(context.Context, string, metadatadomain.ResourceMetadata) error {
+	return nil
+}
+
+func (fakeEditMetadataService) Unset(context.Context, string) error {
+	return nil
+}
+
+func (fakeEditMetadataService) ReadDefaultsArtifact(context.Context, string, string) (resourcedomain.Content, error) {
+	return resourcedomain.Content{}, faults.NewTypedError(faults.NotFoundError, "defaults artifact not found", nil)
+}
+
+func (fakeEditMetadataService) WriteDefaultsArtifact(context.Context, string, string, resourcedomain.Content) error {
+	return nil
+}
+
+func (fakeEditMetadataService) DeleteDefaultsArtifact(context.Context, string, string) error {
+	return nil
+}
+
 type fakeEditServiceAccessor struct {
 	store    repository.ResourceStore
 	metadata metadatadomain.MetadataService

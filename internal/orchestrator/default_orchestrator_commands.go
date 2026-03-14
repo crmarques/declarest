@@ -254,6 +254,14 @@ func (r *Orchestrator) ListLocal(ctx context.Context, logicalPath string, policy
 		if getErr != nil {
 			return nil, getErr
 		}
+		resolvedMetadata, metadataErr := r.resolveMetadataForPath(ctx, items[idx].LogicalPath, true)
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
+		content, _, metadataErr = mergeContentWithMetadataDefaults(content, resolvedMetadata)
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
 		items[idx].Payload = content.Value
 		items[idx].PayloadDescriptor = content.Descriptor
 	}

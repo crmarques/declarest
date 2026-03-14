@@ -90,14 +90,27 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 	}
 
 	writeFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.yaml"), "spec:\n  enabled: true\n")
-	revLegacyDefaults := commitAll(t, repo, "add legacy defaults")
+	revResourceDefaults := commitAll(t, repo, "add resource defaults")
 
-	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revDefaultsRemoved, revLegacyDefaults, "/customers")
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revDefaultsRemoved, revResourceDefaults, "/customers")
+	if err != nil {
+		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
+	}
+	targets = normalizeSyncApplyTargets(plan.applyTargets)
+	expectedTargets = []syncApplyTarget{{Path: "/customers/acme", Recursive: false}}
+	if !reflect.DeepEqual(targets, expectedTargets) {
+		t.Fatalf("unexpected resource defaults apply targets: got %#v want %#v", targets, expectedTargets)
+	}
+
+	writeFile(t, filepath.Join(repoDir, "customers", "acme", "defaults.ini"), "enabled=true\n")
+	revUnsupportedDefaults := commitAll(t, repo, "add unsupported defaults artifact")
+
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revResourceDefaults, revUnsupportedDefaults, "/customers")
 	if err != nil {
 		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
 	}
 	if !plan.requiresFull {
-		t.Fatal("expected legacy per-resource defaults diff to force full-sync fallback")
+		t.Fatal("expected unsupported defaults artifact diff to force full-sync fallback")
 	}
 
 	removeFile(t, filepath.Join(repoDir, "customers", "bravo", "resource.json"))
@@ -110,7 +123,7 @@ func TestBuildIncrementalPlanFromRepositoryDiff(t *testing.T) {
 	}
 	rev4 := commitAll(t, repo, "remove bravo")
 
-	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revLegacyDefaults, rev4, "/customers")
+	plan, err = buildIncrementalPlanFromRepositoryDiff(context.Background(), repoDir, revUnsupportedDefaults, rev4, "/customers")
 	if err != nil {
 		t.Fatalf("buildIncrementalPlanFromRepositoryDiff() error = %v", err)
 	}

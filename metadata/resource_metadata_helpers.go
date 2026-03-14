@@ -15,6 +15,7 @@ func HasResourceMetadataDirectives(value ResourceMetadata) bool {
 		strings.TrimSpace(value.RemoteCollectionPath) != "" ||
 		strings.TrimSpace(value.PayloadType) != "" ||
 		strings.TrimSpace(value.DefaultFormat) != "" ||
+		HasDefaultsSpecDirectives(value.Defaults) ||
 		value.Secret != nil ||
 		value.SecretAttributes != nil ||
 		value.ExternalizedAttributes != nil ||
@@ -30,6 +31,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		RemoteCollectionPath:   value.RemoteCollectionPath,
 		PayloadType:            value.PayloadType,
 		DefaultFormat:          value.DefaultFormat,
+		Defaults:               CloneDefaultsSpec(value.Defaults),
 		Secret:                 cloneBoolPointer(value.Secret),
 		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
@@ -62,6 +64,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		RemoteCollectionPath:   base.RemoteCollectionPath,
 		PayloadType:            base.PayloadType,
 		DefaultFormat:          base.DefaultFormat,
+		Defaults:               CloneDefaultsSpec(base.Defaults),
 		Secret:                 cloneBoolPointer(base.Secret),
 		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
@@ -87,6 +90,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 	if overlay.DefaultFormat != "" {
 		merged.DefaultFormat = overlay.DefaultFormat
 	}
+	merged.Defaults = MergeDefaultsSpec(merged.Defaults, overlay.Defaults)
 	if overlay.Secret != nil {
 		merged.Secret = cloneBoolPointer(overlay.Secret)
 	}

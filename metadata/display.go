@@ -14,9 +14,17 @@ type displayResourceWire struct {
 	RemoteCollectionPath   string                             `json:"remoteCollectionPath" yaml:"remoteCollectionPath"`
 	PayloadType            string                             `json:"payloadType" yaml:"payloadType"`
 	DefaultFormat          string                             `json:"defaultFormat" yaml:"defaultFormat"`
+	Defaults               displayDefaultsSpec                `json:"defaults" yaml:"defaults"`
 	Secret                 bool                               `json:"secret" yaml:"secret"`
 	SecretAttributes       []string                           `json:"secretAttributes" yaml:"secretAttributes"`
 	ExternalizedAttributes []displayExternalizedAttributeWire `json:"externalizedAttributes" yaml:"externalizedAttributes"`
+}
+
+type displayDefaultsSpec struct {
+	Mode        string         `json:"mode" yaml:"mode"`
+	UseProfiles []string       `json:"useProfiles" yaml:"useProfiles"`
+	Value       any            `json:"value" yaml:"value"`
+	Profiles    map[string]any `json:"profiles" yaml:"profiles"`
 }
 
 type displayExternalizedAttributeWire struct {
@@ -84,6 +92,7 @@ func DisplayResourceMetadataView(value ResourceMetadata) displayResourceMetadata
 			RemoteCollectionPath:   expanded.RemoteCollectionPath,
 			PayloadType:            expanded.PayloadType,
 			DefaultFormat:          expanded.DefaultFormat,
+			Defaults:               displayDefaults(expanded.Defaults),
 			Secret:                 expanded.IsWholeResourceSecret(),
 			SecretAttributes:       cloneStringSliceOrEmpty(expanded.SecretAttributes),
 			ExternalizedAttributes: displayExternalizedAttributes(expanded.ExternalizedAttributes),
@@ -187,4 +196,35 @@ func displayExternalizedAttributes(values []ExternalizedAttribute) []displayExte
 		}
 	}
 	return items
+}
+
+func displayDefaults(value *DefaultsSpec) displayDefaultsSpec {
+	if value == nil {
+		return displayDefaultsSpec{
+			Mode:        DefaultsModeInherit,
+			UseProfiles: []string{},
+			Value:       map[string]any{},
+			Profiles:    map[string]any{},
+		}
+	}
+
+	mode, _ := ValidateDefaultsMode(value.Mode)
+	profiles := map[string]any{}
+	if value.Profiles != nil {
+		for key, item := range value.Profiles {
+			profiles[key] = cloneDefaultsEntry(item)
+		}
+	}
+
+	displayValue := cloneDefaultsEntry(value.Value)
+	if displayValue == nil {
+		displayValue = map[string]any{}
+	}
+
+	return displayDefaultsSpec{
+		Mode:        mode,
+		UseProfiles: cloneStringSliceOrEmpty(value.UseProfiles),
+		Value:       displayValue,
+		Profiles:    profiles,
+	}
 }

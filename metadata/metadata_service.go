@@ -43,6 +43,15 @@ type MetadataService interface {
 	OperationSpecRenderer
 }
 
+// DefaultsArtifactStore is an optional metadata capability used by defaults
+// workflows that persist deterministic file-backed defaults artifacts next to
+// metadata selector files.
+type DefaultsArtifactStore interface {
+	ReadDefaultsArtifact(ctx context.Context, logicalPath string, file string) (resource.Content, error)
+	WriteDefaultsArtifact(ctx context.Context, logicalPath string, file string, content resource.Content) error
+	DeleteDefaultsArtifact(ctx context.Context, logicalPath string, file string) error
+}
+
 // CollectionChildrenResolver is an optional metadata capability used by path
 // completion to surface child selectors that exist only in metadata templates.
 type CollectionChildrenResolver interface {

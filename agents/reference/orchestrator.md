@@ -30,8 +30,8 @@ Define orchestration behavior that coordinates repository, metadata, server, and
 13. Remote delete workflows SHOULD attempt literal delete first and MAY retry once with metadata-aware identity fallback after `NotFound`.
 14. Remote read workflows SHOULD treat `NotFound` collection reads as empty collections only when repository structure hints or OpenAPI inference indicate the requested path is a collection endpoint, and they SHOULD preserve `NotFound` when a nested collection read fails because the parent resource is also `NotFound`.
 15. Remote read metadata fallback MAY accept a single-candidate list result when metadata declares list `jq` filtering, but only when the requested logical path depth does not exceed the resolved selector/collection template depth; singleton fallback MUST NOT collapse explicit child identity segments and SHOULD then resolve to canonical remote identity for follow-up reads when possible.
-16. Repository-backed local read, diff, template, and mutation-preparation workflows MUST use the effective local desired payload after repository defaults-sidecar merging and repository artifact expansion, before identity resolution, payload validation, secret resolution, compare transforms, or remote HTTP execution.
-17. Repository-backed write workflows MUST preserve metadata-root defaults-sidecar layout by compacting effective desired payloads against resolved `defaults.<ext>` overlays before persisting `resource.<ext>`.
+16. Repository-backed local read, diff, template, and mutation-preparation workflows MUST use the effective local desired payload after metadata `resource.defaults` resolution and repository artifact expansion, before identity resolution, payload validation, secret resolution, compare transforms, or remote HTTP execution.
+17. Repository-backed write workflows MUST preserve metadata-managed defaults layout by compacting effective desired payloads against the resolved metadata defaults object before persisting raw `resource.<ext>`.
 
 ## Data Contracts
 Core orchestrator workflows:
@@ -47,7 +47,7 @@ Resolution contract:
 1. Input path -> metadata resolution -> `resource.Resource` identity resolution -> operation spec -> execution.
 2. Optional secret masking/resolution performed at boundaries.
 3. Direct request workflows MUST preserve the full rendered request contract, including metadata-derived query parameters, headers, `Accept`, and `Content-Type`, through managed-server execution.
-4. Repository-backed resource resolution MUST treat resolved metadata-root `defaults.<ext>` content as part of the local desired payload for that same logical path rather than as a separate resource target.
+4. Repository-backed resource resolution MUST treat resolved metadata `resource.defaults` content as part of the local desired payload for that same logical path rather than as a separate resource target.
 
 ## Failure Modes
 1. Metadata resolved but required remote identity missing.
@@ -55,7 +55,7 @@ Resolution contract:
 3. Remote fallback candidates are ambiguous.
 4. Repository sync conflict blocks local persistence workflows after successful remote operations.
 5. Local metadata-id fallback yields multiple candidates for one path segment.
-6. Repository defaults-sidecar content is invalid for the effective payload type or conflicts with the canonical payload descriptor.
+6. Metadata defaults content or defaults artifacts are invalid for the effective payload type or conflict with the canonical payload descriptor.
 
 ## Edge Cases
 1. Direct get path fails and alias-based fallback succeeds.
@@ -65,7 +65,7 @@ Resolution contract:
 5. Local path segment is an ID while repository uses metadata alias for stored logical paths.
 6. Collection endpoint returns `404` when empty and must be interpreted as zero items rather than missing endpoint when collection hints are present and the parent resource exists.
 7. Nested collection read returns `404` because the parent resource is missing and must remain `NotFound` instead of collapsing to `[]`.
-8. A local resource with `/customers/_/defaults.yaml` and `/customers/acme/resource.yaml` can diff cleanly against a remote payload even when `resource.yaml` omits most fields because compare uses the effective merged payload, not the override file alone.
+8. A local resource with `/customers/_/metadata.yaml` referencing `defaults.yaml` and `/customers/acme/resource.yaml` can diff cleanly against a remote payload even when `resource.yaml` omits most fields because compare uses the effective merged payload, not the override file alone.
 
 ## Examples
 1. `Apply(/customers/acme)` resolves metadata, reads remote resource state, compares with metadata compare transforms, then creates/updates only when drift exists (or when force is enabled).
@@ -74,4 +74,4 @@ Resolution contract:
 4. `Apply(/admin/realms/master/clients/<uuid>)` resolves the local resource by metadata ID fallback when only alias-based repository paths exist.
 5. `GetRemote(/admin/realms/master/organizations)` returns an empty list when the server responds `404` for an empty collection and collection hints confirm the path is a collection.
 6. `GetRemote(/admin/realms/acme/organizations)` preserves `NotFound` when `/admin/realms/acme` is also missing, even if OpenAPI hints confirm `organizations` is a collection endpoint.
-7. `Apply(/customers/acme)` with `/customers/_/defaults.yaml` and `/customers/acme/resource.yaml` resolves identity and validation from the merged payload, but later local saves still keep only the non-default overrides in `resource.yaml`.
+7. `Apply(/customers/acme)` with `/customers/_/metadata.yaml` referencing `defaults.yaml` and `/customers/acme/resource.yaml` resolves identity and validation from the merged payload, but later local saves still keep only the non-default overrides in `resource.yaml`.

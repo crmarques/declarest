@@ -33,6 +33,10 @@ func (r *Orchestrator) saveLocalResource(
 		return err
 	}
 	if len(entries) == 0 {
+		content, _, err = compactContentWithMetadataDefaults(content, resolvedMetadata, true)
+		if err != nil {
+			return err
+		}
 		return manager.Save(ctx, normalizedPath, content)
 	}
 
@@ -49,14 +53,22 @@ func (r *Orchestrator) saveLocalResource(
 	if err != nil {
 		return err
 	}
-
-	return artifactStore.SaveResourceWithArtifacts(
-		ctx,
-		normalizedPath,
+	compactedContent, _, err := compactContentWithMetadataDefaults(
 		resource.Content{
 			Value:      extracted.Payload,
 			Descriptor: content.Descriptor,
 		},
+		resolvedMetadata,
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
+	return artifactStore.SaveResourceWithArtifacts(
+		ctx,
+		normalizedPath,
+		compactedContent,
 		extracted.Artifacts,
 	)
 }

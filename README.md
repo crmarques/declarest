@@ -13,7 +13,7 @@ DeclaREST turns REST API resources into versioned desired-state files you can re
 ## Project objective (10 seconds)
 
 - Use stable logical paths (`/corporations/acme`) instead of raw endpoint shapes.
-- Keep desired state in `resource.json|yaml` files inside a repository, with optional `defaults.<ext>` sidecars for shared values.
+- Keep desired state in `resource.json|yaml` files inside a repository, with metadata-backed `resource.defaults` for shared values.
 - Reconcile safely in both directions: `save` from API, `diff`, then `apply` back.
 
 ## How it works
@@ -38,7 +38,7 @@ declarest resource apply /corporations/acme
 
 ## Current capabilities
 
-- Resource workflows: `get|list|save|diff|explain|apply|create|update|delete|edit|copy` plus `resource defaults get|edit|infer` and `--prune-defaults` compaction
+- Resource workflows: `get|list|save|diff|explain|apply|create|update|delete|edit|copy` plus `resource defaults get|edit|config|profile|infer` and `--prune-defaults` compaction
 - Raw HTTP workflows: `resource request <method>` for targeted debugging or ad-hoc operations
 - Metadata workflows: `get|resolve|render|infer|set|unset` with OpenAPI and bundle-aware defaults
 - Secret safety workflows: detect/fix metadata, store/mask/resolve placeholders, safe-save guards
