@@ -490,7 +490,7 @@ case_repo_template_apply_all_metadata() {
     local target_path
     while IFS= read -r target_path; do
       [[ -n "${target_path}" ]] || continue
-      case_run_declarest metadata set "${target_path}" -f "${metadata_file}" -i "${metadata_input_format}"
+      case_run_declarest resource metadata set "${target_path}" -f "${metadata_file}" -i "${metadata_input_format}"
       case_expect_success
     done < <(case_repo_template_metadata_target_paths "${logical_path}" "${component_name}")
   done < <(case_repo_template_metadata_files "${component_name}")

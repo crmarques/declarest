@@ -26,18 +26,18 @@ Use `--output text` for a concise `alias (id)` view when metadata identity mappi
 
 ```bash
 # defaults + merged overrides
-declarest metadata get /corporations/acme
+declarest resource metadata get /corporations/acme
 
 # only authored overrides
-declarest metadata get /corporations/acme --overrides-only
+declarest resource metadata get /corporations/acme --overrides-only
 ```
 
 ## 3. Render concrete operation specs
 
 ```bash
-declarest metadata render /corporations/acme get
-declarest metadata render /corporations/acme update
-declarest metadata render /customers/ list
+declarest resource metadata render /corporations/acme get
+declarest resource metadata render /corporations/acme update
+declarest resource metadata render /customers/ list
 ```
 
 This is the fastest way to verify custom `remoteCollectionPath`, relative `path`, methods, headers, and query behavior.

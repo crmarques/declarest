@@ -282,7 +282,7 @@ Goal: keep metadata-mutating E2E coverage without mutating checked-in component 
 
 Inputs:
 1. Managed-server component with checked-in `metadata/` fixtures.
-2. E2E case that calls `metadata set` or `secret detect --fix`.
+2. E2E case that calls `resource metadata set` or `secret detect --fix`.
 
 Execution:
 1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
@@ -651,10 +651,10 @@ Execution:
 
 Expected outputs:
 1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
-2. `declarest context show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `metadata infer --openapi`.
+2. `declarest context show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `resource metadata infer --openapi`.
 
 Failure expectation:
-1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `metadata` commands run.
+1. If the runner cannot copy the declared spec, the context phase fails fast with an actionable error before `resource metadata` commands run.
 
 ### Example 17: Repository History by Backend Type (Corner)
 Goal: expose local git history when available while keeping filesystem repos deterministic and non-mutating.
@@ -794,20 +794,20 @@ Failure expectation:
 1. If one collection-level descriptor rewrites every child to the same suffix despite `defaultFormat: any`, the contract is breached.
 
 ### Example 36: Metadata View vs Rendered Metadata Snapshot
-Goal: keep `metadata get` and `resource get --show-metadata` boundaries explicit for payload-aware helper tokens.
+Goal: keep `resource metadata get` and `resource get --show-metadata` boundaries explicit for payload-aware helper tokens.
 
 Inputs:
 1. Metadata containing `operations.get.accept: "{{payload_media_type .}}"` and `operations.create.headers.X-Content-Type: "{{index . \"contentType\"}}"`.
 2. Resource payload stored or fetched as raw text or octet-stream.
 
 Execution:
-1. User runs `metadata get <path>`.
+1. User runs `resource metadata get <path>`.
 2. User runs `resource get <path> --show-metadata`.
 
 Expected outputs:
-1. `metadata get` prints the canonical metadata view with helper placeholders still present.
+1. `resource metadata get` prints the canonical metadata view with helper placeholders still present.
 2. `resource get --show-metadata` prints a rendered metadata snapshot where payload-aware helper tokens resolve from the active descriptor (for example `text/plain`, `application/octet-stream`, or an explicit extension-backed descriptor).
-3. Non-payload templates that still depend on unresolved payload fields remain untouched in `metadata get`.
+3. Non-payload templates that still depend on unresolved payload fields remain untouched in `resource metadata get`.
 
 Failure expectation:
-1. If `metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.
+1. If `resource metadata get` renders payload-aware helpers, or `resource get --show-metadata` falls back to JSON for raw text/octet-stream payloads, the contract is breached.

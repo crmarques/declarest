@@ -42,13 +42,13 @@ Helpful commands:
 
 ```bash
 # Effective metadata (merged with defaults)
-declarest metadata get /corporations/acme
+declarest resource metadata get /corporations/acme
 
 # Minimal override view
-declarest metadata get /corporations/acme --overrides-only
+declarest resource metadata get /corporations/acme --overrides-only
 
 # Render one operation to inspect the final HTTP request mapping
-declarest metadata render /corporations/acme update
+declarest resource metadata render /corporations/acme update
 ```
 
 ## OpenAPI helps, but metadata is the final authority
@@ -57,8 +57,8 @@ If an OpenAPI spec is configured, DeclaREST can infer or improve defaults.
 But explicit metadata overrides win.
 
 ```bash
-declarest metadata infer /corporations/acme
-declarest metadata infer /corporations/acme --apply
+declarest resource metadata infer /corporations/acme
+declarest resource metadata infer /corporations/acme --apply
 ```
 
 Use inference as a starting point, then refine manually for edge cases.

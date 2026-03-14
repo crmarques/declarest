@@ -115,14 +115,14 @@ Use this loop whenever you add or change path overrides:
 
 ```bash
 # 1) inspect effective metadata
-declarest metadata get /admin/realms/prod/user-registry/ldap-main
+declarest resource metadata get /admin/realms/prod/user-registry/ldap-main
 
 # 2) inspect just your overrides
-declarest metadata get /admin/realms/prod/user-registry/ldap-main --overrides-only
+declarest resource metadata get /admin/realms/prod/user-registry/ldap-main --overrides-only
 
 # 3) render concrete operation specs
-declarest metadata render /admin/realms/prod/user-registry/ldap-main get
-declarest metadata render /admin/realms/prod/user-registry/ldap-main update
+declarest resource metadata render /admin/realms/prod/user-registry/ldap-main get
+declarest resource metadata render /admin/realms/prod/user-registry/ldap-main update
 
 # 4) inspect the full plan
 declarest resource explain /admin/realms/prod/user-registry/ldap-main

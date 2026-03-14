@@ -500,6 +500,7 @@ func TestPathCompletionIncludesMetadataWildcardSelectorSegments(t *testing.T) {
 		deps,
 		"",
 		"__complete",
+		"resource",
 		"metadata",
 		"get",
 		"/admin/realms/",
@@ -861,12 +862,12 @@ func TestPathCompletionAvailableForAllPathAwareCommands(t *testing.T) {
 		{"resource", "request", "delete"},
 		{"resource", "request", "trace"},
 		{"resource", "request", "connect"},
-		{"metadata", "get"},
-		{"metadata", "set"},
-		{"metadata", "unset"},
-		{"metadata", "resolve"},
-		{"metadata", "render"},
-		{"metadata", "infer"},
+		{"resource", "metadata", "get"},
+		{"resource", "metadata", "set"},
+		{"resource", "metadata", "unset"},
+		{"resource", "metadata", "resolve"},
+		{"resource", "metadata", "render"},
+		{"resource", "metadata", "infer"},
 		{"secret", "get"},
 		{"secret", "detect"},
 	}
@@ -1010,7 +1011,7 @@ func TestPathCompletionMetadataAndSecretPreferRepositoryPaths(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "metadata_get", args: []string{"metadata", "get", "/customers"}},
+		{name: "metadata_get", args: []string{"resource", "metadata", "get", "/customers"}},
 		{name: "secret_get", args: []string{"secret", "get", "/customers"}},
 		{name: "secret_detect", args: []string{"secret", "detect", "/customers"}},
 	}
@@ -1048,7 +1049,7 @@ func TestPathCompletionMetadataAndSecretPreferRepositoryPaths(t *testing.T) {
 func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
 	t.Parallel()
 
-	output, err := executeForTest(testDeps(), "", "__complete", "metadata", "render", "/customers", "")
+	output, err := executeForTest(testDeps(), "", "__complete", "resource", "metadata", "render", "/customers", "")
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
@@ -1059,7 +1060,7 @@ func TestMetadataRenderCompletionSuggestsOperations(t *testing.T) {
 		}
 	}
 
-	withPathFlagOutput, err := executeForTest(testDeps(), "", "__complete", "metadata", "render", "--path", "/customers", "")
+	withPathFlagOutput, err := executeForTest(testDeps(), "", "__complete", "resource", "metadata", "render", "--path", "/customers", "")
 	if err != nil {
 		t.Fatalf("unexpected completion error with --path: %v", err)
 	}

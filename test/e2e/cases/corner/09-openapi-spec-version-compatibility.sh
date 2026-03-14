@@ -138,7 +138,7 @@ case_assert_schema_ref_validation() {
   case_write_validation_metadata "${metadata_file}" "${logical_path}"
   case_write_json "${payload_file}" '{}'
 
-  case_run_declarest_with_context "${temp_context}" metadata set "${logical_path}/_" --payload "${metadata_file}"
+  case_run_declarest_with_context "${temp_context}" resource metadata set "${logical_path}/_" --payload "${metadata_file}"
   case_expect_success
 
   case_run_declarest_with_context "${temp_context}" resource request post "${logical_path}" --payload "${payload_file}"
@@ -146,7 +146,7 @@ case_assert_schema_ref_validation() {
   case_expect_output_contains 'openapi:request-body'
   case_expect_output_contains 'missing required property'
 
-  case_run_declarest_with_context "${temp_context}" metadata unset "${logical_path}/_"
+  case_run_declarest_with_context "${temp_context}" resource metadata unset "${logical_path}/_"
   case_expect_success
 }
 

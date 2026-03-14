@@ -58,9 +58,9 @@ Use canonical JSON Pointer placeholders such as {% raw %}`{{/realm}}`{% endraw %
 ### Verify the mapping
 
 ```bash
-declarest metadata get /admin/realms/prod/user-registry/ldap-main
-declarest metadata render /admin/realms/prod/user-registry/ldap-main get
-declarest metadata render /admin/realms/prod/user-registry/ list
+declarest resource metadata get /admin/realms/prod/user-registry/ldap-main
+declarest resource metadata render /admin/realms/prod/user-registry/ldap-main get
+declarest resource metadata render /admin/realms/prod/user-registry/ list
 ```
 
 ### Why this is powerful
@@ -128,9 +128,9 @@ This is a textbook example of operation-level API drift handled cleanly by metad
 ### Verify each operation explicitly
 
 ```bash
-declarest metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" create
-declarest metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" update
-declarest metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" delete
+declarest resource metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" create
+declarest resource metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" update
+declarest resource metadata render \"/admin/realms/prod/authentication/flows/browser/executions/OTP Form\" delete
 ```
 
 If the logical path alias contains spaces, shell quoting matters.
@@ -155,15 +155,15 @@ This is an advanced pattern for APIs that flatten nested resources internally.
 1. Model the logical path tree you want users to operate on.
 2. Add high-level selector metadata with `remoteCollectionPath` and identity templates.
 3. Add list `jq` filters to isolate the logical collection.
-4. Render operations with `metadata render` for concrete paths.
+4. Render operations with `resource metadata render` for concrete paths.
 5. Add per-operation overrides and ordered `transforms` steps only where the API deviates.
 6. Use `resource explain` to validate reconciliation behavior end-to-end.
 7. Save/apply one resource before scaling to a whole collection.
 
 ## Checklist for advanced metadata changes
 
-- `metadata get` shows the expected merged result
-- `metadata get --overrides-only` stays minimal and readable
-- `metadata render` matches real API endpoints for get/create/update/delete/list
+- `resource metadata get` shows the expected merged result
+- `resource metadata get --overrides-only` stays minimal and readable
+- `resource metadata render` matches real API endpoints for get/create/update/delete/list
 - `resource explain` resolves the correct alias/id and operation plan
 - `resource save` / `resource apply` works on a single concrete path first

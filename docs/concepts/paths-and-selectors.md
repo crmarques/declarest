@@ -27,7 +27,7 @@ Rules:
 This distinction matters for:
 
 - `resource list`
-- `metadata render` default operation selection
+- `resource metadata render` default operation selection
 - metadata file placement under `_/metadata.json`
 
 ## Selector paths (metadata-only patterns)

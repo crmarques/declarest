@@ -42,7 +42,7 @@ case_run() {
     }
   }'
 
-  case_run_declarest metadata set "${public_key_path}" -f "${secret_metadata_file}" --content-type json
+  case_run_declarest resource metadata set "${public_key_path}" -f "${secret_metadata_file}" --content-type json
   case_expect_success
   case_repo_commit_setup_changes_if_git
 

@@ -300,7 +300,7 @@ func TestRequiresContextBootstrap(t *testing.T) {
 		},
 		{
 			name: "metadata commands require context",
-			args: []string{"metadata", "resolve", "/"},
+			args: []string{"resource", "metadata", "resolve", "/"},
 			want: true,
 		},
 		{

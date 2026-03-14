@@ -53,32 +53,32 @@ declarest context update --payload /tmp/contexts.yaml
 ### Inspect first
 
 ```bash
-declarest metadata get /corporations/acme
-declarest metadata get /corporations/acme --overrides-only
+declarest resource metadata get /corporations/acme
+declarest resource metadata get /corporations/acme --overrides-only
 ```
 
 ### Write metadata from a file or stdin
 
 ```bash
-declarest metadata set /customers/ --payload customers-metadata.json
+declarest resource metadata set /customers/ --payload customers-metadata.json
 
 # or
-cat customers-metadata.json | declarest metadata set /customers/ --payload -
+cat customers-metadata.json | declarest resource metadata set /customers/ --payload -
 ```
 
 Remove metadata for a path when refactoring selector layout:
 
 ```bash
-declarest metadata unset /customers/
+declarest resource metadata unset /customers/
 ```
 
 ### Validate rendered operations after every metadata change
 
 ```bash
-declarest metadata render /corporations/acme get
-declarest metadata render /corporations/acme create
-declarest metadata render /corporations/acme update
-declarest metadata render /customers/ list
+declarest resource metadata render /corporations/acme get
+declarest resource metadata render /corporations/acme create
+declarest resource metadata render /corporations/acme update
+declarest resource metadata render /customers/ list
 
 declarest resource explain /corporations/acme
 ```
@@ -86,8 +86,8 @@ declarest resource explain /corporations/acme
 ### Use inference as a baseline, then customize
 
 ```bash
-declarest metadata infer /customers/
-declarest metadata infer /customers/ --apply
+declarest resource metadata infer /customers/
+declarest resource metadata infer /customers/ --apply
 ```
 
 Inference is a starting point. Advanced APIs almost always need manual overrides afterward.

@@ -225,7 +225,7 @@ Fixture tree rules:
 - collection metadata must be stored at `<logical-collection>/_/metadata.yaml` or `<logical-collection>/_/metadata.json` (YAML preferred for new fixtures).
 - resource payloads must be stored at `<logical-resource>/resource.<ext>`.
 - metadata paths may be nested (for example `/admin/realms/_/organizations/_`) to avoid duplicated metadata files.
-- when metadata paths include intermediary `/_/`, the e2e loader expands them to concrete collection metadata paths from template resources before calling `declarest metadata set`.
+- when metadata paths include intermediary `/_/`, the e2e loader expands them to concrete collection metadata paths from template resources before calling `declarest resource metadata set`.
 - metadata must represent API-specific identifiers using `id` and `alias` identity templates (for example, keycloak realms use `{{/realm}}`, not internal `{{/id}}`).
 
 Keycloak repo-template currently covers:

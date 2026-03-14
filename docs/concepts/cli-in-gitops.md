@@ -10,7 +10,7 @@ Typical flow:
 
 1. Pull/import current state (`resource save`, `repository refresh`).
 2. Edit payloads and metadata in Git-tracked files.
-3. Validate intent (`resource diff`, `metadata render`, optional apply in lower env).
+3. Validate intent (`resource diff`, `resource metadata render`, optional apply in lower env).
 4. Commit and push changes for review/merge.
 
 After merge, Operator reconciliation updates real state.

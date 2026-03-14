@@ -46,7 +46,7 @@ case_run() {
     }
   }'
 
-  case_run_declarest metadata set "${metadata_path}" -f "${metadata_file}" -i json
+  case_run_declarest resource metadata set "${metadata_path}" -f "${metadata_file}" -i json
   case_expect_success
   case_repo_commit_setup_changes_if_git
 

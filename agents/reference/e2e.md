@@ -41,7 +41,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 22. Resource-server components MUST ship fixture trees under `repo-template/` with collection metadata at `<logical-collection>/_/metadata.yaml` or `<logical-collection>/_/metadata.json` and resource payloads at `<logical-resource>/resource.json`; YAML SHOULD be the default for new fixture metadata files.
 23. Resource-server fixture metadata MUST model API-facing identifiers via `resource.id` and `resource.alias` identity templates (for example, keycloak realms use `{{/realm}}`).
 24. The runner `--validate-components` mode MUST reject managed-server fixture metadata files that omit `resource.id` or `resource.alias`.
-25. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `metadata set`.
+25. The loader MUST expand intermediary `/_/` metadata placeholders into concrete collection targets before invoking `resource metadata set`.
 26. Cases MUST define `CASE_ID`, `CASE_SCOPE`, `CASE_REQUIRES`, and `case_run`; they MAY declare `CASE_PROFILES` as a whitespace-separated subset of `cli operator`.
 27. `smoke` scope MUST represent the curated fast suite used by `cli-basic` and `operator-basic`.
 28. Cases default to `CASE_PROFILES=cli` unless `CASE_SCOPE=operator-main`, which defaults to `CASE_PROFILES=operator`.
@@ -160,7 +160,7 @@ Operator handoff:
 12. Cleanup while a manual profile shell is still sourced MUST drop the `<run-dir>/bin` PATH insertion so the shell no longer resolves the deleted `declarest-e2e` alias or binary.
 13. `managed-server=keycloak` runs in `bundle` mode fail during context validation when shorthand bundle `keycloak-bundle:0.0.1` cannot be resolved from the default remote path.
 14. `bundle` mode with a managed-server that has no shorthand mapping falls back to component-local `metadata/` when present, otherwise continues without `metadata.bundle`; in both cases local `openapi.yaml` remains unset.
-15. Metadata-mutating E2E cases (for example `metadata set` or `secret detect --fix`) write only into the run-scoped metadata workspace copy and MUST leave checked-in component metadata directories unchanged.
+15. Metadata-mutating E2E cases (for example `resource metadata set` or `secret detect --fix`) write only into the run-scoped metadata workspace copy and MUST leave checked-in component metadata directories unchanged.
 16. Legacy `--metadata-type base-dir` selections normalize to `metadata-source=dir`, while `--metadata-source base-dir` MUST fail argument validation before runtime startup.
 17. `--platform kubernetes` with only remote/native selections MUST not create a kind cluster.
 18. `--managed-server-proxy true` without `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL` fails argument validation before runtime startup.

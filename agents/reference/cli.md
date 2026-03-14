@@ -32,13 +32,13 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 13. Non-runtime commands (`version`, `context print-template|add|edit|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
 14. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 15. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
-16. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates, `resource request <method>` path completion MUST prefer remote candidates with repository fallback, and `metadata *` plus path-aware `secret` commands MUST prefer repository candidates with remote fallback.
+16. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates, `resource request <method>` path completion MUST prefer remote candidates with repository fallback, and `resource metadata *` plus path-aware `secret` commands MUST prefer repository candidates with remote fallback.
 17. When completion resolves collection items from payload-backed metadata, it MUST prefer rendered `resource.alias` values for displayed path segments over ID-only segments when aliases are available, completion suggestions MUST use canonical absolute paths that remain prefix-compatible with the current input token, templated placeholder segments (`{...}`) MUST NOT be surfaced as completion items, collection-prefix suggestions SHOULD preserve trailing `/` semantics, and path completion SHOULD emit no-space directives so accepted path candidates do not append a trailing space.
 18. When metadata selector trees define logical child branches that are not present in OpenAPI paths (for example intermediary `/_/` templates such as `/admin/realms/_/user-registry/_/mappers/_/`), path completion SHOULD surface those metadata-defined child segments as canonical logical suggestions under matching concrete paths.
 
 ## Data Contracts
 Command groups:
-1. Basic Commands: `context`, `metadata`, `repository`, `resource`, `server`, `secret`.
+1. Basic Commands: `context`, `repository`, `resource`, `server`, `secret`.
 2. Other Commands: `completion`, `version`.
 Global flags:
 1. `--context`, `-c`.
@@ -96,32 +96,33 @@ Selected command names:
 6. `context show`.
 7. `context current`.
 8. `context resolve`.
-9. `metadata edit`.
-10. `metadata resolve`.
-11. `metadata render`.
-12. `repository status`.
-13. `repository clean`.
-14. `repository commit`.
-15. `repository history`.
-16. `repository tree`.
-17. `resource request`.
-18. `resource defaults`.
-19. `resource defaults config`.
-20. `resource defaults profile`.
-21. `secret set`.
-22. `secret get`.
-23. `secret list`.
-24. `secret delete`.
-25. `secret mask`.
-26. `secret resolve`.
-27. `secret normalize`.
-28. `secret detect`.
-29. `completion`.
-30. `version`.
-31. `server get base-url`.
-32. `server get token-url`.
-31. `server get access-token`.
-32. `server check`.
+9. `resource metadata`.
+10. `resource metadata edit`.
+11. `resource metadata resolve`.
+12. `resource metadata render`.
+13. `repository status`.
+14. `repository clean`.
+15. `repository commit`.
+16. `repository history`.
+17. `repository tree`.
+18. `resource request`.
+19. `resource defaults`.
+20. `resource defaults config`.
+21. `resource defaults profile`.
+22. `secret set`.
+23. `secret get`.
+24. `secret list`.
+25. `secret delete`.
+26. `secret mask`.
+27. `secret resolve`.
+28. `secret normalize`.
+29. `secret detect`.
+30. `completion`.
+31. `version`.
+32. `server get base-url`.
+33. `server get token-url`.
+34. `server get access-token`.
+35. `server check`.
 
 HTTP request command methods:
 1. Canonical path is `resource request <method>`.
@@ -144,19 +145,19 @@ Interactive context commands:
 ### Metadata Commands
 1. Resource targets MUST be logical absolute paths.
 2. Metadata targets accept collection and resource scopes with positional path and `--path`.
-3. Metadata selector paths using intermediary namespace segments (for example `/admin/realms/_/clients/`) MUST be accepted by `metadata get|infer|render`.
-4. `metadata render` MUST accept optional operation input; when omitted, it MUST default to `list` for collection/selector targets and `get` for resource targets.
-5. When `metadata render` defaults to `get` and the resolved `get` operation path is missing, it MUST retry with `list` before returning a validation error.
-6. `metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
-7. `metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
-8. `metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
-9. `metadata infer` MUST expose only supported inference options and MUST NOT register placeholder flags for unsupported recursive behavior.
-10. `metadata get` MUST return resolved repository metadata in the full canonical nested schema by default, explicitly filling unset attributes with deterministic default values (for example empty strings, `false`, empty arrays/maps, default operation entries, and `null` for unset operation bodies); it MUST preserve metadata helper placeholders such as `{{payload_media_type .}}` rather than rendering them; `metadata get --overrides-only` MUST return only the resolved/inferred override object without those expanded defaults.
-11. When metadata overrides are missing, `metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
+3. Metadata selector paths using intermediary namespace segments (for example `/admin/realms/_/clients/`) MUST be accepted by `resource metadata get|infer|render`.
+4. `resource metadata render` MUST accept optional operation input; when omitted, it MUST default to `list` for collection/selector targets and `get` for resource targets.
+5. When `resource metadata render` defaults to `get` and the resolved `get` operation path is missing, it MUST retry with `list` before returning a validation error.
+6. `resource metadata infer` MUST use OpenAPI path hints when available and MUST still return deterministic fallback inference when OpenAPI is unavailable.
+7. `resource metadata infer` output MUST omit inferred directives that are equal to deterministic fallback defaults for the requested target.
+8. `resource metadata infer --apply` MUST persist the same compacted metadata payload shown in command output and MUST NOT persist inferred directives equal to defaults; when JSON is selected, both infer output and persisted metadata JSON MUST end with one trailing newline.
+9. `resource metadata infer` MUST expose only supported inference options and MUST NOT register placeholder flags for unsupported recursive behavior.
+10. `resource metadata get` MUST return resolved repository metadata in the full canonical nested schema by default, explicitly filling unset attributes with deterministic default values (for example empty strings, `false`, empty arrays/maps, default operation entries, and `null` for unset operation bodies); it MUST preserve metadata helper placeholders such as `{{payload_media_type .}}` rather than rendering them; `resource metadata get --overrides-only` MUST return only the resolved/inferred override object without those expanded defaults.
+11. When metadata overrides are missing, `resource metadata get` MUST return inferred metadata (compact in `--overrides-only` mode, default-merged in standard mode) when the target endpoint exists in OpenAPI or is reachable from the managed server; otherwise it MUST keep the `NotFoundError`.
 12. Mutations from stdin MUST validate payload format before side effects.
 13. Option conflicts MUST produce usage errors.
 14. Shell completion output SHOULD avoid duplicate flag suggestions that differ only by `=` suffix (for example `--output` and `--output=`).
-15. `metadata edit` MUST open the current metadata override in YAML form, MUST start from an empty metadata object when no override exists yet, MUST validate the edited YAML on save/exit, and MUST persist only validated metadata changes.
+15. `resource metadata edit` MUST open the current metadata override in YAML form, MUST start from an empty metadata object when no override exists yet, MUST validate the edited YAML on save/exit, and MUST persist only validated metadata changes.
 
 ### Resource Get, List, and Delete
 14. `resource get` MUST support `--source <managed-server|repository>`.
@@ -337,8 +338,8 @@ Interactive context commands:
 17. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
 18. Text-mode binary diff output MUST render a deterministic whole-payload message indicating that binary content differs instead of attempting field-level rendering.
 ### Metadata and Binary Output
-16. Metadata command structured output MUST keep compact omit-empty persistence semantics for `metadata resolve|infer` and for `metadata get --overrides-only`, while default `metadata get` MUST emit the full canonical nested metadata shape with explicit default values for unset attributes.
-17. Metadata JSON command output and persisted JSON metadata produced by `metadata infer --apply` MUST end with one trailing newline.
+16. Metadata command structured output MUST keep compact omit-empty persistence semantics for `resource metadata resolve|infer` and for `resource metadata get --overrides-only`, while default `resource metadata get` MUST emit the full canonical nested metadata shape with explicit default values for unset attributes.
+17. Metadata JSON command output and persisted JSON metadata produced by `resource metadata infer --apply` MUST end with one trailing newline.
 18. State-changing commands (`resource save|apply|create|update|delete` and `resource request post|put|patch|delete|connect`) MUST suppress complementary payload output by default and print only the status footer.
 19. `--verbose` MUST re-enable complementary payload output for commands that suppress it by default.
 ### Context, Server, and Secret Output
@@ -391,7 +392,7 @@ Interactive context commands:
 1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--secret-attributes`) but no secret manager is configured.
 2. `resource save --secret-attributes` handles only a subset and fails with warning for the remaining non-metadata-declared plaintext candidates unless `--allow-plaintext` is set.
 3. `delete` invoked on collection without recursive force confirmation.
-4. `metadata infer` called with missing OpenAPI source.
+4. `resource metadata infer` called with missing OpenAPI source.
 5. Completion for alias path when remote ID differs.
 6. Interactive context command invoked from non-TTY input/output.
 7. `resource save --help` invoked when no current context exists.
@@ -469,9 +470,9 @@ Interactive context commands:
 39. `declarest secret get --path /customers/acme --key /apiToken` prints only the secret value for `/customers/acme:/apiToken`.
 40. `declarest secret get /customers/acme` fails with `ValidationError` and points the user to `declarest secret list /customers/acme`.
 41. `declarest resource save /admin/realms/master/clients/` saves remote list items using metadata identity attributes and falls back to common attributes like `id` when metadata attributes are absent in payload entries.
-42. `declarest metadata render /customers/acme get` renders metadata operation spec.
-43. `declarest metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
-44. `declarest metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
+42. `declarest resource metadata render /customers/acme get` renders metadata operation spec.
+43. `declarest resource metadata infer /admin/realms/_/clients/` infers selector-path metadata using OpenAPI hints when available.
+44. `declarest resource metadata render /admin/realms/_/clients/` defaults to rendering the `list` operation for the selector collection path.
 45. `declarest repository push --force-push` executes force push with explicit safety acknowledgment.
 44. `declarest repository status` reports local/remote sync status without mutating repository state.
 38. `declarest repository status --verbose` prints sync summary plus git-style local worktree details (for example modified or untracked files) in git contexts.

@@ -246,7 +246,7 @@ Optional but recommended.
 
 When configured, DeclaREST can:
 
-- improve default metadata inference (`metadata infer`)
+- improve default metadata inference (`resource metadata infer`)
 - improve operation defaults for path/method/media behavior
 - help path completion with API path templates
 

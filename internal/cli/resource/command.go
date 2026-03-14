@@ -5,6 +5,7 @@ import (
 
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
+	metadatacmd "github.com/crmarques/declarest/internal/cli/metadata"
 	"github.com/spf13/cobra"
 )
 
@@ -115,6 +116,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 	listCommand := newListCommand(deps, globalFlags)
 	editCommand := newEditCommand(deps, globalFlags)
 	copyCommand := newCopyCommand(deps, globalFlags)
+	metadataCommand := metadatacmd.NewCommand(deps, globalFlags)
 	defaultsCommand := newDefaultsCommand(deps, globalFlags)
 	explainCommand := newExplainCommand(deps, globalFlags)
 	describeCommand := newDescribeCommand(deps, globalFlags)
@@ -140,6 +142,7 @@ func NewCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.GlobalFla
 		listCommand,
 		editCommand,
 		copyCommand,
+		metadataCommand,
 		defaultsCommand,
 		explainCommand,
 		describeCommand,

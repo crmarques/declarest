@@ -15,9 +15,8 @@ declarest <group> <command> --help
 ### Basic commands
 
 - `context` - manage contexts and validation
-- `metadata` - inspect, infer, render, set, unset, and resolve metadata
 - `repository` - manage local repository state
-- `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, metadata-backed defaults, plus raw requests and template rendering
+- `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, inspect and mutate metadata, manage metadata-backed defaults, plus raw requests and template rendering
 - `server` - inspect managed server connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
@@ -128,22 +127,22 @@ Useful flags for mutation and payload-driven workflows:
 - `--http-method <METHOD>` override for remote calls
 - `--message <text>` overrides the default git commit message on `resource save`, `resource copy`, and repository-backed `resource delete`
 
-## `metadata` command family (advanced API modeling)
+## `resource metadata` command family (advanced API modeling)
 
 ```bash
-declarest metadata get /corporations/acme
-declarest metadata get /corporations/acme --overrides-only
-declarest metadata resolve /corporations/acme
-declarest metadata render /corporations/acme update
-declarest metadata infer /corporations/acme
-declarest metadata infer /corporations/acme --apply
+declarest resource metadata get /corporations/acme
+declarest resource metadata get /corporations/acme --overrides-only
+declarest resource metadata resolve /corporations/acme
+declarest resource metadata render /corporations/acme update
+declarest resource metadata infer /corporations/acme
+declarest resource metadata infer /corporations/acme --apply
 ```
 
 Write/remove metadata definitions:
 
 ```bash
-declarest metadata set /customers/ --payload metadata.json
-declarest metadata unset /customers/
+declarest resource metadata set /customers/ --payload metadata.json
+declarest resource metadata unset /customers/
 ```
 
 ## `context` command family
@@ -235,9 +234,9 @@ These commands are useful when debugging auth or connectivity independently from
 ## Recommended debug sequence for advanced metadata issues
 
 ```bash
-declarest metadata get /path
-declarest metadata render /path get
-declarest metadata render /path update
+declarest resource metadata get /path
+declarest resource metadata render /path get
+declarest resource metadata render /path update
 declarest resource explain /path
 ```
 

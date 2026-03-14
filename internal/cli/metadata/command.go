@@ -305,9 +305,9 @@ func newRenderCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glo
 		Use:   "render [path] [operation]",
 		Short: "Render operation spec",
 		Example: strings.Join([]string{
-			"  declarest metadata render /customers/acme get",
-			"  declarest metadata render /customers/ list",
-			"  declarest metadata render --path /customers/acme update",
+			"  declarest resource metadata render /customers/acme get",
+			"  declarest resource metadata render /customers/ list",
+			"  declarest resource metadata render --path /customers/acme update",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -406,8 +406,8 @@ func newInferCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Glob
 		Use:   "infer [path]",
 		Short: "Infer metadata",
 		Example: strings.Join([]string{
-			"  declarest metadata infer /customers/acme",
-			"  declarest metadata infer /customers/acme --apply",
+			"  declarest resource metadata infer /customers/acme",
+			"  declarest resource metadata infer /customers/acme --apply",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {

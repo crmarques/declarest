@@ -25,7 +25,7 @@ case_run() {
   case_write_json "${item_one}" "{\"clientId\": \"${client_one}\", \"name\": \"One\", \"enabled\": true, \"publicClient\": true, \"protocol\": \"openid-connect\"}"
   case_write_json "${item_two}" "{\"clientId\": \"${client_two}\", \"name\": \"Two\", \"enabled\": true, \"publicClient\": true, \"protocol\": \"openid-connect\"}"
 
-  case_run_declarest metadata set /admin/realms/master/clients/_ -f "${metadata_file}" -i json
+  case_run_declarest resource metadata set /admin/realms/master/clients/_ -f "${metadata_file}" -i json
   case_expect_success
 
   case_run_declarest resource create "/admin/realms/master/clients/${client_one}" -f "${item_one}" -i json

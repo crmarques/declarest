@@ -41,7 +41,7 @@ cat payload.json | declarest resource save /corporations/acme --payload -
 
 ```bash
 declarest resource get --source repository /corporations/acme
-declarest metadata get /corporations/acme
+declarest resource metadata get /corporations/acme
 ```
 
 ### Keep shared values in metadata-backed defaults
@@ -141,8 +141,8 @@ This is useful for initial imports of complex APIs when you already know the log
 If save/apply/diff does not hit the endpoint you expect:
 
 ```bash
-declarest metadata render /corporations/acme get
-declarest metadata render /corporations/acme update
+declarest resource metadata render /corporations/acme get
+declarest resource metadata render /corporations/acme update
 declarest resource explain /corporations/acme
 ```
 

@@ -109,8 +109,8 @@ Use these commands together:
 
 ```bash
 declarest resource get --source repository /corporations/acme
-declarest metadata get /corporations/acme
-declarest metadata render /corporations/acme update
+declarest resource metadata get /corporations/acme
+declarest resource metadata render /corporations/acme update
 ```
 
 That combination lets you inspect payload + metadata + rendered remote request mapping before a write.

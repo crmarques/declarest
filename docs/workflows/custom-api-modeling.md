@@ -125,9 +125,9 @@ Pattern:
 ## Verification loop for every recipe
 
 ```bash
-declarest metadata get <path>
-declarest metadata render <path> get
-declarest metadata render <path> update
+declarest resource metadata get <path>
+declarest resource metadata render <path> get
+declarest resource metadata render <path> update
 declarest resource explain <path>
 ```
 

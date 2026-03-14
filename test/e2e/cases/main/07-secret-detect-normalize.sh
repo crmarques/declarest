@@ -53,7 +53,7 @@ case_run() {
   fi
   case_repo_commit_setup_changes_if_git
 
-  case_run_declarest metadata get "${metadata_target_path}" -o json
+  case_run_declarest resource metadata get "${metadata_target_path}" -o json
   case_expect_success
   if ! jq -e '.resource.secretAttributes == ["/password"]' <<<"${CASE_LAST_STDOUT}" >/dev/null; then
     printf 'expected --fix to write resource.secretAttributes metadata\n' >&2

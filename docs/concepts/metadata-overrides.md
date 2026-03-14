@@ -76,21 +76,21 @@ That is different from omitting the field.
 
 Use this when you need to clear inherited transforms in a deeper subtree.
 
-## `metadata get` vs `--overrides-only`
+## `resource metadata get` vs `--overrides-only`
 
 Use both views while designing overrides:
 
 ```bash
 # Full effective behavior (defaults + merged overrides)
-declarest metadata get /corporations/acme
+declarest resource metadata get /corporations/acme
 
 # Only what your metadata files currently override
-declarest metadata get /corporations/acme --overrides-only
+declarest resource metadata get /corporations/acme --overrides-only
 ```
 
 Practical use:
 
-- `metadata get` answers: "What will DeclaREST actually do?"
+- `resource metadata get` answers: "What will DeclaREST actually do?"
 - `--overrides-only` answers: "What custom behavior have I authored?"
 
 ## Safe override workflow
@@ -101,7 +101,7 @@ Practical use:
 4. Introduce deeper wildcard/literal/resource overrides only when a concrete exception appears.
 
 ```bash
-declarest metadata render /corporations/acme update
+declarest resource metadata render /corporations/acme update
 declarest resource explain /corporations/acme
 ```
 

@@ -47,10 +47,10 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"server get token-url",
 		"server get access-token",
 		"server check",
-		"metadata",
-		"metadata edit",
-		"metadata resolve",
-		"metadata render",
+		"resource metadata",
+		"resource metadata edit",
+		"resource metadata resolve",
+		"resource metadata render",
 		"repository",
 		"repository clean",
 		"repository commit",
@@ -86,6 +86,7 @@ func TestLegacyCommandNamesRemoved(t *testing.T) {
 		"config set-current",
 		"config get-current",
 		"config load-resolved-config",
+		"metadata",
 		"metadata resolve-for-path",
 		"metadata render-operation-spec",
 		"repo",
@@ -513,7 +514,7 @@ func TestMetadataDebugTraceIncludesLookupPath(t *testing.T) {
 		Services: &testServiceAccessor{metadata: metadataService},
 	}
 
-	output, debugOutput, err := executeForTestWithStreams(deps, "", "-vvv", "metadata", "get", "/admin/realms/")
+	output, debugOutput, err := executeForTestWithStreams(deps, "", "-vvv", "resource", "metadata", "get", "/admin/realms/")
 	if err != nil {
 		t.Fatalf("unexpected metadata get error: %v", err)
 	}
@@ -3604,7 +3605,7 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("resolve_with_path_returns_metadata", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "metadata", "resolve", "--path", "/customers/acme")
+		output, err := executeForTest(testDeps(), "", "resource", "metadata", "resolve", "--path", "/customers/acme")
 		if err != nil {
 			t.Fatalf("unexpected resolve error: %v", err)
 		}
@@ -3616,14 +3617,14 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("resolve_missing_path", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "resolve")
+		_, err := executeForTest(testDeps(), "", "resource", "metadata", "resolve")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
 	t.Run("render_positional_path", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme", "get")
+		output, err := executeForTest(testDeps(), "", "resource", "metadata", "render", "/customers/acme", "get")
 		if err != nil {
 			t.Fatalf("unexpected render error: %v", err)
 		}
@@ -3635,7 +3636,7 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("render_flag_path", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "render", "--path", "/customers/acme", "get")
+		_, err := executeForTest(testDeps(), "", "resource", "metadata", "render", "--path", "/customers/acme", "get")
 		if err != nil {
 			t.Fatalf("unexpected render error with --path: %v", err)
 		}
@@ -3644,7 +3645,7 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("render_flag_path_without_operation_uses_default", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "metadata", "render", "--path", "/customers/acme")
+		output, err := executeForTest(testDeps(), "", "resource", "metadata", "render", "--path", "/customers/acme")
 		if err != nil {
 			t.Fatalf("unexpected render default-operation error with --path: %v", err)
 		}
@@ -3656,14 +3657,14 @@ func TestMetadataPathCommands(t *testing.T) {
 	t.Run("render_mismatch_path", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/a", "--path", "/customers/b", "get")
+		_, err := executeForTest(testDeps(), "", "resource", "metadata", "render", "/customers/a", "--path", "/customers/b", "get")
 		assertTypedCategory(t, err, faults.ValidationError)
 	})
 
 	t.Run("render_missing_operation", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "metadata", "render", "/customers/acme")
+		output, err := executeForTest(testDeps(), "", "resource", "metadata", "render", "/customers/acme")
 		if err != nil {
 			t.Fatalf("unexpected render default-operation error: %v", err)
 		}
@@ -3686,7 +3687,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "metadata", "render", "/admin/realms")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "resource", "metadata", "render", "/admin/realms")
 		if err != nil {
 			t.Fatalf("unexpected render fallback error: %v", err)
 		}
@@ -3708,7 +3709,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		}
 		orchestrator := &testOrchestrator{metadataService: metadataService}
 
-		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "metadata", "render", "/admin/realms/_/clients/")
+		output, err := executeForTest(testDepsWith(orchestrator, metadataService), "", "resource", "metadata", "render", "/admin/realms/_/clients/")
 		if err != nil {
 			t.Fatalf("unexpected selector render default-operation error: %v", err)
 		}
@@ -3749,7 +3750,7 @@ func TestMetadataPathCommands(t *testing.T) {
 				metadataService.items[test.path] = metadatadomain.ResourceMetadata{}
 				orchestrator := &testOrchestrator{metadataService: metadataService}
 
-				args := []string{"metadata", "render", test.path}
+				args := []string{"resource", "metadata", "render", test.path}
 				if strings.TrimSpace(test.operationArg) != "" {
 					args = append(args, test.operationArg)
 				}
@@ -3789,6 +3790,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"infer",
 			"/admin/realms/_/clients/",
@@ -3839,6 +3841,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"infer",
 			"/admin/realms/_/clients/",
@@ -3884,6 +3887,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"infer",
 			"/admin/realms",
@@ -3916,6 +3920,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/_/clients/",
@@ -3957,6 +3962,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/_/user-registry",
@@ -3983,6 +3989,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4040,6 +4047,7 @@ func TestMetadataPathCommands(t *testing.T) {
 			"yaml",
 			"-o",
 			"json",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4071,6 +4079,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4112,6 +4121,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4159,6 +4169,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4193,6 +4204,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		_, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"get",
 			"/admin/realms/",
@@ -4224,6 +4236,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		output, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"infer",
 			"/admin/realms/",
@@ -4270,6 +4283,7 @@ func TestMetadataPathCommands(t *testing.T) {
 		_, err := executeForTest(
 			testDepsWith(orchestrator, metadataService),
 			"",
+			"resource",
 			"metadata",
 			"infer",
 			"/admin/realms/",
@@ -6253,7 +6267,7 @@ func TestCommandWithoutRequiredSubcommandShowsHelp(t *testing.T) {
 		expectedSnippet string
 	}{
 		{name: "context", args: []string{"context"}, expectedSnippet: "Manage contexts"},
-		{name: "metadata", args: []string{"metadata"}, expectedSnippet: "Manage metadata"},
+		{name: "resource metadata", args: []string{"resource", "metadata"}, expectedSnippet: "Manage metadata"},
 		{name: "repository", args: []string{"repository"}, expectedSnippet: "Manage local repository state"},
 		{name: "resource", args: []string{"resource"}, expectedSnippet: "Manage resources"},
 		{name: "secret", args: []string{"secret"}, expectedSnippet: "Manage secrets"},

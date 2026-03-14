@@ -22,7 +22,7 @@ case_run() {
     {"id": "alpha", "tier": "free"}
   ]'
 
-  case_run_declarest metadata set "${as_items_collection}/_" -f "${metadata_file}" -i json
+  case_run_declarest resource metadata set "${as_items_collection}/_" -f "${metadata_file}" -i json
   case_expect_success
   case_repo_commit_setup_changes_if_git
 
