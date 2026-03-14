@@ -92,13 +92,18 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			command.SetContext(commandContext)
 
 			if globalFlags.VerboseInsecure && verboseLevel < 1 {
-				_, _ = fmt.Fprintln(command.ErrOrStderr(), "WARNING: --verbose-insecure has no effect without -v or --verbose.")
+				cliutil.WriteStatusLine(
+					command.ErrOrStderr(),
+					"WARNING",
+					"--verbose-insecure has no effect without -v or --verbose.",
+				)
 			}
 
 			if globalFlags.VerboseInsecure && verboseLevel >= 1 {
 				debugctx.Infof(
 					command.Context(),
-					"WARNING: --verbose-insecure is enabled. Secrets, tokens, and credentials will be printed to stderr.",
+					"%s --verbose-insecure is enabled. Secrets, tokens, and credentials will be printed to stderr.",
+					cliutil.FormatStatusLabel(command.ErrOrStderr(), "WARNING"),
 				)
 			}
 

@@ -335,10 +335,11 @@ Interactive context commands:
 ### Status Footer and Color
 13. Unless `--no-status` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
 14. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
-15. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
-16. Structured `--output json|yaml` for binary payloads MUST emit a stable wrapper with keys `encoding`, `mediaType`, and `data`, where `encoding=base64` and `mediaType=application/octet-stream`.
-17. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
-18. Text-mode binary diff output MUST render a deterministic whole-payload message indicating that binary content differs instead of attempting field-level rendering.
+15. Standalone CLI warning lines emitted to stderr SHOULD use `[WARNING] <description>`, and interactive terminals SHOULD render `[WARNING]` in bold yellow while preserving `--no-color` and `NO_COLOR` behavior.
+16. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
+17. Structured `--output json|yaml` for binary payloads MUST emit a stable wrapper with keys `encoding`, `mediaType`, and `data`, where `encoding=base64` and `mediaType=application/octet-stream`.
+18. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
+19. Text-mode binary diff output MUST render a deterministic whole-payload message indicating that binary content differs instead of attempting field-level rendering.
 ### Metadata and Binary Output
 16. Metadata command structured output MUST keep compact omit-empty persistence semantics for `resource metadata resolve|infer` and for `resource metadata get --overrides-only`, while default `resource metadata get` MUST emit the full canonical nested metadata shape with explicit default values for unset attributes.
 17. Metadata JSON command output and persisted JSON metadata produced by `resource metadata infer --apply` MUST end with one trailing newline.
@@ -425,6 +426,7 @@ Interactive context commands:
 29. `server get token-url` or `server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
 30. `server check` fails when the configured GET probe returns an error or non-success outcome.
 31. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
+32. Warnings emitted before a successful command footer (for example managed-server security warnings during bootstrap) preserve deterministic order, use `[WARNING]` labels, and still allow the final `[OK]` status line to remain the last stderr line for mutation commands.
 
 ## Examples
 1. `declarest resource apply /customers/acme` applies desired state for one resource.
@@ -436,6 +438,7 @@ Interactive context commands:
 7. `declarest resource apply /customers/acme --force` applies a forced remote update even when compare output indicates no drift.
 8. `declarest resource create /customers` creates all direct-child resources in `/customers` using repository payloads.
 9. `declarest resource create /customers/acme --payload payload.json` creates one remote resource from explicit payload input (overrides repository-sourced input for that target path).
+10. `declarest resource defaults infer /admin/realms --from managed-server --save --yes` MAY print one or more `[WARNING] ...` bootstrap/security lines to stderr before the final `[OK] command executed successfully.` status footer.
 10. `cat payload.json | declarest resource create /customers/acme --payload -` creates one remote resource from stdin payload input (overrides repository-sourced input for that target path).
 11. `declarest resource update /customers` updates only direct-child resources in `/customers` using repository payloads and skips nested descendants.
 12. `declarest resource update /customers --recursive` updates direct and nested resources under `/customers` using repository payloads.

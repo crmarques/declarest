@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
 	httpmanagedserver "github.com/crmarques/declarest/internal/providers/managedserver/http"
 	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
@@ -66,7 +66,7 @@ func buildOrchestratorFromResolvedContext(
 			metadataService = fsmetadata.NewFSMetadataService(metadataSource.BaseDir)
 		}
 		if strings.TrimSpace(metadataSource.DeprecatedWarning) != "" {
-			_, _ = fmt.Fprintf(os.Stderr, "warning: %s\n", metadataSource.DeprecatedWarning)
+			cliutil.WriteStatusLine(os.Stderr, "WARNING", metadataSource.DeprecatedWarning)
 		}
 	}
 
@@ -157,35 +157,35 @@ func resolvedRepositoryBaseDir(ctx config.Context) string {
 func emitSecurityWarnings(w io.Writer, resolvedContext config.Context) {
 	if resolvedContext.ManagedServer != nil && resolvedContext.ManagedServer.HTTP != nil {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.BaseURL)), "http://") {
-			_, _ = fmt.Fprintf(w, "warning: managed-server.http.base-url uses plain HTTP, credentials will be transmitted in cleartext\n")
+			cliutil.WriteStatusLine(w, "WARNING", "managed-server.http.base-url uses plain HTTP, credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.ManagedServer.HTTP.Auth != nil &&
 			resolvedContext.ManagedServer.HTTP.Auth.OAuth2 != nil &&
 			strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.Auth.OAuth2.TokenURL)), "http://") {
-			_, _ = fmt.Fprintf(w, "warning: managed-server.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext\n")
+			cliutil.WriteStatusLine(w, "WARNING", "managed-server.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.ManagedServer.HTTP.TLS != nil && resolvedContext.ManagedServer.HTTP.TLS.InsecureSkipVerify {
-			_, _ = fmt.Fprintf(w, "warning: managed-server.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+			cliutil.WriteStatusLine(w, "WARNING", "managed-server.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 	}
 
 	if resolvedContext.SecretStore != nil && resolvedContext.SecretStore.Vault != nil {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.SecretStore.Vault.Address)), "http://") {
-			_, _ = fmt.Fprintf(w, "warning: secret-store.vault.address uses plain HTTP, credentials will be transmitted in cleartext\n")
+			cliutil.WriteStatusLine(w, "WARNING", "secret-store.vault.address uses plain HTTP, credentials will be transmitted in cleartext")
 		}
 		if resolvedContext.SecretStore.Vault.TLS != nil && resolvedContext.SecretStore.Vault.TLS.InsecureSkipVerify {
-			_, _ = fmt.Fprintf(w, "warning: secret-store.vault.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+			cliutil.WriteStatusLine(w, "WARNING", "secret-store.vault.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 	}
 
 	if resolvedContext.Repository.Git != nil && resolvedContext.Repository.Git.Remote != nil {
 		if resolvedContext.Repository.Git.Remote.TLS != nil && resolvedContext.Repository.Git.Remote.TLS.InsecureSkipVerify {
-			_, _ = fmt.Fprintf(w, "warning: repository.git.remote.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled\n")
+			cliutil.WriteStatusLine(w, "WARNING", "repository.git.remote.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 		if resolvedContext.Repository.Git.Remote.Auth != nil &&
 			resolvedContext.Repository.Git.Remote.Auth.SSH != nil &&
 			resolvedContext.Repository.Git.Remote.Auth.SSH.InsecureIgnoreHostKey {
-			_, _ = fmt.Fprintf(w, "warning: repository.git.remote.auth.ssh.insecure-ignore-host-key is enabled, SSH host key verification is disabled\n")
+			cliutil.WriteStatusLine(w, "WARNING", "repository.git.remote.auth.ssh.insecure-ignore-host-key is enabled, SSH host key verification is disabled")
 		}
 	}
 }

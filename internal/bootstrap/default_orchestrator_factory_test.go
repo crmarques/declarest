@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
@@ -777,6 +778,9 @@ func TestEmitSecurityWarnings(t *testing.T) {
 			if !bytes.Contains([]byte(output), []byte(substr)) {
 				t.Errorf("expected warning containing %q in output:\n%s", substr, output)
 			}
+		}
+		if got, want := strings.Count(output, "[WARNING]"), len(expectedSubstrings); got != want {
+			t.Fatalf("expected %d warning labels, got %d in output:\n%s", want, got, output)
 		}
 	})
 

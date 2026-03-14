@@ -124,6 +124,34 @@ func TestRootWithoutArgsShowsHelp(t *testing.T) {
 	}
 }
 
+func TestVerboseInsecureWarningsUseWarningLabel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("without_verbose", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "--verbose-insecure", "version")
+		if err != nil {
+			t.Fatalf("version returned error: %v", err)
+		}
+		if !strings.Contains(stderr, "[WARNING] --verbose-insecure has no effect without -v or --verbose.") {
+			t.Fatalf("expected warning label in stderr, got %q", stderr)
+		}
+	})
+
+	t.Run("with_verbose", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "-v", "--verbose-insecure", "version")
+		if err != nil {
+			t.Fatalf("version returned error: %v", err)
+		}
+		if !strings.Contains(stderr, "verbose: [WARNING] --verbose-insecure is enabled. Secrets, tokens, and credentials will be printed to stderr.") {
+			t.Fatalf("expected verbose warning label in stderr, got %q", stderr)
+		}
+	})
+}
+
 func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 	t.Parallel()
 

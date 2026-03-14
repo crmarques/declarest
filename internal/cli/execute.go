@@ -41,7 +41,7 @@ func ExitCodeForError(err error) int {
 }
 
 func writeExecutionOKStatus(w io.Writer) {
-	_, _ = fmt.Fprintf(w, "%s command executed successfully.\n", formatStatusLabel(w, "OK"))
+	cliutil.WriteStatusLine(w, "OK", "command executed successfully.")
 }
 
 func writeExecutionErrorStatus(w io.Writer, err error) {
@@ -49,57 +49,11 @@ func writeExecutionErrorStatus(w io.Writer, err error) {
 	if err != nil {
 		description = fmt.Sprintf("%s: %s", description, strings.TrimSpace(err.Error()))
 	}
-	_, _ = fmt.Fprintf(w, "%s %s.\n", formatStatusLabel(w, "ERROR"), description)
-}
-
-func formatStatusLabel(w io.Writer, status string) string {
-	label := fmt.Sprintf("[%s]", strings.TrimSpace(status))
-	if !supportsANSIStatus(w) {
-		return label
-	}
-
-	switch strings.TrimSpace(status) {
-	case "OK":
-		return "\x1b[1;32m" + label + "\x1b[0m"
-	case "ERROR":
-		return "\x1b[1;31m" + label + "\x1b[0m"
-	default:
-		return label
-	}
-}
-
-func supportsANSIStatus(w io.Writer) bool {
-	if shouldSuppressColor(os.Args[1:]) {
-		return false
-	}
-
-	file, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-
-	info, err := file.Stat()
-	if err != nil || info == nil {
-		return false
-	}
-	if (info.Mode() & os.ModeCharDevice) == 0 {
-		return false
-	}
-
-	term := strings.TrimSpace(strings.ToLower(os.Getenv("TERM")))
-	return term != "" && term != "dumb"
+	cliutil.WriteStatusLine(w, "ERROR", description+".")
 }
 
 func shouldSuppressColor(args []string) bool {
-	return parseGlobalBoolFlag(
-		args,
-		cliutil.GlobalFlagNoColor,
-		"",
-		cliutil.EnvBoolOrDefault(
-			cliutil.GlobalEnvNoColor,
-			cliutil.EnvPresentOrDefault(cliutil.GlobalEnvNoColorLegacy, false),
-		),
-	)
+	return cliutil.ShouldSuppressColor(args)
 }
 
 func shouldEmitExecutionStatus(args []string, command *cobra.Command) bool {
