@@ -150,6 +150,30 @@ func TestVerboseInsecureWarningsUseWarningLabel(t *testing.T) {
 			t.Fatalf("expected verbose warning label in stderr, got %q", stderr)
 		}
 	})
+
+	t.Run("ignore_warnings_suppresses_non_verbose_warning", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "--ignore-warnings", "--verbose-insecure", "version")
+		if err != nil {
+			t.Fatalf("version returned error: %v", err)
+		}
+		if strings.Contains(stderr, "[WARNING]") {
+			t.Fatalf("expected warnings to be suppressed, got %q", stderr)
+		}
+	})
+
+	t.Run("ignore_warnings_suppresses_verbose_warning", func(t *testing.T) {
+		t.Parallel()
+
+		_, stderr, err := executeForTestWithStreams(testDeps(), "", "--ignore-warnings", "-v", "--verbose-insecure", "version")
+		if err != nil {
+			t.Fatalf("version returned error: %v", err)
+		}
+		if strings.Contains(stderr, "[WARNING]") {
+			t.Fatalf("expected warnings to be suppressed, got %q", stderr)
+		}
+	})
 }
 
 func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
@@ -515,7 +539,8 @@ func TestDebugFlagPrintsTraceOutput(t *testing.T) {
 	if !strings.Contains(output, "/customers/acme") {
 		t.Fatalf("expected output to contain path, got %q", output)
 	}
-	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" verbose=3 verbose_insecure=false no_status=`) ||
+	if !strings.Contains(debugOutput, `debug: root flags context="" output="auto" verbose=3 verbose_insecure=false skip_result_message=`) ||
+		!strings.Contains(debugOutput, `ignore_warnings=`) ||
 		!strings.Contains(debugOutput, `command="declarest resource get"`) {
 		t.Fatalf("expected root debug trace, got %q", debugOutput)
 	}

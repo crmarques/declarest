@@ -44,11 +44,12 @@ Global flags:
 1. `--context`, `-c`.
 2. `--debug`, `-d`.
 3. `--verbose`, `-v`.
-4. `--no-status`, `-n`.
-5. `--no-color`.
-6. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
-7. `--help`, `-h`.
-8. Global flag defaults MUST honor precedence `flag > env > built-in default` and use env vars `DECLAREST_CONTEXT`, `DECLAREST_OUTPUT`, `DECLAREST_VERBOSE`, `DECLAREST_VERBOSE_INSECURE`, `DECLAREST_NO_STATUS`, `DECLAREST_NO_COLOR`, plus `NO_COLOR` as a non-empty color-disable signal.
+4. `--skip-result-message`, `-n`.
+5. `--ignore-warnings`.
+6. `--no-color`.
+7. `--output`, `-o` with allowed formats `auto|text|json|yaml`.
+8. `--help`, `-h`.
+9. Global flag defaults MUST honor precedence `flag > env > built-in default` and use env vars `DECLAREST_CONTEXT`, `DECLAREST_OUTPUT`, `DECLAREST_VERBOSE`, `DECLAREST_VERBOSE_INSECURE`, `DECLAREST_SKIP_RESULT_MESSAGE`, `DECLAREST_IGNORE_WARNINGS`, `DECLAREST_NO_COLOR`, plus `NO_COLOR` as a non-empty color-disable signal; CLI readers MUST continue accepting legacy `DECLAREST_NO_STATUS` as an alias for `DECLAREST_SKIP_RESULT_MESSAGE`.
 
 Input flags:
 1. `--payload <path|->`, `-f` (use `-` to read object from stdin).
@@ -333,9 +334,9 @@ Interactive context commands:
 13. `resource diff --color <auto|always|never>` MUST control ANSI rendering for text diff output, where `auto` colors only terminal output, `always` forces ANSI, and `never` disables ANSI.
 14. Structured `resource diff` and `resource explain` output MUST encode `resource.DiffEntry.ResourcePath` as the logical resource path and `resource.DiffEntry.Path` as an RFC 6901 JSON Pointer relative to that resource payload; root payload replacements MUST use `Path=""`.
 ### Status Footer and Color
-13. Unless `--no-status` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
+13. Unless `--skip-result-message` is set, resource-mutation commands (`resource save|apply|create|update|delete`) and state-changing HTTP request commands (`resource request post|put|patch|delete|connect`) MUST print a terminal status line as the final output line to stderr using `[OK] <description>.` on success and `[ERROR] <description>.` on failure.
 14. Interactive terminal status output SHOULD render `[OK]` in bold green and `[ERROR]` in bold red.
-15. Standalone CLI warning lines emitted to stderr SHOULD use `[WARNING] <description>`, and interactive terminals SHOULD render `[WARNING]` in bold yellow while preserving `--no-color` and `NO_COLOR` behavior.
+15. Standalone CLI warning lines emitted to stderr SHOULD use `[WARNING] <description>`, and interactive terminals SHOULD render `[WARNING]` in bold yellow while preserving `--no-color` and `NO_COLOR` behavior; `--ignore-warnings` MUST suppress those standalone warning lines entirely.
 16. Commands returning nil payload output MUST emit no payload body (no `null`/`<nil>` placeholder output).
 17. Structured `--output json|yaml` for binary payloads MUST emit a stable wrapper with keys `encoding`, `mediaType`, and `data`, where `encoding=base64` and `mediaType=application/octet-stream`.
 18. `--output auto|text` MUST reject collection or multi-item results that contain binary payloads with `ValidationError`.
@@ -521,13 +522,14 @@ Interactive context commands:
 68. `declarest resource diff /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c` falls back to single-resource lookup when collection resolution for that deep path has no direct matches.
 69. `declarest resource diff /admin/realms/payments --color always` renders a colored unified diff even when stdout is not a terminal.
 70. `declarest resource save /customers/acme -f payload.json -i json` terminates with `[OK] command executed successfully.`.
-71. `declarest resource save /customers/acme -f payload.json -i json --no-status` suppresses the final status line.
-72. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
-71. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
-72. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
-73. `declarest resource request delete /customers --yes --recursive` prints no response bodies by default and only the final status footer.
-74. `declarest resource request delete /customers --yes --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
-74. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
+71. `declarest resource save /customers/acme -f payload.json -i json --skip-result-message` suppresses the final status line.
+72. `declarest resource defaults infer /admin/realms --from managed-server --save --yes --ignore-warnings` suppresses bootstrap warning lines while still allowing command success.
+73. `declarest resource request get /health` terminates with `[OK] command executed successfully.`.
+74. `declarest resource create /customers/acme --payload payload.json` prints no payload output by default and only the final status footer.
+75. `cat payload.json | declarest resource create /customers/acme --payload - --verbose` prints the created target payload output plus the final status footer.
+76. `declarest resource request delete /customers --yes --recursive` prints no response bodies by default and only the final status footer.
+77. `declarest resource request delete /customers --yes --recursive --verbose` prints response bodies for each resolved delete target plus the final status footer.
+78. `declarest resource get /admin/realms/m<TAB>` completes to concrete candidates such as `/admin/realms/master` by combining OpenAPI templates with local/remote collection item lookups.
 75. `declarest context add dev` skips context-name prompt and starts interactive prompts at repository settings.
 76. `declarest context add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
 77. `declarest context add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.

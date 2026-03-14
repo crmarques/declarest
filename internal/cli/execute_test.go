@@ -10,18 +10,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestShouldSuppressStatusMessage(t *testing.T) {
+func TestShouldSkipResultMessage(t *testing.T) {
 	testCases := []struct {
 		name string
 		args []string
 		want bool
 	}{
 		{name: "default false", args: []string{"resource", "list", "/"}, want: false},
-		{name: "long flag", args: []string{"--no-status", "resource", "list", "/"}, want: true},
+		{name: "long flag", args: []string{"--skip-result-message", "resource", "list", "/"}, want: true},
 		{name: "short flag", args: []string{"-n", "resource", "list", "/"}, want: true},
-		{name: "flag after positionals", args: []string{"resource", "list", "/", "--no-status"}, want: true},
-		{name: "explicit true", args: []string{"--no-status=true", "resource", "list", "/"}, want: true},
-		{name: "explicit false", args: []string{"--no-status=false", "resource", "list", "/"}, want: false},
+		{name: "flag after positionals", args: []string{"resource", "list", "/", "--skip-result-message"}, want: true},
+		{name: "explicit true", args: []string{"--skip-result-message=true", "resource", "list", "/"}, want: true},
+		{name: "explicit false", args: []string{"--skip-result-message=false", "resource", "list", "/"}, want: false},
 	}
 
 	for _, testCase := range testCases {
@@ -29,19 +29,29 @@ func TestShouldSuppressStatusMessage(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := shouldSuppressStatusMessage(testCase.args)
+			got := shouldSkipResultMessage(testCase.args)
 			if got != testCase.want {
-				t.Fatalf("shouldSuppressStatusMessage(%v) = %t, want %t", testCase.args, got, testCase.want)
+				t.Fatalf("shouldSkipResultMessage(%v) = %t, want %t", testCase.args, got, testCase.want)
 			}
 		})
 	}
 
 	t.Run("env default", func(t *testing.T) {
-		t.Setenv(cliutil.GlobalEnvNoStatus, "true")
-		if !shouldSuppressStatusMessage([]string{"resource", "list", "/"}) {
+		t.Setenv(cliutil.GlobalEnvSkipResultMessage, "true")
+		if !shouldSkipResultMessage([]string{"resource", "list", "/"}) {
+			t.Fatal("expected status suppression when DECLAREST_SKIP_RESULT_MESSAGE is set")
+		}
+		if shouldSkipResultMessage([]string{"resource", "list", "/", "--skip-result-message=false"}) {
+			t.Fatal("expected explicit flag to override DECLAREST_SKIP_RESULT_MESSAGE")
+		}
+	})
+
+	t.Run("legacy env default", func(t *testing.T) {
+		t.Setenv(cliutil.GlobalEnvSkipResultMessageLegacy, "true")
+		if !shouldSkipResultMessage([]string{"resource", "list", "/"}) {
 			t.Fatal("expected status suppression when DECLAREST_NO_STATUS is set")
 		}
-		if shouldSuppressStatusMessage([]string{"resource", "list", "/", "--no-status=false"}) {
+		if shouldSkipResultMessage([]string{"resource", "list", "/", "--skip-result-message=false"}) {
 			t.Fatal("expected explicit flag to override DECLAREST_NO_STATUS")
 		}
 	})
@@ -155,7 +165,7 @@ func TestShouldEmitExecutionStatus(t *testing.T) {
 		want bool
 	}{
 		{name: "mutation command", args: []string{"resource", "save", "/customers/acme"}, want: true},
-		{name: "mutation command no status", args: []string{"resource", "save", "/customers/acme", "--no-status"}, want: false},
+		{name: "mutation command skip result message", args: []string{"resource", "save", "/customers/acme", "--skip-result-message"}, want: false},
 		{name: "help invocation", args: []string{"resource", "save", "--help"}, want: false},
 		{name: "completion invocation", args: []string{"completion", "bash"}, want: false},
 		{name: "read command", args: []string{"resource", "get", "/customers/acme"}, want: false},

@@ -57,7 +57,7 @@ func shouldSuppressColor(args []string) bool {
 }
 
 func shouldEmitExecutionStatus(args []string, command *cobra.Command) bool {
-	if shouldSuppressStatusMessage(args) {
+	if shouldSkipResultMessage(args) {
 		return false
 	}
 	if isHelpOrCompletionInvocation(args) {
@@ -66,12 +66,15 @@ func shouldEmitExecutionStatus(args []string, command *cobra.Command) bool {
 	return commandmeta.EmitsExecutionStatus(command)
 }
 
-func shouldSuppressStatusMessage(args []string) bool {
+func shouldSkipResultMessage(args []string) bool {
 	return parseGlobalBoolFlag(
 		args,
-		cliutil.GlobalFlagNoStatus,
-		cliutil.GlobalFlagNoStatusShort,
-		cliutil.EnvBoolOrDefault(cliutil.GlobalEnvNoStatus, false),
+		cliutil.GlobalFlagSkipResultMessage,
+		cliutil.GlobalFlagSkipResultMessageShort,
+		cliutil.EnvBoolOrDefault(
+			cliutil.GlobalEnvSkipResultMessage,
+			cliutil.EnvBoolOrDefault(cliutil.GlobalEnvSkipResultMessageLegacy, false),
+		),
 	)
 }
 

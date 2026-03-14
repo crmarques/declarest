@@ -47,3 +47,24 @@ func TestWriteStatusLineUsesUppercaseBracketedLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldIgnoreWarnings(t *testing.T) {
+	t.Run("flag parsing", func(t *testing.T) {
+		if !ShouldIgnoreWarnings([]string{"resource", "get", "/", "--ignore-warnings"}) {
+			t.Fatal("expected warning suppression for --ignore-warnings")
+		}
+		if ShouldIgnoreWarnings([]string{"resource", "get", "/", "--ignore-warnings=false"}) {
+			t.Fatal("expected warnings enabled for --ignore-warnings=false")
+		}
+	})
+
+	t.Run("env default", func(t *testing.T) {
+		t.Setenv(GlobalEnvIgnoreWarnings, "true")
+		if !ShouldIgnoreWarnings([]string{"resource", "get", "/"}) {
+			t.Fatal("expected warning suppression when DECLAREST_IGNORE_WARNINGS is set")
+		}
+		if ShouldIgnoreWarnings([]string{"resource", "get", "/", "--ignore-warnings=false"}) {
+			t.Fatal("expected explicit flag to override DECLAREST_IGNORE_WARNINGS")
+		}
+	})
+}

@@ -33,7 +33,8 @@ Available on all commands:
 - `-o, --output <auto|text|json|yaml>` - output format
 - `-d, --debug` - debug output
 - `-v, --verbose` - show complementary output for commands that suppress it by default
-- `-n, --no-status` - hide status footer lines
+- `-n, --skip-result-message` - hide result footer lines
+- `--ignore-warnings` - suppress standalone warning lines
 - `--no-color` - disable ANSI color
 
 ## Path input conventions
@@ -231,7 +232,8 @@ These commands are useful when debugging auth or connectivity independently from
 - `secret list <path> --recursive` expands discovery to descendant secret-bearing paths and renders matches as the full relative path from the selected root, for example `/test/secrets/private-key:.`.
 - Explicit non-structured `--content-type` values such as `text`, `txt`, or `text/plain` keep inline payloads literal, so `--payload a=b --content-type txt` is saved as text, not parsed as JSON-style assignment shorthand.
 - Some commands intentionally suppress payload output unless `--verbose` is used (especially state-changing commands).
-- Status lines are printed to stderr by default; use `--no-status` when piping stdout.
+- Status lines are printed to stderr by default; use `--skip-result-message` when piping stdout.
+- Use `--ignore-warnings` when you need to suppress standalone warning lines such as bootstrap security notices.
 - `resource get` redacts metadata-declared secret attributes by default; use `--show-secrets` only when necessary.
 - `resource defaults get` prints the effective resolved defaults object; when no defaults are resolved yet, it returns an empty object.
 

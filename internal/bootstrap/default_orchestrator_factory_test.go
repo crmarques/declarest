@@ -609,7 +609,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			ManagedServer: &config.ManagedServer{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com/api",
@@ -625,7 +625,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			ManagedServer: &config.ManagedServer{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
@@ -642,7 +642,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			ManagedServer: &config.ManagedServer{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
@@ -663,7 +663,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			SecretStore: &config.SecretStore{
 				Vault: &config.VaultSecretStore{
 					Address: "http://vault.local:8200",
@@ -679,7 +679,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			SecretStore: &config.SecretStore{
 				Vault: &config.VaultSecretStore{
 					Address: "https://vault.example.com",
@@ -696,7 +696,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			Repository: config.Repository{
 				Git: &config.GitRepository{
 					Remote: &config.GitRemote{
@@ -714,7 +714,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			Repository: config.Repository{
 				Git: &config.GitRepository{
 					Remote: &config.GitRemote{
@@ -734,7 +734,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		emitSecurityWarnings(&buf, config.Context{
+		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
 			ManagedServer: &config.ManagedServer{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com",
@@ -781,6 +781,20 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		}
 		if got, want := strings.Count(output, "[WARNING]"), len(expectedSubstrings); got != want {
 			t.Fatalf("expected %d warning labels, got %d in output:\n%s", want, got, output)
+		}
+	})
+
+	t.Run("ignore_warnings_suppresses_output", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		emitSecurityWarningsWithArgs(&buf, []string{"--ignore-warnings"}, config.Context{
+			ManagedServer: &config.ManagedServer{
+				HTTP: &config.HTTPServer{BaseURL: "http://example.com"},
+			},
+		})
+		if buf.Len() != 0 {
+			t.Fatalf("expected warnings to be suppressed, got %q", buf.String())
 		}
 	})
 

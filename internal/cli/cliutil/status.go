@@ -39,6 +39,18 @@ func WriteStatusLine(w io.Writer, status string, message string) {
 	_, _ = fmt.Fprintf(w, "%s %s\n", label, rendered)
 }
 
+func WriteWarningLine(w io.Writer, message string) {
+	WriteStatusLine(w, "WARNING", message)
+}
+
+func ShouldIgnoreWarnings(args []string) bool {
+	return parseGlobalBoolFlag(
+		args,
+		GlobalFlagIgnoreWarnings,
+		EnvBoolOrDefault(GlobalEnvIgnoreWarnings, false),
+	)
+}
+
 func ShouldSuppressColor(args []string) bool {
 	return parseGlobalBoolFlag(
 		args,

@@ -66,7 +66,9 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			"  DECLAREST_OUTPUT",
 			"  DECLAREST_VERBOSE",
 			"  DECLAREST_VERBOSE_INSECURE",
-			"  DECLAREST_NO_STATUS",
+			"  DECLAREST_SKIP_RESULT_MESSAGE",
+			"  DECLAREST_IGNORE_WARNINGS",
+			"  DECLAREST_NO_STATUS (legacy)",
 			"  DECLAREST_NO_COLOR",
 			"  NO_COLOR",
 		}, "\n"),
@@ -91,15 +93,11 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 			commandContext = debugctx.WithWriter(commandContext, command.ErrOrStderr())
 			command.SetContext(commandContext)
 
-			if globalFlags.VerboseInsecure && verboseLevel < 1 {
-				cliutil.WriteStatusLine(
-					command.ErrOrStderr(),
-					"WARNING",
-					"--verbose-insecure has no effect without -v or --verbose.",
-				)
+			if globalFlags.VerboseInsecure && verboseLevel < 1 && !globalFlags.IgnoreWarnings {
+				cliutil.WriteWarningLine(command.ErrOrStderr(), "--verbose-insecure has no effect without -v or --verbose.")
 			}
 
-			if globalFlags.VerboseInsecure && verboseLevel >= 1 {
+			if globalFlags.VerboseInsecure && verboseLevel >= 1 && !globalFlags.IgnoreWarnings {
 				debugctx.Infof(
 					command.Context(),
 					"%s --verbose-insecure is enabled. Secrets, tokens, and credentials will be printed to stderr.",
@@ -109,12 +107,13 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 
 			debugctx.Printf(
 				command.Context(),
-				"root flags context=%q output=%q verbose=%d verbose_insecure=%t no_status=%t no_color=%t command=%q",
+				"root flags context=%q output=%q verbose=%d verbose_insecure=%t skip_result_message=%t ignore_warnings=%t no_color=%t command=%q",
 				globalFlags.Context,
 				globalFlags.Output,
 				verboseLevel,
 				globalFlags.VerboseInsecure,
-				globalFlags.NoStatus,
+				globalFlags.SkipResultMessage,
+				globalFlags.IgnoreWarnings,
 				globalFlags.NoColor,
 				command.CommandPath(),
 			)

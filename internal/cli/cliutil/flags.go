@@ -10,33 +10,37 @@ import (
 )
 
 const (
-	GlobalFlagContext         = "context"
-	GlobalFlagContextShort    = "c"
-	GlobalFlagVerbose         = "verbose"
-	GlobalFlagVerboseShort    = "v"
-	GlobalFlagVerboseInsecure = "verbose-insecure"
-	GlobalFlagNoStatus        = "no-status"
-	GlobalFlagNoStatusShort   = "n"
-	GlobalFlagNoColor         = "no-color"
-	GlobalFlagOutput          = "output"
-	GlobalFlagOutputShort     = "o"
+	GlobalFlagContext                = "context"
+	GlobalFlagContextShort           = "c"
+	GlobalFlagVerbose                = "verbose"
+	GlobalFlagVerboseShort           = "v"
+	GlobalFlagVerboseInsecure        = "verbose-insecure"
+	GlobalFlagSkipResultMessage      = "skip-result-message"
+	GlobalFlagSkipResultMessageShort = "n"
+	GlobalFlagIgnoreWarnings         = "ignore-warnings"
+	GlobalFlagNoColor                = "no-color"
+	GlobalFlagOutput                 = "output"
+	GlobalFlagOutputShort            = "o"
 
-	GlobalEnvContext         = "DECLAREST_CONTEXT"
-	GlobalEnvOutput          = "DECLAREST_OUTPUT"
-	GlobalEnvVerbose         = "DECLAREST_VERBOSE"
-	GlobalEnvVerboseInsecure = "DECLAREST_VERBOSE_INSECURE"
-	GlobalEnvNoStatus        = "DECLAREST_NO_STATUS"
-	GlobalEnvNoColor         = "DECLAREST_NO_COLOR"
-	GlobalEnvNoColorLegacy   = "NO_COLOR"
+	GlobalEnvContext                 = "DECLAREST_CONTEXT"
+	GlobalEnvOutput                  = "DECLAREST_OUTPUT"
+	GlobalEnvVerbose                 = "DECLAREST_VERBOSE"
+	GlobalEnvVerboseInsecure         = "DECLAREST_VERBOSE_INSECURE"
+	GlobalEnvSkipResultMessage       = "DECLAREST_SKIP_RESULT_MESSAGE"
+	GlobalEnvSkipResultMessageLegacy = "DECLAREST_NO_STATUS"
+	GlobalEnvIgnoreWarnings          = "DECLAREST_IGNORE_WARNINGS"
+	GlobalEnvNoColor                 = "DECLAREST_NO_COLOR"
+	GlobalEnvNoColorLegacy           = "NO_COLOR"
 )
 
 type GlobalFlags struct {
-	Context         string
-	Verbose         int
-	VerboseInsecure bool
-	NoStatus        bool
-	NoColor         bool
-	Output          string
+	Context           string
+	Verbose           int
+	VerboseInsecure   bool
+	SkipResultMessage bool
+	IgnoreWarnings    bool
+	NoColor           bool
+	Output            string
 }
 
 type InputFlags struct {
@@ -48,7 +52,11 @@ func BindGlobalFlags(command *cobra.Command, flags *GlobalFlags) {
 	flags.Context = EnvOrDefault(GlobalEnvContext, "")
 	flags.Verbose = EnvIntOrDefault(GlobalEnvVerbose, 0)
 	flags.VerboseInsecure = EnvBoolOrDefault(GlobalEnvVerboseInsecure, false)
-	flags.NoStatus = EnvBoolOrDefault(GlobalEnvNoStatus, false)
+	flags.SkipResultMessage = EnvBoolOrDefault(
+		GlobalEnvSkipResultMessage,
+		EnvBoolOrDefault(GlobalEnvSkipResultMessageLegacy, false),
+	)
+	flags.IgnoreWarnings = EnvBoolOrDefault(GlobalEnvIgnoreWarnings, false)
 	flags.NoColor = EnvBoolOrDefault(GlobalEnvNoColor, EnvPresentOrDefault(GlobalEnvNoColorLegacy, false))
 	flags.Output = EnvOrDefault(GlobalEnvOutput, OutputAuto)
 
@@ -76,11 +84,17 @@ func BindGlobalFlags(command *cobra.Command, flags *GlobalFlags) {
 	)
 
 	command.PersistentFlags().BoolVarP(
-		&flags.NoStatus,
-		GlobalFlagNoStatus,
-		GlobalFlagNoStatusShort,
-		flags.NoStatus,
-		"hide status output (env: "+GlobalEnvNoStatus+")",
+		&flags.SkipResultMessage,
+		GlobalFlagSkipResultMessage,
+		GlobalFlagSkipResultMessageShort,
+		flags.SkipResultMessage,
+		"skip result footer output (env: "+GlobalEnvSkipResultMessage+"; legacy: "+GlobalEnvSkipResultMessageLegacy+")",
+	)
+	command.PersistentFlags().BoolVar(
+		&flags.IgnoreWarnings,
+		GlobalFlagIgnoreWarnings,
+		flags.IgnoreWarnings,
+		"suppress standalone warning output (env: "+GlobalEnvIgnoreWarnings+")",
 	)
 	command.PersistentFlags().BoolVar(
 		&flags.NoColor,
