@@ -58,6 +58,21 @@ func EffectiveResourceRequiredAttributesForOperation(
 	return attributes
 }
 
+func EffectiveCreatePayloadRequiredAttributes(md metadatadomain.ResourceMetadata) ([]string, error) {
+	createSpec, hasCreate := md.Operations[string(metadatadomain.OperationCreate)]
+	if !hasCreate || createSpec.Validate == nil || createSpec.Validate.RequiredAttributes == nil {
+		return resourceRequiredAttributesForOperation(md, metadatadomain.OperationCreate)
+	}
+
+	attributes := append([]string(nil), createSpec.Validate.RequiredAttributes...)
+	addPointer := orderedStringCollector(&attributes)
+	if err := appendIdentityTemplatePointers(addPointer, "resource.alias", md.Alias); err != nil {
+		return nil, err
+	}
+
+	return attributes, nil
+}
+
 func ValidateResourceRequiredAttributes(payload resource.Value, md metadatadomain.ResourceMetadata) error {
 	required, err := identity.RequiredAttributes(md)
 	if err != nil {

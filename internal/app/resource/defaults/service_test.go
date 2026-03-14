@@ -73,7 +73,7 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 	deps.Metadata = &fakeDefaultsMetadata{
 		items: map[string]metadata.ResourceMetadata{
-			"/customers/acme": {
+			"/customers/_": {
 				ID:    "{{/id}}",
 				Alias: "{{/name}}",
 			},
@@ -85,12 +85,7 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
-	want := map[string]any{
-		"labels": map[string]any{
-			"team": "platform",
-		},
-		"status": "active",
-	}
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
@@ -186,6 +181,14 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
 	})
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/admin/realms/_": {
+				ID:    "{{/realm}}",
+				Alias: "{{/realm}}",
+			},
+		},
+	}
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
 	tests := []struct {
@@ -198,10 +201,7 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 		{name: "specific_resource", requestedPath: "/admin/realms/master", wantResolvedPath: "/admin/realms"},
 	}
 
-	want := map[string]any{
-		"organizationsEnabled": true,
-		"status":               "active",
-	}
+	want := map[string]any{"status": "active"}
 
 	for _, tc := range tests {
 		tc := tc
@@ -266,10 +266,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 		t.Fatalf("expected resolved path /admin/realms, got %q", result.ResolvedPath)
 	}
 
-	want := map[string]any{
-		"organizationsEnabled": true,
-		"status":               "active",
-	}
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
@@ -286,9 +283,144 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 		if got := payload["realm"]; got != tempName {
 			t.Fatalf("expected realm %q for %q, got %#v", tempName, call.logicalPath, got)
 		}
+		if _, exists := payload["displayName"]; exists {
+			t.Fatalf("expected probe payload to keep only inferred identity fields when metadata is missing, got %#v", payload)
+		}
+		if _, exists := payload["organizationsEnabled"]; exists {
+			t.Fatalf("expected probe payload to exclude non-identity fields when metadata is missing, got %#v", payload)
+		}
+	}
+}
+
+func TestInferManagedServerUsesCreateValidateRequiredAttributesOnlyForProbePayload(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/admin/realms/acme": {
+			Value: map[string]any{
+				"realm":                "acme",
+				"displayName":          "Acme",
+				"enabled":              true,
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"realm":                "master",
+				"displayName":          "Master",
+				"enabled":              true,
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/admin/realms/_": {
+				Alias:              "{{/realm}}",
+				RequiredAttributes: []string{"/enabled"},
+				Operations: map[string]metadata.OperationSpec{
+					string(metadata.OperationCreate): {
+						Validate: &metadata.OperationValidationSpec{
+							RequiredAttributes: []string{"/displayName"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := Infer(context.Background(), deps, "/admin/realms", managedServerInferRequest())
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if !reflect.DeepEqual(result.Content.Value, map[string]any{"status": "active"}) {
+		t.Fatalf("unexpected managed-server defaults: got %#v", result.Content.Value)
+	}
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	for _, call := range orch.createCalls {
+		payload, ok := call.content.Value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", call.content.Value)
+		}
+		tempName := path.Base(call.logicalPath)
+		if got := payload["realm"]; got != tempName {
+			t.Fatalf("expected realm %q for %q, got %#v", tempName, call.logicalPath, got)
+		}
 		displayName, ok := payload["displayName"].(string)
-		if !ok || (displayName != "acme" && displayName != "master") {
-			t.Fatalf("expected displayName to remain unchanged, got %#v", payload["displayName"])
+		if !ok || (displayName != "Acme" && displayName != "Master") {
+			t.Fatalf("expected displayName to be preserved from create validate.requiredAttributes, got %#v", payload["displayName"])
+		}
+		if _, exists := payload["enabled"]; exists {
+			t.Fatalf("expected resource.requiredAttributes to be ignored when create validate.requiredAttributes is set, got %#v", payload)
+		}
+		if _, exists := payload["organizationsEnabled"]; exists {
+			t.Fatalf("expected non-required fields to be excluded from probe payload, got %#v", payload)
+		}
+	}
+}
+
+func TestInferManagedServerFallsBackToResourceRequiredAttributesForProbePayload(t *testing.T) {
+	t.Parallel()
+
+	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
+		"/admin/realms/acme": {
+			Value: map[string]any{
+				"realm":                "acme",
+				"displayName":          "Acme",
+				"enabled":              true,
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+		"/admin/realms/master": {
+			Value: map[string]any{
+				"realm":                "master",
+				"displayName":          "Master",
+				"enabled":              true,
+				"organizationsEnabled": true,
+			},
+			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
+		},
+	})
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/admin/realms/_": {
+				Alias:              "{{/realm}}",
+				RequiredAttributes: []string{"/displayName"},
+			},
+		},
+	}
+
+	result, err := Infer(context.Background(), deps, "/admin/realms", managedServerInferRequest())
+	if err != nil {
+		t.Fatalf("Infer returned error: %v", err)
+	}
+	if !reflect.DeepEqual(result.Content.Value, map[string]any{"status": "active"}) {
+		t.Fatalf("unexpected managed-server defaults: got %#v", result.Content.Value)
+	}
+
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
+	for _, call := range orch.createCalls {
+		payload, ok := call.content.Value.(map[string]any)
+		if !ok {
+			t.Fatalf("expected object payload, got %#v", call.content.Value)
+		}
+		tempName := path.Base(call.logicalPath)
+		if got := payload["realm"]; got != tempName {
+			t.Fatalf("expected realm %q for %q, got %#v", tempName, call.logicalPath, got)
+		}
+		displayName, ok := payload["displayName"].(string)
+		if !ok || (displayName != "Acme" && displayName != "Master") {
+			t.Fatalf("expected displayName to be preserved from resource.requiredAttributes, got %#v", payload["displayName"])
+		}
+		if _, exists := payload["enabled"]; exists {
+			t.Fatalf("expected probe payload to exclude unrelated fields, got %#v", payload)
+		}
+		if _, exists := payload["organizationsEnabled"]; exists {
+			t.Fatalf("expected probe payload to exclude non-required fields, got %#v", payload)
 		}
 	}
 }
@@ -363,7 +495,7 @@ func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	deps := testDefaultsDeps()
 	deps.Metadata = &fakeDefaultsMetadata{
 		items: map[string]metadata.ResourceMetadata{
-			"/customers/acme": {
+			"/customers/_": {
 				ID:    "{{/id}}",
 				Alias: "{{/name}}",
 			},
@@ -381,10 +513,7 @@ func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
-	want := map[string]any{
-		"labels": map[string]any{"team": "platform"},
-		"status": "active",
-	}
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
 	}
@@ -690,6 +819,15 @@ func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
 			Descriptor: resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON}),
 		},
 	})
+	deps.Metadata = &fakeDefaultsMetadata{
+		items: map[string]metadata.ResourceMetadata{
+			"/admin/realms/_": {
+				ID:    "{{/realm}}",
+				Alias: "{{/realm}}",
+			},
+		},
+	}
+	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
 	result, err := Infer(context.Background(), deps, "/admin/realms", InferRequest{
 		Sources: []InferSource{InferSourceManagedServer},
@@ -699,12 +837,12 @@ func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
-	want := map[string]any{
-		"organizationsEnabled": false,
-		"status":               "active",
-	}
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
 		t.Fatalf("unexpected managed-server defaults for selected aliases: got %#v want %#v", result.Content.Value, want)
+	}
+	if len(orch.createCalls) != 4 {
+		t.Fatalf("expected four temporary creates for two selected aliases, got %#v", orch.createCalls)
 	}
 }
 
@@ -830,7 +968,7 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 	}
 	deps.Metadata = &fakeDefaultsMetadata{
 		items: map[string]metadata.ResourceMetadata{
-			"/customers/acme": {
+			"/customers/_": {
 				ID:    "{{/id}}",
 				Alias: "{{/name}}",
 			},
@@ -844,10 +982,7 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 	if result.Matches {
 		t.Fatalf("expected mismatching defaults, got %#v vs %#v", result.CurrentContent.Value, result.InferredContent.Value)
 	}
-	want := map[string]any{
-		"labels": map[string]any{"team": "platform"},
-		"status": "active",
-	}
+	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.InferredContent.Value, want) {
 		t.Fatalf("unexpected inferred defaults: got %#v want %#v", result.InferredContent.Value, want)
 	}

@@ -69,6 +69,87 @@ func TestEffectiveResourceRequiredAttributesForCreateExcludesIDTemplatePointers(
 	}
 }
 
+func TestEffectiveCreatePayloadRequiredAttributesUsesOperationValidateAndAddsAlias(t *testing.T) {
+	t.Parallel()
+
+	effective, err := EffectiveCreatePayloadRequiredAttributes(metadatadomain.ResourceMetadata{
+		Alias:              "{{/realm}}",
+		RequiredAttributes: []string{"/enabled"},
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCreate): {
+				Validate: &metadatadomain.OperationValidationSpec{
+					RequiredAttributes: []string{"/displayName"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("EffectiveCreatePayloadRequiredAttributes returned error: %v", err)
+	}
+
+	want := []string{"/displayName", "/realm"}
+	if len(effective) != len(want) {
+		t.Fatalf("unexpected create payload required attributes %#v", effective)
+	}
+	for idx := range want {
+		if effective[idx] != want[idx] {
+			t.Fatalf("unexpected create payload required attributes %#v", effective)
+		}
+	}
+}
+
+func TestEffectiveCreatePayloadRequiredAttributesFallsBackToResourceRequiredAttributes(t *testing.T) {
+	t.Parallel()
+
+	effective, err := EffectiveCreatePayloadRequiredAttributes(metadatadomain.ResourceMetadata{
+		Alias:              "{{/realm}}",
+		ID:                 "{{/id}}",
+		RequiredAttributes: []string{"/displayName"},
+	})
+	if err != nil {
+		t.Fatalf("EffectiveCreatePayloadRequiredAttributes returned error: %v", err)
+	}
+
+	want := []string{"/displayName", "/realm"}
+	if len(effective) != len(want) {
+		t.Fatalf("unexpected create payload required attributes %#v", effective)
+	}
+	for idx := range want {
+		if effective[idx] != want[idx] {
+			t.Fatalf("unexpected create payload required attributes %#v", effective)
+		}
+	}
+}
+
+func TestEffectiveCreatePayloadRequiredAttributesHonorsExplicitEmptyOperationValidate(t *testing.T) {
+	t.Parallel()
+
+	effective, err := EffectiveCreatePayloadRequiredAttributes(metadatadomain.ResourceMetadata{
+		Alias:              "{{/realm}}",
+		RequiredAttributes: []string{"/displayName"},
+		Operations: map[string]metadatadomain.OperationSpec{
+			string(metadatadomain.OperationCreate): {
+				Validate: &metadatadomain.OperationValidationSpec{
+					RequiredAttributes: []string{},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("EffectiveCreatePayloadRequiredAttributes returned error: %v", err)
+	}
+
+	want := []string{"/realm"}
+	if len(effective) != len(want) {
+		t.Fatalf("unexpected create payload required attributes %#v", effective)
+	}
+	for idx := range want {
+		if effective[idx] != want[idx] {
+			t.Fatalf("unexpected create payload required attributes %#v", effective)
+		}
+	}
+}
+
 func TestValidateResourceRequiredAttributesForCreateSkipsImplicitIDPointers(t *testing.T) {
 	t.Parallel()
 

@@ -17,6 +17,7 @@ import (
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
+	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
@@ -658,6 +659,15 @@ func buildManagedServerProbePayload(
 		return resource.Content{}, "", faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
 	}
 
+	requiredAttributes, err := metadatavalidation.EffectiveCreatePayloadRequiredAttributes(md)
+	if err != nil {
+		return resource.Content{}, "", err
+	}
+	nextPayload, selectedPointers, err := selectManagedServerProbePayload(payload, requiredAttributes)
+	if err != nil {
+		return resource.Content{}, "", err
+	}
+
 	aliasPointer, aliasOK, err := identity.SimpleAliasPointer(md)
 	if err != nil {
 		return resource.Content{}, "", err
@@ -684,37 +694,86 @@ func buildManagedServerProbePayload(
 	}
 
 	tempName := "declarest-defaults-" + label + "-" + strings.ToLower(uuid.NewString()[:8])
-	next := resource.DeepCopyValue(payload)
+	next := any(nextPayload)
 	replacedPointers := map[string]struct{}{}
 
 	if aliasOK {
-		next, err = resource.SetJSONPointerValue(next, aliasPointer, tempName)
-		if err != nil {
-			return resource.Content{}, "", err
+		if _, selected := selectedPointers[aliasPointer]; selected {
+			next, err = resource.SetJSONPointerValue(next, aliasPointer, tempName)
+			if err != nil {
+				return resource.Content{}, "", err
+			}
+			replacedPointers[aliasPointer] = struct{}{}
 		}
-		replacedPointers[aliasPointer] = struct{}{}
 	}
 	if idOK {
-		next, err = resource.SetJSONPointerValue(next, idPointer, tempName)
-		if err != nil {
-			return resource.Content{}, "", err
+		if _, selected := selectedPointers[idPointer]; selected {
+			if _, replaced := replacedPointers[idPointer]; !replaced {
+				next, err = resource.SetJSONPointerValue(next, idPointer, tempName)
+				if err != nil {
+					return resource.Content{}, "", err
+				}
+				replacedPointers[idPointer] = struct{}{}
+			}
 		}
-		replacedPointers[idPointer] = struct{}{}
 	}
 
-	nextPayload, ok := next.(map[string]any)
+	rewrittenPayload, ok := next.(map[string]any)
 	if !ok {
 		return resource.Content{}, "", faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
 	}
-	nextPayload, err = applyManagedServerProbeIdentityFallback(logicalPath, payload, nextPayload, tempName, replacedPointers, aliasPointer, idPointer)
-	if err != nil {
-		return resource.Content{}, "", err
+	if len(selectedPointers) == 0 {
+		rewrittenPayload, err = applyManagedServerProbeIdentityFallback(logicalPath, payload, rewrittenPayload, tempName, replacedPointers, aliasPointer, idPointer)
+		if err != nil {
+			return resource.Content{}, "", err
+		}
 	}
 
 	return resource.Content{
-		Value:      nextPayload,
+		Value:      rewrittenPayload,
 		Descriptor: content.Descriptor,
 	}, joinLogicalPath(collectionPathFor(logicalPath), tempName), nil
+}
+
+func selectManagedServerProbePayload(
+	payload map[string]any,
+	requiredAttributes []string,
+) (map[string]any, map[string]struct{}, error) {
+	selectedPayload := map[string]any{}
+	selectedPointers := map[string]struct{}{}
+
+	pointers, err := metadatavalidation.NormalizeAttributePointers(
+		"managed-server defaults inference create required attributes",
+		requiredAttributes,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, pointer := range pointers {
+		selectedPointers[pointer] = struct{}{}
+
+		value, found, err := resource.LookupJSONPointer(payload, pointer)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !found || value == nil {
+			continue
+		}
+
+		next, err := resource.SetJSONPointerValue(selectedPayload, pointer, resource.DeepCopyValue(value))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		typed, ok := next.(map[string]any)
+		if !ok {
+			return nil, nil, faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+		}
+		selectedPayload = typed
+	}
+
+	return selectedPayload, selectedPointers, nil
 }
 
 func applyManagedServerProbeIdentityFallback(
