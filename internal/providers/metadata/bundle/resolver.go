@@ -305,12 +305,17 @@ func installBundle(ctx context.Context, cacheRoot string, cacheDir string, sourc
 		return BundleResolution{}, internalError("failed to write bundle cache readiness marker", err)
 	}
 
-	if err := os.RemoveAll(cacheDir); err != nil {
-		return BundleResolution{}, internalError("failed to replace existing metadata bundle cache", err)
+	oldDir := cacheDir + ".old"
+	_ = os.RemoveAll(oldDir)
+
+	if err := os.Rename(cacheDir, oldDir); err != nil && !os.IsNotExist(err) {
+		return BundleResolution{}, internalError("failed to move existing metadata bundle cache aside", err)
 	}
 	if err := os.Rename(tmpDir, cacheDir); err != nil {
+		_ = os.Rename(oldDir, cacheDir)
 		return BundleResolution{}, internalError("failed to finalize metadata bundle cache", err)
 	}
+	_ = os.RemoveAll(oldDir)
 	cleanupTmp = false
 
 	return loadCachedOrFail(cacheDir, source)

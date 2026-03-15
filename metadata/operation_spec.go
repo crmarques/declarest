@@ -263,7 +263,7 @@ func CompactInferredMetadataDefaults(logicalPath string, inferred ResourceMetada
 		SecretAttributes:       cloneStringSlice(inferred.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(inferred.ExternalizedAttributes),
 		Operations:             cloneOperationMap(inferred.Operations),
-		Transforms:             cloneTransformSteps(inferred.Transforms),
+		Transforms:             CloneTransformSteps(inferred.Transforms),
 	}
 
 	compact.Operations = removeDefaultOperationSpecs(compact.Operations, defaults.Operations)
@@ -285,7 +285,7 @@ func renderOperationSpecTemplates(spec OperationSpec, scope map[string]any) (Ope
 		Query:      maps.Clone(spec.Query),
 		Headers:    maps.Clone(spec.Headers),
 		Body:       resource.DeepCopyValue(spec.Body),
-		Transforms: cloneTransformSteps(spec.Transforms),
+		Transforms: CloneTransformSteps(spec.Transforms),
 		Validate:   cloneOperationValidationSpec(spec.Validate),
 	}
 

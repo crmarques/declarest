@@ -288,33 +288,27 @@ func sortedSelectorMatches(values map[string]selectorMatch) []selectorMatch {
 	return result
 }
 
-// ResolveCollectionChildren returns literal child collection selector segments
-// available for the given logical path based on metadata selector structure.
-// It is used by shell completion to surface metadata-only branches (for example
-// intermediary "/_/" templates) even when OpenAPI paths differ.
-func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error) {
-	debugctx.Printf(ctx, "metadata fs resolve-children start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
-
+// walkChildSelectors traverses child directory entries under the metadata
+// selectors matching logicalPath. The visitor receives each directory child
+// name and its parent selector. Return true from the visitor to stop early.
+func (s *FSMetadataService) walkChildSelectors(
+	logicalPath string,
+	visitor func(childName string, parentSelector string) bool,
+) error {
 	target, err := normalizeResolvePath(logicalPath)
 	if err != nil {
-		debugctx.Printf(ctx, "metadata fs resolve-children invalid logical_path=%q error=%v", logicalPath, err)
-		return nil, err
+		return err
 	}
 
 	parentSelectors, err := s.matchingParentSelectors(target.path)
 	if err != nil {
-		debugctx.Printf(ctx, "metadata fs resolve-children match failed logical_path=%q error=%v", target.path, err)
-		return nil, err
-	}
-	if len(parentSelectors) == 0 {
-		return nil, nil
+		return err
 	}
 
-	children := map[string]struct{}{}
 	for _, parentSelector := range parentSelectors {
 		parentDir, dirErr := s.selectorDirPath(parentSelector)
 		if dirErr != nil {
-			return nil, dirErr
+			return dirErr
 		}
 
 		entries, readErr := os.ReadDir(parentDir)
@@ -322,7 +316,7 @@ func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logic
 			if errors.Is(readErr, os.ErrNotExist) {
 				continue
 			}
-			return nil, internalError("failed to list metadata selector children", readErr)
+			return internalError("failed to list metadata selector children", readErr)
 		}
 
 		for _, entry := range entries {
@@ -330,21 +324,38 @@ func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logic
 				continue
 			}
 			childName := strings.TrimSpace(entry.Name())
-			if childName == "" || childName == "_" || hasWildcardPattern(childName) {
+			if childName == "" {
 				continue
 			}
+			if visitor(childName, parentSelector) {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+// ResolveCollectionChildren returns literal child collection selector segments
+// available for the given logical path based on metadata selector structure.
+// It is used by shell completion to surface metadata-only branches (for example
+// intermediary "/_/" templates) even when OpenAPI paths differ.
+func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logicalPath string) ([]string, error) {
+	debugctx.Printf(ctx, "metadata fs resolve-children start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
+
+	children := map[string]struct{}{}
+	err := s.walkChildSelectors(logicalPath, func(childName string, _ string) bool {
+		if childName != "_" && !hasWildcardPattern(childName) {
 			children[childName] = struct{}{}
 		}
+		return false
+	})
+	if err != nil {
+		debugctx.Printf(ctx, "metadata fs resolve-children failed logical_path=%q error=%v", logicalPath, err)
+		return nil, err
 	}
 
 	resolved := sortedSelectorKeys(children)
-	debugctx.Printf(
-		ctx,
-		"metadata fs resolve-children done logical_path=%q normalized=%q children=%v",
-		logicalPath,
-		target.path,
-		resolved,
-	)
+	debugctx.Printf(ctx, "metadata fs resolve-children done logical_path=%q children=%v", logicalPath, resolved)
 	return resolved, nil
 }
 
@@ -355,54 +366,26 @@ func (s *FSMetadataService) ResolveCollectionChildren(ctx context.Context, logic
 func (s *FSMetadataService) HasCollectionWildcardChild(ctx context.Context, logicalPath string) (bool, error) {
 	debugctx.Printf(ctx, "metadata fs wildcard-child check start logical_path=%q base_dir=%q", logicalPath, s.baseDir)
 
-	target, err := normalizeResolvePath(logicalPath)
+	found := false
+	err := s.walkChildSelectors(logicalPath, func(childName string, parentSelector string) bool {
+		if childName == "_" || hasWildcardPattern(childName) {
+			debugctx.Printf(
+				ctx,
+				"metadata fs wildcard-child match logical_path=%q selector=%q child=%q",
+				logicalPath,
+				parentSelector,
+				childName,
+			)
+			found = true
+			return true
+		}
+		return false
+	})
 	if err != nil {
-		debugctx.Printf(ctx, "metadata fs wildcard-child invalid logical_path=%q error=%v", logicalPath, err)
+		debugctx.Printf(ctx, "metadata fs wildcard-child failed logical_path=%q error=%v", logicalPath, err)
 		return false, err
 	}
-
-	parentSelectors, err := s.matchingParentSelectors(target.path)
-	if err != nil {
-		debugctx.Printf(ctx, "metadata fs wildcard-child match failed logical_path=%q error=%v", target.path, err)
-		return false, err
-	}
-	if len(parentSelectors) == 0 {
-		return false, nil
-	}
-
-	for _, parentSelector := range parentSelectors {
-		parentDir, dirErr := s.selectorDirPath(parentSelector)
-		if dirErr != nil {
-			return false, dirErr
-		}
-
-		entries, readErr := os.ReadDir(parentDir)
-		if readErr != nil {
-			if errors.Is(readErr, os.ErrNotExist) {
-				continue
-			}
-			return false, internalError("failed to list metadata selector children", readErr)
-		}
-
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			childName := strings.TrimSpace(entry.Name())
-			if childName == "_" || hasWildcardPattern(childName) {
-				debugctx.Printf(
-					ctx,
-					"metadata fs wildcard-child match logical_path=%q selector=%q child=%q",
-					logicalPath,
-					parentSelector,
-					childName,
-				)
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
+	return found, nil
 }
 
 func (s *FSMetadataService) matchingParentSelectors(logicalPath string) ([]string, error) {
@@ -479,8 +462,6 @@ func (s *FSMetadataService) matchingCollectionCandidates(parentSelector string, 
 		}
 	}
 
-	sort.Strings(wildcards)
-	sort.Strings(literals)
 	return wildcards, literals, nil
 }
 

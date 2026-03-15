@@ -35,7 +35,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 		SecretAttributes:       cloneStringSlice(value.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(value.ExternalizedAttributes),
 		Operations:             make(map[string]OperationSpec, len(value.Operations)),
-		Transforms:             cloneTransformSteps(value.Transforms),
+		Transforms:             CloneTransformSteps(value.Transforms),
 	}
 
 	for key, operationSpec := range value.Operations {
@@ -47,7 +47,7 @@ func CloneResourceMetadata(value ResourceMetadata) ResourceMetadata {
 			Accept:      operationSpec.Accept,
 			ContentType: operationSpec.ContentType,
 			Body:        resource.DeepCopyValue(operationSpec.Body),
-			Transforms:  cloneTransformSteps(operationSpec.Transforms),
+			Transforms:  CloneTransformSteps(operationSpec.Transforms),
 			Validate:    cloneOperationValidationSpec(operationSpec.Validate),
 		}
 	}
@@ -68,7 +68,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		SecretAttributes:       cloneStringSlice(base.SecretAttributes),
 		ExternalizedAttributes: cloneExternalizedAttributes(base.ExternalizedAttributes),
 		Operations:             cloneOperationMap(base.Operations),
-		Transforms:             cloneTransformSteps(base.Transforms),
+		Transforms:             CloneTransformSteps(base.Transforms),
 	}
 
 	if overlay.ID != "" {
@@ -106,7 +106,7 @@ func MergeResourceMetadata(base ResourceMetadata, overlay ResourceMetadata) Reso
 		}
 	}
 	if overlay.Transforms != nil {
-		merged.Transforms = cloneTransformSteps(overlay.Transforms)
+		merged.Transforms = CloneTransformSteps(overlay.Transforms)
 	}
 
 	return merged
@@ -151,7 +151,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 		Accept:      base.Accept,
 		ContentType: base.ContentType,
 		Body:        resource.DeepCopyValue(base.Body),
-		Transforms:  cloneTransformSteps(base.Transforms),
+		Transforms:  CloneTransformSteps(base.Transforms),
 		Validate:    cloneOperationValidationSpec(base.Validate),
 	}
 
@@ -197,7 +197,7 @@ func MergeOperationSpec(base OperationSpec, overlay OperationSpec) OperationSpec
 		merged.Body = overlay.Body
 	}
 	if overlay.Transforms != nil {
-		merged.Transforms = cloneTransformSteps(overlay.Transforms)
+		merged.Transforms = CloneTransformSteps(overlay.Transforms)
 	}
 	merged.Validate = mergeOperationValidationSpec(merged.Validate, overlay.Validate)
 
@@ -219,7 +219,7 @@ func cloneOperationMap(values map[string]OperationSpec) map[string]OperationSpec
 			Accept:      value.Accept,
 			ContentType: value.ContentType,
 			Body:        resource.DeepCopyValue(value.Body),
-			Transforms:  cloneTransformSteps(value.Transforms),
+			Transforms:  CloneTransformSteps(value.Transforms),
 			Validate:    cloneOperationValidationSpec(value.Validate),
 		}
 	}

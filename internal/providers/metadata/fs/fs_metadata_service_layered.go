@@ -189,19 +189,17 @@ func (s *LayeredMetadataService) RenderOperationSpecForResource(
 		return metadatadomain.OperationSpec{}, err
 	}
 
-	resolved, err := s.resolveForPathWithContext(ctx, resolvedResource.LogicalPath)
-	if err != nil {
-		if faults.IsCategory(err, faults.NotFoundError) {
+	resolved, resolveErr := s.resolveForPathWithContext(ctx, resolvedResource.LogicalPath)
+	if resolveErr != nil {
+		if faults.IsCategory(resolveErr, faults.NotFoundError) {
 			resolved = resolvedMetadataResult{}
 		} else {
-			return metadatadomain.OperationSpec{}, err
+			return metadatadomain.OperationSpec{}, resolveErr
 		}
 	}
-	resolvedMetadata := metadatadomain.CloneResourceMetadata(input.Metadata)
-	if !metadatadomain.HasResourceMetadataDirectives(resolvedMetadata) {
-		resolvedMetadata = resolved.metadata
+	if metadatadomain.HasResourceMetadataDirectives(input.Metadata) {
+		resolved.metadata = metadatadomain.CloneResourceMetadata(input.Metadata)
 	}
-	resolved.metadata = resolvedMetadata
 
 	templateScope, err := buildTemplateScopeForResource(target, resolved, resolvedResource, operation)
 	if err != nil {
@@ -209,12 +207,12 @@ func (s *LayeredMetadataService) RenderOperationSpecForResource(
 	}
 	metadatadomain.ApplyPayloadTemplateScope(
 		templateScope,
-		resolvedMetadata,
+		resolved.metadata,
 		resolvedResource.Payload,
 		resolvedResource.PayloadDescriptor,
 	)
 
-	return metadatadomain.ResolveOperationSpecWithScope(ctx, resolvedMetadata, operation, templateScope)
+	return metadatadomain.ResolveOperationSpecWithScope(ctx, resolved.metadata, operation, templateScope)
 }
 
 func (s *LayeredMetadataService) ReadDefaultsArtifact(ctx context.Context, logicalPath string, file string) (resource.Content, error) {

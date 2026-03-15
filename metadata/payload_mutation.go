@@ -8,7 +8,7 @@ const (
 	transformJQ      = "jqExpression"
 )
 
-func cloneTransformSteps(values []TransformStep) []TransformStep {
+func CloneTransformSteps(values []TransformStep) []TransformStep {
 	if values == nil {
 		return nil
 	}
@@ -57,13 +57,13 @@ func combineTransformSteps(defaults []TransformStep, operation []TransformStep) 
 	}
 
 	combined := make([]TransformStep, 0, len(defaults)+len(operation))
-	combined = append(combined, cloneTransformSteps(defaults)...)
-	combined = append(combined, cloneTransformSteps(operation)...)
+	combined = append(combined, CloneTransformSteps(defaults)...)
+	combined = append(combined, CloneTransformSteps(operation)...)
 	return combined
 }
 
 func OrderedTransformSteps(spec OperationSpec) []TransformStep {
-	return cloneTransformSteps(spec.Transforms)
+	return CloneTransformSteps(spec.Transforms)
 }
 
 func HasTransformJQ(values []TransformStep) bool {

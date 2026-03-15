@@ -34,7 +34,7 @@ func resolveOperationSpecTemplates(
 		Operations: map[string]metadata.OperationSpec{
 			string(operation): spec,
 		},
-		Transforms: metadata.CloneResourceMetadata(metadata.ResourceMetadata{Transforms: md.Transforms}).Transforms,
+		Transforms: metadata.CloneTransformSteps(md.Transforms),
 	}
 
 	rendered, err := metadata.ResolveOperationSpecWithScope(ctx, templateMetadata, operation, templateScope)

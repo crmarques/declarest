@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/crmarques/declarest/config"
@@ -32,7 +31,6 @@ var _ repository.ResourceStore = (*GitResourceRepository)(nil)
 var _ repository.RepositorySync = (*GitResourceRepository)(nil)
 var _ repository.ResourceArtifactStore = (*GitResourceRepository)(nil)
 
-var proxyEnvMu sync.Mutex
 var _ repository.RepositoryCommitter = (*GitResourceRepository)(nil)
 var _ repository.RepositoryHistoryReader = (*GitResourceRepository)(nil)
 var _ repository.RepositoryTreeReader = (*GitResourceRepository)(nil)
@@ -395,15 +393,19 @@ func (r *GitResourceRepository) Refresh(ctx context.Context) error {
 		return err
 	}
 
-	fetchErr := r.withProxyEnv(ctx, func() error {
-		return repo.Fetch(&gogit.FetchOptions{
-			RemoteName: defaultRemoteName,
-			Auth:       auth,
-			RefSpecs: []gitcfg.RefSpec{
-				gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
-			},
-			Force: true,
-		})
+	proxyOpts, err := r.proxyOptions(ctx)
+	if err != nil {
+		return err
+	}
+
+	fetchErr := repo.Fetch(&gogit.FetchOptions{
+		RemoteName: defaultRemoteName,
+		Auth:       auth,
+		RefSpecs: []gitcfg.RefSpec{
+			gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
+		},
+		Force:        true,
+		ProxyOptions: proxyOpts,
 	})
 	if fetchErr != nil && !errors.Is(fetchErr, gogit.NoErrAlreadyUpToDate) {
 		return classifyRemoteError("failed to refresh repository from remote", fetchErr)
@@ -493,15 +495,19 @@ func (r *GitResourceRepository) Push(ctx context.Context, policy repository.Push
 		return err
 	}
 
-	pushErr := r.withProxyEnv(ctx, func() error {
-		return repo.Push(&gogit.PushOptions{
-			RemoteName: defaultRemoteName,
-			Auth:       auth,
-			Force:      policy.Force,
-			RefSpecs: []gitcfg.RefSpec{
-				gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", sourceBranch, targetBranch)),
-			},
-		})
+	proxyOpts, err := r.proxyOptions(ctx)
+	if err != nil {
+		return err
+	}
+
+	pushErr := repo.Push(&gogit.PushOptions{
+		RemoteName: defaultRemoteName,
+		Auth:       auth,
+		Force:      policy.Force,
+		RefSpecs: []gitcfg.RefSpec{
+			gitcfg.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", sourceBranch, targetBranch)),
+		},
+		ProxyOptions: proxyOpts,
 	})
 	if pushErr != nil && !errors.Is(pushErr, gogit.NoErrAlreadyUpToDate) {
 		return classifyRemoteError("failed to push repository changes", pushErr)
@@ -540,15 +546,19 @@ func (r *GitResourceRepository) SyncStatus(ctx context.Context) (repository.Sync
 		return repository.SyncReport{}, err
 	}
 
-	fetchErr := r.withProxyEnv(ctx, func() error {
-		return repo.Fetch(&gogit.FetchOptions{
-			RemoteName: defaultRemoteName,
-			Auth:       auth,
-			RefSpecs: []gitcfg.RefSpec{
-				gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
-			},
-			Force: true,
-		})
+	proxyOpts, err := r.proxyOptions(ctx)
+	if err != nil {
+		return repository.SyncReport{}, err
+	}
+
+	fetchErr := repo.Fetch(&gogit.FetchOptions{
+		RemoteName: defaultRemoteName,
+		Auth:       auth,
+		RefSpecs: []gitcfg.RefSpec{
+			gitcfg.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", r.targetBranch(), defaultRemoteName, r.targetBranch())),
+		},
+		Force:        true,
+		ProxyOptions: proxyOpts,
 	})
 	if fetchErr != nil && !errors.Is(fetchErr, gogit.NoErrAlreadyUpToDate) {
 		return repository.SyncReport{}, classifyRemoteError("failed to refresh remote refs for status", fetchErr)
@@ -682,12 +692,49 @@ func (r *GitResourceRepository) authMethod(ctx context.Context) (transport.AuthM
 
 		sshKeys, err := sshauth.NewPublicKeysFromFile(username, auth.SSH.PrivateKeyFile, auth.SSH.Passphrase)
 		if err != nil {
-			return nil, faults.NewTypedError(faults.AuthError, "failed to load git ssh auth configuration", nil)
+			return nil, faults.NewTypedError(faults.AuthError, "failed to load git ssh auth configuration", err)
 		}
 		return sshKeys, nil
 	default:
 		return nil, faults.NewValidationError("git remote auth configuration is invalid", nil)
 	}
+}
+
+func (r *GitResourceRepository) proxyOptions(ctx context.Context) (transport.ProxyOptions, error) {
+	proxyConfig, disabled, err := proxyhelper.ResolveWithRuntime("repository.git.remote.proxy", r.proxy, r.runtime)
+	if err != nil {
+		return transport.ProxyOptions{}, err
+	}
+	if disabled || !proxyConfig.HasProxy() {
+		return transport.ProxyOptions{}, nil
+	}
+
+	envVars, err := proxyConfig.Env(ctx)
+	if err != nil {
+		return transport.ProxyOptions{}, err
+	}
+
+	proxyURL := envVars["HTTPS_PROXY"]
+	if proxyURL == "" {
+		proxyURL = envVars["HTTP_PROXY"]
+	}
+	if proxyURL == "" {
+		return transport.ProxyOptions{}, nil
+	}
+
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return transport.ProxyOptions{URL: proxyURL}, nil
+	}
+
+	opts := transport.ProxyOptions{URL: proxyURL}
+	if parsed.User != nil {
+		opts.Username = parsed.User.Username()
+		opts.Password, _ = parsed.User.Password()
+		parsed.User = nil
+		opts.URL = parsed.String()
+	}
+	return opts, nil
 }
 
 func (r *GitResourceRepository) currentHeadBranch(repo *gogit.Repository) (string, error) {
@@ -732,6 +779,8 @@ func (r *GitResourceRepository) resolveRemoteHash(repo *gogit.Repository, target
 	return remoteRef.Hash(), nil
 }
 
+const maxGraphTraversalDepth = 5000
+
 func (r *GitResourceRepository) computeAheadBehind(repo *gogit.Repository, localHash plumbing.Hash, remoteHash plumbing.Hash) (int, int, error) {
 	const (
 		markLocal = 1 << iota
@@ -759,6 +808,11 @@ func (r *GitResourceRepository) computeAheadBehind(repo *gogit.Repository, local
 	return ahead, behind, nil
 }
 
+type graphEntry struct {
+	hash  plumbing.Hash
+	depth int
+}
+
 func (r *GitResourceRepository) markCommitGraph(
 	repo *gogit.Repository,
 	start plumbing.Hash,
@@ -769,23 +823,28 @@ func (r *GitResourceRepository) markCommitGraph(
 		return nil
 	}
 
-	stack := []plumbing.Hash{start}
+	stack := []graphEntry{{hash: start, depth: 0}}
 	for len(stack) > 0 {
 		last := len(stack) - 1
-		hash := stack[last]
+		entry := stack[last]
 		stack = stack[:last]
 
-		currentMark := marks[hash]
+		currentMark := marks[entry.hash]
 		if currentMark&mark != 0 {
 			continue
 		}
 
-		commit, err := repo.CommitObject(hash)
+		commit, err := repo.CommitObject(entry.hash)
 		if err != nil {
 			return internalError("failed to load git commit for status", err)
 		}
-		marks[hash] = currentMark | mark
-		stack = append(stack, commit.ParentHashes...)
+		marks[entry.hash] = currentMark | mark
+
+		if entry.depth < maxGraphTraversalDepth {
+			for _, parentHash := range commit.ParentHashes {
+				stack = append(stack, graphEntry{hash: parentHash, depth: entry.depth + 1})
+			}
+		}
 	}
 
 	return nil
@@ -809,68 +868,18 @@ func classifyRemoteError(message string, err error) error {
 	case errors.Is(err, transport.ErrAuthenticationRequired) ||
 		strings.Contains(lower, "authentication") ||
 		strings.Contains(lower, "permission denied"):
-		return faults.NewTypedError(faults.AuthError, message, nil)
+		return faults.NewTypedError(faults.AuthError, message, err)
 	case strings.Contains(lower, "non-fast-forward") ||
 		strings.Contains(lower, "fetch first") ||
 		strings.Contains(lower, "rejected"):
-		return faults.NewTypedError(faults.ConflictError, message, nil)
+		return faults.NewTypedError(faults.ConflictError, message, err)
 	case strings.Contains(lower, "timeout") ||
 		strings.Contains(lower, "tls") ||
 		strings.Contains(lower, "connection") ||
 		strings.Contains(lower, "network"):
-		return faults.NewTypedError(faults.TransportError, message, nil)
+		return faults.NewTypedError(faults.TransportError, message, err)
 	default:
-		return faults.NewTypedError(faults.InternalError, message, nil)
-	}
-}
-
-func (r *GitResourceRepository) withProxyEnv(ctx context.Context, fn func() error) error {
-	proxyConfig, _, err := proxyhelper.ResolveWithRuntime("repository.git.remote.proxy", r.proxy, r.runtime)
-	if err != nil {
-		return err
-	}
-	envVars, err := proxyConfig.Env(ctx)
-	if err != nil {
-		return err
-	}
-	keys := proxyhelper.EnvironmentKeys()
-
-	proxyEnvMu.Lock()
-	defer proxyEnvMu.Unlock()
-
-	saved := make(map[string]*string, len(keys))
-	for _, key := range keys {
-		if old, ok := os.LookupEnv(key); ok {
-			temp := old
-			saved[key] = &temp
-		} else {
-			saved[key] = nil
-		}
-		if value, ok := envVars[key]; ok {
-			if err := os.Setenv(key, value); err != nil {
-				restoreEnv(saved)
-				return err
-			}
-			continue
-		}
-		if err := os.Unsetenv(key); err != nil {
-			restoreEnv(saved)
-			return err
-		}
-	}
-
-	err = fn()
-	restoreEnv(saved)
-	return err
-}
-
-func restoreEnv(saved map[string]*string) {
-	for key, value := range saved {
-		if value != nil {
-			_ = os.Setenv(key, *value)
-		} else {
-			_ = os.Unsetenv(key)
-		}
+		return faults.NewTypedError(faults.InternalError, message, err)
 	}
 }
 
