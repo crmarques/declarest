@@ -102,6 +102,7 @@ e2e_print_startup_execution_parameters() {
 
 step_prepare_runtime() {
   local cached_cli_bin
+  local cached_cli_tmp
 
   if [[ -z "${E2E_RUN_ID}" ]]; then
     E2E_RUN_ID=$(date +%Y%m%d-%H%M%S)-$$
@@ -114,6 +115,7 @@ step_prepare_runtime() {
   E2E_BIN="${E2E_RUN_DIR}/bin/declarest"
   E2E_OPERATOR_BIN="${E2E_ROOT_DIR}/.e2e-build/declarest-operator-manager-${E2E_RUN_ID}"
   cached_cli_bin="${E2E_BUILD_CACHE_DIR}/declarest"
+  cached_cli_tmp="${E2E_BUILD_CACHE_DIR}/declarest.${E2E_RUN_ID}.tmp"
 
   if [[ -z "${E2E_EXECUTION_LOG}" ]]; then
     E2E_EXECUTION_LOG="${E2E_RUN_DIR}/execution.log"
@@ -149,7 +151,9 @@ step_prepare_runtime() {
     "${E2E_ROOT_DIR}/repository" \
     "${E2E_ROOT_DIR}/resource" \
     "${E2E_ROOT_DIR}/secrets"; then
-    e2e_run_cmd go build -o "${cached_cli_bin}" ./cmd/declarest || return 1
+    rm -f "${cached_cli_tmp}" || return 1
+    e2e_run_cmd go build -o "${cached_cli_tmp}" ./cmd/declarest || return 1
+    mv -f "${cached_cli_tmp}" "${cached_cli_bin}" || return 1
   else
     e2e_info "using cached e2e cli binary path=${cached_cli_bin}"
   fi
@@ -432,6 +436,7 @@ step_finalize() {
   fi
 
   [[ -n "${E2E_PID_FILE}" && -f "${E2E_PID_FILE}" ]] && rm -f "${E2E_PID_FILE}" || true
+  e2e_release_reserved_ports_for_run "${E2E_RUN_ID:-}" || true
   e2e_cleanup_temp_files
   return 0
 }

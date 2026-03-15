@@ -238,6 +238,28 @@ Expected outputs:
 3. `--check` succeeds only when the resolved defaults object matches the inferred normalized object.
 4. Subsequent repository-backed reads still expose the merged effective resource.
 
+### Example 12: Prompt Auth Reuse and Session Keep
+Goal: reuse one interactively-entered username/password pair across prompt-auth components without forcing plaintext credentials into the persisted context.
+
+Inputs:
+1. Context with `managedServer.http.auth.prompt`, `repository.git.remote.auth.prompt`, and `managedServer.http.proxy.auth.prompt`.
+2. `managedServer.http.auth.prompt.keepCredentialsForSession: true`.
+3. One runtime command that uses the managed server and git repository.
+
+Execution:
+1. Startup resolves the context without prompting because prompt auth is deferred.
+2. The first component that needs credentials prompts for username/password and warns that credentials will be kept for the terminal session.
+3. Runtime asks whether those credentials should be reused for the remaining prompt-auth components in the same command.
+4. Later commands on the same terminal session reuse the kept managed-server credentials without prompting again.
+
+Expected outputs:
+1. Persisted context YAML still contains only the `prompt` blocks and no plaintext credentials.
+2. One command prompts at most once when the user approves reuse for the other prompt-auth components in that command.
+3. Later commands can reuse the kept credentials for the same component without another prompt when session persistence is available.
+
+Failure expectation:
+1. A non-interactive command with uncached prompt-auth credentials fails with `ValidationError`.
+
 ### Example 12: Resource Defaults Managed-Server Probe Safety
 Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
 
@@ -276,6 +298,27 @@ Expected outputs:
 1. Printed or saved payload retains only explicit override fields.
 2. When all fields are defaulted, `resource get --prune-defaults` prints `{}` instead of `null`.
 3. The raw metadata `resource.defaults` block and its referenced defaults artifacts remain unchanged.
+
+### Example 14: E2E Manual Handoff With Prompt Auth
+Goal: generate a manual E2E context that defers managed-server and proxy credentials to runtime prompts instead of writing plaintext credentials into the context file.
+
+Inputs:
+1. `run-e2e.sh --profile cli-manual --managed-server simple-api-server --managed-server-auth-type prompt --managed-server-proxy true --managed-server-proxy-auth-type prompt`.
+2. `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://proxy.example:3128`.
+3. A managed-server component that supports `basic-auth`.
+
+Execution:
+1. Runner validates that the selected managed-server component supports `basic-auth` capability before startup continues.
+2. Component init/configure-auth hooks prepare any local component state needed for health checks or manual handoff without mutating the generated auth mode.
+3. Context generation writes `managedServer.http.auth.prompt` and `managedServer.http.proxy.auth.prompt` blocks while omitting inline managed-server and proxy credentials.
+4. The first manual `declarest-e2e` command prompts for the managed-server and proxy credentials when no cached session credentials are available.
+
+Expected outputs:
+1. The generated context file contains `prompt` auth blocks and no plaintext managed-server or proxy credentials.
+2. Manual handoff output remains usable without editing the generated context file.
+
+Failure expectation:
+1. Selecting `--managed-server-auth-type prompt` for a managed-server component without `basic-auth` capability, or combining `--managed-server-proxy-auth-type prompt` with inline proxy username/password env vars, fails with actionable validation output before workload execution.
 
 ### Example 14: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
@@ -891,3 +934,25 @@ Expected outputs:
 
 Failure expectation:
 1. Invalid `--color` values fail with `ValidationError` before diff rendering.
+
+### Example 41: Parallel E2E Matrix Execution
+Goal: run multiple `run-e2e.sh` workloads concurrently without losing per-run failure visibility.
+
+Inputs:
+1. `test/e2e/run-e2e-parallel.sh`.
+2. A matrix file or stdin payload containing one `./test/e2e/run-e2e.sh ...` command per line.
+3. At least one local-stack command that requires host port allocation.
+
+Execution:
+1. The parallel launcher reads the command list, ignoring blank lines and comments.
+2. The launcher starts one child shell per line and writes each child output to its own log file.
+3. Each child `run-e2e.sh` reserves any selected host ports for the lifetime of the run and releases them during finalize or cleanup.
+4. The launcher waits for every child process and aggregates their exit codes.
+
+Expected outputs:
+1. All child runs execute concurrently and keep their own run directories, logs, compose project names, and Kubernetes runtime names.
+2. The launcher prints one `PASS` or `FAIL` summary line per child log.
+3. The launcher exits `0` only when every child command exits `0`.
+
+Failure expectation:
+1. Any one child `run-e2e.sh` failure makes the launcher exit non-zero after reporting the failing job log path.

@@ -101,6 +101,8 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"noProxy:",
 		"oauth2:",
 		"basicAuth:",
+		"prompt:",
+		"keepCredentialsForSession:",
 		"customHeaders:",
 		"prefix: Bearer",
 		"value: change-me",
@@ -1160,6 +1162,7 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 		},
 		selects: []string{
 			"filesystem",
+			"credentials",
 			"customHeaders",
 		},
 		confirms: []bool{

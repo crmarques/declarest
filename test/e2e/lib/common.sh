@@ -13,6 +13,8 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_CONTEXT_DIR:=}"
 : "${E2E_CONTEXT_FILE:=}"
 : "${E2E_BUILD_CACHE_DIR:=${E2E_ROOT_DIR}/.e2e-build}"
+: "${E2E_LOCKS_DIR:=${E2E_RUNS_DIR}/.locks}"
+: "${E2E_PORT_RESERVATIONS_DIR:=${E2E_RUNS_DIR}/.port-reservations}"
 : "${E2E_BIN:=}"
 : "${E2E_OPERATOR_BIN:=}"
 : "${E2E_OPERATOR_IMAGE:=}"
@@ -205,19 +207,142 @@ e2e_cleanup_temp_files() {
   done
 }
 
-e2e_pick_free_port() {
+e2e_lock_path() {
+  local name=$1
+  local safe_name=${name//[^A-Za-z0-9._-]/_}
+  printf '%s/%s.lock\n' "${E2E_LOCKS_DIR}" "${safe_name}"
+}
+
+e2e_lock_acquire() {
+  local name=$1
+  local lock_path
+  local owner_pid=''
+  local attempts=0
+
+  lock_path=$(e2e_lock_path "${name}")
+  mkdir -p "${E2E_LOCKS_DIR}" || return 1
+
+  while ! mkdir "${lock_path}" 2>/dev/null; do
+    owner_pid=''
+    if [[ -f "${lock_path}/pid" ]]; then
+      owner_pid=$(cat "${lock_path}/pid" 2>/dev/null || true)
+    fi
+    if [[ -n "${owner_pid}" && "${owner_pid}" =~ ^[0-9]+$ ]] && ! kill -0 "${owner_pid}" >/dev/null 2>&1; then
+      rm -rf "${lock_path}" >/dev/null 2>&1 || true
+      continue
+    fi
+
+    ((attempts += 1))
+    if ((attempts >= 600)); then
+      e2e_die "timed out waiting for lock: ${name}"
+      return 1
+    fi
+    sleep 0.1
+  done
+
+  printf '%s\n' "$$" >"${lock_path}/pid"
+  printf '%s\n' "${lock_path}"
+}
+
+e2e_lock_release() {
+  local lock_path=$1
+  [[ -n "${lock_path}" ]] || return 0
+
+  rm -f "${lock_path}/pid" >/dev/null 2>&1 || true
+  rmdir "${lock_path}" >/dev/null 2>&1 || rm -rf "${lock_path}" >/dev/null 2>&1 || true
+}
+
+e2e_with_lock() {
+  local name=$1
+  shift
+
+  local lock_path
+  local rc
+  local had_errexit=0
+
+  lock_path=$(e2e_lock_acquire "${name}") || return 1
+
+  if [[ $- == *e* ]]; then
+    had_errexit=1
+  fi
+
+  set +e
+  "$@"
+  rc=$?
+  if ((had_errexit == 1)); then
+    set -e
+  fi
+
+  e2e_lock_release "${lock_path}"
+  return "${rc}"
+}
+
+e2e_port_reservation_path() {
+  local port=$1
+  printf '%s/%s\n' "${E2E_PORT_RESERVATIONS_DIR}" "${port}"
+}
+
+e2e_is_port_reserved() {
+  local port=$1
+  local reservation_file
+
+  reservation_file=$(e2e_port_reservation_path "${port}")
+  [[ -f "${reservation_file}" ]]
+}
+
+e2e_reserve_port() {
+  local port=$1
+  local reservation_file
+
+  reservation_file=$(e2e_port_reservation_path "${port}")
+  mkdir -p "${E2E_PORT_RESERVATIONS_DIR}" || return 1
+  if [[ -f "${reservation_file}" ]]; then
+    return 1
+  fi
+
+  {
+    printf 'run_id=%s\n' "${E2E_RUN_ID:-}"
+    printf 'pid=%s\n' "$$"
+  } >"${reservation_file}" || return 1
+}
+
+e2e_pick_free_port_locked() {
   local port
   local used
 
   for port in $(shuf -i 18080-28999 -n 120); do
+    if e2e_is_port_reserved "${port}"; then
+      continue
+    fi
+
     used=$(ss -ltn 2>/dev/null | awk '{print $4}' | grep -E ":${port}$" || true)
     if [[ -z "${used}" ]]; then
+      e2e_reserve_port "${port}" || continue
       printf '%s\n' "${port}"
       return 0
     fi
   done
 
   e2e_die "failed to allocate free TCP port"
+}
+
+e2e_pick_free_port() {
+  e2e_with_lock 'port-allocation' e2e_pick_free_port_locked
+}
+
+e2e_release_reserved_ports_for_run() {
+  local run_id=$1
+  local reservation_file
+
+  [[ -n "${run_id}" ]] || return 0
+  [[ -d "${E2E_PORT_RESERVATIONS_DIR}" ]] || return 0
+
+  while IFS= read -r reservation_file; do
+    [[ -n "${reservation_file}" ]] || continue
+    if grep -Fxq "run_id=${run_id}" "${reservation_file}" 2>/dev/null; then
+      rm -f "${reservation_file}" || return 1
+    fi
+  done < <(find "${E2E_PORT_RESERVATIONS_DIR}" -mindepth 1 -maxdepth 1 -type f | sort)
 }
 
 e2e_quote_cmd() {

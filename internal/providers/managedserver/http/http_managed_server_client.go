@@ -12,6 +12,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/crmarques/declarest/internal/providers/tlsconfig"
 	"github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
@@ -43,6 +44,8 @@ type Client struct {
 	oauthMu          sync.Mutex
 	oauthAccessToken string
 	oauthExpiresAt   time.Time
+
+	promptRuntime *promptauth.Runtime
 }
 
 type ClientOption func(*Client)
@@ -56,13 +59,17 @@ func WithMetadataRenderer(renderer metadata.ResourceOperationSpecRenderer) Clien
 	}
 }
 
+func WithPromptRuntime(runtime *promptauth.Runtime) ClientOption {
+	return func(g *Client) {
+		if g == nil {
+			return
+		}
+		g.promptRuntime = runtime
+	}
+}
+
 func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 	baseURL, err := parseBaseURL(cfg.BaseURL)
-	if err != nil {
-		return nil, err
-	}
-
-	auth, err := buildAuthConfig(cfg.Auth)
 	if err != nil {
 		return nil, err
 	}
@@ -79,16 +86,10 @@ func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
 	transport.Proxy = nil
-	if proxyFunc, err := buildProxyFunc(cfg.Proxy); err != nil {
-		return nil, err
-	} else if proxyFunc != nil {
-		transport.Proxy = proxyFunc
-	}
 
 	client := &Client{
 		baseURL:        baseURL,
 		defaultHeaders: maps.Clone(cfg.DefaultHeaders),
-		auth:           auth,
 		client: &http.Client{
 			Timeout:   defaultHTTPTimeout,
 			Transport: transport,
@@ -106,6 +107,16 @@ func NewClient(cfg config.HTTPServer, opts ...ClientOption) (*Client, error) {
 			continue
 		}
 		opt(client)
+	}
+	auth, err := buildAuthConfig(cfg.Auth, client.promptRuntime)
+	if err != nil {
+		return nil, err
+	}
+	client.auth = auth
+	if proxyFunc, err := buildProxyFunc(cfg.Proxy, client.promptRuntime); err != nil {
+		return nil, err
+	} else if proxyFunc != nil {
+		transport.Proxy = proxyFunc
 	}
 	return client, nil
 }

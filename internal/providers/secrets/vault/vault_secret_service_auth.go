@@ -12,9 +12,10 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		strings.TrimSpace(cfg.Token) != "",
 		cfg.Password != nil,
 		cfg.AppRole != nil,
+		cfg.Prompt != nil,
 	)
 	if setCount != 1 {
-		return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
+		return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle, prompt", nil)
 	}
 
 	if strings.TrimSpace(cfg.Token) != "" {
@@ -43,6 +44,15 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		return vaultAuthConfig{
 			mode:    vaultAuthAppRole,
 			appRole: &copied,
+		}, nil
+	}
+
+	if cfg.Prompt != nil {
+		copied := *cfg.Prompt
+		copied.Mount = strings.TrimSpace(copied.Mount)
+		return vaultAuthConfig{
+			mode:   vaultAuthPrompt,
+			prompt: &copied,
 		}, nil
 	}
 

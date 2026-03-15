@@ -26,6 +26,8 @@ contexts:
         #     basicAuth:
         #       username: change-me
         #       password: change-me
+        #     # prompt:
+        #     #   keepCredentialsForSession: true
         #     # ssh:
         #     #   user: git
         #     #   privateKeyFile: /path/to/id_rsa
@@ -68,6 +70,8 @@ contexts:
         #   auth:
         #     username: proxy-user
         #     password: proxy-pass
+        #     # prompt:
+        #     #   keepCredentialsForSession: true
 
         # Mutually exclusive: choose exactly one auth method.
         auth:
@@ -87,6 +91,8 @@ contexts:
           # basicAuth:
           #   username: change-me
           #   password: change-me
+          # prompt:
+          #   keepCredentialsForSession: true
           # customHeaders:
           #   - header: X-API-Key
           #     value: change-me
@@ -124,6 +130,9 @@ contexts:
     #   #     # password:
     #   #     #   username: vault-user
     #   #     #   password: vault-pass
+    #   #     #   mount: userpass
+    #   #     # prompt:
+    #   #     #   keepCredentialsForSession: true
     #   #     #   mount: userpass
     #   #     # appRole:
     #   #     #   roleID: role-id

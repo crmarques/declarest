@@ -33,6 +33,12 @@ case "${selected_auth_type}" in
       exit 1
     fi
     ;;
+  prompt)
+    if [[ "${enable_basic_auth}" != 'true' || "${enable_oauth2}" != 'false' ]]; then
+      printf 'simple-api-server auth-type prompt requires basic-auth=true and oauth2=false (got basic-auth=%s oauth2=%s)\n' "${enable_basic_auth}" "${enable_oauth2}" >&2
+      exit 1
+    fi
+    ;;
   oauth2)
     if [[ "${enable_basic_auth}" != 'false' || "${enable_oauth2}" != 'true' ]]; then
       printf 'simple-api-server auth-type oauth2 requires basic-auth=false and oauth2=true (got basic-auth=%s oauth2=%s)\n' "${enable_basic_auth}" "${enable_oauth2}" >&2
@@ -83,6 +89,8 @@ esac
     if [[ -n "${SIMPLE_API_SERVER_AUDIENCE:-}" ]]; then
       printf '        audience: %s\n' "${SIMPLE_API_SERVER_AUDIENCE}"
     fi
+  elif [[ "${selected_auth_type}" == 'prompt' ]]; then
+    printf '      prompt: {}\n'
   elif [[ "${enable_basic_auth}" == 'true' ]]; then
     printf '      basicAuth:\n'
     printf '        username: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME}"

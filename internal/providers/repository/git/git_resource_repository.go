@@ -13,6 +13,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 	"github.com/crmarques/declarest/repository"
@@ -48,20 +49,39 @@ type GitResourceRepository struct {
 	remote   *config.GitRemote
 	proxy    *config.HTTPProxy
 	autoInit bool
+	runtime  *promptauth.Runtime
 }
 
-func NewGitResourceRepository(repoConfig config.GitRepository, metadataBaseDir ...string) *GitResourceRepository {
+type Option func(*GitResourceRepository)
+
+func WithPromptRuntime(runtime *promptauth.Runtime) Option {
+	return func(repository *GitResourceRepository) {
+		if repository == nil {
+			return
+		}
+		repository.runtime = runtime
+	}
+}
+
+func NewGitResourceRepository(repoConfig config.GitRepository, opts ...Option) *GitResourceRepository {
 	var remoteProxy *config.HTTPProxy
 	if repoConfig.Remote != nil {
 		remoteProxy = proxyhelper.Clone(repoConfig.Remote.Proxy)
 	}
-	return &GitResourceRepository{
-		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir, metadataBaseDir...),
+	repository := &GitResourceRepository{
+		local:    fsstore.NewLocalResourceRepository(repoConfig.Local.BaseDir),
 		baseDir:  repoConfig.Local.BaseDir,
 		remote:   repoConfig.Remote,
 		proxy:    remoteProxy,
 		autoInit: repoConfig.Local.AutoInitEnabled(),
 	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(repository)
+	}
+	return repository
 }
 
 func (r *GitResourceRepository) Save(ctx context.Context, logicalPath string, content resource.Content) error {
@@ -370,12 +390,12 @@ func (r *GitResourceRepository) Refresh(ctx context.Context) error {
 		return err
 	}
 
-	auth, err := r.authMethod()
+	auth, err := r.authMethod(ctx)
 	if err != nil {
 		return err
 	}
 
-	fetchErr := r.withProxyEnv(func() error {
+	fetchErr := r.withProxyEnv(ctx, func() error {
 		return repo.Fetch(&gogit.FetchOptions{
 			RemoteName: defaultRemoteName,
 			Auth:       auth,
@@ -468,12 +488,12 @@ func (r *GitResourceRepository) Push(ctx context.Context, policy repository.Push
 	}
 	targetBranch := r.targetBranch()
 
-	auth, err := r.authMethod()
+	auth, err := r.authMethod(ctx)
 	if err != nil {
 		return err
 	}
 
-	pushErr := r.withProxyEnv(func() error {
+	pushErr := r.withProxyEnv(ctx, func() error {
 		return repo.Push(&gogit.PushOptions{
 			RemoteName: defaultRemoteName,
 			Auth:       auth,
@@ -515,12 +535,12 @@ func (r *GitResourceRepository) SyncStatus(ctx context.Context) (repository.Sync
 		return report, nil
 	}
 
-	auth, err := r.authMethod()
+	auth, err := r.authMethod(ctx)
 	if err != nil {
 		return repository.SyncReport{}, err
 	}
 
-	fetchErr := r.withProxyEnv(func() error {
+	fetchErr := r.withProxyEnv(ctx, func() error {
 		return repo.Fetch(&gogit.FetchOptions{
 			RemoteName: defaultRemoteName,
 			Auth:       auth,
@@ -625,7 +645,7 @@ func (r *GitResourceRepository) openRepositoryForOperation(ctx context.Context) 
 	return repo, nil
 }
 
-func (r *GitResourceRepository) authMethod() (transport.AuthMethod, error) {
+func (r *GitResourceRepository) authMethod(ctx context.Context) (transport.AuthMethod, error) {
 	if r.remote == nil || r.remote.Auth == nil {
 		return nil, nil
 	}
@@ -636,6 +656,18 @@ func (r *GitResourceRepository) authMethod() (transport.AuthMethod, error) {
 		return &httpauth.BasicAuth{
 			Username: auth.BasicAuth.Username,
 			Password: auth.BasicAuth.Password,
+		}, nil
+	case auth.Prompt != nil:
+		if r.runtime == nil {
+			return nil, faults.NewValidationError("repository.git.remote.auth.prompt runtime is not configured", nil)
+		}
+		creds, err := r.runtime.Resolve(ctx, promptauth.TargetRepositoryGitRemoteAuth, auth.Prompt.KeepCredentialsForSession)
+		if err != nil {
+			return nil, err
+		}
+		return &httpauth.BasicAuth{
+			Username: creds.Username,
+			Password: creds.Password,
 		}, nil
 	case auth.AccessKey != nil:
 		return &httpauth.BasicAuth{
@@ -792,12 +824,15 @@ func classifyRemoteError(message string, err error) error {
 	}
 }
 
-func (r *GitResourceRepository) withProxyEnv(fn func() error) error {
-	proxyConfig, _, err := proxyhelper.Resolve("repository.git.remote.proxy", r.proxy)
+func (r *GitResourceRepository) withProxyEnv(ctx context.Context, fn func() error) error {
+	proxyConfig, _, err := proxyhelper.ResolveWithRuntime("repository.git.remote.proxy", r.proxy, r.runtime)
 	if err != nil {
 		return err
 	}
-	envVars := proxyConfig.Env()
+	envVars, err := proxyConfig.Env(ctx)
+	if err != nil {
+		return err
+	}
 	keys := proxyhelper.EnvironmentKeys()
 
 	proxyEnvMu.Lock()

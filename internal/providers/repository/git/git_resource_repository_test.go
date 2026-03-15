@@ -11,11 +11,13 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/crmarques/declarest/repository"
 	gogit "github.com/go-git/go-git/v5"
 	gitcfg "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	httpauth "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
 func TestGitRepositoryNoRemoteStatus(t *testing.T) {
@@ -281,7 +283,7 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 			},
 		},
 	)
-	basicAuth, err := basicProvider.authMethod()
+	basicAuth, err := basicProvider.authMethod(context.Background())
 	if err != nil {
 		t.Fatalf("authMethod basic returned error: %v", err)
 	}
@@ -300,13 +302,76 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 			},
 		},
 	)
-	tokenAuth, err := tokenProvider.authMethod()
+	tokenAuth, err := tokenProvider.authMethod(context.Background())
 	if err != nil {
 		t.Fatalf("authMethod token returned error: %v", err)
 	}
 	if tokenAuth == nil {
 		t.Fatal("expected non-nil token auth method")
 	}
+
+	promptProvider := NewGitResourceRepository(
+		config.GitRepository{
+			Local: config.GitLocal{BaseDir: t.TempDir()},
+			Remote: &config.GitRemote{
+				URL: "https://example.invalid/repo.git",
+				Auth: &config.GitAuth{
+					Prompt: &config.PromptAuth{},
+				},
+			},
+		},
+		WithPromptRuntime(newGitPromptRuntime(t, promptauth.Credentials{
+			Username: "prompt-user",
+			Password: "prompt-pass",
+		})),
+	)
+	promptAuthMethod, err := promptProvider.authMethod(context.Background())
+	if err != nil {
+		t.Fatalf("authMethod prompt returned error: %v", err)
+	}
+	basicPromptAuth, ok := promptAuthMethod.(*httpauth.BasicAuth)
+	if !ok {
+		t.Fatalf("expected prompt auth method to be basic auth, got %T", promptAuthMethod)
+	}
+	if basicPromptAuth.Username != "prompt-user" || basicPromptAuth.Password != "prompt-pass" {
+		t.Fatalf("unexpected prompt auth credentials %#v", basicPromptAuth)
+	}
+}
+
+func newGitPromptRuntime(t *testing.T, creds promptauth.Credentials) *promptauth.Runtime {
+	t.Helper()
+
+	runtime, err := promptauth.New(
+		[]promptauth.Target{{Key: promptauth.TargetRepositoryGitRemoteAuth, Label: "git remote auth"}},
+		promptauth.WithPrompter(&gitPromptPrompter{credentials: creds}),
+		promptauth.WithSessionStore(&gitMemorySessionStore{}),
+	)
+	if err != nil {
+		t.Fatalf("promptauth.New returned error: %v", err)
+	}
+	return runtime
+}
+
+type gitPromptPrompter struct {
+	credentials promptauth.Credentials
+}
+
+func (p *gitPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
+	return p.credentials, nil
+}
+
+func (p *gitPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
+	return false, nil
+}
+
+type gitMemorySessionStore struct{}
+
+func (gitMemorySessionStore) Load() (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
+func (gitMemorySessionStore) Save(map[string]string) error {
+	return nil
 }
 
 func TestGitRepositorySyncStatusStates(t *testing.T) {

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"os"
@@ -8,14 +9,18 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	"golang.org/x/net/http/httpproxy"
 )
 
 // Config holds parsed proxy URLs for HTTP and HTTPS transports plus no-proxy rules.
 type Config struct {
-	HTTP    *url.URL
-	HTTPS   *url.URL
-	NoProxy string
+	HTTP        *url.URL
+	HTTPS       *url.URL
+	NoProxy     string
+	fieldPrefix string
+	auth        *config.ProxyAuth
+	runtime     *promptauth.Runtime
 }
 
 var environmentKeys = []string{
@@ -29,6 +34,16 @@ var environmentKeys = []string{
 
 // Build parses the configuration and returns canonical proxy values.
 func Build(fieldPrefix string, proxy *config.HTTPProxy) (Config, error) {
+	return build(fieldPrefix, proxy, nil)
+}
+
+// BuildWithRuntime parses proxy settings and preserves prompt-auth resolution
+// until runtime request execution.
+func BuildWithRuntime(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runtime) (Config, error) {
+	return build(fieldPrefix, proxy, runtime)
+}
+
+func build(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runtime) (Config, error) {
 	if proxy == nil {
 		return Config{}, nil
 	}
@@ -42,41 +57,58 @@ func Build(fieldPrefix string, proxy *config.HTTPProxy) (Config, error) {
 		return Config{}, err
 	}
 
-	noProxy := strings.TrimSpace(proxy.NoProxy)
-
-	if proxy.Auth != nil {
-		username := strings.TrimSpace(proxy.Auth.Username)
-		password := strings.TrimSpace(proxy.Auth.Password)
-		if username == "" || password == "" {
-			return Config{}, faults.NewValidationError(fieldPrefix+".auth requires username and password", nil)
+	auth, err := cloneProxyAuth(proxy.Auth)
+	if err != nil {
+		return Config{}, err
+	}
+	if auth != nil {
+		if httpURL != nil && httpURL.User != nil {
+			return Config{}, faults.NewValidationError(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
 		}
-		if httpURL != nil {
-			httpURL, err = applyProxyAuth(fieldPrefix+".auth", httpURL, username, password)
-			if err != nil {
-				return Config{}, err
-			}
+		if httpsURL != nil && httpsURL.User != nil {
+			return Config{}, faults.NewValidationError(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
 		}
-		if httpsURL != nil {
-			httpsURL, err = applyProxyAuth(fieldPrefix+".auth", httpsURL, username, password)
-			if err != nil {
-				return Config{}, err
+		if auth.Prompt == nil {
+			if httpURL != nil {
+				httpURL, err = applyProxyAuth(fieldPrefix+".auth", httpURL, auth.Username, auth.Password)
+				if err != nil {
+					return Config{}, err
+				}
 			}
+			if httpsURL != nil {
+				httpsURL, err = applyProxyAuth(fieldPrefix+".auth", httpsURL, auth.Username, auth.Password)
+				if err != nil {
+					return Config{}, err
+				}
+			}
+			auth = nil
 		}
 	}
 
-	cfg := Config{
-		HTTP:    httpURL,
-		HTTPS:   httpsURL,
-		NoProxy: noProxy,
-	}
-
-	return cfg, nil
+	return Config{
+		HTTP:        httpURL,
+		HTTPS:       httpsURL,
+		NoProxy:     strings.TrimSpace(proxy.NoProxy),
+		fieldPrefix: fieldPrefix,
+		auth:        auth,
+		runtime:     runtime,
+	}, nil
 }
 
 // Resolve merges process proxy environment variables with the configured proxy
 // block. Explicit empty proxy blocks disable both inherited and environment
 // proxy settings.
 func Resolve(fieldPrefix string, proxy *config.HTTPProxy) (Config, bool, error) {
+	return resolve(fieldPrefix, proxy, nil)
+}
+
+// ResolveWithRuntime merges process proxy environment variables with the
+// configured proxy block while keeping prompt-auth resolution lazy.
+func ResolveWithRuntime(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runtime) (Config, bool, error) {
+	return resolve(fieldPrefix, proxy, runtime)
+}
+
+func resolve(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runtime) (Config, bool, error) {
 	if IsExplicitDisable(proxy) {
 		return Config{}, true, nil
 	}
@@ -86,7 +118,7 @@ func Resolve(fieldPrefix string, proxy *config.HTTPProxy) (Config, bool, error) 
 		return Config{}, false, nil
 	}
 
-	cfg, err := Build(fieldPrefix, merged)
+	cfg, err := BuildWithRuntime(fieldPrefix, merged, runtime)
 	if err != nil {
 		return Config{}, false, err
 	}
@@ -112,20 +144,32 @@ func (cfg Config) Resolver() func(*http.Request) (*url.URL, error) {
 		if req == nil || req.URL == nil {
 			return nil, nil
 		}
-		return resolver(req.URL)
+		value, err := resolver(req.URL)
+		if err != nil || value == nil {
+			return value, err
+		}
+		return cfg.urlWithAuth(req.Context(), value)
 	}
 }
 
 // Env returns proxy-related environment variables following http_proxy conventions.
-func (cfg Config) Env() map[string]string {
+func (cfg Config) Env(ctx context.Context) (map[string]string, error) {
 	env := map[string]string{}
 	if cfg.HTTP != nil {
-		httpValue := cfg.HTTP.String()
+		httpURL, err := cfg.urlWithAuth(ctx, cfg.HTTP)
+		if err != nil {
+			return nil, err
+		}
+		httpValue := httpURL.String()
 		env["HTTP_PROXY"] = httpValue
 		env["http_proxy"] = httpValue
 	}
 	if cfg.HTTPS != nil {
-		httpsValue := cfg.HTTPS.String()
+		httpsURL, err := cfg.urlWithAuth(ctx, cfg.HTTPS)
+		if err != nil {
+			return nil, err
+		}
+		httpsValue := httpsURL.String()
 		env["HTTPS_PROXY"] = httpsValue
 		env["https_proxy"] = httpsValue
 	}
@@ -133,7 +177,7 @@ func (cfg Config) Env() map[string]string {
 		env["NO_PROXY"] = cfg.NoProxy
 		env["no_proxy"] = cfg.NoProxy
 	}
-	return env
+	return env, nil
 }
 
 // EnvironmentKeys returns the proxy-related environment variable names used by
@@ -203,6 +247,10 @@ func Merge(base *config.HTTPProxy, override *config.HTTPProxy) *config.HTTPProxy
 			Username: strings.TrimSpace(override.Auth.Username),
 			Password: strings.TrimSpace(override.Auth.Password),
 		}
+		if override.Auth.Prompt != nil {
+			prompt := *override.Auth.Prompt
+			merged.Auth.Prompt = &prompt
+		}
 	}
 
 	return merged
@@ -216,6 +264,10 @@ func Clone(proxy *config.HTTPProxy) *config.HTTPProxy {
 	cloned := *proxy
 	if proxy.Auth != nil {
 		auth := *proxy.Auth
+		if proxy.Auth.Prompt != nil {
+			prompt := *proxy.Auth.Prompt
+			auth.Prompt = &prompt
+		}
 		cloned.Auth = &auth
 	}
 	return &cloned
@@ -247,7 +299,7 @@ func IsExplicitDisable(proxy *config.HTTPProxy) bool {
 		return false
 	}
 	if proxy.Auth != nil {
-		if strings.TrimSpace(proxy.Auth.Username) != "" || strings.TrimSpace(proxy.Auth.Password) != "" {
+		if strings.TrimSpace(proxy.Auth.Username) != "" || strings.TrimSpace(proxy.Auth.Password) != "" || proxy.Auth.Prompt != nil {
 			return false
 		}
 	}
@@ -279,6 +331,12 @@ func Equal(a, b *config.HTTPProxy) bool {
 			return false
 		}
 		if strings.TrimSpace(a.Auth.Password) != strings.TrimSpace(b.Auth.Password) {
+			return false
+		}
+		if (a.Auth.Prompt == nil) != (b.Auth.Prompt == nil) {
+			return false
+		}
+		if a.Auth.Prompt != nil && a.Auth.Prompt.KeepCredentialsForSession != b.Auth.Prompt.KeepCredentialsForSession {
 			return false
 		}
 	}
@@ -320,6 +378,57 @@ func parseProxyURL(field string, raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
+func cloneProxyAuth(auth *config.ProxyAuth) (*config.ProxyAuth, error) {
+	if auth == nil {
+		return nil, nil
+	}
+
+	cloned := &config.ProxyAuth{
+		Username: strings.TrimSpace(auth.Username),
+		Password: strings.TrimSpace(auth.Password),
+	}
+	if auth.Prompt != nil {
+		prompt := *auth.Prompt
+		cloned.Prompt = &prompt
+	}
+
+	hasUserPass := cloned.Username != "" || cloned.Password != ""
+	hasPrompt := cloned.Prompt != nil
+	if countSet(hasUserPass, hasPrompt) != 1 {
+		return nil, faults.NewValidationError("proxy auth must define either username/password or prompt", nil)
+	}
+	if hasPrompt {
+		return cloned, nil
+	}
+	if cloned.Username == "" || cloned.Password == "" {
+		return nil, faults.NewValidationError("proxy auth requires username and password", nil)
+	}
+	return cloned, nil
+}
+
+func (cfg Config) urlWithAuth(ctx context.Context, base *url.URL) (*url.URL, error) {
+	if base == nil || cfg.auth == nil {
+		return base, nil
+	}
+
+	if cfg.auth.Prompt == nil {
+		return applyProxyAuth(cfg.fieldPrefix+".auth", base, cfg.auth.Username, cfg.auth.Password)
+	}
+	if cfg.runtime == nil {
+		return nil, faults.NewValidationError(cfg.fieldPrefix+".auth.prompt requires prompt auth runtime support", nil)
+	}
+
+	targetKey, ok := proxyTargetKey(cfg.fieldPrefix)
+	if !ok {
+		return nil, faults.NewValidationError(cfg.fieldPrefix+".auth.prompt is not supported", nil)
+	}
+	creds, err := cfg.runtime.Resolve(ctx, targetKey, cfg.auth.Prompt.KeepCredentialsForSession)
+	if err != nil {
+		return nil, err
+	}
+	return applyProxyAuth(cfg.fieldPrefix+".auth", base, creds.Username, creds.Password)
+}
+
 func applyProxyAuth(fieldPrefix string, proxyURL *url.URL, username, password string) (*url.URL, error) {
 	if proxyURL == nil {
 		return nil, nil
@@ -358,4 +467,29 @@ func stripProxyURLUserInfo(raw string) string {
 	clone := *parsed
 	clone.User = nil
 	return clone.String()
+}
+
+func proxyTargetKey(fieldPrefix string) (string, bool) {
+	switch strings.TrimSpace(fieldPrefix) {
+	case "managed-server.http.proxy", "managedServer.http.proxy":
+		return promptauth.TargetManagedServerHTTPProxyAuth, true
+	case "repository.git.remote.proxy":
+		return promptauth.TargetRepositoryGitRemoteProxyAuth, true
+	case "secret-store.vault.proxy", "secretStore.vault.proxy":
+		return promptauth.TargetSecretStoreVaultProxyAuth, true
+	case "metadata.proxy":
+		return promptauth.TargetMetadataProxyAuth, true
+	default:
+		return "", false
+	}
+}
+
+func countSet(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
 }

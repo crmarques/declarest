@@ -606,6 +606,7 @@ e2e_cleanup_run_id() {
   e2e_kill_runner_for_run_id "${run_id}" || return 1
   e2e_cleanup_run_operator_manager "${run_id}" || return 1
   e2e_cleanup_run_runtime "${run_id}" || return 1
+  e2e_release_reserved_ports_for_run "${run_id}" || return 1
 
   if [[ -d "${run_dir}" ]]; then
     rm -rf "${run_dir}" || {

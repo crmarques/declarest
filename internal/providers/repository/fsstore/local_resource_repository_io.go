@@ -120,14 +120,6 @@ func (r *LocalResourceRepository) SaveResourceWithArtifacts(
 	return nil
 }
 
-func defaultsPayloadIsEmpty(value resource.Value) bool {
-	if value == nil {
-		return true
-	}
-	objectValue, ok := value.(map[string]any)
-	return ok && len(objectValue) == 0
-}
-
 func validateReservedSidecarArtifactName(file string) error {
 	base := strings.ToLower(strings.TrimSpace(filepath.Base(file)))
 	switch {

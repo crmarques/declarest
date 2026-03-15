@@ -23,6 +23,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/crmarques/declarest/metadata"
@@ -2065,6 +2066,61 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		}
 	})
 
+	t.Run("prompt_auth", func(t *testing.T) {
+		t.Parallel()
+
+		prompter := &httpPromptPrompter{
+			credentials: promptauth.Credentials{Username: "prompt-user", Password: "prompt-pass"},
+		}
+		runtime, err := promptauth.New(
+			[]promptauth.Target{{Key: promptauth.TargetManagedServerHTTPAuth, Label: "managed-server auth"}},
+			promptauth.WithPrompter(prompter),
+			promptauth.WithSessionStore(&httpMemorySessionStore{}),
+		)
+		if err != nil {
+			t.Fatalf("promptauth.New returned error: %v", err)
+		}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			expected := "Basic " + base64.StdEncoding.EncodeToString([]byte("prompt-user:prompt-pass"))
+			if got := r.Header.Get("Authorization"); got != expected {
+				t.Fatalf("expected prompt auth header %q, got %q", expected, got)
+			}
+			_, _ = fmt.Fprint(w, `{"ok":true}`)
+		}))
+		t.Cleanup(server.Close)
+
+		client, err := NewClient(
+			config.HTTPServer{
+				BaseURL: server.URL,
+				Auth: &config.HTTPAuth{
+					Prompt: &config.PromptAuth{},
+				},
+			},
+			WithPromptRuntime(runtime),
+		)
+		if err != nil {
+			t.Fatalf("NewClient returned error: %v", err)
+		}
+
+		md := metadata.ResourceMetadata{
+			Operations: map[string]metadata.OperationSpec{
+				string(metadata.OperationGet): {Path: "/resource"},
+			},
+		}
+		for idx := 0; idx < 2; idx++ {
+			_, err = client.Get(context.Background(), resource.Resource{
+				LogicalPath: "/customers/acme",
+			}, md)
+			if err != nil {
+				t.Fatalf("Get call %d returned error: %v", idx+1, err)
+			}
+		}
+		if prompter.calls != 1 {
+			t.Fatalf("expected one prompt-auth credential request, got %d", prompter.calls)
+		}
+	})
+
 	t.Run("bearer_auth", func(t *testing.T) {
 		t.Parallel()
 
@@ -2483,6 +2539,43 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 	})
 }
 
+type httpPromptPrompter struct {
+	credentials promptauth.Credentials
+	calls       int
+}
+
+func (p *httpPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
+	p.calls++
+	return p.credentials, nil
+}
+
+func (p *httpPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
+	return false, nil
+}
+
+type httpMemorySessionStore struct {
+	values map[string]string
+}
+
+func (s *httpMemorySessionStore) Load() (map[string]string, error) {
+	if s.values == nil {
+		return map[string]string{}, nil
+	}
+	values := make(map[string]string, len(s.values))
+	for key, value := range s.values {
+		values[key] = value
+	}
+	return values, nil
+}
+
+func (s *httpMemorySessionStore) Save(values map[string]string) error {
+	s.values = make(map[string]string, len(values))
+	for key, value := range values {
+		s.values[key] = value
+	}
+	return nil
+}
+
 func TestManagedServerProxySupport(t *testing.T) {
 	t.Parallel()
 
@@ -2552,7 +2645,7 @@ func TestManagedServerProxySupport(t *testing.T) {
 		proxyFunc, err := buildProxyFunc(&config.HTTPProxy{
 			HTTPURL: "http://proxy.example.com:3128",
 			NoProxy: "api.example.com",
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("buildProxyFunc returned error: %v", err)
 		}
@@ -2593,7 +2686,7 @@ func TestBuildProxyFuncMergesEnvironmentWithConfiguredFields(t *testing.T) {
 
 	proxyFunc, err := buildProxyFunc(&config.HTTPProxy{
 		NoProxy: "localhost",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("buildProxyFunc returned error: %v", err)
 	}
@@ -2629,7 +2722,7 @@ func TestBuildProxyFuncMergesEnvironmentWithConfiguredFields(t *testing.T) {
 func TestBuildProxyFuncExplicitDisableSuppressesEnvironment(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://env-proxy.example.com:3128")
 
-	proxyFunc, err := buildProxyFunc(&config.HTTPProxy{})
+	proxyFunc, err := buildProxyFunc(&config.HTTPProxy{}, nil)
 	if err != nil {
 		t.Fatalf("buildProxyFunc returned error: %v", err)
 	}

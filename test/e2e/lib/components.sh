@@ -47,6 +47,9 @@ e2e_managed_server_auth_feature_for_type() {
     custom-header)
       printf 'custom-header\n'
       ;;
+    prompt)
+      printf 'basic-auth\n'
+      ;;
     *)
       return 1
       ;;
@@ -189,7 +192,7 @@ e2e_default_metadata_bundle_for_managed_server() {
   esac
 }
 
-e2e_seed_local_metadata_bundle_cache() {
+e2e_seed_local_metadata_bundle_cache_locked() {
   local bundle_ref=$1
   local metadata_source=$2
   local openapi_source=${3:-}
@@ -199,6 +202,11 @@ e2e_seed_local_metadata_bundle_cache() {
   local metadata_file_name
 
   [[ -d "${metadata_source}" ]] || return 0
+
+  if [[ -f "${cache_dir}/bundle.yaml" && -d "${cache_dir}/metadata" && -f "${cache_dir}/.declarest-bundle-ready" ]]; then
+    e2e_info "using seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
+    return 0
+  fi
 
   metadata_file_name=$(e2e_metadata_file_name_for_root "${metadata_source}") || return 1
 
@@ -236,6 +244,16 @@ e2e_seed_local_metadata_bundle_cache() {
 
   : >"${cache_dir}/.declarest-bundle-ready"
   e2e_info "seeded local metadata bundle cache bundle=${bundle_ref} dir=${cache_dir}"
+}
+
+e2e_seed_local_metadata_bundle_cache() {
+  local bundle_ref=$1
+  local bundle_name=${bundle_ref%%:*}
+  local bundle_version=${bundle_ref#*:}
+
+  e2e_with_lock "metadata-bundle-${bundle_name}-${bundle_version}" \
+    e2e_seed_local_metadata_bundle_cache_locked \
+    "$@"
 }
 
 e2e_prepare_metadata_workspace_copy() {

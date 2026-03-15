@@ -237,6 +237,10 @@ func normalizeProxy(proxy *config.HTTPProxy) *config.HTTPProxy {
 			Username: strings.TrimSpace(proxy.Auth.Username),
 			Password: strings.TrimSpace(proxy.Auth.Password),
 		}
+		if proxy.Auth.Prompt != nil {
+			prompt := *proxy.Auth.Prompt
+			normalized.Auth.Prompt = &prompt
+		}
 	}
 	return normalized
 }
@@ -274,8 +278,18 @@ func validateRepository(repository config.Repository) error {
 				return faults.NewValidationError("repository.git.remote.url is required", nil)
 			}
 			if repository.Git.Remote.Auth != nil {
-				if countSet(repository.Git.Remote.Auth.BasicAuth != nil, repository.Git.Remote.Auth.SSH != nil, repository.Git.Remote.Auth.AccessKey != nil) != 1 {
-					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basicAuth, ssh, accessKey", nil)
+				if countSet(
+					repository.Git.Remote.Auth.BasicAuth != nil,
+					repository.Git.Remote.Auth.SSH != nil,
+					repository.Git.Remote.Auth.AccessKey != nil,
+					repository.Git.Remote.Auth.Prompt != nil,
+				) != 1 {
+					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basicAuth, ssh, accessKey, prompt", nil)
+				}
+				if repository.Git.Remote.Auth.BasicAuth != nil {
+					if err := validateUsernamePasswordOrPrompt("repository.git.remote.auth.basicAuth", repository.Git.Remote.Auth.BasicAuth.Username, repository.Git.Remote.Auth.BasicAuth.Password, nil); err != nil {
+						return err
+					}
 				}
 			}
 			if err := validateProxy("repository.git.remote.proxy", repository.Git.Remote.Proxy); err != nil {
@@ -309,8 +323,9 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		resourceServer.HTTP.Auth.OAuth2 != nil,
 		resourceServer.HTTP.Auth.BasicAuth != nil,
 		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
+		resourceServer.HTTP.Auth.Prompt != nil,
 	) != 1 {
-		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basicAuth, customHeaders", nil)
+		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basicAuth, customHeaders, prompt", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
@@ -322,8 +337,8 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 
 	if resourceServer.HTTP.Auth.BasicAuth != nil {
 		basic := resourceServer.HTTP.Auth.BasicAuth
-		if basic.Username == "" || basic.Password == "" {
-			return faults.NewValidationError("managedServer.http.auth.basicAuth requires username and password", nil)
+		if err := validateUsernamePasswordOrPrompt("managedServer.http.auth.basicAuth", basic.Username, basic.Password, nil); err != nil {
+			return err
 		}
 	}
 
@@ -452,8 +467,19 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 			secretStore.Vault.Auth.Token != "",
 			secretStore.Vault.Auth.Password != nil,
 			secretStore.Vault.Auth.AppRole != nil,
+			secretStore.Vault.Auth.Prompt != nil,
 		) != 1 {
-			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole", nil)
+			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole, prompt", nil)
+		}
+		if secretStore.Vault.Auth.Password != nil {
+			if err := validateUsernamePasswordOrPrompt(
+				"secretStore.vault.auth.password",
+				secretStore.Vault.Auth.Password.Username,
+				secretStore.Vault.Auth.Password.Password,
+				nil,
+			); err != nil {
+				return err
+			}
 		}
 		if err := validateProxy("secretStore.vault.proxy", secretStore.Vault.Proxy); err != nil {
 			return err
@@ -482,8 +508,33 @@ func validateProxy(field string, proxy *config.HTTPProxy) error {
 	if proxy == nil || proxyhelper.IsExplicitDisable(proxy) {
 		return nil
 	}
+	if proxy.Auth != nil {
+		if err := validateUsernamePasswordOrPrompt(field+".auth", proxy.Auth.Username, proxy.Auth.Password, proxy.Auth.Prompt); err != nil {
+			return err
+		}
+	}
 	if _, err := proxyhelper.Build(field, proxy); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateUsernamePasswordOrPrompt(
+	field string,
+	username string,
+	password string,
+	prompt *config.PromptAuth,
+) error {
+	hasUserPass := strings.TrimSpace(username) != "" || strings.TrimSpace(password) != ""
+	hasPrompt := prompt != nil
+	if countSet(hasUserPass, hasPrompt) != 1 {
+		return faults.NewValidationError(field+" must define either username/password or prompt", nil)
+	}
+	if hasPrompt {
+		return nil
+	}
+	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
+		return faults.NewValidationError(field+" requires username and password", nil)
 	}
 	return nil
 }

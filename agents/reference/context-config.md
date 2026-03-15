@@ -36,13 +36,15 @@ Define the canonical context catalog schema, file location, validation rules, an
 19. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 20. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 21. When `managedServer.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-22. Proxy blocks (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; proxy auth (when provided) MUST include both `username` and `password`, and an empty `proxy:` block explicitly disables inherited or environment proxy settings for that component.
+22. Proxy blocks (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; proxy auth (when provided) MUST define either both `username` and `password` or one `prompt` block, and an empty `proxy:` block explicitly disables inherited or environment proxy settings for that component.
 23. Proxy precedence MUST be: process environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, plus lowercase aliases), then component-local proxy fields overriding only the fields they define, then shared-context inheritance where the first configured concrete proxy becomes the default for components that do not define their own proxy block.
 24. `managedServer.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 25. `managedServer.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
 26. `repository.git.remote.autoSync` MAY be omitted; when omitted, repository-mutation commands MUST treat it as enabled and only an explicit `false` disables automatic push behavior.
 27. When `managedServer` is present, it MUST define `managedServer.http` with exactly one configured auth mode.
-28. Changes to the canonical persisted context or catalog wire shape, one-of blocks, or schema-managed validation fields MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change; those schemas MUST describe canonical camelCase keys only and MUST NOT add legacy aliases.
+28. Prompt auth blocks (`repository.git.remote.auth.prompt`, `managedServer.http.auth.prompt`, `secretStore.vault.auth.prompt`, and `*.proxy.auth.prompt`) MUST collect credentials only when the owning component first needs them at runtime, MUST ask whether the first entered prompt credentials should be reused for other prompt-auth components in the same command, and MUST warn during entry when `keepCredentialsForSession=true`.
+29. `keepCredentialsForSession` MAY be omitted and MUST default to `false`.
+30. Changes to the canonical persisted context or catalog wire shape, one-of blocks, or schema-managed validation fields MUST update `schemas/context.schema.json` and `schemas/contexts.schema.json` in the same change; those schemas MUST describe canonical camelCase keys only and MUST NOT add legacy aliases.
 
 ## Data Contracts
 Top-level catalog fields:
@@ -63,16 +65,18 @@ Repository one-of contract:
 1. Exactly one of `repository.git` or `repository.filesystem` MUST be set.
 2. `repository.git.remote.proxy` MAY be used to configure HTTP/HTTPS proxies for git fetch/push flows; it inherits the shared proxy when unset and an empty block disables the inherited proxy for git operations.
 3. `repository.git.remote.autoSync` defaults to `true` when omitted.
+4. `repository.git.remote.auth` MUST define exactly one of `basicAuth`, `ssh`, `accessKey`, or `prompt` when configured.
 
 Resource server auth one-of contract:
-1. Exactly one of `oauth2`, `basicAuth`, or `customHeaders` MUST be set under `managedServer.http.auth`.
+1. Exactly one of `oauth2`, `basicAuth`, `customHeaders`, or `prompt` MUST be set under `managedServer.http.auth`.
 2. `managedServer.http.auth.customHeaders` MUST contain at least one entry.
 3. Each `managedServer.http.auth.customHeaders[*]` entry MUST define `header` and `value`; it MAY define `prefix`, which is prepended as `<prefix> <value>`.
+4. `managedServer.http.auth.prompt` resolves one runtime username/password pair and applies it as HTTP basic auth.
 
 Resource server proxy contract:
 1. `managedServer.http.proxy` MAY define `httpURL` and/or `httpsURL`.
 2. `managedServer.http.proxy.noProxy` MAY define comma-separated bypass rules.
-3. `managedServer.http.proxy.auth` MAY be configured; when set, it MUST define both `username` and `password`.
+3. `managedServer.http.proxy.auth` MAY be configured; when set, it MUST define either both `username` and `password` or one `prompt` block.
 4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secretStore.vault.proxy`, and `metadata.proxy`; each block can override only selected fields from the process environment, and unset components inherit the first configured concrete proxy unless an empty `proxy:` block explicitly disables it for that component.
 
 Resource server healthCheck contract:
@@ -84,7 +88,8 @@ Resource server healthCheck contract:
 Secret store one-of contracts:
 1. Exactly one of `secretStore.file` or `secretStore.vault` MUST be set.
 2. For `secretStore.file`, exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile` MUST be set.
-3. `secretStore.vault.proxy` MAY configure HTTP/HTTPS proxies for Vault operations and follows the shared proxy inheritance rules; use an empty `proxy:` block to opt out.
+3. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, `appRole`, or `prompt`.
+4. `secretStore.vault.proxy` MAY configure HTTP/HTTPS proxies for Vault operations and follows the shared proxy inheritance rules; use an empty `proxy:` block to opt out.
 
 Context manager operations:
 1. `Create/Update/Delete/Rename/List`.
@@ -121,10 +126,12 @@ contexts:
         #   provider: github
         #   autoSync: true
         #   auth:
-        #     # Choose exactly one auth method: basicAuth, ssh, accessKey.
+        #     # Choose exactly one auth method: basicAuth, prompt, ssh, accessKey.
         #     basicAuth:
         #       username: change-me
         #       password: change-me
+        #     prompt:
+        #       keepCredentialsForSession: true
         #     ssh:
         #       user: git
         #       privateKeyFile: /path/to/id_rsa
@@ -142,6 +149,8 @@ contexts:
         #     auth:
         #       username: proxy-user
         #       password: proxy-pass
+        #       # prompt:
+        #       #   keepCredentialsForSession: true
       # filesystem:
       #   baseDir: /path/to/repo
 
@@ -160,7 +169,7 @@ contexts:
         #     username: proxy-user
         #     password: proxy-pass
         auth:
-          # Choose exactly one auth method: oauth2, basicAuth, customHeaders.
+          # Choose exactly one auth method: oauth2, basicAuth, prompt, customHeaders.
           oauth2:
             tokenURL: https://example.com/oauth/token
             grantType: client_credentials
@@ -173,6 +182,8 @@ contexts:
           # basicAuth:
           #   username: change-me
           #   password: change-me
+          # prompt:
+          #   keepCredentialsForSession: true
           # customHeaders:
           #   - header: Authorization
           #     prefix: Bearer
@@ -204,6 +215,9 @@ contexts:
       #     #   username: vault-user
       #     #   password: vault-pass
       #     #   mount: userpass
+      #     # prompt:
+      #     #   keepCredentialsForSession: true
+      #     #   mount: userpass
       #     # appRole:
       #     #   roleID: roleID
       #     #   secretID: secretID
@@ -220,6 +234,8 @@ contexts:
       #     auth:
       #       username: proxy-user
       #       password: proxy-pass
+      #       # prompt:
+      #       #   keepCredentialsForSession: true
 
     metadata:
       # Metadata source defaults to repository baseDir when both are unset.
@@ -275,6 +291,7 @@ currentContext: xxx
 11. `managedServer.http.proxy.noProxy` can be set without proxy auth and still remains valid.
 12. a context can define only `managedServer.http.proxy.noProxy` and inherit `httpURL` / `httpsURL` from environment variables or the shared proxy default.
 13. `managedServer.http.healthCheck` can be absolute and still resolves to a managedServer-relative probe when scheme/host match `managedServer.http.baseURL`.
+14. one command can resolve prompt auth for one component, reject reuse for the others, and still prompt those other components independently later in the same command.
 
 ## Examples
 1. `ResolveContext({Name: "", Overrides: nil})` loads the context named by `currentContext`.
@@ -292,4 +309,5 @@ currentContext: xxx
 13. Corner case: `ResolveContext({Name: "dev", Overrides: nil})` with `HTTPS_PROXY=https://proxy.example.com:3128` in the environment and only `managedServer.http.proxy.noProxy=localhost` in the context resolves a managed-server proxy with inherited `httpsURL` plus overridden `noProxy`.
 14. Corner case: a legacy catalog entry with `current-ctx` and `filesystem.base-dir` resolves as `currentContext` and `repository.filesystem.baseDir`, and persists back without the legacy keys.
 15. Corner case: `ResolveContext({Name: "local-only", Overrides: nil})` with repository-only config and no `managedServer` remains valid, defaults `metadata.baseDir` from the repository, and bootstraps local-only commands without a remote client.
-16. Corner case: adding a canonical field under `managedServer.http` or `metadata` requires the same change to update `schemas/context.schema.json` and `schemas/contexts.schema.json`, while documented legacy aliases remain reader-only and stay out of the schema files.
+16. Corner case: `managedServer.http.auth.prompt` plus `repository.git.remote.auth.prompt` prompts once for the first used component, asks whether to reuse those credentials for the other prompt-auth component in the same command, and only stores component credentials for later commands when that component sets `keepCredentialsForSession: true`.
+17. Corner case: adding a canonical field under `managedServer.http` or `metadata` requires the same change to update `schemas/context.schema.json` and `schemas/contexts.schema.json`, while documented legacy aliases remain reader-only and stay out of the schema files.

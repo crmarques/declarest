@@ -23,7 +23,7 @@ func (s *FSMetadataService) resolveMetadataDefaults(
 	resolved := metadatadomain.CloneResourceMetadata(item)
 	resolved.Defaults = metadatadomain.CloneDefaultsSpec(item.Defaults)
 
-	value, err := s.resolveDefaultsEntry(ctx, selector, kind, "resource.defaults.value", "", resolved.Defaults.Value)
+	value, err := s.resolveDefaultsEntry(ctx, selector, kind, "resource.defaults.value", resolved.Defaults.Value)
 	if err != nil {
 		return metadatadomain.ResourceMetadata{}, err
 	}
@@ -44,7 +44,6 @@ func (s *FSMetadataService) resolveMetadataDefaults(
 			selector,
 			kind,
 			"resource.defaults.profiles."+key,
-			key,
 			resolved.Defaults.Profiles[key],
 		)
 		if err != nil {
@@ -61,7 +60,6 @@ func (s *FSMetadataService) resolveDefaultsEntry(
 	selector string,
 	kind metadataPathKind,
 	field string,
-	profile string,
 	value any,
 ) (any, error) {
 	if value == nil {

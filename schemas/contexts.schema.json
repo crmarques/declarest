@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "DeclaREST Context Catalog",
-  "description": "Canonical persisted context catalog schema. Legacy YAML aliases are intentionally excluded from this machine-readable contract.",
+  "description": "Canonical persisted context catalog schema, including prompt-auth-capable context entries. Legacy YAML aliases are intentionally excluded from this machine-readable contract.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

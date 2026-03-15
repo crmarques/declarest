@@ -60,6 +60,23 @@ test_requirement_requested_explicitly_tracks_managed_server_proxy_capability() {
   fi
 }
 
+test_requirement_requested_explicitly_tracks_managed_server_proxy_auth_type_selector() {
+  load_case_libs
+
+  E2E_EXPLICIT=()
+  E2E_MANAGED_SERVER_PROXY='true'
+  E2E_MANAGED_SERVER_PROXY_AUTH_TYPE='prompt'
+
+  if case_requirement_requested_explicitly 'managed-server-proxy-auth-type=prompt'; then
+    fail "expected implicit managed-server proxy auth-type selection not to be marked explicit"
+  fi
+
+  e2e_mark_explicit 'managed-server-proxy-auth-type'
+  if ! case_requirement_requested_explicitly 'managed-server-proxy-auth-type=prompt'; then
+    fail "expected explicit managed-server proxy auth-type selection to be marked explicit"
+  fi
+}
+
 test_collect_case_files_is_deterministic_global_then_component() {
   load_case_libs
   local tmp
@@ -180,6 +197,7 @@ EOF
 test_requirement_requested_explicitly_tracks_capability_selection
 test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector
 test_requirement_requested_explicitly_tracks_managed_server_proxy_capability
+test_requirement_requested_explicitly_tracks_managed_server_proxy_auth_type_selector
 test_collect_case_files_is_deterministic_global_then_component
 test_collect_case_files_filters_by_profile_family
 test_collect_case_files_rejects_invalid_case_profiles

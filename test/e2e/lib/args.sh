@@ -7,6 +7,7 @@ E2E_MANAGED_SERVER_CONNECTION='local'
 E2E_MANAGED_SERVER_AUTH_TYPE=''
 E2E_MANAGED_SERVER_MTLS='false'
 E2E_MANAGED_SERVER_PROXY='false'
+E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=''
 E2E_MANAGED_SERVER_PROXY_HTTP_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL:-}"
 E2E_MANAGED_SERVER_PROXY_HTTPS_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL:-}"
 E2E_MANAGED_SERVER_PROXY_NO_PROXY="${DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}"
@@ -140,11 +141,54 @@ e2e_parse_managed_server_auth_type_value() {
     custom-header)
       printf 'custom-header\n'
       ;;
+    prompt)
+      printf 'prompt\n'
+      ;;
     *)
-      e2e_die "invalid --managed-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header)"
+      e2e_die "invalid --managed-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header, prompt)"
       return 1
       ;;
   esac
+}
+
+e2e_parse_managed_server_proxy_auth_type_value() {
+  local raw_value=$1
+
+  case "${raw_value,,}" in
+    basic)
+      printf 'basic\n'
+      ;;
+    prompt)
+      printf 'prompt\n'
+      ;;
+    *)
+      e2e_die "invalid --managed-server-proxy-auth-type value: ${raw_value} (allowed: basic, prompt)"
+      return 1
+      ;;
+  esac
+}
+
+e2e_has_managed_server_proxy_basic_auth_values() {
+  [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}" || -n "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}" ]]
+}
+
+e2e_effective_managed_server_proxy_auth_type() {
+  if [[ "${E2E_MANAGED_SERVER_PROXY:-false}" != 'true' ]]; then
+    printf 'none\n'
+    return 0
+  fi
+
+  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE:-}" ]]; then
+    printf '%s\n' "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}"
+    return 0
+  fi
+
+  if e2e_has_managed_server_proxy_basic_auth_values; then
+    printf 'basic\n'
+    return 0
+  fi
+
+  printf 'none\n'
 }
 
 e2e_parse_metadata_source_value() {
@@ -237,15 +281,20 @@ Component selection (choose values for each flag; see notes below):
   --managed-server-connection <local|remote>            default: local
     local  : Start the chosen managed server via the provided fixtures and scripts.
     remote : Assume the server already exists and reach it via the configured connection details.
-  --managed-server-auth-type <none|basic|oauth2|custom-header>
+  --managed-server-auth-type <none|basic|oauth2|custom-header|prompt>
     Select the managed-server auth mode. When omitted, the selected component elects a default auth type
     (preference order: oauth2, custom-header, basic, none) subject to its capability contract.
+    prompt    : Emit managedServer.http.auth.prompt for basic-auth-capable managed-server components.
   --managed-server-mtls [<true|false>]                  default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
   --managed-server-proxy [<true|false>]                default: false
     true  : Inject managedServer.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
     false : Keep managed-server proxy unset in generated contexts.
+  --managed-server-proxy-auth-type <basic|prompt>
+    basic  : Inject proxy auth username/password from DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_*.
+    prompt : Inject managedServer.http.proxy.auth.prompt and defer proxy credentials to runtime prompts.
+    Requires --managed-server-proxy true; when omitted, proxy auth stays unset unless username/password env vars are present.
   --metadata-source <bundle|dir>                    default: bundle
     bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
     dir       : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
@@ -308,8 +357,10 @@ Examples:
   ./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file
   ./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file
   ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
+  ./run-e2e.sh --profile cli-manual --managed-server simple-api-server --managed-server-auth-type prompt
   ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
   DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true --managed-server-proxy-auth-type prompt
   ./run-e2e.sh --profile cli-manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
@@ -358,7 +409,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--metadata-source|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--managed-server-proxy-auth-type|--metadata-source|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -453,6 +504,15 @@ e2e_parse_args() {
         }
         E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_parse_managed_server_auth_type_value "$2") || return 1
         e2e_mark_explicit 'managed-server-auth-type'
+        shift 2
+        ;;
+      --managed-server-proxy-auth-type)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--managed-server-proxy-auth-type requires a value'
+          return 1
+        }
+        E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=$(e2e_parse_managed_server_proxy_auth_type_value "$2") || return 1
+        e2e_mark_explicit 'managed-server-proxy-auth-type'
         shift 2
         ;;
       --managed-server-mtls)
@@ -587,18 +647,48 @@ e2e_parse_args() {
   if [[ -n "${E2E_MANAGED_SERVER_AUTH_TYPE}" ]]; then
     E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_parse_managed_server_auth_type_value "${E2E_MANAGED_SERVER_AUTH_TYPE}") || return 1
   fi
+  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
+    E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=$(e2e_parse_managed_server_proxy_auth_type_value "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}") || return 1
+  fi
   E2E_MANAGED_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS}") || return 1
   E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${E2E_MANAGED_SERVER_PROXY}") || return 1
+  if [[ "${E2E_MANAGED_SERVER_PROXY}" != 'true' && -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
+    e2e_die '--managed-server-proxy-auth-type requires --managed-server-proxy true'
+    return 1
+  fi
   if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
     if [[ -z "${E2E_MANAGED_SERVER_PROXY_HTTP_URL}" && -z "${E2E_MANAGED_SERVER_PROXY_HTTPS_URL}" ]]; then
       e2e_die "--managed-server-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
       return 1
     fi
-    if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -n "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
-      if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
-        e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+    case "$(e2e_effective_managed_server_proxy_auth_type)" in
+      none)
+        ;;
+      basic)
+        if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
+          if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
+            e2e_die 'managed-server proxy auth-type basic requires DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+          else
+            e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+          fi
+          return 1
+        fi
+        ;;
+      prompt)
+        if e2e_has_managed_server_proxy_basic_auth_values; then
+          e2e_die 'managed-server proxy auth-type prompt cannot be combined with DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME or DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+          return 1
+        fi
+        ;;
+      *)
+        e2e_die "invalid managed-server proxy auth-type: $(e2e_effective_managed_server_proxy_auth_type)"
         return 1
-      fi
+        ;;
+    esac
+  elif e2e_has_managed_server_proxy_basic_auth_values; then
+    if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
+      e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
+      return 1
     fi
   fi
   E2E_METADATA=$(e2e_parse_metadata_source_value '--metadata-source' "${E2E_METADATA}") || return 1

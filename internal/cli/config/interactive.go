@@ -221,7 +221,7 @@ func promptGitRemote(command *cobra.Command, prompter configPrompter) (*configdo
 }
 
 func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdomain.GitAuth, error) {
-	method, err := prompter.Select(command, "Select git auth method", []string{"basicAuth", "ssh", "accessKey"})
+	method, err := prompter.Select(command, "Select git auth method", []string{"basicAuth", "prompt", "ssh", "accessKey"})
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +241,12 @@ func promptGitAuth(command *cobra.Command, prompter configPrompter) (*configdoma
 			Username: username,
 			Password: password,
 		}
+	case "prompt":
+		prompt, inputErr := promptPromptAuth(command, prompter, "Git prompt auth")
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		auth.Prompt = prompt
 	case "ssh":
 		user, inputErr := promptRequiredInput(command, prompter, "Git SSH user: ", "git ssh user")
 		if inputErr != nil {
@@ -378,17 +384,32 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 		return nil, err
 	}
 	if includeAuth {
-		username, inputErr := promptRequiredInput(command, prompter, "Proxy auth username: ", "proxy auth username")
+		authMethod, inputErr := prompter.Select(command, "Select proxy auth method", []string{"credentials", "prompt"})
 		if inputErr != nil {
 			return nil, inputErr
 		}
-		password, inputErr := promptRequiredInput(command, prompter, "Proxy auth password: ", "proxy auth password")
-		if inputErr != nil {
-			return nil, inputErr
-		}
-		proxy.Auth = &configdomain.ProxyAuth{
-			Username: username,
-			Password: password,
+		switch strings.TrimSpace(authMethod) {
+		case "credentials":
+			username, authErr := promptRequiredInput(command, prompter, "Proxy auth username: ", "proxy auth username")
+			if authErr != nil {
+				return nil, authErr
+			}
+			password, authErr := promptRequiredInput(command, prompter, "Proxy auth password: ", "proxy auth password")
+			if authErr != nil {
+				return nil, authErr
+			}
+			proxy.Auth = &configdomain.ProxyAuth{
+				Username: username,
+				Password: password,
+			}
+		case "prompt":
+			prompt, authErr := promptPromptAuth(command, prompter, "Proxy prompt auth")
+			if authErr != nil {
+				return nil, authErr
+			}
+			proxy.Auth = &configdomain.ProxyAuth{Prompt: prompt}
+		default:
+			return nil, cliutil.ValidationError("invalid proxy auth method selected", nil)
 		}
 	}
 
@@ -399,7 +420,7 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 	method, err := prompter.Select(
 		command,
 		"Select managedServer auth method",
-		[]string{"oauth2", "basicAuth", "customHeaders"},
+		[]string{"oauth2", "basicAuth", "prompt", "customHeaders"},
 	)
 	if err != nil {
 		return nil, err
@@ -475,6 +496,12 @@ func promptHTTPAuth(command *cobra.Command, prompter configPrompter) (*configdom
 			Username: username,
 			Password: password,
 		}
+	case "prompt":
+		prompt, inputErr := promptPromptAuth(command, prompter, "Managed-server prompt auth")
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		auth.Prompt = prompt
 	case "customHeaders":
 		customHeaders, inputErr := promptCustomHeaders(command, prompter)
 		if inputErr != nil {
@@ -689,7 +716,7 @@ func promptVaultSecretStore(command *cobra.Command, prompter configPrompter) (*c
 }
 
 func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdomain.VaultAuth, error) {
-	method, err := prompter.Select(command, "Select vault auth method", []string{"token", "password", "appRole"})
+	method, err := prompter.Select(command, "Select vault auth method", []string{"token", "password", "prompt", "appRole"})
 	if err != nil {
 		return nil, err
 	}
@@ -720,6 +747,12 @@ func promptVaultAuth(command *cobra.Command, prompter configPrompter) (*configdo
 			Password: password,
 			Mount:    mount,
 		}
+	case "prompt":
+		prompt, inputErr := promptVaultPromptAuth(command, prompter)
+		if inputErr != nil {
+			return nil, inputErr
+		}
+		auth.Prompt = prompt
 	case "appRole":
 		roleID, inputErr := promptRequiredInput(command, prompter, "Vault appRole roleID: ", "vault appRole roleID")
 		if inputErr != nil {
@@ -772,6 +805,35 @@ func promptTLS(command *cobra.Command, prompter configPrompter) (*configdomain.T
 		ClientCertFile:     clientCertFile,
 		ClientKeyFile:      clientKeyFile,
 		InsecureSkipVerify: insecureSkipVerify,
+	}, nil
+}
+
+func promptPromptAuth(
+	command *cobra.Command,
+	prompter configPrompter,
+	label string,
+) (*configdomain.PromptAuth, error) {
+	keepCredentialsForSession, err := prompter.Confirm(command, label+" keepCredentialsForSession?", false)
+	if err != nil {
+		return nil, err
+	}
+	return &configdomain.PromptAuth{
+		KeepCredentialsForSession: keepCredentialsForSession,
+	}, nil
+}
+
+func promptVaultPromptAuth(command *cobra.Command, prompter configPrompter) (*configdomain.VaultPromptAuth, error) {
+	keepCredentialsForSession, err := prompter.Confirm(command, "Vault prompt auth keepCredentialsForSession?", false)
+	if err != nil {
+		return nil, err
+	}
+	mount, err := promptOptionalInput(command, prompter, "Vault prompt auth mount (optional): ")
+	if err != nil {
+		return nil, err
+	}
+	return &configdomain.VaultPromptAuth{
+		KeepCredentialsForSession: keepCredentialsForSession,
+		Mount:                     mount,
 	}, nil
 }
 

@@ -30,7 +30,9 @@ case_run() {
   if [[ -n "${E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}" ]]; then
     case_assert_context_contains "no-proxy: '${E2E_MANAGED_SERVER_PROXY_NO_PROXY}'"
   fi
-  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}" ]]; then
+  if [[ "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE:-}" == 'prompt' ]]; then
+    case_assert_context_contains 'prompt: {}'
+  elif [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}" ]]; then
     case_assert_context_contains "username: '${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}'"
     case_assert_context_contains "password: '${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}'"
   fi

@@ -20,6 +20,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	"github.com/crmarques/declarest/internal/providers/fsutil"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 )
@@ -74,12 +75,19 @@ type bundleSource struct {
 type BundleResolverOption func(*bundleResolverOptions)
 
 type bundleResolverOptions struct {
-	proxy *config.HTTPProxy
+	proxy   *config.HTTPProxy
+	runtime *promptauth.Runtime
 }
 
 func WithProxyConfig(proxy *config.HTTPProxy) BundleResolverOption {
 	return func(opts *bundleResolverOptions) {
 		opts.proxy = proxy
+	}
+}
+
+func WithPromptRuntime(runtime *promptauth.Runtime) BundleResolverOption {
+	return func(opts *bundleResolverOptions) {
+		opts.runtime = runtime
 	}
 }
 
@@ -596,7 +604,7 @@ func openBundleStream(ctx context.Context, source bundleSource, opts bundleResol
 		}
 
 		client := &http.Client{Timeout: 60 * time.Second}
-		proxyConfig, disabled, parseErr := proxyhelper.Resolve("metadata.proxy", opts.proxy)
+		proxyConfig, disabled, parseErr := proxyhelper.ResolveWithRuntime("metadata.proxy", opts.proxy, opts.runtime)
 		if parseErr != nil {
 			return nil, parseErr
 		}

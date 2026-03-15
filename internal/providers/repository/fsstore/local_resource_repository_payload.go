@@ -78,24 +78,6 @@ func (r *LocalResourceRepository) payloadFilesInfoFromDir(logicalPath string, di
 	return files, nil
 }
 
-func payloadFileCandidatesFromDir(dirPath string, prefix string) []string {
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return nil
-	}
-
-	candidates := make([]string, 0, 1)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if strings.HasPrefix(entry.Name(), prefix+".") {
-			candidates = append(candidates, entry.Name())
-		}
-	}
-	return candidates
-}
-
 func (r *LocalResourceRepository) resolvePayloadTarget(
 	logicalPath string,
 	content resource.Content,
@@ -119,46 +101,6 @@ func (r *LocalResourceRepository) resolvePayloadTarget(
 	return target, files, nil
 }
 
-func (r *LocalResourceRepository) resolveDefaultsTarget(
-	logicalPath string,
-	content resource.Content,
-) (payloadFileInfo, resourcePayloadFiles, error) {
-	files, err := r.discoverPayloadFiles(logicalPath)
-	if err != nil {
-		return payloadFileInfo{}, resourcePayloadFiles{}, err
-	}
-
-	desired, err := r.desiredDefaultsPayloadDescriptor(logicalPath, content, files)
-	if err != nil {
-		return payloadFileInfo{}, resourcePayloadFiles{}, err
-	}
-	if !resource.SupportsDefaultsOverlayPayloadType(desired.PayloadType) {
-		return payloadFileInfo{}, resourcePayloadFiles{}, faults.NewValidationError(
-			fmt.Sprintf(
-				"defaults sidecar requires merge-capable payload type (json, yaml, ini, properties); got %q",
-				desired.PayloadType,
-			),
-			nil,
-		)
-	}
-	if err := validateDesiredDescriptorWithDefaults(files, desired); err != nil {
-		return payloadFileInfo{}, resourcePayloadFiles{}, err
-	}
-
-	canonicalPath, err := r.collectionDefaultsDirPath(logicalPath)
-	if err != nil {
-		return payloadFileInfo{}, resourcePayloadFiles{}, err
-	}
-
-	target := payloadFileInfo{
-		Path:       filepath.Join(canonicalPath, "defaults"+desired.Extension),
-		Name:       "defaults" + desired.Extension,
-		Descriptor: desired,
-		Shared:     true,
-	}
-	return target, files, nil
-}
-
 func desiredPayloadDescriptor(content resource.Content, existing resourcePayloadFiles) resource.PayloadDescriptor {
 	if resource.IsPayloadDescriptorExplicit(content.Descriptor) {
 		return resource.NormalizePayloadDescriptor(content.Descriptor)
@@ -170,65 +112,6 @@ func desiredPayloadDescriptor(content resource.Content, existing resourcePayload
 		return resource.DefaultOctetStreamDescriptor()
 	}
 	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeJSON})
-}
-
-func (r *LocalResourceRepository) desiredDefaultsPayloadDescriptor(
-	logicalPath string,
-	content resource.Content,
-	existing resourcePayloadFiles,
-) (resource.PayloadDescriptor, error) {
-	if existing.Defaults != nil {
-		return existing.Defaults.Descriptor, nil
-	}
-	if resource.IsPayloadDescriptorExplicit(content.Descriptor) {
-		return resource.NormalizePayloadDescriptor(content.Descriptor), nil
-	}
-	if existing.Resource != nil {
-		return existing.Resource.Descriptor, nil
-	}
-
-	if descriptor, ok, err := r.metadataDefaultsDescriptorHint(logicalPath, existing.Resource); err != nil {
-		return resource.PayloadDescriptor{}, err
-	} else if ok {
-		return descriptor, nil
-	}
-
-	return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), nil
-}
-
-func (r *LocalResourceRepository) metadataDefaultsDescriptorHint(
-	logicalPath string,
-	resourceInfo *payloadFileInfo,
-) (resource.PayloadDescriptor, bool, error) {
-	defaultsDir, err := r.collectionDefaultsDirPath(logicalPath)
-	if err != nil {
-		return resource.PayloadDescriptor{}, false, err
-	}
-
-	for _, candidate := range []string{"metadata.yaml", "metadata.json"} {
-		descriptor, ok := resource.PayloadDescriptorForFileName(candidate)
-		if !ok {
-			continue
-		}
-		candidatePath := filepath.Join(defaultsDir, candidate)
-		if _, err := os.Stat(candidatePath); err == nil {
-			if resourceInfo == nil || resource.ValidateDefaultsSidecarDescriptor(descriptor, resourceInfo.Descriptor) == nil {
-				return descriptor, true, nil
-			}
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return resource.PayloadDescriptor{}, false, internalError("failed to inspect metadata defaults format hint", err)
-		}
-	}
-
-	if resourceInfo == nil {
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), true, nil
-	}
-	switch resource.NormalizePayloadDescriptor(resourceInfo.Descriptor).PayloadType {
-	case resource.PayloadTypeJSON, resource.PayloadTypeYAML:
-		return resource.NormalizePayloadDescriptor(resource.PayloadDescriptor{PayloadType: resource.PayloadTypeYAML}), true, nil
-	default:
-		return resource.PayloadDescriptor{}, false, nil
-	}
 }
 
 func payloadFileInfoFromCandidates(
@@ -260,33 +143,4 @@ func payloadFileInfoFromCandidates(
 			Extension: filepath.Ext(name),
 		}),
 	}, nil
-}
-
-func validateDefaultsPayloadFiles(logicalPath string, files resourcePayloadFiles) error {
-	if files.Defaults == nil {
-		return nil
-	}
-
-	overrides := resource.PayloadDescriptor{}
-	if files.Resource != nil {
-		overrides = files.Resource.Descriptor
-	}
-	if err := resource.ValidateDefaultsSidecarDescriptor(files.Defaults.Descriptor, overrides); err != nil {
-		return faults.NewValidationError(fmt.Sprintf("resource %q defaults sidecar is invalid", logicalPath), err)
-	}
-
-	return nil
-}
-
-func validateDesiredDescriptorWithDefaults(files resourcePayloadFiles, desired resource.PayloadDescriptor) error {
-	if files.Defaults == nil {
-		if files.Resource != nil {
-			return resource.ValidateDefaultsSidecarDescriptor(desired, files.Resource.Descriptor)
-		}
-		return nil
-	}
-	if err := resource.ValidateDefaultsSidecarDescriptor(files.Defaults.Descriptor, desired); err != nil {
-		return err
-	}
-	return nil
 }

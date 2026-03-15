@@ -14,6 +14,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 )
 
 func TestVaultSecretServiceKV2TokenAuth(t *testing.T) {
@@ -100,6 +101,54 @@ func TestVaultSecretServiceUserPassAuth(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatalf("NewVaultSecretService returned error: %v", err)
+	}
+
+	if err := service.Init(context.Background()); err != nil {
+		t.Fatalf("Init returned error: %v", err)
+	}
+
+	if err := service.Store(context.Background(), "password", "p4ss"); err != nil {
+		t.Fatalf("Store returned error: %v", err)
+	}
+	value, err := service.Get(context.Background(), "password")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if value != "p4ss" {
+		t.Fatalf("expected p4ss, got %q", value)
+	}
+}
+
+func TestVaultSecretServicePromptAuth(t *testing.T) {
+	t.Parallel()
+
+	fake := newFakeVault()
+	server := httptest.NewServer(fake.handler())
+	defer server.Close()
+
+	runtime, err := promptauth.New(
+		[]promptauth.Target{{Key: promptauth.TargetSecretStoreVaultAuth, Label: "vault auth"}},
+		promptauth.WithPrompter(&vaultPromptPrompter{
+			credentials: promptauth.Credentials{Username: fake.userName, Password: fake.password},
+		}),
+		promptauth.WithSessionStore(&vaultMemorySessionStore{}),
+	)
+	if err != nil {
+		t.Fatalf("promptauth.New returned error: %v", err)
+	}
+
+	service, err := NewVaultSecretService(
+		config.VaultSecretStore{
+			Address:   server.URL,
+			KVVersion: 2,
+			Auth: &config.VaultAuth{
+				Prompt: &config.VaultPromptAuth{},
+			},
+		},
+		WithPromptRuntime(runtime),
+	)
 	if err != nil {
 		t.Fatalf("NewVaultSecretService returned error: %v", err)
 	}
@@ -427,6 +476,28 @@ func writeJSON(writer http.ResponseWriter, status int, payload any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(payload)
+}
+
+type vaultPromptPrompter struct {
+	credentials promptauth.Credentials
+}
+
+func (p *vaultPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
+	return p.credentials, nil
+}
+
+func (p *vaultPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
+	return false, nil
+}
+
+type vaultMemorySessionStore struct{}
+
+func (vaultMemorySessionStore) Load() (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
+func (vaultMemorySessionStore) Save(map[string]string) error {
+	return nil
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

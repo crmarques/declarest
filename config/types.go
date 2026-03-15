@@ -70,6 +70,7 @@ type GitAuth struct {
 	BasicAuth *BasicAuth     `json:"basicAuth,omitempty" yaml:"basicAuth,omitempty"`
 	SSH       *SSHAuth       `json:"ssh,omitempty" yaml:"ssh,omitempty"`
 	AccessKey *AccessKeyAuth `json:"accessKey,omitempty" yaml:"accessKey,omitempty"`
+	Prompt    *PromptAuth    `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type FilesystemRepository struct {
@@ -107,14 +108,20 @@ type HTTPProxy struct {
 }
 
 type ProxyAuth struct {
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
+	Username string      `json:"username" yaml:"username"`
+	Password string      `json:"password" yaml:"password"`
+	Prompt   *PromptAuth `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type HTTPAuth struct {
 	OAuth2        *OAuth2           `json:"oauth2,omitempty" yaml:"oauth2,omitempty"`
 	BasicAuth     *BasicAuth        `json:"basicAuth,omitempty" yaml:"basicAuth,omitempty"`
 	CustomHeaders []HeaderTokenAuth `json:"customHeaders,omitempty" yaml:"customHeaders,omitempty"`
+	Prompt        *PromptAuth       `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+}
+
+type PromptAuth struct {
+	KeepCredentialsForSession bool `json:"keepCredentialsForSession,omitempty" yaml:"keepCredentialsForSession,omitempty"`
 }
 
 type OAuth2 struct {
@@ -185,12 +192,18 @@ type VaultAuth struct {
 	Token    string                 `json:"token,omitempty" yaml:"token,omitempty"`
 	Password *VaultUserPasswordAuth `json:"password,omitempty" yaml:"password,omitempty"`
 	AppRole  *VaultAppRoleAuth      `json:"appRole,omitempty" yaml:"appRole,omitempty"`
+	Prompt   *VaultPromptAuth       `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type VaultUserPasswordAuth struct {
 	Username string `json:"username" yaml:"username"`
 	Password string `json:"password" yaml:"password"`
 	Mount    string `json:"mount,omitempty" yaml:"mount,omitempty"`
+}
+
+type VaultPromptAuth struct {
+	KeepCredentialsForSession bool   `json:"keepCredentialsForSession,omitempty" yaml:"keepCredentialsForSession,omitempty"`
+	Mount                     string `json:"mount,omitempty" yaml:"mount,omitempty"`
 }
 
 type VaultAppRoleAuth struct {

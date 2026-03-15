@@ -13,6 +13,7 @@ import (
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 )
 
 type authMode int
@@ -22,6 +23,7 @@ const (
 	authModeOAuth2
 	authModeBasic
 	authModeCustomHeaders
+	authModePrompt
 )
 
 type authConfig struct {
@@ -29,6 +31,8 @@ type authConfig struct {
 	oauth2        config.OAuth2
 	basicAuth     config.BasicAuth
 	customHeaders []config.HeaderTokenAuth
+	prompt        *config.PromptAuth
+	runtime       *promptauth.Runtime
 }
 
 func (g *Client) InvalidateAuthCache() {
@@ -56,7 +60,7 @@ func (c authConfig) shouldRedactHeader(name string) bool {
 	return false
 }
 
-func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
+func buildAuthConfig(cfg *config.HTTPAuth, runtime *promptauth.Runtime) (authConfig, error) {
 	if cfg == nil {
 		return authConfig{}, faults.NewValidationError("managed-server.http.auth is required", nil)
 	}
@@ -69,6 +73,9 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 		setCount++
 	}
 	if len(cfg.CustomHeaders) > 0 {
+		setCount++
+	}
+	if cfg.Prompt != nil {
 		setCount++
 	}
 	if setCount != 1 {
@@ -99,6 +106,13 @@ func buildAuthConfig(cfg *config.HTTPAuth) (authConfig, error) {
 			return authConfig{}, faults.NewValidationError("managed-server.http.auth.basic-auth requires username and password", nil)
 		}
 		return authConfig{mode: authModeBasic, basicAuth: basic}, nil
+	case cfg.Prompt != nil:
+		prompt := *cfg.Prompt
+		return authConfig{
+			mode:    authModePrompt,
+			prompt:  &prompt,
+			runtime: runtime,
+		}, nil
 	case len(cfg.CustomHeaders) > 0:
 		customHeaders := make([]config.HeaderTokenAuth, 0, len(cfg.CustomHeaders))
 		for idx, custom := range cfg.CustomHeaders {
@@ -140,6 +154,19 @@ func (g *Client) applyAuth(ctx context.Context, request *http.Request) error {
 			debugctx.Detailf(ctx, "auth basic password=%q", g.auth.basicAuth.Password)
 		}
 		request.SetBasicAuth(g.auth.basicAuth.Username, g.auth.basicAuth.Password)
+	case authModePrompt:
+		if g.auth.runtime == nil || g.auth.prompt == nil {
+			return faults.NewValidationError("managed-server.http.auth.prompt runtime is not configured", nil)
+		}
+		creds, err := g.auth.runtime.Resolve(ctx, promptauth.TargetManagedServerHTTPAuth, g.auth.prompt.KeepCredentialsForSession)
+		if err != nil {
+			return err
+		}
+		debugctx.Detailf(ctx, "auth mode=prompt username=%q", creds.Username)
+		if debugctx.Insecure(ctx) {
+			debugctx.Detailf(ctx, "auth prompt password=%q", creds.Password)
+		}
+		request.SetBasicAuth(creds.Username, creds.Password)
 	case authModeCustomHeaders:
 		debugctx.Detailf(ctx, "auth mode=custom-headers count=%d", len(g.auth.customHeaders))
 		for _, customHeader := range g.auth.customHeaders {

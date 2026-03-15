@@ -252,17 +252,6 @@ func validateOperationValidationSpec(
 	)
 }
 
-func validateAttributePointer(field string, value string) error {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	if _, err := resource.ParseJSONPointer(trimmed); err != nil {
-		return faults.NewValidationError(field+" must be a valid JSON pointer", err)
-	}
-	return nil
-}
-
 func validateIdentityTemplate(field string, value string) error {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {

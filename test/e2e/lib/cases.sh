@@ -142,6 +142,7 @@ case_selected_value_for_key() {
     managed-server-auth-type) printf '%s\n' "${E2E_MANAGED_SERVER_AUTH_TYPE}" ;;
     managed-server-mtls) printf '%s\n' "${E2E_MANAGED_SERVER_MTLS}" ;;
     managed-server-proxy) printf '%s\n' "${E2E_MANAGED_SERVER_PROXY}" ;;
+    managed-server-proxy-auth-type) printf '%s\n' "$(e2e_effective_managed_server_proxy_auth_type)" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
     git-provider) printf '%s\n' "${E2E_GIT_PROVIDER}" ;;
     git-provider-connection) printf '%s\n' "${E2E_GIT_PROVIDER_CONNECTION}" ;;

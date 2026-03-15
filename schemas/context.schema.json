@@ -51,6 +51,15 @@
         "type": "string"
       }
     },
+    "promptAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keepCredentialsForSession": {
+          "type": "boolean"
+        }
+      }
+    },
     "proxyAuth": {
       "type": "object",
       "additionalProperties": false,
@@ -62,11 +71,23 @@
         "password": {
           "type": "string",
           "minLength": 1
+        },
+        "prompt": {
+          "$ref": "#/$defs/promptAuth"
         }
       },
-      "required": [
-        "username",
-        "password"
+      "oneOf": [
+        {
+          "required": [
+            "username",
+            "password"
+          ]
+        },
+        {
+          "required": [
+            "prompt"
+          ]
+        }
       ]
     },
     "proxy": {
@@ -181,6 +202,9 @@
         },
         "accessKey": {
           "$ref": "#/$defs/accessKeyAuth"
+        },
+        "prompt": {
+          "$ref": "#/$defs/promptAuth"
         }
       },
       "oneOf": [
@@ -197,6 +221,11 @@
         {
           "required": [
             "accessKey"
+          ]
+        },
+        {
+          "required": [
+            "prompt"
           ]
         }
       ]
@@ -373,6 +402,9 @@
         "basicAuth": {
           "$ref": "#/$defs/basicAuth"
         },
+        "prompt": {
+          "$ref": "#/$defs/promptAuth"
+        },
         "customHeaders": {
           "type": "array",
           "minItems": 1,
@@ -390,6 +422,11 @@
         {
           "required": [
             "basicAuth"
+          ]
+        },
+        {
+          "required": [
+            "prompt"
           ]
         },
         {
@@ -654,6 +691,18 @@
         "secretID"
       ]
     },
+    "vaultPromptAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keepCredentialsForSession": {
+          "type": "boolean"
+        },
+        "mount": {
+          "type": "string"
+        }
+      }
+    },
     "vaultAuth": {
       "type": "object",
       "additionalProperties": false,
@@ -667,6 +716,9 @@
         },
         "appRole": {
           "$ref": "#/$defs/vaultAppRoleAuth"
+        },
+        "prompt": {
+          "$ref": "#/$defs/vaultPromptAuth"
         }
       },
       "oneOf": [
@@ -683,6 +735,11 @@
         {
           "required": [
             "appRole"
+          ]
+        },
+        {
+          "required": [
+            "prompt"
           ]
         }
       ]

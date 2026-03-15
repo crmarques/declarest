@@ -10,6 +10,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/promptauth"
 	proxyhelper "github.com/crmarques/declarest/internal/proxy"
 	"github.com/crmarques/declarest/resource"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -29,6 +30,7 @@ const (
 	vaultAuthToken vaultAuthMode = iota
 	vaultAuthUserPass
 	vaultAuthAppRole
+	vaultAuthPrompt
 )
 
 type VaultSecretService struct {
@@ -38,6 +40,7 @@ type VaultSecretService struct {
 	kvVersion  int
 	auth       vaultAuthConfig
 	client     *http.Client
+	runtime    *promptauth.Runtime
 
 	mu          sync.Mutex
 	token       string
@@ -51,6 +54,7 @@ type vaultAuthConfig struct {
 
 	userPass *config.VaultUserPasswordAuth
 	appRole  *config.VaultAppRoleAuth
+	prompt   *config.VaultPromptAuth
 }
 
 type vaultResponse struct {
@@ -63,7 +67,18 @@ type vaultAuthInfo struct {
 	ClientToken string `json:"client_token"`
 }
 
-func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, error) {
+type Option func(*VaultSecretService)
+
+func WithPromptRuntime(runtime *promptauth.Runtime) Option {
+	return func(service *VaultSecretService) {
+		if service == nil {
+			return
+		}
+		service.runtime = runtime
+	}
+}
+
+func NewVaultSecretService(cfg config.VaultSecretStore, opts ...Option) (*VaultSecretService, error) {
 	address, err := normalizeVaultAddress(cfg.Address)
 	if err != nil {
 		return nil, err
@@ -94,11 +109,6 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 		return nil, faults.NewValidationError("secret-store.vault.auth is required", nil)
 	}
 
-	auth, err := buildVaultAuthConfig(*cfg.Auth)
-	if err != nil {
-		return nil, err
-	}
-
 	tlsConfig, err := buildTLSConfig(cfg.TLS)
 	if err != nil {
 		return nil, err
@@ -107,24 +117,36 @@ func NewVaultSecretService(cfg config.VaultSecretStore) (*VaultSecretService, er
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
 	transport.Proxy = nil
-	proxyConfig, disabled, err := proxyhelper.Resolve("secret-store.vault.proxy", cfg.Proxy)
-	if err != nil {
-		return nil, err
-	}
-	if !disabled {
-		transport.Proxy = proxyConfig.Resolver()
-	}
 
 	service := &VaultSecretService{
 		address:    address,
 		mount:      mount,
 		pathPrefix: pathPrefix,
 		kvVersion:  kvVersion,
-		auth:       auth,
 		client: &http.Client{
 			Timeout:   defaultVaultTimeout,
 			Transport: transport,
 		},
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(service)
+	}
+
+	auth, err := buildVaultAuthConfig(*cfg.Auth)
+	if err != nil {
+		return nil, err
+	}
+	service.auth = auth
+
+	proxyConfig, disabled, err := proxyhelper.ResolveWithRuntime("secret-store.vault.proxy", cfg.Proxy, service.runtime)
+	if err != nil {
+		return nil, err
+	}
+	if !disabled {
+		transport.Proxy = proxyConfig.Resolver()
 	}
 
 	if auth.mode == vaultAuthToken {
@@ -380,6 +402,10 @@ func (s *VaultSecretService) initLocked(ctx context.Context) error {
 		if err := s.loginUserPass(ctx); err != nil {
 			return err
 		}
+	case vaultAuthPrompt:
+		if err := s.loginPrompt(ctx); err != nil {
+			return err
+		}
 	case vaultAuthAppRole:
 		if err := s.loginAppRole(ctx); err != nil {
 			return err
@@ -416,6 +442,35 @@ func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 		return faults.NewValidationError("secret-store.vault.auth.password requires username and password", nil)
 	}
 
+	return s.loginUserPassWithCredentials(ctx, username, password, mount)
+}
+
+func (s *VaultSecretService) loginPrompt(ctx context.Context) error {
+	if s.runtime == nil || s.auth.prompt == nil {
+		return faults.NewValidationError("secret-store.vault.auth.prompt runtime is not configured", nil)
+	}
+
+	mount, err := normalizeVaultPath(s.auth.prompt.Mount, true)
+	if err != nil {
+		return faults.NewValidationError("secret-store.vault.auth.prompt.mount is invalid", err)
+	}
+	if mount == "" {
+		mount = "userpass"
+	}
+
+	creds, err := s.runtime.Resolve(ctx, promptauth.TargetSecretStoreVaultAuth, s.auth.prompt.KeepCredentialsForSession)
+	if err != nil {
+		return err
+	}
+	return s.loginUserPassWithCredentials(ctx, creds.Username, creds.Password, mount)
+}
+
+func (s *VaultSecretService) loginUserPassWithCredentials(
+	ctx context.Context,
+	username string,
+	password string,
+	mount string,
+) error {
 	endpoint := buildEndpoint("auth", mount, "login", username)
 	payload := map[string]string{"password": password}
 

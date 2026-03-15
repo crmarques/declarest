@@ -280,6 +280,24 @@ test_managed_server_auth_type_rejects_unsupported_selection() {
   assert_contains "${output}" "does not support selected auth-type: custom-header"
 }
 
+test_managed_server_prompt_auth_type_maps_to_basic_auth_capability() {
+  load_components_libs
+
+  E2E_EXPLICIT=()
+  E2E_MANAGED_SERVER='demo'
+  E2E_MANAGED_SERVER_AUTH_TYPE='prompt'
+  E2E_MANAGED_SERVER_MTLS='false'
+  e2e_mark_explicit 'managed-server-auth-type'
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='basic-auth oauth2'
+  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
+
+  e2e_validate_managed_server_security_selection >/dev/null
+
+  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "prompt" "expected prompt selection to remain intact after validation"
+}
+
 test_validate_all_discovered_components_rejects_missing_compose_artifacts() {
   load_components_libs
   with_temp_e2e_dir _test_validate_all_discovered_components_rejects_missing_compose_artifacts_impl
@@ -336,6 +354,7 @@ test_validate_all_discovered_components_rejects_missing_fixture_identity
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template
 test_managed_server_auth_type_defaults_prefer_oauth2
 test_managed_server_auth_type_rejects_unsupported_selection
+test_managed_server_prompt_auth_type_maps_to_basic_auth_capability
 test_validate_all_discovered_components_rejects_missing_compose_artifacts
 test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity
 test_validate_all_discovered_components_accepts_valid_yaml_resource_payload

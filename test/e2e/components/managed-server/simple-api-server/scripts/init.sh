@@ -37,6 +37,9 @@ simple_api_auth_defaults_for_selected_type() {
     basic)
       printf 'true false\n'
       ;;
+    prompt)
+      printf 'true false\n'
+      ;;
     oauth2)
       printf 'false true\n'
       ;;

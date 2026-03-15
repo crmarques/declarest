@@ -14,15 +14,6 @@ import (
 	"github.com/crmarques/declarest/resource/identity"
 )
 
-type metadataSnapshotRenderer interface {
-	RenderMetadataSnapshot(
-		ctx context.Context,
-		logicalPath string,
-		payload resource.Value,
-		descriptor resource.PayloadDescriptor,
-	) (metadatadomain.ResourceMetadata, error)
-}
-
 func (s *FSMetadataService) RenderOperationSpec(
 	ctx context.Context,
 	logicalPath string,

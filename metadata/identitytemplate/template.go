@@ -359,10 +359,6 @@ func validateHelperArity(name string, count int) error {
 	return nil
 }
 
-func isPointerToken(item token) bool {
-	return !item.quoted && strings.HasPrefix(strings.TrimSpace(item.text), "/")
-}
-
 func singleTokenPointer(item token) (string, bool, error) {
 	if item.quoted {
 		return "", false, nil

@@ -1,9 +1,12 @@
 package proxy
 
 import (
+	"context"
+	"maps"
 	"testing"
 
 	"github.com/crmarques/declarest/config"
+	"github.com/crmarques/declarest/internal/promptauth"
 )
 
 func TestResolveMergesEnvironmentAndConfiguredFields(t *testing.T) {
@@ -69,4 +72,63 @@ func TestResolveConfiguredAuthOverridesEnvironmentCredentials(t *testing.T) {
 	if got := cfg.HTTP.String(); got != "http://ctx-user:ctx-pass@proxy.example.com:3128" {
 		t.Fatalf("expected configured auth to override env credentials, got %q", got)
 	}
+}
+
+func TestResolveWithRuntimePromptAuthInjectsPromptedCredentials(t *testing.T) {
+	runtime, err := promptauth.New(
+		[]promptauth.Target{{Key: promptauth.TargetManagedServerHTTPProxyAuth, Label: "managed-server proxy auth"}},
+		promptauth.WithPrompter(&proxyPromptPrompter{
+			credentials: promptauth.Credentials{Username: "proxy-user", Password: "proxy-pass"},
+		}),
+		promptauth.WithSessionStore(&proxyMemorySessionStore{}),
+	)
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	cfg, disabled, err := ResolveWithRuntime("managed-server.http.proxy", &config.HTTPProxy{
+		HTTPURL: "http://proxy.example.com:3128",
+		Auth: &config.ProxyAuth{
+			Prompt: &config.PromptAuth{},
+		},
+	}, runtime)
+	if err != nil {
+		t.Fatalf("ResolveWithRuntime() returned error: %v", err)
+	}
+	if disabled {
+		t.Fatal("expected prompt-backed proxy to remain enabled")
+	}
+
+	env, err := cfg.Env(context.Background())
+	if err != nil {
+		t.Fatalf("Env() returned error: %v", err)
+	}
+	if got := env["HTTP_PROXY"]; got != "http://proxy-user:proxy-pass@proxy.example.com:3128" {
+		t.Fatalf("expected prompted proxy URL, got %q", got)
+	}
+}
+
+type proxyPromptPrompter struct {
+	credentials promptauth.Credentials
+}
+
+func (p *proxyPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
+	return p.credentials, nil
+}
+
+func (p *proxyPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
+	return false, nil
+}
+
+type proxyMemorySessionStore struct {
+	values map[string]string
+}
+
+func (s *proxyMemorySessionStore) Load() (map[string]string, error) {
+	return maps.Clone(s.values), nil
+}
+
+func (s *proxyMemorySessionStore) Save(values map[string]string) error {
+	s.values = maps.Clone(values)
+	return nil
 }

@@ -9,9 +9,9 @@ state_file=${E2E_COMPONENT_STATE_FILE}
 
 selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-custom-header}
 case "${selected_auth_type}" in
-  basic|custom-header) ;;
+  basic|custom-header|prompt) ;;
   *)
-    e2e_die "managed-server rundeck does not support auth-type ${selected_auth_type} (supported: basic, custom-header)"
+    e2e_die "managed-server rundeck does not support auth-type ${selected_auth_type} (supported: basic, custom-header, prompt)"
     exit 1
     ;;
 esac

@@ -10,7 +10,7 @@ load_ui_libs() {
     DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD || true
   unset E2E_EXPLICIT \
     E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
-    E2E_MANAGED_SERVER_PROXY E2E_MANAGED_SERVER_PROXY_HTTP_URL E2E_MANAGED_SERVER_PROXY_HTTPS_URL E2E_MANAGED_SERVER_PROXY_NO_PROXY \
+    E2E_MANAGED_SERVER_PROXY E2E_MANAGED_SERVER_PROXY_AUTH_TYPE E2E_MANAGED_SERVER_PROXY_HTTP_URL E2E_MANAGED_SERVER_PROXY_HTTPS_URL E2E_MANAGED_SERVER_PROXY_NO_PROXY \
     E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
     E2E_REPO_TYPE E2E_GIT_PROVIDER E2E_GIT_PROVIDER_CONNECTION E2E_SECRET_PROVIDER E2E_SECRET_PROVIDER_CONNECTION \
@@ -122,9 +122,27 @@ test_summary_marks_operator_profile_defaults() {
   assert_contains "${output}" "git-provider: gitea (profile-default)"
 }
 
+test_summary_marks_explicit_proxy_prompt_auth_type() {
+  load_ui_libs
+  E2E_START_EPOCH=$(e2e_epoch_now)
+  E2E_STEPS_TOTAL=1
+  E2E_STEP_TITLES[1]='Initializing'
+  E2E_STEP_STATUSES[1]='OK'
+  E2E_STEP_DURATIONS[1]=0
+
+  E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
+  e2e_parse_args --managed-server-proxy true --managed-server-proxy-auth-type prompt
+
+  local output
+  output=$(ui_print_summary)
+
+  assert_contains "${output}" "managed-server-proxy-auth-type: prompt (explicit)"
+}
+
 test_step_table_header_format
 test_step_state_labels_match_contract
 test_running_step_line_shows_elapsed_span
 test_summary_includes_required_fields
 test_summary_marks_explicit_and_component_default_parameters
 test_summary_marks_operator_profile_defaults
+test_summary_marks_explicit_proxy_prompt_auth_type

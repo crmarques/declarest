@@ -11,6 +11,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
+	"github.com/crmarques/declarest/internal/promptauth"
 	httpmanagedserver "github.com/crmarques/declarest/internal/providers/managedserver/http"
 	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
@@ -48,7 +49,12 @@ func buildOrchestratorFromResolvedContext(
 	args := os.Args[1:]
 	emitSecurityWarningsWithArgs(os.Stderr, args, resolvedContext)
 
-	metadataSource, err := resolveMetadataSource(ctx, resolvedContext)
+	authRuntime, err := promptauth.New(promptauth.BuildTargets(resolvedContext))
+	if err != nil {
+		return nil, err
+	}
+
+	metadataSource, err := resolveMetadataSource(ctx, resolvedContext, authRuntime)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +82,10 @@ func buildOrchestratorFromResolvedContext(
 	case resolvedContext.Repository.Filesystem != nil:
 		repo = fsstore.NewLocalResourceRepository(resolvedContext.Repository.Filesystem.BaseDir)
 	case resolvedContext.Repository.Git != nil:
-		repo = gitrepository.NewGitResourceRepository(*resolvedContext.Repository.Git)
+		repo = gitrepository.NewGitResourceRepository(
+			*resolvedContext.Repository.Git,
+			gitrepository.WithPromptRuntime(authRuntime),
+		)
 	}
 
 	var srv managedserver.ManagedServerClient
@@ -92,6 +101,7 @@ func buildOrchestratorFromResolvedContext(
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
 			serverOptions = append(serverOptions, httpmanagedserver.WithMetadataRenderer(renderer))
 		}
+		serverOptions = append(serverOptions, httpmanagedserver.WithPromptRuntime(authRuntime))
 		serverManager, err := httpmanagedserver.NewClient(
 			serverConfig,
 			serverOptions...,
@@ -112,7 +122,10 @@ func buildOrchestratorFromResolvedContext(
 			}
 			sec = secretService
 		case resolvedContext.SecretStore.Vault != nil:
-			secretService, err := vaultsecrets.NewVaultSecretService(*resolvedContext.SecretStore.Vault)
+			secretService, err := vaultsecrets.NewVaultSecretService(
+				*resolvedContext.SecretStore.Vault,
+				vaultsecrets.WithPromptRuntime(authRuntime),
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +220,11 @@ func writeBootstrapWarning(w io.Writer, args []string, message string) {
 	cliutil.WriteWarningLine(w, message)
 }
 
-func resolveMetadataSource(ctx context.Context, context config.Context) (metadataSourceResolution, error) {
+func resolveMetadataSource(
+	ctx context.Context,
+	context config.Context,
+	authRuntime *promptauth.Runtime,
+) (metadataSourceResolution, error) {
 	bundleRef := strings.TrimSpace(context.Metadata.Bundle)
 	if bundleRef == "" {
 		bundleRef = strings.TrimSpace(context.Metadata.BundleFile)
@@ -217,6 +234,7 @@ func resolveMetadataSource(ctx context.Context, context config.Context) (metadat
 			ctx,
 			bundleRef,
 			bundlemetadata.WithProxyConfig(context.Metadata.Proxy),
+			bundlemetadata.WithPromptRuntime(authRuntime),
 		)
 		if err != nil {
 			return metadataSourceResolution{}, err

@@ -345,6 +345,57 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAllowsPromptAuth(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Context{
+		Name: "prompt",
+		Repository: config.Repository{
+			Git: &config.GitRepository{
+				Local: config.GitLocal{BaseDir: "/tmp/repo"},
+				Remote: &config.GitRemote{
+					URL: "https://example.com/repo.git",
+					Auth: &config.GitAuth{
+						Prompt: &config.PromptAuth{KeepCredentialsForSession: true},
+					},
+					Proxy: &config.HTTPProxy{
+						HTTPURL: "http://proxy.example.com:3128",
+						Auth: &config.ProxyAuth{
+							Prompt: &config.PromptAuth{},
+						},
+					},
+				},
+			},
+		},
+		ManagedServer: &config.ManagedServer{
+			HTTP: &config.HTTPServer{
+				BaseURL: "https://api.example.com",
+				Auth: &config.HTTPAuth{
+					Prompt: &config.PromptAuth{},
+				},
+				Proxy: &config.HTTPProxy{
+					HTTPURL: "http://proxy.example.com:3128",
+					Auth: &config.ProxyAuth{
+						Prompt: &config.PromptAuth{KeepCredentialsForSession: true},
+					},
+				},
+			},
+		},
+		SecretStore: &config.SecretStore{
+			Vault: &config.VaultSecretStore{
+				Address: "https://vault.example.com",
+				Auth: &config.VaultAuth{
+					Prompt: &config.VaultPromptAuth{Mount: "userpass"},
+				},
+			},
+		},
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		t.Fatalf("validateConfig returned error: %v", err)
+	}
+}
+
 func TestValidateConfigAllowsExplicitProxyDisable(t *testing.T) {
 	t.Parallel()
 

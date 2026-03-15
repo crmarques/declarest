@@ -34,8 +34,10 @@ selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-custom-header}
     printf '      basicAuth:\n'
     printf '        username: %s\n' "${RUNDECK_ADMIN_USER}"
     printf '        password: %s\n' "${RUNDECK_ADMIN_PASSWORD}"
+  elif [[ "${selected_auth_type}" == 'prompt' ]]; then
+    printf '      prompt: {}\n'
   else
-    printf 'managed-server rundeck does not support auth-type %s (supported: basic, custom-header)\n' "${selected_auth_type}" >&2
+    printf 'managed-server rundeck does not support auth-type %s (supported: basic, custom-header, prompt)\n' "${selected_auth_type}" >&2
     exit 1
   fi
 } >"${fragment_file}"

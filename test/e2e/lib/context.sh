@@ -2,6 +2,39 @@
 
 E2E_CONTEXT_NAME=''
 
+e2e_context_has_managed_server_proxy_basic_auth_values() {
+  if declare -F e2e_has_managed_server_proxy_basic_auth_values >/dev/null 2>&1; then
+    e2e_has_managed_server_proxy_basic_auth_values
+    return
+  fi
+
+  [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}" || -n "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}" ]]
+}
+
+e2e_context_effective_managed_server_proxy_auth_type() {
+  if declare -F e2e_effective_managed_server_proxy_auth_type >/dev/null 2>&1; then
+    e2e_effective_managed_server_proxy_auth_type
+    return
+  fi
+
+  if [[ "${E2E_MANAGED_SERVER_PROXY:-false}" != 'true' ]]; then
+    printf 'none\n'
+    return 0
+  fi
+
+  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE:-}" ]]; then
+    printf '%s\n' "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}"
+    return 0
+  fi
+
+  if e2e_context_has_managed_server_proxy_basic_auth_values; then
+    printf 'basic\n'
+    return 0
+  fi
+
+  printf 'none\n'
+}
+
 e2e_context_build() {
   E2E_CONTEXT_NAME="e2e-${E2E_PROFILE}"
 
@@ -121,6 +154,7 @@ e2e_context_insert_managed_server_proxy() {
   local proxy_http_url="${E2E_MANAGED_SERVER_PROXY_HTTP_URL:-}"
   local proxy_https_url="${E2E_MANAGED_SERVER_PROXY_HTTPS_URL:-}"
   local proxy_no_proxy="${E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}"
+  local proxy_auth_type
   local proxy_auth_username="${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}"
   local proxy_auth_password="${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}"
 
@@ -129,12 +163,27 @@ e2e_context_insert_managed_server_proxy() {
     return 1
   fi
 
-  if [[ -n "${proxy_auth_username}" || -n "${proxy_auth_password}" ]]; then
-    if [[ -z "${proxy_auth_username}" || -z "${proxy_auth_password}" ]]; then
-      e2e_die 'managedServer proxy auth requires both username and password'
+  proxy_auth_type=$(e2e_context_effective_managed_server_proxy_auth_type) || return 1
+  case "${proxy_auth_type}" in
+    none)
+      ;;
+    basic)
+      if [[ -z "${proxy_auth_username}" || -z "${proxy_auth_password}" ]]; then
+        e2e_die 'managedServer proxy auth requires both username and password'
+        return 1
+      fi
+      ;;
+    prompt)
+      if e2e_context_has_managed_server_proxy_basic_auth_values; then
+        e2e_die 'managedServer proxy auth prompt cannot be combined with username/password'
+        return 1
+      fi
+      ;;
+    *)
+      e2e_die "invalid managedServer proxy auth type: ${proxy_auth_type}"
       return 1
-    fi
-  fi
+      ;;
+  esac
 
   local python_cmd
   if command -v python3 >/dev/null 2>&1; then
@@ -152,6 +201,7 @@ e2e_context_insert_managed_server_proxy() {
     E2E_PROXY_HTTP_URL="${proxy_http_url}" \
     E2E_PROXY_HTTPS_URL="${proxy_https_url}" \
     E2E_PROXY_NO_PROXY="${proxy_no_proxy}" \
+    E2E_PROXY_AUTH_TYPE="${proxy_auth_type}" \
     E2E_PROXY_AUTH_USERNAME="${proxy_auth_username}" \
     E2E_PROXY_AUTH_PASSWORD="${proxy_auth_password}" \
     "${python_cmd}" <<'PY'
@@ -162,6 +212,7 @@ context_path = Path(os.environ["E2E_CONTEXT_FILE"])
 http_url = os.environ.get("E2E_PROXY_HTTP_URL", "")
 https_url = os.environ.get("E2E_PROXY_HTTPS_URL", "")
 no_proxy = os.environ.get("E2E_PROXY_NO_PROXY", "")
+auth_type = os.environ.get("E2E_PROXY_AUTH_TYPE", "")
 auth_username = os.environ.get("E2E_PROXY_AUTH_USERNAME", "")
 auth_password = os.environ.get("E2E_PROXY_AUTH_PASSWORD", "")
 
@@ -223,10 +274,13 @@ if https_url:
     block.append(" " * nested_indent + f"httpsURL: {y(https_url)}")
 if no_proxy:
     block.append(" " * nested_indent + f"noProxy: {y(no_proxy)}")
-if auth_username or auth_password:
+if auth_type == "basic":
     block.append(" " * nested_indent + "auth:")
     block.append(" " * auth_field_indent + f"username: {y(auth_username)}")
     block.append(" " * auth_field_indent + f"password: {y(auth_password)}")
+elif auth_type == "prompt":
+    block.append(" " * nested_indent + "auth:")
+    block.append(" " * auth_field_indent + "prompt: {}")
 
 for offset, value in enumerate(block):
     lines.insert(insert_idx + offset, value)

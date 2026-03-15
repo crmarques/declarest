@@ -94,15 +94,34 @@ User-config key contract:
 One-of invariants:
 1. `config.Context` MUST define at least one of `repository` or `managedServer`.
 2. `repository` MUST define exactly one of `git` or `filesystem` when configured.
-3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders` when `managedServer.http` is configured.
+3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders`, or `prompt` when `managedServer.http` is configured.
 4. `secretStore` MUST define exactly one of `file` or `vault`.
 5. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
 6. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
 7. `managedServer.http.proxy` MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
-8. `managedServer.http.proxy.auth` MUST define both `username` and `password` when configured.
-9. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
-10. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
-11. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
+8. `managedServer.http.proxy.auth` MUST define either both `username` and `password`, or one `prompt` block.
+9. `repository.git.remote.auth` MUST define exactly one of `basicAuth`, `ssh`, `accessKey`, or `prompt`.
+10. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, `appRole`, or `prompt`.
+11. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
+12. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
+13. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
+
+### Type: `config.PromptAuth`
+Represents deferred runtime collection of one username/password pair for one configured component.
+
+Fields:
+1. `KeepCredentialsForSession`: optional bool; when `true`, runtime keeps the resolved component credentials in declarest session environment state for reuse by later commands in the same terminal session when possible.
+
+Invariants:
+1. prompt auth MUST defer interactive collection until the configured component first needs credentials at runtime.
+2. prompt auth MUST reject non-interactive execution when no cached session credentials are available.
+
+### Type: `config.VaultPromptAuth`
+Represents deferred runtime collection of Vault userpass credentials.
+
+Fields:
+1. `KeepCredentialsForSession`: optional bool.
+2. `Mount`: optional Vault auth mount; defaults to `userpass`.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.
