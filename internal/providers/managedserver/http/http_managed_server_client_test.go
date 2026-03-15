@@ -119,8 +119,10 @@ func TestNewClientValidation(t *testing.T) {
 			Proxy: &config.HTTPProxy{
 				HTTPURL: "http://user:pass@proxy.example.com:3128",
 				Auth: &config.ProxyAuth{
-					Username: "proxy-user",
-					Password: "proxy-pass",
+					Basic: &config.BasicAuth{
+						Username: "proxy-user",
+						Password: "proxy-pass",
+					},
 				},
 			},
 		})
@@ -2616,8 +2618,10 @@ func TestManagedServerProxySupport(t *testing.T) {
 			Proxy: &config.HTTPProxy{
 				HTTPURL: proxy.URL,
 				Auth: &config.ProxyAuth{
-					Username: "proxy-user",
-					Password: "proxy-pass",
+					Basic: &config.BasicAuth{
+						Username: "proxy-user",
+						Password: "proxy-pass",
+					},
 				},
 			},
 		})

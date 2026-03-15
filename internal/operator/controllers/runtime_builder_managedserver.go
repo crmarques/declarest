@@ -170,6 +170,6 @@ func resolveManagedServerProxyConfig(
 	if err != nil {
 		return nil, err
 	}
-	proxy.Auth = &config.ProxyAuth{Username: username, Password: password}
+	proxy.Auth = &config.ProxyAuth{Basic: &config.BasicAuth{Username: username, Password: password}}
 	return proxy, nil
 }

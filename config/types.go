@@ -108,9 +108,8 @@ type HTTPProxy struct {
 }
 
 type ProxyAuth struct {
-	Username string      `json:"username" yaml:"username"`
-	Password string      `json:"password" yaml:"password"`
-	Prompt   *PromptAuth `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+	Basic  *BasicAuth  `json:"basic,omitempty" yaml:"basic,omitempty"`
+	Prompt *PromptAuth `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type HTTPAuth struct {

@@ -36,7 +36,7 @@ Define the canonical context catalog schema, file location, validation rules, an
 19. Catalog-level `defaultEditor` MAY be omitted and MUST default to `vi` when editor-opening CLI commands resolve no explicit `--editor` override.
 20. Catalog edit workflows that replace the full YAML document (for example `context edit`) MUST validate strict YAML and context semantics before persisting any file changes.
 21. When `managedServer.http.openapi` is empty and `metadata.bundle` or `metadata.bundleFile` is configured, startup MUST resolve OpenAPI from bundle hints in order: `bundle.yaml declarest.openapi`, then peer `openapi.yaml` at the bundle root.
-22. Proxy blocks (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; proxy auth (when provided) MUST define either both `username` and `password` or one `prompt` block, and an empty `proxy:` block explicitly disables inherited or environment proxy settings for that component.
+22. Proxy blocks (`managedServer.http.proxy`, `repository.git.remote.proxy`, `secretStore.vault.proxy`, `metadata.proxy`) MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; proxy auth (when provided) MUST define either one `basic` block (with `username` and `password`) or one `prompt` block, and an empty `proxy:` block explicitly disables inherited or environment proxy settings for that component.
 23. Proxy precedence MUST be: process environment (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, plus lowercase aliases), then component-local proxy fields overriding only the fields they define, then shared-context inheritance where the first configured concrete proxy becomes the default for components that do not define their own proxy block.
 24. `managedServer.http.openapi` MAY reference either an OpenAPI 3.x (`openapi`) or Swagger 2.0 (`swagger`) document.
 25. `managedServer.http.healthCheck` MAY be configured as a relative path or an absolute `http|https` URL, and it MUST NOT include query parameters.
@@ -76,7 +76,7 @@ Resource server auth one-of contract:
 Resource server proxy contract:
 1. `managedServer.http.proxy` MAY define `httpURL` and/or `httpsURL`.
 2. `managedServer.http.proxy.noProxy` MAY define comma-separated bypass rules.
-3. `managedServer.http.proxy.auth` MAY be configured; when set, it MUST define either both `username` and `password` or one `prompt` block.
+3. `managedServer.http.proxy.auth` MAY be configured; when set, it MUST define either one `basic` block (with `username` and `password`) or one `prompt` block.
 4. The same `proxy` structure is available for `repository.git.remote.proxy`, `secretStore.vault.proxy`, and `metadata.proxy`; each block can override only selected fields from the process environment, and unset components inherit the first configured concrete proxy unless an empty `proxy:` block explicitly disables it for that component.
 
 Resource server healthCheck contract:
@@ -105,8 +105,8 @@ Runtime override keys:
 5. `managedServer.http.proxy.httpURL`.
 6. `managedServer.http.proxy.httpsURL`.
 7. `managedServer.http.proxy.noProxy`.
-8. `managedServer.http.proxy.auth.username`.
-9. `managedServer.http.proxy.auth.password`.
+8. `managedServer.http.proxy.auth.basic.username`.
+9. `managedServer.http.proxy.auth.basic.password`.
 10. `metadata.baseDir`.
 11. `metadata.bundle`.
 12. `metadata.bundleFile`.
@@ -147,8 +147,9 @@ contexts:
         #     httpsURL: http://proxy.example.com:3128
         #     noProxy: localhost,127.0.0.1
         #     auth:
-        #       username: proxy-user
-        #       password: proxy-pass
+        #       basic:
+        #         username: proxy-user
+        #         password: proxy-pass
         #       # prompt:
         #       #   keepCredentialsForSession: true
       # filesystem:
@@ -166,8 +167,9 @@ contexts:
         #   httpsURL: http://proxy.example.com:3128
         #   noProxy: localhost,127.0.0.1
         #   auth:
-        #     username: proxy-user
-        #     password: proxy-pass
+        #     basic:
+        #       username: proxy-user
+        #       password: proxy-pass
         auth:
           # Choose exactly one auth method: oauth2, basicAuth, prompt, customHeaders.
           oauth2:
@@ -232,8 +234,9 @@ contexts:
       #     httpsURL: http://proxy.example.com:3128
       #     noProxy: localhost,127.0.0.1
       #     auth:
-      #       username: proxy-user
-      #       password: proxy-pass
+      #       basic:
+      #         username: proxy-user
+      #         password: proxy-pass
       #       # prompt:
       #       #   keepCredentialsForSession: true
 
@@ -248,8 +251,9 @@ contexts:
       #   httpsURL: http://proxy.example.com:3128
       #   noProxy: localhost,127.0.0.1
       #   auth:
-      #     username: proxy-user
-      #     password: proxy-pass
+      #     basic:
+      #       username: proxy-user
+      #       password: proxy-pass
 
   - name: yyy
     repository:

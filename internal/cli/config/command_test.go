@@ -1162,7 +1162,7 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 		},
 		selects: []string{
 			"filesystem",
-			"credentials",
+			"basic",
 			"customHeaders",
 		},
 		confirms: []bool{
@@ -1208,7 +1208,7 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 	if proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
 	}
-	if proxy.Auth.Username != "proxy-user" || proxy.Auth.Password != "proxy-pass" {
+	if proxy.Auth.Basic == nil || proxy.Auth.Basic.Username != "proxy-user" || proxy.Auth.Basic.Password != "proxy-pass" {
 		t.Fatalf("unexpected proxy auth values: %#v", proxy.Auth)
 	}
 }

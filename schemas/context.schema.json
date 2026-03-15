@@ -64,13 +64,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "username": {
-          "type": "string",
-          "minLength": 1
-        },
-        "password": {
-          "type": "string",
-          "minLength": 1
+        "basic": {
+          "$ref": "#/$defs/basicAuth"
         },
         "prompt": {
           "$ref": "#/$defs/promptAuth"
@@ -79,8 +74,7 @@
       "oneOf": [
         {
           "required": [
-            "username",
-            "password"
+            "basic"
           ]
         },
         {

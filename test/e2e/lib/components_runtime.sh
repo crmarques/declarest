@@ -109,7 +109,9 @@ e2e_kind_create_retryable_failure() {
   local kind_log_file=$1
   [[ -f "${kind_log_file}" ]] || return 1
 
-  grep -Fq 'failed to create cluster: could not find a log line that matches "Reached target .*Multi-User System.*|detected cgroup v1"' "${kind_log_file}"
+  grep -Eq \
+    'could not find a log line that matches "Reached target .*Multi-User System|detected cgroup v1"|The kubelet is not healthy after|failed to init node with kubeadm' \
+    "${kind_log_file}"
 }
 
 e2e_kind_reuse_existing_on_create_failure_enabled() {

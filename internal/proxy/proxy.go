@@ -68,15 +68,15 @@ func build(fieldPrefix string, proxy *config.HTTPProxy, runtime *promptauth.Runt
 		if httpsURL != nil && httpsURL.User != nil {
 			return Config{}, faults.NewValidationError(fieldPrefix+".auth cannot be combined with credentials embedded in proxy URL", nil)
 		}
-		if auth.Prompt == nil {
+		if auth.Basic != nil {
 			if httpURL != nil {
-				httpURL, err = applyProxyAuth(fieldPrefix+".auth", httpURL, auth.Username, auth.Password)
+				httpURL, err = applyProxyAuth(fieldPrefix+".auth", httpURL, auth.Basic.Username, auth.Basic.Password)
 				if err != nil {
 					return Config{}, err
 				}
 			}
 			if httpsURL != nil {
-				httpsURL, err = applyProxyAuth(fieldPrefix+".auth", httpsURL, auth.Username, auth.Password)
+				httpsURL, err = applyProxyAuth(fieldPrefix+".auth", httpsURL, auth.Basic.Username, auth.Basic.Password)
 				if err != nil {
 					return Config{}, err
 				}
@@ -243,9 +243,12 @@ func Merge(base *config.HTTPProxy, override *config.HTTPProxy) *config.HTTPProxy
 		if overrideHTTPSURL == "" {
 			merged.HTTPSURL = stripProxyURLUserInfo(merged.HTTPSURL)
 		}
-		merged.Auth = &config.ProxyAuth{
-			Username: strings.TrimSpace(override.Auth.Username),
-			Password: strings.TrimSpace(override.Auth.Password),
+		merged.Auth = &config.ProxyAuth{}
+		if override.Auth.Basic != nil {
+			merged.Auth.Basic = &config.BasicAuth{
+				Username: strings.TrimSpace(override.Auth.Basic.Username),
+				Password: strings.TrimSpace(override.Auth.Basic.Password),
+			}
 		}
 		if override.Auth.Prompt != nil {
 			prompt := *override.Auth.Prompt
@@ -264,6 +267,10 @@ func Clone(proxy *config.HTTPProxy) *config.HTTPProxy {
 	cloned := *proxy
 	if proxy.Auth != nil {
 		auth := *proxy.Auth
+		if proxy.Auth.Basic != nil {
+			basic := *proxy.Auth.Basic
+			auth.Basic = &basic
+		}
 		if proxy.Auth.Prompt != nil {
 			prompt := *proxy.Auth.Prompt
 			auth.Prompt = &prompt
@@ -299,7 +306,7 @@ func IsExplicitDisable(proxy *config.HTTPProxy) bool {
 		return false
 	}
 	if proxy.Auth != nil {
-		if strings.TrimSpace(proxy.Auth.Username) != "" || strings.TrimSpace(proxy.Auth.Password) != "" || proxy.Auth.Prompt != nil {
+		if proxy.Auth.Basic != nil || proxy.Auth.Prompt != nil {
 			return false
 		}
 	}
@@ -327,11 +334,16 @@ func Equal(a, b *config.HTTPProxy) bool {
 		return false
 	}
 	if a.Auth != nil {
-		if strings.TrimSpace(a.Auth.Username) != strings.TrimSpace(b.Auth.Username) {
+		if (a.Auth.Basic == nil) != (b.Auth.Basic == nil) {
 			return false
 		}
-		if strings.TrimSpace(a.Auth.Password) != strings.TrimSpace(b.Auth.Password) {
-			return false
+		if a.Auth.Basic != nil {
+			if strings.TrimSpace(a.Auth.Basic.Username) != strings.TrimSpace(b.Auth.Basic.Username) {
+				return false
+			}
+			if strings.TrimSpace(a.Auth.Basic.Password) != strings.TrimSpace(b.Auth.Basic.Password) {
+				return false
+			}
 		}
 		if (a.Auth.Prompt == nil) != (b.Auth.Prompt == nil) {
 			return false
@@ -383,25 +395,28 @@ func cloneProxyAuth(auth *config.ProxyAuth) (*config.ProxyAuth, error) {
 		return nil, nil
 	}
 
-	cloned := &config.ProxyAuth{
-		Username: strings.TrimSpace(auth.Username),
-		Password: strings.TrimSpace(auth.Password),
+	cloned := &config.ProxyAuth{}
+	if auth.Basic != nil {
+		cloned.Basic = &config.BasicAuth{
+			Username: strings.TrimSpace(auth.Basic.Username),
+			Password: strings.TrimSpace(auth.Basic.Password),
+		}
 	}
 	if auth.Prompt != nil {
 		prompt := *auth.Prompt
 		cloned.Prompt = &prompt
 	}
 
-	hasUserPass := cloned.Username != "" || cloned.Password != ""
+	hasBasic := cloned.Basic != nil
 	hasPrompt := cloned.Prompt != nil
-	if countSet(hasUserPass, hasPrompt) != 1 {
-		return nil, faults.NewValidationError("proxy auth must define either username/password or prompt", nil)
+	if countSet(hasBasic, hasPrompt) != 1 {
+		return nil, faults.NewValidationError("proxy auth must define either basic or prompt", nil)
 	}
 	if hasPrompt {
 		return cloned, nil
 	}
-	if cloned.Username == "" || cloned.Password == "" {
-		return nil, faults.NewValidationError("proxy auth requires username and password", nil)
+	if cloned.Basic.Username == "" || cloned.Basic.Password == "" {
+		return nil, faults.NewValidationError("proxy auth basic requires username and password", nil)
 	}
 	return cloned, nil
 }
@@ -411,8 +426,8 @@ func (cfg Config) urlWithAuth(ctx context.Context, base *url.URL) (*url.URL, err
 		return base, nil
 	}
 
-	if cfg.auth.Prompt == nil {
-		return applyProxyAuth(cfg.fieldPrefix+".auth", base, cfg.auth.Username, cfg.auth.Password)
+	if cfg.auth.Basic != nil {
+		return applyProxyAuth(cfg.fieldPrefix+".auth", base, cfg.auth.Basic.Username, cfg.auth.Basic.Password)
 	}
 	if cfg.runtime == nil {
 		return nil, faults.NewValidationError(cfg.fieldPrefix+".auth.prompt requires prompt auth runtime support", nil)

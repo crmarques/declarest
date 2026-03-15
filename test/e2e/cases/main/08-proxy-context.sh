@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CASE_ID='managed-server-proxy-context'
+CASE_ID='proxy-context'
 CASE_SCOPE='main'
 CASE_REQUIRES='has-proxy'
 

@@ -233,9 +233,12 @@ func normalizeProxy(proxy *config.HTTPProxy) *config.HTTPProxy {
 		NoProxy:  strings.TrimSpace(proxy.NoProxy),
 	}
 	if proxy.Auth != nil {
-		normalized.Auth = &config.ProxyAuth{
-			Username: strings.TrimSpace(proxy.Auth.Username),
-			Password: strings.TrimSpace(proxy.Auth.Password),
+		normalized.Auth = &config.ProxyAuth{}
+		if proxy.Auth.Basic != nil {
+			normalized.Auth.Basic = &config.BasicAuth{
+				Username: strings.TrimSpace(proxy.Auth.Basic.Username),
+				Password: strings.TrimSpace(proxy.Auth.Basic.Password),
+			}
 		}
 		if proxy.Auth.Prompt != nil {
 			prompt := *proxy.Auth.Prompt
@@ -509,12 +512,26 @@ func validateProxy(field string, proxy *config.HTTPProxy) error {
 		return nil
 	}
 	if proxy.Auth != nil {
-		if err := validateUsernamePasswordOrPrompt(field+".auth", proxy.Auth.Username, proxy.Auth.Password, proxy.Auth.Prompt); err != nil {
+		if err := validateProxyAuth(field+".auth", proxy.Auth); err != nil {
 			return err
 		}
 	}
 	if _, err := proxyhelper.Build(field, proxy); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateProxyAuth(field string, auth *config.ProxyAuth) error {
+	hasBasic := auth.Basic != nil
+	hasPrompt := auth.Prompt != nil
+	if countSet(hasBasic, hasPrompt) != 1 {
+		return faults.NewValidationError(field+" must define either basic or prompt", nil)
+	}
+	if hasBasic {
+		if strings.TrimSpace(auth.Basic.Username) == "" || strings.TrimSpace(auth.Basic.Password) == "" {
+			return faults.NewValidationError(field+".basic requires username and password", nil)
+		}
 	}
 	return nil
 }
@@ -587,9 +604,9 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.NoProxy = value
-		case "managedServer.http.proxy.auth.username":
+		case "managedServer.http.proxy.auth.basic.username":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.username requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.basic.username requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -597,10 +614,13 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
 				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
-			cfg.ManagedServer.HTTP.Proxy.Auth.Username = value
-		case "managedServer.http.proxy.auth.password":
+			if cfg.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
+				cfg.ManagedServer.HTTP.Proxy.Auth.Basic = &config.BasicAuth{}
+			}
+			cfg.ManagedServer.HTTP.Proxy.Auth.Basic.Username = value
+		case "managedServer.http.proxy.auth.basic.password":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.password requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.basic.password requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -608,7 +628,10 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
 				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
 			}
-			cfg.ManagedServer.HTTP.Proxy.Auth.Password = value
+			if cfg.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
+				cfg.ManagedServer.HTTP.Proxy.Auth.Basic = &config.BasicAuth{}
+			}
+			cfg.ManagedServer.HTTP.Proxy.Auth.Basic.Password = value
 		case "metadata.baseDir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {

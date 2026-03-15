@@ -9,10 +9,6 @@ reload_args_lib() {
     E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
     E2E_PROXY_MODE E2E_PROXY_AUTH_TYPE E2E_PROXY_HTTP_URL E2E_PROXY_HTTPS_URL E2E_PROXY_NO_PROXY \
     E2E_PROXY_AUTH_USERNAME E2E_PROXY_AUTH_PASSWORD \
-    E2E_LEGACY_MANAGED_SERVER_PROXY_HTTP_URL E2E_LEGACY_MANAGED_SERVER_PROXY_HTTPS_URL E2E_LEGACY_MANAGED_SERVER_PROXY_NO_PROXY \
-    E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_USERNAME E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
-    E2E_MANAGED_SERVER_PROXY E2E_MANAGED_SERVER_PROXY_AUTH_TYPE E2E_MANAGED_SERVER_PROXY_HTTP_URL E2E_MANAGED_SERVER_PROXY_HTTPS_URL E2E_MANAGED_SERVER_PROXY_NO_PROXY \
-    E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
     E2E_REPO_TYPE E2E_GIT_PROVIDER E2E_GIT_PROVIDER_CONNECTION E2E_SECRET_PROVIDER E2E_SECRET_PROVIDER_CONNECTION \
     E2E_PROFILE E2E_PLATFORM E2E_LIST_COMPONENTS E2E_VALIDATE_COMPONENTS E2E_KEEP_RUNTIME E2E_VERBOSE E2E_CLEAN_RUN_ID E2E_CLEAN_ALL \
@@ -27,7 +23,7 @@ test_parses_validate_components_flag() {
   assert_eq "${E2E_VALIDATE_COMPONENTS}" "1" "expected --validate-components to be parsed"
 }
 
-test_defaults_metadata_type_to_bundle() {
+test_defaults_metadata_source_to_bundle() {
   reload_args_lib
   e2e_parse_args
   assert_eq "${E2E_METADATA}" "bundle" "expected metadata source default to bundle"
@@ -85,28 +81,6 @@ test_parses_managed_server_auth_type_prompt_flag() {
   assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "prompt" "expected prompt auth-type to be parsed"
 }
 
-test_parses_managed_server_proxy_flag() {
-  reload_args_lib
-  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
-  e2e_parse_args --managed-server-proxy true
-  assert_eq "${E2E_MANAGED_SERVER_PROXY}" "true" "expected managed-server proxy flag to be parsed"
-  assert_eq "${E2E_PROXY_MODE}" "external" "expected legacy managed-server proxy flag to normalize to proxy-mode external"
-
-  reload_args_lib
-  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
-  e2e_parse_args --managed-server-proxy false
-  assert_eq "${E2E_MANAGED_SERVER_PROXY}" "false" "expected managed-server proxy flag to parse explicit false"
-  assert_eq "${E2E_PROXY_MODE}" "none" "expected legacy managed-server proxy false to normalize to proxy-mode none"
-}
-
-test_parses_managed_server_proxy_auth_type_flag() {
-  reload_args_lib
-  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
-  e2e_parse_args --managed-server-proxy true --managed-server-proxy-auth-type prompt
-  assert_eq "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" "prompt" "expected managed-server proxy auth-type to be parsed"
-  assert_eq "${E2E_PROXY_AUTH_TYPE}" "prompt" "expected legacy managed-server proxy auth-type to normalize to canonical proxy auth-type"
-}
-
 test_parses_proxy_mode_flag() {
   reload_args_lib
   e2e_parse_args --proxy-mode local
@@ -127,10 +101,10 @@ test_parses_metadata_source_flag() {
   assert_eq "${E2E_METADATA}" "bundle" "expected metadata source to be parsed"
 }
 
-test_parses_legacy_metadata_type_alias() {
+test_parses_metadata_source_dir_flag() {
   reload_args_lib
-  e2e_parse_args --metadata-type base-dir
-  assert_eq "${E2E_METADATA}" "dir" "expected legacy metadata type alias to normalize to dir"
+  e2e_parse_args --metadata-source dir
+  assert_eq "${E2E_METADATA}" "dir" "expected metadata source dir to be parsed"
 }
 
 test_rejects_invalid_metadata_source_flag() {
@@ -145,52 +119,16 @@ test_rejects_invalid_metadata_source_flag() {
   assert_contains "${output}" "invalid --metadata-source value"
 }
 
-test_rejects_base_dir_value_for_new_metadata_source_flag() {
+test_rejects_unknown_argument() {
   reload_args_lib
   local output status
   set +e
-  output=$(e2e_parse_args --metadata-source base-dir 2>&1)
+  output=$(e2e_parse_args --unknown-flag 2>&1)
   status=$?
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "invalid --metadata-source value"
-}
-
-test_rejects_invalid_metadata_type_flag() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_args --metadata-type nope 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "1"
-  assert_contains "${output}" "invalid --metadata-type value"
-}
-
-test_rejects_legacy_metadata_flag() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_args --metadata bundle 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "1"
-  assert_contains "${output}" "unknown argument: --metadata"
-}
-
-test_rejects_legacy_managed_server_auth_flags() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_args --managed-server-oauth2 false 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "1"
-  assert_contains "${output}" "unknown argument: --managed-server-oauth2"
+  assert_contains "${output}" "unknown argument: --unknown-flag"
 }
 
 test_rejects_managed_server_none() {
@@ -201,12 +139,11 @@ test_rejects_managed_server_none() {
   status=$?
   set -e
 
-  [[ -z "${output}" ]] || true
   assert_status "${status}" "1"
   assert_contains "${output}" "--managed-server none is not supported"
 }
 
-test_rejects_managed_server_proxy_without_urls() {
+test_rejects_proxy_mode_external_without_urls() {
   reload_args_lib
   local output status
   set +e
@@ -218,7 +155,7 @@ test_rejects_managed_server_proxy_without_urls() {
   assert_contains "${output}" "--proxy-mode external requires DECLAREST_E2E_PROXY_HTTP_URL and/or DECLAREST_E2E_PROXY_HTTPS_URL"
 }
 
-test_rejects_managed_server_proxy_auth_type_without_proxy() {
+test_rejects_proxy_auth_type_without_proxy() {
   reload_args_lib
   local output status
   set +e
@@ -230,7 +167,7 @@ test_rejects_managed_server_proxy_auth_type_without_proxy() {
   assert_contains "${output}" "--proxy-auth-type requires --proxy-mode local or external"
 }
 
-test_rejects_managed_server_proxy_auth_type_basic_without_credentials() {
+test_rejects_proxy_auth_type_basic_without_credentials() {
   reload_args_lib
   local output status
   E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
@@ -243,7 +180,7 @@ test_rejects_managed_server_proxy_auth_type_basic_without_credentials() {
   assert_contains "${output}" "proxy auth-type basic requires DECLAREST_E2E_PROXY_AUTH_USERNAME and DECLAREST_E2E_PROXY_AUTH_PASSWORD"
 }
 
-test_rejects_managed_server_proxy_auth_type_prompt_with_inline_credentials() {
+test_rejects_proxy_auth_type_prompt_with_inline_credentials() {
   reload_args_lib
   local output status
   E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
@@ -256,20 +193,6 @@ test_rejects_managed_server_proxy_auth_type_prompt_with_inline_credentials() {
 
   assert_status "${status}" "1"
   assert_contains "${output}" "proxy auth-type prompt cannot be combined with DECLAREST_E2E_PROXY_AUTH_USERNAME or DECLAREST_E2E_PROXY_AUTH_PASSWORD"
-}
-
-test_rejects_conflicting_canonical_and_legacy_proxy_env_aliases() {
-  reload_args_lib
-  local output status
-  E2E_PROXY_HTTP_URL='http://proxy-one.example.com:3128'
-  E2E_LEGACY_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy-two.example.com:3128'
-  set +e
-  output=$(e2e_parse_args --proxy-mode external 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "1"
-  assert_contains "${output}" "conflicting proxy environment values for http URL"
 }
 
 test_cleanup_parser_treats_validate_mode_as_workload_flag() {
@@ -289,42 +212,6 @@ test_cleanup_parser_treats_metadata_source_flag_as_workload_flag() {
   local output status
   set +e
   output=$(e2e_parse_cleanup_args --clean-all --metadata-source bundle 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "2"
-  assert_contains "${output}" "cannot be combined with workload flags"
-}
-
-test_cleanup_parser_treats_legacy_metadata_type_flag_as_workload_flag() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_cleanup_args --clean-all --metadata-type bundle 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "2"
-  assert_contains "${output}" "cannot be combined with workload flags"
-}
-
-test_cleanup_parser_treats_managed_server_proxy_flag_as_workload_flag() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_cleanup_args --clean-all --managed-server-proxy true 2>&1)
-  status=$?
-  set -e
-
-  assert_status "${status}" "2"
-  assert_contains "${output}" "cannot be combined with workload flags"
-}
-
-test_cleanup_parser_treats_managed_server_proxy_auth_type_flag_as_workload_flag() {
-  reload_args_lib
-  local output status
-  set +e
-  output=$(e2e_parse_cleanup_args --clean-all --managed-server-proxy-auth-type prompt 2>&1)
   status=$?
   set -e
 
@@ -372,7 +259,7 @@ test_cleanup_parser_treats_platform_flag_as_workload_flag() {
   assert_contains "${output}" "cannot be combined with workload flags"
 }
 
-test_usage_mentions_validate_flag_and_no_none_managed_server() {
+test_usage_mentions_validate_flag_and_canonical_options() {
   reload_args_lib
   local output
   output=$(e2e_usage)
@@ -380,12 +267,9 @@ test_usage_mentions_validate_flag_and_no_none_managed_server() {
   assert_contains "${output}" "--validate-components"
   assert_contains "${output}" "--platform <compose|kubernetes>"
   assert_contains "${output}" "--metadata-source <bundle|dir>"
-  assert_contains "${output}" "legacy alias: --metadata-type <bundle|base-dir>"
   assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header|prompt>"
   assert_contains "${output}" "--proxy-mode <none|local|external>"
   assert_contains "${output}" "--proxy-auth-type <none|basic|prompt>"
-  assert_contains "${output}" "--managed-server-proxy [<true|false>]"
-  assert_contains "${output}" "--managed-server-proxy-auth-type <basic|prompt>"
   assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
   assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
   assert_contains "${output}" "DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>"
@@ -396,7 +280,7 @@ test_usage_mentions_validate_flag_and_no_none_managed_server() {
 }
 
 test_parses_validate_components_flag
-test_defaults_metadata_type_to_bundle
+test_defaults_metadata_source_to_bundle
 test_defaults_platform_to_kubernetes
 test_parses_platform_flag
 test_parses_operator_profile
@@ -404,28 +288,19 @@ test_parses_operator_automated_profile
 test_rejects_invalid_platform_flag
 test_parses_managed_server_auth_type_flag
 test_parses_managed_server_auth_type_prompt_flag
-test_parses_managed_server_proxy_flag
-test_parses_managed_server_proxy_auth_type_flag
 test_parses_proxy_mode_flag
 test_parses_proxy_auth_type_flag
 test_parses_metadata_source_flag
-test_parses_legacy_metadata_type_alias
+test_parses_metadata_source_dir_flag
 test_rejects_invalid_metadata_source_flag
-test_rejects_base_dir_value_for_new_metadata_source_flag
-test_rejects_invalid_metadata_type_flag
-test_rejects_legacy_metadata_flag
-test_rejects_legacy_managed_server_auth_flags
+test_rejects_unknown_argument
 test_rejects_managed_server_none
-test_rejects_managed_server_proxy_without_urls
-test_rejects_managed_server_proxy_auth_type_without_proxy
-test_rejects_managed_server_proxy_auth_type_basic_without_credentials
-test_rejects_managed_server_proxy_auth_type_prompt_with_inline_credentials
-test_rejects_conflicting_canonical_and_legacy_proxy_env_aliases
+test_rejects_proxy_mode_external_without_urls
+test_rejects_proxy_auth_type_without_proxy
+test_rejects_proxy_auth_type_basic_without_credentials
+test_rejects_proxy_auth_type_prompt_with_inline_credentials
 test_cleanup_parser_treats_validate_mode_as_workload_flag
 test_cleanup_parser_treats_metadata_source_flag_as_workload_flag
-test_cleanup_parser_treats_legacy_metadata_type_flag_as_workload_flag
-test_cleanup_parser_treats_managed_server_proxy_flag_as_workload_flag
-test_cleanup_parser_treats_managed_server_proxy_auth_type_flag_as_workload_flag
 test_cleanup_parser_treats_proxy_mode_and_auth_flags_as_workload_flags
 test_cleanup_parser_treats_platform_flag_as_workload_flag
-test_usage_mentions_validate_flag_and_no_none_managed_server
+test_usage_mentions_validate_flag_and_canonical_options

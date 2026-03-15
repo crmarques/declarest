@@ -283,7 +283,7 @@ ui_execution_parameter_source() {
     proxy-auth-type)
       if [[ "${E2E_PROXY_MODE:-none}" == 'none' ]]; then
         printf 'not-applicable\n'
-      elif ui_parameter_is_explicit 'proxy-auth-type' || ui_parameter_is_explicit 'managed-server-proxy-auth-type'; then
+      elif ui_parameter_is_explicit 'proxy-auth-type'; then
         printf 'explicit\n'
       elif [[ "$(e2e_effective_proxy_auth_type)" == 'basic' ]] && e2e_has_proxy_basic_auth_values; then
         printf 'env\n'

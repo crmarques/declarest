@@ -669,8 +669,6 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["managed-server-connection=${E2E_MANAGED_SERVER_CONNECTION}"]=1
   E2E_CAPABILITY_SET["managed-server-auth-type=${E2E_MANAGED_SERVER_AUTH_TYPE}"]=1
   E2E_CAPABILITY_SET["managed-server-mtls=${E2E_MANAGED_SERVER_MTLS}"]=1
-  E2E_CAPABILITY_SET["managed-server-proxy=${E2E_MANAGED_SERVER_PROXY}"]=1
-  E2E_CAPABILITY_SET["managed-server-proxy-auth-type=$(e2e_effective_proxy_auth_type)"]=1
   E2E_CAPABILITY_SET["proxy-mode=${E2E_PROXY_MODE:-none}"]=1
   E2E_CAPABILITY_SET["proxy-auth-type=$(e2e_effective_proxy_auth_type)"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
@@ -691,10 +689,6 @@ e2e_build_capabilities() {
 
   if [[ "${E2E_MANAGED_SERVER}" != 'none' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
     E2E_CAPABILITY_SET['has-managed-server-mtls']=1
-  fi
-
-  if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
-    E2E_CAPABILITY_SET['has-managed-server-proxy']=1
   fi
 
   if [[ "${E2E_PROXY_MODE:-none}" != 'none' ]]; then

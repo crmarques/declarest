@@ -56,8 +56,10 @@ func TestResolveConfiguredAuthOverridesEnvironmentCredentials(t *testing.T) {
 
 	cfg, disabled, err := Resolve("managedServer.http.proxy", &config.HTTPProxy{
 		Auth: &config.ProxyAuth{
-			Username: "ctx-user",
-			Password: "ctx-pass",
+			Basic: &config.BasicAuth{
+				Username: "ctx-user",
+				Password: "ctx-pass",
+			},
 		},
 	})
 	if err != nil {

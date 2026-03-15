@@ -129,7 +129,7 @@ func populateSecretStoreConfig(
 			if err != nil {
 				return err
 			}
-			proxyConfig.Auth = &config.ProxyAuth{Username: username, Password: password}
+			proxyConfig.Auth = &config.ProxyAuth{Basic: &config.BasicAuth{Username: username, Password: password}}
 		}
 		vaultConfig.Proxy = proxyConfig
 	}

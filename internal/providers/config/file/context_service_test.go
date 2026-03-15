@@ -284,7 +284,9 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 						Proxy: &config.HTTPProxy{
 							HTTPURL: "http://proxy.example.com:3128",
 							Auth: &config.ProxyAuth{
-								Username: "user",
+								Basic: &config.BasicAuth{
+									Username: "user",
+								},
 							},
 						},
 					},
@@ -1199,8 +1201,8 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 			"managedServer.http.proxy.httpURL":       "http://proxy.example.com:3128",
 			"managedServer.http.proxy.httpsURL":      "https://proxy.example.com:3128",
 			"managedServer.http.proxy.noProxy":       "localhost,127.0.0.1",
-			"managedServer.http.proxy.auth.username": "proxy-user",
-			"managedServer.http.proxy.auth.password": "proxy-pass",
+			"managedServer.http.proxy.auth.basic.username": "proxy-user",
+			"managedServer.http.proxy.auth.basic.password": "proxy-pass",
 		},
 	})
 	if err != nil {
@@ -1222,11 +1224,14 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 	if resolved.ManagedServer.HTTP.Proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
 	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth.Username != "proxy-user" {
-		t.Fatalf("expected proxy auth username override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Username)
+	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
+		t.Fatal("expected proxy auth basic configuration")
 	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth.Password != "proxy-pass" {
-		t.Fatalf("expected proxy auth password override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Password)
+	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Username != "proxy-user" {
+		t.Fatalf("expected proxy auth username override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Username)
+	}
+	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Password != "proxy-pass" {
+		t.Fatalf("expected proxy auth password override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Password)
 	}
 }
 
@@ -1444,11 +1449,14 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 	if proxy.Auth == nil {
 		t.Fatalf("expected %s proxy auth to be configured", component)
 	}
-	if proxy.Auth.Username != username {
-		t.Fatalf("expected %s proxy auth username %q, got %q", component, username, proxy.Auth.Username)
+	if proxy.Auth.Basic == nil {
+		t.Fatalf("expected %s proxy auth basic to be configured", component)
 	}
-	if proxy.Auth.Password != password {
-		t.Fatalf("expected %s proxy auth password %q, got %q", component, password, proxy.Auth.Password)
+	if proxy.Auth.Basic.Username != username {
+		t.Fatalf("expected %s proxy auth username %q, got %q", component, username, proxy.Auth.Basic.Username)
+	}
+	if proxy.Auth.Basic.Password != password {
+		t.Fatalf("expected %s proxy auth password %q, got %q", component, password, proxy.Auth.Basic.Password)
 	}
 }
 
@@ -1704,8 +1712,9 @@ contexts:
           httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
-            username: proxy-user
-            password: proxy-pass
+            basic:
+              username: proxy-user
+              password: proxy-pass
     metadata:
       baseDir: /tmp/metadata
 currentContext: shared
@@ -1737,8 +1746,9 @@ contexts:
           httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
-            username: proxy-user
-            password: proxy-pass
+            basic:
+              username: proxy-user
+              password: proxy-pass
     secretStore:
       vault:
         address: https://vault.example.com
@@ -1776,8 +1786,9 @@ contexts:
           httpsURL: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
-            username: proxy-user
-            password: proxy-pass
+            basic:
+              username: proxy-user
+              password: proxy-pass
     secretStore:
       vault:
         address: https://vault.example.com

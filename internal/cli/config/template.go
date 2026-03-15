@@ -66,10 +66,11 @@ contexts:
         #   httpsURL: http://proxy.example.com:3128
         #   # Optional comma-separated bypass rules.
         #   noProxy: localhost,127.0.0.1,.svc.cluster.local
-        #   # Optional proxy auth.
+        #   # Optional proxy auth (mutually exclusive: basic or prompt).
         #   auth:
-        #     username: proxy-user
-        #     password: proxy-pass
+        #     basic:
+        #       username: proxy-user
+        #       password: proxy-pass
         #     # prompt:
         #     #   keepCredentialsForSession: true
 

@@ -44,39 +44,36 @@ test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector()
   fi
 }
 
-test_requirement_requested_explicitly_tracks_managed_server_proxy_capability() {
+test_requirement_requested_explicitly_tracks_proxy_capability() {
   load_case_libs
 
   E2E_EXPLICIT=()
   E2E_PROXY_MODE='external'
-  E2E_MANAGED_SERVER_PROXY='true'
 
-  if case_requirement_requested_explicitly 'has-managed-server-proxy'; then
-    fail "expected implicit managed-server proxy selection not to be marked explicit"
+  if case_requirement_requested_explicitly 'has-proxy'; then
+    fail "expected implicit proxy selection not to be marked explicit"
   fi
 
-  e2e_mark_explicit 'managed-server-proxy'
-  if ! case_requirement_requested_explicitly 'has-managed-server-proxy'; then
-    fail "expected explicit managed-server proxy selection to be marked explicit"
+  e2e_mark_explicit 'proxy-mode'
+  if ! case_requirement_requested_explicitly 'has-proxy'; then
+    fail "expected explicit proxy selection to be marked explicit"
   fi
 }
 
-test_requirement_requested_explicitly_tracks_managed_server_proxy_auth_type_selector() {
+test_requirement_requested_explicitly_tracks_proxy_auth_type_selector() {
   load_case_libs
 
   E2E_EXPLICIT=()
   E2E_PROXY_MODE='external'
   E2E_PROXY_AUTH_TYPE='prompt'
-  E2E_MANAGED_SERVER_PROXY='true'
-  E2E_MANAGED_SERVER_PROXY_AUTH_TYPE='prompt'
 
-  if case_requirement_requested_explicitly 'managed-server-proxy-auth-type=prompt'; then
-    fail "expected implicit managed-server proxy auth-type selection not to be marked explicit"
+  if case_requirement_requested_explicitly 'proxy-auth-type=prompt'; then
+    fail "expected implicit proxy auth-type selection not to be marked explicit"
   fi
 
-  e2e_mark_explicit 'managed-server-proxy-auth-type'
-  if ! case_requirement_requested_explicitly 'managed-server-proxy-auth-type=prompt'; then
-    fail "expected explicit managed-server proxy auth-type selection to be marked explicit"
+  e2e_mark_explicit 'proxy-auth-type'
+  if ! case_requirement_requested_explicitly 'proxy-auth-type=prompt'; then
+    fail "expected explicit proxy auth-type selection to be marked explicit"
   fi
 }
 
@@ -223,8 +220,8 @@ EOF
 
 test_requirement_requested_explicitly_tracks_capability_selection
 test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector
-test_requirement_requested_explicitly_tracks_managed_server_proxy_capability
-test_requirement_requested_explicitly_tracks_managed_server_proxy_auth_type_selector
+test_requirement_requested_explicitly_tracks_proxy_capability
+test_requirement_requested_explicitly_tracks_proxy_auth_type_selector
 test_requirement_requested_explicitly_tracks_generic_proxy_capability_and_selector
 test_collect_case_files_is_deterministic_global_then_component
 test_collect_case_files_filters_by_profile_family

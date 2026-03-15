@@ -384,12 +384,12 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 		return nil, err
 	}
 	if includeAuth {
-		authMethod, inputErr := prompter.Select(command, "Select proxy auth method", []string{"credentials", "prompt"})
+		authMethod, inputErr := prompter.Select(command, "Select proxy auth method", []string{"basic", "prompt"})
 		if inputErr != nil {
 			return nil, inputErr
 		}
 		switch strings.TrimSpace(authMethod) {
-		case "credentials":
+		case "basic":
 			username, authErr := promptRequiredInput(command, prompter, "Proxy auth username: ", "proxy auth username")
 			if authErr != nil {
 				return nil, authErr
@@ -399,8 +399,10 @@ func promptHTTPProxy(command *cobra.Command, prompter configPrompter) (*configdo
 				return nil, authErr
 			}
 			proxy.Auth = &configdomain.ProxyAuth{
-				Username: username,
-				Password: password,
+				Basic: &configdomain.BasicAuth{
+					Username: username,
+					Password: password,
+				},
 			}
 		case "prompt":
 			prompt, authErr := promptPromptAuth(command, prompter, "Proxy prompt auth")

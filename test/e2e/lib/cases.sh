@@ -141,8 +141,6 @@ case_selected_value_for_key() {
     managed-server-connection) printf '%s\n' "${E2E_MANAGED_SERVER_CONNECTION}" ;;
     managed-server-auth-type) printf '%s\n' "${E2E_MANAGED_SERVER_AUTH_TYPE}" ;;
     managed-server-mtls) printf '%s\n' "${E2E_MANAGED_SERVER_MTLS}" ;;
-    managed-server-proxy) printf '%s\n' "${E2E_MANAGED_SERVER_PROXY}" ;;
-    managed-server-proxy-auth-type) printf '%s\n' "$(e2e_effective_proxy_auth_type)" ;;
     proxy-mode) printf '%s\n' "${E2E_PROXY_MODE:-none}" ;;
     proxy-auth-type) printf '%s\n' "$(e2e_effective_proxy_auth_type)" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
@@ -198,12 +196,8 @@ case_requirement_requested_explicitly() {
       e2e_is_explicit 'managed-server-mtls' && [[ "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]
       return
       ;;
-    has-managed-server-proxy)
-      (e2e_is_explicit 'managed-server-proxy' || e2e_is_explicit 'proxy-mode') && [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]
-      return
-      ;;
     has-proxy)
-      (e2e_is_explicit 'proxy-mode' || e2e_is_explicit 'managed-server-proxy') && [[ "${E2E_PROXY_MODE:-none}" != 'none' ]]
+      e2e_is_explicit 'proxy-mode' && [[ "${E2E_PROXY_MODE:-none}" != 'none' ]]
       return
       ;;
     remote-selection)

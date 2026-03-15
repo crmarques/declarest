@@ -374,24 +374,24 @@ Expected outputs:
 2. Local OpenAPI wiring remains enabled.
 3. Checked-in component metadata directories remain unchanged after the run.
 
-### Example 34: E2E Metadata Source Legacy Alias (Corner)
-Goal: preserve compatibility for older metadata mode flag spelling while normalizing to the canonical metadata-source contract.
+### Example 34: E2E Metadata Source Validation (Corner)
+Goal: reject invalid metadata-source selections before runtime preparation.
 
 Inputs:
-1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-type base-dir`.
+1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source nope`.
 2. Selected managed-server component with checked-in `metadata/` fixtures.
 
 Execution:
-1. Runner parses the legacy flag/value pair and normalizes the effective metadata source to `dir`.
-2. Runner prepares the same run-scoped metadata workspace used by `--metadata-source dir`.
-3. Final summary renders the canonical execution parameter label/value as `metadata-source: dir`.
+1. Runner parses the metadata-source flag before runtime preparation.
+2. Runner validates the requested value against the canonical `bundle|dir` set.
+3. Runner exits before preparing the runtime workspace.
 
 Expected outputs:
-1. Runtime behavior matches `--metadata-source dir`.
-2. Summary output reports the canonical metadata-source selection.
+1. Command fails with `ValidationError`.
+2. Error output names the allowed metadata-source values.
 
 Failure expectation:
-1. `run-e2e.sh --metadata-source base-dir` fails with `ValidationError` before runtime startup.
+1. No runtime directories, component startup, or context generation occurs.
 
 ### Example 12: Metadata Sidecar YAML Preference With JSON Fallback
 Goal: persist metadata in YAML by default while keeping existing JSON sidecars readable.
