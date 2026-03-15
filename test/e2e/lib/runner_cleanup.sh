@@ -643,11 +643,16 @@ e2e_cleanup_all_runs() {
     return 0
   fi
 
-  e2e_kill_all_runner_processes || true
+  local -a cleanup_pids=()
+  local cleanup_pid
+  for run_id in "${run_ids[@]}"; do
+    e2e_cleanup_run_id "${run_id}" &
+    cleanup_pids+=($!)
+  done
 
   local failed=0
-  for run_id in "${run_ids[@]}"; do
-    e2e_cleanup_run_id "${run_id}" || failed=1
+  for cleanup_pid in "${cleanup_pids[@]}"; do
+    wait "${cleanup_pid}" || failed=1
   done
 
   if ((failed == 1)); then
