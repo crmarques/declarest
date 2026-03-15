@@ -593,6 +593,11 @@ e2e_validate_selection() {
     return 1
   fi
 
+  if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]] && ! e2e_component_exists 'proxy' "$(e2e_proxy_component_name)"; then
+    e2e_die "unknown proxy component: $(e2e_proxy_component_name)"
+    return 1
+  fi
+
   if [[ "${E2E_MANAGED_SERVER}" != 'none' ]] && ! e2e_component_supports_connection 'managed-server' "${E2E_MANAGED_SERVER}" "${E2E_MANAGED_SERVER_CONNECTION}"; then
     e2e_die "managed-server ${E2E_MANAGED_SERVER} does not support connection ${E2E_MANAGED_SERVER_CONNECTION}"
     return 1
@@ -632,6 +637,10 @@ e2e_build_selected_components() {
     E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'secret-provider' "${E2E_SECRET_PROVIDER}")")
   fi
 
+  if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
+    E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_proxy_component_key)")
+  fi
+
   E2E_SELECTED_COMPONENT_KEYS+=("$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")")
 }
 
@@ -661,6 +670,9 @@ e2e_build_capabilities() {
   E2E_CAPABILITY_SET["managed-server-auth-type=${E2E_MANAGED_SERVER_AUTH_TYPE}"]=1
   E2E_CAPABILITY_SET["managed-server-mtls=${E2E_MANAGED_SERVER_MTLS}"]=1
   E2E_CAPABILITY_SET["managed-server-proxy=${E2E_MANAGED_SERVER_PROXY}"]=1
+  E2E_CAPABILITY_SET["managed-server-proxy-auth-type=$(e2e_effective_proxy_auth_type)"]=1
+  E2E_CAPABILITY_SET["proxy-mode=${E2E_PROXY_MODE:-none}"]=1
+  E2E_CAPABILITY_SET["proxy-auth-type=$(e2e_effective_proxy_auth_type)"]=1
   E2E_CAPABILITY_SET["secret-provider=${E2E_SECRET_PROVIDER}"]=1
   E2E_CAPABILITY_SET["secret-provider-connection=${E2E_SECRET_PROVIDER_CONNECTION}"]=1
 
@@ -683,6 +695,10 @@ e2e_build_capabilities() {
 
   if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
     E2E_CAPABILITY_SET['has-managed-server-proxy']=1
+  fi
+
+  if [[ "${E2E_PROXY_MODE:-none}" != 'none' ]]; then
+    E2E_CAPABILITY_SET['has-proxy']=1
   fi
 
   if [[ "${E2E_GIT_PROVIDER_CONNECTION}" == 'remote' || "${E2E_MANAGED_SERVER_CONNECTION}" == 'remote' || "${E2E_SECRET_PROVIDER_CONNECTION}" == 'remote' ]]; then

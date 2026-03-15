@@ -18,6 +18,14 @@ declare -ag E2E_COMPONENT_KEYS=()
 declare -ag E2E_SELECTED_COMPONENT_KEYS=()
 declare -ag E2E_STARTED_COMPONENT_KEYS=()
 
+e2e_proxy_component_name() {
+  printf 'forward-proxy\n'
+}
+
+e2e_proxy_component_key() {
+  e2e_component_key 'proxy' "$(e2e_proxy_component_name)"
+}
+
 e2e_managed_server_security_feature_is_auth() {
   local feature=$1
 

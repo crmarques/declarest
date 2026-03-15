@@ -142,7 +142,9 @@ case_selected_value_for_key() {
     managed-server-auth-type) printf '%s\n' "${E2E_MANAGED_SERVER_AUTH_TYPE}" ;;
     managed-server-mtls) printf '%s\n' "${E2E_MANAGED_SERVER_MTLS}" ;;
     managed-server-proxy) printf '%s\n' "${E2E_MANAGED_SERVER_PROXY}" ;;
-    managed-server-proxy-auth-type) printf '%s\n' "$(e2e_effective_managed_server_proxy_auth_type)" ;;
+    managed-server-proxy-auth-type) printf '%s\n' "$(e2e_effective_proxy_auth_type)" ;;
+    proxy-mode) printf '%s\n' "${E2E_PROXY_MODE:-none}" ;;
+    proxy-auth-type) printf '%s\n' "$(e2e_effective_proxy_auth_type)" ;;
     repo-type) printf '%s\n' "${E2E_REPO_TYPE}" ;;
     git-provider) printf '%s\n' "${E2E_GIT_PROVIDER}" ;;
     git-provider-connection) printf '%s\n' "${E2E_GIT_PROVIDER_CONNECTION}" ;;
@@ -197,7 +199,11 @@ case_requirement_requested_explicitly() {
       return
       ;;
     has-managed-server-proxy)
-      e2e_is_explicit 'managed-server-proxy' && [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]
+      (e2e_is_explicit 'managed-server-proxy' || e2e_is_explicit 'proxy-mode') && [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]
+      return
+      ;;
+    has-proxy)
+      (e2e_is_explicit 'proxy-mode' || e2e_is_explicit 'managed-server-proxy') && [[ "${E2E_PROXY_MODE:-none}" != 'none' ]]
       return
       ;;
     remote-selection)
@@ -322,7 +328,7 @@ e2e_run_single_case() {
       "${E2E_MANAGED_SERVER_CONNECTION}" \
       "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" \
       "${E2E_MANAGED_SERVER_MTLS:-false}" \
-      "${E2E_MANAGED_SERVER_PROXY:-false}" \
+      "${E2E_PROXY_MODE:-none}/$(e2e_effective_proxy_auth_type)" \
       "${E2E_GIT_PROVIDER:-none}" \
       "${E2E_GIT_PROVIDER_CONNECTION}" \
       "${E2E_SECRET_PROVIDER}" \

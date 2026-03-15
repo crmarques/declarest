@@ -280,12 +280,12 @@ ui_execution_parameter_source() {
       fi
       return 0
       ;;
-    managed-server-proxy-auth-type)
-      if [[ "${E2E_MANAGED_SERVER_PROXY:-false}" != 'true' ]]; then
+    proxy-auth-type)
+      if [[ "${E2E_PROXY_MODE:-none}" == 'none' ]]; then
         printf 'not-applicable\n'
-      elif ui_parameter_is_explicit 'managed-server-proxy-auth-type'; then
+      elif ui_parameter_is_explicit 'proxy-auth-type' || ui_parameter_is_explicit 'managed-server-proxy-auth-type'; then
         printf 'explicit\n'
-      elif [[ "$(e2e_effective_managed_server_proxy_auth_type)" == 'basic' ]]; then
+      elif [[ "$(e2e_effective_proxy_auth_type)" == 'basic' ]] && e2e_has_proxy_basic_auth_values; then
         printf 'env\n'
       else
         printf 'default\n'
@@ -357,14 +357,14 @@ ui_execution_parameter_line() {
 ui_execution_parameter_lines() {
   local git_provider='none'
   local git_provider_connection='n/a'
-  local managed_server_proxy_auth_type='none'
+  local proxy_auth_type='none'
 
   if [[ -n "${E2E_GIT_PROVIDER:-}" ]]; then
     git_provider="${E2E_GIT_PROVIDER}"
     git_provider_connection="${E2E_GIT_PROVIDER_CONNECTION:-local}"
   fi
 
-  managed_server_proxy_auth_type=$(e2e_effective_managed_server_proxy_auth_type)
+  proxy_auth_type=$(e2e_effective_proxy_auth_type)
 
   ui_execution_parameter_line 'profile' "${E2E_PROFILE:-n/a}" "$(ui_execution_parameter_source 'profile')"
   ui_execution_parameter_line 'platform' "${E2E_PLATFORM:-n/a}" "$(ui_execution_parameter_source 'platform')"
@@ -373,8 +373,8 @@ ui_execution_parameter_lines() {
   ui_execution_parameter_line 'managed-server-connection' "${E2E_MANAGED_SERVER_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'managed-server-connection')"
   ui_execution_parameter_line 'managed-server-auth-type' "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" "$(ui_execution_parameter_source 'managed-server-auth-type')"
   ui_execution_parameter_line 'managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS:-false}" "$(ui_execution_parameter_source 'managed-server-mtls')"
-  ui_execution_parameter_line 'managed-server-proxy' "${E2E_MANAGED_SERVER_PROXY:-false}" "$(ui_execution_parameter_source 'managed-server-proxy')"
-  ui_execution_parameter_line 'managed-server-proxy-auth-type' "${managed_server_proxy_auth_type}" "$(ui_execution_parameter_source 'managed-server-proxy-auth-type')"
+  ui_execution_parameter_line 'proxy-mode' "${E2E_PROXY_MODE:-none}" "$(ui_execution_parameter_source 'proxy-mode')"
+  ui_execution_parameter_line 'proxy-auth-type' "${proxy_auth_type}" "$(ui_execution_parameter_source 'proxy-auth-type')"
   ui_execution_parameter_line 'repository-type' "${E2E_REPO_TYPE:-n/a}" "$(ui_execution_parameter_source 'repository-type')"
   ui_execution_parameter_line 'git-provider' "${git_provider}" "$(ui_execution_parameter_source 'git-provider')"
   ui_execution_parameter_line 'git-provider-connection' "${git_provider_connection}" "$(ui_execution_parameter_source 'git-provider-connection')"

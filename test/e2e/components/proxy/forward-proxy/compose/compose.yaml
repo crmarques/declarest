@@ -1,0 +1,17 @@
+services:
+  forward-proxy:
+    image: docker.io/python:3.12-alpine
+    network_mode: host
+    command:
+      - python
+      - /workspace/declarest/test/e2e/components/proxy/forward-proxy/app/proxy.py
+    environment:
+      FORWARD_PROXY_BIND_HOST: 0.0.0.0
+      FORWARD_PROXY_BIND_PORT: "${PROXY_HOST_PORT}"
+      FORWARD_PROXY_ACCESS_LOG: /var/run/declarest-proxy/access.log
+      FORWARD_PROXY_AUTH_MODE: "${PROXY_SERVER_AUTH_MODE}"
+      FORWARD_PROXY_AUTH_USERNAME: "${PROXY_AUTH_USERNAME}"
+      FORWARD_PROXY_AUTH_PASSWORD: "${PROXY_AUTH_PASSWORD}"
+    volumes:
+      - "${PROXY_REPO_ROOT}:/workspace/declarest:ro,Z"
+      - "${PROXY_RUNTIME_DIR}:/var/run/declarest-proxy:Z"

@@ -40,6 +40,7 @@ e2e_component_export_env() {
   export E2E_CONTEXT_DIR
   export E2E_CONTEXT_FILE
   export E2E_PLATFORM
+  export E2E_CONTAINER_ENGINE
   export E2E_KUBECONFIG
   export E2E_KIND_CLUSTER_NAME
   export E2E_K8S_NAMESPACE
@@ -49,6 +50,13 @@ e2e_component_export_env() {
   export E2E_MANAGED_SERVER_CONNECTION
   export E2E_MANAGED_SERVER_AUTH_TYPE
   export E2E_MANAGED_SERVER_MTLS
+  export E2E_PROXY_MODE
+  export E2E_PROXY_AUTH_TYPE
+  export E2E_PROXY_HTTP_URL
+  export E2E_PROXY_HTTPS_URL
+  export E2E_PROXY_NO_PROXY
+  export E2E_PROXY_AUTH_USERNAME
+  export E2E_PROXY_AUTH_PASSWORD
   export E2E_REPO_TYPE
   export E2E_GIT_PROVIDER
   export E2E_GIT_PROVIDER_CONNECTION

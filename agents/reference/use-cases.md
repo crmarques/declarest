@@ -300,25 +300,25 @@ Expected outputs:
 3. The raw metadata `resource.defaults` block and its referenced defaults artifacts remain unchanged.
 
 ### Example 14: E2E Manual Handoff With Prompt Auth
-Goal: generate a manual E2E context that defers managed-server and proxy credentials to runtime prompts instead of writing plaintext credentials into the context file.
+Goal: generate a manual E2E context that defers proxy credentials to runtime prompts instead of writing plaintext proxy credentials into the context file.
 
 Inputs:
-1. `run-e2e.sh --profile cli-manual --managed-server simple-api-server --managed-server-auth-type prompt --managed-server-proxy true --managed-server-proxy-auth-type prompt`.
-2. `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://proxy.example:3128`.
-3. A managed-server component that supports `basic-auth`.
+1. `run-e2e.sh --profile cli-manual --platform compose --proxy-mode local --proxy-auth-type prompt`.
+2. Default local managed-server selection (`simple-api-server`) and auto-selected helper component `proxy:forward-proxy`.
 
 Execution:
-1. Runner validates that the selected managed-server component supports `basic-auth` capability before startup continues.
-2. Component init/configure-auth hooks prepare any local component state needed for health checks or manual handoff without mutating the generated auth mode.
-3. Context generation writes `managedServer.http.auth.prompt` and `managedServer.http.proxy.auth.prompt` blocks while omitting inline managed-server and proxy credentials.
-4. The first manual `declarest-e2e` command prompts for the managed-server and proxy credentials when no cached session credentials are available.
+1. Runner validates that proxy prompt auth is being used only with `cli-manual`.
+2. Proxy helper component generates run-scoped proxy credentials for the local forward proxy and writes a `0600` helper file with `DECLAREST_PROMPT_AUTH_*_PROXY_AUTH_*` exports.
+3. Context generation writes prompt-backed `*.proxy.auth.prompt` blocks while omitting inline proxy credentials.
+4. Manual handoff output prints `Prompt helper: source .../proxy/prompt-auth.env`.
 
 Expected outputs:
-1. The generated context file contains `prompt` auth blocks and no plaintext managed-server or proxy credentials.
+1. The generated context file contains proxy `prompt` auth blocks and no plaintext proxy credentials.
 2. Manual handoff output remains usable without editing the generated context file.
+3. Sourcing the helper file pre-seeds prompt auth env vars for managed-server, git remote, Vault, and metadata proxy targets.
 
 Failure expectation:
-1. Selecting `--managed-server-auth-type prompt` for a managed-server component without `basic-auth` capability, or combining `--managed-server-proxy-auth-type prompt` with inline proxy username/password env vars, fails with actionable validation output before workload execution.
+1. Combining `--proxy-auth-type prompt` with inline proxy username/password env vars, or selecting proxy prompt auth outside `cli-manual`, fails with actionable validation output before workload execution.
 
 ### Example 14: E2E Dependency-Aware Parallel Component Hooks
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
@@ -740,22 +740,23 @@ Failure expectation:
 1. Step 3 fails with `ValidationError` before mutation because auto-commit commands require a clean git worktree.
 2. Step 4 fails with `ValidationError` because `--message` cannot be empty after trimming.
 
-### Example 19: Managed-Server Proxy Context Injection
-Goal: ensure E2E proxy selection writes a complete `managed-server.http.proxy` block in generated contexts.
+### Example 19: Shared E2E Proxy Context Injection
+Goal: ensure E2E shared proxy selection writes complete proxy blocks into every eligible CLI context section.
 
 Inputs:
-1. `run-e2e.sh --managed-server-proxy true`.
-2. At least one proxy URL env var (`DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL` or `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`).
-3. Optional proxy auth vars (`DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME` and `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`).
+1. `run-e2e.sh --proxy-mode external`.
+2. At least one proxy URL env var (`DECLAREST_E2E_PROXY_HTTP_URL` or `DECLAREST_E2E_PROXY_HTTPS_URL`).
+3. Optional proxy auth vars (`DECLAREST_E2E_PROXY_AUTH_USERNAME` and `DECLAREST_E2E_PROXY_AUTH_PASSWORD`).
 
 Execution:
-1. Start the runner with `--managed-server-proxy true` and proxy env vars set.
+1. Start the runner with `--proxy-mode external` and proxy env vars set.
 2. Let context assembly complete and inspect `test/e2e/.runs/<run-id>/contexts.yaml`.
-3. Repeat with `--managed-server-proxy true` and no proxy URL env vars.
+3. Repeat with `--proxy-mode external` and no proxy URL env vars.
 
 Expected outputs:
-1. Step 2 context contains `managed-server.http.proxy` with configured `http-url`/`https-url`, optional `no-proxy`, and optional `auth` fields.
-2. Resource-server auth and other context blocks remain unchanged.
+1. Step 2 context contains explicit proxy blocks for `managedServer.http`, `repository.git.remote` when the remote URL uses `http|https`, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
+2. Each injected proxy block contains configured `httpURL`/`httpsURL`, optional `noProxy`, and optional `auth` fields.
+3. Unrelated auth and TLS blocks remain unchanged.
 
 Failure expectation:
 1. Step 3 fails argument validation before runtime startup with actionable guidance about missing proxy URL env vars.

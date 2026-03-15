@@ -6,13 +6,25 @@ E2E_MANAGED_SERVER='simple-api-server'
 E2E_MANAGED_SERVER_CONNECTION='local'
 E2E_MANAGED_SERVER_AUTH_TYPE=''
 E2E_MANAGED_SERVER_MTLS='false'
+E2E_PROXY_MODE='none'
+E2E_PROXY_AUTH_TYPE=''
+E2E_PROXY_HTTP_URL="${DECLAREST_E2E_PROXY_HTTP_URL:-}"
+E2E_PROXY_HTTPS_URL="${DECLAREST_E2E_PROXY_HTTPS_URL:-}"
+E2E_PROXY_NO_PROXY="${DECLAREST_E2E_PROXY_NO_PROXY:-}"
+E2E_PROXY_AUTH_USERNAME="${DECLAREST_E2E_PROXY_AUTH_USERNAME:-}"
+E2E_PROXY_AUTH_PASSWORD="${DECLAREST_E2E_PROXY_AUTH_PASSWORD:-}"
+E2E_LEGACY_MANAGED_SERVER_PROXY_HTTP_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL:-}"
+E2E_LEGACY_MANAGED_SERVER_PROXY_HTTPS_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL:-}"
+E2E_LEGACY_MANAGED_SERVER_PROXY_NO_PROXY="${DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}"
+E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_USERNAME="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}"
+E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_PASSWORD="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}"
 E2E_MANAGED_SERVER_PROXY='false'
 E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=''
-E2E_MANAGED_SERVER_PROXY_HTTP_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL:-}"
-E2E_MANAGED_SERVER_PROXY_HTTPS_URL="${DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL:-}"
-E2E_MANAGED_SERVER_PROXY_NO_PROXY="${DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY:-}"
-E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}"
-E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD="${DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}"
+E2E_MANAGED_SERVER_PROXY_HTTP_URL=''
+E2E_MANAGED_SERVER_PROXY_HTTPS_URL=''
+E2E_MANAGED_SERVER_PROXY_NO_PROXY=''
+E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME=''
+E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD=''
 E2E_METADATA='bundle'
 E2E_REPO_TYPE='filesystem'
 E2E_GIT_PROVIDER=''
@@ -152,9 +164,36 @@ e2e_parse_managed_server_auth_type_value() {
 }
 
 e2e_parse_managed_server_proxy_auth_type_value() {
+  e2e_parse_proxy_auth_type_value "$1"
+}
+
+e2e_parse_proxy_mode_value() {
   local raw_value=$1
 
   case "${raw_value,,}" in
+    none)
+      printf 'none\n'
+      ;;
+    local)
+      printf 'local\n'
+      ;;
+    external)
+      printf 'external\n'
+      ;;
+    *)
+      e2e_die "invalid --proxy-mode value: ${raw_value} (allowed: none, local, external)"
+      return 1
+      ;;
+  esac
+}
+
+e2e_parse_proxy_auth_type_value() {
+  local raw_value=$1
+
+  case "${raw_value,,}" in
+    none)
+      printf 'none\n'
+      ;;
     basic)
       printf 'basic\n'
       ;;
@@ -162,33 +201,129 @@ e2e_parse_managed_server_proxy_auth_type_value() {
       printf 'prompt\n'
       ;;
     *)
-      e2e_die "invalid --managed-server-proxy-auth-type value: ${raw_value} (allowed: basic, prompt)"
+      e2e_die "invalid --proxy-auth-type value: ${raw_value} (allowed: none, basic, prompt)"
       return 1
       ;;
   esac
 }
 
-e2e_has_managed_server_proxy_basic_auth_values() {
-  [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME:-}" || -n "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD:-}" ]]
+e2e_proxy_mode_is_explicit() {
+  e2e_is_explicit 'proxy-mode' || e2e_is_explicit 'managed-server-proxy'
 }
 
-e2e_effective_managed_server_proxy_auth_type() {
-  if [[ "${E2E_MANAGED_SERVER_PROXY:-false}" != 'true' ]]; then
+e2e_proxy_auth_type_is_explicit() {
+  e2e_is_explicit 'proxy-auth-type' || e2e_is_explicit 'managed-server-proxy-auth-type'
+}
+
+e2e_set_proxy_mode() {
+  local value=$1
+  local explicit_key=${2:-proxy-mode}
+
+  if e2e_proxy_mode_is_explicit && [[ "${E2E_PROXY_MODE:-none}" != "${value}" ]]; then
+    e2e_die "conflicting proxy mode selection: ${E2E_PROXY_MODE} vs ${value}"
+    return 1
+  fi
+
+  E2E_PROXY_MODE="${value}"
+  e2e_mark_explicit 'proxy-mode'
+  if [[ "${explicit_key}" != 'proxy-mode' ]]; then
+    e2e_mark_explicit "${explicit_key}"
+  fi
+  e2e_sync_legacy_managed_server_proxy_state
+}
+
+e2e_set_proxy_auth_type() {
+  local value=$1
+  local explicit_key=${2:-proxy-auth-type}
+
+  if e2e_proxy_auth_type_is_explicit && [[ "${E2E_PROXY_AUTH_TYPE:-}" != "${value}" ]]; then
+    e2e_die "conflicting proxy auth-type selection: ${E2E_PROXY_AUTH_TYPE} vs ${value}"
+    return 1
+  fi
+
+  E2E_PROXY_AUTH_TYPE="${value}"
+  e2e_mark_explicit 'proxy-auth-type'
+  if [[ "${explicit_key}" != 'proxy-auth-type' ]]; then
+    e2e_mark_explicit "${explicit_key}"
+  fi
+  e2e_sync_legacy_managed_server_proxy_state
+}
+
+e2e_sync_legacy_managed_server_proxy_state() {
+  if [[ "${E2E_PROXY_MODE:-none}" == 'none' ]]; then
+    E2E_MANAGED_SERVER_PROXY='false'
+  else
+    E2E_MANAGED_SERVER_PROXY='true'
+  fi
+
+  E2E_MANAGED_SERVER_PROXY_AUTH_TYPE="${E2E_PROXY_AUTH_TYPE:-}"
+  E2E_MANAGED_SERVER_PROXY_HTTP_URL="${E2E_PROXY_HTTP_URL:-}"
+  E2E_MANAGED_SERVER_PROXY_HTTPS_URL="${E2E_PROXY_HTTPS_URL:-}"
+  E2E_MANAGED_SERVER_PROXY_NO_PROXY="${E2E_PROXY_NO_PROXY:-}"
+  E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME="${E2E_PROXY_AUTH_USERNAME:-}"
+  E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD="${E2E_PROXY_AUTH_PASSWORD:-}"
+}
+
+e2e_apply_proxy_env_alias() {
+  local canonical_var=$1
+  local legacy_var=$2
+  local label=$3
+  local canonical_value="${!canonical_var:-}"
+  local legacy_value="${!legacy_var:-}"
+
+  if [[ -n "${canonical_value}" && -n "${legacy_value}" && "${canonical_value}" != "${legacy_value}" ]]; then
+    e2e_die "conflicting proxy environment values for ${label}: canonical ${canonical_var} does not match legacy ${legacy_var}"
+    return 1
+  fi
+
+  if [[ -z "${canonical_value}" && -n "${legacy_value}" ]]; then
+    printf -v "${canonical_var}" '%s' "${legacy_value}"
+  fi
+}
+
+e2e_normalize_proxy_env_aliases() {
+  e2e_apply_proxy_env_alias 'E2E_PROXY_HTTP_URL' 'E2E_LEGACY_MANAGED_SERVER_PROXY_HTTP_URL' 'http URL' || return 1
+  e2e_apply_proxy_env_alias 'E2E_PROXY_HTTPS_URL' 'E2E_LEGACY_MANAGED_SERVER_PROXY_HTTPS_URL' 'https URL' || return 1
+  e2e_apply_proxy_env_alias 'E2E_PROXY_NO_PROXY' 'E2E_LEGACY_MANAGED_SERVER_PROXY_NO_PROXY' 'no-proxy list' || return 1
+  e2e_apply_proxy_env_alias 'E2E_PROXY_AUTH_USERNAME' 'E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_USERNAME' 'proxy auth username' || return 1
+  e2e_apply_proxy_env_alias 'E2E_PROXY_AUTH_PASSWORD' 'E2E_LEGACY_MANAGED_SERVER_PROXY_AUTH_PASSWORD' 'proxy auth password' || return 1
+  e2e_sync_legacy_managed_server_proxy_state
+}
+
+e2e_has_proxy_basic_auth_values() {
+  [[ -n "${E2E_PROXY_AUTH_USERNAME:-}" || -n "${E2E_PROXY_AUTH_PASSWORD:-}" ]]
+}
+
+e2e_has_managed_server_proxy_basic_auth_values() {
+  e2e_has_proxy_basic_auth_values
+}
+
+e2e_effective_proxy_auth_type() {
+  if [[ "${E2E_PROXY_MODE:-none}" == 'none' ]]; then
     printf 'none\n'
     return 0
   fi
 
-  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE:-}" ]]; then
-    printf '%s\n' "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}"
+  if [[ -n "${E2E_PROXY_AUTH_TYPE:-}" ]]; then
+    printf '%s\n' "${E2E_PROXY_AUTH_TYPE}"
     return 0
   fi
 
-  if e2e_has_managed_server_proxy_basic_auth_values; then
+  if e2e_has_proxy_basic_auth_values; then
+    printf 'basic\n'
+    return 0
+  fi
+
+  if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
     printf 'basic\n'
     return 0
   fi
 
   printf 'none\n'
+}
+
+e2e_effective_managed_server_proxy_auth_type() {
+  e2e_effective_proxy_auth_type
 }
 
 e2e_parse_metadata_source_value() {
@@ -288,13 +423,16 @@ Component selection (choose values for each flag; see notes below):
   --managed-server-mtls [<true|false>]                  default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
-  --managed-server-proxy [<true|false>]                default: false
-    true  : Inject managedServer.http.proxy into the generated context using DECLAREST_E2E_MANAGED_SERVER_PROXY_* values.
-    false : Keep managed-server proxy unset in generated contexts.
-  --managed-server-proxy-auth-type <basic|prompt>
-    basic  : Inject proxy auth username/password from DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_*.
-    prompt : Inject managedServer.http.proxy.auth.prompt and defer proxy credentials to runtime prompts.
-    Requires --managed-server-proxy true; when omitted, proxy auth stays unset unless username/password env vars are present.
+  --proxy-mode <none|local|external>                default: none
+    none     : Keep proxy settings unset in generated contexts.
+    local    : Start the bundled forward proxy component and inject explicit proxy blocks for selected CLI components.
+    external : Inject explicit proxy blocks using DECLAREST_E2E_PROXY_* values without starting a local proxy component.
+    legacy alias: --managed-server-proxy [<true|false>] maps false->none and true->external.
+  --proxy-auth-type <none|basic|prompt>
+    none   : Inject no proxy auth block.
+    basic  : Inject proxy auth username/password; local mode defaults here and auto-generates creds when none are supplied.
+    prompt : Inject *.proxy.auth.prompt and defer proxy credentials to runtime prompts (cli-manual only).
+    legacy alias: --managed-server-proxy-auth-type <basic|prompt>
   --metadata-source <bundle|dir>                    default: bundle
     bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
     dir       : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
@@ -340,11 +478,12 @@ Environment overrides:
   DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>
                                                        default: 120 (operator CR readiness wait; must be <= 600)
   DECLAREST_E2E_EXECUTION_LOG=<path>                   optional path where detailed execution logs are written
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=<url>    optional managed-server proxy http-url
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL=<url>   optional managed-server proxy https-url
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY=<list>   optional managed-server proxy no-proxy list
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME=<v> optional managed-server proxy auth username
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD=<v> optional managed-server proxy auth password
+  DECLAREST_E2E_PROXY_HTTP_URL=<url>                   optional proxy http-url (external mode)
+  DECLAREST_E2E_PROXY_HTTPS_URL=<url>                  optional proxy https-url (external mode)
+  DECLAREST_E2E_PROXY_NO_PROXY=<list>                  optional proxy no-proxy list
+  DECLAREST_E2E_PROXY_AUTH_USERNAME=<v>                optional proxy auth username
+  DECLAREST_E2E_PROXY_AUTH_PASSWORD=<v>                optional proxy auth password
+  DECLAREST_E2E_MANAGED_SERVER_PROXY_*                 deprecated aliases for the canonical DECLAREST_E2E_PROXY_* values
 
 Examples:
   ./run-e2e.sh --platform kubernetes --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
@@ -359,8 +498,10 @@ Examples:
   ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
   ./run-e2e.sh --profile cli-manual --managed-server simple-api-server --managed-server-auth-type prompt
   ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true
-  DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --managed-server-proxy true --managed-server-proxy-auth-type prompt
+  ./run-e2e.sh --proxy-mode local
+  ./run-e2e.sh --profile cli-manual --proxy-mode local --proxy-auth-type prompt
+  DECLAREST_E2E_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --proxy-mode external
+  DECLAREST_E2E_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --proxy-mode external --proxy-auth-type prompt
   ./run-e2e.sh --profile cli-manual --keep-runtime
   ./run-e2e.sh --clean 20260216-141148-216353
   ./run-e2e.sh --clean-all
@@ -409,7 +550,7 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--managed-server-proxy-auth-type|--metadata-source|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--proxy-mode|--proxy-auth-type|--managed-server-proxy-auth-type|--metadata-source|--metadata-type|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
@@ -506,13 +647,28 @@ e2e_parse_args() {
         e2e_mark_explicit 'managed-server-auth-type'
         shift 2
         ;;
+      --proxy-mode)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--proxy-mode requires a value'
+          return 1
+        }
+        e2e_set_proxy_mode "$(e2e_parse_proxy_mode_value "$2")" || return 1
+        shift 2
+        ;;
+      --proxy-auth-type)
+        [[ $# -ge 2 ]] || {
+          e2e_die '--proxy-auth-type requires a value'
+          return 1
+        }
+        e2e_set_proxy_auth_type "$(e2e_parse_proxy_auth_type_value "$2")" || return 1
+        shift 2
+        ;;
       --managed-server-proxy-auth-type)
         [[ $# -ge 2 ]] || {
           e2e_die '--managed-server-proxy-auth-type requires a value'
           return 1
         }
-        E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=$(e2e_parse_managed_server_proxy_auth_type_value "$2") || return 1
-        e2e_mark_explicit 'managed-server-proxy-auth-type'
+        e2e_set_proxy_auth_type "$(e2e_parse_managed_server_proxy_auth_type_value "$2")" 'managed-server-proxy-auth-type' || return 1
         shift 2
         ;;
       --managed-server-mtls)
@@ -534,8 +690,12 @@ e2e_parse_args() {
         else
           shift
         fi
-        E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${proxy_value}") || return 1
-        e2e_mark_explicit 'managed-server-proxy'
+        proxy_value=$(e2e_parse_bool_value '--managed-server-proxy' "${proxy_value}") || return 1
+        if [[ "${proxy_value}" == 'true' ]]; then
+          e2e_set_proxy_mode 'external' 'managed-server-proxy' || return 1
+        else
+          e2e_set_proxy_mode 'none' 'managed-server-proxy' || return 1
+        fi
         ;;
       --metadata-source|--metadata-type)
         local metadata_flag=$1
@@ -629,6 +789,7 @@ e2e_parse_args() {
   esac
 
   E2E_PLATFORM=$(e2e_parse_platform_value "${E2E_PLATFORM}") || return 1
+  e2e_normalize_proxy_env_aliases || return 1
 
   if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
     e2e_die '--managed-server none is not supported; select a managed-server component'
@@ -647,50 +808,84 @@ e2e_parse_args() {
   if [[ -n "${E2E_MANAGED_SERVER_AUTH_TYPE}" ]]; then
     E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_parse_managed_server_auth_type_value "${E2E_MANAGED_SERVER_AUTH_TYPE}") || return 1
   fi
-  if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
-    E2E_MANAGED_SERVER_PROXY_AUTH_TYPE=$(e2e_parse_managed_server_proxy_auth_type_value "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}") || return 1
+  if [[ -n "${E2E_PROXY_AUTH_TYPE}" ]]; then
+    E2E_PROXY_AUTH_TYPE=$(e2e_parse_proxy_auth_type_value "${E2E_PROXY_AUTH_TYPE}") || return 1
   fi
   E2E_MANAGED_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS}") || return 1
-  E2E_MANAGED_SERVER_PROXY=$(e2e_parse_bool_value '--managed-server-proxy' "${E2E_MANAGED_SERVER_PROXY}") || return 1
-  if [[ "${E2E_MANAGED_SERVER_PROXY}" != 'true' && -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
-    e2e_die '--managed-server-proxy-auth-type requires --managed-server-proxy true'
-    return 1
-  fi
-  if [[ "${E2E_MANAGED_SERVER_PROXY}" == 'true' ]]; then
-    if [[ -z "${E2E_MANAGED_SERVER_PROXY_HTTP_URL}" && -z "${E2E_MANAGED_SERVER_PROXY_HTTPS_URL}" ]]; then
-      e2e_die "--managed-server-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
-      return 1
-    fi
-    case "$(e2e_effective_managed_server_proxy_auth_type)" in
-      none)
-        ;;
-      basic)
-        if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
-          if [[ -n "${E2E_MANAGED_SERVER_PROXY_AUTH_TYPE}" ]]; then
-            e2e_die 'managed-server proxy auth-type basic requires DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
-          else
-            e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
-          fi
-          return 1
-        fi
-        ;;
-      prompt)
-        if e2e_has_managed_server_proxy_basic_auth_values; then
-          e2e_die 'managed-server proxy auth-type prompt cannot be combined with DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME or DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
-          return 1
-        fi
-        ;;
-      *)
-        e2e_die "invalid managed-server proxy auth-type: $(e2e_effective_managed_server_proxy_auth_type)"
+  E2E_PROXY_MODE=$(e2e_parse_proxy_mode_value "${E2E_PROXY_MODE}") || return 1
+  case "${E2E_PROXY_MODE}" in
+    none)
+      if [[ -n "${E2E_PROXY_AUTH_TYPE}" ]]; then
+        e2e_die '--proxy-auth-type requires --proxy-mode local or external'
         return 1
-        ;;
-    esac
-  elif e2e_has_managed_server_proxy_basic_auth_values; then
-    if [[ -z "${E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME}" || -z "${E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD}" ]]; then
-      e2e_die 'managed-server proxy auth requires both DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME and DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD'
-      return 1
-    fi
-  fi
+      fi
+      if e2e_has_proxy_basic_auth_values; then
+        if [[ -z "${E2E_PROXY_AUTH_USERNAME}" || -z "${E2E_PROXY_AUTH_PASSWORD}" ]]; then
+          e2e_die 'proxy auth requires both DECLAREST_E2E_PROXY_AUTH_USERNAME and DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+        else
+          e2e_die '--proxy-mode none cannot be combined with proxy auth credentials'
+        fi
+        return 1
+      fi
+      ;;
+    external)
+      if [[ -z "${E2E_PROXY_HTTP_URL}" && -z "${E2E_PROXY_HTTPS_URL}" ]]; then
+        e2e_die '--proxy-mode external requires DECLAREST_E2E_PROXY_HTTP_URL and/or DECLAREST_E2E_PROXY_HTTPS_URL'
+        return 1
+      fi
+      case "$(e2e_effective_proxy_auth_type)" in
+        none)
+          ;;
+        basic)
+          if [[ -z "${E2E_PROXY_AUTH_USERNAME}" || -z "${E2E_PROXY_AUTH_PASSWORD}" ]]; then
+            if [[ -n "${E2E_PROXY_AUTH_TYPE}" ]]; then
+              e2e_die 'proxy auth-type basic requires DECLAREST_E2E_PROXY_AUTH_USERNAME and DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+            else
+              e2e_die 'proxy auth requires both DECLAREST_E2E_PROXY_AUTH_USERNAME and DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+            fi
+            return 1
+          fi
+          ;;
+        prompt)
+          if e2e_has_proxy_basic_auth_values; then
+            e2e_die 'proxy auth-type prompt cannot be combined with DECLAREST_E2E_PROXY_AUTH_USERNAME or DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+            return 1
+          fi
+          ;;
+        *)
+          e2e_die "invalid proxy auth-type: $(e2e_effective_proxy_auth_type)"
+          return 1
+          ;;
+      esac
+      ;;
+    local)
+      case "$(e2e_effective_proxy_auth_type)" in
+        none)
+          if e2e_has_proxy_basic_auth_values; then
+            e2e_die '--proxy-auth-type none cannot be combined with proxy auth credentials'
+            return 1
+          fi
+          ;;
+        basic)
+          if e2e_has_proxy_basic_auth_values && [[ -z "${E2E_PROXY_AUTH_USERNAME}" || -z "${E2E_PROXY_AUTH_PASSWORD}" ]]; then
+            e2e_die 'proxy auth requires both DECLAREST_E2E_PROXY_AUTH_USERNAME and DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+            return 1
+          fi
+          ;;
+        prompt)
+          if e2e_has_proxy_basic_auth_values; then
+            e2e_die 'proxy auth-type prompt cannot be combined with DECLAREST_E2E_PROXY_AUTH_USERNAME or DECLAREST_E2E_PROXY_AUTH_PASSWORD'
+            return 1
+          fi
+          ;;
+        *)
+          e2e_die "invalid proxy auth-type: $(e2e_effective_proxy_auth_type)"
+          return 1
+          ;;
+      esac
+      ;;
+  esac
+  e2e_sync_legacy_managed_server_proxy_state
   E2E_METADATA=$(e2e_parse_metadata_source_value '--metadata-source' "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1

@@ -348,6 +348,16 @@ _test_validate_all_discovered_components_accepts_native_without_runtime_artifact
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
 
+test_checked_in_forward_proxy_component_contract_is_valid() {
+  load_components_libs
+
+  e2e_discover_components
+
+  if ! e2e_component_exists 'proxy' 'forward-proxy'; then
+    fail 'expected checked-in proxy:forward-proxy component to be discoverable'
+  fi
+}
+
 test_discover_rejects_missing_contract_version
 test_validate_all_discovered_components_accepts_valid_fixture_identity
 test_validate_all_discovered_components_rejects_missing_fixture_identity
@@ -360,3 +370,4 @@ test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity
 test_validate_all_discovered_components_accepts_valid_yaml_resource_payload
 test_validate_all_discovered_components_rejects_missing_k8s_artifacts
 test_validate_all_discovered_components_accepts_native_without_runtime_artifacts
+test_checked_in_forward_proxy_component_contract_is_valid

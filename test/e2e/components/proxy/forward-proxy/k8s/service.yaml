@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-forward-proxy
+  labels:
+    app.kubernetes.io/name: proxy-forward-proxy
+    declarest.e2e/component-key: proxy-forward-proxy
+  annotations:
+    declarest.e2e/port-forward: "${PROXY_HOST_PORT}:3128"
+spec:
+  selector:
+    app.kubernetes.io/name: proxy-forward-proxy
+  ports:
+    - name: http
+      port: 3128
+      targetPort: 3128

@@ -107,6 +107,11 @@ e2e_apply_profile_defaults() {
 }
 
 e2e_validate_profile_rules() {
+  if [[ "$(e2e_effective_proxy_auth_type)" == 'prompt' ]] && ! e2e_profile_is_cli_manual; then
+    e2e_die 'proxy auth-type prompt is supported only for cli-manual profile'
+    return 1
+  fi
+
   if e2e_profile_is_cli_manual; then
     if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
       e2e_die 'cli-manual profile is local-instantiable only; managed-server connection must be local'

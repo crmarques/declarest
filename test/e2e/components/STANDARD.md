@@ -10,6 +10,7 @@ Use this standard for all component groups:
 - `git-provider`
 - `secret-provider`
 - `repo-type`
+- `proxy`
 
 ## Directory Layout
 
@@ -62,7 +63,7 @@ REQUIRED_SECURITY_FEATURES="oauth2"
 
 Field rules:
 
-- `COMPONENT_TYPE`: group key (`managed-server`, `git-provider`, `secret-provider`, `repo-type`).
+- `COMPONENT_TYPE`: group key (`managed-server`, `git-provider`, `secret-provider`, `repo-type`, `proxy`).
 - `COMPONENT_NAME`: stable selector name used by CLI flags.
 - `SUPPORTED_CONNECTIONS`: whitespace-separated values from `local remote`.
 - `DEFAULT_CONNECTION`: one value from `SUPPORTED_CONNECTIONS`.
@@ -118,6 +119,9 @@ Common exported variables:
 - `E2E_COMPONENT_CONNECTION`
 - `E2E_COMPONENT_RUNTIME_KIND`, `E2E_COMPONENT_DEPENDS_ON`
 - `E2E_MANAGED_SERVER_AUTH_TYPE`, `E2E_MANAGED_SERVER_MTLS`
+- `E2E_PROXY_MODE`, `E2E_PROXY_AUTH_TYPE`
+- `E2E_PROXY_HTTP_URL`, `E2E_PROXY_HTTPS_URL`, `E2E_PROXY_NO_PROXY`
+- `E2E_PROXY_AUTH_USERNAME`, `E2E_PROXY_AUTH_PASSWORD`
 - `E2E_COMPONENT_STATE_FILE`
 - `E2E_COMPONENT_PROJECT_NAME` (compose project when applicable)
 - `E2E_COMPONENT_COMPOSE_FILE`, `E2E_COMPONENT_K8S_DIR`, `E2E_COMPONENT_K8S_LABEL_KEY`

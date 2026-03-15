@@ -6,10 +6,14 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 load_ui_libs() {
   unset DECLAREST_E2E_CONTAINER_ENGINE DECLAREST_E2E_EXECUTION_LOG \
+    DECLAREST_E2E_PROXY_HTTP_URL DECLAREST_E2E_PROXY_HTTPS_URL DECLAREST_E2E_PROXY_NO_PROXY \
+    DECLAREST_E2E_PROXY_AUTH_USERNAME DECLAREST_E2E_PROXY_AUTH_PASSWORD \
     DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY \
     DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD || true
   unset E2E_EXPLICIT \
     E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
+    E2E_PROXY_MODE E2E_PROXY_AUTH_TYPE E2E_PROXY_HTTP_URL E2E_PROXY_HTTPS_URL E2E_PROXY_NO_PROXY \
+    E2E_PROXY_AUTH_USERNAME E2E_PROXY_AUTH_PASSWORD \
     E2E_MANAGED_SERVER_PROXY E2E_MANAGED_SERVER_PROXY_AUTH_TYPE E2E_MANAGED_SERVER_PROXY_HTTP_URL E2E_MANAGED_SERVER_PROXY_HTTPS_URL E2E_MANAGED_SERVER_PROXY_NO_PROXY \
     E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
@@ -130,13 +134,14 @@ test_summary_marks_explicit_proxy_prompt_auth_type() {
   E2E_STEP_STATUSES[1]='OK'
   E2E_STEP_DURATIONS[1]=0
 
-  E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
-  e2e_parse_args --managed-server-proxy true --managed-server-proxy-auth-type prompt
+  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
+  e2e_parse_args --proxy-mode external --proxy-auth-type prompt
 
   local output
   output=$(ui_print_summary)
 
-  assert_contains "${output}" "managed-server-proxy-auth-type: prompt (explicit)"
+  assert_contains "${output}" "proxy-mode: external (explicit)"
+  assert_contains "${output}" "proxy-auth-type: prompt (explicit)"
 }
 
 test_step_table_header_format

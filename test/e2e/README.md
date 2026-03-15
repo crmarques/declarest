@@ -46,9 +46,11 @@ This repository uses a componentized Bash e2e harness.
 - `--platform <compose|kubernetes>`
 - `--managed-server <name>` (mandatory; `none` is not supported)
 - `--managed-server-connection <local|remote>`
-- `--managed-server-auth-type <none|basic|oauth2|custom-header>` (default: component-elected)
+- `--managed-server-auth-type <none|basic|oauth2|custom-header|prompt>` (default: component-elected)
 - `--managed-server-mtls [<true|false>]` (default: `false`)
-- `--managed-server-proxy [<true|false>]` (default: `false`)
+- `--proxy-mode <none|local|external>` (default: `none`)
+- `--proxy-auth-type <none|basic|prompt>` (default: `none`; `local` defaults to `basic` when omitted)
+  - legacy aliases remain accepted: `--managed-server-proxy [<true|false>]` maps `false -> none` and `true -> external`; `--managed-server-proxy-auth-type <basic|prompt>` maps to `--proxy-auth-type`
 - `--metadata-source <bundle|dir>` (default: `bundle`)
   - legacy alias: `--metadata-type <bundle|base-dir>`
 - `--repo-type <name>`
@@ -67,7 +69,9 @@ Use `--list-components` to see currently available component names and metadata.
 Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and managed-server fixture metadata rules) and exit without running test cases.
 When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
-When `--managed-server-proxy true`, generated contexts include `managedServer.http.proxy` using `DECLAREST_E2E_MANAGED_SERVER_PROXY_*` values.
+When `--proxy-mode external`, generated CLI contexts inject explicit proxy blocks into each eligible section: `managedServer.http`, `repository.git.remote` for `http|https` remotes, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
+When `--proxy-mode local`, the runner auto-selects helper component `proxy:forward-proxy`, exposes one run-scoped proxy URL to the CLI, and wires the same eligible context sections through that local proxy.
+Proxy prompt auth is CLI-only in v1: `--proxy-auth-type prompt` is supported for `cli-manual`, writes prompt blocks to `contexts.yaml`, and prints a `Prompt helper: source .../proxy/prompt-auth.env` line in manual handoff output instead of writing inline proxy credentials.
 `--metadata-source bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
 `--metadata-source dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring. Legacy `--metadata-type base-dir` remains accepted and normalizes to the same `dir` behavior.
 
@@ -82,11 +86,12 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`: optional `managedServer.http.proxy.http-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`: optional `managedServer.http.proxy.https-url` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`: optional `managedServer.http.proxy.no-proxy` value used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME`: optional proxy auth username used when `--managed-server-proxy true`
-- `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`: optional proxy auth password used when `--managed-server-proxy true`
+- `DECLAREST_E2E_PROXY_HTTP_URL`: optional shared proxy `httpURL` used when `--proxy-mode external`
+- `DECLAREST_E2E_PROXY_HTTPS_URL`: optional shared proxy `httpsURL` used when `--proxy-mode external`
+- `DECLAREST_E2E_PROXY_NO_PROXY`: optional shared proxy `noProxy` list used when `--proxy-mode local|external`
+- `DECLAREST_E2E_PROXY_AUTH_USERNAME`: optional shared proxy auth username used with `--proxy-auth-type basic`
+- `DECLAREST_E2E_PROXY_AUTH_PASSWORD`: optional shared proxy auth password used with `--proxy-auth-type basic`
+- deprecated env aliases remain accepted for compatibility: `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL`, `DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL`, `DECLAREST_E2E_MANAGED_SERVER_PROXY_NO_PROXY`, `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME`, and `DECLAREST_E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD`
 
 ## Runtime Steps
 

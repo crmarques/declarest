@@ -6,6 +6,13 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 reload_context_libs() {
   unset \
+    E2E_PROXY_MODE \
+    E2E_PROXY_AUTH_TYPE \
+    E2E_PROXY_HTTP_URL \
+    E2E_PROXY_HTTPS_URL \
+    E2E_PROXY_NO_PROXY \
+    E2E_PROXY_AUTH_USERNAME \
+    E2E_PROXY_AUTH_PASSWORD \
     E2E_MANAGED_SERVER_PROXY \
     E2E_MANAGED_SERVER_PROXY_AUTH_TYPE \
     E2E_MANAGED_SERVER_PROXY_HTTP_URL \
@@ -14,9 +21,21 @@ reload_context_libs() {
     E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME \
     E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD \
     E2E_MANAGED_SERVER_AUTH_TYPE \
-    E2E_MANAGED_SERVER || true
+    E2E_MANAGED_SERVER \
+    E2E_MANAGED_SERVER_CONNECTION \
+    E2E_REPO_TYPE \
+    E2E_GIT_PROVIDER \
+    E2E_GIT_PROVIDER_CONNECTION \
+    E2E_SECRET_PROVIDER \
+    E2E_SECRET_PROVIDER_CONNECTION \
+    E2E_PLATFORM \
+    E2E_K8S_NAMESPACE \
+    E2E_STATE_DIR || true
 
   source_e2e_lib "common"
+  source_e2e_lib "args"
+  source_e2e_lib "components"
+  source_e2e_lib "operator"
   source_e2e_lib "context"
 }
 
@@ -29,74 +48,208 @@ contexts:
       http:
         baseURL: http://127.0.0.1:8080
         auth:
-          customHeaders:
-            - header: Authorization
-              prefix: Bearer
-              value: token-dev
+          oauth2:
+            tokenURL: http://127.0.0.1:8080/oauth/token
+            grantType: client_credentials
+            clientID: demo
+            clientSecret: secret
+    repository:
+      git:
+        local:
+          baseDir: /tmp/repo
+        remote:
+          url: http://127.0.0.1:3000/acme/repo.git
+          branch: main
+          provider: gitea
+          auth:
+            basicAuth:
+              username: git-user
+              password: git-pass
+    secretStore:
+      vault:
+        address: http://127.0.0.1:8200
+        mount: secret
+        pathPrefix: declarest-e2e
+        kvVersion: 2
+        auth:
+          token: root-token
+    metadata:
+      bundle: keycloak-bundle:0.0.1
 currentContext: e2e-basic
 EOF
 }
 
-test_inserts_proxy_block_when_managed_server_proxy_enabled() {
+write_git_ssh_context_fixture() {
+  local path=$1
+  cat >"${path}" <<'EOF'
+contexts:
+  - name: e2e-basic
+    managedServer:
+      http:
+        baseURL: http://127.0.0.1:8080
+        auth:
+          customHeaders:
+            - header: Authorization
+              value: token
+    repository:
+      git:
+        local:
+          baseDir: /tmp/repo
+        remote:
+          url: git@github.com:acme/repo.git
+          branch: main
+          provider: github
+    metadata:
+      bundle: keycloak-bundle:0.0.1
+currentContext: e2e-basic
+EOF
+}
+
+write_service_manifest() {
+  local dir=$1
+  local name=$2
+  local mapping=$3
+
+  mkdir -p "${dir}"
+  cat >"${dir}/service.yaml" <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${name}
+  annotations:
+    declarest.e2e/port-forward: "${mapping}"
+EOF
+}
+
+write_state_fixture() {
+  local path=$1
+  shift
+
+  : >"${path}"
+  while (($# > 1)); do
+    e2e_write_state_value "${path}" "$1" "$2"
+    shift 2
+  done
+}
+
+test_inserts_proxy_blocks_across_proxiable_sections() {
   reload_context_libs
   local tmp
   tmp=$(new_temp_dir)
   local context_file="${tmp}/contexts.yaml"
   write_context_fixture "${context_file}"
 
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_PROXY='true'
-  E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
-  E2E_MANAGED_SERVER_PROXY_HTTPS_URL='https://proxy.example.com:3128'
-  E2E_MANAGED_SERVER_PROXY_NO_PROXY='localhost,127.0.0.1'
-  E2E_MANAGED_SERVER_PROXY_AUTH_USERNAME='proxy-user'
-  E2E_MANAGED_SERVER_PROXY_AUTH_PASSWORD='proxy-pass'
+  E2E_PROXY_MODE='external'
+  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
+  E2E_PROXY_HTTPS_URL='https://proxy.example.com:3128'
+  E2E_PROXY_NO_PROXY='localhost,127.0.0.1'
+  E2E_PROXY_AUTH_USERNAME='proxy-user'
+  E2E_PROXY_AUTH_PASSWORD='proxy-pass'
 
-  e2e_context_insert_managed_server_proxy "${context_file}"
+  e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "proxy:"
   assert_file_contains "${context_file}" "httpURL: 'http://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "httpsURL: 'https://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "noProxy: 'localhost,127.0.0.1'"
   assert_file_contains "${context_file}" "username: 'proxy-user'"
   assert_file_contains "${context_file}" "password: 'proxy-pass'"
+
+  local proxy_count
+  proxy_count=$(grep -c '^[[:space:]]*proxy:$' "${context_file}" || true)
+  assert_eq "${proxy_count}" "4" "expected proxy blocks for managedServer, repository, secretStore, and metadata"
 }
 
-test_inserts_prompt_proxy_auth_block_when_requested() {
+test_inserts_prompt_proxy_auth_block_for_local_proxy() {
   reload_context_libs
   local tmp
   tmp=$(new_temp_dir)
   local context_file="${tmp}/contexts.yaml"
+  local proxy_state="${tmp}/state/proxy-forward-proxy.env"
+  mkdir -p "${tmp}/state"
   write_context_fixture "${context_file}"
 
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_PROXY='true'
-  E2E_MANAGED_SERVER_PROXY_AUTH_TYPE='prompt'
-  E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
+  E2E_STATE_DIR="${tmp}/state"
+  E2E_PROXY_MODE='local'
+  E2E_PROXY_AUTH_TYPE='prompt'
 
-  e2e_context_insert_managed_server_proxy "${context_file}"
+  write_state_fixture "${proxy_state}" \
+    PROXY_HTTP_URL "http://127.0.0.1:3128" \
+    PROXY_HTTPS_URL "http://127.0.0.1:3128" \
+    PROXY_AUTH_TYPE "prompt" \
+    PROXY_AUTH_USERNAME "generated-user" \
+    PROXY_AUTH_PASSWORD "generated-pass"
 
-  assert_file_contains "${context_file}" "proxy:"
-  assert_file_contains "${context_file}" "httpURL: 'http://proxy.example.com:3128'"
+  e2e_context_insert_proxy_config "${context_file}"
+
+  assert_file_contains "${context_file}" "httpURL: 'http://127.0.0.1:3128'"
   assert_file_contains "${context_file}" "prompt: {}"
-  assert_not_contains "$(cat "${context_file}")" "username: '"
-  assert_not_contains "$(cat "${context_file}")" "password: '"
+  assert_not_contains "$(cat "${context_file}")" "username: 'generated-user'"
+  assert_not_contains "$(cat "${context_file}")" "password: 'generated-pass'"
 }
 
-test_skips_proxy_block_when_managed_server_proxy_disabled() {
+test_skips_git_proxy_block_for_non_http_remote_url() {
   reload_context_libs
   local tmp
   tmp=$(new_temp_dir)
   local context_file="${tmp}/contexts.yaml"
+  write_git_ssh_context_fixture "${context_file}"
+
+  E2E_PROXY_MODE='external'
+  E2E_PROXY_HTTP_URL='http://proxy.example.com:3128'
+
+  e2e_context_insert_proxy_config "${context_file}"
+
+  local proxy_count
+  proxy_count=$(grep -c '^[[:space:]]*proxy:$' "${context_file}" || true)
+  assert_eq "${proxy_count}" "2" "expected proxy blocks only for managedServer and metadata"
+}
+
+test_rewrites_local_kubernetes_targets_for_local_proxy() {
+  reload_context_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  local context_file="${tmp}/contexts.yaml"
+  local state_dir="${tmp}/state"
+  local managed_rendered="${tmp}/rendered/managed-server"
+  local repo_rendered="${tmp}/rendered/git-provider"
+  local secret_rendered="${tmp}/rendered/secret-provider"
+  mkdir -p "${state_dir}" "${tmp}/rendered"
   write_context_fixture "${context_file}"
+  write_service_manifest "${managed_rendered}" "managed-server-simple-api-server" "18080:8080"
+  write_service_manifest "${repo_rendered}" "git-provider-gitea" "13000:3000"
+  write_service_manifest "${secret_rendered}" "secret-provider-vault" "18200:8200"
 
+  E2E_STATE_DIR="${state_dir}"
+  E2E_PLATFORM='kubernetes'
+  E2E_K8S_NAMESPACE='declarest-test'
+  E2E_PROXY_MODE='local'
   E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_PROXY='false'
-  E2E_MANAGED_SERVER_PROXY_HTTP_URL='http://proxy.example.com:3128'
+  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_REPO_TYPE='git'
+  E2E_GIT_PROVIDER='gitea'
+  E2E_GIT_PROVIDER_CONNECTION='local'
+  E2E_SECRET_PROVIDER='vault'
+  E2E_SECRET_PROVIDER_CONNECTION='local'
 
-  e2e_context_insert_managed_server_proxy "${context_file}"
+  write_state_fixture "$(e2e_component_state_file 'proxy:forward-proxy')" \
+    PROXY_HTTP_URL "http://127.0.0.1:3128" \
+    PROXY_HTTPS_URL "http://127.0.0.1:3128" \
+    PROXY_AUTH_TYPE "basic" \
+    PROXY_AUTH_USERNAME "proxy-user" \
+    PROXY_AUTH_PASSWORD "proxy-pass"
+  write_state_fixture "$(e2e_component_state_file 'managed-server:simple-api-server')" \
+    K8S_RENDERED_DIR "${managed_rendered}"
+  write_state_fixture "$(e2e_component_state_file 'git-provider:gitea')" \
+    K8S_RENDERED_DIR "${repo_rendered}"
+  write_state_fixture "$(e2e_component_state_file 'secret-provider:vault')" \
+    K8S_RENDERED_DIR "${secret_rendered}"
 
-  assert_not_contains "$(cat "${context_file}")" "proxy:"
+  e2e_context_insert_proxy_config "${context_file}"
+
+  assert_file_contains "${context_file}" "baseURL: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080"
+  assert_file_contains "${context_file}" "tokenURL: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080/oauth/token"
+  assert_file_contains "${context_file}" "url: http://git-provider-gitea.declarest-test.svc.cluster.local:3000/acme/repo.git"
+  assert_file_contains "${context_file}" "address: http://secret-provider-vault.declarest-test.svc.cluster.local:8200"
 }
 
 test_rejects_proxy_enable_without_proxy_urls() {
@@ -106,17 +259,16 @@ test_rejects_proxy_enable_without_proxy_urls() {
   local context_file="${tmp}/contexts.yaml"
   write_context_fixture "${context_file}"
 
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_PROXY='true'
+  E2E_PROXY_MODE='external'
 
   local output status
   set +e
-  output=$(e2e_context_insert_managed_server_proxy "${context_file}" 2>&1)
+  output=$(e2e_context_insert_proxy_config "${context_file}" 2>&1)
   status=$?
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "--managedServer-proxy requires DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTP_URL and/or DECLAREST_E2E_MANAGED_SERVER_PROXY_HTTPS_URL"
+  assert_contains "${output}" "--proxy-mode requires proxy HTTP and/or HTTPS URL configuration"
 }
 
 test_simple_api_server_context_emits_prompt_auth_block() {
@@ -145,8 +297,9 @@ EOF
   assert_not_contains "$(cat "${fragment_file}")" "password: admin"
 }
 
-test_inserts_proxy_block_when_managed_server_proxy_enabled
-test_inserts_prompt_proxy_auth_block_when_requested
-test_skips_proxy_block_when_managed_server_proxy_disabled
+test_inserts_proxy_blocks_across_proxiable_sections
+test_inserts_prompt_proxy_auth_block_for_local_proxy
+test_skips_git_proxy_block_for_non_http_remote_url
+test_rewrites_local_kubernetes_targets_for_local_proxy
 test_rejects_proxy_enable_without_proxy_urls
 test_simple_api_server_context_emits_prompt_auth_block

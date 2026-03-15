@@ -7,6 +7,7 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 load_hook_libs() {
   source_e2e_lib "common"
   source_e2e_lib "components"
+  source_e2e_lib "components_hooks"
 }
 
 prepare_runtime_globals() {
@@ -292,6 +293,44 @@ EOF
     run_repo_context_script "${script_path}" "${state_file}" "${fragment_file}" "" "${metadata_dir}"
     assert_eq "$(context_metadata_line "${fragment_file}")" "  baseDir: ${metadata_dir}" "expected ${script_path} to emit metadata.baseDir fallback"
   done
+}
+
+test_forward_proxy_init_generates_prompt_helper_file() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  E2E_PLATFORM='compose'
+  E2E_CONTAINER_ENGINE='podman'
+  E2E_PROXY_MODE='local'
+  E2E_PROXY_AUTH_TYPE='prompt'
+  E2E_PROXY_AUTH_USERNAME=''
+  E2E_PROXY_AUTH_PASSWORD=''
+
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_DEPENDS_ON=()
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_SELECTED_COMPONENT_KEYS=('proxy:forward-proxy')
+  E2E_COMPONENT_PATH['proxy:forward-proxy']="${E2E_SCRIPT_DIR}/components/proxy/forward-proxy"
+  E2E_COMPONENT_DEPENDS_ON['proxy:forward-proxy']=''
+  E2E_COMPONENT_RUNTIME_KIND['proxy:forward-proxy']='compose'
+
+  e2e_component_run_hook 'proxy:forward-proxy' init
+
+  local state_file helper_file helper_mode
+  state_file=$(e2e_component_state_file 'proxy:forward-proxy')
+  helper_file=$(e2e_state_get "${state_file}" 'PROXY_PROMPT_HELPER_FILE')
+  helper_mode=$(stat -c '%a' "${helper_file}")
+
+  assert_eq "$(e2e_state_get "${state_file}" 'PROXY_AUTH_TYPE')" "prompt" "expected prompt proxy auth type to persist in state"
+  assert_path_exists "${helper_file}"
+  assert_eq "${helper_mode}" "600" "expected prompt helper file mode 0600"
+  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_MANAGED_SERVER_HTTP_PROXY_AUTH_USERNAME"
+  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_REPOSITORY_GIT_REMOTE_PROXY_AUTH_USERNAME"
+  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_SECRET_STORE_VAULT_PROXY_AUTH_USERNAME"
+  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_METADATA_PROXY_AUTH_USERNAME"
 }
 
 create_openapi_component() {
@@ -1070,6 +1109,7 @@ test_prepare_metadata_workspace_uses_component_metadata_for_dir_mode
 test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode
 test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_mapping_is_missing
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
+test_forward_proxy_init_generates_prompt_helper_file
 test_repo_context_scripts_emit_metadata_bundle_when_set
 test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode
 test_prepare_component_openapi_specs_keeps_local_openapi_for_dir_mode
