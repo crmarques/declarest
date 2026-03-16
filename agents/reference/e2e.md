@@ -132,7 +132,7 @@ Case discovery order:
 
 Manual handoff:
 1. Emit temporary context catalog path.
-2. Emit setup/reset shell script paths; setup script MUST export runtime vars and define alias `declarest-e2e` to the run-local binary, and reset script MUST unset those vars and remove the alias.
+2. Emit setup/reset shell script paths; setup script MUST export runtime vars, define alias `declarest-e2e` to the run-local binary, and initialize prompt-auth shell-session reuse for prompt-backed credentials by evaluating the bash session hook against that binary, while reset script MUST unset those vars, remove the alias, and restore the prior prompt-auth shell state.
 3. Print concrete follow-up `declarest-e2e` commands.
 4. Exit after startup and keep runtime resources available until explicit `--clean`/`--clean-all`.
 5. When platform is `kubernetes`, print cluster access details (`cluster`, `namespace`, `kubeconfig`) and example `kubectl` commands.

@@ -141,7 +141,7 @@ Interactive context commands:
 7. Interactive `context add` SHOULD treat `managed-server` as required and SHOULD still surface optional sections with explicit skip choices (for example `secret-store` and `preferences`).
 8. For interactive `context add`, repository payload-format prompts MUST NOT be shown; managed-server media signals are the default source for repository payload formats.
 9. `context edit` SHOULD open the context catalog in an editor, validate the edited YAML on save/exit, and persist only validated changes.
-10. `context edit <name>` SHOULD present only the selected context for editing and merge the validated result back into the full catalog.
+10. `context edit <name>` SHOULD present the selected context plus catalog-scoped `defaultEditor` and reusable `credentials` for editing, and MUST merge the validated result back into the full catalog without exposing unrelated contexts.
 
 ## CLI Input Grammar
 

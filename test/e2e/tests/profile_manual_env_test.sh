@@ -23,7 +23,39 @@ prepare_manual_env_runtime() {
   export E2E_K8S_NAMESPACE="${E2E_K8S_NAMESPACE:-}"
 
   mkdir -p "${E2E_STATE_DIR}" "$(dirname -- "${E2E_BIN}")"
-  printf '#!/usr/bin/env bash\nexit 0\n' >"${E2E_BIN}"
+  cat >"${E2E_BIN}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == 'context' && "${2:-}" == 'session-hook' && "${3:-}" == 'bash' ]]; then
+  cat <<'HOOK'
+if [ -z "${DECLAREST_PROMPT_AUTH_SESSION_ID:-}" ]; then
+  export DECLAREST_PROMPT_AUTH_SESSION_ID="bash:${BASHPID:-$$}"
+fi
+declare -f declarest_prompt_auth_cleanup >/dev/null 2>&1 || declarest_prompt_auth_cleanup() {
+  command declarest context clean --credentials-in-session >/dev/null 2>&1 || true
+}
+if [ -z "${__declarest_prompt_auth_bash_hook_installed:-}" ]; then
+  __declarest_prompt_auth_prev_exit="$(trap -p EXIT | sed -n "s/^trap -- '\\(.*\\)' EXIT$/\\1/p")"
+  declarest_prompt_auth_on_exit() {
+    declarest_prompt_auth_cleanup
+    if [ -n "${__declarest_prompt_auth_prev_exit:-}" ]; then
+      eval "$__declarest_prompt_auth_prev_exit"
+    fi
+  }
+  trap 'declarest_prompt_auth_on_exit' EXIT
+  __declarest_prompt_auth_bash_hook_installed=1
+fi
+HOOK
+  exit 0
+fi
+
+if [[ "${1:-}" == 'context' && "${2:-}" == 'clean' && "${3:-}" == '--credentials-in-session' ]]; then
+  exit 0
+fi
+
+exit 0
+EOF
   chmod +x "${E2E_BIN}"
 }
 
@@ -79,6 +111,45 @@ esac
 source "${RESET_SCRIPT}"
 [[ "${PROMPT_COMMAND}" == 'printf pre >/dev/null' ]]
 type __declarest_e2e_prune_deleted_run_bins_from_path >/dev/null 2>&1 && exit 1 || true
+EOF
+  )
+  status=$?
+  set -e
+  assert_status "${status}" "0"
+  [[ -z "${output}" ]] || true
+}
+
+test_manual_env_scripts_enable_and_reset_prompt_auth_session() {
+  load_profile_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local SETUP_SCRIPT RESET_SCRIPT
+  prepare_manual_env_scripts "${tmp}"
+
+  assert_file_contains "${SETUP_SCRIPT}" 'context session-hook bash'
+  assert_file_contains "${RESET_SCRIPT}" 'DECLAREST_PROMPT_AUTH_SESSION_ID'
+  assert_file_contains "${RESET_SCRIPT}" 'DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK'
+
+  local output status
+  set +e
+  output=$(
+    SETUP_SCRIPT="${SETUP_SCRIPT}" RESET_SCRIPT="${RESET_SCRIPT}" bash <<'EOF'
+set -euo pipefail
+source "${SETUP_SCRIPT}"
+
+[[ -n "${DECLAREST_PROMPT_AUTH_SESSION_ID:-}" ]]
+[[ "${DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK:-}" == '1' ]]
+[[ "${__declarest_prompt_auth_bash_hook_installed:-}" == '1' ]]
+
+source "${RESET_SCRIPT}"
+
+[[ -z "${DECLAREST_PROMPT_AUTH_SESSION_ID:-}" ]]
+[[ -z "${DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK:-}" ]]
+[[ -z "${__declarest_prompt_auth_bash_hook_installed:-}" ]]
+type declarest_prompt_auth_on_exit >/dev/null 2>&1 && exit 1 || true
 EOF
   )
   status=$?
@@ -321,6 +392,7 @@ test_managed_server_access_details_formats_rundeck_state() {
 }
 
 test_manual_env_scripts_install_and_restore_prompt_hook
+test_manual_env_scripts_enable_and_reset_prompt_auth_session
 test_manual_env_scripts_skip_local_prompt_proxy_auth_exports
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig

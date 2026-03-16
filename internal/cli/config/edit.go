@@ -105,12 +105,12 @@ func editSingleContext(
 	catalog configdomain.ContextCatalog,
 	name string,
 ) error {
-	viewContext, idx, err := selectContextForView(catalog.Contexts, name)
+	view, idx, err := selectSingleContextEditView(catalog, name)
 	if err != nil {
 		return err
 	}
 
-	encoded, err := yaml.Marshal(viewContext)
+	encoded, err := yaml.Marshal(view)
 	if err != nil {
 		return cliutil.ValidationError("failed to encode context for editing", err)
 	}
@@ -123,16 +123,22 @@ func editSingleContext(
 		return cliutil.ValidationError("context edit is empty", nil)
 	}
 
-	decoded, err := decodeContextStrictFromData(edited, cliutil.OutputYAML, fmt.Sprintf("%s.yaml", name))
+	decoded, err := decodeSingleContextEditViewFromData(edited, cliutil.OutputYAML, fmt.Sprintf("%s.yaml", name))
 	if err != nil {
 		return err
 	}
 
-	oldName := catalog.Contexts[idx].Name
-	catalog.Contexts[idx] = decoded
-	if catalog.CurrentContext == oldName && decoded.Name != "" {
-		catalog.CurrentContext = decoded.Name
-	}
+	return editorService.ReplaceCatalog(command.Context(), applySingleContextEditView(catalog, idx, decoded))
+}
 
-	return editorService.ReplaceCatalog(command.Context(), catalog)
+func decodeSingleContextEditViewFromData(
+	data []byte,
+	contentType string,
+	sourceName string,
+) (singleContextEditView, error) {
+	var output singleContextEditView
+	if err := decodeInputStrict(data, contentType, sourceName, &output); err != nil {
+		return singleContextEditView{}, err
+	}
+	return output, nil
 }

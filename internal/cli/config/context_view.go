@@ -16,10 +16,17 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 )
+
+type singleContextEditView struct {
+	DefaultEditor string                    `yaml:"defaultEditor,omitempty"`
+	Credentials   []configdomain.Credential `yaml:"credentials,omitempty"`
+	Context       configdomain.Context      `yaml:"context"`
+}
 
 func compactContextCatalogForView(catalog configdomain.ContextCatalog) configdomain.ContextCatalog {
 	return configdomain.CompactContextCatalog(catalog)
@@ -51,4 +58,39 @@ func selectContextForView(contexts []configdomain.Context, name string) (configd
 		return configdomain.CompactContext(item), idx, nil
 	}
 	return configdomain.Context{}, -1, faults.NewTypedError(faults.NotFoundError, fmt.Sprintf("context %q not found", name), nil)
+}
+
+func selectSingleContextEditView(
+	catalog configdomain.ContextCatalog,
+	name string,
+) (singleContextEditView, int, error) {
+	viewContext, idx, err := selectContextForView(catalog.Contexts, name)
+	if err != nil {
+		return singleContextEditView{}, -1, err
+	}
+
+	return singleContextEditView{
+		DefaultEditor: catalog.DefaultEditor,
+		Credentials:   append([]configdomain.Credential(nil), catalog.Credentials...),
+		Context:       viewContext,
+	}, idx, nil
+}
+
+func applySingleContextEditView(
+	catalog configdomain.ContextCatalog,
+	idx int,
+	edited singleContextEditView,
+) configdomain.ContextCatalog {
+	if idx < 0 || idx >= len(catalog.Contexts) {
+		return catalog
+	}
+
+	oldName := catalog.Contexts[idx].Name
+	catalog.DefaultEditor = edited.DefaultEditor
+	catalog.Credentials = append([]configdomain.Credential(nil), edited.Credentials...)
+	catalog.Contexts[idx] = edited.Context
+	if catalog.CurrentContext == oldName && strings.TrimSpace(edited.Context.Name) != "" {
+		catalog.CurrentContext = edited.Context.Name
+	}
+	return catalog
 }

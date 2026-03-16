@@ -323,6 +323,38 @@ if [[ "\${DECLAREST_E2E_PLATFORM:-}" == 'kubernetes' && -n "\${DECLAREST_E2E_KUB
   export KUBECONFIG="\${DECLAREST_E2E_KUBECONFIG}"
 fi
 
+if [[ -z "\${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET+x}" ]]; then
+  if [[ -n "\${DECLAREST_PROMPT_AUTH_SESSION_ID+x}" ]]; then
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID="\${DECLAREST_PROMPT_AUTH_SESSION_ID-}"
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET='1'
+  else
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID=''
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET='0'
+  fi
+fi
+
+if [[ -z "\${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_HOOK_SET+x}" ]]; then
+  if [[ -n "\${__declarest_prompt_auth_bash_hook_installed+x}" ]]; then
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_HOOK_SET='1'
+  else
+    export DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_HOOK_SET='0'
+  fi
+fi
+
+if [[ -x "\${DECLAREST_E2E_BIN:-}" ]]; then
+  __declarest_e2e_prompt_auth_hook="\$("\${DECLAREST_E2E_BIN}" context session-hook bash 2>/dev/null || true)"
+  if [[ -n "\${__declarest_e2e_prompt_auth_hook}" ]]; then
+    eval "\${__declarest_e2e_prompt_auth_hook}"
+  fi
+  unset __declarest_e2e_prompt_auth_hook
+fi
+
+if [[ "\${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_HOOK_SET:-}" == '0' && -n "\${__declarest_prompt_auth_bash_hook_installed:-}" ]]; then
+  export DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK='1'
+else
+  export DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK='0'
+fi
+
 __declarest_e2e_prune_deleted_run_bins_from_path() {
   local runs_dir="\${DECLAREST_E2E_RUNS_DIR:-}"
   [[ -n "\${runs_dir}" ]] || return 0
@@ -436,6 +468,36 @@ if [[ -n "${DECLAREST_E2E_ORIGINAL_KUBECONFIG+x}" ]]; then
   fi
 fi
 unset DECLAREST_E2E_ORIGINAL_KUBECONFIG
+
+if [[ "${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET:-}" == '0' && -n "${DECLAREST_PROMPT_AUTH_SESSION_ID:-}" ]]; then
+  if [[ -x "${DECLAREST_E2E_BIN:-}" ]]; then
+    "${DECLAREST_E2E_BIN}" context clean --credentials-in-session >/dev/null 2>&1 || true
+  else
+    command declarest context clean --credentials-in-session >/dev/null 2>&1 || true
+  fi
+fi
+
+if [[ "${DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK:-}" == '1' ]]; then
+  if [[ -n "${__declarest_prompt_auth_prev_exit:-}" ]]; then
+    trap -- "${__declarest_prompt_auth_prev_exit}" EXIT
+  else
+    trap - EXIT
+  fi
+  unset -f declarest_prompt_auth_cleanup >/dev/null 2>&1 || true
+  unset -f declarest_prompt_auth_on_exit >/dev/null 2>&1 || true
+  unset __declarest_prompt_auth_prev_exit
+  unset __declarest_prompt_auth_bash_hook_installed
+fi
+unset DECLAREST_E2E_INSTALLED_PROMPT_AUTH_HOOK
+
+if [[ "${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET:-}" == '1' ]]; then
+  export DECLAREST_PROMPT_AUTH_SESSION_ID="${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID}"
+elif [[ "${DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET:-}" == '0' ]]; then
+  unset DECLAREST_PROMPT_AUTH_SESSION_ID || true
+fi
+unset DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID
+unset DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_SESSION_ID_SET
+unset DECLAREST_E2E_ORIGINAL_PROMPT_AUTH_HOOK_SET
 
 for state_var in ${DECLAREST_E2E_STATE_ENV_KEYS:-}; do
   unset "${state_var}"

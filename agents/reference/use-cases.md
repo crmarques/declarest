@@ -154,7 +154,7 @@ Expected outputs:
 1. Temporary context config is usable after sourcing the generated setup script.
 2. Access output includes component-specific or state-derived managed-server details (for example, local keycloak admin console URL and credentials, or local rundeck API URL and auth token).
 3. Context repository directory contains seeded template resources and collection metadata.
-4. Setup script exports runtime env vars and defines alias `declarest-e2e`; reset script unsets these vars and removes the alias.
+4. Setup script exports runtime env vars, defines alias `declarest-e2e`, and initializes prompt-auth shell-session reuse for prompt-backed credentials; reset script unsets these vars, removes the alias, and restores the prior prompt-auth shell state.
 5. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
 6. Remote selections fail validation with actionable guidance.
 
@@ -319,7 +319,7 @@ Execution:
 Expected outputs:
 1. The generated context file contains top-level prompt-backed credentials plus proxy `basic.credentialsRef` placeholders and no plaintext proxy credentials.
 2. Manual handoff output includes the generated proxy username and password so a tester can enter them at the runtime prompt.
-3. Sourcing the generated setup script leaves proxy auth env vars unset so runtime still behaves like a real prompt-backed credential flow until the user enters credentials.
+3. Sourcing the generated setup script leaves proxy auth env vars unset while still enabling prompt-auth shell-session reuse, so runtime behaves like a real prompt-backed credential flow until the user enters credentials and later commands in that shell can reuse the kept values.
 
 Failure expectation:
 1. Combining `--proxy-auth-type prompt` with inline proxy username/password env vars, or selecting proxy prompt auth outside `cli-manual`, fails with actionable validation output before workload execution.
