@@ -1226,7 +1226,189 @@ EOF
   assert_file_contains "${kind_log}" "start declarest-e2e-parallel-b"
 }
 
-test_kubernetes_runtime_kind_create_lock_timeout_is_configurable() {
+test_kubernetes_runtime_serializes_podman_kind_load_against_create() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local kind_log="${tmp}/kind.log"
+  local create_worker="${tmp}/create-worker.sh"
+  local load_worker="${tmp}/load-worker.sh"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+action="${1:-} ${2:-}"
+name=''
+shift $(( $# >= 2 ? 2 : $# ))
+while (($# > 0)); do
+  case "$1" in
+    --name)
+      name=$2
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+case "${action}" in
+  'create cluster'|'load image-archive')
+    if ! mkdir "${FAKE_KIND_ACTIVE_DIR}" 2>/dev/null; then
+      printf 'overlap %s %s\n' "${action}" "${name}" >>"${FAKE_KIND_LOG}"
+      exit 1
+    fi
+
+    printf 'start %s %s\n' "${action}" "${name}" >>"${FAKE_KIND_LOG}"
+    sleep 0.2
+    rmdir "${FAKE_KIND_ACTIVE_DIR}"
+    printf 'done %s %s\n' "${action}" "${name}" >>"${FAKE_KIND_LOG}"
+    exit 0
+    ;;
+  'delete cluster')
+    exit 0
+    ;;
+esac
+
+printf 'unexpected kind invocation: %s %s\n' "${action}" "${name}" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${create_worker}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cluster_name=$1
+
+export E2E_RUNS_DIR="${WORKER_RUNS_DIR}"
+export E2E_LOCKS_DIR="${WORKER_LOCKS_DIR}"
+export E2E_CONTAINER_ENGINE='podman'
+
+source "${WORKER_REPO}/test/e2e/lib/common.sh"
+source "${WORKER_REPO}/test/e2e/lib/components_runtime.sh"
+
+mkdir -p "${WORKER_TMP}/${cluster_name}"
+: >"${WORKER_TMP}/${cluster_name}/kind-config.yaml"
+
+e2e_kind_create_cluster_with_retry \
+  "${cluster_name}" \
+  "${WORKER_TMP}/${cluster_name}/kubeconfig" \
+  "${WORKER_TMP}/${cluster_name}/kind-config.yaml" \
+  '5s'
+EOF
+  chmod +x "${create_worker}"
+
+  cat >"${load_worker}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cluster_name=$1
+
+export E2E_RUNS_DIR="${WORKER_RUNS_DIR}"
+export E2E_LOCKS_DIR="${WORKER_LOCKS_DIR}"
+export E2E_CONTAINER_ENGINE='podman'
+
+source "${WORKER_REPO}/test/e2e/lib/common.sh"
+source "${WORKER_REPO}/test/e2e/lib/components_runtime.sh"
+
+mkdir -p "${WORKER_TMP}/${cluster_name}"
+: >"${WORKER_TMP}/image.tar"
+
+e2e_kind_cmd_locked load image-archive "${WORKER_TMP}/image.tar" --name "${cluster_name}"
+EOF
+  chmod +x "${load_worker}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KIND_LOG="${kind_log}"
+  export FAKE_KIND_ACTIVE_DIR="${tmp}/kind-active"
+  export WORKER_REPO="${E2E_ROOT_DIR}"
+  export WORKER_RUNS_DIR="${tmp}/runs"
+  export WORKER_LOCKS_DIR="${tmp}/runs/.locks"
+  export WORKER_TMP="${tmp}/workers"
+
+  local rc_create rc_load pid_create pid_load
+  set +e
+  bash "${create_worker}" 'declarest-e2e-create' &
+  pid_create=$!
+  bash "${load_worker}" 'declarest-e2e-load' &
+  pid_load=$!
+  wait "${pid_create}"
+  rc_create=$?
+  wait "${pid_load}"
+  rc_load=$?
+  set -e
+
+  assert_status "${rc_create}" "0"
+  assert_status "${rc_load}" "0"
+  assert_not_contains "$(cat "${kind_log}")" "overlap "
+  assert_file_contains "${kind_log}" "start create cluster declarest-e2e-create"
+  assert_file_contains "${kind_log}" "start load image-archive declarest-e2e-load"
+}
+
+test_kubernetes_runtime_limits_active_podman_clusters() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local worker="${tmp}/worker.sh"
+  local worker_a_log="${tmp}/worker-a.log"
+  local worker_b_log="${tmp}/worker-b.log"
+  local worker_c_log="${tmp}/worker-c.log"
+
+  cat >"${worker}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+export E2E_RUNS_DIR="${WORKER_RUNS_DIR}"
+export E2E_LOCKS_DIR="${WORKER_LOCKS_DIR}"
+export E2E_CONTAINER_ENGINE='podman'
+export DECLAREST_E2E_KIND_ACTIVE_CLUSTER_SLOTS='2'
+export DECLAREST_E2E_KIND_ACTIVE_CLUSTER_LOCK_WAIT_SECONDS='1'
+
+source "${WORKER_REPO}/test/e2e/lib/common.sh"
+source "${WORKER_REPO}/test/e2e/lib/components_runtime.sh"
+
+e2e_kind_active_cluster_slot_acquire
+sleep 2
+e2e_kind_active_cluster_slot_release
+EOF
+  chmod +x "${worker}"
+
+  export WORKER_REPO="${E2E_ROOT_DIR}"
+  export WORKER_RUNS_DIR="${tmp}/runs"
+  export WORKER_LOCKS_DIR="${tmp}/runs/.locks"
+
+  local rc_a rc_b rc_c pid_a pid_b
+  bash "${worker}" >"${worker_a_log}" 2>&1 &
+  pid_a=$!
+  bash "${worker}" >"${worker_b_log}" 2>&1 &
+  pid_b=$!
+  sleep 0.1
+  set +e
+  bash "${worker}" >"${worker_c_log}" 2>&1
+  rc_c=$?
+  wait "${pid_a}"
+  rc_a=$?
+  wait "${pid_b}"
+  rc_b=$?
+  set -e
+
+  assert_status "${rc_a}" "0"
+  assert_status "${rc_b}" "0"
+  assert_status "${rc_c}" "1"
+  assert_file_contains "${worker_c_log}" "timed out waiting for active kind cluster slot"
+}
+
+test_kubernetes_runtime_kind_lock_timeout_is_configurable() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -1302,7 +1484,7 @@ EOF
 
   assert_status "${rc_a}" "0"
   assert_status "${rc_b}" "1"
-  assert_file_contains "${worker_b_log}" "timed out waiting for lock: kind-create-podman"
+  assert_file_contains "${worker_b_log}" "timed out waiting for lock: kind-podman"
 }
 
 test_k8s_component_start_uses_configurable_ready_timeout() {
@@ -1467,6 +1649,8 @@ test_k8s_component_start_reuses_cached_exported_archives_across_runs
 test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure
 test_kubernetes_runtime_fails_after_retryable_failures_without_reuse
 test_kubernetes_runtime_serializes_podman_kind_create
-test_kubernetes_runtime_kind_create_lock_timeout_is_configurable
+test_kubernetes_runtime_serializes_podman_kind_load_against_create
+test_kubernetes_runtime_limits_active_podman_clusters
+test_kubernetes_runtime_kind_lock_timeout_is_configurable
 test_k8s_component_start_uses_configurable_ready_timeout
 test_k8s_component_start_rejects_invalid_ready_timeout

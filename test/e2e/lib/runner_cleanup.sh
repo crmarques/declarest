@@ -4,6 +4,26 @@ e2e_proc_root() {
   printf '%s\n' "${E2E_PROC_ROOT:-/proc}"
 }
 
+e2e_cleanup_kind_lock_name() {
+  printf 'kind-podman\n'
+}
+
+e2e_cleanup_kind_lock_wait_seconds() {
+  local seconds=${DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS:-600}
+
+  if ! [[ "${seconds}" =~ ^[0-9]+$ ]] || ((seconds <= 0)); then
+    e2e_warn "invalid DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS=${seconds}; using default 600"
+    seconds=600
+  fi
+
+  printf '%s\n' "${seconds}"
+}
+
+e2e_cleanup_kind_delete_cluster_quiet_locked() {
+  local cluster_name=$1
+  KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+}
+
 e2e_validate_cleanup_run_id() {
   local run_id=$1
 
@@ -478,7 +498,8 @@ e2e_cleanup_run_kubernetes_runtime() {
   e2e_info "cleanup kind cluster name=${cluster_name} engine=${engine}"
   set +e
   if [[ "${engine}" == 'podman' ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    e2e_with_lock_timeout "$(e2e_cleanup_kind_lock_name)" "$(e2e_cleanup_kind_lock_wait_seconds)" \
+      e2e_cleanup_kind_delete_cluster_quiet_locked "${cluster_name}"
     rc=$?
   else
     kind delete cluster --name "${cluster_name}" >/dev/null 2>&1

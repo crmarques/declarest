@@ -232,6 +232,54 @@ _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl()
   assert_contains "${output}" "metadata fixture missing resource.id or resource.alias"
 }
 
+test_preflight_accepts_podman_kind_without_existing_clusters() {
+  load_components_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+
+  local command_name
+  for command_name in go git jq curl podman kubectl envsubst; do
+    cat >"${fake_bin}/${command_name}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+    chmod +x "${fake_bin}/${command_name}"
+  done
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == 'get' && "${2:-}" == 'clusters' ]]; then
+  printf 'No kind clusters found.\n'
+  exit 1
+fi
+
+printf 'unexpected kind invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
+  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_PLATFORM='kubernetes'
+  E2E_CONTAINER_ENGINE='podman'
+
+  local original_path="${PATH}"
+  PATH="${fake_bin}:${original_path}"
+  export PATH
+
+  e2e_preflight_requirements
+}
+
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template() {
   local metadata_file="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
   local content
@@ -361,6 +409,7 @@ test_checked_in_forward_proxy_component_contract_is_valid() {
 test_discover_rejects_missing_contract_version
 test_validate_all_discovered_components_accepts_valid_fixture_identity
 test_validate_all_discovered_components_rejects_missing_fixture_identity
+test_preflight_accepts_podman_kind_without_existing_clusters
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template
 test_managed_server_auth_type_defaults_prefer_oauth2
 test_managed_server_auth_type_rejects_unsupported_selection

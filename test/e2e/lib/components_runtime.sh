@@ -165,12 +165,19 @@ e2e_kind_export_kubeconfig_for_cluster() {
   local cluster_name=$1
   local kubeconfig=$2
 
+  e2e_kind_cmd_locked export kubeconfig --name "${cluster_name}" --kubeconfig "${kubeconfig}" || return 1
+}
+
+e2e_kind_delete_cluster_quiet_locked() {
+  local cluster_name=$1
+  [[ -n "${cluster_name}" ]] || return 0
+
   if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
-    e2e_run_cmd env KIND_EXPERIMENTAL_PROVIDER=podman kind export kubeconfig --name "${cluster_name}" --kubeconfig "${kubeconfig}" || return 1
-    return 0
+    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    return $?
   fi
 
-  e2e_run_cmd kind export kubeconfig --name "${cluster_name}" --kubeconfig "${kubeconfig}" || return 1
+  kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
 }
 
 e2e_kind_delete_cluster_quiet() {
@@ -180,10 +187,11 @@ e2e_kind_delete_cluster_quiet() {
   local rc=0
   set +e
   if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    e2e_with_lock_timeout "$(e2e_kind_lock_name)" "$(e2e_kind_lock_wait_seconds)" \
+      e2e_kind_delete_cluster_quiet_locked "${cluster_name}"
     rc=$?
   else
-    kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    e2e_kind_delete_cluster_quiet_locked "${cluster_name}"
     rc=$?
   fi
   set -e
@@ -194,11 +202,11 @@ e2e_kind_delete_cluster_quiet() {
   return 0
 }
 
-e2e_kind_create_lock_name() {
-  printf 'kind-create-%s\n' "${E2E_CONTAINER_ENGINE}"
+e2e_kind_lock_name() {
+  printf 'kind-%s\n' "${E2E_CONTAINER_ENGINE}"
 }
 
-e2e_kind_create_lock_wait_seconds() {
+e2e_kind_lock_wait_seconds() {
   local seconds=${DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS:-600}
 
   if ! [[ "${seconds}" =~ ^[0-9]+$ ]] || ((seconds <= 0)); then
@@ -207,6 +215,101 @@ e2e_kind_create_lock_wait_seconds() {
   fi
 
   printf '%s\n' "${seconds}"
+}
+
+e2e_kind_cmd_locked() {
+  if [[ "${E2E_CONTAINER_ENGINE}" != 'podman' ]]; then
+    e2e_kind_cmd "$@"
+    return $?
+  fi
+
+  e2e_with_lock_timeout "$(e2e_kind_lock_name)" "$(e2e_kind_lock_wait_seconds)" e2e_kind_cmd "$@"
+}
+
+e2e_kind_active_cluster_slots() {
+  if [[ "${E2E_CONTAINER_ENGINE}" != 'podman' ]]; then
+    printf '0\n'
+    return 0
+  fi
+
+  local slots=${DECLAREST_E2E_KIND_ACTIVE_CLUSTER_SLOTS:-2}
+  if ! [[ "${slots}" =~ ^[0-9]+$ ]] || ((slots <= 0)); then
+    e2e_warn "invalid DECLAREST_E2E_KIND_ACTIVE_CLUSTER_SLOTS=${slots}; using default 2"
+    slots=2
+  fi
+
+  printf '%s\n' "${slots}"
+}
+
+e2e_kind_active_cluster_lock_wait_seconds() {
+  local seconds=${DECLAREST_E2E_KIND_ACTIVE_CLUSTER_LOCK_WAIT_SECONDS:-3600}
+
+  if ! [[ "${seconds}" =~ ^[0-9]+$ ]] || ((seconds <= 0)); then
+    e2e_warn "invalid DECLAREST_E2E_KIND_ACTIVE_CLUSTER_LOCK_WAIT_SECONDS=${seconds}; using default 3600"
+    seconds=3600
+  fi
+
+  printf '%s\n' "${seconds}"
+}
+
+e2e_kind_active_cluster_lock_name() {
+  local slot=$1
+  printf 'kind-active-cluster-%s-%02d\n' "${E2E_CONTAINER_ENGINE}" "${slot}"
+}
+
+e2e_kind_active_cluster_slot_acquire() {
+  if [[ "${E2E_CONTAINER_ENGINE}" != 'podman' ]]; then
+    return 0
+  fi
+
+  if [[ -n "${E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH:-}" ]]; then
+    return 0
+  fi
+
+  local slots
+  local wait_seconds
+  local deadline
+  local current_epoch
+  local slot
+  local lock_path=''
+
+  slots=$(e2e_kind_active_cluster_slots) || return 1
+  if ((slots <= 0)); then
+    return 0
+  fi
+
+  wait_seconds=$(e2e_kind_active_cluster_lock_wait_seconds) || return 1
+  deadline=$(( $(e2e_epoch_now) + wait_seconds ))
+
+  while :; do
+    for ((slot = 1; slot <= slots; slot++)); do
+      lock_path=$(e2e_lock_try_acquire "$(e2e_kind_active_cluster_lock_name "${slot}")" || true)
+      if [[ -n "${lock_path}" ]]; then
+        E2E_KIND_ACTIVE_CLUSTER_SLOT=${slot}
+        E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH=${lock_path}
+        e2e_info "acquired active kind cluster slot=${slot}/${slots} engine=${E2E_CONTAINER_ENGINE}"
+        return 0
+      fi
+    done
+
+    current_epoch=$(e2e_epoch_now)
+    if ((current_epoch >= deadline)); then
+      e2e_die "timed out waiting for active kind cluster slot (engine=${E2E_CONTAINER_ENGINE} slots=${slots})"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+e2e_kind_active_cluster_slot_release() {
+  if [[ -z "${E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH:-}" ]]; then
+    return 0
+  fi
+
+  e2e_lock_release "${E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH}"
+  e2e_info "released active kind cluster slot=${E2E_KIND_ACTIVE_CLUSTER_SLOT:-} engine=${E2E_CONTAINER_ENGINE}"
+  E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH=''
+  E2E_KIND_ACTIVE_CLUSTER_SLOT=''
 }
 
 e2e_kind_create_cluster_with_retry_locked() {
@@ -279,8 +382,8 @@ e2e_kind_create_cluster_with_retry() {
 
   local lock_name
   local lock_wait_seconds
-  lock_name=$(e2e_kind_create_lock_name)
-  lock_wait_seconds=$(e2e_kind_create_lock_wait_seconds)
+  lock_name=$(e2e_kind_lock_name)
+  lock_wait_seconds=$(e2e_kind_lock_wait_seconds)
   e2e_with_lock_timeout "${lock_name}" "${lock_wait_seconds}" e2e_kind_create_cluster_with_retry_locked "${cluster_name}" "${kubeconfig}" "${kind_config}" "${wait_timeout}"
 }
 
@@ -296,6 +399,8 @@ e2e_kubernetes_runtime_ensure() {
   if [[ -n "${E2E_KIND_CLUSTER_NAME:-}" && -n "${E2E_KUBECONFIG:-}" && -f "${E2E_KUBECONFIG}" ]]; then
     return 0
   fi
+
+  e2e_kind_active_cluster_slot_acquire || return 1
 
   E2E_KIND_CLUSTER_NAME=$(e2e_kind_cluster_name_for_run "${E2E_RUN_ID}")
   E2E_K8S_NAMESPACE=$(e2e_k8s_namespace_for_run "${E2E_RUN_ID}")
@@ -332,8 +437,13 @@ e2e_kubernetes_runtime_ensure() {
 e2e_kubernetes_runtime_teardown() {
   local cluster_name=${E2E_KIND_CLUSTER_NAME:-}
   local cluster_reused=${E2E_KIND_CLUSTER_REUSED:-}
+  local release_active_slot=0
 
-  if [[ "${E2E_PLATFORM}" != 'kubernetes' && -z "${cluster_name}" ]]; then
+  if [[ -n "${E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH:-}" ]]; then
+    release_active_slot=1
+  fi
+
+  if [[ "${E2E_PLATFORM}" != 'kubernetes' && -z "${cluster_name}" && "${release_active_slot}" != '1' ]]; then
     return 0
   fi
 
@@ -353,32 +463,45 @@ e2e_kubernetes_runtime_teardown() {
   case "${cluster_reused,,}" in
     1|true|yes|on)
       e2e_info "skipping kind cluster deletion for reused cluster name=${cluster_name}"
+      if ((release_active_slot == 1)); then
+        e2e_kind_active_cluster_slot_release || true
+      fi
       return 0
       ;;
   esac
 
   if ! command -v kind >/dev/null 2>&1; then
     e2e_warn "kind binary not found; skipping cluster teardown for ${cluster_name}"
+    if ((release_active_slot == 1)); then
+      e2e_kind_active_cluster_slot_release || true
+    fi
     return 0
   fi
 
   local rc=0
   set +e
   if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    e2e_with_lock_timeout "$(e2e_kind_lock_name)" "$(e2e_kind_lock_wait_seconds)" \
+      e2e_kind_delete_cluster_quiet_locked "${cluster_name}"
     rc=$?
   else
-    kind delete cluster --name "${cluster_name}" >/dev/null 2>&1
+    e2e_kind_delete_cluster_quiet_locked "${cluster_name}"
     rc=$?
   fi
   set -e
 
   if ((rc != 0)); then
     e2e_warn "kind cluster deletion returned rc=${rc} for ${cluster_name}"
+    if ((release_active_slot == 1)); then
+      e2e_kind_active_cluster_slot_release || true
+    fi
     return 1
   fi
 
   e2e_info "deleted kind cluster name=${cluster_name}"
+  if ((release_active_slot == 1)); then
+    e2e_kind_active_cluster_slot_release || true
+  fi
   return 0
 }
 
@@ -522,7 +645,7 @@ e2e_k8s_preload_image_to_kind() {
     e2e_k8s_prepare_image_archive_locked "${image}" "${archive}" "${archive_id_file}" || return 1
 
   e2e_info "k8s image preload loading image into kind cluster=${E2E_KIND_CLUSTER_NAME} image=${image}"
-  e2e_kind_cmd load image-archive "${archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
+  e2e_kind_cmd_locked load image-archive "${archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
 }
 
 e2e_kubernetes_preload_selected_images() {

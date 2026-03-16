@@ -799,7 +799,7 @@ e2e_operator_start_manager() {
   e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${image_archive}" "${E2E_OPERATOR_IMAGE}" || return 1
 
   e2e_info "operator profile loading manager image archive into kind cluster name=${E2E_KIND_CLUSTER_NAME} archive=${image_archive}"
-  e2e_kind_cmd load image-archive "${image_archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
+  e2e_kind_cmd_locked load image-archive "${image_archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1
 
   local ready_timeout_seconds
   ready_timeout_seconds=$(e2e_operator_ready_timeout_seconds) || return 1

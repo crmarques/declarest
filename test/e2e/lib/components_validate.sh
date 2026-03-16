@@ -739,7 +739,14 @@ e2e_preflight_requirements() {
         e2e_require_command kubectl || return 1
         e2e_require_command envsubst || return 1
 
-        if ! e2e_kind_run_raw get clusters >/dev/null 2>&1; then
+        local kind_provider_output=''
+        local kind_provider_rc=0
+        set +e
+        kind_provider_output=$(e2e_kind_run_raw get clusters 2>&1)
+        kind_provider_rc=$?
+        set -e
+
+        if ((kind_provider_rc != 0)) && [[ "${kind_provider_output}" != *'No kind clusters found.'* ]]; then
           if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]]; then
             e2e_die 'kind provider check failed for podman; verify kind supports podman on this host (KIND_EXPERIMENTAL_PROVIDER=podman)'
           else

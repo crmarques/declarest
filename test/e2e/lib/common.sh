@@ -30,6 +30,8 @@ E2E_RUNS_DIR="${E2E_DIR}/.runs"
 : "${E2E_KUBECONFIG:=}"
 : "${E2E_KIND_CLUSTER_NAME:=}"
 : "${E2E_KIND_CLUSTER_REUSED:=0}"
+: "${E2E_KIND_ACTIVE_CLUSTER_SLOT:=}"
+: "${E2E_KIND_ACTIVE_CLUSTER_LOCK_PATH:=}"
 : "${E2E_K8S_NAMESPACE:=}"
 : "${E2E_START_EPOCH:=0}"
 : "${E2E_METADATA:=bundle}"
@@ -227,6 +229,35 @@ e2e_lock_path() {
   local name=$1
   local safe_name=${name//[^A-Za-z0-9._-]/_}
   printf '%s/%s.lock\n' "${E2E_LOCKS_DIR}" "${safe_name}"
+}
+
+e2e_lock_try_acquire() {
+  local name=$1
+  local lock_path
+  local owner_pid=''
+
+  lock_path=$(e2e_lock_path "${name}")
+  mkdir -p "${E2E_LOCKS_DIR}" || return 1
+
+  if mkdir "${lock_path}" 2>/dev/null; then
+    printf '%s\n' "$$" >"${lock_path}/pid"
+    printf '%s\n' "${lock_path}"
+    return 0
+  fi
+
+  if [[ -f "${lock_path}/pid" ]]; then
+    owner_pid=$(cat "${lock_path}/pid" 2>/dev/null || true)
+  fi
+  if [[ -n "${owner_pid}" && "${owner_pid}" =~ ^[0-9]+$ ]] && ! kill -0 "${owner_pid}" >/dev/null 2>&1; then
+    rm -rf "${lock_path}" >/dev/null 2>&1 || true
+    if mkdir "${lock_path}" 2>/dev/null; then
+      printf '%s\n' "$$" >"${lock_path}/pid"
+      printf '%s\n' "${lock_path}"
+      return 0
+    fi
+  fi
+
+  return 1
 }
 
 e2e_lock_acquire_with_timeout() {
