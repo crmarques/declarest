@@ -66,6 +66,7 @@ e2e_context_build() {
   printf 'currentContext: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
   e2e_context_insert_managed_server_openapi "${context_file}"
   e2e_context_insert_proxy_config "${context_file}"
+  e2e_context_normalize_credentials "${context_file}"
 }
 
 e2e_context_insert_managed_server_openapi() {
@@ -132,7 +133,7 @@ for idx, line in enumerate(lines):
         has_openapi = True
         break
 
-    if stripped.startswith('baseURL:'):
+    if stripped.startswith('url:'):
         base_url_idx = idx
 
 if has_openapi or base_url_idx is None:
@@ -596,9 +597,9 @@ def proxy_block(indent: int, cfg: dict[str, str]) -> list[str]:
     auth_indent = child_indent + 2
     auth_value_indent = auth_indent + 2
     if cfg["http_url"]:
-        block.append(" " * child_indent + f"httpURL: {yaml_quote(cfg['http_url'])}")
+        block.append(" " * child_indent + f"http: {yaml_quote(cfg['http_url'])}")
     if cfg["https_url"]:
-        block.append(" " * child_indent + f"httpsURL: {yaml_quote(cfg['https_url'])}")
+        block.append(" " * child_indent + f"https: {yaml_quote(cfg['https_url'])}")
     if cfg["no_proxy"]:
         block.append(" " * child_indent + f"noProxy: {yaml_quote(cfg['no_proxy'])}")
     if cfg["auth_type"] == "basic":
@@ -713,8 +714,8 @@ managed_server = find_child(lines, context_start, context_end, context_indent, "
 if managed_server is not None:
     http_section = find_child(lines, managed_server[0], managed_server[1], managed_server[2], "http")
     if http_section is not None:
-        if replace_mapping_scalar(lines, http_section, "baseURL", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
-            sections.append("managedServer.baseURL")
+        if replace_mapping_scalar(lines, http_section, "url", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
+            sections.append("managedServer.url")
             http_section = (http_section[0], block_end(lines, http_section[0], http_section[2]), http_section[2])
         if replace_mapping_scalar(lines, http_section, "healthCheck", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
             sections.append("managedServer.healthCheck")
@@ -803,10 +804,298 @@ PY
     e2e_info "proxy context injected into ${context_file}: ${patch_output#PATCHED }"
   fi
 
+  e2e_context_normalize_credentials "${context_file}"
+
   return 0
 }
 
 e2e_context_insert_managed_server_proxy() {
   local context_file=$1
   e2e_context_insert_proxy_config "${context_file}"
+}
+
+e2e_context_normalize_credentials() {
+  local context_file=$1
+
+  local python_cmd
+  if command -v python3 >/dev/null 2>&1; then
+    python_cmd='python3'
+  elif command -v python >/dev/null 2>&1; then
+    python_cmd='python'
+  else
+    e2e_info 'skipping credential normalization: python interpreter unavailable'
+    return 0
+  fi
+
+  local patch_output
+  patch_output=$(
+    E2E_CONTEXT_FILE="${context_file}" \
+    "${python_cmd}" <<'PY'
+import os
+from pathlib import Path
+
+
+context_path = Path(os.environ["E2E_CONTEXT_FILE"])
+if not context_path.exists():
+    raise SystemExit(0)
+
+lines = context_path.read_text().splitlines()
+
+
+def indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def stripped(line: str) -> str:
+    return line.lstrip()
+
+
+def is_content_line(line: str) -> bool:
+    value = stripped(line)
+    return bool(value) and not value.startswith("#")
+
+
+def block_end(lines: list[str], start_idx: int, indent: int) -> int:
+    for idx in range(start_idx + 1, len(lines)):
+        if not is_content_line(lines[idx]):
+            continue
+        if indent_of(lines[idx]) <= indent:
+            return idx
+    return len(lines)
+
+
+def find_context_range(lines: list[str]):
+    context_idx = None
+    for idx, line in enumerate(lines):
+        if stripped(line).startswith("- name:"):
+            context_idx = idx
+            break
+    if context_idx is None:
+        return None
+    for idx in range(context_idx + 1, len(lines)):
+        if is_content_line(lines[idx]) and indent_of(lines[idx]) == 0:
+            return context_idx, idx
+    return context_idx, len(lines)
+
+
+def find_key(lines: list[str], start: int, end: int, parent_indent: int, key: str):
+    prefix = f"{key}:"
+    for idx in range(start + 1, end):
+        if not is_content_line(lines[idx]):
+            continue
+        current_indent = indent_of(lines[idx])
+        current_stripped = stripped(lines[idx])
+        if current_indent <= parent_indent:
+            return None
+        if current_indent == parent_indent + 2 and current_stripped.startswith(prefix):
+            return idx, block_end(lines, idx, current_indent), current_indent, current_stripped[len(prefix):].strip()
+    return None
+
+
+def follow_path(lines: list[str], start: int, end: int, indent: int, keys: list[str]):
+    current = (start, end, indent, "")
+    for key in keys:
+        current = find_key(lines, current[0], current[1], current[2], key)
+        if current is None:
+            return None
+    return current
+
+
+def yaml_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def unwrap_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        inner = value[1:-1]
+        if value[0] == "'":
+            return inner.replace("''", "'")
+        return inner
+    return value
+
+
+def find_scalar(lines: list[str], parent_range, key: str):
+    match = find_key(lines, parent_range[0], parent_range[1], parent_range[2], key)
+    if match is None:
+        return None
+    idx, _, _, value = match
+    return idx, unwrap_scalar(value)
+
+
+credential_specs: dict[str, tuple] = {}
+credential_order: list[str] = []
+
+
+def register_credential(name: str, spec: tuple) -> str:
+    existing = credential_specs.get(name)
+    if existing is None:
+        credential_specs[name] = spec
+        credential_order.append(name)
+        return name
+    if existing == spec:
+        return name
+
+    suffix = 2
+    while True:
+        candidate = f"{name}-{suffix}"
+        existing = credential_specs.get(candidate)
+        if existing is None:
+            credential_specs[candidate] = spec
+            credential_order.append(candidate)
+            return candidate
+        if existing == spec:
+            return candidate
+        suffix += 1
+
+
+def replace_basic_with_ref(lines: list[str], current_range, credential_name: str):
+    start, end, indent, _ = current_range
+    lines[start:end] = [
+        " " * indent + "basic:",
+        " " * (indent + 2) + "credentialsRef:",
+        " " * (indent + 4) + f"name: {yaml_quote(credential_name)}",
+    ]
+
+
+def replace_vault_password_with_ref(lines: list[str], current_range, credential_name: str, mount_value: str):
+    start, end, indent, _ = current_range
+    replacement = [
+        " " * indent + "password:",
+        " " * (indent + 2) + "credentialsRef:",
+        " " * (indent + 4) + f"name: {yaml_quote(credential_name)}",
+    ]
+    if mount_value:
+        replacement.append(" " * (indent + 2) + f"mount: {yaml_quote(mount_value)}")
+    lines[start:end] = replacement
+
+
+def process_basic_auth(lines: list[str], parent_range, credential_name: str) -> bool:
+    basic = find_key(lines, parent_range[0], parent_range[1], parent_range[2], "basic")
+    if basic is None:
+        return False
+    if find_key(lines, basic[0], basic[1], basic[2], "credentialsRef") is not None:
+        return False
+    username = find_scalar(lines, basic, "username")
+    password = find_scalar(lines, basic, "password")
+    if username is None or password is None:
+        return False
+    final_name = register_credential(credential_name, ("literal", username[1], password[1]))
+    replace_basic_with_ref(lines, basic, final_name)
+    return True
+
+
+def process_prompt_auth(lines: list[str], parent_range, credential_name: str) -> bool:
+    prompt = find_key(lines, parent_range[0], parent_range[1], parent_range[2], "prompt")
+    if prompt is None:
+        return False
+    keep = find_scalar(lines, prompt, "keepCredentialsForSession")
+    persist = keep is not None and keep[1].lower() == "true"
+    final_name = register_credential(credential_name, ("prompt", persist))
+    replace_basic_with_ref(lines, prompt, final_name)
+    return True
+
+
+def process_vault_password(lines: list[str], auth_range, credential_name: str) -> bool:
+    password = find_key(lines, auth_range[0], auth_range[1], auth_range[2], "password")
+    if password is None:
+        return False
+    if find_key(lines, password[0], password[1], password[2], "credentialsRef") is not None:
+        return False
+    username = find_scalar(lines, password, "username")
+    secret = find_scalar(lines, password, "password")
+    if username is None or secret is None:
+        return False
+    mount = find_scalar(lines, password, "mount")
+    final_name = register_credential(credential_name, ("literal", username[1], secret[1]))
+    replace_vault_password_with_ref(lines, password, final_name, "" if mount is None else mount[1])
+    return True
+
+
+def render_credential_block(name: str, spec: tuple) -> list[str]:
+    block = [f"  - name: {yaml_quote(name)}"]
+    if spec[0] == "literal":
+        block.append(f"    username: {yaml_quote(spec[1])}")
+        block.append(f"    password: {yaml_quote(spec[2])}")
+        return block
+
+    persist = spec[1]
+    block.append("    username:")
+    block.append("      prompt: true")
+    if persist:
+        block.append("      persistInSession: true")
+    block.append("    password:")
+    block.append("      prompt: true")
+    if persist:
+        block.append("      persistInSession: true")
+    return block
+
+
+context_range = find_context_range(lines)
+if context_range is None:
+    raise SystemExit(0)
+
+context_start, context_end = context_range
+context_indent = indent_of(lines[context_start])
+
+targets = [
+    (["repository", "git", "remote", "auth"], "git-remote-auth", "basic_or_prompt"),
+    (["managedServer", "http", "auth"], "managed-server-auth", "basic_or_prompt"),
+    (["secretStore", "vault", "auth"], "vault-password-auth", "vault_password"),
+    (["repository", "git", "remote", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
+    (["managedServer", "http", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
+    (["secretStore", "vault", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
+    (["metadata", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
+]
+
+patched = False
+for path_keys, credential_name, mode in targets:
+    current = follow_path(lines, context_start, context_end, context_indent, path_keys)
+    if current is None:
+        continue
+    if mode == "vault_password":
+        if process_vault_password(lines, current, credential_name):
+            patched = True
+    else:
+        if process_basic_auth(lines, current, credential_name):
+            patched = True
+            continue
+        if process_prompt_auth(lines, current, credential_name):
+            patched = True
+
+if not patched:
+    raise SystemExit(0)
+
+credentials_idx = None
+contexts_idx = None
+for idx, line in enumerate(lines):
+    if not is_content_line(line) or indent_of(line) != 0:
+        continue
+    key = stripped(line)
+    if key == "credentials:" and credentials_idx is None:
+        credentials_idx = idx
+    if key == "contexts:" and contexts_idx is None:
+        contexts_idx = idx
+
+credential_lines: list[str] = []
+for name in credential_order:
+    credential_lines.extend(render_credential_block(name, credential_specs[name]))
+
+if credentials_idx is None:
+    insert_idx = 0 if contexts_idx is None else contexts_idx
+    lines[insert_idx:insert_idx] = ["credentials:"] + credential_lines
+else:
+    insert_idx = block_end(lines, credentials_idx, 0)
+    lines[insert_idx:insert_idx] = credential_lines
+
+context_path.write_text("\n".join(lines) + "\n")
+print("PATCHED")
+PY
+  )
+
+  if [[ "${patch_output}" == 'PATCHED' ]]; then
+    e2e_info "credential normalization injected reusable credentials into ${context_file}"
+  fi
+
+  return 0
 }

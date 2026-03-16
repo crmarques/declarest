@@ -89,7 +89,7 @@ test_hook_contract_keeps_state_and_context_deterministic_on_reentry() {
     "${key}" \
     'printf "TOKEN=alpha\n" >"${E2E_COMPONENT_STATE_FILE}"' \
     'printf "TOKEN=alpha\nAUTH_MODE=oauth2\n" >"${E2E_COMPONENT_STATE_FILE}"' \
-    'printf "managedServer:\n  http:\n    baseURL: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
+    'printf "managedServer:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
   register_contract_component "${key}" "${component_dir}"
 
   e2e_component_run_hook "${key}" init
@@ -127,7 +127,7 @@ test_hook_contract_rejects_missing_state_after_init() {
     "${key}" \
     ':' \
     'printf "TOKEN=alpha\n" >"${E2E_COMPONENT_STATE_FILE}"' \
-    'printf "managedServer:\n  http:\n    baseURL: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
+    'printf "managedServer:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
   register_contract_component "${key}" "${component_dir}"
 
   local output status

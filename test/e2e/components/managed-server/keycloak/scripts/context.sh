@@ -13,7 +13,7 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 {
   printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    baseURL: %s\n' "${KEYCLOAK_BASE_URL}"
+  printf '    url: %s\n' "${KEYCLOAK_BASE_URL}"
   printf '    healthCheck: %s/realms/master/account\n' "${KEYCLOAK_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"

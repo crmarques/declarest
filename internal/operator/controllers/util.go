@@ -53,8 +53,6 @@ const (
 	conditionReasonOverlappingPolicy = "OverlappingPolicy"
 
 	// Distinct condition reasons for better error categorization.
-	conditionReasonSecretResolutionFailed = "SecretResolutionFailed"
-	conditionReasonArtifactDownloadFailed = "ArtifactDownloadFailed"
 	conditionReasonRepositoryUnavailable  = "RepositoryUnavailable"
 	conditionReasonSessionBootstrapFailed = "SessionBootstrapFailed"
 

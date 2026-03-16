@@ -44,7 +44,6 @@ const (
 	vaultAuthToken vaultAuthMode = iota
 	vaultAuthUserPass
 	vaultAuthAppRole
-	vaultAuthPrompt
 )
 
 type VaultSecretService struct {
@@ -68,7 +67,6 @@ type vaultAuthConfig struct {
 
 	userPass *config.VaultUserPasswordAuth
 	appRole  *config.VaultAppRoleAuth
-	prompt   *config.VaultPromptAuth
 }
 
 type vaultResponse struct {
@@ -416,10 +414,6 @@ func (s *VaultSecretService) initLocked(ctx context.Context) error {
 		if err := s.loginUserPass(ctx); err != nil {
 			return err
 		}
-	case vaultAuthPrompt:
-		if err := s.loginPrompt(ctx); err != nil {
-			return err
-		}
 	case vaultAuthAppRole:
 		if err := s.loginAppRole(ctx); err != nil {
 			return err
@@ -450,33 +444,23 @@ func (s *VaultSecretService) loginUserPass(ctx context.Context) error {
 		mount = "userpass"
 	}
 
-	username := strings.TrimSpace(credentials.Username)
-	password := strings.TrimSpace(credentials.Password)
+	creds, err := promptauth.ResolveCredentials(
+		s.runtime,
+		ctx,
+		credentials.CredentialName(),
+		credentials.Username,
+		credentials.Password,
+	)
+	if err != nil {
+		return err
+	}
+	username := strings.TrimSpace(creds.Username)
+	password := strings.TrimSpace(creds.Password)
 	if username == "" || password == "" {
 		return faults.NewValidationError("secret-store.vault.auth.password requires username and password", nil)
 	}
 
 	return s.loginUserPassWithCredentials(ctx, username, password, mount)
-}
-
-func (s *VaultSecretService) loginPrompt(ctx context.Context) error {
-	if s.runtime == nil || s.auth.prompt == nil {
-		return faults.NewValidationError("secret-store.vault.auth.prompt runtime is not configured", nil)
-	}
-
-	mount, err := normalizeVaultPath(s.auth.prompt.Mount, true)
-	if err != nil {
-		return faults.NewValidationError("secret-store.vault.auth.prompt.mount is invalid", err)
-	}
-	if mount == "" {
-		mount = "userpass"
-	}
-
-	creds, err := s.runtime.Resolve(ctx, promptauth.TargetSecretStoreVaultAuth, s.auth.prompt.KeepCredentialsForSession)
-	if err != nil {
-		return err
-	}
-	return s.loginUserPassWithCredentials(ctx, creds.Username, creds.Password, mount)
 }
 
 func (s *VaultSecretService) loginUserPassWithCredentials(

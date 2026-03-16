@@ -170,7 +170,7 @@ declarest context check
 Useful for environment-specific testing without editing stored config:
 
 ```bash
-declarest context resolve --set managedServer.http.baseURL=https://staging-api.example.com
+declarest context resolve --set managedServer.http.url=https://staging-api.example.com
 ```
 
 ## `repository` command family (git/filesystem backends)

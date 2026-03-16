@@ -63,7 +63,7 @@ func buildOrchestratorFromResolvedContext(
 	args := os.Args[1:]
 	emitSecurityWarningsWithArgs(os.Stderr, args, resolvedContext)
 
-	authRuntime, err := promptauth.New(promptauth.BuildTargets(resolvedContext))
+	authRuntime, err := promptauth.New()
 	if err != nil {
 		return nil, err
 	}

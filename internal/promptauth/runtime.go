@@ -22,10 +22,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 )
 
-const envPrefix = "DECLAREST_PROMPT_AUTH_"
+const envPrefix = "DECLAREST_CONTEXT_CREDENTIAL_"
 
 type Credentials struct {
 	Username string
@@ -33,8 +34,13 @@ type Credentials struct {
 }
 
 type Prompter interface {
-	PromptCredentials(ctx context.Context, target Target, keepForSession bool, persistentSession bool) (Credentials, error)
-	ConfirmReuse(ctx context.Context, source Target, targets []Target) (bool, error)
+	PromptValue(
+		ctx context.Context,
+		credentialName string,
+		field string,
+		persistInSession bool,
+		persistentSession bool,
+	) (string, error)
 }
 
 type SessionStore interface {
@@ -47,9 +53,6 @@ type Option func(*Runtime)
 type Runtime struct {
 	mu sync.Mutex
 
-	targets map[string]Target
-	order   []string
-
 	prompter Prompter
 	store    SessionStore
 
@@ -57,12 +60,7 @@ type Runtime struct {
 	sessionLoaded     bool
 	sessionValues     map[string]string
 
-	resolved        map[string]Credentials
-	shared          Credentials
-	sharedSet       bool
-	sharedSourceKey string
-	reuseAll        bool
-	reuseAsked      bool
+	resolved map[string]Credentials
 }
 
 func WithPrompter(prompter Prompter) Option {
@@ -84,24 +82,10 @@ func WithSessionStore(store SessionStore) Option {
 	}
 }
 
-func New(targets []Target, opts ...Option) (*Runtime, error) {
-	if len(targets) == 0 {
-		return nil, nil
-	}
-
+func New(opts ...Option) (*Runtime, error) {
 	runtime := &Runtime{
-		targets:  make(map[string]Target, len(targets)),
-		order:    make([]string, 0, len(targets)),
 		prompter: terminalPrompter{},
 		resolved: map[string]Credentials{},
-	}
-	for _, item := range targets {
-		if strings.TrimSpace(item.Key) == "" {
-			continue
-		}
-		key := strings.TrimSpace(item.Key)
-		runtime.targets[key] = item
-		runtime.order = append(runtime.order, key)
 	}
 	for _, opt := range opts {
 		if opt == nil {
@@ -126,139 +110,111 @@ func New(targets []Target, opts ...Option) (*Runtime, error) {
 	return runtime, nil
 }
 
-func (r *Runtime) Resolve(ctx context.Context, key string, keepForSession bool) (Credentials, error) {
+func (r *Runtime) Resolve(
+	ctx context.Context,
+	credentialName string,
+	username config.CredentialValue,
+	password config.CredentialValue,
+) (Credentials, error) {
 	if r == nil {
-		return Credentials{}, faults.NewValidationError("prompt auth runtime is not configured", nil)
+		return Credentials{}, faults.NewValidationError("credential runtime is not configured", nil)
 	}
 	if err := r.ensureSessionLoaded(); err != nil {
 		return Credentials{}, err
 	}
 
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return Credentials{}, faults.NewValidationError("prompt auth target is required", nil)
+	credentialName = strings.TrimSpace(credentialName)
+	if credentialName == "" {
+		return Credentials{}, faults.NewValidationError("credential name is required", nil)
 	}
 
 	r.mu.Lock()
-	target := r.targetLocked(key)
-	if creds, ok := r.resolved[key]; ok {
+	if creds, ok := r.resolved[credentialName]; ok {
 		r.mu.Unlock()
 		return creds, nil
-	}
-	if creds, ok := credentialsFromEnvironment(key); ok {
-		r.resolved[key] = creds
-		if !r.sharedSet {
-			r.shared = creds
-			r.sharedSet = true
-			r.sharedSourceKey = key
-		}
-		r.mu.Unlock()
-		return creds, nil
-	}
-	if r.reuseAll && r.sharedSet {
-		creds := r.shared
-		r.resolved[key] = creds
-		r.mu.Unlock()
-		if keepForSession {
-			if err := r.persist(key, creds); err != nil {
-				return Credentials{}, err
-			}
-		}
-		return creds, nil
-	}
-
-	shouldAskReuseBeforePrompt := r.sharedSet && !r.reuseAsked && r.sharedSourceKey != "" && r.sharedSourceKey != key
-	source := r.targetLocked(r.sharedSourceKey)
-	sharedCreds := r.shared
-	if shouldAskReuseBeforePrompt {
-		r.reuseAsked = true
 	}
 	r.mu.Unlock()
 
-	if shouldAskReuseBeforePrompt {
-		reuse, err := r.prompter.ConfirmReuse(ctx, source, []Target{target})
-		if err != nil {
-			return Credentials{}, err
-		}
-		if reuse {
-			r.mu.Lock()
-			r.reuseAll = true
-			r.resolved[key] = sharedCreds
-			r.mu.Unlock()
-			if keepForSession {
-				if err := r.persist(key, sharedCreds); err != nil {
-					return Credentials{}, err
-				}
-			}
-			return sharedCreds, nil
-		}
-	}
-
-	creds, err := r.prompter.PromptCredentials(ctx, target, keepForSession, r.persistentSession)
+	resolvedUsername, err := r.resolveField(ctx, credentialName, "username", username)
 	if err != nil {
 		return Credentials{}, err
 	}
-	creds.Username = strings.TrimSpace(creds.Username)
-	creds.Password = strings.TrimSpace(creds.Password)
-	if creds.Username == "" || creds.Password == "" {
-		return Credentials{}, faults.NewValidationError(fmt.Sprintf("prompt auth for %s requires username and password", target.Label), nil)
+	resolvedPassword, err := r.resolveField(ctx, credentialName, "password", password)
+	if err != nil {
+		return Credentials{}, err
 	}
-
-	if keepForSession {
-		if err := r.persist(key, creds); err != nil {
-			return Credentials{}, err
-		}
+	creds := Credentials{
+		Username: strings.TrimSpace(resolvedUsername),
+		Password: strings.TrimSpace(resolvedPassword),
+	}
+	if creds.Username == "" || creds.Password == "" {
+		return Credentials{}, faults.NewValidationError(
+			fmt.Sprintf("credential %q requires username and password", credentialName),
+			nil,
+		)
 	}
 
 	r.mu.Lock()
-	r.resolved[key] = creds
-	if !r.sharedSet {
-		r.shared = creds
-		r.sharedSet = true
-		r.sharedSourceKey = key
-	}
-	shouldAskReuseAfterPrompt := !r.reuseAsked
-	others := r.pendingTargetsLocked(key)
-	if shouldAskReuseAfterPrompt {
-		r.reuseAsked = true
-	}
+	r.resolved[credentialName] = creds
 	r.mu.Unlock()
-
-	if shouldAskReuseAfterPrompt && len(others) > 0 {
-		reuse, err := r.prompter.ConfirmReuse(ctx, target, others)
-		if err != nil {
-			return Credentials{}, err
-		}
-		r.mu.Lock()
-		r.reuseAll = reuse
-		r.mu.Unlock()
-	}
 
 	return creds, nil
 }
 
-func (r *Runtime) targetLocked(key string) Target {
-	if target, ok := r.targets[key]; ok {
-		return target
+func ResolveCredentials(
+	runtime *Runtime,
+	ctx context.Context,
+	credentialName string,
+	username config.CredentialValue,
+	password config.CredentialValue,
+) (Credentials, error) {
+	if !username.IsPrompt() && !password.IsPrompt() {
+		return Credentials{
+			Username: username.Literal(),
+			Password: password.Literal(),
+		}, nil
 	}
-	return target(key)
+	if runtime == nil {
+		return Credentials{}, faults.NewValidationError(
+			fmt.Sprintf("credential %q requires prompt runtime support", strings.TrimSpace(credentialName)),
+			nil,
+		)
+	}
+	return runtime.Resolve(ctx, credentialName, username, password)
 }
 
-func (r *Runtime) pendingTargetsLocked(exclude string) []Target {
-	pending := make([]Target, 0, len(r.order))
-	for _, key := range r.order {
-		if key == exclude {
-			continue
-		}
-		if _, ok := r.resolved[key]; ok {
-			continue
-		}
-		if _, ok := credentialsFromEnvironment(key); ok {
-			continue
-		}
-		pending = append(pending, r.targetLocked(key))
+func (r *Runtime) resolveField(
+	ctx context.Context,
+	credentialName string,
+	field string,
+	value config.CredentialValue,
+) (string, error) {
+	if !value.IsPrompt() {
+		return value.Literal(), nil
 	}
-	return pending
+
+	envKey := credentialEnvKey(credentialName, field)
+	if resolved, ok := sessionValue(envKey); ok {
+		return resolved, nil
+	}
+
+	prompted, err := r.prompter.PromptValue(ctx, credentialName, field, value.PersistInSession(), r.persistentSession)
+	if err != nil {
+		return "", err
+	}
+	prompted = strings.TrimSpace(prompted)
+	if prompted == "" {
+		return "", faults.NewValidationError(
+			fmt.Sprintf("credential %q %s is required", credentialName, field),
+			nil,
+		)
+	}
+	if value.PersistInSession() {
+		if err := r.persistField(envKey, prompted); err != nil {
+			return "", err
+		}
+	}
+	return prompted, nil
 }
 
 func (r *Runtime) ensureSessionLoaded() error {
@@ -294,25 +250,20 @@ func (r *Runtime) ensureSessionLoaded() error {
 	return nil
 }
 
-func (r *Runtime) persist(key string, creds Credentials) error {
+func (r *Runtime) persistField(key string, value string) error {
 	if err := r.ensureSessionLoaded(); err != nil {
 		return err
 	}
 
-	usernameKey, passwordKey := credentialEnvKeys(key)
-	if err := os.Setenv(usernameKey, creds.Username); err != nil {
-		return internalError("failed to store prompt auth session username", err)
-	}
-	if err := os.Setenv(passwordKey, creds.Password); err != nil {
-		return internalError("failed to store prompt auth session password", err)
+	if err := os.Setenv(key, value); err != nil {
+		return internalError("failed to store prompt auth session value", err)
 	}
 
 	r.mu.Lock()
 	if r.sessionValues == nil {
 		r.sessionValues = map[string]string{}
 	}
-	r.sessionValues[usernameKey] = creds.Username
-	r.sessionValues[passwordKey] = creds.Password
+	r.sessionValues[key] = value
 	values := maps.Clone(r.sessionValues)
 	store := r.store
 	r.mu.Unlock()
@@ -321,33 +272,49 @@ func (r *Runtime) persist(key string, creds Credentials) error {
 		return nil
 	}
 	if err := store.Save(values); err != nil {
-		return internalError("failed to persist prompt auth session credentials", err)
+		return internalError("failed to persist prompt auth session value", err)
 	}
 	return nil
 }
 
-func credentialEnvKeys(key string) (string, string) {
-	segment := strings.ToUpper(strings.TrimSpace(key))
-	return envPrefix + segment + "_USERNAME", envPrefix + segment + "_PASSWORD"
+func credentialEnvKeys(name string) (string, string) {
+	return credentialEnvKey(name, "username"), credentialEnvKey(name, "password")
 }
 
-func credentialsFromEnvironment(key string) (Credentials, bool) {
-	usernameKey, passwordKey := credentialEnvKeys(key)
-	username, usernameOK := os.LookupEnv(usernameKey)
-	password, passwordOK := os.LookupEnv(passwordKey)
-	if !usernameOK || !passwordOK {
-		return Credentials{}, false
-	}
+func credentialEnvKey(name string, field string) string {
+	return envPrefix + sanitizeEnvSegment(name) + "_" + strings.ToUpper(strings.TrimSpace(field))
+}
 
-	username = strings.TrimSpace(username)
-	password = strings.TrimSpace(password)
-	if username == "" || password == "" {
-		return Credentials{}, false
+func sanitizeEnvSegment(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
 	}
-	return Credentials{
-		Username: username,
-		Password: password,
-	}, true
+	var builder strings.Builder
+	builder.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r - ('a' - 'A'))
+		case (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'):
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+	return builder.String()
+}
+
+func sessionValue(key string) (string, bool) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
 }
 
 func internalError(message string, cause error) error {

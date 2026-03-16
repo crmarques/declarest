@@ -101,6 +101,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 	}
 
 	requiredSnippets := []string{
+		"credentials:",
 		"contexts:",
 		"currentContext:",
 		"repository:",
@@ -110,13 +111,14 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"healthCheck:",
 		"auth:",
 		"proxy:",
-		"httpURL:",
-		"httpsURL:",
+		"http:",
+		"https:",
 		"noProxy:",
 		"oauth2:",
-		"basicAuth:",
+		"basic:",
+		"credentialsRef:",
 		"prompt:",
-		"keepCredentialsForSession:",
+		"persistInSession:",
 		"customHeaders:",
 		"prefix: Bearer",
 		"value: change-me",
@@ -192,7 +194,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected baseURL fallback to succeed, got %v", err)
+		t.Fatalf("expected url fallback to succeed, got %v", err)
 	}
 	if probePath != "/admin/api/45" {
 		t.Fatalf("expected probe path /admin/api/45, got %q", probePath)
@@ -204,7 +206,7 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 			},
 		},
 	}); got != "https://api.example.invalid/admin/api/45" {
-		t.Fatalf("expected rendered target to use baseURL fallback, got %q", got)
+		t.Fatalf("expected rendered target to use url fallback, got %q", got)
 	}
 }
 
@@ -1168,6 +1170,7 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 			"http://proxy.example.com:3128",
 			"",
 			"localhost,127.0.0.1",
+			"proxy-creds",
 			"proxy-user",
 			"proxy-pass",
 			"Authorization",
@@ -1176,13 +1179,14 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 		},
 		selects: []string{
 			"filesystem",
-			"basic",
 			"customHeaders",
 		},
 		confirms: []bool{
 			false,
 			true,
 			true,
+			false,
+			false,
 			false,
 			false,
 			false,
@@ -1211,10 +1215,10 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 
 	proxy := service.createdContext.ManagedServer.HTTP.Proxy
 	if proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpURL, got %q", proxy.HTTPURL)
+		t.Fatalf("expected proxy http, got %q", proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != "" {
-		t.Fatalf("expected empty proxy httpsURL, got %q", proxy.HTTPSURL)
+		t.Fatalf("expected empty proxy https, got %q", proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != "localhost,127.0.0.1" {
 		t.Fatalf("expected proxy noProxy, got %q", proxy.NoProxy)
@@ -1222,8 +1226,14 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 	if proxy.Auth == nil {
 		t.Fatal("expected proxy auth configuration")
 	}
-	if proxy.Auth.Basic == nil || proxy.Auth.Basic.Username != "proxy-user" || proxy.Auth.Basic.Password != "proxy-pass" {
+	if proxy.Auth.Basic == nil ||
+		proxy.Auth.Basic.CredentialName() != "proxy-creds" ||
+		proxy.Auth.Basic.Username.Literal() != "proxy-user" ||
+		proxy.Auth.Basic.Password.Literal() != "proxy-pass" {
 		t.Fatalf("unexpected proxy auth values: %#v", proxy.Auth)
+	}
+	if service.createdContext.Credentials["proxy-creds"].Username.Literal() != "proxy-user" {
+		t.Fatalf("expected stored proxy credential username, got %#v", service.createdContext.Credentials)
 	}
 }
 
@@ -1466,7 +1476,7 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
 		t.Fatal("expected managedServer oauth2 configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.BasicAuth != nil {
+	if service.createdContext.ManagedServer.HTTP.Auth.Basic != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
 	if len(service.createdContext.ManagedServer.HTTP.Auth.CustomHeaders) != 0 {

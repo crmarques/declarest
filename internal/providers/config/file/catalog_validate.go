@@ -29,6 +29,10 @@ import (
 
 func validateCatalog(contextCatalog config.ContextCatalog) error {
 	contextCatalog.DefaultEditor = strings.TrimSpace(contextCatalog.DefaultEditor)
+	credentials, err := validateCredentials(contextCatalog.Credentials)
+	if err != nil {
+		return err
+	}
 
 	if len(contextCatalog.Contexts) == 0 {
 		if contextCatalog.CurrentContext != "" {
@@ -47,7 +51,7 @@ func validateCatalog(contextCatalog config.ContextCatalog) error {
 		}
 		seen[item.Name] = struct{}{}
 
-		if err := validateConfig(item); err != nil {
+		if err := validateConfig(item, credentials, true); err != nil {
 			return err
 		}
 	}
@@ -67,7 +71,7 @@ func validateResolvedCatalog(contextCatalog config.ContextCatalog) error {
 	return validateCatalog(envref.ExpandExactEnvPlaceholders(contextCatalog))
 }
 
-func validateConfig(cfg config.Context) error {
+func validateConfig(cfg config.Context, credentials map[string]config.Credential, strictCredentialRefs bool) error {
 	cfg = normalizeConfig(cfg)
 
 	if cfg.Name == "" {
@@ -77,15 +81,15 @@ func validateConfig(cfg config.Context) error {
 		return faults.NewValidationError("context must define at least one of repository or managedServer", nil)
 	}
 
-	if err := validateRepository(cfg.Repository); err != nil {
+	if err := validateRepository(cfg.Repository, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 
-	if err := validateManagedServer(cfg.ManagedServer); err != nil {
+	if err := validateManagedServer(cfg.ManagedServer, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 
-	if err := validateSecretStore(cfg.SecretStore); err != nil {
+	if err := validateSecretStore(cfg.SecretStore, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 	if err := validateMetadata(cfg.Metadata); err != nil {
@@ -96,18 +100,27 @@ func validateConfig(cfg config.Context) error {
 }
 
 func validateResolvedConfig(cfg config.Context) error {
-	return validateConfig(envref.ExpandExactEnvPlaceholders(cfg))
+	return validateConfig(envref.ExpandExactEnvPlaceholders(cfg), cfg.Credentials, false)
 }
 
 func normalizeConfig(cfg config.Context) config.Context {
 	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
+		if cfg.Repository.Git.Remote.Auth != nil && cfg.Repository.Git.Remote.Auth.Basic != nil {
+			cfg.Repository.Git.Remote.Auth.Basic.CredentialsRef = normalizeCredentialsRef(cfg.Repository.Git.Remote.Auth.Basic.CredentialsRef)
+		}
 		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
 	}
 	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
 		cfg.ManagedServer.HTTP.HealthCheck = strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+		if cfg.ManagedServer.HTTP.Auth != nil && cfg.ManagedServer.HTTP.Auth.Basic != nil {
+			cfg.ManagedServer.HTTP.Auth.Basic.CredentialsRef = normalizeCredentialsRef(cfg.ManagedServer.HTTP.Auth.Basic.CredentialsRef)
+		}
 		cfg.ManagedServer.HTTP.Proxy = normalizeProxy(cfg.ManagedServer.HTTP.Proxy)
 	}
 	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
+		if cfg.SecretStore.Vault.Auth != nil && cfg.SecretStore.Vault.Auth.Password != nil {
+			cfg.SecretStore.Vault.Auth.Password.CredentialsRef = normalizeCredentialsRef(cfg.SecretStore.Vault.Auth.Password.CredentialsRef)
+		}
 		cfg.SecretStore.Vault.Proxy = normalizeProxy(cfg.SecretStore.Vault.Proxy)
 	}
 	cfg.Metadata.Proxy = normalizeProxy(cfg.Metadata.Proxy)
@@ -250,16 +263,20 @@ func normalizeProxy(proxy *config.HTTPProxy) *config.HTTPProxy {
 		normalized.Auth = &config.ProxyAuth{}
 		if proxy.Auth.Basic != nil {
 			normalized.Auth.Basic = &config.BasicAuth{
-				Username: strings.TrimSpace(proxy.Auth.Basic.Username),
-				Password: strings.TrimSpace(proxy.Auth.Basic.Password),
+				CredentialsRef: normalizeCredentialsRef(proxy.Auth.Basic.CredentialsRef),
 			}
-		}
-		if proxy.Auth.Prompt != nil {
-			prompt := *proxy.Auth.Prompt
-			normalized.Auth.Prompt = &prompt
 		}
 	}
 	return normalized
+}
+
+func normalizeCredentialsRef(ref *config.CredentialsRef) *config.CredentialsRef {
+	if ref == nil {
+		return nil
+	}
+	normalized := *ref
+	normalized.Name = strings.TrimSpace(normalized.Name)
+	return &normalized
 }
 
 func compactConfigForPersistence(cfg config.Context) config.Context {
@@ -277,7 +294,11 @@ func contextRepositoryBaseDir(cfg config.Context) string {
 	}
 }
 
-func validateRepository(repository config.Repository) error {
+func validateRepository(
+	repository config.Repository,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
 	if repository.Git == nil && repository.Filesystem == nil {
 		return nil
 	}
@@ -296,20 +317,24 @@ func validateRepository(repository config.Repository) error {
 			}
 			if repository.Git.Remote.Auth != nil {
 				if countSet(
-					repository.Git.Remote.Auth.BasicAuth != nil,
+					repository.Git.Remote.Auth.Basic != nil,
 					repository.Git.Remote.Auth.SSH != nil,
 					repository.Git.Remote.Auth.AccessKey != nil,
-					repository.Git.Remote.Auth.Prompt != nil,
 				) != 1 {
-					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basicAuth, ssh, accessKey, prompt", nil)
+					return faults.NewValidationError("repository.git.remote.auth must define exactly one of basic, ssh, accessKey", nil)
 				}
-				if repository.Git.Remote.Auth.BasicAuth != nil {
-					if err := validateUsernamePasswordOrPrompt("repository.git.remote.auth.basicAuth", repository.Git.Remote.Auth.BasicAuth.Username, repository.Git.Remote.Auth.BasicAuth.Password, nil); err != nil {
+				if repository.Git.Remote.Auth.Basic != nil {
+					if err := validateCredentialRef(
+						"repository.git.remote.auth.basic.credentialsRef",
+						repository.Git.Remote.Auth.Basic.CredentialsRef,
+						credentials,
+						strictCredentialRefs,
+					); err != nil {
 						return err
 					}
 				}
 			}
-			if err := validateProxy("repository.git.remote.proxy", repository.Git.Remote.Proxy); err != nil {
+			if err := validateProxy("repository.git.remote.proxy", repository.Git.Remote.Proxy, credentials, strictCredentialRefs); err != nil {
 				return err
 			}
 		}
@@ -322,7 +347,11 @@ func validateRepository(repository config.Repository) error {
 	return nil
 }
 
-func validateManagedServer(resourceServer *config.ManagedServer) error {
+func validateManagedServer(
+	resourceServer *config.ManagedServer,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
 	if resourceServer == nil {
 		return nil
 	}
@@ -330,7 +359,7 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		return faults.NewValidationError("managedServer must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("managedServer.http.baseURL is required", nil)
+		return faults.NewValidationError("managedServer.http.url is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
 		return faults.NewValidationError("managedServer.http.auth is required", nil)
@@ -338,11 +367,10 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 
 	if countSet(
 		resourceServer.HTTP.Auth.OAuth2 != nil,
-		resourceServer.HTTP.Auth.BasicAuth != nil,
+		resourceServer.HTTP.Auth.Basic != nil,
 		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
-		resourceServer.HTTP.Auth.Prompt != nil,
 	) != 1 {
-		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basicAuth, customHeaders, prompt", nil)
+		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basic, customHeaders", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
@@ -352,9 +380,14 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		}
 	}
 
-	if resourceServer.HTTP.Auth.BasicAuth != nil {
-		basic := resourceServer.HTTP.Auth.BasicAuth
-		if err := validateUsernamePasswordOrPrompt("managedServer.http.auth.basicAuth", basic.Username, basic.Password, nil); err != nil {
+	if resourceServer.HTTP.Auth.Basic != nil {
+		basic := resourceServer.HTTP.Auth.Basic
+		if err := validateCredentialRef(
+			"managedServer.http.auth.basic.credentialsRef",
+			basic.CredentialsRef,
+			credentials,
+			strictCredentialRefs,
+		); err != nil {
 			return err
 		}
 	}
@@ -368,7 +401,7 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 		}
 	}
 
-	if err := validateManagedServerProxy(resourceServer.HTTP.Proxy); err != nil {
+	if err := validateManagedServerProxy(resourceServer.HTTP.Proxy, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 	if err := validateManagedServerRequestThrottling(resourceServer.HTTP.RequestThrottling); err != nil {
@@ -381,8 +414,12 @@ func validateManagedServer(resourceServer *config.ManagedServer) error {
 	return nil
 }
 
-func validateManagedServerProxy(proxy *config.HTTPProxy) error {
-	return validateProxy("managedServer.http.proxy", proxy)
+func validateManagedServerProxy(
+	proxy *config.HTTPProxy,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
+	return validateProxy("managedServer.http.proxy", proxy, credentials, strictCredentialRefs)
 }
 
 func validateManagedServerRequestThrottling(throttling *config.HTTPRequestThrottling) error {
@@ -427,7 +464,7 @@ func validateManagedServerHealthCheck(value string) error {
 		return faults.NewValidationError("managedServer.http.healthCheck must not include query parameters", nil)
 	}
 
-	// Relative paths are interpreted against managed-server.http.base-url.
+	// Relative paths are interpreted against managedServer.http.url.
 	if parsed.Scheme == "" && parsed.Host == "" {
 		if strings.TrimSpace(parsed.Path) == "" {
 			return faults.NewValidationError("managedServer.http.healthCheck is invalid", nil)
@@ -450,7 +487,11 @@ func validateManagedServerHealthCheck(value string) error {
 	return nil
 }
 
-func validateSecretStore(secretStore *config.SecretStore) error {
+func validateSecretStore(
+	secretStore *config.SecretStore,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
 	if secretStore == nil {
 		return nil
 	}
@@ -484,21 +525,20 @@ func validateSecretStore(secretStore *config.SecretStore) error {
 			secretStore.Vault.Auth.Token != "",
 			secretStore.Vault.Auth.Password != nil,
 			secretStore.Vault.Auth.AppRole != nil,
-			secretStore.Vault.Auth.Prompt != nil,
 		) != 1 {
-			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole, prompt", nil)
+			return faults.NewValidationError("secretStore.vault.auth must define exactly one of token, password, appRole", nil)
 		}
 		if secretStore.Vault.Auth.Password != nil {
-			if err := validateUsernamePasswordOrPrompt(
-				"secretStore.vault.auth.password",
-				secretStore.Vault.Auth.Password.Username,
-				secretStore.Vault.Auth.Password.Password,
-				nil,
+			if err := validateCredentialRef(
+				"secretStore.vault.auth.password.credentialsRef",
+				secretStore.Vault.Auth.Password.CredentialsRef,
+				credentials,
+				strictCredentialRefs,
 			); err != nil {
 				return err
 			}
 		}
-		if err := validateProxy("secretStore.vault.proxy", secretStore.Vault.Proxy); err != nil {
+		if err := validateProxy("secretStore.vault.proxy", secretStore.Vault.Proxy, credentials, strictCredentialRefs); err != nil {
 			return err
 		}
 	}
@@ -514,19 +554,24 @@ func validateMetadata(metadata config.Metadata) error {
 	if countSet(baseDir != "", bundle != "", bundleFile != "") > 1 {
 		return faults.NewValidationError("metadata must define at most one of baseDir, bundle, or bundleFile", nil)
 	}
-	if err := validateProxy("metadata.proxy", metadata.Proxy); err != nil {
+	if err := validateProxy("metadata.proxy", metadata.Proxy, nil, false); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func validateProxy(field string, proxy *config.HTTPProxy) error {
+func validateProxy(
+	field string,
+	proxy *config.HTTPProxy,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
 	if proxy == nil || proxyhelper.IsExplicitDisable(proxy) {
 		return nil
 	}
 	if proxy.Auth != nil {
-		if err := validateProxyAuth(field+".auth", proxy.Auth); err != nil {
+		if err := validateProxyAuth(field+".auth", proxy.Auth, credentials, strictCredentialRefs); err != nil {
 			return err
 		}
 	}
@@ -536,36 +581,71 @@ func validateProxy(field string, proxy *config.HTTPProxy) error {
 	return nil
 }
 
-func validateProxyAuth(field string, auth *config.ProxyAuth) error {
+func validateProxyAuth(
+	field string,
+	auth *config.ProxyAuth,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
+) error {
 	hasBasic := auth.Basic != nil
-	hasPrompt := auth.Prompt != nil
-	if countSet(hasBasic, hasPrompt) != 1 {
-		return faults.NewValidationError(field+" must define either basic or prompt", nil)
+	if countSet(hasBasic) != 1 {
+		return faults.NewValidationError(field+" must define basic", nil)
 	}
 	if hasBasic {
-		if strings.TrimSpace(auth.Basic.Username) == "" || strings.TrimSpace(auth.Basic.Password) == "" {
-			return faults.NewValidationError(field+".basic requires username and password", nil)
+		if err := validateCredentialRef(field+".basic.credentialsRef", auth.Basic.CredentialsRef, credentials, strictCredentialRefs); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func validateUsernamePasswordOrPrompt(
+func validateCredentials(items []config.Credential) (map[string]config.Credential, error) {
+	index := make(map[string]config.Credential, len(items))
+	for idx, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return nil, faults.NewValidationError(fmt.Sprintf("credentials[%d].name is required", idx), nil)
+		}
+		if _, exists := index[name]; exists {
+			return nil, faults.NewValidationError(fmt.Sprintf("duplicate credential name %q", name), nil)
+		}
+		if err := validateCredentialValue("credentials["+fmt.Sprint(idx)+"].username", item.Username); err != nil {
+			return nil, err
+		}
+		if err := validateCredentialValue("credentials["+fmt.Sprint(idx)+"].password", item.Password); err != nil {
+			return nil, err
+		}
+		item.Name = name
+		index[name] = item
+	}
+	return index, nil
+}
+
+func validateCredentialValue(field string, value config.CredentialValue) error {
+	switch {
+	case value.Prompt == nil:
+		if value.Literal() == "" {
+			return faults.NewValidationError(field+" is required", nil)
+		}
+	case !value.Prompt.Prompt:
+		return faults.NewValidationError(field+".prompt must be true when prompt configuration is used", nil)
+	}
+	return nil
+}
+
+func validateCredentialRef(
 	field string,
-	username string,
-	password string,
-	prompt *config.PromptAuth,
+	ref *config.CredentialsRef,
+	credentials map[string]config.Credential,
+	strictCredentialRefs bool,
 ) error {
-	hasUserPass := strings.TrimSpace(username) != "" || strings.TrimSpace(password) != ""
-	hasPrompt := prompt != nil
-	if countSet(hasUserPass, hasPrompt) != 1 {
-		return faults.NewValidationError(field+" must define either username/password or prompt", nil)
+	if ref == nil || strings.TrimSpace(ref.Name) == "" {
+		return faults.NewValidationError(field+" is required", nil)
 	}
-	if hasPrompt {
-		return nil
-	}
-	if strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
-		return faults.NewValidationError(field+" requires username and password", nil)
+	if strictCredentialRefs {
+		if _, ok := credentials[strings.TrimSpace(ref.Name)]; !ok {
+			return faults.NewValidationError(field+fmt.Sprintf(" references undefined credential %q", strings.TrimSpace(ref.Name)), nil)
+		}
 	}
 	return nil
 }
@@ -584,9 +664,9 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "managedServer.http.baseURL":
+		case "managedServer.http.url":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.baseURL requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.url requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.BaseURL = value
 		case "managedServer.http.healthCheck":
@@ -594,17 +674,17 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override managedServer.http.healthCheck requires managedServer.http to be configured", nil)
 			}
 			cfg.ManagedServer.HTTP.HealthCheck = value
-		case "managedServer.http.proxy.httpURL":
+		case "managedServer.http.proxy.http":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpURL requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.http requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.HTTPURL = value
-		case "managedServer.http.proxy.httpsURL":
+		case "managedServer.http.proxy.https":
 			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.httpsURL requires managedServer.http to be configured", nil)
+				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.https requires managedServer.http to be configured", nil)
 			}
 			if cfg.ManagedServer.HTTP.Proxy == nil {
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
@@ -618,34 +698,6 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
 			}
 			cfg.ManagedServer.HTTP.Proxy.NoProxy = value
-		case "managedServer.http.proxy.auth.basic.username":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.basic.username requires managedServer.http to be configured", nil)
-			}
-			if cfg.ManagedServer.HTTP.Proxy == nil {
-				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
-			}
-			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
-				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
-			}
-			if cfg.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
-				cfg.ManagedServer.HTTP.Proxy.Auth.Basic = &config.BasicAuth{}
-			}
-			cfg.ManagedServer.HTTP.Proxy.Auth.Basic.Username = value
-		case "managedServer.http.proxy.auth.basic.password":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.auth.basic.password requires managedServer.http to be configured", nil)
-			}
-			if cfg.ManagedServer.HTTP.Proxy == nil {
-				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
-			}
-			if cfg.ManagedServer.HTTP.Proxy.Auth == nil {
-				cfg.ManagedServer.HTTP.Proxy.Auth = &config.ProxyAuth{}
-			}
-			if cfg.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
-				cfg.ManagedServer.HTTP.Proxy.Auth.Basic = &config.BasicAuth{}
-			}
-			cfg.ManagedServer.HTTP.Proxy.Auth.Basic.Password = value
 		case "metadata.baseDir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {

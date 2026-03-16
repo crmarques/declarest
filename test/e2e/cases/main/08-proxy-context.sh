@@ -23,12 +23,12 @@ case_run() {
   case_assert_context_contains 'proxy:'
 
   if [[ -n "${E2E_PROXY_HTTP_URL:-}" ]]; then
-    case_assert_context_contains "httpURL: '${E2E_PROXY_HTTP_URL}'"
+    case_assert_context_contains "http: '${E2E_PROXY_HTTP_URL}'"
   elif [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
-    case_assert_context_contains "httpURL: 'http://127.0.0.1:"
+    case_assert_context_contains "http: 'http://127.0.0.1:"
   fi
   if [[ -n "${E2E_PROXY_HTTPS_URL:-}" ]]; then
-    case_assert_context_contains "httpsURL: '${E2E_PROXY_HTTPS_URL}'"
+    case_assert_context_contains "https: '${E2E_PROXY_HTTPS_URL}'"
   fi
   if [[ -n "${E2E_PROXY_NO_PROXY:-}" ]]; then
     case_assert_context_contains "noProxy: '${E2E_PROXY_NO_PROXY}'"

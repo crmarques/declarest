@@ -134,8 +134,8 @@ func TestNewClientValidation(t *testing.T) {
 				HTTPURL: "http://user:pass@proxy.example.com:3128",
 				Auth: &config.ProxyAuth{
 					Basic: &config.BasicAuth{
-						Username: "proxy-user",
-						Password: "proxy-pass",
+						Username: config.LiteralCredential("proxy-user"),
+						Password: config.LiteralCredential("proxy-pass"),
 					},
 				},
 			},
@@ -2065,7 +2065,10 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 		client := mustManagedServerClient(t, config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
-				BasicAuth: &config.BasicAuth{Username: "user", Password: "pass"},
+				Basic: &config.BasicAuth{
+					Username: config.LiteralCredential("user"),
+					Password: config.LiteralCredential("pass"),
+				},
 			},
 		})
 
@@ -2089,7 +2092,6 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 			credentials: promptauth.Credentials{Username: "prompt-user", Password: "prompt-pass"},
 		}
 		runtime, err := promptauth.New(
-			[]promptauth.Target{{Key: promptauth.TargetManagedServerHTTPAuth, Label: "managed-server auth"}},
 			promptauth.WithPrompter(prompter),
 			promptauth.WithSessionStore(&httpMemorySessionStore{}),
 		)
@@ -2110,7 +2112,11 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 			config.HTTPServer{
 				BaseURL: server.URL,
 				Auth: &config.HTTPAuth{
-					Prompt: &config.PromptAuth{},
+					Basic: &config.BasicAuth{
+						CredentialsRef: &config.CredentialsRef{Name: "prompt"},
+						Username:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+						Password:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+					},
 				},
 			},
 			WithPromptRuntime(runtime),
@@ -2132,8 +2138,8 @@ func TestAuthModesAndOAuth2Caching(t *testing.T) {
 				t.Fatalf("Get call %d returned error: %v", idx+1, err)
 			}
 		}
-		if prompter.calls != 1 {
-			t.Fatalf("expected one prompt-auth credential request, got %d", prompter.calls)
+		if prompter.calls != 2 {
+			t.Fatalf("expected one prompt per credential field, got %d", prompter.calls)
 		}
 	})
 
@@ -2560,13 +2566,12 @@ type httpPromptPrompter struct {
 	calls       int
 }
 
-func (p *httpPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
+func (p *httpPromptPrompter) PromptValue(_ context.Context, _ string, field string, _ bool, _ bool) (string, error) {
 	p.calls++
-	return p.credentials, nil
-}
-
-func (p *httpPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
-	return false, nil
+	if field == "username" {
+		return p.credentials.Username, nil
+	}
+	return p.credentials.Password, nil
 }
 
 type httpMemorySessionStore struct {
@@ -2633,8 +2638,8 @@ func TestManagedServerProxySupport(t *testing.T) {
 				HTTPURL: proxy.URL,
 				Auth: &config.ProxyAuth{
 					Basic: &config.BasicAuth{
-						Username: "proxy-user",
-						Password: "proxy-pass",
+						Username: config.LiteralCredential("proxy-user"),
+						Password: config.LiteralCredential("proxy-pass"),
 					},
 				},
 			},

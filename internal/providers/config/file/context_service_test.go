@@ -42,85 +42,54 @@ func TestDecodeCatalogSuccess(t *testing.T) {
 	}
 }
 
-func TestDecodeCatalogAcceptsLegacyAliasesAndMigratesResourceFormat(t *testing.T) {
+func TestDecodeCatalogSupportsTopLevelCredentials(t *testing.T) {
 	t.Parallel()
 
 	contextCatalog, err := decodeCatalog([]byte(`
-contexts:
-  - name: legacy
-    repository:
-      resource-format: yaml
-      filesystem:
-        base-dir: /tmp/repo
-    managed-server:
-      http:
-        base-url: https://example.com/api
-        default-headers:
-          X-Test: value
-        auth:
-          custom-headers:
-            - header: Authorization
-              prefix: Bearer
-              value: secret-token
-    secret-store:
-      file:
-        path: /tmp/secrets.json
-        passphrase-file: /tmp/passphrase.txt
-    metadata:
-      base-dir: /tmp/metadata
-current-ctx: legacy
-default-editor: nano
-`))
-	if err != nil {
-		t.Fatalf("decodeCatalog returned error: %v", err)
-	}
-	if contextCatalog.CurrentContext != "legacy" {
-		t.Fatalf("expected currentContext legacy, got %q", contextCatalog.CurrentContext)
-	}
-	if contextCatalog.DefaultEditor != "nano" {
-		t.Fatalf("expected defaultEditor nano, got %q", contextCatalog.DefaultEditor)
-	}
-	if len(contextCatalog.Contexts) != 1 {
-		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
-	}
-
-	legacy := contextCatalog.Contexts[0]
-	if legacy.Repository.Filesystem == nil || legacy.Repository.Filesystem.BaseDir != "/tmp/repo" {
-		t.Fatalf("expected filesystem repository /tmp/repo, got %#v", legacy.Repository.Filesystem)
-	}
-	if legacy.ManagedServer == nil || legacy.ManagedServer.HTTP == nil || legacy.ManagedServer.HTTP.BaseURL != "https://example.com/api" {
-		t.Fatalf("expected managed server baseURL to be normalized, got %#v", legacy.ManagedServer)
-	}
-	if got := legacy.Preferences["preferredFormat"]; got != "yaml" {
-		t.Fatalf("expected preferredFormat yaml from legacy resource-format, got %q", got)
-	}
-	if legacy.SecretStore == nil || legacy.SecretStore.File == nil || legacy.SecretStore.File.PassphraseFile != "/tmp/passphrase.txt" {
-		t.Fatalf("expected secret-store.file.passphrase-file to be normalized, got %#v", legacy.SecretStore)
-	}
-	if legacy.Metadata.BaseDir != "/tmp/metadata" {
-		t.Fatalf("expected metadata baseDir /tmp/metadata, got %q", legacy.Metadata.BaseDir)
-	}
-}
-
-func TestNormalizeLegacyCatalogYAMLPreservesCanonicalInput(t *testing.T) {
-	t.Parallel()
-
-	input := []byte(`
-# keep comments and formatting untouched when no migration is needed
+credentials:
+  - name: shared
+    username:
+      prompt: true
+      persistInSession: true
+    password: secret
 contexts:
   - name: dev
     repository:
       filesystem:
         baseDir: /tmp/repo
+    managedServer:
+      http:
+        url: https://example.com/api
+        auth:
+          basic:
+            credentialsRef:
+              name: shared
 currentContext: dev
-`)
-
-	normalized, err := normalizeLegacyCatalogYAML(input)
+`))
 	if err != nil {
-		t.Fatalf("normalizeLegacyCatalogYAML returned error: %v", err)
+		t.Fatalf("decodeCatalog returned error: %v", err)
 	}
-	if string(normalized) != string(input) {
-		t.Fatalf("expected canonical catalog to remain unchanged, got %q", string(normalized))
+	if contextCatalog.CurrentContext != "dev" {
+		t.Fatalf("expected currentContext dev, got %q", contextCatalog.CurrentContext)
+	}
+	if len(contextCatalog.Contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contextCatalog.Contexts))
+	}
+	if len(contextCatalog.Credentials) != 1 {
+		t.Fatalf("expected one credential, got %d", len(contextCatalog.Credentials))
+	}
+	credential := contextCatalog.Credentials[0]
+	if credential.Name != "shared" {
+		t.Fatalf("expected credential name shared, got %q", credential.Name)
+	}
+	if !credential.Username.IsPrompt() || !credential.Username.PersistInSession() {
+		t.Fatalf("expected username prompt to persist in session, got %#v", credential.Username)
+	}
+	if credential.Password.Literal() != "secret" {
+		t.Fatalf("expected credential password secret, got %q", credential.Password.Literal())
+	}
+	if contextCatalog.Contexts[0].ManagedServer.HTTP.Auth.Basic.CredentialName() != "shared" {
+		t.Fatalf("expected managedServer basic auth to reference shared credential, got %#v", contextCatalog.Contexts[0].ManagedServer.HTTP.Auth.Basic)
 	}
 }
 
@@ -136,7 +105,7 @@ contexts:
           baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -173,7 +142,7 @@ contexts:
           autoInit: false
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -299,7 +268,7 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 							HTTPURL: "http://proxy.example.com:3128",
 							Auth: &config.ProxyAuth{
 								Basic: &config.BasicAuth{
-									Username: "user",
+									Username: config.LiteralCredential("user"),
 								},
 							},
 						},
@@ -354,30 +323,30 @@ func TestValidateConfigOneOfRules(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if err := validateConfig(tt.cfg); err == nil {
+			if err := validateConfig(tt.cfg, nil, false); err == nil {
 				t.Fatalf("expected validation failure for %s", tt.name)
 			}
 		})
 	}
 }
 
-func TestValidateConfigAllowsPromptAuth(t *testing.T) {
+func TestValidateConfigAllowsCredentialRefs(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.Context{
-		Name: "prompt",
+		Name: "credentials",
 		Repository: config.Repository{
 			Git: &config.GitRepository{
 				Local: config.GitLocal{BaseDir: "/tmp/repo"},
 				Remote: &config.GitRemote{
 					URL: "https://example.com/repo.git",
 					Auth: &config.GitAuth{
-						Prompt: &config.PromptAuth{KeepCredentialsForSession: true},
+						Basic: &config.BasicAuth{CredentialsRef: &config.CredentialsRef{Name: "shared"}},
 					},
 					Proxy: &config.HTTPProxy{
 						HTTPURL: "http://proxy.example.com:3128",
 						Auth: &config.ProxyAuth{
-							Prompt: &config.PromptAuth{},
+							Basic: &config.BasicAuth{CredentialsRef: &config.CredentialsRef{Name: "shared"}},
 						},
 					},
 				},
@@ -387,12 +356,12 @@ func TestValidateConfigAllowsPromptAuth(t *testing.T) {
 			HTTP: &config.HTTPServer{
 				BaseURL: "https://api.example.com",
 				Auth: &config.HTTPAuth{
-					Prompt: &config.PromptAuth{},
+					Basic: &config.BasicAuth{CredentialsRef: &config.CredentialsRef{Name: "shared"}},
 				},
 				Proxy: &config.HTTPProxy{
 					HTTPURL: "http://proxy.example.com:3128",
 					Auth: &config.ProxyAuth{
-						Prompt: &config.PromptAuth{KeepCredentialsForSession: true},
+						Basic: &config.BasicAuth{CredentialsRef: &config.CredentialsRef{Name: "shared"}},
 					},
 				},
 			},
@@ -401,13 +370,23 @@ func TestValidateConfigAllowsPromptAuth(t *testing.T) {
 			Vault: &config.VaultSecretStore{
 				Address: "https://vault.example.com",
 				Auth: &config.VaultAuth{
-					Prompt: &config.VaultPromptAuth{Mount: "userpass"},
+					Password: &config.VaultUserPasswordAuth{
+						CredentialsRef: &config.CredentialsRef{Name: "shared"},
+						Mount:          "userpass",
+					},
 				},
+			},
+		},
+		Credentials: map[string]config.Credential{
+			"shared": {
+				Name:     "shared",
+				Username: config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true, PersistInSession: true}},
+				Password: config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
 			},
 		},
 	}
 
-	if err := validateConfig(cfg); err != nil {
+	if err := validateConfig(cfg, cfg.Credentials, false); err != nil {
 		t.Fatalf("validateConfig returned error: %v", err)
 	}
 }
@@ -422,7 +401,7 @@ func TestValidateConfigAllowsExplicitProxyDisable(t *testing.T) {
 		Name:          "proxy-disable",
 		Repository:    validFilesystemRepository(),
 		ManagedServer: server,
-	})
+	}, nil, false)
 	if err != nil {
 		t.Fatalf("expected explicit proxy disable to be valid, got %v", err)
 	}
@@ -440,7 +419,7 @@ func TestValidateConfigAllowsSparseProxyOverrideWithoutURLs(t *testing.T) {
 		Name:          "proxy-override",
 		Repository:    validFilesystemRepository(),
 		ManagedServer: server,
-	})
+	}, nil, false)
 	if err != nil {
 		t.Fatalf("expected sparse proxy override to be valid, got %v", err)
 	}
@@ -452,7 +431,7 @@ func TestValidateConfigAllowsMissingRepositoryWhenManagedServerIsConfigured(t *t
 	err := validateConfig(config.Context{
 		Name:          "remote-only",
 		ManagedServer: validManagedServer(),
-	})
+	}, nil, false)
 	if err != nil {
 		t.Fatalf("expected repository to be optional, got error: %v", err)
 	}
@@ -464,7 +443,7 @@ func TestValidateConfigAllowsMissingManagedServerWhenRepositoryIsConfigured(t *t
 	err := validateConfig(config.Context{
 		Name:       "local-only",
 		Repository: validFilesystemRepository(),
-	})
+	}, nil, false)
 	if err != nil {
 		t.Fatalf("expected managedServer to be optional, got error: %v", err)
 	}
@@ -625,7 +604,7 @@ func TestCreatePersistsEnvPlaceholdersAndResolveContextExpandsThem(t *testing.T)
 		t.Fatalf("expected repository placeholder to remain persisted, got %q", contents)
 	}
 	if !strings.Contains(contents, "${DECLAREST_TEST_BASE_URL}") {
-		t.Fatalf("expected baseURL placeholder to remain persisted, got %q", contents)
+		t.Fatalf("expected url placeholder to remain persisted, got %q", contents)
 	}
 	if !strings.Contains(contents, "${DECLAREST_TEST_TOKEN}") {
 		t.Fatalf("expected auth placeholder to remain persisted, got %q", contents)
@@ -639,7 +618,7 @@ func TestCreatePersistsEnvPlaceholdersAndResolveContextExpandsThem(t *testing.T)
 		t.Fatalf("expected expanded repository path, got %#v", resolved.Repository.Filesystem)
 	}
 	if resolved.ManagedServer == nil || resolved.ManagedServer.HTTP == nil || resolved.ManagedServer.HTTP.BaseURL != "https://runtime.example.com/api" {
-		t.Fatalf("expected expanded managed-server baseURL, got %#v", resolved.ManagedServer)
+		t.Fatalf("expected expanded managedServer url, got %#v", resolved.ManagedServer)
 	}
 	if got := resolved.ManagedServer.HTTP.Auth.CustomHeaders[0].Value; got != "runtime-token" {
 		t.Fatalf("expected expanded auth header value, got %q", got)
@@ -965,24 +944,23 @@ func TestResolveContextWithoutRepositoryResourceFormat(t *testing.T) {
 	}
 }
 
-func TestResolveContextAcceptsLegacyRepositoryOnlyCatalog(t *testing.T) {
+func TestResolveContextRepositoryOnlyCatalog(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "contexts.yaml")
 	if err := os.WriteFile(path, []byte(`
 contexts:
-  - name: legacy
+  - name: repo-only
     repository:
-      resource-format: yaml
       filesystem:
-        base-dir: /tmp/repo
-current-ctx: legacy
+        baseDir: /tmp/repo
+currentContext: repo-only
 `), 0o600); err != nil {
 		t.Fatalf("failed to write test contextCatalog: %v", err)
 	}
 
 	contextService := NewService(path)
-	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "legacy"})
+	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{Name: "repo-only"})
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
@@ -994,9 +972,6 @@ current-ctx: legacy
 	}
 	if resolved.Metadata.BaseDir != "/tmp/repo" {
 		t.Fatalf("expected metadata baseDir default /tmp/repo, got %q", resolved.Metadata.BaseDir)
-	}
-	if got := resolved.Preferences["preferredFormat"]; got != "yaml" {
-		t.Fatalf("expected preferredFormat yaml, got %q", got)
 	}
 }
 
@@ -1030,7 +1005,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1068,7 +1043,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1163,7 +1138,7 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 	contextService := NewService(path)
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name:      "fs",
-		Overrides: map[string]string{"managedServer.http.baseURL": "https://override.example.com"},
+		Overrides: map[string]string{"managedServer.http.url": "https://override.example.com"},
 	})
 	if err != nil {
 		t.Fatalf("expected managedServer override to succeed, got %v", err)
@@ -1172,7 +1147,7 @@ func TestResolveContextOverrideSupportsManagedServerWhenConfigured(t *testing.T)
 		t.Fatalf("expected managedServer configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.BaseURL != "https://override.example.com" {
-		t.Fatalf("expected managedServer baseURL override, got %q", resolved.ManagedServer.HTTP.BaseURL)
+		t.Fatalf("expected managedServer url override, got %q", resolved.ManagedServer.HTTP.BaseURL)
 	}
 }
 
@@ -1212,11 +1187,9 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"managedServer.http.proxy.httpURL":             "http://proxy.example.com:3128",
-			"managedServer.http.proxy.httpsURL":            "https://proxy.example.com:3128",
-			"managedServer.http.proxy.noProxy":             "localhost,127.0.0.1",
-			"managedServer.http.proxy.auth.basic.username": "proxy-user",
-			"managedServer.http.proxy.auth.basic.password": "proxy-pass",
+			"managedServer.http.proxy.http":    "http://proxy.example.com:3128",
+			"managedServer.http.proxy.https":   "https://proxy.example.com:3128",
+			"managedServer.http.proxy.noProxy": "localhost,127.0.0.1",
 		},
 	})
 	if err != nil {
@@ -1227,25 +1200,16 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 		t.Fatalf("expected managedServer proxy configuration, got %#v", resolved.ManagedServer)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPURL != "http://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpURL override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
+		t.Fatalf("expected proxy http override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.HTTPSURL != "https://proxy.example.com:3128" {
-		t.Fatalf("expected proxy httpsURL override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
+		t.Fatalf("expected proxy https override, got %q", resolved.ManagedServer.HTTP.Proxy.HTTPSURL)
 	}
 	if resolved.ManagedServer.HTTP.Proxy.NoProxy != "localhost,127.0.0.1" {
 		t.Fatalf("expected proxy noProxy override, got %q", resolved.ManagedServer.HTTP.Proxy.NoProxy)
 	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth == nil {
-		t.Fatal("expected proxy auth configuration")
-	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic == nil {
-		t.Fatal("expected proxy auth basic configuration")
-	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Username != "proxy-user" {
-		t.Fatalf("expected proxy auth username override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Username)
-	}
-	if resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Password != "proxy-pass" {
-		t.Fatalf("expected proxy auth password override, got %q", resolved.ManagedServer.HTTP.Proxy.Auth.Basic.Password)
+	if resolved.ManagedServer.HTTP.Proxy.Auth != nil {
+		t.Fatalf("expected proxy auth to remain unset, got %#v", resolved.ManagedServer.HTTP.Proxy.Auth)
 	}
 }
 
@@ -1315,7 +1279,7 @@ contexts:
           url: https://git.example.com/org/repo.git
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         proxy:
           noProxy: localhost,127.0.0.1
         auth:
@@ -1356,7 +1320,7 @@ contexts:
           url: https://git.example.com/org/repo.git
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         proxy: {}
         auth:
           customHeaders:
@@ -1446,10 +1410,10 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 		t.Fatalf("expected %s proxy to be configured, got nil", component)
 	}
 	if proxy.HTTPURL != httpURL {
-		t.Fatalf("expected %s proxy httpURL %q, got %q", component, httpURL, proxy.HTTPURL)
+		t.Fatalf("expected %s proxy http %q, got %q", component, httpURL, proxy.HTTPURL)
 	}
 	if proxy.HTTPSURL != httpsURL {
-		t.Fatalf("expected %s proxy httpsURL %q, got %q", component, httpsURL, proxy.HTTPSURL)
+		t.Fatalf("expected %s proxy https %q, got %q", component, httpsURL, proxy.HTTPSURL)
 	}
 	if proxy.NoProxy != noProxy {
 		t.Fatalf("expected %s proxy noProxy %q, got %q", component, noProxy, proxy.NoProxy)
@@ -1466,11 +1430,25 @@ func assertProxyConfig(t *testing.T, component string, proxy *config.HTTPProxy, 
 	if proxy.Auth.Basic == nil {
 		t.Fatalf("expected %s proxy auth basic to be configured", component)
 	}
-	if proxy.Auth.Basic.Username != username {
-		t.Fatalf("expected %s proxy auth username %q, got %q", component, username, proxy.Auth.Basic.Username)
+	if proxy.Auth.Basic.Username.Literal() != username {
+		t.Fatalf(
+			"expected %s proxy auth username %q, got %q (credential=%q auth=%#v)",
+			component,
+			username,
+			proxy.Auth.Basic.Username.Literal(),
+			proxy.Auth.Basic.CredentialName(),
+			proxy.Auth,
+		)
 	}
-	if proxy.Auth.Basic.Password != password {
-		t.Fatalf("expected %s proxy auth password %q, got %q", component, password, proxy.Auth.Basic.Password)
+	if proxy.Auth.Basic.Password.Literal() != password {
+		t.Fatalf(
+			"expected %s proxy auth password %q, got %q (credential=%q auth=%#v)",
+			component,
+			password,
+			proxy.Auth.Basic.Password.Literal(),
+			proxy.Auth.Basic.CredentialName(),
+			proxy.Auth,
+		)
 	}
 }
 
@@ -1583,7 +1561,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1606,7 +1584,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1620,7 +1598,7 @@ contexts:
           baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1633,7 +1611,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1646,7 +1624,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1663,7 +1641,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1686,7 +1664,7 @@ contexts:
         baseDir: /tmp/repo
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -1696,6 +1674,13 @@ currentContext: dev
 `
 
 const proxyInheritanceContextCatalogYAML = `
+credentials:
+  - name: git-basic
+    username: git
+    password: secret
+  - name: proxy-basic
+    username: proxy-user
+    password: proxy-pass
 contexts:
   - name: shared
     repository:
@@ -1705,12 +1690,12 @@ contexts:
         remote:
           url: https://example.com/config.git
           auth:
-            basicAuth:
-              username: git
-              password: secret
+            basic:
+              credentialsRef:
+                name: git-basic
     managedServer:
       http:
-        baseURL: https://api.example.com
+        url: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
@@ -1722,19 +1707,26 @@ contexts:
         auth:
           token: vault-token
         proxy:
-          httpURL: http://proxy.example.com:3128
-          httpsURL: https://proxy.example.com:3128
+          http: http://proxy.example.com:3128
+          https: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             basic:
-              username: proxy-user
-              password: proxy-pass
+              credentialsRef:
+                name: proxy-basic
     metadata:
       baseDir: /tmp/metadata
 currentContext: shared
 `
 
 const proxyDisableContextCatalogYAML = `
+credentials:
+  - name: git-basic
+    username: git
+    password: secret
+  - name: proxy-basic
+    username: proxy-user
+    password: proxy-pass
 contexts:
   - name: disable
     repository:
@@ -1744,25 +1736,25 @@ contexts:
         remote:
           url: https://example.com/config.git
           auth:
-            basicAuth:
-              username: git
-              password: secret
+            basic:
+              credentialsRef:
+                name: git-basic
     managedServer:
       http:
-        baseURL: https://api.example.com
+        url: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          httpURL: http://proxy.example.com:3128
-          httpsURL: https://proxy.example.com:3128
+          http: http://proxy.example.com:3128
+          https: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             basic:
-              username: proxy-user
-              password: proxy-pass
+              credentialsRef:
+                name: proxy-basic
     secretStore:
       vault:
         address: https://vault.example.com
@@ -1775,6 +1767,13 @@ currentContext: disable
 `
 
 const proxyPersistenceContextCatalogYAML = `
+credentials:
+  - name: git-basic
+    username: git
+    password: secret
+  - name: proxy-basic
+    username: proxy-user
+    password: proxy-pass
 contexts:
   - name: persist
     repository:
@@ -1784,25 +1783,25 @@ contexts:
         remote:
           url: https://example.com/config.git
           auth:
-            basicAuth:
-              username: git
-              password: secret
+            basic:
+              credentialsRef:
+                name: git-basic
     managedServer:
       http:
-        baseURL: https://api.example.com
+        url: https://api.example.com
         auth:
           customHeaders:
             - header: Authorization
               prefix: Bearer
               value: secret-token
         proxy:
-          httpURL: http://proxy.example.com:3128
-          httpsURL: https://proxy.example.com:3128
+          http: http://proxy.example.com:3128
+          https: https://proxy.example.com:3128
           noProxy: localhost,127.0.0.1
           auth:
             basic:
-              username: proxy-user
-              password: proxy-pass
+              credentialsRef:
+                name: proxy-basic
     secretStore:
       vault:
         address: https://vault.example.com

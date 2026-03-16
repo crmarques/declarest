@@ -102,7 +102,7 @@ contexts:
         baseDir: ` + devRepo + `
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -114,7 +114,7 @@ contexts:
         baseDir: ` + prodRepo + `
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -162,7 +162,7 @@ contexts:
   - name: remote-only
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -197,7 +197,7 @@ currentContext: remote-only
 	}
 }
 
-func TestNewSessionAllowsLegacyRepositoryOnlyContextWithoutManagedServer(t *testing.T) {
+func TestNewSessionAllowsRepositoryOnlyContextWithoutManagedServer(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -207,10 +207,9 @@ func TestNewSessionAllowsLegacyRepositoryOnlyContextWithoutManagedServer(t *test
 contexts:
   - name: local-only
     repository:
-      resource-format: yaml
       filesystem:
-        base-dir: ` + repoDir + `
-current-ctx: local-only
+        baseDir: ` + repoDir + `
+currentContext: local-only
 `)
 	if err := os.WriteFile(contextCatalogPath, contextCatalog, 0o600); err != nil {
 		t.Fatalf("failed to write catalog: %v", err)
@@ -221,7 +220,7 @@ current-ctx: local-only
 		config.ContextSelection{Name: "local-only"},
 	)
 	if err != nil {
-		t.Fatalf("expected repository-only legacy context to bootstrap, got error: %v", err)
+		t.Fatalf("expected repository-only context to bootstrap, got error: %v", err)
 	}
 	if session.Orchestrator == nil {
 		t.Fatal("expected orchestrator")
@@ -271,7 +270,7 @@ contexts:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization
@@ -345,7 +344,7 @@ contexts:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         auth:
           customHeaders:
             - header: Authorization

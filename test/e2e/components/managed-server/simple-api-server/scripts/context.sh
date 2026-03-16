@@ -58,7 +58,7 @@ esac
 {
   printf 'managedServer:\n'
   printf '  http:\n'
-  printf '    baseURL: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
+  printf '    url: %s\n' "${SIMPLE_API_SERVER_BASE_URL}"
   if [[ -n "${E2E_COMPONENT_OPENAPI_SPEC:-}" ]]; then
     printf '    openapi: %s\n' "${E2E_COMPONENT_OPENAPI_SPEC}"
   fi
@@ -92,7 +92,7 @@ esac
   elif [[ "${selected_auth_type}" == 'prompt' ]]; then
     printf '      prompt: {}\n'
   elif [[ "${enable_basic_auth}" == 'true' ]]; then
-    printf '      basicAuth:\n'
+    printf '      basic:\n'
     printf '        username: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME}"
     printf '        password: %s\n' "${SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD}"
   else

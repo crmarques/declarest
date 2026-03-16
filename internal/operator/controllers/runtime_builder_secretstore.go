@@ -80,7 +80,11 @@ func populateSecretStoreConfig(
 		if err != nil {
 			return err
 		}
-		vaultAuth.Password = &config.VaultUserPasswordAuth{Username: username, Password: password, Mount: vault.Auth.Userpass.Mount}
+		vaultAuth.Password = &config.VaultUserPasswordAuth{
+			Username: config.LiteralCredential(username),
+			Password: config.LiteralCredential(password),
+			Mount:    vault.Auth.Userpass.Mount,
+		}
 	}
 	if vault.Auth.AppRole != nil {
 		roleID, err := readSecretValue(ctx, reader, namespace, vault.Auth.AppRole.RoleIDRef)
@@ -143,7 +147,12 @@ func populateSecretStoreConfig(
 			if err != nil {
 				return err
 			}
-			proxyConfig.Auth = &config.ProxyAuth{Basic: &config.BasicAuth{Username: username, Password: password}}
+			proxyConfig.Auth = &config.ProxyAuth{
+				Basic: &config.BasicAuth{
+					Username: config.LiteralCredential(username),
+					Password: config.LiteralCredential(password),
+				},
+			}
 		}
 		vaultConfig.Proxy = proxyConfig
 	}

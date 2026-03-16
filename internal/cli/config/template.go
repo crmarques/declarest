@@ -18,6 +18,20 @@ const contextTemplateYAML = `# Context catalog template for declarest.
 # Fill the fields you need and remove examples/comments as desired.
 # Optional default editor for commands that open an editor (defaults to vi).
 # defaultEditor: vi
+# Optional reusable credentials.
+# Referenced credentials are injected where credentialsRef is used.
+credentials:
+  - name: shared-basic
+    username: change-me
+    password: change-me
+  # - name: prompt-basic
+  #   username:
+  #     prompt: true
+  #     persistInSession: true
+  #   password:
+  #     prompt: true
+  #     persistInSession: true
+
 contexts:
   - name: my-context
     repository:
@@ -37,11 +51,9 @@ contexts:
         #   # Optional auth.
         #   auth:
         #     # Mutually exclusive: choose exactly one auth method.
-        #     basicAuth:
-        #       username: change-me
-        #       password: change-me
-        #     # prompt:
-        #     #   keepCredentialsForSession: true
+        #     basic:
+        #       credentialsRef:
+        #         name: shared-basic
         #     # ssh:
         #     #   user: git
         #     #   privateKeyFile: /path/to/id_rsa
@@ -64,7 +76,7 @@ contexts:
     # Required managedServer.
     managedServer:
       http:
-        baseURL: https://example.com/api
+        url: https://example.com/api
         # healthCheck: /health
         # openapi: /path/to/openapi-or-swagger.yaml
         # If omitted and metadata.bundle is configured, declarest can fallback to bundle OpenAPI hints.
@@ -76,17 +88,15 @@ contexts:
         # Optional managedServer proxy.
         # proxy:
         #   # Configure one or both proxy URLs.
-        #   httpURL: http://proxy.example.com:3128
-        #   httpsURL: http://proxy.example.com:3128
+        #   http: http://proxy.example.com:3128
+        #   https: http://proxy.example.com:3128
         #   # Optional comma-separated bypass rules.
         #   noProxy: localhost,127.0.0.1,.svc.cluster.local
-        #   # Optional proxy auth (mutually exclusive: basic or prompt).
+        #   # Optional proxy auth.
         #   auth:
         #     basic:
-        #       username: proxy-user
-        #       password: proxy-pass
-        #     # prompt:
-        #     #   keepCredentialsForSession: true
+        #       credentialsRef:
+        #         name: shared-basic
 
         # Mutually exclusive: choose exactly one auth method.
         auth:
@@ -103,11 +113,9 @@ contexts:
           #   password: change-me
           #   scope: api.read
           #   audience: https://example.com/
-          # basicAuth:
-          #   username: change-me
-          #   password: change-me
-          # prompt:
-          #   keepCredentialsForSession: true
+          # basic:
+          #   credentialsRef:
+          #     name: shared-basic
           # customHeaders:
           #   - header: X-API-Key
           #     value: change-me
@@ -143,11 +151,8 @@ contexts:
     #   #     # Mutually exclusive: choose exactly one vault auth method.
     #   #     token: s.xxxx
     #   #     # password:
-    #   #     #   username: vault-user
-    #   #     #   password: vault-pass
-    #   #     #   mount: userpass
-    #   #     # prompt:
-    #   #     #   keepCredentialsForSession: true
+    #   #     #   credentialsRef:
+    #   #     #     name: shared-basic
     #   #     #   mount: userpass
     #   #     # appRole:
     #   #     #   roleID: role-id
@@ -165,6 +170,14 @@ contexts:
     #   # baseDir: /path/to/metadata
     #   # bundle: keycloak-bundle:0.0.1
     #   # bundleFile: /path/to/keycloak-bundle-0.0.1.tar.gz
+    #   # proxy:
+    #   #   http: http://proxy.example.com:3128
+    #   #   https: http://proxy.example.com:3128
+    #   #   noProxy: localhost,127.0.0.1,.svc.cluster.local
+    #   #   auth:
+    #   #     basic:
+    #   #       credentialsRef:
+    #   #         name: shared-basic
 
     # Optional arbitrary key/value preferences.
     # preferences:

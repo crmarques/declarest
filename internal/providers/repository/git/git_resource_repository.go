@@ -676,16 +676,14 @@ func (r *GitResourceRepository) authMethod(ctx context.Context) (transport.AuthM
 
 	auth := r.remote.Auth
 	switch {
-	case auth.BasicAuth != nil:
-		return &httpauth.BasicAuth{
-			Username: auth.BasicAuth.Username,
-			Password: auth.BasicAuth.Password,
-		}, nil
-	case auth.Prompt != nil:
-		if r.runtime == nil {
-			return nil, faults.NewValidationError("repository.git.remote.auth.prompt runtime is not configured", nil)
-		}
-		creds, err := r.runtime.Resolve(ctx, promptauth.TargetRepositoryGitRemoteAuth, auth.Prompt.KeepCredentialsForSession)
+	case auth.Basic != nil:
+		creds, err := promptauth.ResolveCredentials(
+			r.runtime,
+			ctx,
+			auth.Basic.CredentialName(),
+			auth.Basic.Username,
+			auth.Basic.Password,
+		)
 		if err != nil {
 			return nil, err
 		}

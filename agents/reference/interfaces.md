@@ -88,40 +88,53 @@ Optional fields:
 
 User-config key contract:
 1. persisted keys MUST use camelCase.
-2. on-disk catalog readers MUST accept documented legacy aliases (for example `current-ctx`, `base-dir`, `managed-server`, and `secret-store`) and MUST normalize them before strict decoding.
-3. unknown keys MUST fail strict decoding after legacy-alias normalization.
+2. on-disk catalog readers MUST reject legacy aliases and any non-canonical persisted keys.
+3. unknown keys MUST fail strict decoding.
 
 One-of invariants:
 1. `config.Context` MUST define at least one of `repository` or `managedServer`.
 2. `repository` MUST define exactly one of `git` or `filesystem` when configured.
-3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basicAuth`, `customHeaders`, or `prompt` when `managedServer.http` is configured.
+3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basic`, or `customHeaders` when `managedServer.http` is configured.
 4. `secretStore` MUST define exactly one of `file` or `vault`.
 5. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
 6. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
-7. `managedServer.http.proxy` MAY define any subset of `httpURL`, `httpsURL`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
-8. `managedServer.http.proxy.auth` MUST define either both `username` and `password`, or one `prompt` block.
-9. `repository.git.remote.auth` MUST define exactly one of `basicAuth`, `ssh`, `accessKey`, or `prompt`.
-10. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, `appRole`, or `prompt`.
+7. `managedServer.http.proxy` MAY define any subset of `http`, `https`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
+8. `managedServer.http.proxy.auth` MUST define `basic.credentialsRef` when configured.
+9. `repository.git.remote.auth` MUST define exactly one of `basic`, `ssh`, or `accessKey`.
+10. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, or `appRole`.
 11. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
 12. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
 13. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
 
-### Type: `config.PromptAuth`
-Represents deferred runtime collection of one username/password pair for one configured component.
+### Type: `config.Credential`
+Represents one reusable username/password definition stored at catalog scope.
 
 Fields:
-1. `KeepCredentialsForSession`: optional bool; when `true`, runtime keeps the resolved component credentials in declarest session environment state for reuse by later commands in the same terminal session when possible.
+1. `Name`: unique credential identifier.
+2. `Username`: `config.CredentialValue`.
+3. `Password`: `config.CredentialValue`.
 
 Invariants:
-1. prompt auth MUST defer interactive collection until the configured component first needs credentials at runtime.
-2. prompt auth MUST reject non-interactive execution when no cached session credentials are available.
+1. credential names MUST be unique within one catalog.
+2. persisted context components MUST reference catalog credentials by `credentialsRef.name` instead of inlining reusable username/password pairs.
 
-### Type: `config.VaultPromptAuth`
-Represents deferred runtime collection of Vault userpass credentials.
+### Type: `config.CredentialValue`
+Represents one credential attribute that is either literal or prompted at runtime.
 
 Fields:
-1. `KeepCredentialsForSession`: optional bool.
-2. `Mount`: optional Vault auth mount; defaults to `userpass`.
+1. literal string value, or
+2. prompt object `{prompt: true, persistInSession?: bool}`.
+
+### Type: `config.CredentialsRef`
+Represents a placeholder to inject a named catalog credential into one auth block.
+
+Fields:
+1. `Name`: referenced catalog credential name.
+
+Invariants:
+1. when a context component defines `credentialsRef`, runtime MUST inject the referenced credential object into that location while omitting the credential `name` field.
+2. referenced prompt-backed attributes MUST prompt only when the owning component first needs that value at runtime.
+3. non-interactive execution MUST fail when a required prompt-backed attribute has no cached session value.
 
 ### Type: `config.ContextCatalog`
 Represents persisted context catalog in one YAML file.
@@ -132,10 +145,12 @@ Required fields:
 
 Optional fields:
 1. `DefaultEditor`: default editor command mapped to persisted key `defaultEditor`.
+2. `Credentials`: reusable catalog-scoped credentials referenced by `credentialsRef`.
 
 Invariants:
 1. context names MUST be unique and non-empty.
 2. `CurrentContext` MUST reference an existing context when contexts are present.
+3. every resolved `credentialsRef.name` MUST reference an entry in `ContextCatalog.Credentials`.
 
 ### Type: `resource.Value`
 Represents structured or opaque resource content.

@@ -20,7 +20,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 3. Auth mode precedence MUST be deterministic and documented.
 4. Managed-server debug output MUST redact `Authorization` plus every header name configured under `managedServer.http.auth.customHeaders` unless `--verbose-insecure` is enabled.
 5. TLS configuration errors MUST fail fast during initialization.
-6. Bootstrap wiring MUST warn when `managedServer.http.baseURL` or `managedServer.http.auth.oauth2.tokenURL` use plain HTTP because credentials may be transmitted in cleartext.
+6. Bootstrap wiring MUST warn when `managedServer.http.url` or `managedServer.http.auth.oauth2.tokenURL` use plain HTTP because credentials may be transmitted in cleartext.
 7. HTTP response errors MUST preserve status code and response body context.
 8. OpenAPI-derived defaults SHOULD improve request correctness, SHOULD infer metadata `resource.format` from managed-server payload formats (using `any` when multiple deterministic formats are advertised), but MUST NOT override explicit metadata unless requested.
 9. List responses MUST be normalized into deterministic `resource.Resource` ordering.
@@ -33,7 +33,7 @@ Define remote server interaction contracts, request generation rules, and OpenAP
 16. Before sending body-bearing requests, operation validation directives (`validate.requiredAttributes`, `validate.assertions`, `validate.schemaRef`) MUST be evaluated against the outgoing payload only for structured payloads and MUST fail fast with `ValidationError` for `octet-stream`; `validate.requiredAttributes[*]` MUST use RFC 6901 JSON Pointer strings.
 17. Body-bearing operation payload mutation steps MUST run only for structured payloads; raw text or octet-stream request bodies MUST bypass structured `transforms` processing and preserve the original payload bytes/text.
 18. Payload validation context MUST include path-derived template fields (for example `/realm` from `/admin/realms/<realm>/...`) without mutating the outgoing request body.
-19. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.baseURL`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
+19. OpenAPI document URLs MAY be cross-origin relative to `managedServer.http.url`, but authentication headers MUST only be attached for same-origin OpenAPI fetches.
 20. Managed-server OpenAPI sources MUST accept OpenAPI 3.x (`openapi`) and Swagger 2.0 (`swagger`) documents; Swagger 2.0 operations MUST be normalized for media default inference and `validate.schemaRef=openapi:request-body` compatibility.
 21. When `managedServer.http.requestThrottling` is configured, request execution MUST enforce bounded in-flight concurrency and queue capacity, MUST reject overflow with typed conflict errors, and SHOULD share throttling scope for identical managed-server identities.
 22. `application/octet-stream` responses MUST decode to `resource.BinaryValue`, and auto/text CLI output for one binary payload MUST write raw bytes without a trailing newline.

@@ -19,20 +19,20 @@ import (
 	"maps"
 	"os"
 	"testing"
+
+	"github.com/crmarques/declarest/config"
 )
 
-func TestRuntimeResolvePromptsOnceAndReusesForOtherTargets(t *testing.T) {
+func TestRuntimeResolvePromptsOnceAndReusesSameCredential(t *testing.T) {
 	store := &memorySessionStore{}
 	prompter := &stubPrompter{
-		credentials: []Credentials{{Username: "shared-user", Password: "shared-pass"}},
-		reuse:       []bool{true},
+		values: map[string]string{
+			"shared.username": "shared-user",
+			"shared.password": "shared-pass",
+		},
 	}
 
 	runtime, err := New(
-		[]Target{
-			{Key: TargetManagedServerHTTPAuth, Label: "managed-server auth"},
-			{Key: TargetSecretStoreVaultAuth, Label: "vault auth"},
-		},
 		WithPrompter(prompter),
 		WithSessionStore(store),
 	)
@@ -40,11 +40,21 @@ func TestRuntimeResolvePromptsOnceAndReusesForOtherTargets(t *testing.T) {
 		t.Fatalf("New() returned error: %v", err)
 	}
 
-	first, err := runtime.Resolve(context.Background(), TargetManagedServerHTTPAuth, false)
+	first, err := runtime.Resolve(
+		context.Background(),
+		"shared",
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+	)
 	if err != nil {
 		t.Fatalf("Resolve(first) returned error: %v", err)
 	}
-	second, err := runtime.Resolve(context.Background(), TargetSecretStoreVaultAuth, false)
+	second, err := runtime.Resolve(
+		context.Background(),
+		"shared",
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+	)
 	if err != nil {
 		t.Fatalf("Resolve(second) returned error: %v", err)
 	}
@@ -52,22 +62,21 @@ func TestRuntimeResolvePromptsOnceAndReusesForOtherTargets(t *testing.T) {
 	if first != second {
 		t.Fatalf("expected reused credentials, got %#v and %#v", first, second)
 	}
-	if prompter.promptCalls != 1 {
-		t.Fatalf("expected one credential prompt, got %d", prompter.promptCalls)
-	}
-	if prompter.confirmCalls != 1 {
-		t.Fatalf("expected one reuse confirmation, got %d", prompter.confirmCalls)
+	if prompter.promptCalls != 2 {
+		t.Fatalf("expected two field prompts, got %d", prompter.promptCalls)
 	}
 }
 
-func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
+func TestRuntimeResolveKeepsPromptedValuesForSession(t *testing.T) {
 	store := &memorySessionStore{}
 	prompter := &stubPrompter{
-		credentials: []Credentials{{Username: "kept-user", Password: "kept-pass"}},
+		values: map[string]string{
+			"kept.username": "kept-user",
+			"kept.password": "kept-pass",
+		},
 	}
 
 	runtime, err := New(
-		[]Target{{Key: TargetManagedServerHTTPAuth, Label: "managed-server auth"}},
 		WithPrompter(prompter),
 		WithSessionStore(store),
 	)
@@ -75,7 +84,12 @@ func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
 		t.Fatalf("New() returned error: %v", err)
 	}
 
-	creds, err := runtime.Resolve(context.Background(), TargetManagedServerHTTPAuth, true)
+	creds, err := runtime.Resolve(
+		context.Background(),
+		"kept",
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true, PersistInSession: true}},
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true, PersistInSession: true}},
+	)
 	if err != nil {
 		t.Fatalf("Resolve() returned error: %v", err)
 	}
@@ -86,7 +100,7 @@ func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
 		t.Fatal("expected session store values to be persisted")
 	}
 
-	usernameKey, passwordKey := credentialEnvKeys(TargetManagedServerHTTPAuth)
+	usernameKey, passwordKey := credentialEnvKeys("kept")
 	if err := os.Unsetenv(usernameKey); err != nil {
 		t.Fatalf("Unsetenv(username) returned error: %v", err)
 	}
@@ -96,7 +110,6 @@ func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
 
 	secondPrompter := &stubPrompter{}
 	secondRuntime, err := New(
-		[]Target{{Key: TargetManagedServerHTTPAuth, Label: "managed-server auth"}},
 		WithPrompter(secondPrompter),
 		WithSessionStore(store),
 	)
@@ -104,7 +117,12 @@ func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
 		t.Fatalf("New(second) returned error: %v", err)
 	}
 
-	secondCreds, err := secondRuntime.Resolve(context.Background(), TargetManagedServerHTTPAuth, false)
+	secondCreds, err := secondRuntime.Resolve(
+		context.Background(),
+		"kept",
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+		config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+	)
 	if err != nil {
 		t.Fatalf("Resolve(second) returned error: %v", err)
 	}
@@ -117,30 +135,27 @@ func TestRuntimeResolveKeepsCredentialsForSession(t *testing.T) {
 }
 
 type stubPrompter struct {
-	credentials []Credentials
-	reuse       []bool
-
-	promptCalls  int
-	confirmCalls int
+	values      map[string]string
+	promptCalls int
 }
 
-func (s *stubPrompter) PromptCredentials(context.Context, Target, bool, bool) (Credentials, error) {
+func (s *stubPrompter) PromptValue(
+	_ context.Context,
+	credentialName string,
+	field string,
+	_ bool,
+	_ bool,
+) (string, error) {
 	s.promptCalls++
-	if len(s.credentials) == 0 {
-		return Credentials{}, nil
+	if len(s.values) == 0 {
+		return "", nil
 	}
-	creds := s.credentials[0]
-	s.credentials = s.credentials[1:]
-	return creds, nil
-}
-
-func (s *stubPrompter) ConfirmReuse(context.Context, Target, []Target) (bool, error) {
-	s.confirmCalls++
-	if len(s.reuse) == 0 {
-		return false, nil
+	key := credentialName + "." + field
+	value, ok := s.values[key]
+	if !ok {
+		return "", nil
 	}
-	value := s.reuse[0]
-	s.reuse = s.reuse[1:]
+	delete(s.values, key)
 	return value, nil
 }
 

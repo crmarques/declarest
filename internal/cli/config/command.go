@@ -634,7 +634,7 @@ func newResolveCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 			"  declarest context resolve",
 			"  declarest context resolve prod",
 			"  declarest context resolve --context prod",
-			"  declarest context resolve --set managedServer.http.baseURL=https://api.example.com",
+			"  declarest context resolve --set managedServer.http.url=https://api.example.com",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -971,7 +971,7 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 		}
 		parsed, err := url.Parse(baseURL)
 		if err != nil {
-			return "", cliutil.ValidationError("managedServer.http.baseURL is invalid", err)
+			return "", cliutil.ValidationError("managedServer.http.url is invalid", err)
 		}
 		basePath := strings.TrimSpace(parsed.Path)
 		if basePath == "" {
@@ -1008,11 +1008,11 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 	}
 	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL))
 	if err != nil {
-		return "", cliutil.ValidationError("managedServer.http.baseURL is invalid", err)
+		return "", cliutil.ValidationError("managedServer.http.url is invalid", err)
 	}
 	if !strings.EqualFold(parsed.Scheme, baseParsed.Scheme) || !strings.EqualFold(parsed.Host, baseParsed.Host) {
 		return "", cliutil.ValidationError(
-			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.baseURL",
+			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.url",
 			nil,
 		)
 	}

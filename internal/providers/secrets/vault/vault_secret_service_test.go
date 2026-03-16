@@ -110,8 +110,8 @@ func TestVaultSecretServiceUserPassAuth(t *testing.T) {
 		KVVersion: 2,
 		Auth: &config.VaultAuth{
 			Password: &config.VaultUserPasswordAuth{
-				Username: fake.userName,
-				Password: fake.password,
+				Username: config.LiteralCredential(fake.userName),
+				Password: config.LiteralCredential(fake.password),
 			},
 		},
 	})
@@ -143,7 +143,6 @@ func TestVaultSecretServicePromptAuth(t *testing.T) {
 	defer server.Close()
 
 	runtime, err := promptauth.New(
-		[]promptauth.Target{{Key: promptauth.TargetSecretStoreVaultAuth, Label: "vault auth"}},
 		promptauth.WithPrompter(&vaultPromptPrompter{
 			credentials: promptauth.Credentials{Username: fake.userName, Password: fake.password},
 		}),
@@ -158,7 +157,11 @@ func TestVaultSecretServicePromptAuth(t *testing.T) {
 			Address:   server.URL,
 			KVVersion: 2,
 			Auth: &config.VaultAuth{
-				Prompt: &config.VaultPromptAuth{},
+				Password: &config.VaultUserPasswordAuth{
+					CredentialsRef: &config.CredentialsRef{Name: "vault"},
+					Username:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+					Password:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+				},
 			},
 		},
 		WithPromptRuntime(runtime),
@@ -496,12 +499,11 @@ type vaultPromptPrompter struct {
 	credentials promptauth.Credentials
 }
 
-func (p *vaultPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
-	return p.credentials, nil
-}
-
-func (p *vaultPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
-	return false, nil
+func (p *vaultPromptPrompter) PromptValue(_ context.Context, _ string, field string, _ bool, _ bool) (string, error) {
+	if field == "username" {
+		return p.credentials.Username, nil
+	}
+	return p.credentials.Password, nil
 }
 
 type vaultMemorySessionStore struct{}

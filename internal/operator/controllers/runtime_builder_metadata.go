@@ -22,10 +22,6 @@ import (
 	"github.com/crmarques/declarest/config"
 )
 
-func populateMetadataConfig(metadataPath string, resolvedContext *config.Context) error {
-	return populateMetadataConfigWithBundle(metadataPath, "", resolvedContext)
-}
-
 func populateMetadataConfigWithBundle(metadataPath string, metadataBundle string, resolvedContext *config.Context) error {
 	metadataBundle = strings.TrimSpace(metadataBundle)
 	if metadataBundle != "" {

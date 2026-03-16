@@ -69,7 +69,7 @@ When `--managed-server-auth-type` is omitted, the selected managed-server compon
 Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
 When `--proxy-mode external`, generated CLI contexts inject explicit proxy blocks into each eligible section: `managedServer.http`, `repository.git.remote` for `http|https` remotes, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
 When `--proxy-mode local`, the runner auto-selects helper component `proxy:forward-proxy`, exposes one run-scoped proxy URL to the CLI, and wires the same eligible context sections through that local proxy. In `--platform compose`, local loopback component URLs are rewritten to a host-reachable non-loopback address when one can be resolved so host-side CLI traffic still traverses the proxy.
-Proxy prompt auth is CLI-only in v1: `--proxy-auth-type prompt` is supported for `cli-manual`, writes prompt blocks to `contexts.yaml`, sets `keepCredentialsForSession: true` for local prompt-backed proxy blocks, prints the generated proxy credentials in manual handoff output for testing, and keeps proxy auth vars out of the generated setup script environment instead of pre-seeding prompt auth env vars.
+Proxy prompt auth is CLI-only in v1: `--proxy-auth-type prompt` is supported for `cli-manual`, writes top-level prompt-backed credentials plus `credentialsRef` placeholders to `contexts.yaml`, sets `persistInSession: true` for local prompt-backed proxy credentials, prints the generated proxy credentials in manual handoff output for testing, and keeps proxy auth vars out of the generated setup script environment instead of pre-seeding prompt auth env vars.
 `--metadata-source bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
 `--metadata-source dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
 
@@ -84,8 +84,8 @@ Both cleanup modes also drop any `<run-id>/bin` entries that were prepended to `
 
 - `DECLAREST_E2E_CONTAINER_ENGINE`: container CLI used for local compose startup (`podman` or `docker`, default: `podman`)
 - `DECLAREST_E2E_EXECUTION_LOG`: optional path for the live execution log file (default: `test/e2e/.runs/<run-id>/execution.log`)
-- `DECLAREST_E2E_PROXY_HTTP_URL`: optional shared proxy `httpURL` used when `--proxy-mode external`
-- `DECLAREST_E2E_PROXY_HTTPS_URL`: optional shared proxy `httpsURL` used when `--proxy-mode external`
+- `DECLAREST_E2E_PROXY_HTTP_URL`: optional shared proxy `http` URL used when `--proxy-mode external`
+- `DECLAREST_E2E_PROXY_HTTPS_URL`: optional shared proxy `https` URL used when `--proxy-mode external`
 - `DECLAREST_E2E_PROXY_NO_PROXY`: optional shared proxy `noProxy` list used when `--proxy-mode local|external`
 - `DECLAREST_E2E_PROXY_AUTH_USERNAME`: optional shared proxy auth username used with `--proxy-auth-type basic`
 - `DECLAREST_E2E_PROXY_AUTH_PASSWORD`: optional shared proxy auth password used with `--proxy-auth-type basic`

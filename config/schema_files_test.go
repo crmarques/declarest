@@ -69,6 +69,28 @@ func TestMachineReadableSchemasRemainParseableAndWired(t *testing.T) {
 	if !stringSliceContains(t, contextsSchema, "required", "currentContext") {
 		t.Fatal("expected contexts schema to require currentContext")
 	}
+	if _, ok := contextsProperties["credentials"]; !ok {
+		t.Fatal("expected contexts schema to define credentials")
+	}
+	contextsDefs := objectProperty(t, contextsSchema, "$defs")
+	credentialDef, ok := contextsDefs["credential"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected credential definition, got %#v", contextsDefs["credential"])
+	}
+	credentialProperties := objectProperty(t, credentialDef, "properties")
+	if _, ok := credentialProperties["username"]; !ok {
+		t.Fatal("expected credential schema to define username")
+	}
+	if _, ok := credentialProperties["password"]; !ok {
+		t.Fatal("expected credential schema to define password")
+	}
+	credentialValueDef, ok := contextsDefs["credentialValue"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected credentialValue definition, got %#v", contextsDefs["credentialValue"])
+	}
+	if len(arrayProperty(t, credentialValueDef, "oneOf")) != 2 {
+		t.Fatalf("expected credentialValue.oneOf to contain literal and prompt variants, got %#v", credentialValueDef["oneOf"])
+	}
 
 	metadataSchema := loadSchemaDocument(t, "metadata.schema.json")
 	metadataProperties := objectProperty(t, metadataSchema, "properties")

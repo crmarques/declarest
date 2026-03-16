@@ -27,18 +27,20 @@ const (
 )
 
 type ContextCatalog struct {
-	Contexts       []Context `json:"contexts" yaml:"contexts"`
-	CurrentContext string    `json:"currentContext" yaml:"currentContext"`
-	DefaultEditor  string    `json:"defaultEditor,omitempty" yaml:"defaultEditor,omitempty"`
+	Contexts       []Context    `json:"contexts" yaml:"contexts"`
+	CurrentContext string       `json:"currentContext" yaml:"currentContext"`
+	DefaultEditor  string       `json:"defaultEditor,omitempty" yaml:"defaultEditor,omitempty"`
+	Credentials    []Credential `json:"credentials,omitempty" yaml:"credentials,omitempty"`
 }
 
 type Context struct {
-	Name          string            `json:"name" yaml:"name"`
-	Repository    Repository        `json:"repository" yaml:"repository"`
-	ManagedServer *ManagedServer    `json:"managedServer,omitempty" yaml:"managedServer,omitempty"`
-	SecretStore   *SecretStore      `json:"secretStore,omitempty" yaml:"secretStore,omitempty"`
-	Metadata      Metadata          `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Preferences   map[string]string `json:"preferences,omitempty" yaml:"preferences,omitempty"`
+	Name          string                `json:"name" yaml:"name"`
+	Repository    Repository            `json:"repository" yaml:"repository"`
+	ManagedServer *ManagedServer        `json:"managedServer,omitempty" yaml:"managedServer,omitempty"`
+	SecretStore   *SecretStore          `json:"secretStore,omitempty" yaml:"secretStore,omitempty"`
+	Metadata      Metadata              `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Preferences   map[string]string     `json:"preferences,omitempty" yaml:"preferences,omitempty"`
+	Credentials   map[string]Credential `json:"-" yaml:"-"`
 }
 
 type Repository struct {
@@ -81,10 +83,9 @@ func (g GitRemote) AutoSyncEnabled() bool {
 }
 
 type GitAuth struct {
-	BasicAuth *BasicAuth     `json:"basicAuth,omitempty" yaml:"basicAuth,omitempty"`
+	Basic     *BasicAuth     `json:"basic,omitempty" yaml:"basic,omitempty"`
 	SSH       *SSHAuth       `json:"ssh,omitempty" yaml:"ssh,omitempty"`
 	AccessKey *AccessKeyAuth `json:"accessKey,omitempty" yaml:"accessKey,omitempty"`
-	Prompt    *PromptAuth    `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type FilesystemRepository struct {
@@ -96,7 +97,7 @@ type ManagedServer struct {
 }
 
 type HTTPServer struct {
-	BaseURL           string                 `json:"baseURL" yaml:"baseURL"`
+	BaseURL           string                 `json:"url" yaml:"url"`
 	HealthCheck       string                 `json:"healthCheck,omitempty" yaml:"healthCheck,omitempty"`
 	OpenAPI           string                 `json:"openapi,omitempty" yaml:"openapi,omitempty"`
 	DefaultHeaders    map[string]string      `json:"defaultHeaders,omitempty" yaml:"defaultHeaders,omitempty"`
@@ -115,26 +116,20 @@ type HTTPRequestThrottling struct {
 }
 
 type HTTPProxy struct {
-	HTTPURL  string     `json:"httpURL,omitempty" yaml:"httpURL,omitempty"`
-	HTTPSURL string     `json:"httpsURL,omitempty" yaml:"httpsURL,omitempty"`
+	HTTPURL  string     `json:"http,omitempty" yaml:"http,omitempty"`
+	HTTPSURL string     `json:"https,omitempty" yaml:"https,omitempty"`
 	NoProxy  string     `json:"noProxy,omitempty" yaml:"noProxy,omitempty"`
 	Auth     *ProxyAuth `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
 type ProxyAuth struct {
-	Basic  *BasicAuth  `json:"basic,omitempty" yaml:"basic,omitempty"`
-	Prompt *PromptAuth `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+	Basic *BasicAuth `json:"basic,omitempty" yaml:"basic,omitempty"`
 }
 
 type HTTPAuth struct {
 	OAuth2        *OAuth2           `json:"oauth2,omitempty" yaml:"oauth2,omitempty"`
-	BasicAuth     *BasicAuth        `json:"basicAuth,omitempty" yaml:"basicAuth,omitempty"`
+	Basic         *BasicAuth        `json:"basic,omitempty" yaml:"basic,omitempty"`
 	CustomHeaders []HeaderTokenAuth `json:"customHeaders,omitempty" yaml:"customHeaders,omitempty"`
-	Prompt        *PromptAuth       `json:"prompt,omitempty" yaml:"prompt,omitempty"`
-}
-
-type PromptAuth struct {
-	KeepCredentialsForSession bool `json:"keepCredentialsForSession,omitempty" yaml:"keepCredentialsForSession,omitempty"`
 }
 
 type OAuth2 struct {
@@ -149,8 +144,9 @@ type OAuth2 struct {
 }
 
 type BasicAuth struct {
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
+	CredentialsRef *CredentialsRef `json:"credentialsRef,omitempty" yaml:"credentialsRef,omitempty"`
+	Username       CredentialValue `json:"-" yaml:"-"`
+	Password       CredentialValue `json:"-" yaml:"-"`
 }
 
 type HeaderTokenAuth struct {
@@ -205,18 +201,13 @@ type VaultAuth struct {
 	Token    string                 `json:"token,omitempty" yaml:"token,omitempty"`
 	Password *VaultUserPasswordAuth `json:"password,omitempty" yaml:"password,omitempty"`
 	AppRole  *VaultAppRoleAuth      `json:"appRole,omitempty" yaml:"appRole,omitempty"`
-	Prompt   *VaultPromptAuth       `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 }
 
 type VaultUserPasswordAuth struct {
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
-	Mount    string `json:"mount,omitempty" yaml:"mount,omitempty"`
-}
-
-type VaultPromptAuth struct {
-	KeepCredentialsForSession bool   `json:"keepCredentialsForSession,omitempty" yaml:"keepCredentialsForSession,omitempty"`
-	Mount                     string `json:"mount,omitempty" yaml:"mount,omitempty"`
+	CredentialsRef *CredentialsRef `json:"credentialsRef,omitempty" yaml:"credentialsRef,omitempty"`
+	Mount          string          `json:"mount,omitempty" yaml:"mount,omitempty"`
+	Username       CredentialValue `json:"-" yaml:"-"`
+	Password       CredentialValue `json:"-" yaml:"-"`
 }
 
 type VaultAppRoleAuth struct {

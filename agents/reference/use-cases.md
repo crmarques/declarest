@@ -238,27 +238,27 @@ Expected outputs:
 3. `--check` succeeds only when the resolved defaults object matches the inferred normalized object.
 4. Subsequent repository-backed reads still expose the merged effective resource.
 
-### Example 12: Prompt Auth Reuse and Session Keep
-Goal: reuse one interactively-entered username/password pair across prompt-auth components without forcing plaintext credentials into the persisted context.
+### Example 12: Reused Prompt-Backed Credentials
+Goal: reuse one named prompt-backed credential across multiple components without persisting plaintext values in the context blocks.
 
 Inputs:
-1. Context with `managedServer.http.auth.prompt`, `repository.git.remote.auth.prompt`, and `managedServer.http.proxy.auth.prompt`.
-2. `managedServer.http.auth.prompt.keepCredentialsForSession: true`.
+1. Catalog credential `shared-login` with prompt-backed `username` and `password`, both using `persistInSession: true`.
+2. Context with `managedServer.http.auth.basic.credentialsRef.name=shared-login`, `repository.git.remote.auth.basic.credentialsRef.name=shared-login`, and `managedServer.http.proxy.auth.basic.credentialsRef.name=shared-login`.
 3. One runtime command that uses the managed server and git repository.
 
 Execution:
-1. Startup resolves the context without prompting because prompt auth is deferred.
+1. Startup resolves the context without prompting because prompt-backed credential attributes are deferred.
 2. The first component that needs credentials prompts for username/password and warns that credentials will be kept for the terminal session.
-3. Runtime asks whether those credentials should be reused for the remaining prompt-auth components in the same command.
-4. Later commands on the same terminal session reuse the kept managed-server credentials without prompting again.
+3. Runtime applies the resolved credential values to the requesting component and persists them for the session.
+4. Later commands on the same terminal session reuse the kept credential values for any component that references `shared-login`.
 
 Expected outputs:
-1. Persisted context YAML still contains only the `prompt` blocks and no plaintext credentials.
-2. One command prompts at most once when the user approves reuse for the other prompt-auth components in that command.
-3. Later commands can reuse the kept credentials for the same component without another prompt when session persistence is available.
+1. Persisted catalog YAML still contains only the top-level prompt-backed credential definition plus `credentialsRef` placeholders in context components.
+2. One terminal session prompts at most once per prompt-backed credential attribute when session persistence is enabled.
+3. Later commands can reuse the kept credential values without another prompt when session persistence is available.
 
 Failure expectation:
-1. A non-interactive command with uncached prompt-auth credentials fails with `ValidationError`.
+1. A non-interactive command with uncached prompt-backed credential attributes fails with `ValidationError`.
 
 ### Example 12: Resource Defaults Managed-Server Probe Safety
 Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
@@ -299,7 +299,7 @@ Expected outputs:
 2. When all fields are defaulted, `resource get --prune-defaults` prints `{}` instead of `null`.
 3. The raw metadata `resource.defaults` block and its referenced defaults artifacts remain unchanged.
 
-### Example 14: E2E Manual Handoff With Prompt Auth
+### Example 14: E2E Manual Handoff With Prompt-Backed Credentials
 Goal: generate a manual E2E context that defers proxy credentials to runtime prompts instead of writing plaintext proxy credentials into the context file.
 
 Inputs:
@@ -309,13 +309,13 @@ Inputs:
 Execution:
 1. Runner validates that proxy prompt auth is being used only with `cli-manual`.
 2. Proxy helper component generates run-scoped proxy credentials for the local forward proxy.
-3. Context generation writes prompt-backed `*.proxy.auth.prompt` blocks with `keepCredentialsForSession: true` while omitting inline proxy credentials.
+3. Context generation writes a top-level prompt-backed credential with `persistInSession: true` and sets `*.proxy.auth.basic.credentialsRef` to that credential while omitting inline proxy credentials.
 4. Manual handoff output prints the generated proxy credentials for testing, and the generated setup script does not export proxy auth bootstrap variables.
 
 Expected outputs:
-1. The generated context file contains proxy `prompt` auth blocks and no plaintext proxy credentials.
+1. The generated context file contains top-level prompt-backed credentials plus proxy `basic.credentialsRef` placeholders and no plaintext proxy credentials.
 2. Manual handoff output includes the generated proxy username and password so a tester can enter them at the runtime prompt.
-3. Sourcing the generated setup script leaves proxy auth env vars unset so runtime still behaves like a real prompt-auth flow until the user enters credentials.
+3. Sourcing the generated setup script leaves proxy auth env vars unset so runtime still behaves like a real prompt-backed credential flow until the user enters credentials.
 
 Failure expectation:
 1. Combining `--proxy-auth-type prompt` with inline proxy username/password env vars, or selecting proxy prompt auth outside `cli-manual`, fails with actionable validation output before workload execution.
@@ -329,7 +329,7 @@ Inputs:
 
 Execution:
 1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
-2. Generated context points `metadata.base-dir` at that run-scoped copy.
+2. Generated context points `metadata.baseDir` at that run-scoped copy.
 3. Case mutates metadata through CLI commands.
 
 Expected outputs:
@@ -366,7 +366,7 @@ Inputs:
 Execution:
 1. Runner parses `--metadata-source dir`.
 2. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
-3. Generated context points `metadata.base-dir` at that run-scoped copy.
+3. Generated context points `metadata.baseDir` at that run-scoped copy.
 4. Runner keeps local `managedServer.http.openapi` wiring enabled for the selected component.
 
 Expected outputs:
@@ -755,7 +755,7 @@ Execution:
 
 Expected outputs:
 1. Step 2 context contains explicit proxy blocks for `managedServer.http`, `repository.git.remote` when the remote URL uses `http|https`, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
-2. Each injected proxy block contains configured `httpURL`/`httpsURL`, optional `noProxy`, and optional `auth` fields.
+2. Each injected proxy block contains configured `http`/`https`, optional `noProxy`, and optional `auth` fields.
 3. Unrelated auth and TLS blocks remain unchanged.
 
 Failure expectation:

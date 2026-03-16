@@ -301,10 +301,10 @@ Interactive context commands:
 88. `resource get` with an explicit trailing slash collection marker and remote source (`--source managed-server` or default) MUST execute remote list resolution for the normalized collection path first; when that list attempt fails with list-response shape validation (`list response ...` or `list payload ...`), the command MUST retry a single-resource remote read for the same normalized path.
 89. Path completion candidates containing spaces in non-terminal segments (for example `/admin/realms/publico-br/user-registry/AD PRD`) MUST be preserved as one completion token in generated shell completion scripts.
 ### Server Commands
-90. `server get base-url` MUST print the active context `managedServer.http.baseURL` and fail with `ValidationError` when `managedServer.http` is not configured.
+90. `server get base-url` MUST print the active context `managedServer.http.url` and fail with `ValidationError` when `managedServer.http` is not configured.
 91. `server get token-url` MUST print the active context `managedServer.http.auth.oauth2.tokenURL` and fail with `ValidationError` when OAuth2 auth is not configured.
 92. `server get access-token` MUST fetch and print the OAuth2 access token from `managedServer.http.auth.oauth2`; when OAuth2 auth is not configured, it MUST fail with `ValidationError`.
-93. `server check` MUST probe managed-server connectivity using a GET request against `managedServer.http.healthCheck` when configured or the normalized `managedServer.http.baseURL` path otherwise, and it MUST succeed only when the probe request succeeds.
+93. `server check` MUST probe managed-server connectivity using a GET request against `managedServer.http.healthCheck` when configured or the normalized `managedServer.http.url` path otherwise, and it MUST succeed only when the probe request succeeds.
 94. Commands with plain-text-only output (`secret get`, `repository tree`, `server get *`, `server check`, shell `completion` subcommands, and `context print-template`) MUST reject `--output json|yaml` with `ValidationError` instead of silently ignoring the requested format.
 95. `context show` MUST print YAML by default and MUST reject `--output json`; it MAY accept `--output text` or `--output yaml`.
 96. `repository status --verbose` MAY include structured `worktree` entries when `--output json|yaml` is selected.

@@ -292,7 +292,10 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 			Remote: &config.GitRemote{
 				URL: "https://example.invalid/repo.git",
 				Auth: &config.GitAuth{
-					BasicAuth: &config.BasicAuth{Username: "u", Password: "p"},
+					Basic: &config.BasicAuth{
+						Username: config.LiteralCredential("u"),
+						Password: config.LiteralCredential("p"),
+					},
 				},
 			},
 		},
@@ -330,7 +333,11 @@ func TestGitRepositoryAuthMethodSanity(t *testing.T) {
 			Remote: &config.GitRemote{
 				URL: "https://example.invalid/repo.git",
 				Auth: &config.GitAuth{
-					Prompt: &config.PromptAuth{},
+					Basic: &config.BasicAuth{
+						CredentialsRef: &config.CredentialsRef{Name: "prompt"},
+						Username:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+						Password:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+					},
 				},
 			},
 		},
@@ -356,7 +363,6 @@ func newGitPromptRuntime(t *testing.T, creds promptauth.Credentials) *promptauth
 	t.Helper()
 
 	runtime, err := promptauth.New(
-		[]promptauth.Target{{Key: promptauth.TargetRepositoryGitRemoteAuth, Label: "git remote auth"}},
 		promptauth.WithPrompter(&gitPromptPrompter{credentials: creds}),
 		promptauth.WithSessionStore(&gitMemorySessionStore{}),
 	)
@@ -370,12 +376,17 @@ type gitPromptPrompter struct {
 	credentials promptauth.Credentials
 }
 
-func (p *gitPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
-	return p.credentials, nil
-}
-
-func (p *gitPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
-	return false, nil
+func (p *gitPromptPrompter) PromptValue(
+	_ context.Context,
+	_ string,
+	field string,
+	_ bool,
+	_ bool,
+) (string, error) {
+	if field == "username" {
+		return p.credentials.Username, nil
+	}
+	return p.credentials.Password, nil
 }
 
 type gitMemorySessionStore struct{}

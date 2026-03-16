@@ -140,7 +140,10 @@ func populateManagedServerConfig(
 		if err != nil {
 			return err
 		}
-		auth.BasicAuth = &config.BasicAuth{Username: username, Password: password}
+		auth.Basic = &config.BasicAuth{
+			Username: config.LiteralCredential(username),
+			Password: config.LiteralCredential(password),
+		}
 	}
 	if len(managedServer.Spec.HTTP.Auth.CustomHeaders) > 0 {
 		headers := make([]config.HeaderTokenAuth, 0, len(managedServer.Spec.HTTP.Auth.CustomHeaders))
@@ -184,6 +187,11 @@ func resolveManagedServerProxyConfig(
 	if err != nil {
 		return nil, err
 	}
-	proxy.Auth = &config.ProxyAuth{Basic: &config.BasicAuth{Username: username, Password: password}}
+	proxy.Auth = &config.ProxyAuth{
+		Basic: &config.BasicAuth{
+			Username: config.LiteralCredential(username),
+			Password: config.LiteralCredential(password),
+		},
+	}
 	return proxy, nil
 }

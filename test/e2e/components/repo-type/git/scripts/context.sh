@@ -22,7 +22,7 @@ fragment_file=${1:-${E2E_COMPONENT_CONTEXT_FRAGMENT:-}}
 
   if [[ "${GIT_AUTH_MODE:-}" == 'basic' ]]; then
     printf '      auth:\n'
-    printf '        basicAuth:\n'
+    printf '        basic:\n'
     printf '          username: %s\n' "${GIT_AUTH_USERNAME}"
     printf '          password: %s\n' "${GIT_AUTH_PASSWORD}"
   fi

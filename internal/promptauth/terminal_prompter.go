@@ -29,80 +29,49 @@ import (
 
 type terminalPrompter struct{}
 
-func (terminalPrompter) PromptCredentials(
+func (terminalPrompter) PromptValue(
 	_ context.Context,
-	target Target,
-	keepForSession bool,
+	credentialName string,
+	field string,
+	persistInSession bool,
 	persistentSession bool,
-) (Credentials, error) {
+) (string, error) {
 	if !isInteractiveTerminal(os.Stdin, os.Stdout) {
-		return Credentials{}, faults.NewValidationError(
+		return "", faults.NewValidationError(
 			fmt.Sprintf(
-				"prompt auth for %s requires an interactive terminal when no cached session credentials are available",
-				target.Label,
+				"credential %q %s requires an interactive terminal when no cached session value is available",
+				strings.TrimSpace(credentialName),
+				strings.TrimSpace(field),
 			),
 			nil,
 		)
 	}
 
-	if keepForSession {
+	if persistInSession {
 		writePromptWarning(
 			os.Stderr,
 			fmt.Sprintf(
-				"credentials for %s will be stored in declarest session environment variables and reused by %s.",
-				target.Label,
+				"credential %q %s will be stored in declarest session environment variables and reused by %s.",
+				strings.TrimSpace(credentialName),
+				strings.TrimSpace(field),
 				sessionReuseScope(persistentSession),
 			),
 		)
 	}
 
-	username := ""
-	usernameField := huh.NewInput().
-		Title(normalizePrompt(fmt.Sprintf("%s username", target.Label))).
-		Value(&username).
+	value := ""
+	input := huh.NewInput().
+		Title(normalizePrompt(fmt.Sprintf("%s %s", strings.TrimSpace(credentialName), strings.TrimSpace(field)))).
+		Value(&value).
 		Validate(huh.ValidateNotEmpty())
-	if err := runField(usernameField); err != nil {
-		return Credentials{}, err
+	if strings.EqualFold(strings.TrimSpace(field), "password") {
+		input.Password(true)
+	}
+	if err := runField(input); err != nil {
+		return "", err
 	}
 
-	password := ""
-	passwordField := huh.NewInput().
-		Title(normalizePrompt(fmt.Sprintf("%s password", target.Label))).
-		Value(&password).
-		Password(true).
-		Validate(huh.ValidateNotEmpty())
-	if err := runField(passwordField); err != nil {
-		return Credentials{}, err
-	}
-
-	return Credentials{
-		Username: strings.TrimSpace(username),
-		Password: strings.TrimSpace(password),
-	}, nil
-}
-
-func (terminalPrompter) ConfirmReuse(_ context.Context, source Target, targets []Target) (bool, error) {
-	if !isInteractiveTerminal(os.Stdin, os.Stdout) {
-		return false, faults.NewValidationError(
-			fmt.Sprintf("prompt auth for %s requires an interactive terminal", source.Label),
-			nil,
-		)
-	}
-
-	labels := make([]string, 0, len(targets))
-	for _, target := range targets {
-		labels = append(labels, target.Label)
-	}
-
-	value := false
-	field := huh.NewConfirm().
-		Title(normalizePrompt("Reuse these credentials for other prompt-auth components in this command")).
-		Description(strings.Join(labels, ", ")).
-		Value(&value)
-	if err := runField(field); err != nil {
-		return false, err
-	}
-	return value, nil
+	return strings.TrimSpace(value), nil
 }
 
 func runField(field huh.Field) error {

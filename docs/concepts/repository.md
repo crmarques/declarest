@@ -32,7 +32,7 @@ In Operator mode, the Git repository is the desired-state source of truth:
 
 In short: CLI/PRs change desired state in Git; Operator reconciles runtime state from that desired state.
 
-## Metadata base-dir can be separate
+## Metadata baseDir can be separate
 
 By default, metadata lives under the same base directory as repository files.
 
@@ -40,7 +40,7 @@ You can override this with:
 
 ```yaml
 metadata:
-  base-dir: /path/to/metadata
+  baseDir: /path/to/metadata
 ```
 
 This is useful when you want:

@@ -26,10 +26,9 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		strings.TrimSpace(cfg.Token) != "",
 		cfg.Password != nil,
 		cfg.AppRole != nil,
-		cfg.Prompt != nil,
 	)
 	if setCount != 1 {
-		return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle, prompt", nil)
+		return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth must define exactly one of token, password, approle", nil)
 	}
 
 	if strings.TrimSpace(cfg.Token) != "" {
@@ -40,8 +39,8 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 	}
 
 	if cfg.Password != nil {
-		if strings.TrimSpace(cfg.Password.Username) == "" || strings.TrimSpace(cfg.Password.Password) == "" {
-			return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth.password requires username and password", nil)
+		if cfg.Password.CredentialName() == "" && !cfg.Password.HasResolvedCredentials() {
+			return vaultAuthConfig{}, faults.NewValidationError("secret-store.vault.auth.password.credentials-ref is required", nil)
 		}
 		copied := *cfg.Password
 		return vaultAuthConfig{
@@ -58,15 +57,6 @@ func buildVaultAuthConfig(cfg config.VaultAuth) (vaultAuthConfig, error) {
 		return vaultAuthConfig{
 			mode:    vaultAuthAppRole,
 			appRole: &copied,
-		}, nil
-	}
-
-	if cfg.Prompt != nil {
-		copied := *cfg.Prompt
-		copied.Mount = strings.TrimSpace(copied.Mount)
-		return vaultAuthConfig{
-			mode:   vaultAuthPrompt,
-			prompt: &copied,
 		}, nil
 	}
 

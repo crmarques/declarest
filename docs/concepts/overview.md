@@ -46,7 +46,7 @@ Think in this order:
 A named configuration that combines:
 
 - repository backend (`filesystem` or `git`)
-- managed server config (`managedServer`: `baseURL`, auth, optional `healthCheck` and OpenAPI)
+- managed server config (`managedServer`: `url`, auth, optional `healthCheck` and OpenAPI)
 - optional secret store
 - optional metadata source
 

@@ -8,8 +8,8 @@ It represents the real system that should converge to Git desired state.
 
 `ManagedServer.spec` includes:
 
-- `http.baseURL`
-- `http.auth` (exactly one of `oauth2`, `basicAuth`, `customHeaders`)
+- `http.url`
+- `http.auth` (exactly one of `oauth2`, `basic`, `customHeaders`)
 - optional `http.tls`, `http.proxy`, `http.requestThrottling`
 - optional `openapi` and `metadata` artifacts
 - optional `pollInterval`

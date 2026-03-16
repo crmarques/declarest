@@ -40,7 +40,7 @@ contexts:
   - name: e2e-basic
     managedServer:
       http:
-        baseURL: http://127.0.0.1:8080
+        url: http://127.0.0.1:8080
         auth:
           oauth2:
             tokenURL: http://127.0.0.1:8080/oauth/token
@@ -56,7 +56,7 @@ contexts:
           branch: main
           provider: gitea
           auth:
-            basicAuth:
+            basic:
               username: git-user
               password: git-pass
     secretStore:
@@ -80,7 +80,7 @@ contexts:
   - name: e2e-basic
     managedServer:
       http:
-        baseURL: http://127.0.0.1:8080
+        url: http://127.0.0.1:8080
         auth:
           customHeaders:
             - header: Authorization
@@ -142,16 +142,20 @@ test_inserts_proxy_blocks_across_proxiable_sections() {
 
   e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "httpURL: 'http://proxy.example.com:3128'"
-  assert_file_contains "${context_file}" "httpsURL: 'https://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "http: 'http://proxy.example.com:3128'"
+  assert_file_contains "${context_file}" "https: 'https://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "noProxy: 'localhost,127.0.0.1'"
-  assert_file_contains "${context_file}" "basic:"
-  assert_file_contains "${context_file}" "username: 'proxy-user'"
-  assert_file_contains "${context_file}" "password: 'proxy-pass'"
+  assert_file_contains "${context_file}" "credentials:"
+  assert_file_contains "${context_file}" "credentialsRef:"
+  assert_file_contains "${context_file}" "name: 'shared-proxy-auth'"
 
   local proxy_count
   proxy_count=$(grep -c '^[[:space:]]*proxy:$' "${context_file}" || true)
   assert_eq "${proxy_count}" "4" "expected proxy blocks for managedServer, repository, secretStore, and metadata"
+
+  local shared_ref_count
+  shared_ref_count=$(grep -c "name: 'shared-proxy-auth'" "${context_file}" || true)
+  assert_eq "${shared_ref_count}" "5" "expected one shared proxy credential definition reused across four references"
 }
 
 test_inserts_prompt_proxy_auth_block_for_local_proxy() {
@@ -176,9 +180,11 @@ test_inserts_prompt_proxy_auth_block_for_local_proxy() {
 
   e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "httpURL: 'http://127.0.0.1:3128'"
-  assert_file_contains "${context_file}" "prompt:"
-  assert_file_contains "${context_file}" "keepCredentialsForSession: true"
+  assert_file_contains "${context_file}" "http: 'http://127.0.0.1:3128'"
+  assert_file_contains "${context_file}" "prompt: true"
+  assert_file_contains "${context_file}" "persistInSession: true"
+  assert_file_contains "${context_file}" "credentialsRef:"
+  assert_file_contains "${context_file}" "name: 'shared-proxy-auth'"
   assert_not_contains "$(cat "${context_file}")" "username: 'generated-user'"
   assert_not_contains "$(cat "${context_file}")" "password: 'generated-pass'"
 }
@@ -242,7 +248,7 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
 
   e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "baseURL: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080"
+  assert_file_contains "${context_file}" "url: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080"
   assert_file_contains "${context_file}" "tokenURL: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080/oauth/token"
   assert_file_contains "${context_file}" "url: http://git-provider-gitea.declarest-test.svc.cluster.local:3000/acme/repo.git"
   assert_file_contains "${context_file}" "address: http://secret-provider-vault.declarest-test.svc.cluster.local:8200"
@@ -284,7 +290,7 @@ test_rewrites_local_compose_targets_for_local_proxy() {
 
   e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "baseURL: http://192.0.2.10:18080"
+  assert_file_contains "${context_file}" "url: http://192.0.2.10:18080"
   assert_file_contains "${context_file}" "tokenURL: http://192.0.2.10:18080/oauth/token"
   assert_file_contains "${context_file}" "url: http://192.0.2.10:13000/acme/repo.git"
   assert_file_contains "${context_file}" "address: http://192.0.2.10:18200"
@@ -309,12 +315,13 @@ test_rejects_proxy_enable_without_proxy_urls() {
   assert_contains "${output}" "--proxy-mode requires proxy HTTP and/or HTTPS URL configuration"
 }
 
-test_simple_api_server_context_emits_prompt_auth_block() {
+test_simple_api_server_context_normalizes_prompt_auth() {
   reload_context_libs
   local tmp
   tmp=$(new_temp_dir)
   local state_file="${tmp}/simple-api.env"
   local fragment_file="${tmp}/simple-api-context.yaml"
+  local context_file="${tmp}/contexts.yaml"
   cat >"${state_file}" <<'EOF'
 SIMPLE_API_SERVER_ENABLE_BASIC_AUTH=true
 SIMPLE_API_SERVER_ENABLE_OAUTH2=false
@@ -329,10 +336,22 @@ EOF
     E2E_MANAGED_SERVER_AUTH_TYPE='prompt' \
     bash "${E2E_SCRIPT_DIR}/components/managed-server/simple-api-server/scripts/context.sh" "${fragment_file}"
 
-  assert_file_contains "${fragment_file}" "prompt: {}"
-  assert_not_contains "$(cat "${fragment_file}")" "basicAuth:"
-  assert_not_contains "$(cat "${fragment_file}")" "username: admin"
-  assert_not_contains "$(cat "${fragment_file}")" "password: admin"
+  {
+    printf 'contexts:\n'
+    printf '  - name: e2e-basic\n'
+    sed 's/^/    /' "${fragment_file}"
+    printf 'currentContext: e2e-basic\n'
+  } >"${context_file}"
+
+  e2e_context_normalize_credentials "${context_file}"
+
+  assert_file_contains "${context_file}" "credentials:"
+  assert_file_contains "${context_file}" "name: 'managed-server-auth'"
+  assert_file_contains "${context_file}" "prompt: true"
+  assert_file_contains "${context_file}" "credentialsRef:"
+  assert_not_contains "$(cat "${context_file}")" "prompt: {}"
+  assert_not_contains "$(cat "${context_file}")" "username: admin"
+  assert_not_contains "$(cat "${context_file}")" "password: admin"
 }
 
 test_inserts_proxy_blocks_across_proxiable_sections
@@ -341,4 +360,4 @@ test_skips_git_proxy_block_for_non_http_remote_url
 test_rewrites_local_kubernetes_targets_for_local_proxy
 test_rewrites_local_compose_targets_for_local_proxy
 test_rejects_proxy_enable_without_proxy_urls
-test_simple_api_server_context_emits_prompt_auth_block
+test_simple_api_server_context_normalizes_prompt_auth

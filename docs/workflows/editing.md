@@ -18,7 +18,7 @@ Use `context resolve --set` to preview runtime overrides.
 
 ```bash
 declarest context resolve \
-  --set managedServer.http.baseURL=https://staging-api.example.com \
+  --set managedServer.http.url=https://staging-api.example.com \
   --set metadata.baseDir=/srv/declarest/staging-metadata
 ```
 

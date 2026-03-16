@@ -71,8 +71,8 @@ func TestResolveConfiguredAuthOverridesEnvironmentCredentials(t *testing.T) {
 	cfg, disabled, err := Resolve("managedServer.http.proxy", &config.HTTPProxy{
 		Auth: &config.ProxyAuth{
 			Basic: &config.BasicAuth{
-				Username: "ctx-user",
-				Password: "ctx-pass",
+				Username: config.LiteralCredential("ctx-user"),
+				Password: config.LiteralCredential("ctx-pass"),
 			},
 		},
 	})
@@ -92,9 +92,11 @@ func TestResolveConfiguredAuthOverridesEnvironmentCredentials(t *testing.T) {
 
 func TestResolveWithRuntimePromptAuthInjectsPromptedCredentials(t *testing.T) {
 	runtime, err := promptauth.New(
-		[]promptauth.Target{{Key: promptauth.TargetManagedServerHTTPProxyAuth, Label: "managed-server proxy auth"}},
 		promptauth.WithPrompter(&proxyPromptPrompter{
-			credentials: promptauth.Credentials{Username: "proxy-user", Password: "proxy-pass"},
+			values: map[string]string{
+				"proxy.username": "proxy-user",
+				"proxy.password": "proxy-pass",
+			},
 		}),
 		promptauth.WithSessionStore(&proxyMemorySessionStore{}),
 	)
@@ -105,7 +107,11 @@ func TestResolveWithRuntimePromptAuthInjectsPromptedCredentials(t *testing.T) {
 	cfg, disabled, err := ResolveWithRuntime("managed-server.http.proxy", &config.HTTPProxy{
 		HTTPURL: "http://proxy.example.com:3128",
 		Auth: &config.ProxyAuth{
-			Prompt: &config.PromptAuth{},
+			Basic: &config.BasicAuth{
+				CredentialsRef: &config.CredentialsRef{Name: "proxy"},
+				Username:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+				Password:       config.CredentialValue{Prompt: &config.CredentialPrompt{Prompt: true}},
+			},
 		},
 	}, runtime)
 	if err != nil {
@@ -125,15 +131,17 @@ func TestResolveWithRuntimePromptAuthInjectsPromptedCredentials(t *testing.T) {
 }
 
 type proxyPromptPrompter struct {
-	credentials promptauth.Credentials
+	values map[string]string
 }
 
-func (p *proxyPromptPrompter) PromptCredentials(context.Context, promptauth.Target, bool, bool) (promptauth.Credentials, error) {
-	return p.credentials, nil
-}
-
-func (p *proxyPromptPrompter) ConfirmReuse(context.Context, promptauth.Target, []promptauth.Target) (bool, error) {
-	return false, nil
+func (p *proxyPromptPrompter) PromptValue(
+	_ context.Context,
+	credentialName string,
+	field string,
+	_ bool,
+	_ bool,
+) (string, error) {
+	return p.values[credentialName+"."+field], nil
 }
 
 type proxyMemorySessionStore struct {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "DeclaREST Context",
-  "description": "Canonical persisted context schema. Legacy YAML aliases are intentionally excluded from this machine-readable contract.",
+  "description": "Canonical persisted context schema.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -51,48 +51,58 @@
         "type": "string"
       }
     },
-    "promptAuth": {
+    "preferences": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "credentialsRef": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "keepCredentialsForSession": {
-          "type": "boolean"
+        "name": {
+          "type": "string",
+          "minLength": 1
         }
-      }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "referencedBasicCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentialsRef": {
+          "$ref": "#/$defs/credentialsRef"
+        }
+      },
+      "required": [
+        "credentialsRef"
+      ]
     },
     "proxyAuth": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "basic": {
-          "$ref": "#/$defs/basicAuth"
-        },
-        "prompt": {
-          "$ref": "#/$defs/promptAuth"
+          "$ref": "#/$defs/referencedBasicCredentials"
         }
       },
-      "oneOf": [
-        {
-          "required": [
-            "basic"
-          ]
-        },
-        {
-          "required": [
-            "prompt"
-          ]
-        }
+      "required": [
+        "basic"
       ]
     },
     "proxy": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "httpURL": {
+        "http": {
           "type": "string",
           "minLength": 1
         },
-        "httpsURL": {
+        "https": {
           "type": "string",
           "minLength": 1
         },
@@ -124,24 +134,6 @@
           "type": "boolean"
         }
       }
-    },
-    "basicAuth": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "username": {
-          "type": "string",
-          "minLength": 1
-        },
-        "password": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "username",
-        "password"
-      ]
     },
     "sshAuth": {
       "type": "object",
@@ -188,23 +180,20 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "basicAuth": {
-          "$ref": "#/$defs/basicAuth"
+        "basic": {
+          "$ref": "#/$defs/referencedBasicCredentials"
         },
         "ssh": {
           "$ref": "#/$defs/sshAuth"
         },
         "accessKey": {
           "$ref": "#/$defs/accessKeyAuth"
-        },
-        "prompt": {
-          "$ref": "#/$defs/promptAuth"
         }
       },
       "oneOf": [
         {
           "required": [
-            "basicAuth"
+            "basic"
           ]
         },
         {
@@ -215,11 +204,6 @@
         {
           "required": [
             "accessKey"
-          ]
-        },
-        {
-          "required": [
-            "prompt"
           ]
         }
       ]
@@ -334,7 +318,8 @@
           "minLength": 1
         },
         "prefix": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "value": {
           "type": "string",
@@ -393,18 +378,15 @@
         "oauth2": {
           "$ref": "#/$defs/oauth2"
         },
-        "basicAuth": {
-          "$ref": "#/$defs/basicAuth"
-        },
-        "prompt": {
-          "$ref": "#/$defs/promptAuth"
+        "basic": {
+          "$ref": "#/$defs/referencedBasicCredentials"
         },
         "customHeaders": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "$ref": "#/$defs/headerTokenAuth"
-          }
+          },
+          "minItems": 1
         }
       },
       "oneOf": [
@@ -415,12 +397,7 @@
         },
         {
           "required": [
-            "basicAuth"
-          ]
-        },
-        {
-          "required": [
-            "prompt"
+            "basic"
           ]
         },
         {
@@ -436,7 +413,7 @@
       "properties": {
         "maxConcurrentRequests": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 1
         },
         "queueSize": {
           "type": "integer",
@@ -444,89 +421,19 @@
         },
         "requestsPerSecond": {
           "type": "number",
-          "minimum": 0
+          "exclusiveMinimum": 0
         },
         "burst": {
           "type": "integer",
           "minimum": 0
         }
-      },
-      "allOf": [
-        {
-          "anyOf": [
-            {
-              "properties": {
-                "maxConcurrentRequests": {
-                  "exclusiveMinimum": 0
-                }
-              },
-              "required": [
-                "maxConcurrentRequests"
-              ]
-            },
-            {
-              "properties": {
-                "requestsPerSecond": {
-                  "exclusiveMinimum": 0
-                }
-              },
-              "required": [
-                "requestsPerSecond"
-              ]
-            }
-          ]
-        },
-        {
-          "if": {
-            "properties": {
-              "queueSize": {
-                "exclusiveMinimum": 0
-              }
-            },
-            "required": [
-              "queueSize"
-            ]
-          },
-          "then": {
-            "properties": {
-              "maxConcurrentRequests": {
-                "exclusiveMinimum": 0
-              }
-            },
-            "required": [
-              "maxConcurrentRequests"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "burst": {
-                "exclusiveMinimum": 0
-              }
-            },
-            "required": [
-              "burst"
-            ]
-          },
-          "then": {
-            "properties": {
-              "requestsPerSecond": {
-                "exclusiveMinimum": 0
-              }
-            },
-            "required": [
-              "requestsPerSecond"
-            ]
-          }
-        }
-      ]
+      }
     },
     "httpServer": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "baseURL": {
+        "url": {
           "type": "string",
           "minLength": 1
         },
@@ -555,7 +462,7 @@
         }
       },
       "required": [
-        "baseURL",
+        "url",
         "auth"
       ]
     },
@@ -619,49 +526,22 @@
       },
       "required": [
         "path"
-      ],
-      "oneOf": [
-        {
-          "required": [
-            "key"
-          ]
-        },
-        {
-          "required": [
-            "keyFile"
-          ]
-        },
-        {
-          "required": [
-            "passphrase"
-          ]
-        },
-        {
-          "required": [
-            "passphraseFile"
-          ]
-        }
       ]
     },
-    "vaultUserPasswordAuth": {
+    "vaultPasswordAuth": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "username": {
-          "type": "string",
-          "minLength": 1
-        },
-        "password": {
-          "type": "string",
-          "minLength": 1
+        "credentialsRef": {
+          "$ref": "#/$defs/credentialsRef"
         },
         "mount": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "username",
-        "password"
+        "credentialsRef"
       ]
     },
     "vaultAppRoleAuth": {
@@ -677,25 +557,14 @@
           "minLength": 1
         },
         "mount": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
         "roleID",
         "secretID"
       ]
-    },
-    "vaultPromptAuth": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "keepCredentialsForSession": {
-          "type": "boolean"
-        },
-        "mount": {
-          "type": "string"
-        }
-      }
     },
     "vaultAuth": {
       "type": "object",
@@ -706,13 +575,10 @@
           "minLength": 1
         },
         "password": {
-          "$ref": "#/$defs/vaultUserPasswordAuth"
+          "$ref": "#/$defs/vaultPasswordAuth"
         },
         "appRole": {
           "$ref": "#/$defs/vaultAppRoleAuth"
-        },
-        "prompt": {
-          "$ref": "#/$defs/vaultPromptAuth"
         }
       },
       "oneOf": [
@@ -730,11 +596,6 @@
           "required": [
             "appRole"
           ]
-        },
-        {
-          "required": [
-            "prompt"
-          ]
         }
       ]
     },
@@ -747,13 +608,16 @@
           "minLength": 1
         },
         "mount": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "pathPrefix": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "kvVersion": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "auth": {
           "$ref": "#/$defs/vaultAuth"
@@ -813,38 +677,6 @@
         "proxy": {
           "$ref": "#/$defs/proxy"
         }
-      },
-      "allOf": [
-        {
-          "not": {
-            "required": [
-              "baseDir",
-              "bundle"
-            ]
-          }
-        },
-        {
-          "not": {
-            "required": [
-              "baseDir",
-              "bundleFile"
-            ]
-          }
-        },
-        {
-          "not": {
-            "required": [
-              "bundle",
-              "bundleFile"
-            ]
-          }
-        }
-      ]
-    },
-    "preferences": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
       }
     }
   }

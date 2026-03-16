@@ -64,7 +64,7 @@ func (c *secretRefCache) update(key types.NamespacedName, secretNames []string) 
 		delete(c.index, key)
 		return
 	}
-	c.index[key] = sets.New[string](secretNames...)
+	c.index[key] = sets.New(secretNames...)
 }
 
 func (c *secretRefCache) remove(key types.NamespacedName) {

@@ -53,6 +53,10 @@ func (m *Service) Create(_ context.Context, cfg config.Context) error {
 		return faults.NewValidationError(fmt.Sprintf("context %q already exists", cfg.Name), nil)
 	}
 
+	contextCatalog, err = mergeContextCredentials(contextCatalog, cfg.Credentials)
+	if err != nil {
+		return err
+	}
 	contextCatalog.Contexts = append(contextCatalog.Contexts, cfg)
 	if contextCatalog.CurrentContext == "" {
 		contextCatalog.CurrentContext = cfg.Name
@@ -79,6 +83,10 @@ func (m *Service) Update(_ context.Context, cfg config.Context) error {
 		return err
 	}
 
+	contextCatalog, err = mergeContextCredentials(contextCatalog, cfg.Credentials)
+	if err != nil {
+		return err
+	}
 	contextCatalog.Contexts[idx] = cfg
 	return m.saveCatalog(contextCatalog)
 }
@@ -180,27 +188,39 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 	if err != nil {
 		return config.Context{}, err
 	}
+	resolvedCatalog := envref.ExpandExactEnvPlaceholders(contextCatalog)
+	credentials, err := validateCredentials(resolvedCatalog.Credentials)
+	if err != nil {
+		return config.Context{}, err
+	}
 
 	effectiveName := selection.Name
 	if effectiveName == "" {
-		effectiveName = contextCatalog.CurrentContext
+		effectiveName = resolvedCatalog.CurrentContext
 	}
 	if effectiveName == "" {
 		return config.Context{}, notFoundError("current context not set")
 	}
 
-	idx := findContextIndex(contextCatalog.Contexts, effectiveName)
+	idx := findContextIndex(resolvedCatalog.Contexts, effectiveName)
 	if idx < 0 {
 		return config.Context{}, notFoundError(fmt.Sprintf("context %q not found", effectiveName))
 	}
 
-	resolved, err := applyOverrides(normalizeConfig(contextCatalog.Contexts[idx]), selection.Overrides)
+	resolved, err := applyOverrides(normalizeConfig(resolvedCatalog.Contexts[idx]), selection.Overrides)
 	if err != nil {
 		return config.Context{}, err
 	}
-	resolved = envref.ExpandExactEnvPlaceholders(resolved)
 	resolved = applyConfigDefaults(resolved)
-	if err := validateConfig(resolved); err != nil {
+	resolved, err = injectContextCredentials(resolved, credentials)
+	if err != nil {
+		return config.Context{}, err
+	}
+	if err := validateConfig(resolved, credentials, true); err != nil {
+		return config.Context{}, err
+	}
+	resolved, err = injectContextCredentials(resolved, credentials)
+	if err != nil {
 		return config.Context{}, err
 	}
 
