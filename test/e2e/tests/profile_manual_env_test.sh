@@ -8,7 +8,7 @@ load_profile_libs() {
   source_e2e_libs common profile
 }
 
-prepare_manual_env_scripts() {
+prepare_manual_env_runtime() {
   local tmp=$1
 
   export E2E_RUN_ID='manual-env-hook-test'
@@ -25,11 +25,23 @@ prepare_manual_env_scripts() {
   mkdir -p "${E2E_STATE_DIR}" "$(dirname -- "${E2E_BIN}")"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${E2E_BIN}"
   chmod +x "${E2E_BIN}"
+}
+
+write_manual_env_scripts() {
+  local tmp=$1
 
   SETUP_SCRIPT="${tmp}/setup.sh"
   RESET_SCRIPT="${tmp}/reset.sh"
-  e2e_manual_write_env_setup_script "e2e-manual" "${SETUP_SCRIPT}" "${RESET_SCRIPT}" ""
+  local state_key_list
+  state_key_list=$(e2e_manual_collect_state_env_keys | sort -u | tr '\n' ' ' | sed 's/[[:space:]]\+$//')
+  e2e_manual_write_env_setup_script "e2e-manual" "${SETUP_SCRIPT}" "${RESET_SCRIPT}" "${state_key_list}"
   e2e_manual_write_env_reset_script "${RESET_SCRIPT}"
+}
+
+prepare_manual_env_scripts() {
+  local tmp=$1
+  prepare_manual_env_runtime "${tmp}"
+  write_manual_env_scripts "${tmp}"
 }
 
 test_manual_env_scripts_install_and_restore_prompt_hook() {
@@ -67,6 +79,59 @@ esac
 source "${RESET_SCRIPT}"
 [[ "${PROMPT_COMMAND}" == 'printf pre >/dev/null' ]]
 type __declarest_e2e_prune_deleted_run_bins_from_path >/dev/null 2>&1 && exit 1 || true
+EOF
+  )
+  status=$?
+  set -e
+  assert_status "${status}" "0"
+  [[ -z "${output}" ]] || true
+}
+
+test_manual_env_scripts_skip_local_prompt_proxy_auth_exports() {
+  load_profile_libs
+
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"; unset E2E_PROXY_MODE E2E_PROXY_AUTH_TYPE' RETURN
+
+  export E2E_PROXY_MODE='local'
+  export E2E_PROXY_AUTH_TYPE='prompt'
+
+  prepare_manual_env_runtime "${tmp}"
+
+  local proxy_state="${E2E_STATE_DIR}/proxy-forward-proxy.env"
+  : >"${proxy_state}"
+  e2e_write_state_value "${proxy_state}" 'PROXY_HTTP_URL' 'http://127.0.0.1:3128'
+  e2e_write_state_value "${proxy_state}" 'PROXY_AUTH_TYPE' 'prompt'
+  e2e_write_state_value "${proxy_state}" 'PROXY_SERVER_AUTH_MODE' 'basic'
+  e2e_write_state_value "${proxy_state}" 'PROXY_AUTH_USERNAME' 'proxy-user'
+  e2e_write_state_value "${proxy_state}" 'PROXY_AUTH_PASSWORD' 'proxy-pass'
+
+  write_manual_env_scripts "${tmp}"
+
+  assert_not_contains "$(cat "${SETUP_SCRIPT}")" "PROXY_AUTH_TYPE="
+  assert_not_contains "$(cat "${SETUP_SCRIPT}")" "PROXY_SERVER_AUTH_MODE="
+  assert_not_contains "$(cat "${SETUP_SCRIPT}")" "PROXY_AUTH_USERNAME="
+  assert_not_contains "$(cat "${SETUP_SCRIPT}")" "PROXY_AUTH_PASSWORD="
+
+  local output status
+  set +e
+  output=$(
+    SETUP_SCRIPT="${SETUP_SCRIPT}" bash <<'EOF'
+set -euo pipefail
+source "${SETUP_SCRIPT}"
+
+[[ "${PROXY_HTTP_URL}" == 'http://127.0.0.1:3128' ]]
+[[ -z "${PROXY_AUTH_TYPE:-}" ]]
+[[ -z "${PROXY_AUTH_USERNAME:-}" ]]
+[[ -z "${PROXY_AUTH_PASSWORD:-}" ]]
+
+case " ${DECLAREST_E2E_STATE_ENV_KEYS} " in
+  *" PROXY_AUTH_TYPE "*|*" PROXY_SERVER_AUTH_MODE "*|*" PROXY_AUTH_USERNAME "*|*" PROXY_AUTH_PASSWORD "*)
+    printf 'unexpected proxy auth state key export list: %s\n' "${DECLAREST_E2E_STATE_ENV_KEYS}" >&2
+    exit 1
+    ;;
+esac
 EOF
   )
   status=$?
@@ -256,6 +321,7 @@ test_managed_server_access_details_formats_rundeck_state() {
 }
 
 test_manual_env_scripts_install_and_restore_prompt_hook
+test_manual_env_scripts_skip_local_prompt_proxy_auth_exports
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig
 test_manual_handoff_prints_kubectl_and_repo_provider_access

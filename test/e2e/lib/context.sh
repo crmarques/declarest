@@ -169,6 +169,51 @@ e2e_context_service_network_host() {
   printf '%s\n' "${service_name}"
 }
 
+e2e_context_local_access_host() {
+  local override="${DECLAREST_E2E_LOCAL_ACCESS_HOST:-}"
+  local python_cmd=''
+
+  if [[ -n "${override}" ]]; then
+    case "${override}" in
+      localhost|127.*|::1)
+        return 1
+        ;;
+    esac
+    printf '%s\n' "${override}"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python_cmd='python3'
+  elif command -v python >/dev/null 2>&1; then
+    python_cmd='python'
+  else
+    return 1
+  fi
+
+  "${python_cmd}" <<'PY'
+import socket
+import sys
+
+targets = [("198.51.100.1", 80), ("8.8.8.8", 80)]
+
+for target in targets:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(target)
+        host = sock.getsockname()[0].strip()
+        if host and host not in {"127.0.0.1", "0.0.0.0"} and not host.startswith("127."):
+            print(host)
+            sys.exit(0)
+    except OSError:
+        pass
+    finally:
+        sock.close()
+
+sys.exit(1)
+PY
+}
+
 e2e_context_component_service_binding() {
   local component_key=$1
   local state_file rendered_dir service_file service_name mapping remote_port
@@ -226,9 +271,51 @@ e2e_context_component_service_binding() {
   return 1
 }
 
+e2e_context_state_url_binding() {
+  local component_key=$1
+  local state_key=$2
+  local state_file raw_url access_host scheme rest hostport port
+
+  [[ -n "${component_key}" && -n "${state_key}" ]] || return 1
+
+  state_file=$(e2e_component_state_file "${component_key}")
+  raw_url=$(e2e_state_get "${state_file}" "${state_key}" 2>/dev/null || true)
+  [[ -n "${raw_url}" ]] || return 1
+
+  access_host=$(e2e_context_local_access_host) || return 1
+  scheme=${raw_url%%://*}
+  rest=${raw_url#*://}
+  hostport=${rest%%/*}
+  [[ -n "${hostport}" ]] || return 1
+
+  if [[ "${hostport}" == *:* ]]; then
+    port=${hostport##*:}
+  else
+    case "${scheme}" in
+      http)
+        port='80'
+        ;;
+      https)
+        port='443'
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  fi
+
+  [[ -n "${port}" ]] || return 1
+  printf '%s\t%s\n' "${access_host}" "${port}"
+}
+
 e2e_context_managed_server_service_binding() {
   if [[ "${E2E_MANAGED_SERVER_CONNECTION:-local}" != 'local' || "${E2E_MANAGED_SERVER:-none}" == 'none' ]]; then
     return 1
+  fi
+
+  if [[ "${E2E_PLATFORM:-}" == 'compose' ]]; then
+    e2e_context_state_url_binding "$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")" 'MANAGED_SERVER_BASE_URL'
+    return
   fi
 
   e2e_context_component_service_binding "$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")"
@@ -239,12 +326,22 @@ e2e_context_git_remote_service_binding() {
     return 1
   fi
 
+  if [[ "${E2E_PLATFORM:-}" == 'compose' ]]; then
+    e2e_context_state_url_binding "$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}")" 'GIT_REMOTE_URL'
+    return
+  fi
+
   e2e_context_component_service_binding "$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}")"
 }
 
 e2e_context_secret_store_service_binding() {
   if [[ "${E2E_SECRET_PROVIDER:-none}" != 'vault' || "${E2E_SECRET_PROVIDER_CONNECTION:-local}" != 'local' ]]; then
     return 1
+  fi
+
+  if [[ "${E2E_PLATFORM:-}" == 'compose' ]]; then
+    e2e_context_state_url_binding "$(e2e_component_key 'secret-provider' 'vault')" 'VAULT_ADDRESS'
+    return
   fi
 
   e2e_context_component_service_binding "$(e2e_component_key 'secret-provider' 'vault')"
@@ -345,7 +442,7 @@ e2e_context_insert_proxy_config() {
   local secret_port=''
   local binding=''
 
-  if [[ "${E2E_PROXY_MODE:-none}" == 'local' && "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
+  if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
     if binding=$(e2e_context_managed_server_service_binding 2>/dev/null); then
       IFS=$'\t' read -r managed_server_host managed_server_port <<<"${binding}"
     fi
@@ -377,7 +474,6 @@ e2e_context_insert_proxy_config() {
     E2E_PROXY_AUTH_USERNAME="${proxy_auth_username}" \
     E2E_PROXY_AUTH_PASSWORD="${proxy_auth_password}" \
     E2E_PROXY_MODE="${E2E_PROXY_MODE:-none}" \
-    E2E_PLATFORM="${E2E_PLATFORM:-}" \
     E2E_CONTEXT_REWRITE_MANAGED_SERVER_HOST="${managed_server_host}" \
     E2E_CONTEXT_REWRITE_MANAGED_SERVER_PORT="${managed_server_port}" \
     E2E_CONTEXT_REWRITE_REPO_HOST="${repo_host}" \
@@ -404,7 +500,6 @@ proxy = {
     "auth_password": os.environ.get("E2E_PROXY_AUTH_PASSWORD", ""),
 }
 proxy_mode = os.environ.get("E2E_PROXY_MODE", "none").strip() or "none"
-platform = os.environ.get("E2E_PLATFORM", "").strip()
 rewrite_bindings = {
     "managed_server": (
         os.environ.get("E2E_CONTEXT_REWRITE_MANAGED_SERVER_HOST", ""),
@@ -499,6 +594,7 @@ def proxy_block(indent: int, cfg: dict[str, str]) -> list[str]:
     block = [" " * indent + "proxy:"]
     child_indent = indent + 2
     auth_indent = child_indent + 2
+    auth_value_indent = auth_indent + 2
     if cfg["http_url"]:
         block.append(" " * child_indent + f"httpURL: {yaml_quote(cfg['http_url'])}")
     if cfg["https_url"]:
@@ -507,11 +603,16 @@ def proxy_block(indent: int, cfg: dict[str, str]) -> list[str]:
         block.append(" " * child_indent + f"noProxy: {yaml_quote(cfg['no_proxy'])}")
     if cfg["auth_type"] == "basic":
         block.append(" " * child_indent + "auth:")
-        block.append(" " * auth_indent + f"username: {yaml_quote(cfg['auth_username'])}")
-        block.append(" " * auth_indent + f"password: {yaml_quote(cfg['auth_password'])}")
+        block.append(" " * auth_indent + "basic:")
+        block.append(" " * auth_value_indent + f"username: {yaml_quote(cfg['auth_username'])}")
+        block.append(" " * auth_value_indent + f"password: {yaml_quote(cfg['auth_password'])}")
     elif cfg["auth_type"] == "prompt":
         block.append(" " * child_indent + "auth:")
-        block.append(" " * auth_indent + "prompt: {}")
+        if proxy_mode == "local":
+            block.append(" " * auth_indent + "prompt:")
+            block.append(" " * (auth_indent + 2) + "keepCredentialsForSession: true")
+        else:
+            block.append(" " * auth_indent + "prompt: {}")
     return block
 
 
@@ -568,7 +669,7 @@ def replace_mapping_scalar(lines: list[str], parent_range, key: str, transform) 
 
 def rewrite_local_url(raw_value: str, binding: tuple[str, str]) -> str:
     host, port = binding
-    if proxy_mode != "local" or platform != "kubernetes" or not host or not port:
+    if proxy_mode != "local" or not host or not port:
         return raw_value
 
     try:

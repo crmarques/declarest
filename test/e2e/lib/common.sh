@@ -213,11 +213,19 @@ e2e_lock_path() {
   printf '%s/%s.lock\n' "${E2E_LOCKS_DIR}" "${safe_name}"
 }
 
-e2e_lock_acquire() {
+e2e_lock_acquire_with_timeout() {
   local name=$1
+  local timeout_seconds=${2:-60}
   local lock_path
   local owner_pid=''
   local attempts=0
+  local max_attempts
+
+  if ! [[ "${timeout_seconds}" =~ ^[0-9]+$ ]] || ((timeout_seconds <= 0)); then
+    e2e_die "invalid lock timeout seconds: ${timeout_seconds}"
+    return 1
+  fi
+  max_attempts=$((timeout_seconds * 10))
 
   lock_path=$(e2e_lock_path "${name}")
   mkdir -p "${E2E_LOCKS_DIR}" || return 1
@@ -233,7 +241,7 @@ e2e_lock_acquire() {
     fi
 
     ((attempts += 1))
-    if ((attempts >= 600)); then
+    if ((attempts >= max_attempts)); then
       e2e_die "timed out waiting for lock: ${name}"
       return 1
     fi
@@ -242,6 +250,10 @@ e2e_lock_acquire() {
 
   printf '%s\n' "$$" >"${lock_path}/pid"
   printf '%s\n' "${lock_path}"
+}
+
+e2e_lock_acquire() {
+  e2e_lock_acquire_with_timeout "$1" 60
 }
 
 e2e_lock_release() {
@@ -261,6 +273,32 @@ e2e_with_lock() {
   local had_errexit=0
 
   lock_path=$(e2e_lock_acquire "${name}") || return 1
+
+  if [[ $- == *e* ]]; then
+    had_errexit=1
+  fi
+
+  set +e
+  "$@"
+  rc=$?
+  if ((had_errexit == 1)); then
+    set -e
+  fi
+
+  e2e_lock_release "${lock_path}"
+  return "${rc}"
+}
+
+e2e_with_lock_timeout() {
+  local name=$1
+  local timeout_seconds=$2
+  shift 2
+
+  local lock_path
+  local rc
+  local had_errexit=0
+
+  lock_path=$(e2e_lock_acquire_with_timeout "${name}" "${timeout_seconds}") || return 1
 
   if [[ $- == *e* ]]; then
     had_errexit=1

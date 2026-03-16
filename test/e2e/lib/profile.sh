@@ -207,6 +207,29 @@ e2e_manual_env_reset_script_path() {
   printf '%s/%s\n' "${E2E_RUN_DIR}" 'declarest-e2e-env-reset.sh'
 }
 
+e2e_manual_state_key_is_exportable() {
+  local key=$1
+
+  [[ -n "${key}" ]] || return 1
+  [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+
+  case "${key}" in
+    __DECLAREST_B64_*)
+      return 1
+      ;;
+  esac
+
+  if [[ "${E2E_PROXY_MODE:-none}" == 'local' && "${E2E_PROXY_AUTH_TYPE:-}" == 'prompt' ]]; then
+    case "${key}" in
+      PROXY_AUTH_TYPE|PROXY_SERVER_AUTH_MODE|PROXY_AUTH_USERNAME|PROXY_AUTH_PASSWORD|PROXY_PROMPT_HELPER_FILE)
+        return 1
+        ;;
+    esac
+  fi
+
+  return 0
+}
+
 e2e_manual_collect_state_env_keys() {
   local state_file
   local key
@@ -215,11 +238,45 @@ e2e_manual_collect_state_env_keys() {
     [[ -f "${state_file}" ]] || continue
 
     while IFS='=' read -r key _; do
-      [[ -n "${key}" ]] || continue
-      [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+      e2e_manual_state_key_is_exportable "${key}" || continue
       printf '%s\n' "${key}"
     done <"${state_file}"
   done < <(find "${E2E_STATE_DIR}" -maxdepth 1 -type f -name '*.env' | sort)
+}
+
+e2e_manual_write_state_exports() {
+  local setup_script=$1
+  local state_file
+  local key
+  local value
+  local wrote_exports=1
+
+  while IFS= read -r state_file; do
+    [[ -f "${state_file}" ]] || continue
+
+    while IFS='=' read -r key _; do
+      e2e_manual_state_key_is_exportable "${key}" || continue
+      if ! value=$(e2e_state_get "${state_file}" "${key}" 2>/dev/null); then
+        continue
+      fi
+
+      if ((wrote_exports == 1)); then
+        cat >>"${setup_script}" <<'EOF'
+# Export selected component runtime state values captured during this run.
+EOF
+        wrote_exports=0
+      fi
+
+      printf 'export %s=%q\n' "${key}" "${value}" >>"${setup_script}"
+    done <"${state_file}"
+  done < <(find "${E2E_STATE_DIR}" -maxdepth 1 -type f -name '*.env' | sort)
+
+  if ((wrote_exports == 0)); then
+    printf '\n' >>"${setup_script}"
+    return 0
+  fi
+
+  return 1
 }
 
 e2e_manual_write_env_setup_script() {
@@ -227,8 +284,6 @@ e2e_manual_write_env_setup_script() {
   local setup_script=$2
   local reset_script=$3
   local state_key_list=$4
-  local state_file
-  local has_state_files=0
 
   cat >"${setup_script}" <<EOF
 #!/usr/bin/env bash
@@ -335,26 +390,7 @@ __declarest_e2e_prune_deleted_run_bins_from_path
 
 EOF
 
-  while IFS= read -r state_file; do
-    [[ -f "${state_file}" ]] || continue
-
-    if ((has_state_files == 0)); then
-      cat >>"${setup_script}" <<'EOF'
-# Export component runtime state values captured during this run.
-set -a
-EOF
-      has_state_files=1
-    fi
-
-    printf '# shellcheck disable=SC1090\nsource %q\n' "${state_file}" >>"${setup_script}"
-  done < <(find "${E2E_STATE_DIR}" -maxdepth 1 -type f -name '*.env' | sort)
-
-  if ((has_state_files == 1)); then
-    cat >>"${setup_script}" <<'EOF'
-set +a
-
-EOF
-  fi
+  e2e_manual_write_state_exports "${setup_script}" || true
 
   cat >>"${setup_script}" <<'EOF'
 alias declarest-e2e="${DECLAREST_E2E_BIN}"

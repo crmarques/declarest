@@ -6,6 +6,7 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 reload_context_libs() {
   unset \
+    DECLAREST_E2E_LOCAL_ACCESS_HOST \
     E2E_PROXY_MODE \
     E2E_PROXY_AUTH_TYPE \
     E2E_PROXY_HTTP_URL \
@@ -144,6 +145,7 @@ test_inserts_proxy_blocks_across_proxiable_sections() {
   assert_file_contains "${context_file}" "httpURL: 'http://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "httpsURL: 'https://proxy.example.com:3128'"
   assert_file_contains "${context_file}" "noProxy: 'localhost,127.0.0.1'"
+  assert_file_contains "${context_file}" "basic:"
   assert_file_contains "${context_file}" "username: 'proxy-user'"
   assert_file_contains "${context_file}" "password: 'proxy-pass'"
 
@@ -175,7 +177,8 @@ test_inserts_prompt_proxy_auth_block_for_local_proxy() {
   e2e_context_insert_proxy_config "${context_file}"
 
   assert_file_contains "${context_file}" "httpURL: 'http://127.0.0.1:3128'"
-  assert_file_contains "${context_file}" "prompt: {}"
+  assert_file_contains "${context_file}" "prompt:"
+  assert_file_contains "${context_file}" "keepCredentialsForSession: true"
   assert_not_contains "$(cat "${context_file}")" "username: 'generated-user'"
   assert_not_contains "$(cat "${context_file}")" "password: 'generated-pass'"
 }
@@ -245,6 +248,48 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
   assert_file_contains "${context_file}" "address: http://secret-provider-vault.declarest-test.svc.cluster.local:8200"
 }
 
+test_rewrites_local_compose_targets_for_local_proxy() {
+  reload_context_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  local context_file="${tmp}/contexts.yaml"
+  local state_dir="${tmp}/state"
+  mkdir -p "${state_dir}"
+  write_context_fixture "${context_file}"
+
+  E2E_STATE_DIR="${state_dir}"
+  E2E_PLATFORM='compose'
+  E2E_PROXY_MODE='local'
+  E2E_MANAGED_SERVER='simple-api-server'
+  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_REPO_TYPE='git'
+  E2E_GIT_PROVIDER='gitea'
+  E2E_GIT_PROVIDER_CONNECTION='local'
+  E2E_SECRET_PROVIDER='vault'
+  E2E_SECRET_PROVIDER_CONNECTION='local'
+  DECLAREST_E2E_LOCAL_ACCESS_HOST='192.0.2.10'
+
+  write_state_fixture "$(e2e_component_state_file 'proxy:forward-proxy')" \
+    PROXY_HTTP_URL "http://127.0.0.1:3128" \
+    PROXY_HTTPS_URL "http://127.0.0.1:3128" \
+    PROXY_AUTH_TYPE "basic" \
+    PROXY_AUTH_USERNAME "proxy-user" \
+    PROXY_AUTH_PASSWORD "proxy-pass"
+  write_state_fixture "$(e2e_component_state_file 'managed-server:simple-api-server')" \
+    MANAGED_SERVER_BASE_URL "http://127.0.0.1:18080"
+  write_state_fixture "$(e2e_component_state_file 'git-provider:gitea')" \
+    GIT_REMOTE_URL "http://127.0.0.1:13000/acme/repo.git"
+  write_state_fixture "$(e2e_component_state_file 'secret-provider:vault')" \
+    VAULT_ADDRESS "http://127.0.0.1:18200"
+
+  e2e_context_insert_proxy_config "${context_file}"
+
+  assert_file_contains "${context_file}" "baseURL: http://192.0.2.10:18080"
+  assert_file_contains "${context_file}" "tokenURL: http://192.0.2.10:18080/oauth/token"
+  assert_file_contains "${context_file}" "url: http://192.0.2.10:13000/acme/repo.git"
+  assert_file_contains "${context_file}" "address: http://192.0.2.10:18200"
+}
+
 test_rejects_proxy_enable_without_proxy_urls() {
   reload_context_libs
   local tmp
@@ -294,5 +339,6 @@ test_inserts_proxy_blocks_across_proxiable_sections
 test_inserts_prompt_proxy_auth_block_for_local_proxy
 test_skips_git_proxy_block_for_non_http_remote_url
 test_rewrites_local_kubernetes_targets_for_local_proxy
+test_rewrites_local_compose_targets_for_local_proxy
 test_rejects_proxy_enable_without_proxy_urls
 test_simple_api_server_context_emits_prompt_auth_block

@@ -1212,9 +1212,9 @@ func TestResolveContextOverrideSupportsManagedServerProxyWhenConfigured(t *testi
 	resolved, err := contextService.ResolveContext(context.Background(), config.ContextSelection{
 		Name: "fs",
 		Overrides: map[string]string{
-			"managedServer.http.proxy.httpURL":       "http://proxy.example.com:3128",
-			"managedServer.http.proxy.httpsURL":      "https://proxy.example.com:3128",
-			"managedServer.http.proxy.noProxy":       "localhost,127.0.0.1",
+			"managedServer.http.proxy.httpURL":             "http://proxy.example.com:3128",
+			"managedServer.http.proxy.httpsURL":            "https://proxy.example.com:3128",
+			"managedServer.http.proxy.noProxy":             "localhost,127.0.0.1",
 			"managedServer.http.proxy.auth.basic.username": "proxy-user",
 			"managedServer.http.proxy.auth.basic.password": "proxy-pass",
 		},

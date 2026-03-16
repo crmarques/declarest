@@ -43,26 +43,6 @@ effective_proxy_auth_type() {
   esac
 }
 
-write_prompt_helper_file() {
-  local path=$1
-  local username=$2
-  local password=$3
-
-  umask 077
-  cat >"${path}" <<EOF
-#!/usr/bin/env bash
-export DECLAREST_PROMPT_AUTH_MANAGED_SERVER_HTTP_PROXY_AUTH_USERNAME=${username@Q}
-export DECLAREST_PROMPT_AUTH_MANAGED_SERVER_HTTP_PROXY_AUTH_PASSWORD=${password@Q}
-export DECLAREST_PROMPT_AUTH_REPOSITORY_GIT_REMOTE_PROXY_AUTH_USERNAME=${username@Q}
-export DECLAREST_PROMPT_AUTH_REPOSITORY_GIT_REMOTE_PROXY_AUTH_PASSWORD=${password@Q}
-export DECLAREST_PROMPT_AUTH_SECRET_STORE_VAULT_PROXY_AUTH_USERNAME=${username@Q}
-export DECLAREST_PROMPT_AUTH_SECRET_STORE_VAULT_PROXY_AUTH_PASSWORD=${password@Q}
-export DECLAREST_PROMPT_AUTH_METADATA_PROXY_AUTH_USERNAME=${username@Q}
-export DECLAREST_PROMPT_AUTH_METADATA_PROXY_AUTH_PASSWORD=${password@Q}
-EOF
-  chmod 0600 "${path}"
-}
-
 state_file=${E2E_COMPONENT_STATE_FILE}
 : >"${state_file}"
 
@@ -79,7 +59,6 @@ proxy_auth_type=$(effective_proxy_auth_type)
 proxy_server_auth_mode='none'
 proxy_auth_username="${E2E_PROXY_AUTH_USERNAME:-}"
 proxy_auth_password="${E2E_PROXY_AUTH_PASSWORD:-}"
-proxy_prompt_helper_file=''
 
 mkdir -p "${proxy_runtime_dir}"
 : >"${proxy_access_log}"
@@ -91,10 +70,6 @@ case "${proxy_auth_type}" in
     proxy_server_auth_mode='basic'
     : "${proxy_auth_username:=declarest-e2e-proxy}"
     : "${proxy_auth_password:=proxy-${RANDOM}${RANDOM}${RANDOM}}"
-    if [[ "${proxy_auth_type}" == 'prompt' ]]; then
-      proxy_prompt_helper_file="${proxy_runtime_dir}/prompt-auth.env"
-      write_prompt_helper_file "${proxy_prompt_helper_file}" "${proxy_auth_username}" "${proxy_auth_password}"
-    fi
     ;;
   *)
     e2e_die "unsupported proxy auth type: ${proxy_auth_type}"
@@ -118,7 +93,4 @@ if [[ -n "${proxy_auth_username}" ]]; then
 fi
 if [[ -n "${proxy_auth_password}" ]]; then
   e2e_write_state_value "${state_file}" PROXY_AUTH_PASSWORD "${proxy_auth_password}"
-fi
-if [[ -n "${proxy_prompt_helper_file}" ]]; then
-  e2e_write_state_value "${state_file}" PROXY_PROMPT_HELPER_FILE "${proxy_prompt_helper_file}"
 fi

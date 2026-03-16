@@ -308,14 +308,14 @@ Inputs:
 
 Execution:
 1. Runner validates that proxy prompt auth is being used only with `cli-manual`.
-2. Proxy helper component generates run-scoped proxy credentials for the local forward proxy and writes a `0600` helper file with `DECLAREST_PROMPT_AUTH_*_PROXY_AUTH_*` exports.
-3. Context generation writes prompt-backed `*.proxy.auth.prompt` blocks while omitting inline proxy credentials.
-4. Manual handoff output prints `Prompt helper: source .../proxy/prompt-auth.env`.
+2. Proxy helper component generates run-scoped proxy credentials for the local forward proxy.
+3. Context generation writes prompt-backed `*.proxy.auth.prompt` blocks with `keepCredentialsForSession: true` while omitting inline proxy credentials.
+4. Manual handoff output prints the generated proxy credentials for testing, and the generated setup script does not export proxy auth bootstrap variables.
 
 Expected outputs:
 1. The generated context file contains proxy `prompt` auth blocks and no plaintext proxy credentials.
-2. Manual handoff output remains usable without editing the generated context file.
-3. Sourcing the helper file pre-seeds prompt auth env vars for managed-server, git remote, Vault, and metadata proxy targets.
+2. Manual handoff output includes the generated proxy username and password so a tester can enter them at the runtime prompt.
+3. Sourcing the generated setup script leaves proxy auth env vars unset so runtime still behaves like a real prompt-auth flow until the user enters credentials.
 
 Failure expectation:
 1. Combining `--proxy-auth-type prompt` with inline proxy username/password env vars, or selecting proxy prompt auth outside `cli-manual`, fails with actionable validation output before workload execution.

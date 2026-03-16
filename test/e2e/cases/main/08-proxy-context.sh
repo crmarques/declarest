@@ -34,7 +34,10 @@ case_run() {
     case_assert_context_contains "noProxy: '${E2E_PROXY_NO_PROXY}'"
   fi
   if [[ "$(e2e_effective_proxy_auth_type)" == 'prompt' ]]; then
-    case_assert_context_contains 'prompt: {}'
+    case_assert_context_contains 'prompt:'
+    if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
+      case_assert_context_contains 'keepCredentialsForSession: true'
+    fi
   elif [[ -n "${E2E_PROXY_AUTH_USERNAME:-}" ]]; then
     case_assert_context_contains "username: '${E2E_PROXY_AUTH_USERNAME}'"
     case_assert_context_contains "password: '${E2E_PROXY_AUTH_PASSWORD}'"

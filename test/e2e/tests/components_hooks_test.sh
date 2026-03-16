@@ -295,7 +295,7 @@ EOF
   done
 }
 
-test_forward_proxy_init_generates_prompt_helper_file() {
+test_forward_proxy_prompt_auth_prints_credentials_without_helper_file() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -319,18 +319,24 @@ test_forward_proxy_init_generates_prompt_helper_file() {
 
   e2e_component_run_hook 'proxy:forward-proxy' init
 
-  local state_file helper_file helper_mode
+  local state_file username password helper_file output
   state_file=$(e2e_component_state_file 'proxy:forward-proxy')
-  helper_file=$(e2e_state_get "${state_file}" 'PROXY_PROMPT_HELPER_FILE')
-  helper_mode=$(stat -c '%a' "${helper_file}")
+  username=$(e2e_state_get "${state_file}" 'PROXY_AUTH_USERNAME')
+  password=$(e2e_state_get "${state_file}" 'PROXY_AUTH_PASSWORD')
+  helper_file=$(e2e_state_get "${state_file}" 'PROXY_PROMPT_HELPER_FILE' 2>/dev/null || true)
 
   assert_eq "$(e2e_state_get "${state_file}" 'PROXY_AUTH_TYPE')" "prompt" "expected prompt proxy auth type to persist in state"
-  assert_path_exists "${helper_file}"
-  assert_eq "${helper_mode}" "600" "expected prompt helper file mode 0600"
-  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_MANAGED_SERVER_HTTP_PROXY_AUTH_USERNAME"
-  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_REPOSITORY_GIT_REMOTE_PROXY_AUTH_USERNAME"
-  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_SECRET_STORE_VAULT_PROXY_AUTH_USERNAME"
-  assert_file_contains "${helper_file}" "DECLAREST_PROMPT_AUTH_METADATA_PROXY_AUTH_USERNAME"
+  assert_eq "${username}" "declarest-e2e-proxy" "expected generated prompt username"
+  [[ -n "${password}" ]] || fail 'expected generated prompt password'
+  [[ -z "${helper_file}" ]] || fail "expected no prompt helper file, got ${helper_file}"
+
+  output=$(
+    E2E_COMPONENT_STATE_FILE="${state_file}" \
+      bash "${E2E_SCRIPT_DIR}/components/proxy/forward-proxy/scripts/manual-info.sh"
+  )
+  assert_contains "${output}" "Proxy auth username: ${username}"
+  assert_contains "${output}" "Proxy auth password: ${password}"
+  assert_not_contains "${output}" "Prompt helper:"
 }
 
 create_openapi_component() {
@@ -870,7 +876,7 @@ EOF
   assert_file_contains "${kind_log}" "provider=podman cmd=create cluster"
 }
 
-test_kubernetes_runtime_reuses_existing_cluster_after_retryable_failures() {
+test_kubernetes_runtime_fails_after_retryable_failures_without_reuse() {
   load_hook_libs
   local tmp
   tmp=$(new_temp_dir)
@@ -952,13 +958,201 @@ EOF
   PATH="${fake_bin}:${old_path}"
   export PATH
   export FAKE_KIND_LOG="${kind_log}"
-  export DECLAREST_E2E_KIND_REUSE_EXISTING_ON_CREATE_FAILURE='true'
 
-  e2e_kubernetes_runtime_ensure
+  local output status
+  set +e
+  output=$(e2e_kubernetes_runtime_ensure 2>&1)
+  status=$?
+  set -e
 
-  assert_eq "${E2E_KIND_CLUSTER_NAME}" "declarest-e2e-existing" "expected fallback to existing kind cluster"
-  assert_eq "${E2E_KIND_CLUSTER_REUSED}" "1" "expected reused cluster marker to be set"
-  assert_file_contains "${kind_log}" "provider=podman cmd=export kubeconfig --name declarest-e2e-existing --kubeconfig ${E2E_KUBECONFIG}"
+  assert_status "${status}" "1"
+  assert_contains "${output}" "failed to create cluster"
+  assert_not_contains "$(cat "${kind_log}")" "cmd=get clusters"
+  assert_not_contains "$(cat "${kind_log}")" "cmd=export kubeconfig"
+  assert_eq "${E2E_KIND_CLUSTER_REUSED}" "0" "expected reused cluster marker to remain unset"
+}
+
+test_kubernetes_runtime_serializes_podman_kind_create() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local kind_log="${tmp}/kind.log"
+  local worker="${tmp}/worker.sh"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == 'create' && "${2:-}" == 'cluster' ]]; then
+  name=''
+  shift 2
+  while (($# > 0)); do
+    case "$1" in
+      --name)
+        name=$2
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  if ! mkdir "${FAKE_KIND_ACTIVE_DIR}" 2>/dev/null; then
+    printf 'overlap %s\n' "${name}" >>"${FAKE_KIND_LOG}"
+    exit 1
+  fi
+
+  printf 'start %s\n' "${name}" >>"${FAKE_KIND_LOG}"
+  sleep 0.2
+  rmdir "${FAKE_KIND_ACTIVE_DIR}"
+  printf 'done %s\n' "${name}" >>"${FAKE_KIND_LOG}"
+  exit 0
+fi
+
+if [[ "${1:-}" == 'delete' && "${2:-}" == 'cluster' ]]; then
+  exit 0
+fi
+
+printf 'unexpected kind invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${worker}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cluster_name=$1
+
+export E2E_RUNS_DIR="${WORKER_RUNS_DIR}"
+export E2E_LOCKS_DIR="${WORKER_LOCKS_DIR}"
+export E2E_CONTAINER_ENGINE='podman'
+
+source "${WORKER_REPO}/test/e2e/lib/common.sh"
+source "${WORKER_REPO}/test/e2e/lib/components_runtime.sh"
+
+mkdir -p "${WORKER_TMP}/${cluster_name}"
+: >"${WORKER_TMP}/${cluster_name}/kind-config.yaml"
+
+e2e_kind_create_cluster_with_retry \
+  "${cluster_name}" \
+  "${WORKER_TMP}/${cluster_name}/kubeconfig" \
+  "${WORKER_TMP}/${cluster_name}/kind-config.yaml" \
+  '5s'
+EOF
+  chmod +x "${worker}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_KIND_LOG="${kind_log}"
+  export FAKE_KIND_ACTIVE_DIR="${tmp}/kind-active"
+  export WORKER_REPO="${E2E_ROOT_DIR}"
+  export WORKER_RUNS_DIR="${tmp}/runs"
+  export WORKER_LOCKS_DIR="${tmp}/runs/.locks"
+  export WORKER_TMP="${tmp}/workers"
+
+  local rc_a rc_b pid_a pid_b
+  set +e
+  bash "${worker}" 'declarest-e2e-parallel-a' &
+  pid_a=$!
+  bash "${worker}" 'declarest-e2e-parallel-b' &
+  pid_b=$!
+  wait "${pid_a}"
+  rc_a=$?
+  wait "${pid_b}"
+  rc_b=$?
+  set -e
+
+  assert_status "${rc_a}" "0"
+  assert_status "${rc_b}" "0"
+  assert_not_contains "$(cat "${kind_log}")" "overlap "
+  assert_file_contains "${kind_log}" "start declarest-e2e-parallel-a"
+  assert_file_contains "${kind_log}" "start declarest-e2e-parallel-b"
+}
+
+test_kubernetes_runtime_kind_create_lock_timeout_is_configurable() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local worker="${tmp}/worker.sh"
+  local worker_a_log="${tmp}/worker-a.log"
+  local worker_b_log="${tmp}/worker-b.log"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == 'create' && "${2:-}" == 'cluster' ]]; then
+  sleep 2
+  exit 0
+fi
+
+if [[ "${1:-}" == 'delete' && "${2:-}" == 'cluster' ]]; then
+  exit 0
+fi
+
+printf 'unexpected kind invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${worker}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cluster_name=$1
+
+export E2E_RUNS_DIR="${WORKER_RUNS_DIR}"
+export E2E_LOCKS_DIR="${WORKER_LOCKS_DIR}"
+export E2E_CONTAINER_ENGINE='podman'
+export DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS='1'
+
+source "${WORKER_REPO}/test/e2e/lib/common.sh"
+source "${WORKER_REPO}/test/e2e/lib/components_runtime.sh"
+
+mkdir -p "${WORKER_TMP}/${cluster_name}"
+: >"${WORKER_TMP}/${cluster_name}/kind-config.yaml"
+
+e2e_kind_create_cluster_with_retry \
+  "${cluster_name}" \
+  "${WORKER_TMP}/${cluster_name}/kubeconfig" \
+  "${WORKER_TMP}/${cluster_name}/kind-config.yaml" \
+  '5s'
+EOF
+  chmod +x "${worker}"
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export WORKER_REPO="${E2E_ROOT_DIR}"
+  export WORKER_RUNS_DIR="${tmp}/runs"
+  export WORKER_LOCKS_DIR="${tmp}/runs/.locks"
+  export WORKER_TMP="${tmp}/workers"
+
+  local rc_a rc_b pid_a
+  bash "${worker}" 'declarest-e2e-timeout-a' >"${worker_a_log}" 2>&1 &
+  pid_a=$!
+  sleep 0.1
+  set +e
+  bash "${worker}" 'declarest-e2e-timeout-b' >"${worker_b_log}" 2>&1
+  rc_b=$?
+  wait "${pid_a}"
+  rc_a=$?
+  set -e
+
+  assert_status "${rc_a}" "0"
+  assert_status "${rc_b}" "1"
+  assert_file_contains "${worker_b_log}" "timed out waiting for lock: kind-create-podman"
 }
 
 test_k8s_component_start_uses_configurable_ready_timeout() {
@@ -1109,7 +1303,7 @@ test_prepare_metadata_workspace_uses_component_metadata_for_dir_mode
 test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode
 test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_mapping_is_missing
 test_prepare_metadata_workspace_allows_bundle_mode_without_mapping
-test_forward_proxy_init_generates_prompt_helper_file
+test_forward_proxy_prompt_auth_prints_credentials_without_helper_file
 test_repo_context_scripts_emit_metadata_bundle_when_set
 test_prepare_component_openapi_specs_skips_local_openapi_for_bundle_mode
 test_prepare_component_openapi_specs_keeps_local_openapi_for_dir_mode
@@ -1120,6 +1314,8 @@ test_k8s_port_forward_pid_tracking_and_stop
 test_k8s_port_forward_retries_after_runtime_disconnect
 test_k8s_component_start_preloads_unique_images_before_apply
 test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure
-test_kubernetes_runtime_reuses_existing_cluster_after_retryable_failures
+test_kubernetes_runtime_fails_after_retryable_failures_without_reuse
+test_kubernetes_runtime_serializes_podman_kind_create
+test_kubernetes_runtime_kind_create_lock_timeout_is_configurable
 test_k8s_component_start_uses_configurable_ready_timeout
 test_k8s_component_start_rejects_invalid_ready_timeout

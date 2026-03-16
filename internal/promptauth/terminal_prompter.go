@@ -24,6 +24,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/crmarques/declarest/faults"
+	"github.com/crmarques/declarest/internal/cli/cliutil"
 )
 
 type terminalPrompter struct{}
@@ -45,15 +46,13 @@ func (terminalPrompter) PromptCredentials(
 	}
 
 	if keepForSession {
-		scope := "this declarest command"
-		if persistentSession {
-			scope = "later declarest commands in this terminal session"
-		}
-		_, _ = fmt.Fprintf(
+		writePromptWarning(
 			os.Stderr,
-			"Warning: credentials for %s will be stored in declarest session environment variables and reused by %s.\n",
-			target.Label,
-			scope,
+			fmt.Sprintf(
+				"credentials for %s will be stored in declarest session environment variables and reused by %s.",
+				target.Label,
+				sessionReuseScope(persistentSession),
+			),
 		)
 	}
 
@@ -138,6 +137,25 @@ func isInteractiveTerminal(in io.Reader, out io.Writer) bool {
 		return false
 	}
 	return (inInfo.Mode()&os.ModeCharDevice) != 0 && (outInfo.Mode()&os.ModeCharDevice) != 0
+}
+
+func writePromptWarning(w io.Writer, message string) {
+	writePromptWarningWithArgs(w, os.Args[1:], message)
+}
+
+func writePromptWarningWithArgs(w io.Writer, args []string, message string) {
+	if cliutil.ShouldIgnoreWarnings(args) {
+		return
+	}
+
+	cliutil.WriteWarningLine(w, message)
+}
+
+func sessionReuseScope(persistentSession bool) string {
+	if persistentSession {
+		return "later declarest commands in this terminal session"
+	}
+	return "this declarest command"
 }
 
 func fileFromReader(reader io.Reader) (*os.File, os.FileInfo, bool) {

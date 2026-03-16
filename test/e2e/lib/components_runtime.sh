@@ -194,7 +194,22 @@ e2e_kind_delete_cluster_quiet() {
   return 0
 }
 
-e2e_kind_create_cluster_with_retry() {
+e2e_kind_create_lock_name() {
+  printf 'kind-create-%s\n' "${E2E_CONTAINER_ENGINE}"
+}
+
+e2e_kind_create_lock_wait_seconds() {
+  local seconds=${DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS:-600}
+
+  if ! [[ "${seconds}" =~ ^[0-9]+$ ]] || ((seconds <= 0)); then
+    e2e_warn "invalid DECLAREST_E2E_KIND_CREATE_LOCK_WAIT_SECONDS=${seconds}; using default 600"
+    seconds=600
+  fi
+
+  printf '%s\n' "${seconds}"
+}
+
+e2e_kind_create_cluster_with_retry_locked() {
   local cluster_name=$1
   local kubeconfig=$2
   local kind_config=$3
@@ -247,20 +262,26 @@ e2e_kind_create_cluster_with_retry() {
     break
   done
 
-  if [[ "${E2E_CONTAINER_ENGINE}" == 'podman' ]] && e2e_kind_create_retryable_failure "${kind_log_file}" && e2e_kind_reuse_existing_on_create_failure_enabled; then
-    local reuse_cluster_name
-    if reuse_cluster_name=$(e2e_kind_pick_existing_cluster_for_reuse "${cluster_name}"); then
-      e2e_warn "reusing existing kind cluster name=${reuse_cluster_name} after create failure for ${cluster_name}"
-      if e2e_kind_export_kubeconfig_for_cluster "${reuse_cluster_name}" "${kubeconfig}"; then
-        rm -f "${kind_log_file}" || true
-        E2E_KIND_EFFECTIVE_CLUSTER_NAME="${reuse_cluster_name}"
-        return 0
-      fi
-    fi
-  fi
-
   rm -f "${kind_log_file}" || true
   return "${last_rc}"
+}
+
+e2e_kind_create_cluster_with_retry() {
+  local cluster_name=$1
+  local kubeconfig=$2
+  local kind_config=$3
+  local wait_timeout=$4
+
+  if [[ "${E2E_CONTAINER_ENGINE}" != 'podman' ]]; then
+    e2e_kind_create_cluster_with_retry_locked "${cluster_name}" "${kubeconfig}" "${kind_config}" "${wait_timeout}"
+    return $?
+  fi
+
+  local lock_name
+  local lock_wait_seconds
+  lock_name=$(e2e_kind_create_lock_name)
+  lock_wait_seconds=$(e2e_kind_create_lock_wait_seconds)
+  e2e_with_lock_timeout "${lock_name}" "${lock_wait_seconds}" e2e_kind_create_cluster_with_retry_locked "${cluster_name}" "${kubeconfig}" "${kind_config}" "${wait_timeout}"
 }
 
 e2e_kubernetes_runtime_ensure() {
