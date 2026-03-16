@@ -433,6 +433,27 @@ e2e_container_image_exists_local() {
   esac
 }
 
+e2e_container_image_id() {
+  local image=$1
+  local image_id=''
+
+  case "${E2E_CONTAINER_ENGINE}" in
+    podman|docker)
+      image_id=$("${E2E_CONTAINER_ENGINE}" image inspect --format '{{.Id}}' "${image}" 2>/dev/null | head -n 1 || true)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  [[ -n "${image_id}" ]] || {
+    e2e_die "unable to resolve local image id for ${image}"
+    return 1
+  }
+
+  printf '%s\n' "${image_id}"
+}
+
 e2e_k8s_pull_image_with_retry() {
   local image=$1
   local attempts=3
@@ -452,15 +473,14 @@ e2e_k8s_pull_image_with_retry() {
   return 1
 }
 
-e2e_k8s_preload_image_to_kind() {
+e2e_k8s_prepare_image_archive_locked() {
   local image=$1
-  local cache_dir="${E2E_RUN_DIR}/k8s/image-cache"
-  local safe_image
-  local archive
-
-  mkdir -p "${cache_dir}" || return 1
-  safe_image=${image//[^a-zA-Z0-9._-]/_}
-  archive="${cache_dir}/${safe_image}.tar"
+  local archive=$2
+  local archive_id_file=$3
+  local image_id=''
+  local cached_image_id=''
+  local archive_tmp=''
+  local archive_id_tmp=''
 
   if ! e2e_container_image_exists_local "${image}"; then
     e2e_info "k8s image preload pulling image=${image}"
@@ -469,8 +489,37 @@ e2e_k8s_preload_image_to_kind() {
     e2e_info "k8s image preload using local image cache image=${image}"
   fi
 
+  image_id=$(e2e_container_image_id "${image}") || return 1
+  cached_image_id=$(cat "${archive_id_file}" 2>/dev/null || true)
+  if [[ -f "${archive}" && -n "${cached_image_id}" && "${cached_image_id}" == "${image_id}" ]]; then
+    e2e_info "k8s image preload using cached exported archive image=${image} archive=${archive}"
+    return 0
+  fi
+
+  archive_tmp="${archive}.${E2E_RUN_ID:-$$}.tmp"
+  archive_id_tmp="${archive_id_file}.${E2E_RUN_ID:-$$}.tmp"
+  rm -f "${archive_tmp}" "${archive_id_tmp}" || return 1
+
   e2e_info "k8s image preload exporting image=${image} archive=${archive}"
-  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${archive}" "${image}" || return 1
+  e2e_run_cmd "${E2E_CONTAINER_ENGINE}" save -o "${archive_tmp}" "${image}" || return 1
+  mv -f "${archive_tmp}" "${archive}" || return 1
+  printf '%s\n' "${image_id}" >"${archive_id_tmp}" || return 1
+  mv -f "${archive_id_tmp}" "${archive_id_file}" || return 1
+}
+
+e2e_k8s_preload_image_to_kind() {
+  local image=$1
+  local cache_dir="${E2E_BUILD_CACHE_DIR}/k8s-image-cache"
+  local safe_image
+  local archive
+  local archive_id_file
+
+  mkdir -p "${cache_dir}" || return 1
+  safe_image=${image//[^a-zA-Z0-9._-]/_}
+  archive="${cache_dir}/${safe_image}.tar"
+  archive_id_file="${archive}.image-id"
+  e2e_with_lock "k8s-image-archive-${safe_image}" \
+    e2e_k8s_prepare_image_archive_locked "${image}" "${archive}" "${archive_id_file}" || return 1
 
   e2e_info "k8s image preload loading image into kind cluster=${E2E_KIND_CLUSTER_NAME} image=${image}"
   e2e_kind_cmd load image-archive "${archive}" --name "${E2E_KIND_CLUSTER_NAME}" || return 1

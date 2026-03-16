@@ -50,6 +50,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 30. Missing requirements default to `SKIP`; they become `FAIL` when tied to explicitly requested capabilities/selections.
 31. Runtime artifacts MUST be written under `test/e2e/.runs/<run-id>/` (logs, state, context, per-case workdirs).
 32. When managed-server metadata is sourced from a component `metadata/` directory, the runner MUST copy it into a run-scoped workspace under `test/e2e/.runs/<run-id>/` before generating contexts so metadata-mutating cases never write into checked-in component fixtures.
+33. `Preparing Runtime` MUST reuse cached E2E CLI and operator-manager binaries when their Go source inputs are unchanged; operator profiles MUST build the runtime manager image from that cached prebuilt Linux binary instead of recompiling inside the container build.
 33. User-facing E2E env vars MUST use `DECLAREST_E2E_*`; container engine selection MUST support `podman` or `docker` via `DECLAREST_E2E_CONTAINER_ENGINE` (default `podman`).
 34. The runner MUST maintain one live execution log file and print its path at startup.
 35. Cleanup mode flags (`--clean`, `--clean-all`) MUST short-circuit workload execution, stop referenced runner processes, and remove execution artifacts plus run-recorded runtime resources associated with each run (`compose` projects or `kind` clusters), and they MUST also drop any run-specific `PATH` entries (for example `<run-dir>/bin`) that `cli-manual` or `operator-manual` handoff prepended so shells no longer reference cleaned runs.
@@ -71,6 +72,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 43. In `dir` mode, managed-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST set `E2E_METADATA_DIR` to that component-local directory and repository-type context fragments MUST emit `metadata.baseDir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset).
 44. In `bundle` mode, when the selected managed-server has no shorthand mapping, the runner MUST fall back to the component-local `metadata/` directory as `metadata.baseDir` when present; otherwise it MUST continue without setting `metadata.bundle`.
 45. Kubernetes runtime MUST use run-scoped `kind` clusters when platform is `kubernetes` and at least one local containerized component is selected; it MUST persist runtime state (`platform`, `container engine`, `cluster name`, `namespace`, `kubeconfig`) for cleanup/manual handoff.
+46. Kubernetes image preload MUST deduplicate identical image references within one run and SHOULD reuse shared exported archives under `.e2e-build/k8s-image-cache/` when the local image ID is unchanged; each run MUST still load its required archives into the selected kind cluster.
 46. Kubernetes component startup MUST apply rendered `k8s/*.yaml` manifests in the run namespace and manage service port-forwards from `declarest.e2e/port-forward` service annotations, persisting forward PIDs in component state for stop/cleanup.
 47. For `DECLAREST_E2E_CONTAINER_ENGINE=podman`, kind operations MUST use provider mode `KIND_EXPERIMENTAL_PROVIDER=podman` and preflight MUST fail fast with actionable guidance when provider checks fail.
 48. `operator-manual`, `operator-basic`, and `operator-full` MUST enforce kubernetes-only local-instantiable selections (`--platform kubernetes`, `--repo-type git`, `--git-provider <gitea|gitlab>`, `--secret-provider <file|vault>`, and local connections for selected components) and MUST fail initialization with actionable validation output when unsupported combinations are selected.
@@ -182,6 +184,8 @@ Operator handoff:
 25. Manual profiles with no component manual-info output omit the `Manual Component Access` section and still render handoff access sections deterministically.
 26. Operator profile with `git-provider=git` does not configure provider webhooks and still fails fast from operator-profile provider validation.
 27. `run-e2e-parallel.sh` returns non-zero when any one child run fails, even if the other child runs succeed.
+28. Repeated operator runs against an unchanged tree reuse the cached Linux manager binary and MUST NOT re-enter in-container module download or source rebuild paths during `Preparing Runtime`.
+29. Repeated kubernetes runs that reference the same unchanged local image reuse the shared exported archive while still loading that archive into each new run-scoped kind cluster.
 
 ## Examples
 1. `./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider none` runs compatible smoke cases and reports deterministic summary.
@@ -212,3 +216,5 @@ Operator handoff:
 26. A long-running step such as `Starting Components` in a TTY session updates the `SPAN` column live from values such as `0s` to `1s` to `2s` while the spinner remains active, then preserves the final duration once the step completes.
 27. `./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source nope` fails argument validation before runtime startup with the allowed metadata-source values.
 28. `./test/e2e/run-e2e-parallel.sh <<'EOF' ... EOF` runs a pasted command matrix concurrently, writes one job log per line under `test/e2e/.runs/parallel-<id>/`, and exits `1` when any listed `run-e2e.sh` command fails.
+29. Running `./run-e2e.sh --profile operator-basic --managed-server keycloak` twice on an unchanged tree reuses the cached Linux operator-manager binary for `Preparing Runtime` and only rebuilds the runtime image wrapper layer.
+30. Two kubernetes runs that both reference `docker.io/rundeck/rundeck:5.19.0` reuse the shared `.e2e-build/k8s-image-cache/docker.io_rundeck_rundeck_5.19.0.tar` export while still issuing one `kind load image-archive ...` per run-scoped cluster.

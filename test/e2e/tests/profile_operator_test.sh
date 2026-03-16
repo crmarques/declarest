@@ -108,9 +108,11 @@ test_cli_profile_automated_scopes() {
 test_operator_profile_builds_linux_static_manager_binary() {
   local script="${REPO_ROOT}/test/e2e/run-e2e.sh"
 
-  assert_file_contains "${script}" 'e2e_run_cmd env CGO_ENABLED=0 GOOS=linux go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1'
-  assert_file_contains "${script}" 'go_version=$(e2e_resolve_go_version) || return 1'
-  assert_file_contains "${script}" '--build-arg "GO_VERSION=${go_version}"'
+  assert_file_contains "${script}" 'go_arch=$(e2e_resolve_go_arch) || return 1'
+  assert_file_contains "${script}" 'e2e_run_cmd env CGO_ENABLED=0 GOOS=linux GOARCH="${go_arch}" go build -o "${cached_operator_tmp}" ./cmd/declarest-operator-manager || return 1'
+  assert_file_contains "${script}" 'e2e_write_operator_runtime_dockerfile "${operator_runtime_dockerfile}" "${operator_binary_rel}" || return 1'
+  assert_file_contains "${script}" 'e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${operator_runtime_dockerfile}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_BUILD_CACHE_DIR}" || return 1'
+  assert_not_contains "$(cat "${script}")" 'podman build -f "${E2E_ROOT_DIR}/Dockerfile.operator"'
 }
 
 test_operator_profile_uses_supported_repository_poll_interval() {

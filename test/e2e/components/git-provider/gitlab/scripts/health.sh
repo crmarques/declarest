@@ -8,8 +8,8 @@ if [[ "${E2E_COMPONENT_CONNECTION}" != 'local' ]]; then
   exit 0
 fi
 
-attempts=${DECLAREST_E2E_GITLAB_HEALTH_ATTEMPTS:-${E2E_GITLAB_HEALTH_ATTEMPTS:-120}}
-interval_seconds=${DECLAREST_E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-${E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-5}}
+attempts=${DECLAREST_E2E_GITLAB_HEALTH_ATTEMPTS:-${E2E_GITLAB_HEALTH_ATTEMPTS:-150}}
+interval_seconds=${DECLAREST_E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-${E2E_GITLAB_HEALTH_INTERVAL_SECONDS:-2}}
 
 if ! [[ "${attempts}" =~ ^[0-9]+$ ]] || ((attempts <= 0)); then
   printf 'invalid gitlab health attempts value: %s\n' "${attempts}" >&2
@@ -26,7 +26,7 @@ for ((i = 1; i <= attempts; i++)); do
     exit 0
   fi
 
-  if ((i % 12 == 0)); then
+  if ((i % 15 == 0)); then
     printf 'gitlab healthcheck pending (%d/%d): %s/users/sign_in\n' "${i}" "${attempts}" "${GITLAB_BASE_URL}" >&2
   fi
 

@@ -100,9 +100,29 @@ e2e_print_startup_execution_parameters() {
   printf '\n'
 }
 
+e2e_operator_runtime_dockerfile_path() {
+  local go_arch=$1
+  printf '%s/Dockerfile.operator-runtime-linux-%s\n' "${E2E_BUILD_CACHE_DIR}" "${go_arch}"
+}
+
+e2e_write_operator_runtime_dockerfile() {
+  local dockerfile_path=$1
+  local operator_binary_rel=$2
+
+  cat >"${dockerfile_path}" <<EOF
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY ${operator_binary_rel} /manager
+USER 65532:65532
+ENTRYPOINT ["/manager"]
+EOF
+}
+
 step_prepare_runtime() {
   local cached_cli_bin
   local cached_cli_tmp
+  local cached_operator_bin=''
+  local cached_operator_tmp=''
 
   if [[ -z "${E2E_RUN_ID}" ]]; then
     E2E_RUN_ID=$(date +%Y%m%d-%H%M%S)-$$
@@ -113,7 +133,6 @@ step_prepare_runtime() {
   E2E_CONTEXT_DIR="${E2E_RUN_DIR}/context"
   E2E_CONTEXT_FILE="${E2E_RUN_DIR}/contexts.yaml"
   E2E_BIN="${E2E_RUN_DIR}/bin/declarest"
-  E2E_OPERATOR_BIN="${E2E_ROOT_DIR}/.e2e-build/declarest-operator-manager-${E2E_RUN_ID}"
   cached_cli_bin="${E2E_BUILD_CACHE_DIR}/declarest"
   cached_cli_tmp="${E2E_BUILD_CACHE_DIR}/declarest.${E2E_RUN_ID}.tmp"
 
@@ -121,7 +140,7 @@ step_prepare_runtime() {
     E2E_EXECUTION_LOG="${E2E_RUN_DIR}/execution.log"
   fi
 
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}" "$(dirname -- "${E2E_BIN}")" "$(dirname -- "${E2E_OPERATOR_BIN}")" || return 1
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}" "$(dirname -- "${E2E_BIN}")" || return 1
   e2e_info "runtime paths run-dir=${E2E_RUN_DIR} state-dir=${E2E_STATE_DIR} log-dir=${E2E_LOG_DIR} context-file=${E2E_CONTEXT_FILE}"
   e2e_info "runtime binary path=${E2E_BIN}"
   e2e_runtime_state_record_platform || return 1
@@ -159,18 +178,43 @@ step_prepare_runtime() {
   fi
   e2e_stage_cached_binary "${cached_cli_bin}" "${E2E_BIN}" || return 1
   if e2e_profile_is_operator; then
-    local go_version
-    go_version=$(e2e_resolve_go_version) || return 1
-    e2e_run_cmd env CGO_ENABLED=0 GOOS=linux go build -o "${E2E_OPERATOR_BIN}" ./cmd/declarest-operator-manager || return 1
-    e2e_register_temp_file "${E2E_OPERATOR_BIN}"
+    local go_arch
+    local operator_runtime_dockerfile
+    go_arch=$(e2e_resolve_go_arch) || return 1
+    cached_operator_bin="${E2E_BUILD_CACHE_DIR}/declarest-operator-manager-linux-${go_arch}"
+    cached_operator_tmp="${E2E_BUILD_CACHE_DIR}/declarest-operator-manager-linux-${go_arch}.${E2E_RUN_ID}.tmp"
+    E2E_OPERATOR_BIN="${cached_operator_bin}"
+
+    if e2e_go_build_target_is_stale \
+      "${cached_operator_bin}" \
+      "${E2E_ROOT_DIR}/go.mod" \
+      "${E2E_ROOT_DIR}/go.sum" \
+      "${E2E_ROOT_DIR}/api" \
+      "${E2E_ROOT_DIR}/cmd" \
+      "${E2E_ROOT_DIR}/config" \
+      "${E2E_ROOT_DIR}/debugctx" \
+      "${E2E_ROOT_DIR}/faults" \
+      "${E2E_ROOT_DIR}/internal" \
+      "${E2E_ROOT_DIR}/managedserver" \
+      "${E2E_ROOT_DIR}/metadata" \
+      "${E2E_ROOT_DIR}/orchestrator" \
+      "${E2E_ROOT_DIR}/repository" \
+      "${E2E_ROOT_DIR}/resource" \
+      "${E2E_ROOT_DIR}/secrets"; then
+      rm -f "${cached_operator_tmp}" || return 1
+      e2e_run_cmd env CGO_ENABLED=0 GOOS=linux GOARCH="${go_arch}" go build -o "${cached_operator_tmp}" ./cmd/declarest-operator-manager || return 1
+      mv -f "${cached_operator_tmp}" "${cached_operator_bin}" || return 1
+    else
+      e2e_info "using cached e2e operator manager binary path=${cached_operator_bin}"
+    fi
+
     E2E_OPERATOR_IMAGE="localhost/declarest/e2e-operator-manager:${E2E_RUN_ID}"
     export E2E_OPERATOR_IMAGE
-    local operator_binary_rel="${E2E_OPERATOR_BIN#${E2E_ROOT_DIR}/}"
-    if [[ "${operator_binary_rel}" == "${E2E_OPERATOR_BIN}" ]]; then
-      e2e_die "operator binary path is outside repository root: ${E2E_OPERATOR_BIN}"
-      return 1
-    fi
-    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${E2E_ROOT_DIR}/Dockerfile.operator" --build-arg "GO_VERSION=${go_version}" --build-arg "MANAGER_BINARY=${operator_binary_rel}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_ROOT_DIR}" || return 1
+    local operator_binary_rel
+    operator_binary_rel=$(basename -- "${cached_operator_bin}") || return 1
+    operator_runtime_dockerfile=$(e2e_operator_runtime_dockerfile_path "${go_arch}") || return 1
+    e2e_write_operator_runtime_dockerfile "${operator_runtime_dockerfile}" "${operator_binary_rel}" || return 1
+    e2e_run_cmd "${E2E_CONTAINER_ENGINE}" build -f "${operator_runtime_dockerfile}" -t "${E2E_OPERATOR_IMAGE}" "${E2E_BUILD_CACHE_DIR}" || return 1
     e2e_info "runtime operator image=${E2E_OPERATOR_IMAGE}"
   fi
 

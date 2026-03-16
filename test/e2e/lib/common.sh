@@ -119,6 +119,22 @@ e2e_resolve_go_version() {
   printf '%s\n' "${version}"
 }
 
+e2e_resolve_go_arch() {
+  local arch
+
+  arch=$(go env GOARCH 2>/dev/null) || {
+    e2e_die 'unable to resolve Go architecture via go env GOARCH'
+    return 1
+  }
+
+  [[ -n "${arch}" ]] || {
+    e2e_die 'go env GOARCH returned an empty architecture'
+    return 1
+  }
+
+  printf '%s\n' "${arch}"
+}
+
 e2e_compose_cmd() {
   e2e_run_cmd "${E2E_CONTAINER_ENGINE}" compose "$@"
 }

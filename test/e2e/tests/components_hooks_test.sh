@@ -18,6 +18,7 @@ prepare_runtime_globals() {
   E2E_LOG_DIR="${tmp}/logs"
   E2E_CONTEXT_DIR="${tmp}/context"
   E2E_CONTEXT_FILE="${tmp}/contexts.yaml"
+  E2E_BUILD_CACHE_DIR="${tmp}/build-cache"
   E2E_METADATA_DIR=''
   E2E_METADATA_BUNDLE=''
   E2E_METADATA='bundle'
@@ -30,7 +31,7 @@ prepare_runtime_globals() {
   E2E_GIT_PROVIDER_CONNECTION='local'
   E2E_SECRET_PROVIDER='none'
   E2E_SECRET_PROVIDER_CONNECTION='local'
-  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}"
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}" "${E2E_BUILD_CACHE_DIR}"
 }
 
 create_hook_component() {
@@ -666,6 +667,11 @@ if [[ "$*" == image\ exists* ]]; then
   exit 1
 fi
 
+if [[ "$*" == image\ inspect* ]]; then
+  printf '%s\n' 'sha256:gitea-test-id'
+  exit 0
+fi
+
 if [[ "${1:-}" == 'pull' ]]; then
   printf 'pull %s\n' "${2:-}" >>"${FAKE_PODMAN_LOG}"
   exit 0
@@ -788,13 +794,157 @@ EOF
   local pull_count save_count load_count
   pull_count=$(grep -c '^pull docker.io/gitea/gitea:1.25.4$' "${podman_log}" || true)
   save_count=$(grep -c '^save docker.io/gitea/gitea:1.25.4 ' "${podman_log}" || true)
-  load_count=$(grep -c '^load image-archive .*/docker.io_gitea_gitea_1.25.4.tar --name declarest-e2e-hooks$' "${kind_log}" || true)
+  load_count=$(grep -c '^load image-archive .*/k8s-image-cache/docker.io_gitea_gitea_1.25.4.tar --name declarest-e2e-hooks$' "${kind_log}" || true)
 
   assert_eq "${pull_count}" "1" "expected one image pull for duplicated image references"
   assert_eq "${save_count}" "1" "expected one image export for duplicated image references"
   assert_eq "${load_count}" "1" "expected one kind image load for duplicated image references"
   assert_file_contains "${kubectl_log}" "apply -f ${E2E_STATE_DIR}/k8s-rendered/managed-server-demo-a/deployment.yaml"
   assert_file_contains "${kubectl_log}" "apply -f ${E2E_STATE_DIR}/k8s-rendered/secret-provider-demo-b/deployment.yaml"
+}
+
+test_k8s_component_start_reuses_cached_exported_archives_across_runs() {
+  load_hook_libs
+  local tmp
+  tmp=$(new_temp_dir)
+  trap 'rm -rf "${tmp}"' RETURN
+  prepare_runtime_globals "${tmp}"
+
+  local fake_bin="${tmp}/bin"
+  mkdir -p "${fake_bin}"
+  local podman_log="${tmp}/podman.log"
+  local kind_log="${tmp}/kind.log"
+  local kubectl_log="${tmp}/kubectl.log"
+
+  cat >"${fake_bin}/podman" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == image\ exists* ]]; then
+  exit 0
+fi
+
+if [[ "$*" == image\ inspect* ]]; then
+  printf '%s\n' 'sha256:rundeck-test-id'
+  exit 0
+fi
+
+if [[ "${1:-}" == 'save' ]]; then
+  out=''
+  image=''
+  shift
+  while (($# > 0)); do
+    case "$1" in
+      -o)
+        out=$2
+        shift 2
+        ;;
+      *)
+        image=$1
+        shift
+        ;;
+    esac
+  done
+  [[ -n "${out}" ]] || exit 1
+  : >"${out}"
+  printf 'save %s %s\n' "${image}" "${out}" >>"${FAKE_PODMAN_LOG}"
+  exit 0
+fi
+
+printf 'unexpected podman invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/podman"
+
+  cat >"${fake_bin}/kind" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_KIND_LOG}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/kind"
+
+  cat >"${fake_bin}/kubectl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_KUBECTL_LOG}"
+
+if [[ "$*" == *" get svc "* ]]; then
+  cat <<'JSON'
+{"items":[]}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *" apply "* || "$*" == *" wait "* ]]; then
+  exit 0
+fi
+
+printf 'unexpected kubectl invocation: %s\n' "$*" >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/kubectl"
+
+  local component_dir="${tmp}/components/managed-server/demo"
+  mkdir -p "${component_dir}/k8s"
+  cat >"${component_dir}/k8s/deployment.yaml" <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: managed-server-demo
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: docker.io/rundeck/rundeck:5.19.0
+EOF
+
+  E2E_PLATFORM='kubernetes'
+  E2E_CONTAINER_ENGINE='podman'
+  E2E_KIND_CLUSTER_NAME='declarest-e2e-hooks-a'
+  E2E_K8S_NAMESPACE='declarest-tests-a'
+  E2E_KUBECONFIG="${tmp}/kubeconfig-a"
+  : >"${E2E_KUBECONFIG}"
+
+  E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_DEPENDS_ON=()
+  E2E_COMPONENT_RUNTIME_KIND=()
+  E2E_SELECTED_COMPONENT_KEYS=("managed-server:demo")
+  E2E_COMPONENT_PATH['managed-server:demo']="${component_dir}"
+  E2E_COMPONENT_DEPENDS_ON['managed-server:demo']=''
+  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
+
+  local old_path="${PATH}"
+  PATH="${fake_bin}:${old_path}"
+  export PATH
+  export FAKE_PODMAN_LOG="${podman_log}"
+  export FAKE_KIND_LOG="${kind_log}"
+  export FAKE_KUBECTL_LOG="${kubectl_log}"
+
+  e2e_components_start_local
+
+  E2E_RUN_ID='test-hooks-second'
+  E2E_RUN_DIR="${tmp}/run-second"
+  E2E_STATE_DIR="${tmp}/state-second"
+  E2E_LOG_DIR="${tmp}/logs-second"
+  E2E_CONTEXT_DIR="${tmp}/context-second"
+  E2E_CONTEXT_FILE="${tmp}/contexts-second.yaml"
+  mkdir -p "${E2E_RUN_DIR}" "${E2E_STATE_DIR}" "${E2E_LOG_DIR}" "${E2E_CONTEXT_DIR}"
+
+  E2E_KIND_CLUSTER_NAME='declarest-e2e-hooks-b'
+  E2E_K8S_NAMESPACE='declarest-tests-b'
+  E2E_KUBECONFIG="${tmp}/kubeconfig-b"
+  : >"${E2E_KUBECONFIG}"
+
+  e2e_components_start_local
+
+  local save_count load_count
+  save_count=$(grep -c '^save docker.io/rundeck/rundeck:5.19.0 ' "${podman_log}" || true)
+  load_count=$(grep -c '^load image-archive .*/k8s-image-cache/docker.io_rundeck_rundeck_5.19.0.tar --name declarest-e2e-hooks-' "${kind_log}" || true)
+
+  assert_eq "${save_count}" "1" "expected exported image archive to be reused across runs"
+  assert_eq "${load_count}" "2" "expected cached archive to still be loaded into each kind cluster"
 }
 
 test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure() {
@@ -1313,6 +1463,7 @@ test_component_compose_file_resolves_compose_subdir
 test_k8s_port_forward_pid_tracking_and_stop
 test_k8s_port_forward_retries_after_runtime_disconnect
 test_k8s_component_start_preloads_unique_images_before_apply
+test_k8s_component_start_reuses_cached_exported_archives_across_runs
 test_kubernetes_runtime_retries_retryable_kind_bootstrap_failure
 test_kubernetes_runtime_fails_after_retryable_failures_without_reuse
 test_kubernetes_runtime_serializes_podman_kind_create
