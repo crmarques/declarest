@@ -25,6 +25,24 @@ func compactContextCatalogForView(catalog configdomain.ContextCatalog) configdom
 	return configdomain.CompactContextCatalog(catalog)
 }
 
+func selectContextCatalogForShow(catalog configdomain.ContextCatalog, name string) (configdomain.ContextCatalog, error) {
+	for _, item := range catalog.Contexts {
+		if item.Name != name {
+			continue
+		}
+
+		shown := catalog
+		shown.Contexts = []configdomain.Context{item}
+		shown.CurrentContext = item.Name
+		return shown, nil
+	}
+	return configdomain.ContextCatalog{}, faults.NewTypedError(
+		faults.NotFoundError,
+		fmt.Sprintf("context %q not found", name),
+		nil,
+	)
+}
+
 func selectContextForView(contexts []configdomain.Context, name string) (configdomain.Context, int, error) {
 	for idx, item := range contexts {
 		if item.Name != name {

@@ -45,6 +45,8 @@ func TestRequiredCommandPathsRegistered(t *testing.T) {
 		"context init",
 		"context use",
 		"context current",
+		"context clean",
+		"context session-hook",
 		"context check",
 		"context resolve",
 		"resource",

@@ -125,6 +125,11 @@ Fields:
 1. literal string value, or
 2. prompt object `{prompt: true, persistInSession?: bool}`.
 
+Invariants:
+1. `persistInSession: true` MUST mean reuse for later `declarest` commands only within one shell session that exported `DECLAREST_PROMPT_AUTH_SESSION_ID`.
+2. new prompt-auth session cache files MUST be written only under `XDG_RUNTIME_DIR/declarest/prompt-auth/`.
+3. when `XDG_RUNTIME_DIR` or `DECLAREST_PROMPT_AUTH_SESSION_ID` is unavailable, prompted values MAY be reused only inside the current `declarest` process and MUST NOT be persisted under the home directory.
+
 ### Type: `config.CredentialsRef`
 Represents a placeholder to inject a named catalog credential into one auth block.
 

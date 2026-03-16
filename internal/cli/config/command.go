@@ -27,6 +27,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
+	"github.com/crmarques/declarest/internal/promptauth"
 	managedserverdomain "github.com/crmarques/declarest/managedserver"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -59,11 +60,15 @@ func newCommandWithPrompter(
 	useCommand := newUseCommand(deps, prompter)
 	showCommand := newShowCommand(deps, globalFlags, prompter)
 	currentCommand := newCurrentCommand(deps, globalFlags)
+	cleanCommand := newCleanCommand()
+	sessionHookCommand := newSessionHookCommand()
 	resolveCommand := newResolveCommand(deps, globalFlags)
 	checkCommand := newCheckCommand(deps, globalFlags)
 	validateCommand := newValidateCommand(deps)
 
 	commandmeta.MarkTextOnlyOutput(printTemplateCommand)
+	commandmeta.MarkTextOnlyOutput(cleanCommand)
+	commandmeta.MarkTextOnlyOutput(sessionHookCommand)
 	commandmeta.MarkRequiresContextBootstrap(initCommand)
 	commandmeta.MarkYAMLDefaultTextOrYAMLOutput(showCommand)
 	commandmeta.MarkRequiresContextBootstrap(checkCommand)
@@ -82,6 +87,8 @@ func newCommandWithPrompter(
 		useCommand,
 		showCommand,
 		currentCommand,
+		cleanCommand,
+		sessionHookCommand,
 		resolveCommand,
 		checkCommand,
 		validateCommand,
@@ -579,6 +586,25 @@ func newShowCommand(
 				}
 			}
 
+			if editorService, ok := contexts.(configdomain.ContextCatalogEditor); ok {
+				catalog, err := editorService.GetCatalog(command.Context())
+				if err != nil {
+					return err
+				}
+
+				shown, err := selectContextCatalogForShow(catalog, name)
+				if err != nil {
+					return err
+				}
+
+				return cliutil.WriteOutput(
+					command,
+					cliutil.ResolveCommandOutputFormat(command, globalFlags),
+					shown,
+					renderContextCatalogText,
+				)
+			}
+
 			items, err := contexts.List(command.Context())
 			if err != nil {
 				return err
@@ -620,6 +646,67 @@ func newCurrentCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 				_, writeErr := fmt.Fprintln(w, value.Name)
 				return writeErr
 			})
+		},
+	}
+}
+
+func newCleanCommand() *cobra.Command {
+	var credentialsInSession bool
+
+	command := &cobra.Command{
+		Use:   "clean",
+		Short: "Clean cached context session data",
+		Example: strings.Join([]string{
+			"  declarest context clean --credentials-in-session",
+		}, "\n"),
+		Args: cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			if !credentialsInSession {
+				return cliutil.ValidationError("at least one clean target flag is required", nil)
+			}
+
+			removed := 0
+			if credentialsInSession {
+				cleared, err := promptauth.ClearSessionCredentials()
+				if err != nil {
+					return err
+				}
+				removed += cleared
+			}
+
+			return cliutil.WriteText(
+				command,
+				cliutil.OutputText,
+				fmt.Sprintf("removed %d prompt credential session cache files", removed),
+			)
+		},
+	}
+
+	command.Flags().BoolVar(
+		&credentialsInSession,
+		"credentials-in-session",
+		false,
+		"remove prompt-backed credential session cache files",
+	)
+
+	return command
+}
+
+func newSessionHookCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "session-hook <bash|zsh>",
+		Short: "Print shell hook code for prompt credential session cleanup",
+		Args:  cobra.ExactArgs(1),
+		Example: strings.Join([]string{
+			`  eval "$(declarest context session-hook bash)"`,
+			`  eval "$(declarest context session-hook zsh)"`,
+		}, "\n"),
+		RunE: func(command *cobra.Command, args []string) error {
+			hook, err := promptauth.RenderSessionHook(args[0])
+			if err != nil {
+				return err
+			}
+			return cliutil.WriteText(command, cliutil.OutputText, strings.TrimRight(hook, "\n"))
 		},
 	}
 }
@@ -1101,6 +1188,15 @@ func renderConfigCheckText(writer io.Writer, report configCheckReport) error {
 }
 
 func renderContextText(writer io.Writer, value configdomain.Context) error {
+	encoded, err := yaml.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(writer, string(encoded))
+	return err
+}
+
+func renderContextCatalogText(writer io.Writer, value configdomain.ContextCatalog) error {
 	encoded, err := yaml.Marshal(value)
 	if err != nil {
 		return err

@@ -8,7 +8,7 @@ This page shows safe edit loops for the two things that most often change during
 
 ```bash
 declarest context current
-declarest context show
+declarest context show   # prints a one-context catalog view, including shared credentials
 declarest context resolve
 ```
 

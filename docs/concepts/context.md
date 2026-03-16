@@ -37,6 +37,16 @@ managedServer:
 
 `credentialsRef` is a placeholder. At runtime, declarest injects the referenced credential content into that location and omits only the credential `name`. Prompt-backed attributes ask for input only when the owning component first needs them.
 
+If you want `persistInSession: true` to reuse prompted values across later `declarest` commands in the same shell, enable the shell hook first:
+
+```bash
+eval "$(declarest context session-hook bash)"
+# or
+eval "$(declarest context session-hook zsh)"
+```
+
+When `XDG_RUNTIME_DIR` is available, declarest stores that prompt cache only under `XDG_RUNTIME_DIR/declarest/prompt-auth/` and removes it on shell exit through the hook. Without `XDG_RUNTIME_DIR`, prompted values are reused only within the current `declarest` command.
+
 ## Context rules
 
 - `managedServer.http.url` is the canonical managed-server URL key.

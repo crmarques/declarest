@@ -51,7 +51,7 @@ func (terminalPrompter) PromptValue(
 		writePromptWarning(
 			os.Stderr,
 			fmt.Sprintf(
-				"credential %q %s will be stored in declarest session environment variables and reused by %s.",
+				"credential %q %s %s.",
 				strings.TrimSpace(credentialName),
 				strings.TrimSpace(field),
 				sessionReuseScope(persistentSession),
@@ -122,9 +122,9 @@ func writePromptWarningWithArgs(w io.Writer, args []string, message string) {
 
 func sessionReuseScope(persistentSession bool) string {
 	if persistentSession {
-		return "later declarest commands in this terminal session"
+		return "will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session"
 	}
-	return "this declarest command"
+	return "cannot be kept across commands because runtime session storage is unavailable and will only be reused by this declarest command"
 }
 
 func fileFromReader(reader io.Reader) (*os.File, os.FileInfo, bool) {

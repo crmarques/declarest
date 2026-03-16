@@ -39,7 +39,7 @@ Define component boundaries, dependency direction, and orchestration ownership f
 ## Allowed Dependency Directions
 1. `cmd/declarest` -> `internal/bootstrap`, `internal/cli`.
 2. `cmd/declarest-operator-manager` -> `internal/operator/controllers`, `internal/operator/observability`, `api/v1alpha1`.
-3. `internal/cli/*` -> `internal/cli/cliutil`, `internal/app/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
+3. `internal/cli/*` -> `internal/cli/cliutil`, `internal/app/*`, `internal/promptauth`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and approved support primitives.
 4. `internal/app/*` -> domain contracts (`orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`).
 5. `internal/operator/controllers` -> `api/v1alpha1`, `internal/bootstrap`, `internal/app/resource/*`, domain contracts (`config`, `orchestrator`, `repository`, `metadata`, `resource`, `secrets`, `faults`), and Kubernetes/controller-runtime primitives.
 6. `orchestrator` -> `repository`, `metadata`, `managedserver`, `secrets`, `resource`.

@@ -212,10 +212,6 @@ func (m *Service) ResolveContext(_ context.Context, selection config.ContextSele
 		return config.Context{}, err
 	}
 	resolved = applyConfigDefaults(resolved)
-	resolved, err = injectContextCredentials(resolved, credentials)
-	if err != nil {
-		return config.Context{}, err
-	}
 	if err := validateConfig(resolved, credentials, true); err != nil {
 		return config.Context{}, err
 	}
@@ -310,7 +306,10 @@ func (m *Service) loadCatalog() (config.ContextCatalog, error) {
 		return config.ContextCatalog{}, err
 	}
 
-	if err := validateResolvedCatalog(contextCatalog); err != nil {
+	// Validate structural constraints (names, duplicates, one-of rules) without
+	// expanding env placeholders. Full expansion happens in ResolveContext and
+	// saveCatalog, avoiding redundant deep-clone + reflection walks.
+	if err := validateCatalog(contextCatalog); err != nil {
 		return config.ContextCatalog{}, err
 	}
 

@@ -29,7 +29,7 @@ Define user-facing CLI contract, command semantics, output stability, and comple
 10. Help invocations (`--help`, `-h`, or `help`) and completion-script invocations (`completion`, `__complete`, `__completeNoDesc`) MUST render without requiring active-context resolution.
 11. Shell completion output MUST expose canonical command names and MUST NOT leak internal command placeholders.
 12. Invoking a command group without a required subcommand MUST render that group's help and MUST NOT require active-context resolution.
-13. Non-runtime commands (`version`, `context print-template|add|edit|update|delete|rename|list|use|show|current|resolve|validate`) MUST execute without requiring active-context resolution at startup.
+13. Non-runtime commands (`version`, `context print-template|add|edit|update|delete|rename|list|use|show|current|clean|session-hook|resolve|validate`) MUST execute without requiring active-context resolution at startup.
 14. When `--repo-type git` is selected and no `--git-provider` is supplied, the CLI MUST default the provider to the local `git` component so git-backed repositories integrate without additional flags while still enforcing explicit overrides when provided.
 15. Path completion MUST merge repository paths, remote resource paths, and OpenAPI paths; for templated OpenAPI segments (`{...}`), completion SHOULD resolve concrete candidates by listing collection children with metadata-aware path semantics.
 16. Path completion MUST use command-aware source priority: `resource get|save|list|delete` MUST prefer remote candidates by default (respecting explicit source flags), repository-driven commands (`resource apply|create|update|diff|explain|template`) MUST prefer repository candidates and only fall back to remote candidates when the preferred source yields no completion candidates, `resource request <method>` path completion MUST prefer remote candidates with repository fallback, and `resource metadata *` plus path-aware `secret` commands MUST prefer repository candidates with remote fallback.
@@ -96,31 +96,33 @@ Selected command names:
 5. `context use`.
 6. `context show`.
 7. `context current`.
-8. `context resolve`.
-9. `resource metadata`.
-10. `resource metadata edit`.
-11. `resource metadata resolve`.
-12. `resource metadata render`.
-13. `repository status`.
-14. `repository clean`.
-15. `repository commit`.
-16. `repository history`.
-17. `repository tree`.
-18. `resource request`.
-19. `resource defaults`.
-20. `resource defaults config`.
-21. `resource defaults profile`.
-22. `secret set`.
-23. `secret get`.
-24. `secret list`.
-25. `secret delete`.
-26. `secret mask`.
-27. `secret resolve`.
-28. `secret normalize`.
-29. `secret detect`.
-30. `completion`.
-31. `version`.
-32. `server get base-url`.
+8. `context clean`.
+9. `context session-hook`.
+10. `context resolve`.
+11. `resource metadata`.
+12. `resource metadata edit`.
+13. `resource metadata resolve`.
+14. `resource metadata render`.
+15. `repository status`.
+16. `repository clean`.
+17. `repository commit`.
+18. `repository history`.
+19. `repository tree`.
+20. `resource request`.
+21. `resource defaults`.
+22. `resource defaults config`.
+23. `resource defaults profile`.
+24. `secret set`.
+25. `secret get`.
+26. `secret list`.
+27. `secret delete`.
+28. `secret mask`.
+29. `secret resolve`.
+30. `secret normalize`.
+31. `secret detect`.
+32. `completion`.
+33. `version`.
+34. `server get base-url`.
 33. `server get token-url`.
 34. `server get access-token`.
 35. `server check`.
@@ -249,19 +251,21 @@ Interactive context commands:
 53. `context add` MUST fail with `ValidationError` when positional `[new-context-name]` and global `--context` are both provided with different values.
 54. `context resolve`, `context check`, and `context init` MUST accept optional context selection from positional `[name]` or global `--context`, and mismatched values MUST fail with `ValidationError`.
 55. `context init` MUST initialize repository state and resolve metadata at `/` so bundle-backed metadata references are downloaded and cached before runtime workflows.
+56. `context clean` MUST require at least one cleanup selector flag, and `context clean --credentials-in-session` MUST remove prompt-backed credential session cache files for the detected prompt-auth session so later `declarest` commands stop reusing those cached values.
+57. `context session-hook <bash|zsh>` MUST print text-only shell code that exports `DECLAREST_PROMPT_AUTH_SESSION_ID` once per shell session, registers `context clean --credentials-in-session` cleanup on shell exit, and preserves pre-existing shell exit handlers.
 ### Resource Request
-56. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`, and `resource request get|delete` MUST reuse the same unique collection-candidate payload fallback as `resource get|delete` when metadata path rendering cannot derive required template fields from the requested logical path alone.
-57. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--content-type` when provided, otherwise by trusted file extension, otherwise by content heuristics (`JSON` for structured-looking input, `application/octet-stream` otherwise); binary input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
-58. `resource request post`, `resource request put`, and `resource request patch` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--content-type` when provided, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
-59. `context add` MUST accept input from `--payload <path|->` or stdin.
-57. `context add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
-58. When `context add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
-59. When `context add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
-60. When `context add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
-61. `context add --set-current` MUST set current context to the imported context when exactly one context is imported.
-62. `context add --set-current` with multiple imported contexts MUST require catalog `currentContext` or fail with `ValidationError`.
-63. `context add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
-64. `context update` and `context validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `context add`.
+58. `resource request <method>` MUST accept endpoint path from positional `<path>` and `--path`, and mismatched values MUST fail with `ValidationError`; `resource request get` MUST attempt metadata-aware remote read fallback when the literal request returns `NotFound`, and `resource request get|delete` MUST reuse the same unique collection-candidate payload fallback as `resource get|delete` when metadata path rendering cannot derive required template fields from the requested logical path alone.
+59. `resource request <method>` MUST accept optional request payload from `--payload <path|->` or stdin, decoding according to `--content-type` when provided, otherwise by trusted file extension, otherwise by content heuristics (`JSON` for structured-looking input, `application/octet-stream` otherwise); binary input MUST be read only from file or stdin and MUST produce `resource.BinaryValue`.
+60. `resource request post`, `resource request put`, and `resource request patch` MUST also support optional inline `--payload` input for non-binary formats, decoded according to `--content-type` when provided, and the inline `--payload` MUST be mutually exclusive with the `--payload <path|->`/stdin option.
+61. `context add` MUST accept input from `--payload <path|->` or stdin.
+62. `context add` MUST accept either one `context` object or one full `contexts.yaml` catalog object.
+63. When `context add` receives a catalog input and `--context-name` is omitted, it MUST import all catalog contexts.
+64. When `context add` receives a catalog input and `--context-name` is set, it MUST import only the matching catalog context name.
+65. When `context add` receives a single context object and `--context-name` is set, the imported context name MUST be overridden by `--context-name`.
+66. `context add --set-current` MUST set current context to the imported context when exactly one context is imported.
+67. `context add --set-current` with multiple imported contexts MUST require catalog `currentContext` or fail with `ValidationError`.
+68. `context add` SHOULD infer JSON or YAML from the payload file extension when `--content-type` is omitted.
+69. `context update` and `context validate` SHOULD follow the same `--content-type` plus file-extension decoding rules as `context add`.
 ### Help, Completion, and Bootstrap Gating
 65. Help and completion-script invocations MUST bypass context-dependent startup validation so command usage remains available when no current context is configured.
 66. Command-group invocations without subcommands MUST bypass context-dependent startup validation so usage/help output remains available when no current context is configured.
@@ -324,7 +328,7 @@ Interactive context commands:
 9. `repository tree` text output MUST render a deterministic tree-style directory listing using repository-relative directory names only (no files), preserving spaces within directory segments.
 ### Resource and List Output
 9. `resource list --output auto|text` MUST render one line per item in the form `<alias> (<id>)`, preferring metadata-derived identity (`alias`/`id`) and falling back to resolved item identity fields when already present; text output SHOULD align the alias column deterministically across all rendered list lines.
-7. `context show` MUST print the full selected context configuration as YAML to stdout.
+7. `context show` MUST print a one-context catalog view as YAML to stdout, preserving catalog-scoped attributes such as `credentials` and `defaultEditor`, preserving explicit context fields without view-time compaction, and setting `currentContext` to the shown context name so the output remains a valid single-context catalog.
 8. Command help output MUST present `--help` in the `Global Flags` section.
 9. HTTP transport debug output MUST include TLS/mTLS configuration context (`tls_enabled`, `mtls_enabled`, and configured TLS file paths) without logging secret values.
 10. Help output SHOULD avoid repeated blank lines between sections.
@@ -391,6 +395,7 @@ Interactive context commands:
 33. `resource save --push` is invoked when the active repository is filesystem or when git remote configuration is missing.
 34. `resource edit` targets a resource whose resolved payload type is `octet-stream`.
 35. `--output auto|text` is requested for a collection or multi-item result that contains binary payloads.
+36. `context clean` is invoked without any cleanup selector flag.
 
 ## Edge Cases
 1. `resource save` encounters plaintext secret candidates selected for handling (automatic metadata-declared handling or `--secret-attributes`) but no secret manager is configured.
@@ -418,12 +423,14 @@ Interactive context commands:
 20. `version` and context-catalog management commands (for example `context list`) succeed when no current context is set, while runtime commands continue to fail fast when active context resolution is required.
 21. `secret get /customers/acme` prints multiple lines in deterministic order as `<key>=<value>` and preserves quote characters only when they exist in secret values.
 22. `context add` with managed-server auth set to `oauth2` prompts only oauth2 fields and does not prompt `basic-auth` or `custom-headers` fields.
-23. `context print-template` works without a configured current context and still renders the full template.
-24. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
-25. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
-26. Interactive `context add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
-27. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
-28. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
+23. `context clean --credentials-in-session` succeeds without a current context even when no cached prompt-backed credential session values exist.
+24. `context session-hook bash` and `context session-hook zsh` succeed without a current context and print shell code only.
+25. `context print-template` works without a configured current context and still renders the full template.
+26. `repository status` in a `filesystem` context prints `sync=not_applicable` instead of git `ahead/behind` counters.
+27. `repository clean` in a `filesystem` context succeeds without repository mutations and leaves output empty.
+28. Interactive `context add` stores no repository payload-format setting because managed-server responses and explicit payload input determine `resource.<ext>` persistence at runtime.
+29. `resource list --output auto|text` falls back to logical-path alias formatting when metadata identity attributes are absent from an item payload.
+30. `resource get /admin/realms/master/` first attempts remote list for `/admin/realms/master` and then falls back to one remote single-resource read when the list response shape is invalid.
 29. `server get token-url` or `server get access-token` is invoked for a context configured with `basic-auth` or `custom-headers` and fails with `ValidationError`.
 30. `server check` fails when the configured GET probe returns an error or non-success outcome.
 31. Path completion for `/admin/realms/_/clients/` preserves `_` selector segments as canonical logical metadata-path suggestions instead of replacing `_` with placeholder text.
@@ -491,7 +498,7 @@ Interactive context commands:
 44. `declarest completion bash` generates Bash completion output.
 39. `declarest version -o json` prints machine-readable version information.
 40. `declarest context use` opens interactive context selection when run in a terminal.
-41. `declarest context show --context dev` prints the selected context configuration as YAML.
+41. `declarest context show --context dev` prints a valid one-context catalog view for `dev`, including any top-level shared credentials referenced by that context.
 42. `declarest resource request get /health` executes a direct managed-server GET request.
 43. `declarest resource request post /customers --payload payload.json` executes a direct managed-server POST request with JSON body.
 44. `declarest resource request put /files/blob --payload blob.bin --content-type binary` executes a direct binary upload request.
@@ -534,11 +541,13 @@ Interactive context commands:
 76. `declarest context add --context dev` skips context-name prompt and starts interactive prompts at repository settings.
 77. `declarest context add full` can populate managed-server, secret-store, TLS, and preference fields interactively while allowing optional sections to be skipped.
 78. `declarest context print-template` prints a full commented `contexts.yaml` template including mutually-exclusive option guidance.
-79. `declarest repository push` fails with `ValidationError` when the active context repository type is `filesystem`.
-80. `declarest repository status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
-81. `declarest context add` interactive flow always prompts `managed-server` fields and never asks for a repository payload format override.
-82. `declarest context edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
-83. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
+79. `declarest context clean --credentials-in-session` removes prompt-backed credential session cache files so later `declarest` commands prompt again in the same detected shell session.
+80. `eval "$(declarest context session-hook bash)"` enables shell-session prompt-auth reuse for later `declarest` commands and cleans the runtime cache file on shell exit.
+81. `declarest repository push` fails with `ValidationError` when the active context repository type is `filesystem`.
+82. `declarest repository status` in a filesystem context prints `type=filesystem sync=not_applicable hasUncommitted=<bool>`.
+83. `declarest context add` interactive flow always prompts `managed-server` fields and never asks for a repository payload format override.
+84. `declarest context edit prod --editor "vi"` opens a temporary YAML document for only `prod`, validates it on save/exit, and replaces the stored `prod` context only when validation succeeds.
+85. `declarest resource edit /customers/acme --editor "vi"` opens the local repository payload, validates the edited content, and commits changes when the repository backend is git.
 84. `declarest resource edit /admin/realms/master/clients/f88c68f3-3253-49f9-94a9-fe7553d33b5c --editor "vi"` resolves the existing alias-based repository entry first; if no local resource matches, it bootstraps the editor from one remote read and saves the edited payload to the requested logical path.
 84. `declarest resource copy /customers/acme /customers/acme-copy --override-attributes /name=acme-copy,/spec/tier=gold` copies one repository resource and applies JSON Pointer overrides before saving.
 85. `declarest resource copy /admin/realms/test /admin/realms/test2 --override-attributes /realm=test2` falls back to the remote read when the source realm is not yet saved locally and updates the identity attribute to match the target path.

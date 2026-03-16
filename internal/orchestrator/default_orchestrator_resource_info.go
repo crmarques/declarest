@@ -19,6 +19,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/metadata/templatescope"
 	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
@@ -89,7 +90,7 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 	remoteID := localAlias
 
 	payload := map[string]any{}
-	payload = metadatavalidation.MergePayloadFields(
+	merged, ok := metadatavalidation.MergePayloadFields(
 		payload,
 		metadatavalidation.DerivePathFields(resource.Resource{
 			LogicalPath:    normalizedPath,
@@ -98,6 +99,12 @@ func (r *Orchestrator) buildResourceInfoForRemoteRead(
 			RemoteID:       remoteID,
 		}, resolvedMetadata),
 	).(map[string]any)
+	if !ok {
+		return resource.Resource{}, metadata.ResourceMetadata{}, faults.NewValidationError(
+			"failed to merge payload fields into map for remote read", nil,
+		)
+	}
+	payload = merged
 	for key, value := range templatescope.DerivePathTemplateFields(normalizedPath, resolvedMetadata) {
 		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
 			continue

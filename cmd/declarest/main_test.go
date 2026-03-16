@@ -271,6 +271,16 @@ func TestShouldSkipContextBootstrap(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "context clean command does not require context bootstrap",
+			args: []string{"context", "clean", "--credentials-in-session"},
+			want: true,
+		},
+		{
+			name: "context session-hook command does not require context bootstrap",
+			args: []string{"context", "session-hook", "bash"},
+			want: true,
+		},
+		{
 			name: "context print-template command does not require context bootstrap",
 			args: []string{"context", "print-template"},
 			want: true,
@@ -345,6 +355,16 @@ func TestRequiresContextBootstrap(t *testing.T) {
 		{
 			name: "context list does not require context",
 			args: []string{"context", "list"},
+			want: false,
+		},
+		{
+			name: "context clean does not require context",
+			args: []string{"context", "clean", "--credentials-in-session"},
+			want: false,
+		},
+		{
+			name: "context session-hook does not require context",
+			args: []string{"context", "session-hook", "bash"},
 			want: false,
 		},
 		{

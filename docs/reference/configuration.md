@@ -71,6 +71,16 @@ basic:
 
 `credentialsRef` works like a placeholder. At runtime, declarest injects the referenced credential content at that location and removes only the credential `name`.
 
+To reuse `persistInSession: true` values across later `declarest` commands in one shell session, install the shell hook first:
+
+```bash
+eval "$(declarest context session-hook bash)"
+# or
+eval "$(declarest context session-hook zsh)"
+```
+
+Prompt-backed session cache files are written only under `XDG_RUNTIME_DIR/declarest/prompt-auth/` and the hook removes them on shell exit. If `XDG_RUNTIME_DIR` is unavailable, prompted values are reused only within the current `declarest` process.
+
 ## Repository
 
 Choose exactly one of `git` or `filesystem`.

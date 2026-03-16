@@ -59,8 +59,10 @@ type Runtime struct {
 	persistentSession bool
 	sessionLoaded     bool
 	sessionValues     map[string]string
+	warnedNoSession   bool
 
-	resolved map[string]Credentials
+	resolved     map[string]Credentials
+	envKeyOwners map[string]string // envKey → credential name (collision detection)
 }
 
 func WithPrompter(prompter Prompter) Option {
@@ -133,6 +135,10 @@ func (r *Runtime) Resolve(
 		r.mu.Unlock()
 		return creds, nil
 	}
+	if err := r.registerEnvKeyOwner(credentialName); err != nil {
+		r.mu.Unlock()
+		return Credentials{}, err
+	}
 	r.mu.Unlock()
 
 	resolvedUsername, err := r.resolveField(ctx, credentialName, "username", username)
@@ -183,6 +189,35 @@ func ResolveCredentials(
 	return runtime.Resolve(ctx, credentialName, username, password)
 }
 
+func ClearSessionCredentials() (int, error) {
+	removed := 0
+
+	runtimePath, err := defaultSessionFilePath()
+	if err != nil {
+		return 0, internalError("failed to resolve prompt auth runtime session path", err)
+	}
+	if deleted, err := removeSessionCacheFile(runtimePath); err != nil {
+		return 0, internalError("failed to clear prompt auth runtime session cache", err)
+	} else if deleted {
+		removed++
+	}
+
+	legacySessionID := detectSessionID()
+	legacyPath, err := legacySessionFilePathForSessionID(legacySessionID)
+	if err != nil {
+		return 0, internalError("failed to resolve prompt auth legacy session path", err)
+	}
+	if legacyPath != "" && legacyPath != runtimePath {
+		if deleted, err := removeSessionCacheFile(legacyPath); err != nil {
+			return 0, internalError("failed to clear prompt auth legacy session cache", err)
+		} else if deleted {
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
 func (r *Runtime) resolveField(
 	ctx context.Context,
 	credentialName string,
@@ -194,11 +229,25 @@ func (r *Runtime) resolveField(
 	}
 
 	envKey := credentialEnvKey(credentialName, field)
+	if resolved, ok := r.sessionValueFromMemory(envKey); ok {
+		return resolved, nil
+	}
 	if resolved, ok := sessionValue(envKey); ok {
 		return resolved, nil
 	}
 
-	prompted, err := r.prompter.PromptValue(ctx, credentialName, field, value.PersistInSession(), r.persistentSession)
+	warnOnPersistRequest := value.PersistInSession()
+	if warnOnPersistRequest && !r.persistentSession {
+		r.mu.Lock()
+		if r.warnedNoSession {
+			warnOnPersistRequest = false
+		} else {
+			r.warnedNoSession = true
+		}
+		r.mu.Unlock()
+	}
+
+	prompted, err := r.prompter.PromptValue(ctx, credentialName, field, warnOnPersistRequest, r.persistentSession)
 	if err != nil {
 		return "", err
 	}
@@ -233,14 +282,6 @@ func (r *Runtime) ensureSessionLoaded() error {
 			return internalError("failed to load prompt auth session credentials", err)
 		}
 		values = loaded
-		for key, value := range loaded {
-			if _, exists := os.LookupEnv(key); exists {
-				continue
-			}
-			if err := os.Setenv(key, value); err != nil {
-				return internalError("failed to apply prompt auth session credentials", err)
-			}
-		}
 	}
 
 	r.mu.Lock()
@@ -253,10 +294,6 @@ func (r *Runtime) ensureSessionLoaded() error {
 func (r *Runtime) persistField(key string, value string) error {
 	if err := r.ensureSessionLoaded(); err != nil {
 		return err
-	}
-
-	if err := os.Setenv(key, value); err != nil {
-		return internalError("failed to store prompt auth session value", err)
 	}
 
 	r.mu.Lock()
@@ -274,6 +311,48 @@ func (r *Runtime) persistField(key string, value string) error {
 	if err := store.Save(values); err != nil {
 		return internalError("failed to persist prompt auth session value", err)
 	}
+	return nil
+}
+
+// sessionValueFromMemory checks the in-memory session cache for a credential
+// value. This avoids leaking credentials into the process environment.
+func (r *Runtime) sessionValueFromMemory(key string) (string, bool) {
+	r.mu.Lock()
+	value, ok := r.sessionValues[key]
+	r.mu.Unlock()
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
+}
+
+// registerEnvKeyOwner records the credential name that owns a given env key
+// and returns an error if a different credential name already maps to the
+// same key, which would cause silent cross-contamination.
+// Must be called with r.mu held.
+func (r *Runtime) registerEnvKeyOwner(credentialName string) error {
+	if r.envKeyOwners == nil {
+		r.envKeyOwners = map[string]string{}
+	}
+	usernameKey, passwordKey := credentialEnvKeys(credentialName)
+	for _, key := range []string{usernameKey, passwordKey} {
+		if owner, exists := r.envKeyOwners[key]; exists && owner != credentialName {
+			return faults.NewValidationError(
+				fmt.Sprintf(
+					"credential %q and %q produce the same session key; use distinct credential names to avoid cross-contamination",
+					credentialName,
+					owner,
+				),
+				nil,
+			)
+		}
+	}
+	r.envKeyOwners[usernameKey] = credentialName
+	r.envKeyOwners[passwordKey] = credentialName
 	return nil
 }
 
@@ -315,6 +394,19 @@ func sessionValue(key string) (string, bool) {
 		return "", false
 	}
 	return value, true
+}
+
+func removeSessionCacheFile(path string) (bool, error) {
+	if strings.TrimSpace(path) == "" {
+		return false, nil
+	}
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func internalError(message string, cause error) error {

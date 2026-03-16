@@ -82,7 +82,8 @@ func TestCLIImportsFollowAllowedProjectBoundaries(t *testing.T) {
 	}
 
 	allowedExactImports := map[string]struct{}{
-		modulePrefix + "debugctx": {},
+		modulePrefix + "debugctx":            {},
+		modulePrefix + "internal/promptauth": {},
 	}
 
 	fset := token.NewFileSet()

@@ -47,12 +47,12 @@ func CompactContextCatalog(catalog ContextCatalog) ContextCatalog {
 }
 
 func metadataUsesDefaultBaseDir(cfg Context) bool {
-	repoBaseDir := normalizeContextBaseDir(contextRepositoryBaseDir(cfg))
+	repoBaseDir := normalizeContextBaseDir(ContextRepositoryBaseDir(cfg))
 	metadataBaseDir := normalizeContextBaseDir(cfg.Metadata.BaseDir)
 	return repoBaseDir != "" && metadataBaseDir != "" && repoBaseDir == metadataBaseDir
 }
 
-func contextRepositoryBaseDir(cfg Context) string {
+func ContextRepositoryBaseDir(cfg Context) string {
 	switch {
 	case cfg.Repository.Git != nil:
 		return cfg.Repository.Git.Local.BaseDir

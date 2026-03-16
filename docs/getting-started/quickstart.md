@@ -75,6 +75,16 @@ print -r -- 'fpath+=(~/.zfunc)' >> ~/.zshrc
 print -r -- 'autoload -U compinit && compinit' >> ~/.zshrc
 ```
 
+### Prompt credential session reuse (optional)
+
+If your context uses prompt-backed credentials with `persistInSession: true`, enable the session hook once per shell so later `declarest` commands can reuse the prompted values and clean them on shell exit:
+
+```bash
+eval "$(declarest context session-hook bash)"
+# or
+eval "$(declarest context session-hook zsh)"
+```
+
 #### Fish
 
 ```bash

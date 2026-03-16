@@ -43,40 +43,16 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 	alias := aliasForLogicalPath(logicalPath)
 	remoteID := alias
 
-	if template := effectiveIdentityTemplate(md.Alias); template != "" {
-		if pointer, ok, err := simpleIdentityPointer("resource.alias", template); err != nil {
-			return "", "", err
-		} else if ok {
-			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
-				return "", "", faults.NewValidationError("resource.alias must resolve from payload data", lookupErr)
-			} else if found {
-				alias = value
-			}
-		} else {
-			rendered, renderErr := renderIdentityTemplate("resource.alias", template, payload)
-			if renderErr != nil {
-				return "", "", renderErr
-			}
-			alias = rendered
-		}
+	if resolved, ok, err := resolveIdentityField("resource.alias", md.Alias, payload); err != nil {
+		return "", "", err
+	} else if ok {
+		alias = resolved
 	}
 
-	if template := effectiveIdentityTemplate(md.ID); template != "" {
-		if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
-			return "", "", err
-		} else if ok {
-			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
-				return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
-			} else if found {
-				remoteID = value
-			}
-		} else {
-			rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
-			if renderErr != nil {
-				return "", "", renderErr
-			}
-			remoteID = rendered
-		}
+	if resolved, ok, err := resolveIdentityField("resource.id", md.ID, payload); err != nil {
+		return "", "", err
+	} else if ok {
+		remoteID = resolved
 	}
 
 	if strings.TrimSpace(alias) == "" {
@@ -104,40 +80,16 @@ func ResolveAliasAndRemoteID(logicalPath string, md metadata.ResourceMetadata, p
 
 func ResolveAliasAndRemoteIDForListItem(payload map[string]any, md metadata.ResourceMetadata) (string, string, error) {
 	var alias string
-	if template := effectiveIdentityTemplate(md.Alias); template != "" {
-		if pointer, ok, err := simpleIdentityPointer("resource.alias", template); err != nil {
-			return "", "", err
-		} else if ok {
-			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
-				return "", "", faults.NewValidationError("resource.alias must resolve from payload data", lookupErr)
-			} else if found {
-				alias = value
-			}
-		} else {
-			rendered, renderErr := renderIdentityTemplate("resource.alias", template, payload)
-			if renderErr != nil {
-				return "", "", renderErr
-			}
-			alias = rendered
-		}
+	if resolved, ok, err := resolveIdentityField("resource.alias", md.Alias, payload); err != nil {
+		return "", "", err
+	} else if ok {
+		alias = resolved
 	}
 	if alias == "" {
-		if template := effectiveIdentityTemplate(md.ID); template != "" {
-			if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
-				return "", "", err
-			} else if ok {
-				if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
-					return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
-				} else if found {
-					alias = value
-				}
-			} else {
-				rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
-				if renderErr != nil {
-					return "", "", renderErr
-				}
-				alias = rendered
-			}
+		if resolved, ok, err := resolveIdentityField("resource.id", md.ID, payload); err != nil {
+			return "", "", err
+		} else if ok {
+			alias = resolved
 		}
 	}
 	if alias == "" {
@@ -149,25 +101,40 @@ func ResolveAliasAndRemoteIDForListItem(payload map[string]any, md metadata.Reso
 	}
 
 	remoteID := alias
-	if template := effectiveIdentityTemplate(md.ID); template != "" {
-		if pointer, ok, err := simpleIdentityPointer("resource.id", template); err != nil {
-			return "", "", err
-		} else if ok {
-			if value, found, lookupErr := lookupSimplePointer(payload, pointer); lookupErr != nil {
-				return "", "", faults.NewValidationError("resource.id must resolve from payload data", lookupErr)
-			} else if found {
-				remoteID = value
-			}
-		} else {
-			rendered, renderErr := renderIdentityTemplate("resource.id", template, payload)
-			if renderErr != nil {
-				return "", "", renderErr
-			}
-			remoteID = rendered
-		}
+	if resolved, ok, err := resolveIdentityField("resource.id", md.ID, payload); err != nil {
+		return "", "", err
+	} else if ok {
+		remoteID = resolved
 	}
 
 	return alias, remoteID, nil
+}
+
+// resolveIdentityField resolves an identity field (alias or id) from a raw
+// template string against the given payload. It returns the resolved value,
+// whether a value was found, and any error. The template is first checked as
+// a simple JSON pointer; if not, it is rendered as a full identity template.
+func resolveIdentityField(field string, rawTemplate string, payload any) (string, bool, error) {
+	template := effectiveIdentityTemplate(rawTemplate)
+
+	if pointer, ok, err := simpleIdentityPointer(field, template); err != nil {
+		return "", false, err
+	} else if ok {
+		value, found, lookupErr := lookupSimplePointer(payload, pointer)
+		if lookupErr != nil {
+			return "", false, faults.NewValidationError(field+" must resolve from payload data", lookupErr)
+		}
+		if found {
+			return value, true, nil
+		}
+		return "", false, nil
+	}
+
+	rendered, renderErr := renderIdentityTemplate(field, template, payload)
+	if renderErr != nil {
+		return "", false, renderErr
+	}
+	return rendered, true, nil
 }
 
 func RequiredAttributes(md metadata.ResourceMetadata) ([]string, error) {

@@ -25,6 +25,8 @@ import (
 	"strings"
 )
 
+const promptAuthSessionIDEnv = "DECLAREST_PROMPT_AUTH_SESSION_ID"
+
 type fileSessionStore struct {
 	path string
 }
@@ -105,7 +107,29 @@ func (s *fileSessionStore) Save(values map[string]string) error {
 }
 
 func defaultSessionFilePath() (string, error) {
-	sessionID := detectSessionID()
+	sessionID := persistentSessionID()
+	if sessionID == "" {
+		return "", nil
+	}
+
+	return runtimeSessionFilePathForSessionID(sessionID), nil
+}
+
+func persistentSessionID() string {
+	return strings.TrimSpace(os.Getenv(promptAuthSessionIDEnv))
+}
+
+func runtimeSessionFilePathForSessionID(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	runtimeDir := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR"))
+	if sessionID == "" || runtimeDir == "" {
+		return ""
+	}
+	return filepath.Join(runtimeDir, "declarest", "prompt-auth", sessionFileName(sessionID))
+}
+
+func legacySessionFilePathForSessionID(sessionID string) (string, error) {
+	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return "", nil
 	}
@@ -115,14 +139,17 @@ func defaultSessionFilePath() (string, error) {
 		return "", err
 	}
 
-	digest := sha256.Sum256([]byte(sessionID))
-	fileName := "prompt-auth-" + hex.EncodeToString(digest[:8]) + ".json"
-	return filepath.Join(homeDir, ".declarest", "sessions", fileName), nil
+	return filepath.Join(homeDir, ".declarest", "sessions", sessionFileName(sessionID)), nil
+}
+
+func sessionFileName(sessionID string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(sessionID)))
+	return "prompt-auth-" + hex.EncodeToString(digest[:8]) + ".json"
 }
 
 func detectSessionID() string {
 	for _, key := range []string{
-		"DECLAREST_PROMPT_AUTH_SESSION_ID",
+		promptAuthSessionIDEnv,
 		"TERM_SESSION_ID",
 		"TMUX_PANE",
 		"KITTY_WINDOW_ID",

@@ -85,3 +85,52 @@ func TestCompactContextCatalogForViewCompactsEntries(t *testing.T) {
 		t.Fatalf("expected compacted metadata base-dir, got %q", compacted.Contexts[0].Metadata.BaseDir)
 	}
 }
+
+func TestSelectContextCatalogForShowPreservesCatalogAttributes(t *testing.T) {
+	t.Parallel()
+
+	catalog := configdomain.ContextCatalog{
+		CurrentContext: "other",
+		DefaultEditor:  "vim",
+		Credentials: []configdomain.Credential{{
+			Name:     "shared-proxy-auth",
+			Username: configdomain.LiteralCredential("demo-user"),
+			Password: configdomain.LiteralCredential("demo-pass"),
+		}},
+		Contexts: []configdomain.Context{
+			{
+				Name: "dev",
+				Repository: configdomain.Repository{
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+				},
+				Metadata: configdomain.Metadata{BaseDir: "/tmp/repo"},
+			},
+			{
+				Name: "other",
+				Repository: configdomain.Repository{
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/other"},
+				},
+			},
+		},
+	}
+
+	shown, err := selectContextCatalogForShow(catalog, "dev")
+	if err != nil {
+		t.Fatalf("selectContextCatalogForShow returned error: %v", err)
+	}
+	if shown.CurrentContext != "dev" {
+		t.Fatalf("expected shown current context dev, got %q", shown.CurrentContext)
+	}
+	if shown.DefaultEditor != "vim" {
+		t.Fatalf("expected default editor vim, got %q", shown.DefaultEditor)
+	}
+	if len(shown.Credentials) != 1 || shown.Credentials[0].Name != "shared-proxy-auth" {
+		t.Fatalf("expected credentials to be preserved, got %#v", shown.Credentials)
+	}
+	if len(shown.Contexts) != 1 || shown.Contexts[0].Name != "dev" {
+		t.Fatalf("expected one shown context dev, got %#v", shown.Contexts)
+	}
+	if shown.Contexts[0].Metadata.BaseDir != "/tmp/repo" {
+		t.Fatalf("expected metadata base-dir to be preserved, got %q", shown.Contexts[0].Metadata.BaseDir)
+	}
+}

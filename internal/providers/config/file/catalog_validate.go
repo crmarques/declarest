@@ -130,7 +130,7 @@ func normalizeConfig(cfg config.Context) config.Context {
 func applyConfigDefaults(cfg config.Context) config.Context {
 	cfg = normalizeConfig(cfg)
 	if strings.TrimSpace(cfg.Metadata.Bundle) == "" && strings.TrimSpace(cfg.Metadata.BundleFile) == "" && cfg.Metadata.BaseDir == "" {
-		cfg.Metadata.BaseDir = contextRepositoryBaseDir(cfg)
+		cfg.Metadata.BaseDir = config.ContextRepositoryBaseDir(cfg)
 	}
 	cfg = applyProxyDefaults(cfg)
 	return cfg
@@ -281,17 +281,6 @@ func normalizeCredentialsRef(ref *config.CredentialsRef) *config.CredentialsRef 
 
 func compactConfigForPersistence(cfg config.Context) config.Context {
 	return config.CompactContext(cfg)
-}
-
-func contextRepositoryBaseDir(cfg config.Context) string {
-	switch {
-	case cfg.Repository.Git != nil:
-		return cfg.Repository.Git.Local.BaseDir
-	case cfg.Repository.Filesystem != nil:
-		return cfg.Repository.Filesystem.BaseDir
-	default:
-		return ""
-	}
 }
 
 func validateRepository(

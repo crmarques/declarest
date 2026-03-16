@@ -29,10 +29,10 @@ func TestWritePromptWarningWithArgs(t *testing.T) {
 		writePromptWarningWithArgs(
 			&buf,
 			nil,
-			"credentials for managed-server proxy auth will be stored in declarest session environment variables and reused by later declarest commands in this terminal session.",
+			"credentials for managed-server proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.",
 		)
 
-		want := "[WARNING] credentials for managed-server proxy auth will be stored in declarest session environment variables and reused by later declarest commands in this terminal session.\n"
+		want := "[WARNING] credentials for managed-server proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.\n"
 		if got := buf.String(); got != want {
 			t.Fatalf("writePromptWarningWithArgs() = %q, want %q", got, want)
 		}
@@ -52,10 +52,10 @@ func TestWritePromptWarningWithArgs(t *testing.T) {
 func TestSessionReuseScope(t *testing.T) {
 	t.Parallel()
 
-	if got, want := sessionReuseScope(false), "this declarest command"; got != want {
+	if got, want := sessionReuseScope(false), "cannot be kept across commands because runtime session storage is unavailable and will only be reused by this declarest command"; got != want {
 		t.Fatalf("sessionReuseScope(false) = %q, want %q", got, want)
 	}
-	if got, want := sessionReuseScope(true), "later declarest commands in this terminal session"; got != want {
+	if got, want := sessionReuseScope(true), "will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session"; got != want {
 		t.Fatalf("sessionReuseScope(true) = %q, want %q", got, want)
 	}
 }

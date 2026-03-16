@@ -31,6 +31,8 @@ credentials:
   #   password:
   #     prompt: true
   #     persistInSession: true
+  #   # Reuse across later declarest commands in one shell session:
+  #   # eval "$(declarest context session-hook bash)"
 
 contexts:
   - name: my-context

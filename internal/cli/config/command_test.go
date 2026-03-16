@@ -17,6 +17,8 @@ package config
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -180,6 +182,121 @@ func TestMigrateRewritesCatalogUsingEditorService(t *testing.T) {
 	}
 	if strings.TrimSpace(output) != "context catalog migrated" {
 		t.Fatalf("expected migrate output, got %q", output)
+	}
+}
+
+func TestCleanCredentialsInSessionRequiresTargetFlag(t *testing.T) {
+	t.Parallel()
+
+	_, err := executeConfigCommand(t, nil, &cliutil.GlobalFlags{}, "", "clean")
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !strings.Contains(err.Error(), "clean target flag") {
+		t.Fatalf("expected clean target validation error, got %v", err)
+	}
+}
+
+func TestCleanCredentialsInSessionRemovesPromptCredentialCacheFiles(t *testing.T) {
+	runtimeDir := t.TempDir()
+	homeDir := t.TempDir()
+	sessionID := "shell-session"
+	runtimePath := filepath.Join(runtimeDir, "declarest", "prompt-auth", promptAuthSessionFileName(sessionID))
+	legacyPath := filepath.Join(
+		homeDir,
+		".declarest",
+		"sessions",
+		promptAuthSessionFileName("DECLAREST_PROMPT_AUTH_SESSION_ID:"+sessionID),
+	)
+
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("DECLAREST_PROMPT_AUTH_SESSION_ID", sessionID)
+	writePromptAuthCacheFile(t, runtimePath)
+	writePromptAuthCacheFile(t, legacyPath)
+
+	output, err := executeConfigCommand(
+		t,
+		nil,
+		&cliutil.GlobalFlags{},
+		"",
+		"clean",
+		"--credentials-in-session",
+	)
+	if err != nil {
+		t.Fatalf("clean returned error: %v", err)
+	}
+	if strings.TrimSpace(output) != "removed 2 prompt credential session cache files" {
+		t.Fatalf("expected clean output, got %q", output)
+	}
+	if _, err := os.Stat(runtimePath); !os.IsNotExist(err) {
+		t.Fatalf("expected runtime cache file to be removed, got err=%v", err)
+	}
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy cache file to be removed, got err=%v", err)
+	}
+}
+
+func TestCleanCredentialsInSessionSucceedsWithoutCachedValues(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("DECLAREST_PROMPT_AUTH_SESSION_ID", "shell-session")
+
+	output, err := executeConfigCommand(
+		t,
+		nil,
+		&cliutil.GlobalFlags{},
+		"",
+		"clean",
+		"--credentials-in-session",
+	)
+	if err != nil {
+		t.Fatalf("clean returned error: %v", err)
+	}
+	if strings.TrimSpace(output) != "removed 0 prompt credential session cache files" {
+		t.Fatalf("expected clean output, got %q", output)
+	}
+}
+
+func TestSessionHookCommandOutputsShellCode(t *testing.T) {
+	t.Run("bash", func(t *testing.T) {
+		output, err := executeConfigCommand(t, nil, &cliutil.GlobalFlags{}, "", "session-hook", "bash")
+		if err != nil {
+			t.Fatalf("session-hook bash returned error: %v", err)
+		}
+		required := []string{
+			`export DECLAREST_PROMPT_AUTH_SESSION_ID="bash:${BASHPID:-$$}"`,
+			"command declarest context clean --credentials-in-session >/dev/null 2>&1 || true",
+			`trap 'declarest_prompt_auth_on_exit' EXIT`,
+		}
+		for _, snippet := range required {
+			if !strings.Contains(output, snippet) {
+				t.Fatalf("expected bash hook output to contain %q, got %q", snippet, output)
+			}
+		}
+	})
+
+	t.Run("zsh", func(t *testing.T) {
+		output, err := executeConfigCommand(t, nil, &cliutil.GlobalFlags{}, "", "session-hook", "zsh")
+		if err != nil {
+			t.Fatalf("session-hook zsh returned error: %v", err)
+		}
+		required := []string{
+			`export DECLAREST_PROMPT_AUTH_SESSION_ID="zsh:$$"`,
+			"command declarest context clean --credentials-in-session >/dev/null 2>&1 || true",
+			"typeset -ga zshexit_functions",
+		}
+		for _, snippet := range required {
+			if !strings.Contains(output, snippet) {
+				t.Fatalf("expected zsh hook output to contain %q, got %q", snippet, output)
+			}
+		}
+	})
+}
+
+func TestSessionHookCommandRejectsUnsupportedShell(t *testing.T) {
+	_, err := executeConfigCommand(t, nil, &cliutil.GlobalFlags{}, "", "session-hook", "fish")
+	assertTypedCategory(t, err, faults.ValidationError)
+	if err == nil || !strings.Contains(err.Error(), "bash or zsh") {
+		t.Fatalf("expected shell validation error, got %v", err)
 	}
 }
 
@@ -1543,12 +1660,20 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		listValue: []configdomain.Context{{
-			Name: "prod",
-			Repository: configdomain.Repository{
-				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
-			},
-		}},
+		catalogValue: configdomain.ContextCatalog{
+			CurrentContext: "dev",
+			Credentials: []configdomain.Credential{{
+				Name:     "shared-proxy-auth",
+				Username: configdomain.LiteralCredential("proxy-user"),
+				Password: configdomain.LiteralCredential("proxy-pass"),
+			}},
+			Contexts: []configdomain.Context{{
+				Name: "prod",
+				Repository: configdomain.Repository{
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				},
+			}},
+		},
 	}
 	prompter := &mockPrompter{interactive: true}
 	globalFlags := &cliutil.GlobalFlags{
@@ -1563,8 +1688,14 @@ func TestShowUsesContextFlagWhenProvided(t *testing.T) {
 	if service.resolveCalled {
 		t.Fatal("expected show to read stored context without calling resolve")
 	}
-	if !strings.Contains(output, "name: prod") {
-		t.Fatalf("expected YAML output with context name prod, got %q", output)
+	if !strings.Contains(output, "contexts:") || !strings.Contains(output, "name: prod") {
+		t.Fatalf("expected one-context catalog output for prod, got %q", output)
+	}
+	if !strings.Contains(output, "currentContext: prod") {
+		t.Fatalf("expected shown currentContext to be prod, got %q", output)
+	}
+	if !strings.Contains(output, "credentials:") {
+		t.Fatalf("expected catalog-scoped credentials in show output, got %q", output)
 	}
 }
 
@@ -1572,12 +1703,15 @@ func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		listValue: []configdomain.Context{{
-			Name: "prod",
-			Repository: configdomain.Repository{
-				Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
-			},
-		}},
+		catalogValue: configdomain.ContextCatalog{
+			CurrentContext: "dev",
+			Contexts: []configdomain.Context{{
+				Name: "prod",
+				Repository: configdomain.Repository{
+					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+				},
+			}},
+		},
 	}
 	prompter := &mockPrompter{interactive: false}
 
@@ -1596,8 +1730,11 @@ func TestShowUsesPositionalContextNameWhenProvided(t *testing.T) {
 	if service.resolveCalled {
 		t.Fatal("expected show to read stored context without calling resolve")
 	}
-	if !strings.Contains(output, "name: prod") {
-		t.Fatalf("expected YAML output with context name prod, got %q", output)
+	if !strings.Contains(output, "contexts:") || !strings.Contains(output, "name: prod") {
+		t.Fatalf("expected one-context catalog output for prod, got %q", output)
+	}
+	if !strings.Contains(output, "currentContext: prod") {
+		t.Fatalf("expected shown currentContext to be prod, got %q", output)
 	}
 }
 
@@ -1640,6 +1777,23 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 				},
 			},
 		},
+		catalogValue: configdomain.ContextCatalog{
+			CurrentContext: "prod",
+			Contexts: []configdomain.Context{
+				{
+					Name: "dev",
+					Repository: configdomain.Repository{
+						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/dev"},
+					},
+				},
+				{
+					Name: "prod",
+					Repository: configdomain.Repository{
+						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/prod"},
+					},
+				},
+			},
+		},
 	}
 	prompter := &mockPrompter{
 		interactive: true,
@@ -1654,33 +1808,63 @@ func TestShowInteractiveSelectionWhenContextFlagMissing(t *testing.T) {
 	if service.resolveCalled {
 		t.Fatal("expected interactive show to read stored context without calling resolve")
 	}
-	if !strings.Contains(output, "name: dev") {
-		t.Fatalf("expected YAML output with context name dev, got %q", output)
+	if !strings.Contains(output, "contexts:") || !strings.Contains(output, "name: dev") {
+		t.Fatalf("expected one-context catalog output for dev, got %q", output)
+	}
+	if !strings.Contains(output, "currentContext: dev") {
+		t.Fatalf("expected shown currentContext to be dev, got %q", output)
 	}
 }
 
-func TestShowOmitsDefaultMetadataBaseDir(t *testing.T) {
+func TestShowPreservesCatalogAttributesAndExplicitMetadataBaseDir(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{
-		listValue: []configdomain.Context{
-			{
-				Name: "dev",
-				Repository: configdomain.Repository{
-					Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
-				},
-				ManagedServer: &configdomain.ManagedServer{
-					HTTP: &configdomain.HTTPServer{
-						BaseURL: "https://example.com/api",
-						Auth: &configdomain.HTTPAuth{
-							CustomHeaders: []configdomain.HeaderTokenAuth{{
-								Header: "Authorization",
-								Value:  "token",
-							}},
-						},
+		catalogValue: configdomain.ContextCatalog{
+			CurrentContext: "prod",
+			DefaultEditor:  "vim",
+			Credentials: []configdomain.Credential{{
+				Name: "shared-proxy-auth",
+				Username: configdomain.CredentialValue{
+					Prompt: &configdomain.CredentialPrompt{
+						Prompt:           true,
+						PersistInSession: true,
 					},
 				},
-				Metadata: configdomain.Metadata{BaseDir: "/tmp/repo"},
+				Password: configdomain.CredentialValue{
+					Prompt: &configdomain.CredentialPrompt{
+						Prompt:           true,
+						PersistInSession: true,
+					},
+				},
+			}},
+			Contexts: []configdomain.Context{
+				{
+					Name: "dev",
+					Repository: configdomain.Repository{
+						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
+					},
+					ManagedServer: &configdomain.ManagedServer{
+						HTTP: &configdomain.HTTPServer{
+							BaseURL: "https://example.com/api",
+							Proxy: &configdomain.HTTPProxy{
+								HTTPURL: "http://proxy.example.com:3128",
+								Auth: &configdomain.ProxyAuth{
+									Basic: &configdomain.BasicAuth{
+										CredentialsRef: &configdomain.CredentialsRef{Name: "shared-proxy-auth"},
+									},
+								},
+							},
+							Auth: &configdomain.HTTPAuth{
+								CustomHeaders: []configdomain.HeaderTokenAuth{{
+									Header: "Authorization",
+									Value:  "token",
+								}},
+							},
+						},
+					},
+					Metadata: configdomain.Metadata{BaseDir: "/tmp/repo"},
+				},
 			},
 		},
 	}
@@ -1696,8 +1880,23 @@ func TestShowOmitsDefaultMetadataBaseDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show returned error: %v", err)
 	}
-	if strings.Contains(output, "metadata:") {
-		t.Fatalf("expected compact show output to omit default metadata block, got %q", output)
+	requiredSnippets := []string{
+		"defaultEditor: vim",
+		"credentials:",
+		"prompt: true",
+		"persistInSession: true",
+		"contexts:",
+		"name: dev",
+		"currentContext: dev",
+		"metadata:",
+		"baseDir: /tmp/repo",
+		"credentialsRef:",
+		"name: shared-proxy-auth",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected show output to contain %q, got %q", snippet, output)
+		}
 	}
 }
 
@@ -2208,6 +2407,22 @@ func (a *testConfigServiceAccessor) SecretProvider() secretsdomain.SecretProvide
 }
 func (a *testConfigServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
 	return a.server
+}
+
+func promptAuthSessionFileName(sessionID string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(sessionID)))
+	return "prompt-auth-" + hex.EncodeToString(digest[:8]) + ".json"
+}
+
+func writePromptAuthCacheFile(t *testing.T, path string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("MkdirAll(%q) returned error: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(`{"DECLAREST_CONTEXT_CREDENTIAL_SHARED_USERNAME":"user"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q) returned error: %v", path, err)
+	}
 }
 
 func assertTypedCategory(t *testing.T, err error, category faults.ErrorCategory) {

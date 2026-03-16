@@ -244,21 +244,25 @@ Goal: reuse one named prompt-backed credential across multiple components withou
 Inputs:
 1. Catalog credential `shared-login` with prompt-backed `username` and `password`, both using `persistInSession: true`.
 2. Context with `managedServer.http.auth.basic.credentialsRef.name=shared-login`, `repository.git.remote.auth.basic.credentialsRef.name=shared-login`, and `managedServer.http.proxy.auth.basic.credentialsRef.name=shared-login`.
-3. One runtime command that uses the managed server and git repository.
+3. The user evaluated `declarest context session-hook bash` or `declarest context session-hook zsh` in the current shell before running runtime commands.
+4. One runtime command that uses the managed server and git repository.
 
 Execution:
 1. Startup resolves the context without prompting because prompt-backed credential attributes are deferred.
-2. The first component that needs credentials prompts for username/password and warns that credentials will be kept for the terminal session.
-3. Runtime applies the resolved credential values to the requesting component and persists them for the session.
-4. Later commands on the same terminal session reuse the kept credential values for any component that references `shared-login`.
+2. The first component that needs credentials prompts for username/password and warns that credentials will be reused for later `declarest` commands in the current shell session.
+3. Runtime applies the resolved credential values to the requesting component and persists them only under `XDG_RUNTIME_DIR/declarest/prompt-auth/`.
+4. Later commands on the same shell session reuse the kept credential values for any component that references `shared-login`.
+5. When the shell exits, the registered session-hook cleanup removes the runtime cache file.
 
 Expected outputs:
 1. Persisted catalog YAML still contains only the top-level prompt-backed credential definition plus `credentialsRef` placeholders in context components.
-2. One terminal session prompts at most once per prompt-backed credential attribute when session persistence is enabled.
+2. One hooked shell session prompts at most once per prompt-backed credential attribute when runtime session storage is available.
 3. Later commands can reuse the kept credential values without another prompt when session persistence is available.
+4. A new shell session prompts again because the previous session cache file was removed on exit.
 
 Failure expectation:
 1. A non-interactive command with uncached prompt-backed credential attributes fails with `ValidationError`.
+2. When `XDG_RUNTIME_DIR` is unavailable, `persistInSession: true` does not create a cross-command cache file and later `declarest` commands prompt again.
 
 ### Example 12: Resource Defaults Managed-Server Probe Safety
 Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
