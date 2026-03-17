@@ -70,7 +70,7 @@ $(DOCS_VENV_STAMP): $(DOCS_VENV_PYTHON) $(DOCS_REQUIREMENTS)
 docs-deps: $(DOCS_VENV_STAMP) ## Create or refresh the MkDocs virtualenv dependencies
 
 docs: docs-deps ## Build the MkDocs documentation site locally
-	@$(DOCS_VENV_MKDOCS) build --strict --clean --site-dir .docs
+	@PYTHONDONTWRITEBYTECODE=1 $(DOCS_VENV_MKDOCS) build --strict --clean --site-dir .docs
 
 build: ## Compile the declarest binary into $(BIN_DIR)/
 	@mkdir -p $(BIN_DIR)
@@ -104,9 +104,7 @@ clean: ## Remove build artifacts and transient docs/e2e outputs
 		deactivate; \
 	fi
 	rm -rf $(BIN_DIR) $(DOCS_SITE_DIRS) $(E2E_RUNS_DIR) $(E2E_BUILD_DIR) $(DOCS_VENV_DIR)
-	@if [ -d test/e2e/components ]; then \
-		find test/e2e/components -type d -name '__pycache__' -prune -exec rm -rf {} +; \
-	fi
+	find docs test/e2e/components -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
 
 tidy: ## Reconcile go.mod and go.sum with the current imports
 	$(GO) mod tidy
