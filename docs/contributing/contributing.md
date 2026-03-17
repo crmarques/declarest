@@ -85,6 +85,45 @@ Tagging a semver version (for example `v1.2.3`) triggers both release flows.
 
 When docs are built from a release tag, examples use that tag's DeclaREST version automatically. For local builds you can override the rendered version with `DECLAREST_DOCS_VERSION=<version>`.
 
+## E2E component system
+
+The `test/e2e` directory contains a component-based E2E harness.
+
+### Entry points
+
+- Main runner: `test/e2e/run-e2e.sh`
+- Fast Bash contract tests: `test/e2e/tests/run.sh`
+- Component contract reference: `test/e2e/components/STANDARD.md`
+
+### Component categories
+
+Components live under `test/e2e/components/` and are grouped by concern:
+
+- `managed-server/`
+- `repo-type/`
+- `git-provider/`
+- `secret-provider/`
+
+The harness composes these into a runnable profile/environment.
+
+### Adding a component
+
+Read these files first:
+
+1. `test/e2e/components/STANDARD.md`
+2. `test/e2e/lib/components_catalog.sh`
+3. `test/e2e/lib/components_runtime.sh`
+4. `test/e2e/lib/components_validate.sh`
+
+Validation:
+
+```bash
+./test/e2e/run-e2e.sh --validate-components
+./test/e2e/tests/run.sh
+```
+
+Keep component definitions deterministic and shellcheck-friendly. Prefer reusable hooks/scripts under the component directory. Update `STANDARD.md` when the component contract changes.
+
 ## Contribution checklist
 
 1. Make the smallest coherent change.

@@ -12,13 +12,13 @@ Managing API configurations usually means scripts, manual UI clicks, and changes
 2. **Edit** the file to match what you want.
 3. **Apply** the change back — DeclaREST handles the diff and the HTTP calls.
 
-That’s it. Your configuration lives in Git, with full history, pull requests, and repeatable automation.
+That's it. Your configuration lives in Git, with full history, pull requests, and repeatable automation.
 
 ## What makes it different
 
 - **Stable logical paths** — use `/corporations/acme` instead of raw endpoint URLs
 - **Git as source of truth** — review changes before they hit the API
-- **Metadata-driven adaptation** — works with APIs that aren’t clean REST
+- **Metadata-driven adaptation** — works with APIs that aren't clean REST
 - **Compact repository layout** — metadata-backed defaults keep shared values out of `resource.<ext>`
 - **Secret placeholders** — no plaintext credentials in your repository
 - **Two modes** — CLI for on-demand work, Kubernetes Operator for continuous sync
@@ -42,7 +42,7 @@ declarest resource apply /corporations/acme # apply new desired state to managed
 
 Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`, then verify reconciliation:
 
-- [Quickstart](getting-started/quickstart-operator.md)
+- [Quickstart (Operator)](getting-started/quickstart-operator.md)
 
 ## Capabilities snapshot
 
@@ -72,15 +72,7 @@ DeclaREST is usually not the best fit when:
 
 ## Start here
 
-- [Quickstart (CLI)](getting-started/quickstart.md) — includes CLI installation and first-run setup
-- [Quickstart (Operator - recommended)](getting-started/quickstart-operator.md)
-- [Troubleshooting](getting-started/troubleshooting.md)
-
-## For advanced API modeling
-
-When your API uses inconsistent paths, mixed collections, or per-operation payload quirks:
-
-- [Metadata overview](concepts/metadata.md)
-- [Metadata Overrides](concepts/metadata-overrides.md)
-- [Custom Paths](concepts/metadata-custom-paths.md)
-- [Advanced Metadata Configuration](workflows/advanced-metadata-configuration.md)
+- [Quickstart (CLI)](getting-started/quickstart-cli.md) — includes CLI installation and first-run setup
+- [Quickstart (Operator)](getting-started/quickstart-operator.md)
+- [Core Concepts](guide/core-concepts.md) — understand the building blocks
+- [Troubleshooting](topics/troubleshooting.md)

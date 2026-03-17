@@ -1,8 +1,6 @@
-# Architecture deep dive
+# Architecture
 
-> This section is for users who want to understand DeclaREST internals or contribute to the project. For daily usage, the [Concepts](../concepts/overview.md) and [How-to](../workflows/sync.md) sections are sufficient.
-
-This page describes how DeclaREST components fit together, how data flows through the system, and what design choices shape the implementation.
+> This page is for contributors and power users who want to understand DeclaREST internals. For daily usage, the [Guide](../guide/core-concepts.md) section is sufficient.
 
 ## High-level data flow
 
@@ -33,11 +31,9 @@ This page describes how DeclaREST components fit together, how data flows throug
                     └───────────────┘
 ```
 
-The orchestrator is the coordination boundary. It composes repository, metadata, managed-server, and secret operations into deterministic workflows. CLI commands and operator controllers both delegate to the orchestrator — they never call providers directly.
+The orchestrator is the coordination boundary. It composes repository, metadata, managed-server, and secret operations into deterministic workflows. CLI commands and operator controllers both delegate to the orchestrator -- they never call providers directly.
 
 ## Layer model
-
-DeclaREST follows a strict layered architecture with explicit dependency rules:
 
 ```text
 ┌─────────────────────────────────────────────────┐
@@ -66,7 +62,7 @@ DeclaREST follows a strict layered architecture with explicit dependency rules:
 - CLI layer depends on domain packages but never on providers.
 - App layer depends on domain packages but never on CLI or providers.
 - Providers never import sibling providers.
-- Bootstrap is the only place that knows about concrete implementations — it wires everything together at startup.
+- Bootstrap is the only place that knows about concrete implementations.
 
 These rules are enforced by boundary tests that parse Go imports and fail on violations.
 
@@ -85,13 +81,13 @@ These rules are enforced by boundary tests that parse Go imports and fail on vio
 
 A typical `resource apply` flow:
 
-1. **Load local** — read desired-state payload from the repository.
-2. **Resolve metadata** — merge metadata layers to determine operation specs.
-3. **Resolve secrets** — expand {% raw %}`{{secret .}}`{% endraw %} placeholders in the payload.
-4. **Read remote** — fetch current state from the managed server.
-5. **Compare** — diff desired vs actual using metadata compare transforms.
-6. **Decide** — skip if no drift (unless `--force`), create if remote returns `NotFound`, update otherwise.
-7. **Mutate** — send the create/update request with metadata-rendered headers, path, and body transforms.
+1. **Load local** -- read desired-state payload from the repository.
+2. **Resolve metadata** -- merge metadata layers to determine operation specs.
+3. **Resolve secrets** -- expand {% raw %}`{{secret .}}`{% endraw %} placeholders in the payload.
+4. **Read remote** -- fetch current state from the managed server.
+5. **Compare** -- diff desired vs actual using metadata compare transforms.
+6. **Decide** -- skip if no drift (unless `--force`), create if remote returns `NotFound`, update otherwise.
+7. **Mutate** -- send the create/update request with metadata-rendered headers, path, and body transforms.
 
 Each step is bounded: no unbounded retries, no cascading searches. If a step fails, a typed error is returned immediately.
 
@@ -99,21 +95,16 @@ Each step is bounded: no unbounded retries, no cascading searches. If a step fai
 
 - **Normalized paths:** all logical paths are absolute and normalized before any I/O.
 - **Metadata-first identity:** resource identity resolves through metadata `resource.id`/`resource.alias` templates before raw API response.
-- **Bounded fallback:** read fallbacks (literal -> collection list/filter) are always bounded by one level — no recursive search.
+- **Bounded fallback:** read fallbacks (literal -> collection list/filter) are bounded by one level.
 - **Stable ordering:** list and diff outputs use deterministic ordering for equivalent inputs.
 - **Typed errors:** every error path maps to a specific category (`ValidationError`, `NotFoundError`, `ConflictError`, `AuthError`, `TransportError`, `InternalError`), which maps to a deterministic CLI exit code.
 
 ## Execution modes
 
-### CLI mode
+Both CLI and Operator share the same orchestrator and provider implementations -- the only difference is the entry point and trigger model.
 
-Explicit user or CI invocation. Each command maps to one orchestrator workflow. The CLI layer handles argument parsing, output formatting, and status reporting. Best for on-demand tasks, scripting, and CI pipelines.
-
-### Operator mode
-
-A Kubernetes reconciliation loop around the same orchestrator workflows. Four CRDs (`ResourceRepository`, `ManagedServer`, `SecretStore`, `SyncPolicy`) define the desired configuration. The operator controller watches for changes and reconciles through the standard save/diff/apply cycle.
-
-Both modes share the same orchestrator and provider implementations — the only difference is the entry point and trigger model.
+- **CLI**: explicit user or CI invocation. Each command maps to one orchestrator workflow.
+- **Operator**: Kubernetes reconciliation loop. Four CRDs define desired configuration; the controller reconciles through the same save/diff/apply cycle.
 
 ## Extension points
 
@@ -123,9 +114,9 @@ Both modes share the same orchestrator and provider implementations — the only
 - **Metadata bundles** for distributing reusable metadata packages across teams.
 - **Operator CRD composition** for multi-server, multi-repository continuous sync topologies.
 
-## Common architecture tradeoffs
+## Architecture tradeoffs
 
 - More metadata flexibility increases modeling power but also review complexity. Start with defaults and override only what you need.
 - Operator mode improves convergence and reduces manual work, but adds cluster runtime dependencies.
-- Git backend adds auditability and promotion flows (PRs, branches), but requires network access and auth configuration.
+- Git backend adds auditability and promotion flows, but requires network access and auth configuration.
 - Bundle metadata simplifies distribution but adds a caching and versioning layer.

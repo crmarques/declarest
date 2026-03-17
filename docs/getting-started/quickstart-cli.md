@@ -164,7 +164,6 @@ declarest resource get /corporations/acme
 
 ## What to learn next
 
-- [Contexts](../concepts/context.md) — understand how contexts connect everything
-- [Paths and Selectors](../concepts/paths-and-selectors.md) — learn the path model
-- [Metadata overview](../concepts/metadata.md) — adapt DeclaREST to non-REST APIs
+- [Core Concepts](../guide/core-concepts.md) — understand all the building blocks
+- [Working with Resources](../guide/working-with-resources.md) — day-to-day operations
 - [Configuration reference](../reference/configuration.md) — all context options

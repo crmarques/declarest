@@ -147,6 +147,6 @@ You should see the new attempted/applied revision and updated sync timestamps.
 
 ## Next steps
 
-- [Operator model](../concepts/operator.md)
-- [Run the Operator](../workflows/operator.md)
+- [Core Concepts](../guide/core-concepts.md) — understand all the building blocks
+- [Running the Operator](../guide/running-the-operator.md) — full operational model
 - [Operator CRDs reference](../reference/operator-crds.md)

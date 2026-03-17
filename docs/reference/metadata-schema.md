@@ -78,7 +78,4 @@ Defines reusable defaults for transforms/compare behavior that operations can in
 
 ## Related docs
 
-- [Metadata Overview](../concepts/metadata.md)
-- [Metadata Overrides](../concepts/metadata-overrides.md)
-- [Custom Paths](../concepts/metadata-custom-paths.md)
-- [Advanced Metadata Configuration](../workflows/advanced-metadata-configuration.md)
+- [Metadata and API Modeling](../guide/metadata-and-api-modeling.md)

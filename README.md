@@ -5,109 +5,131 @@
 </p>
 
 <p align="center">
-  Declarative resource sync between Git and REST APIs
+  <strong>Declarative resource sync between Git and REST APIs</strong>
 </p>
 
-DeclaREST turns REST API resources into versioned desired-state files you can review in Git and reconcile through a CLI.
+<p align="center">
+  <a href="docs/getting-started/quickstart-cli.md">Quickstart</a> &middot;
+  <a href="docs/guide/core-concepts.md">Concepts</a> &middot;
+  <a href="docs/reference/cli.md">CLI Reference</a> &middot;
+  <a href="docs/contributing/contributing.md">Contributing</a>
+</p>
 
-## Project objective (10 seconds)
+---
 
-- Use stable logical paths (`/corporations/acme`) instead of raw endpoint shapes.
-- Keep desired state in `resource.json|yaml` files inside a repository, with metadata-backed `resource.defaults` for shared values.
-- Reconcile safely in both directions: `save` from API, `diff`, then `apply` back.
+Managing API configurations usually means scripts, manual UI clicks, and changes nobody can review or reproduce. DeclaREST replaces that with a simple model: **store desired state in Git, and let DeclaREST keep your systems in sync.**
 
-## How it works
-
-![DeclaREST architecture](docs/assets/architecture.png)
-
-1. A **context** defines repository, managed-server, auth, and optional metadata/secret providers.
-2. **Metadata** maps logical paths to real API paths/methods/transforms.
-3. The **CLI** runs deterministic workflows for read, diff, and mutation.
-
-## Fast happy path
+## See it in action
 
 ```bash
+# 1. Set up a context (interactive — connects a Git repo to a REST API)
 declarest context add
 
+# 2. Pull a resource from the API into a local file
 declarest resource save /corporations/acme
-# edit repository file
 
+# 3. Edit the file to match what you want
+declarest resource edit /corporations/acme
+
+# 4. See exactly what will change
 declarest resource diff /corporations/acme
+
+# 5. Apply the change — DeclaREST handles the HTTP calls
 declarest resource apply /corporations/acme
 ```
 
-## Current capabilities
+That's it. Your configuration now lives in Git with full history, pull requests, and repeatable automation.
 
-- Resource workflows: `get|list|save|diff|explain|apply|create|update|delete|edit|copy` plus `resource defaults get|edit|config|profile|infer` and `--prune-defaults` compaction
-- Raw HTTP workflows: `resource request <method>` for targeted debugging or ad-hoc operations
-- Metadata workflows: `get|resolve|render|infer|set|unset` with OpenAPI and bundle-aware defaults
-- Secret safety workflows: detect/fix metadata, store/mask/resolve placeholders, safe-save guards
-- Repository workflows: `status|tree|history|commit|refresh|push|reset|clean|check`
-- Context workflows: template/validate/add/update/resolve with runtime override support
-- Kubernetes operator workflows: multi-CRD repo-to-managed-server sync (`ResourceRepository`, `ManagedServer`, `SecretStore`, `SyncPolicy`)
+## Why DeclaREST?
+
+| Problem | DeclaREST solution |
+|---|---|
+| API configs are scattered and untracked | Git becomes the single source of truth |
+| No review process for infrastructure changes | Every change is a commit you can review in a PR |
+| Raw API endpoints vary wildly across products | Stable logical paths like `/corporations/acme` abstract the mess |
+| Credentials leak into config files | Secret placeholders (`{{secret .}}`) keep plaintext out of Git |
+| Manual sync is error-prone | Deterministic save/diff/apply workflow catches drift |
+| Need both local debugging and production sync | CLI for on-demand work, Kubernetes Operator for continuous reconciliation |
+
+## How it works
+
+<p align="center">
+  <img src="docs/assets/usage-flow.png" alt="DeclaREST usage flow" width="650">
+</p>
+
+A **context** ties everything together: a Git repository, a managed REST API server, optional metadata for API modeling, and a secret provider. From there:
+
+- **Metadata** maps logical paths to real API endpoints, methods, and transforms — so you don't have to think in raw HTTP.
+- The **CLI** runs deterministic workflows: save, diff, apply, and more.
+- The **Kubernetes Operator** watches your Git repo and reconciles continuously, so production stays in sync without manual intervention.
 
 ## Install
 
-Use a release binary or build locally:
+Download a release binary or build from source:
 
 ```bash
 go build -o bin/declarest ./cmd/declarest
 ./bin/declarest version
 ```
 
-## Kubernetes Operator (MVP)
+## What you can do
 
-Build and run the operator manager locally:
+**Resource workflows** — the core loop:
 
-```bash
-make operator-build
-make operator-run
+```
+save  diff  apply  get  list  edit  copy  create  update  delete  explain
 ```
 
-Cluster manifests and samples are under:
+**Metadata workflows** — model any API shape:
 
-- `config/default`
-- `config/samples`
-
-## Quickstart
-
-```bash
-declarest context add
-
-declarest resource save /corporations/acme
-declarest resource diff /corporations/acme
-declarest resource apply /corporations/acme
+```
+get  resolve  render  infer  set  unset
 ```
 
-If you prefer file-based context setup:
+**Repository workflows** — Git operations without leaving DeclaREST:
 
-```bash
-declarest context print-template > /tmp/contexts.yaml
-# edit /tmp/contexts.yaml
-declarest context add --payload /tmp/contexts.yaml --set-current
+```
+status  tree  history  commit  refresh  push  reset  clean  check
 ```
 
-## Documentation map
+**Secret workflows** — keep credentials safe:
 
-Start here:
+```
+detect  store  mask  resolve          # plus safe-save guards on every write
+```
 
-- `docs/index.md`
-- `docs/getting-started/quickstart.md`
-- `docs/concepts/overview.md`
+**Kubernetes Operator** — continuous GitOps reconciliation with four CRDs:
 
-Advanced modeling:
+```
+ResourceRepository    ManagedServer    SecretStore    SyncPolicy
+```
 
-- `docs/concepts/metadata.md`
-- `docs/concepts/metadata-overrides.md`
-- `docs/concepts/metadata-custom-paths.md`
-- `docs/workflows/advanced-metadata-configuration.md`
-- `docs/workflows/custom-api-modeling.md`
+## Kubernetes Operator
 
-Reference:
+For continuous sync in production, DeclaREST ships a Kubernetes Operator that watches your Git repository and reconciles resources automatically.
 
-- `docs/reference/configuration.md`
-- `docs/reference/cli.md`
+```bash
+kubectl apply -k config/default    # install CRDs + controller
+```
+
+See the [Operator Quickstart](docs/getting-started/quickstart-operator.md) for a full walkthrough.
+
+## Documentation
+
+| Section | What you'll learn |
+|---|---|
+| [Quickstart (CLI)](docs/getting-started/quickstart-cli.md) | Install, configure, and run your first save/diff/apply |
+| [Quickstart (Operator)](docs/getting-started/quickstart-operator.md) | Deploy the operator and set up continuous sync |
+| [Core Concepts](docs/guide/core-concepts.md) | Contexts, resources, metadata, secrets, and Git workflows |
+| [Working with Resources](docs/guide/working-with-resources.md) | Day-to-day resource operations in depth |
+| [Metadata & API Modeling](docs/guide/metadata-and-api-modeling.md) | Map any REST API to stable logical paths |
+| [Managing Secrets](docs/guide/managing-secrets.md) | Placeholder lifecycle and secret providers |
+| [Repository & Git Workflows](docs/guide/repository-and-git-workflows.md) | Branching, committing, and pushing from the CLI |
+| [Running the Operator](docs/guide/running-the-operator.md) | CRD configuration and production setup |
+| [Troubleshooting](docs/topics/troubleshooting.md) | Common issues and diagnosis checklist |
+
+Full reference: [CLI](docs/reference/cli.md) &middot; [Configuration](docs/reference/configuration.md) &middot; [Metadata Schema](docs/reference/metadata-schema.md) &middot; [Operator CRDs](docs/reference/operator-crds.md)
 
 ## Contributing
 
-See `docs/contributing.md` for development, testing, docs, and release workflows.
+See [Contributing](docs/contributing/contributing.md) for development setup, testing, documentation, and release workflows.

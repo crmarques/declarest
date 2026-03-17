@@ -25,43 +25,22 @@ theme:
 nav:
   - Home: index.md
   - Getting Started:
-      - Quickstart (CLI): getting-started/quickstart.md
+      - Quickstart (CLI): getting-started/quickstart-cli.md
       - Quickstart (Operator): getting-started/quickstart-operator.md
-      - Troubleshooting: getting-started/troubleshooting.md
-  - Concepts:
-      - Overview: concepts/overview.md
-      - Contexts: concepts/context.md
-      - Resource Files: concepts/resource.md
-      - Paths and Selectors: concepts/paths-and-selectors.md
-      - Repository: concepts/repository.md
-      - Managed Server: concepts/managed-server.md
-      - Metadata Overview: concepts/metadata.md
-      - Metadata Overrides: concepts/metadata-overrides.md
-      - Secrets: concepts/secrets.md
-      - Git repository as source of truth: concepts/git-source-of-truth.md
-      - CLI role in GitOps: concepts/cli-in-gitops.md
-      - Operator model: concepts/operator.md
-  - How-to:
-      - Sync Resources (CLI/CI): workflows/sync.md
-      - Repository Operations: workflows/repository.md
-      - Editing Metadata and Contexts: workflows/editing.md
-      - Secrets and Safe Save: workflows/secrets-and-safe-save.md
-      - Inspect and Debug Mappings: workflows/ad-hoc.md
-      - Custom API Modeling Recipes: workflows/custom-api-modeling.md
-      - Custom Paths: concepts/metadata-custom-paths.md
-      - Advanced Metadata Configuration: workflows/advanced-metadata-configuration.md
-      - Run the Operator: workflows/operator.md
+  - Guide:
+      - Core Concepts: guide/core-concepts.md
+      - Working with Resources: guide/working-with-resources.md
+      - Managing Secrets: guide/managing-secrets.md
+      - Metadata and API Modeling: guide/metadata-and-api-modeling.md
+      - Repository and Git Workflows: guide/repository-and-git-workflows.md
+      - Running the Operator: guide/running-the-operator.md
   - Reference:
-      - Configuration: reference/configuration.md
       - CLI: reference/cli.md
+      - Configuration: reference/configuration.md
+      - Metadata Schema: reference/metadata-schema.md
       - Operator CRDs: reference/operator-crds.md
-      - Syntax (paths/selectors/placeholders): reference/syntax.md
-      - Metadata schema reference: reference/metadata-schema.md
-  - Advanced:
-      - Architecture deep dive: advanced/architecture.md
-      - Operator deep dive: advanced/operator-deep-dive.md
-      - Security hardening: advanced/security.md
-      - Performance and scale: advanced/performance.md
-  - Contributing: 
-      - How to contribute: contributing/contributing.md
-      - E2E testing: contributing/e2e-components.md
+  - Topics:
+      - Troubleshooting: topics/troubleshooting.md
+      - Production Hardening: topics/production-hardening.md
+      - Architecture: topics/architecture.md
+  - Contributing: contributing/contributing.md

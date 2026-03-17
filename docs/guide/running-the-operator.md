@@ -1,0 +1,178 @@
+# Running the Operator
+
+> Completed the [Operator Quickstart](../getting-started/quickstart-operator.md)? This page covers the full operational model.
+
+The Operator is the recommended runtime for production. It continuously reconciles Managed Servers from Git desired state.
+
+```text
+Git (desired state) -> Operator reconcile loop -> Managed Server (real state)
+```
+
+Direct server edits are drift. Reconciliation corrects drift back to what is declared in Git.
+
+## CRD model
+
+The controller manager reconciles four namespaced CRDs:
+
+| CRD | Responsibility |
+|-----|---------------|
+| **ResourceRepository** | Polls Git and maintains the current revision |
+| **ManagedServer** | Defines endpoint, auth, optional OpenAPI and metadata artifacts |
+| **SecretStore** | Resolves secrets from `file` or `vault` provider |
+| **SyncPolicy** | References the other three; plans and executes apply/prune for a source path |
+
+`SyncPolicy` is the execution unit. It references one of each dependency and reconciles resources within its `source.path` scope.
+
+## Reconciliation: incremental vs full
+
+`SyncPolicy` decides between two modes:
+
+- **Incremental**: targeted updates based on repository changes. Faster and lower-impact.
+- **Full**: processes every resource in scope. Used when changes are broad, confidence is low, or the policy requires it.
+
+Safety-first behavior prefers full sync when diff confidence is low.
+
+## Triggers
+
+Reconcile is driven by:
+
+- **Sync interval**: `spec.syncInterval` (default `5m`)
+- **Full-resync cron**: optional `fullResyncCron` for periodic full syncs
+- **Dependency changes**: ResourceRepository, ManagedServer, or SecretStore generation updates
+- **Secret changes**: referenced Kubernetes Secret version hash changes
+- **Repository refresh**: poll or webhook-driven
+
+## Drift handling
+
+- **Default**: apply only when drift is detected between desired and real state.
+- **Forced**: `spec.sync.force: true` triggers update calls even when compare shows no drift.
+
+## Status model
+
+Track these fields for operations and debugging:
+
+```bash
+kubectl describe syncpolicy <name>
+```
+
+Key status fields:
+
+- `lastAttemptedRepoRevision` / `lastAppliedRepoRevision`
+- `lastSyncMode` (incremental or full)
+- `resourceStats.{targeted, applied, pruned, failed}`
+- Conditions: `Ready`, `Reconciling`, `Stalled`
+
+### Failure analysis sequence
+
+1. `kubectl describe` the relevant CR.
+2. Inspect condition reason/message.
+3. Check controller logs for root cause.
+4. Verify referenced Secrets and dependency refs.
+5. Confirm repository branch/revision movement.
+
+```bash
+kubectl get resourcerepositories,managedservers,secretstores,syncpolicies
+kubectl logs -n declarest-system deploy/declarest-operator-controller-manager
+```
+
+### Common failure modes
+
+- Invalid spec (auth one-of, required fields)
+- Missing referenced dependency resources
+- Git fetch/auth failures
+- Managed API auth/transport failures
+- Apply/prune execution errors
+
+All surface through CR status conditions and controller logs.
+
+## Building and deploying
+
+### Local build and run
+
+```bash
+make operator-build
+make operator-run
+```
+
+### Container image
+
+```bash
+make operator-image
+make operator-image OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
+```
+
+Images are published to GHCR by `.github/workflows/operator-image.yml` on semver tag push.
+
+Manual push:
+
+```bash
+podman login ghcr.io
+make operator-image-push OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=v0.2.2
+make operator-image-push OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPERATOR_IMAGE_TAG=latest
+```
+
+### Install on a cluster
+
+```bash
+kubectl create namespace declarest-system
+kubectl apply -k config/default
+```
+
+`config/default` includes admission webhook resources and default manager deployment settings.
+
+Apply sample resources:
+
+```bash
+kubectl apply -k config/samples
+```
+
+## Observability
+
+The manager exposes:
+
+- `/metrics` on `:8080`
+- `/healthz` and `/readyz` on `:8081`
+
+OTLP export is enabled through standard `OTEL_EXPORTER_OTLP_*` environment variables.
+
+### Signals to watch
+
+- Sync duration trends
+- Reconcile error rates
+- `resourceStats.failed` and repeated retries
+- Managed API latency and throttling responses
+
+## Security defaults
+
+The manager deployment uses:
+
+- `runAsNonRoot`
+- `readOnlyRootFilesystem`
+- Dropped Linux capabilities
+- `seccompProfile: RuntimeDefault`
+
+Credentials come from Kubernetes Secret references; sensitive values are not in CR specs/status.
+
+For SSH repository auth, host verification is required by default (`knownHostsRef`). It is only skipped when `spec.git.auth.sshSecretRef.insecureIgnoreHostKey: true` is explicitly set.
+
+## CLI + Operator together
+
+Most teams use both:
+
+- **CLI** for authoring: save, edit, diff, validate, commit, push.
+- **Operator** for runtime: continuous reconciliation after merge.
+
+Typical admin flow:
+
+1. `repository refresh` and `resource save` to import current state.
+2. Edit payloads and metadata locally.
+3. `resource diff` and `resource explain` to validate.
+4. Commit and push for review/merge.
+5. Operator reconciles after merge.
+
+### Operational guidelines
+
+- Keep source scopes non-overlapping across `SyncPolicy` objects.
+- Use webhook-triggered refresh for low-latency response to Git push.
+- Keep sync scope narrow for faster, safer reconciles.
+- Split large domains into multiple `SyncPolicy` paths.

@@ -25,7 +25,7 @@ Common issues for both CLI and Operator mode.
 ## 5. Plaintext secret warning on save
 
 - Symptom: `resource save` fails due to detected plaintext secret candidates.
-- Fix: use `--secret-attributes` (recommended), or declare `resource.secretAttributes` first.
+- Fix: use `--secret-attributes` (recommended), or declare `resource.secretAttributes` first. See [Managing Secrets](../guide/managing-secrets.md).
 
 ## 6. `repository push` fails
 

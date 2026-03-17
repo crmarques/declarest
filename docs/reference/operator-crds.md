@@ -157,4 +157,4 @@ spec:
 3. `SecretStore` provides secret resolution/storage.
 4. `SyncPolicy` reconciles one source scope from desired state to real state.
 
-For runnable steps, see [Quickstart (Operator - recommended)](../getting-started/quickstart-operator.md).
+For runnable steps, see [Quickstart (Operator)](../getting-started/quickstart-operator.md).
