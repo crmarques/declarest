@@ -47,7 +47,7 @@ type SecretStoreVaultAuth struct {
 
 type SecretStoreVaultSpec struct {
 	// +kubebuilder:validation:MinLength=1
-	Address string `json:"address"`
+	Address    string               `json:"address"`
 	Mount      string               `json:"mount,omitempty"`
 	PathPrefix string               `json:"pathPrefix,omitempty"`
 	KVVersion  int                  `json:"kvVersion,omitempty"`
@@ -64,7 +64,7 @@ type SecretStoreFileEncryption struct {
 
 type SecretStoreFileSpec struct {
 	// +kubebuilder:validation:MinLength=1
-	Path string `json:"path"`
+	Path       string                    `json:"path"`
 	Storage    StorageSpec               `json:"storage"`
 	Encryption SecretStoreFileEncryption `json:"encryption"`
 }
@@ -83,8 +83,9 @@ type SecretStoreStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=sst
+// +kubebuilder:resource:scope=Namespaced,shortName=sst,categories=declarest
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SecretStore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

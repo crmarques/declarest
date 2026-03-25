@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -36,8 +37,9 @@ import (
 // SecretStoreReconciler reconciles SecretStore resources.
 type SecretStoreReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	MaxConcurrentReconciles int
 }
 
 func (r *SecretStoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -185,8 +187,11 @@ func (r *SecretStoreReconciler) setNotReady(
 }
 
 func (r *SecretStoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	bld := ctrl.NewControllerManagedBy(mgr).
 		For(&declarestv1alpha1.SecretStore{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Owns(&corev1.PersistentVolumeClaim{}).
-		Complete(r)
+		Owns(&corev1.PersistentVolumeClaim{})
+	if r.MaxConcurrentReconciles > 0 {
+		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
+	}
+	return bld.Complete(r)
 }

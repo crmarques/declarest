@@ -8,6 +8,8 @@ metadata:
 spec:
   group: declarest.io
   names:
+    categories:
+    - declarest
     kind: ManagedServer
     listKind: ManagedServerList
     plural: managedservers
@@ -17,9 +19,16 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.http.baseURL
+      name: URL
+      priority: 1
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -428,8 +437,8 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: metadata must define at most one of url or bundle
-                  rule: '!(has(self.url) && self.url != '''' && has(self.bundle) &&
-                    self.bundle != '''')'
+                  rule: '!(has(self.url) && size(self.url) > 0 && has(self.bundle)
+                    && size(self.bundle) > 0)'
               openapi:
                 properties:
                   url:

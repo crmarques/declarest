@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: declarest-operator
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: declarest
+spec:
+  groups:
+    - name: declarest-operator
+      rules:
+        - alert: DeclarestSyncPolicyStalled
+          expr: |
+            kube_customresource_declarest_io_syncpolicies{} == 1
+            and on(namespace, name)
+            (time() - declarest_operator_syncpolicy_reconcile_duration_seconds_count) > 900
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SyncPolicy {{ $labels.namespace }}/{{ $labels.name }} is stalled"
+            description: "SyncPolicy has not reconciled successfully for more than 15 minutes."
+        - alert: DeclarestSyncPolicyReconcileErrors
+          expr: |
+            rate(declarest_operator_syncpolicy_reconcile_total{result="error"}[5m]) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SyncPolicy {{ $labels.namespace }}/{{ $labels.name }} has recurring errors"
+            description: "SyncPolicy has been failing reconciliation for more than 10 minutes. Reason: {{ $labels.reason }}"
+        - alert: DeclarestRepositoryPollFailures
+          expr: |
+            rate(declarest_operator_resource_repository_poll_total{result="error"}[5m]) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ResourceRepository {{ $labels.namespace }}/{{ $labels.name }} poll failures"
+            description: "ResourceRepository polling has been failing for more than 10 minutes."

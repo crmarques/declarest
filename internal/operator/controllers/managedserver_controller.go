@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -37,8 +38,9 @@ import (
 // ManagedServerReconciler reconciles ManagedServer resources.
 type ManagedServerReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	MaxConcurrentReconciles int
 }
 
 func (r *ManagedServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -200,9 +202,12 @@ func (r *ManagedServerReconciler) setNotReady(
 }
 
 func (r *ManagedServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.ManagedServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Complete(r)
+	bld := ctrl.NewControllerManagedBy(mgr).
+		For(&declarestv1alpha1.ManagedServer{}, builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+	if r.MaxConcurrentReconciles > 0 {
+		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
+	}
+	return bld.Complete(r)
 }
 
 func shortenPath(value string) string {

@@ -68,10 +68,11 @@ type SyncPolicyStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=sp
+// +kubebuilder:resource:scope=Namespaced,shortName=sp,categories=declarest
 // +kubebuilder:printcolumn:name="Repo",type="string",JSONPath=".spec.resourceRepositoryRef.name"
 // +kubebuilder:printcolumn:name="Server",type="string",JSONPath=".spec.managedServerRef.name"
 // +kubebuilder:printcolumn:name="Revision",type="string",JSONPath=".status.lastAppliedRepoRevision"
+// +kubebuilder:printcolumn:name="Last Sync",type="date",JSONPath=".status.lastSuccessfulSyncTime"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
 type SyncPolicy struct {
 	metav1.TypeMeta   `json:",inline"`

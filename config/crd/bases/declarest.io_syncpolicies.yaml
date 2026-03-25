@@ -8,6 +8,8 @@ metadata:
 spec:
   group: declarest.io
   names:
+    categories:
+    - declarest
     kind: SyncPolicy
     listKind: SyncPolicyList
     plural: syncpolicies
@@ -26,6 +28,9 @@ spec:
     - jsonPath: .status.lastAppliedRepoRevision
       name: Revision
       type: string
+    - jsonPath: .status.lastSuccessfulSyncTime
+      name: Last Sync
+      type: date
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string

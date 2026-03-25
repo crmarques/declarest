@@ -37,14 +37,15 @@ import (
 
 func main() {
 	var (
-		metricsAddr              string
-		probeAddr                string
-		repositoryWebhookAddr    string
-		enableLeaderElection     bool
-		enableAdmissionWebhooks  bool
-		admissionWebhookPort     int
-		admissionWebhookCertDir  string
-		watchNamespace           string
+		metricsAddr             string
+		probeAddr               string
+		repositoryWebhookAddr   string
+		enableLeaderElection    bool
+		enableAdmissionWebhooks bool
+		admissionWebhookPort    int
+		admissionWebhookCertDir string
+		watchNamespace          string
+		maxConcurrentReconciles int
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -54,6 +55,7 @@ func main() {
 	flag.IntVar(&admissionWebhookPort, "admission-webhook-port", 9443, "The port the admission webhook server binds to.")
 	flag.StringVar(&admissionWebhookCertDir, "admission-webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "The directory containing TLS certs for the admission webhook server.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "", "Namespace to watch (empty means all namespaces).")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 2, "Maximum number of concurrent reconciles per controller.")
 	zapOptions := zap.Options{Development: false}
 	zapOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -106,41 +108,46 @@ func main() {
 	}
 
 	if err := (&controllers.ResourceRepositoryReconciler{
-		Client:   manager.GetClient(),
-		Scheme:   manager.GetScheme(),
-		Recorder: manager.GetEventRecorderFor("resourcerepository-controller"),
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorderFor("resourcerepository-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository controller")
 		os.Exit(1)
 	}
 	if err := (&controllers.ManagedServerReconciler{
-		Client:   manager.GetClient(),
-		Scheme:   manager.GetScheme(),
-		Recorder: manager.GetEventRecorderFor("managedserver-controller"),
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorderFor("managedserver-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer controller")
 		os.Exit(1)
 	}
 	if err := (&controllers.SecretStoreReconciler{
-		Client:   manager.GetClient(),
-		Scheme:   manager.GetScheme(),
-		Recorder: manager.GetEventRecorderFor("secretstore-controller"),
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorderFor("secretstore-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SecretStore controller")
 		os.Exit(1)
 	}
 	if err := (&controllers.SyncPolicyReconciler{
-		Client:   manager.GetClient(),
-		Scheme:   manager.GetScheme(),
-		Recorder: manager.GetEventRecorderFor("syncpolicy-controller"),
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorderFor("syncpolicy-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
 		os.Exit(1)
 	}
 	if err := (&controllers.RepositoryWebhookReconciler{
-		Client:   manager.GetClient(),
-		Scheme:   manager.GetScheme(),
-		Recorder: manager.GetEventRecorderFor("repositorywebhook-controller"),
+		Client:                  manager.GetClient(),
+		Scheme:                  manager.GetScheme(),
+		Recorder:                manager.GetEventRecorderFor("repositorywebhook-controller"),
+		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create RepositoryWebhook controller")
 		os.Exit(1)

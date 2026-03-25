@@ -26,13 +26,15 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type RepositoryWebhookReconciler struct {
-	Client   client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Client                  client.Client
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	MaxConcurrentReconciles int
 }
 
 func (r *RepositoryWebhookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -110,7 +112,10 @@ func (r *RepositoryWebhookReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func (r *RepositoryWebhookReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&declarestv1alpha1.RepositoryWebhook{}).
-		Complete(r)
+	bld := ctrl.NewControllerManagedBy(mgr).
+		For(&declarestv1alpha1.RepositoryWebhook{})
+	if r.MaxConcurrentReconciles > 0 {
+		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
+	}
+	return bld.Complete(r)
 }

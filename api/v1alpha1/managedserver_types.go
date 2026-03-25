@@ -48,7 +48,7 @@ type ManagedServerBasicAuth struct {
 
 type ManagedServerHeaderAuth struct {
 	// +kubebuilder:validation:MinLength=1
-	Header string `json:"header"`
+	Header   string                    `json:"header"`
 	Prefix   string                    `json:"prefix,omitempty"`
 	ValueRef *corev1.SecretKeySelector `json:"valueRef,omitempty"`
 }
@@ -66,7 +66,7 @@ type ManagedServerRequestThrottling struct {
 
 type ManagedServerHTTP struct {
 	// +kubebuilder:validation:MinLength=1
-	BaseURL string `json:"baseURL"`
+	BaseURL           string                          `json:"baseURL"`
 	HealthCheck       string                          `json:"healthCheck,omitempty"`
 	DefaultHeaders    map[string]string               `json:"defaultHeaders,omitempty"`
 	Auth              ManagedServerAuth               `json:"auth"`
@@ -91,8 +91,10 @@ type ManagedServerStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=ms
+// +kubebuilder:resource:scope=Namespaced,shortName=ms,categories=declarest
+// +kubebuilder:printcolumn:name="URL",type="string",JSONPath=".spec.http.baseURL",priority=1
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type ManagedServer struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

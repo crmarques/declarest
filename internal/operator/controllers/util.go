@@ -53,6 +53,7 @@ const (
 	conditionReasonOverlappingPolicy = "OverlappingPolicy"
 
 	// Distinct condition reasons for better error categorization.
+	conditionReasonDependencyNotReady     = "DependencyNotReady"
 	conditionReasonRepositoryUnavailable  = "RepositoryUnavailable"
 	conditionReasonSessionBootstrapFailed = "SessionBootstrapFailed"
 
@@ -103,18 +104,29 @@ func returnAfterSetNotReady(
 	if err := setNotReady(ctx, reason, message); err != nil {
 		return ctrl.Result{}, err
 	}
-	// Apply the default transient requeue interval when no explicit duration
-	// is set and the error is not a validation issue. This prevents resources
-	// from becoming permanently stalled on transient failures. SpecInvalid
-	// and OverlappingPolicy require user intervention and rely on watch events.
-	interval := requeueAfter
-	if interval <= 0 && reason != conditionReasonSpecInvalid && reason != conditionReasonOverlappingPolicy {
-		interval = defaultTransientRequeueInterval
+	// Validation errors require user intervention — do not requeue.
+	if reason == conditionReasonSpecInvalid || reason == conditionReasonOverlappingPolicy {
+		return ctrl.Result{}, nil
 	}
-	if interval > 0 {
-		return ctrl.Result{RequeueAfter: interval}, nil
+	// If an explicit requeue interval is provided (e.g., matching a poll
+	// interval), honour it.
+	if requeueAfter > 0 {
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
-	return ctrl.Result{}, nil
+	// For transient errors, return an error so the controller-runtime work
+	// queue applies its built-in exponential backoff (default: 5ms base,
+	// 1000s max). This replaces the previous fixed 30s requeue.
+	return ctrl.Result{}, fmt.Errorf("%s: %s", reason, message)
+}
+
+// isDependencyReady checks whether a dependency CRD has a Ready=True condition.
+func isDependencyReady(conditions []metav1.Condition) bool {
+	for _, c := range conditions {
+		if c.Type == declarestv1alpha1.ConditionTypeReady {
+			return c.Status == metav1.ConditionTrue
+		}
+	}
+	return false
 }
 
 func ensureDir(path string) error {

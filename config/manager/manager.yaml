@@ -5,6 +5,9 @@ metadata:
   namespace: declarest-system
   labels:
     app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: declarest
+    app.kubernetes.io/managed-by: kustomize
 spec:
   replicas: 1
   selector:
@@ -14,6 +17,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: declarest-operator
+        app.kubernetes.io/component: operator
+        app.kubernetes.io/part-of: declarest
     spec:
       serviceAccountName: declarest-operator
       securityContext:
@@ -85,6 +90,8 @@ metadata:
   namespace: declarest-system
   labels:
     app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: declarest
 spec:
   selector:
     app.kubernetes.io/name: declarest-operator
@@ -100,6 +107,8 @@ metadata:
   namespace: declarest-system
   labels:
     app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: repository-webhook
+    app.kubernetes.io/part-of: declarest
 spec:
   selector:
     app.kubernetes.io/name: declarest-operator
@@ -115,9 +124,26 @@ metadata:
   namespace: declarest-system
   labels:
     app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: state
+    app.kubernetes.io/part-of: declarest
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: declarest-operator
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: declarest
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: declarest-operator

@@ -43,10 +43,10 @@ type RepositoryWebhookSpec struct {
 	RepositoryRef NamespacedObjectReference `json:"repositoryRef"`
 	// +kubebuilder:validation:Enum=github;gitlab;gitea;generic-hmac
 	Provider     RepositoryWebhookProvider      `json:"provider"`
-	SecretRef    NamespacedObjectReference       `json:"secretRef"`
-	Events       []RepositoryWebhookEvent        `json:"events,omitempty"`
-	BranchFilter *RepositoryWebhookBranchFilter  `json:"branchFilter,omitempty"`
-	Suspend      bool                            `json:"suspend,omitempty"`
+	SecretRef    NamespacedObjectReference      `json:"secretRef"`
+	Events       []RepositoryWebhookEvent       `json:"events,omitempty"`
+	BranchFilter *RepositoryWebhookBranchFilter `json:"branchFilter,omitempty"`
+	Suspend      bool                           `json:"suspend,omitempty"`
 }
 
 type RepositoryWebhookStatus struct {
@@ -59,11 +59,12 @@ type RepositoryWebhookStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=rwh
+// +kubebuilder:resource:scope=Namespaced,shortName=rwh,categories=declarest
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.provider"
 // +kubebuilder:printcolumn:name="Repository",type="string",JSONPath=".spec.repositoryRef.name"
 // +kubebuilder:printcolumn:name="Path",type="string",JSONPath=".status.webhookPath"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type RepositoryWebhook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

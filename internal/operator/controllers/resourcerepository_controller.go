@@ -43,6 +43,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -52,8 +53,9 @@ import (
 // ResourceRepositoryReconciler reconciles ResourceRepository resources.
 type ResourceRepositoryReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	MaxConcurrentReconciles int
 }
 
 func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -417,10 +419,13 @@ func (r *ResourceRepositoryReconciler) setNotReady(
 }
 
 func (r *ResourceRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	bld := ctrl.NewControllerManagedBy(mgr).
 		For(&declarestv1alpha1.ResourceRepository{}, builder.WithPredicates(resourceRepositoryReconcilePredicate())).
-		Owns(&corev1.PersistentVolumeClaim{}).
-		Complete(r)
+		Owns(&corev1.PersistentVolumeClaim{})
+	if r.MaxConcurrentReconciles > 0 {
+		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
+	}
+	return bld.Complete(r)
 }
 
 func resourceRepositoryReconcilePredicate() predicate.Predicate {

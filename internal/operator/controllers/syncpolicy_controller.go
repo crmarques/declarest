@@ -39,6 +39,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -88,9 +89,10 @@ func (c *secretRefCache) policiesForSecret(namespace string, secretName string) 
 // SyncPolicyReconciler reconciles SyncPolicy resources.
 type SyncPolicyReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	secretRefs secretRefCache
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	MaxConcurrentReconciles int
+	secretRefs              secretRefCache
 }
 
 const (
@@ -235,6 +237,13 @@ func (r *syncPolicyReconciliation) loadDependencies() (*ctrl.Result, error) {
 		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve resource repository: %v", err), 0, "DependencyInvalid")
 		return &res, err
 	}
+	if !isDependencyReady(r.repo.Status.Conditions) {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyNotReady
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyNotReady,
+			fmt.Sprintf("ResourceRepository %q is not ready", r.repo.Name), defaultTransientRequeueInterval, "DependencyNotReady")
+		return &res, err
+	}
 
 	r.server, err = r.loadManagedServer()
 	if err != nil {
@@ -243,12 +252,26 @@ func (r *syncPolicyReconciliation) loadDependencies() (*ctrl.Result, error) {
 		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve managed server: %v", err), 0, "DependencyInvalid")
 		return &res, err
 	}
+	if !isDependencyReady(r.server.Status.Conditions) {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyNotReady
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyNotReady,
+			fmt.Sprintf("ManagedServer %q is not ready", r.server.Name), defaultTransientRequeueInterval, "DependencyNotReady")
+		return &res, err
+	}
 
 	r.secret, err = r.loadSecretStore()
 	if err != nil {
 		r.resultLabel = "error"
 		r.reasonLabel = conditionReasonDependencyInvalid
 		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve secret store: %v", err), 0, "DependencyInvalid")
+		return &res, err
+	}
+	if !isDependencyReady(r.secret.Status.Conditions) {
+		r.resultLabel = "error"
+		r.reasonLabel = conditionReasonDependencyNotReady
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyNotReady,
+			fmt.Sprintf("SecretStore %q is not ready", r.secret.Name), defaultTransientRequeueInterval, "DependencyNotReady")
 		return &res, err
 	}
 
@@ -688,7 +711,7 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	bld := ctrl.NewControllerManagedBy(mgr).
 		For(&declarestv1alpha1.SyncPolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&declarestv1alpha1.ResourceRepository{},
@@ -705,8 +728,11 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForSecret),
-		).
-		Complete(r)
+		)
+	if r.MaxConcurrentReconciles > 0 {
+		bld = bld.WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
+	}
+	return bld.Complete(r)
 }
 
 func (r *SyncPolicyReconciler) syncPoliciesForResourceRepository(ctx context.Context, obj client.Object) []reconcile.Request {

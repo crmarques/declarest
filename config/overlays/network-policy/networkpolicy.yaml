@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: declarest-operator
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: declarest
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: declarest-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow metrics scraping from any namespace with the monitoring label.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Allow health probes from the kubelet.
+    - ports:
+        - protocol: TCP
+          port: 8081
+    # Allow repository webhook events.
+    - ports:
+        - protocol: TCP
+          port: 8082
