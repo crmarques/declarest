@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: managedservers.declarest.io
 spec:
   group: declarest.io
@@ -102,6 +102,7 @@ spec:
                         items:
                           properties:
                             header:
+                              minLength: 1
                               type: string
                             prefix:
                               type: string
@@ -243,7 +244,14 @@ spec:
                         - tokenURL
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: auth must define exactly one of oauth2, basicAuth,
+                        or customHeaders
+                      rule: '(has(self.oauth2) ? 1 : 0) + (has(self.basicAuth) ? 1
+                        : 0) + (has(self.customHeaders) && size(self.customHeaders)
+                        > 0 ? 1 : 0) == 1'
                   baseURL:
+                    minLength: 1
                     type: string
                   defaultHeaders:
                     additionalProperties:
@@ -251,25 +259,6 @@ spec:
                     type: object
                   healthCheck:
                     type: string
-                  requestThrottling:
-                    properties:
-                      burst:
-                        format: int32
-                        minimum: 0
-                        type: integer
-                      maxConcurrentRequests:
-                        format: int32
-                        minimum: 0
-                        type: integer
-                      queueSize:
-                        format: int32
-                        minimum: 0
-                        type: integer
-                      requestsPerSecond:
-                        format: int32
-                        minimum: 0
-                        type: integer
-                    type: object
                   proxy:
                     properties:
                       auth:
@@ -329,6 +318,25 @@ spec:
                         type: string
                       noProxy:
                         type: string
+                    type: object
+                  requestThrottling:
+                    properties:
+                      burst:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      maxConcurrentRequests:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      queueSize:
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      requestsPerSecond:
+                        format: int32
+                        minimum: 0
+                        type: integer
                     type: object
                   tls:
                     properties:
@@ -418,11 +426,17 @@ spec:
                   url:
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: metadata must define at most one of url or bundle
+                  rule: '!(has(self.url) && self.url != '''' && has(self.bundle) &&
+                    self.bundle != '''')'
               openapi:
                 properties:
                   url:
                     type: string
                 type: object
+              pollInterval:
+                type: string
             required:
             - http
             type: object

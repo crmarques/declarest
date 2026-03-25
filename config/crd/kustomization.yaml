@@ -5,3 +5,4 @@ resources:
   - bases/declarest.io_managedservers.yaml
   - bases/declarest.io_secretstores.yaml
   - bases/declarest.io_syncpolicies.yaml
+  - bases/declarest.io_repositorywebhooks.yaml

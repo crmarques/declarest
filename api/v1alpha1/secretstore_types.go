@@ -38,6 +38,7 @@ type SecretStoreVaultAppRoleAuth struct {
 	Mount       string                    `json:"mount,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.token) ? 1 : 0) + (has(self.userpass) ? 1 : 0) + (has(self.appRole) ? 1 : 0) == 1",message="vault auth must define exactly one of token, userpass, or appRole"
 type SecretStoreVaultAuth struct {
 	Token    *SecretStoreVaultTokenAuth    `json:"token,omitempty"`
 	Userpass *SecretStoreVaultUserpassAuth `json:"userpass,omitempty"`
@@ -45,7 +46,8 @@ type SecretStoreVaultAuth struct {
 }
 
 type SecretStoreVaultSpec struct {
-	Address    string               `json:"address"`
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
 	Mount      string               `json:"mount,omitempty"`
 	PathPrefix string               `json:"pathPrefix,omitempty"`
 	KVVersion  int                  `json:"kvVersion,omitempty"`
@@ -54,17 +56,20 @@ type SecretStoreVaultSpec struct {
 	Proxy      *HTTPProxySpec       `json:"proxy,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.keyRef) ? 1 : 0) + (has(self.passphraseRef) ? 1 : 0) == 1",message="encryption must define exactly one of keyRef or passphraseRef"
 type SecretStoreFileEncryption struct {
 	KeyRef        *corev1.SecretKeySelector `json:"keyRef,omitempty"`
 	PassphraseRef *corev1.SecretKeySelector `json:"passphraseRef,omitempty"`
 }
 
 type SecretStoreFileSpec struct {
-	Path       string                    `json:"path"`
+	// +kubebuilder:validation:MinLength=1
+	Path string `json:"path"`
 	Storage    StorageSpec               `json:"storage"`
 	Encryption SecretStoreFileEncryption `json:"encryption"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.vault) ? 1 : 0) + (has(self.file) ? 1 : 0) == 1",message="spec must define exactly one of vault or file"
 type SecretStoreSpec struct {
 	Vault *SecretStoreVaultSpec `json:"vault,omitempty"`
 	File  *SecretStoreFileSpec  `json:"file,omitempty"`

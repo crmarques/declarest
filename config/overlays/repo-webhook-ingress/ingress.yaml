@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: declarest-operator-repository-webhook
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+  annotations:
+    # Adjust annotations for your ingress controller as needed.
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+    - host: declarest-webhooks.example.com  # Replace with your domain
+      http:
+        paths:
+          - path: /webhooks/repository
+            pathType: Prefix
+            backend:
+              service:
+                name: declarest-operator-repository-webhook
+                port:
+                  number: 8082
+  # tls:
+  #   - hosts:
+  #       - declarest-webhooks.example.com
+  #     secretName: declarest-webhook-tls

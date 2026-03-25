@@ -25,6 +25,7 @@ import (
 )
 
 type NamespacedObjectReference struct {
+	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 }
 
@@ -32,6 +33,7 @@ type DeclaRESTExternalArtifact struct {
 	URL string `json:"url,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!(has(self.url) && self.url != '' && has(self.bundle) && self.bundle != '')",message="metadata must define at most one of url or bundle"
 type DeclaRESTMetadataArtifact struct {
 	URL    string `json:"url,omitempty"`
 	Bundle string `json:"bundle,omitempty"`
@@ -56,6 +58,7 @@ type TLSSpec struct {
 	InsecureSkipVerify bool                      `json:"insecureSkipVerify,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.existingPVC) ? 1 : 0) + (has(self.pvc) ? 1 : 0) == 1",message="storage must define exactly one of existingPVC or pvc"
 type StorageSpec struct {
 	ExistingPVC *corev1.LocalObjectReference `json:"existingPVC,omitempty"`
 	PVC         *PVCTemplateSpec             `json:"pvc,omitempty"`

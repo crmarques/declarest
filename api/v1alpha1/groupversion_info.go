@@ -43,6 +43,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SecretStoreList{},
 		&SyncPolicy{},
 		&SyncPolicyList{},
+		&RepositoryWebhook{},
+		&RepositoryWebhookList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil

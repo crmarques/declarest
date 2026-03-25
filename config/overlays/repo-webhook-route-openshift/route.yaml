@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: declarest-operator-repository-webhook
+  namespace: declarest-system
+  labels:
+    app.kubernetes.io/name: declarest-operator
+spec:
+  to:
+    kind: Service
+    name: declarest-operator-repository-webhook
+    weight: 100
+  port:
+    targetPort: repo-webhook
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  path: /webhooks/repository

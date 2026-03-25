@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: resourcerepositories.declarest.io
 spec:
   group: declarest.io
@@ -52,6 +52,8 @@ spec:
                     properties:
                       sshSecretRef:
                         properties:
+                          insecureIgnoreHostKey:
+                            type: boolean
                           knownHostsRef:
                             description: SecretKeySelector selects a key of a Secret.
                             properties:
@@ -127,6 +129,12 @@ spec:
                           user:
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: sshSecretRef.privateKeyRef is required
+                          rule: has(self.privateKeyRef)
+                        - message: sshSecretRef.knownHostsRef is required unless insecureIgnoreHostKey
+                            is true
+                          rule: has(self.knownHostsRef) || self.insecureIgnoreHostKey
                       tokenRef:
                         description: SecretKeySelector selects a key of a Secret.
                         properties:
@@ -152,7 +160,15 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                     type: object
+                    x-kubernetes-validations:
+                    - message: auth must define exactly one of tokenRef or sshSecretRef
+                      rule: (has(self.tokenRef) && !has(self.sshSecretRef)) || (!has(self.tokenRef)
+                        && has(self.sshSecretRef))
                   branch:
+                    default: main
+                    type: string
+                  url:
+                    minLength: 1
                     type: string
                   webhook:
                     properties:
@@ -188,8 +204,6 @@ spec:
                     required:
                     - provider
                     type: object
-                  url:
-                    type: string
                 required:
                 - auth
                 - url
@@ -236,13 +250,22 @@ spec:
                     - requests
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: storage must define exactly one of existingPVC or pvc
+                  rule: '(has(self.existingPVC) ? 1 : 0) + (has(self.pvc) ? 1 : 0)
+                    == 1'
               type:
+                enum:
+                - git
                 type: string
             required:
             - pollInterval
             - storage
             - type
             type: object
+            x-kubernetes-validations:
+            - message: spec.git is required when type is git
+              rule: 'self.type == ''git'' ? has(self.git) : true'
           status:
             properties:
               conditions:

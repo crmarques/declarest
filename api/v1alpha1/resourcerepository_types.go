@@ -29,11 +29,14 @@ const (
 	ResourceRepositoryTypeGit ResourceRepositoryType = "git"
 )
 
+// +kubebuilder:validation:XValidation:rule="(has(self.tokenRef) && !has(self.sshSecretRef)) || (!has(self.tokenRef) && has(self.sshSecretRef))",message="auth must define exactly one of tokenRef or sshSecretRef"
 type ResourceRepositoryAuth struct {
 	TokenRef     *corev1.SecretKeySelector `json:"tokenRef,omitempty"`
 	SSHSecretRef *GitSSHSecretRef          `json:"sshSecretRef,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.privateKeyRef)",message="sshSecretRef.privateKeyRef is required"
+// +kubebuilder:validation:XValidation:rule="has(self.knownHostsRef) || self.insecureIgnoreHostKey",message="sshSecretRef.knownHostsRef is required unless insecureIgnoreHostKey is true"
 type GitSSHSecretRef struct {
 	PrivateKeyRef         *corev1.SecretKeySelector `json:"privateKeyRef,omitempty"`
 	KnownHostsRef         *corev1.SecretKeySelector `json:"knownHostsRef,omitempty"`
@@ -43,7 +46,9 @@ type GitSSHSecretRef struct {
 }
 
 type GitRepositorySpec struct {
-	URL     string                    `json:"url"`
+	// +kubebuilder:validation:MinLength=1
+	URL string `json:"url"`
+	// +kubebuilder:default="main"
 	Branch  string                    `json:"branch,omitempty"`
 	Auth    ResourceRepositoryAuth    `json:"auth"`
 	Webhook *GitRepositoryWebhookSpec `json:"webhook,omitempty"`
@@ -62,7 +67,9 @@ type GitRepositoryWebhookSpec struct {
 	SecretRef *corev1.SecretKeySelector `json:"secretRef,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="self.type == 'git' ? has(self.git) : true",message="spec.git is required when type is git"
 type ResourceRepositorySpec struct {
+	// +kubebuilder:validation:Enum=git
 	Type         ResourceRepositoryType `json:"type"`
 	PollInterval metav1.Duration        `json:"pollInterval"`
 	Git          *GitRepositorySpec     `json:"git,omitempty"`

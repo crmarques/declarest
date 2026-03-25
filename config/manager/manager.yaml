@@ -31,6 +31,7 @@ spec:
             - --metrics-bind-address=:8080
             - --repository-webhook-bind-address=:8082
             - --leader-elect
+            - --enable-admission-webhooks=false
           ports:
             - containerPort: 8080
               name: metrics
@@ -38,8 +39,6 @@ spec:
               name: probes
             - containerPort: 8082
               name: repo-webhook
-            - containerPort: 9443
-              name: webhook-server
           env:
             - name: DECLAREST_OPERATOR_REPO_BASE_DIR
               value: /var/lib/declarest/repos
@@ -72,18 +71,12 @@ spec:
               mountPath: /var/lib/declarest
             - name: tmp
               mountPath: /tmp
-            - name: webhook-certs
-              mountPath: /tmp/k8s-webhook-server/serving-certs
-              readOnly: true
       volumes:
         - name: state
           persistentVolumeClaim:
             claimName: declarest-operator-state
         - name: tmp
           emptyDir: {}
-        - name: webhook-certs
-          secret:
-            secretName: declarest-operator-webhook-server-cert
 ---
 apiVersion: v1
 kind: Service

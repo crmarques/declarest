@@ -32,22 +32,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	webhookserver "sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 func main() {
 	var (
-		metricsAddr           string
-		probeAddr             string
-		repositoryWebhookAddr string
-		enableLeaderElection  bool
-		enableWebhooks        bool
-		watchNamespace        string
+		metricsAddr              string
+		probeAddr                string
+		repositoryWebhookAddr    string
+		enableLeaderElection     bool
+		enableAdmissionWebhooks  bool
+		admissionWebhookPort     int
+		admissionWebhookCertDir  string
+		watchNamespace           string
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&repositoryWebhookAddr, "repository-webhook-bind-address", ":8082", "The address the repository webhook endpoint binds to (set empty to disable).")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable admission webhooks for DeclaREST CRDs.")
+	flag.BoolVar(&enableAdmissionWebhooks, "enable-admission-webhooks", false, "Enable admission webhooks for DeclaREST CRDs.")
+	flag.IntVar(&admissionWebhookPort, "admission-webhook-port", 9443, "The port the admission webhook server binds to.")
+	flag.StringVar(&admissionWebhookCertDir, "admission-webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "The directory containing TLS certs for the admission webhook server.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "", "Namespace to watch (empty means all namespaces).")
 	zapOptions := zap.Options{Development: false}
 	zapOptions.BindFlags(flag.CommandLine)
@@ -79,6 +84,12 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "declarest-operator.declarest.io",
+	}
+	if enableAdmissionWebhooks {
+		managerOptions.WebhookServer = webhookserver.NewServer(webhookserver.Options{
+			Port:    admissionWebhookPort,
+			CertDir: admissionWebhookCertDir,
+		})
 	}
 	if namespace := strings.TrimSpace(watchNamespace); namespace != "" {
 		managerOptions.Cache = cache.Options{
@@ -126,6 +137,14 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
 		os.Exit(1)
 	}
+	if err := (&controllers.RepositoryWebhookReconciler{
+		Client:   manager.GetClient(),
+		Scheme:   manager.GetScheme(),
+		Recorder: manager.GetEventRecorderFor("repositorywebhook-controller"),
+	}).SetupWithManager(manager); err != nil {
+		ctrl.Log.WithName("setup").Error(err, "unable to create RepositoryWebhook controller")
+		os.Exit(1)
+	}
 	if err := manager.Add(&controllers.RepositoryWebhookServer{
 		Client:         manager.GetClient(),
 		Recorder:       manager.GetEventRecorderFor("repository-webhook"),
@@ -135,7 +154,7 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "unable to start repository webhook server")
 		os.Exit(1)
 	}
-	if enableWebhooks {
+	if enableAdmissionWebhooks {
 		if err := (&declarestv1alpha1.ResourceRepository{}).SetupWebhookWithManager(manager); err != nil {
 			ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository webhook")
 			os.Exit(1)

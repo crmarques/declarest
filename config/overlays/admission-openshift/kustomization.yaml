@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../default
+  - webhook_service.yaml
+  - webhook_configuration.yaml
+patches:
+  - path: manager_webhook_patch.yaml
+    target:
+      kind: Deployment
+      name: declarest-operator
+  - path: webhook_service_patch.yaml
+    target:
+      kind: Service
+      name: declarest-operator-webhook-service

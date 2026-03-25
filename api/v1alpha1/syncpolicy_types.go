@@ -24,8 +24,10 @@ import (
 )
 
 type SyncPolicySource struct {
-	Path      string `json:"path"`
-	Recursive *bool  `json:"recursive,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Path string `json:"path"`
+	// +kubebuilder:default=true
+	Recursive *bool `json:"recursive,omitempty"`
 }
 
 type SyncPolicySyncOptions struct {

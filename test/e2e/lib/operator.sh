@@ -645,13 +645,13 @@ metadata:
   namespace: ${namespace}
 rules:
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies"]
+    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies", "repositorywebhooks"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status"]
+    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers"]
+    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
     verbs: ["update"]
   - apiGroups: [""]
     resources: ["events"]
@@ -709,7 +709,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --leader-elect=false
-            - --enable-webhooks=false
+            - --enable-admission-webhooks=false
             - --watch-namespace=${namespace}
             - --health-probe-bind-address=:18081
             - --metrics-bind-address=:18080

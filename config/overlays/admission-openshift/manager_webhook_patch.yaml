@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: declarest-operator
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          args:
+            - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8080
+            - --repository-webhook-bind-address=:8082
+            - --leader-elect
+            - --enable-admission-webhooks=true
+          ports:
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: probes
+            - containerPort: 8082
+              name: repo-webhook
+            - containerPort: 9443
+              name: webhook-server
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/declarest
+            - name: tmp
+              mountPath: /tmp
+            - name: webhook-certs
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: declarest-operator-state
+        - name: tmp
+          emptyDir: {}
+        - name: webhook-certs
+          secret:
+            secretName: declarest-operator-webhook-server-cert

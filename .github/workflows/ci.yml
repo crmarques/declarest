@@ -36,6 +36,8 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -race ./...
+      - name: Verify generated manifests
+        run: make verify-generated
 
   docs:
     runs-on: ubuntu-latest

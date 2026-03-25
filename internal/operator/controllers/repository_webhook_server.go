@@ -29,6 +29,7 @@ import (
 	"time"
 
 	declarestv1alpha1 "github.com/crmarques/declarest/api/v1alpha1"
+	"github.com/crmarques/declarest/internal/operator/webhookreceiver"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -72,6 +73,14 @@ func (s *RepositoryWebhookServer) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(repositoryWebhookPathPrefix, s.handleRepositoryWebhook)
+
+	// Register the CRD-based RepositoryWebhook handler.
+	crdHandler := &webhookreceiver.Handler{
+		Client:    s.Client,
+		Providers: webhookreceiver.NewProviderRegistry(),
+		Dedupe:    webhookreceiver.NewDedupeCache(10 * time.Minute),
+	}
+	mux.Handle("/hooks/v1/repositorywebhooks/", crdHandler)
 
 	server := s.buildHTTPServer(addr, mux)
 

@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:validation:XValidation:rule="(has(self.oauth2) ? 1 : 0) + (has(self.basicAuth) ? 1 : 0) + (has(self.customHeaders) && size(self.customHeaders) > 0 ? 1 : 0) == 1",message="auth must define exactly one of oauth2, basicAuth, or customHeaders"
 type ManagedServerAuth struct {
 	OAuth2        *ManagedServerOAuth2Auth  `json:"oauth2,omitempty"`
 	BasicAuth     *ManagedServerBasicAuth   `json:"basicAuth,omitempty"`
@@ -46,7 +47,8 @@ type ManagedServerBasicAuth struct {
 }
 
 type ManagedServerHeaderAuth struct {
-	Header   string                    `json:"header"`
+	// +kubebuilder:validation:MinLength=1
+	Header string `json:"header"`
 	Prefix   string                    `json:"prefix,omitempty"`
 	ValueRef *corev1.SecretKeySelector `json:"valueRef,omitempty"`
 }
@@ -63,7 +65,8 @@ type ManagedServerRequestThrottling struct {
 }
 
 type ManagedServerHTTP struct {
-	BaseURL           string                          `json:"baseURL"`
+	// +kubebuilder:validation:MinLength=1
+	BaseURL string `json:"baseURL"`
 	HealthCheck       string                          `json:"healthCheck,omitempty"`
 	DefaultHeaders    map[string]string               `json:"defaultHeaders,omitempty"`
 	Auth              ManagedServerAuth               `json:"auth"`

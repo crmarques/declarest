@@ -25,7 +25,7 @@ E2E_BUILD_DIR := .e2e-build
 
 .DEFAULT_GOAL := help
 
-.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push
+.PHONY: help fmt vet lint test docs docs-deps e2e e2e-contract e2e-validate-components check build run install clean tidy operator-build operator-run operator-test operator-image operator-image-push manifests generate bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift release-assets verify-generated
 
 help: ## List available make targets with descriptions
 	@printf "Available targets:\n"
@@ -108,3 +108,41 @@ clean: ## Remove build artifacts and transient docs/e2e outputs
 
 tidy: ## Reconcile go.mod and go.sum with the current imports
 	$(GO) mod tidy
+
+# --- Operator manifest generation ---
+
+CONTROLLER_GEN ?= $(shell $(GO) env GOPATH)/bin/controller-gen
+RELEASE_TAG ?= latest
+
+manifests: ## Regenerate CRD manifests from Go types
+	$(CONTROLLER_GEN) crd paths="./api/v1alpha1/..." output:crd:artifacts:config=config/crd/bases
+
+generate: ## Regenerate deepcopy methods
+	$(CONTROLLER_GEN) object paths="./api/v1alpha1/..."
+
+bundle-install-core: ## Generate dist/install.yaml from core kustomize overlay
+	@mkdir -p dist
+	sed -i 's|newTag: .*|newTag: $(RELEASE_TAG)|' config/release/core/kustomization.yaml
+	kubectl kustomize config/release/core > dist/install.yaml
+	@git checkout config/release/core/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/core/kustomization.yaml
+
+bundle-install-admission-certmanager: ## Generate dist/install-admission-certmanager.yaml
+	@mkdir -p dist
+	sed -i 's|newTag: .*|newTag: $(RELEASE_TAG)|' config/release/admission-certmanager/kustomization.yaml
+	kubectl kustomize config/release/admission-certmanager > dist/install-admission-certmanager.yaml
+	@git checkout config/release/admission-certmanager/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/admission-certmanager/kustomization.yaml
+
+bundle-install-admission-openshift: ## Generate dist/install-admission-openshift.yaml
+	@mkdir -p dist
+	sed -i 's|newTag: .*|newTag: $(RELEASE_TAG)|' config/release/admission-openshift/kustomization.yaml
+	kubectl kustomize config/release/admission-openshift > dist/install-admission-openshift.yaml
+	@git checkout config/release/admission-openshift/kustomization.yaml 2>/dev/null || sed -i 's|newTag: .*|newTag: RELEASE_TAG|' config/release/admission-openshift/kustomization.yaml
+
+release-assets: bundle-install-core bundle-install-admission-certmanager bundle-install-admission-openshift ## Generate all release install bundles under dist/
+
+verify-generated: manifests generate ## Verify generated files are up-to-date
+	@if ! git diff --quiet -- config/crd/bases/ api/v1alpha1/zz_generated.deepcopy.go; then \
+		echo "ERROR: Generated files are out of date. Run 'make manifests generate' and commit the result."; \
+		git diff --stat -- config/crd/bases/ api/v1alpha1/zz_generated.deepcopy.go; \
+		exit 1; \
+	fi
