@@ -1,7 +1,7 @@
 # ---- Go binaries & build dirs
 /bin/
 /build/
-/dist/*.yaml
+/dist/
 /out/
 /tmp/
 /.cache/
