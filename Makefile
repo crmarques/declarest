@@ -7,6 +7,7 @@ GOFLAGS ?= -mod=readonly
 PYTHON ?= python3
 GO_VERSION := $(shell awk '/^go /{print $$2; exit}' go.mod)
 BIN_DIR := bin
+BIN_DIR_ABS := $(abspath $(BIN_DIR))
 BINARY := $(BIN_DIR)/declarest
 OPERATOR_BINARY := $(BIN_DIR)/declarest-operator-manager
 OPERATOR_IMAGE ?= declarest-operator
@@ -111,13 +112,28 @@ tidy: ## Reconcile go.mod and go.sum with the current imports
 
 # --- Operator manifest generation ---
 
-CONTROLLER_GEN ?= $(shell $(GO) env GOPATH)/bin/controller-gen
+CONTROLLER_GEN_VERSION ?= v0.20.1
+CONTROLLER_GEN_BIN := $(BIN_DIR_ABS)/controller-gen
+CONTROLLER_GEN ?= $(CONTROLLER_GEN_BIN)
 RELEASE_TAG ?= latest
 
-manifests: ## Regenerate CRD manifests from Go types
+.PHONY: controller-gen
+
+controller-gen:
+	@if [ -x "$(CONTROLLER_GEN)" ]; then \
+		exit 0; \
+	fi; \
+	if [ "$(CONTROLLER_GEN)" != "$(CONTROLLER_GEN_BIN)" ]; then \
+		echo "ERROR: CONTROLLER_GEN points to a missing executable: $(CONTROLLER_GEN)"; \
+		exit 1; \
+	fi; \
+	mkdir -p "$(BIN_DIR_ABS)"; \
+	GOBIN="$(BIN_DIR_ABS)" $(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
+
+manifests: controller-gen ## Regenerate CRD manifests from Go types
 	$(CONTROLLER_GEN) crd paths="./api/v1alpha1/..." output:crd:artifacts:config=config/crd/bases
 
-generate: ## Regenerate deepcopy methods
+generate: controller-gen ## Regenerate deepcopy methods
 	$(CONTROLLER_GEN) object paths="./api/v1alpha1/..."
 
 bundle-install-core: ## Generate dist/install.yaml from core kustomize overlay
