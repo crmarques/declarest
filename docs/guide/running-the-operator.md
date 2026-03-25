@@ -113,12 +113,43 @@ make operator-image-push OPERATOR_IMAGE=ghcr.io/crmarques/declarest-operator OPE
 
 ### Install on a cluster
 
+Released install manifests are the recommended install path:
+
+| Manifest | Includes | Depends on | Recommended use |
+|---|---|---|---|
+| `install.yaml` | CRDs, RBAC, manager deployment | None | Simplest install, evaluation environments, or clusters where you do not want admission webhook dependencies |
+| `install-admission-certmanager.yaml` | Base install plus validating admission webhooks | `cert-manager` | Recommended default for production Kubernetes clusters |
+| `install-admission-openshift.yaml` | Base install plus validating admission webhooks | OpenShift serving cert integration | Recommended for OpenShift |
+
+```bash
+VERSION={{ declarest_tag() }}
+kubectl create namespace declarest-system
+kubectl apply -f "https://github.com/crmarques/declarest/releases/download/${VERSION}/install-admission-certmanager.yaml"
+```
+
+Why the variants exist:
+
+- `install.yaml` keeps the footprint smallest. It does not enable the validating admission webhook, so CR validation happens later in the controller/runtime path instead of being enforced at the Kubernetes admission layer.
+- `install-admission-certmanager.yaml` enables the validating admission webhook and relies on `cert-manager` to provision the webhook TLS certificate and CA injection.
+- `install-admission-openshift.yaml` also enables the validating admission webhook, but gets the serving certificate from OpenShift service annotations instead of `cert-manager`.
+
+Use the cert-manager variant unless one of these is true:
+
+- You are on OpenShift: use `install-admission-openshift.yaml`.
+- You want the fewest cluster dependencies or a quick evaluation install: use `install.yaml`.
+
+For local development from a source checkout, the repository kustomize bases are still useful:
+
 ```bash
 kubectl create namespace declarest-system
 kubectl apply -k config/default
 ```
 
-`config/default` includes admission webhook resources and default manager deployment settings.
+Developer overlays map to the release assets like this:
+
+- `config/release/core` -> `install.yaml`
+- `config/release/admission-certmanager` -> `install-admission-certmanager.yaml`
+- `config/release/admission-openshift` -> `install-admission-openshift.yaml`
 
 Apply sample resources:
 

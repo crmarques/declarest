@@ -109,8 +109,18 @@ ResourceRepository    ManagedServer    SecretStore    SyncPolicy
 For continuous sync in production, DeclaREST ships a Kubernetes Operator that watches your Git repository and reconciles resources automatically.
 
 ```bash
-kubectl apply -k config/default    # install CRDs + controller
+VERSION=vX.Y.Z
+kubectl create namespace declarest-system
+kubectl apply -f "https://github.com/crmarques/declarest/releases/download/${VERSION}/install.yaml"
 ```
+
+Release install manifests:
+
+| Manifest | Includes | Extra dependency | Recommended when |
+|---|---|---|---|
+| `install.yaml` | CRDs, RBAC, manager deployment | None | You want the simplest install on a standard Kubernetes cluster and do not need admission webhooks yet |
+| `install-admission-certmanager.yaml` | `install.yaml` plus validating admission webhooks | `cert-manager` installed in the cluster | Recommended for most production Kubernetes clusters because it adds early CR validation without requiring OpenShift |
+| `install-admission-openshift.yaml` | `install.yaml` plus validating admission webhooks | OpenShift service serving cert support | Recommended on OpenShift clusters; do not use this on generic Kubernetes |
 
 See the [Operator Quickstart](docs/getting-started/quickstart-operator.md) for a full walkthrough.
 

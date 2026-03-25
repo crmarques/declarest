@@ -12,12 +12,28 @@ This is the shortest path to first reconcile success with the Kubernetes Operato
 
 ## 1. Install CRDs and Operator
 
+Choose one released install manifest:
+
+| Manifest | What it installs | Depends on | Use it when |
+|---|---|---|---|
+| `install.yaml` | CRDs, RBAC, operator manager | Nothing beyond Kubernetes | You want the fastest path to first reconcile success |
+| `install-admission-certmanager.yaml` | `install.yaml` plus validating admission webhooks | `cert-manager` | Recommended for most non-OpenShift production clusters |
+| `install-admission-openshift.yaml` | `install.yaml` plus validating admission webhooks | OpenShift serving cert support | Recommended on OpenShift |
+
+Admission-enabled manifests reject invalid CRs earlier, at create/update time. The base `install.yaml` keeps cluster dependencies minimal and is the shortest quickstart path.
+
 ```bash
+VERSION={{ declarest_tag() }}
 kubectl create namespace declarest-system
-kubectl apply -k config/default
+kubectl apply -f "https://github.com/crmarques/declarest/releases/download/${VERSION}/install.yaml"
 ```
 
-This installs the CRDs and deploys the Operator manager.
+That installs the CRDs and deploys the Operator manager from the tagged release.
+
+If you want admission validation from the start, swap the filename in the URL:
+
+- `install-admission-certmanager.yaml` on standard Kubernetes clusters with `cert-manager`
+- `install-admission-openshift.yaml` on OpenShift
 
 ## 2. Create required Secrets
 
