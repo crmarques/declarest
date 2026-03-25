@@ -37,5 +37,11 @@ checksum:
 snapshot:
   version_template: "{{ .Tag }}-next"
 
+release:
+  extra_files:
+    - glob: ./.release-assets/install.yaml
+    - glob: ./.release-assets/install-admission-certmanager.yaml
+    - glob: ./.release-assets/install-admission-openshift.yaml
+
 changelog:
   use: github

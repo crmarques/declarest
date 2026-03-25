@@ -45,6 +45,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | E2E harness/profile/component change | `agents/reference/interfaces.md`, `agents/reference/e2e.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 | Architecture/refactor proposal | `agents/reference/interfaces.md`, `agents/reference/architecture.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
 | Spec authoring only | `agents/reference/interfaces.md`, targeted domain file, `agents/reference/code.md`, `agents/reference/quality.md` |
+| CI/release workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` |
 | Instruction/skill workflow change | `agents/reference/interfaces.md`, `agents/reference/code.md`, `agents/reference/quality.md` plus affected `AGENTS.md`/`agents/skills/*` files, and `agents/reference/commit-instructions.md` when final handoff or commit guidance changes |
 | Quality strategy/test-policy change | `agents/reference/interfaces.md`, `agents/reference/quality.md`, `agents/reference/use-cases.md` |
 

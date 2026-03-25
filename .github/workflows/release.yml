@@ -45,6 +45,14 @@ jobs:
               sys.exit(1)
           print(f"releasing module version {ref_name}")
           PY
+      - name: Stage release manifest assets
+        run: |
+          set -euo pipefail
+          make release-assets RELEASE_TAG=${{ github.ref_name }}
+          mkdir -p .release-assets
+          cp dist/install.yaml .release-assets/install.yaml
+          cp dist/install-admission-certmanager.yaml .release-assets/install-admission-certmanager.yaml
+          cp dist/install-admission-openshift.yaml .release-assets/install-admission-openshift.yaml
       - name: Validate GoReleaser config
         uses: goreleaser/goreleaser-action@v7
         with:
