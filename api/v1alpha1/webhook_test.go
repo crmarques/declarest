@@ -20,6 +20,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -83,6 +84,39 @@ func TestWebhookValidationSecretStoreCreate(t *testing.T) {
 	}
 	if len(warnings) != 0 {
 		t.Fatalf("ValidateCreate() returned unexpected warnings: %v", warnings)
+	}
+}
+
+func TestWebhookValidationResourceRepositoryCreateRejectsMissingPVCAccessModes(t *testing.T) {
+	t.Parallel()
+
+	repo := &ResourceRepository{
+		Spec: ResourceRepositorySpec{
+			Type:         ResourceRepositoryTypeGit,
+			PollInterval: metav1.Duration{Duration: 30 * time.Second},
+			Git: &GitRepositorySpec{
+				URL:    "https://example.com/org/repo.git",
+				Branch: "main",
+				Auth: ResourceRepositoryAuth{
+					TokenRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "git-auth"},
+						Key:                  "token",
+					},
+				},
+			},
+			Storage: StorageSpec{
+				PVC: &PVCTemplateSpec{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+			},
+		},
+	}
+
+	v := &resourceRepositoryValidator{}
+	if _, err := v.ValidateCreate(context.Background(), repo.DeepCopy()); err == nil {
+		t.Fatal("ValidateCreate() expected pvc accessModes validation error, got nil")
 	}
 }
 

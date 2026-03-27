@@ -65,9 +65,10 @@ type StorageSpec struct {
 }
 
 type PVCTemplateSpec struct {
-	StorageClassName *string                             `json:"storageClassName,omitempty"`
-	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
-	Requests         corev1.ResourceList                 `json:"requests"`
+	StorageClassName *string `json:"storageClassName,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes"`
+	Requests    corev1.ResourceList                 `json:"requests"`
 }
 
 func (s StorageSpec) validate(fieldPath string) error {

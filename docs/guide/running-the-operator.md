@@ -127,6 +127,8 @@ kubectl create namespace declarest-system
 kubectl apply -f "https://github.com/crmarques/declarest/releases/download/${VERSION}/install-admission-certmanager.yaml"
 ```
 
+Released install manifests watch all namespaces by default. They ship cluster-scope RBAC for DeclaREST resources, Secrets, and PVCs, plus a namespace-scoped lease role for leader election in `declarest-system`.
+
 Why the variants exist:
 
 - `install.yaml` keeps the footprint smallest. It does not enable the validating admission webhook, so CR validation happens later in the controller/runtime path instead of being enforced at the Kubernetes admission layer.
@@ -151,11 +153,7 @@ Developer overlays map to the release assets like this:
 - `config/release/admission-certmanager` -> `install-admission-certmanager.yaml`
 - `config/release/admission-openshift` -> `install-admission-openshift.yaml`
 
-Apply sample resources:
-
-```bash
-kubectl apply -k config/samples
-```
+Treat `config/samples/*.yaml` as reference templates, not a ready-to-apply first-success bundle. Edit the URLs, Secret references, and names for your environment before applying them.
 
 ## Observability
 

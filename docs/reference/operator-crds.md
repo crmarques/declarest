@@ -22,6 +22,7 @@ Key fields:
 - `spec.git.branch` (defaults to `main`)
 - `spec.git.auth.tokenRef` or `spec.git.auth.sshSecretRef`
 - `spec.storage` (`existingPVC` or `pvc`)
+- `spec.storage.pvc.accessModes` is required when `pvc` is used and intentionally has no default
 
 Repository payload files preserve the managed-server response media type or the explicit payload input media type. The CRD no longer exposes a repository payload-format default.
 

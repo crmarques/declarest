@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: declarest-operator
+rules:
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies", "repositorywebhooks"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["declarest.io"]
+    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
+    verbs: ["update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

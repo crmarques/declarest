@@ -20,5 +20,8 @@ spec:
         name: repository-credentials
         key: webhook-secret
   storage:
-    existingPVC:
-      name: repository-pvc
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      requests:
+        storage: 1Gi

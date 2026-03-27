@@ -238,6 +238,7 @@ spec:
                       accessModes:
                         items:
                           type: string
+                        minItems: 1
                         type: array
                       requests:
                         additionalProperties:
@@ -252,6 +253,7 @@ spec:
                       storageClassName:
                         type: string
                     required:
+                    - accessModes
                     - requests
                     type: object
                 type: object

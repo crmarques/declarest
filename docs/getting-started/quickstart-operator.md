@@ -53,7 +53,7 @@ kubectl -n declarest-system create secret generic secret-store-file \
 
 ## 3. Apply minimal CRs
 
-You can start from `config/samples/*.yaml` or apply this minimal set:
+For first reconcile success, use a manifest like this. The files under `config/samples/` are reference templates and still require environment-specific edits before you apply them.
 
 ```yaml
 apiVersion: declarest.io/v1alpha1
@@ -137,6 +137,8 @@ Apply it:
 ```bash
 kubectl apply -f quickstart-operator.yaml
 ```
+
+`spec.storage.pvc.accessModes` is required when you ask DeclaREST to create a PVC. The operator does not default it because valid access modes depend on your cluster storage class.
 
 ## 4. Confirm health and reconcile
 
