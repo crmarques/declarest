@@ -14,6 +14,10 @@ selected_auth_type=${E2E_MANAGED_SERVER_AUTH_TYPE:-custom-header}
 case "${selected_auth_type}" in
   basic|prompt)
     e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" RUNDECK_AUTH_MODE "basic"
+    e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_AUTH_KIND "basic"
+    e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_BASIC_USERNAME "${RUNDECK_ADMIN_USER}"
+    e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_BASIC_PASSWORD "${RUNDECK_ADMIN_PASSWORD}"
+    e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_ACCESS_AUTH_MODE "basic"
     exit 0
     ;;
   custom-header) ;;
@@ -115,6 +119,12 @@ if [[ -n "${token}" ]]; then
   e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" RUNDECK_API_TOKEN "${token}"
   e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" RUNDECK_AUTH_MODE "token"
   e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" RUNDECK_AUTH_HEADER "${auth_header}"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_AUTH_KIND "custom-header"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_HEADER_NAME "${auth_header}"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_HEADER_VALUE "${token}"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_ACCESS_AUTH_MODE "custom-header"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_ACCESS_HEADER "${auth_header}"
+  e2e_write_state_value "${E2E_COMPONENT_STATE_FILE}" MANAGED_SERVER_ACCESS_TOKEN "${token}"
   exit 0
 fi
 

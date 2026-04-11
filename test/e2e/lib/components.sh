@@ -8,9 +8,16 @@ declare -Ag E2E_COMPONENT_CONTRACT_VERSION=()
 declare -Ag E2E_COMPONENT_RUNTIME_KIND=()
 declare -Ag E2E_COMPONENT_DEPENDS_ON=()
 declare -Ag E2E_COMPONENT_DESCRIPTION=()
+declare -Ag E2E_COMPONENT_DEFAULT_SELECTIONS=()
 declare -Ag E2E_COMPONENT_PROJECT=()
 declare -Ag E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
 declare -Ag E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+declare -Ag E2E_COMPONENT_SERVICE_PORT=()
+declare -Ag E2E_COMPONENT_METADATA_BUNDLE_REF=()
+declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+declare -Ag E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+declare -Ag E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH=()
 declare -Ag E2E_COMPONENT_OPENAPI_SPEC=()
 declare -Ag E2E_CAPABILITY_SET=()
 
@@ -128,6 +135,48 @@ e2e_component_name() {
   printf '%s\n' "${1#*:}"
 }
 
+e2e_component_default_selection_supports() {
+  local component_key=$1
+  local selection=$2
+  local declared=" ${E2E_COMPONENT_DEFAULT_SELECTIONS[${component_key}]:-} "
+
+  [[ "${declared}" == *" ${selection} "* ]]
+}
+
+e2e_component_default_name_for_type() {
+  local component_type=$1
+  local selection=${2:-base}
+  local component_key
+  local selected_name=''
+
+  for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
+    [[ "$(e2e_component_type "${component_key}")" == "${component_type}" ]] || continue
+    e2e_component_default_selection_supports "${component_key}" "${selection}" || continue
+
+    if [[ -n "${selected_name}" ]]; then
+      e2e_die "multiple ${component_type} components declare DEFAULT_SELECTIONS=${selection}"
+      return 1
+    fi
+
+    selected_name=$(e2e_component_name "${component_key}")
+  done
+
+  if [[ -z "${selected_name}" ]]; then
+    e2e_die "no ${component_type} component declares DEFAULT_SELECTIONS=${selection}"
+    return 1
+  fi
+
+  printf '%s\n' "${selected_name}"
+}
+
+e2e_component_catalog_ensure_discovered() {
+  if ((${#E2E_COMPONENT_KEYS[@]} > 0)); then
+    return 0
+  fi
+
+  e2e_discover_components
+}
+
 e2e_component_connection_for_key() {
   local component_key=$1
   local component_type
@@ -185,19 +234,6 @@ e2e_component_k8s_label_key() {
   component_type=$(e2e_component_type "${component_key}")
   component_name=$(e2e_component_name "${component_key}")
   printf '%s-%s\n' "${component_type}" "${component_name}"
-}
-
-e2e_default_metadata_bundle_for_managed_server() {
-  local managed_server=$1
-
-  case "${managed_server}" in
-    keycloak)
-      printf 'keycloak-bundle:0.0.1\n'
-      ;;
-    *)
-      return 1
-      ;;
-  esac
 }
 
 e2e_seed_local_metadata_bundle_cache_locked() {
@@ -305,14 +341,15 @@ e2e_prepare_metadata_workspace() {
       local metadata_bundle
       local metadata_source="${component_dir}/metadata"
       local openapi_source="${component_dir}/openapi.yaml"
-      if ! metadata_bundle=$(e2e_default_metadata_bundle_for_managed_server "${E2E_MANAGED_SERVER}"); then
+      metadata_bundle=${E2E_COMPONENT_METADATA_BUNDLE_REF[${resource_component_key}]:-}
+      if [[ -z "${metadata_bundle}" ]]; then
         if [[ -d "${metadata_source}" ]]; then
           e2e_prepare_metadata_workspace_copy "${metadata_source}" || return 1
-          e2e_info "metadata source bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; using metadata workspace copy"
+          e2e_info "metadata source bundle has no component-declared bundle ref for managed-server=${E2E_MANAGED_SERVER}; using metadata workspace copy"
           return 0
         fi
 
-        e2e_info "metadata source bundle has no shorthand mapping for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
+        e2e_info "metadata source bundle has no component-declared bundle ref for managed-server=${E2E_MANAGED_SERVER}; continuing without metadata.bundle"
         return 0
       fi
       e2e_seed_local_metadata_bundle_cache "${metadata_bundle}" "${metadata_source}" "${openapi_source}" || return 1

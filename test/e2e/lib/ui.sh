@@ -295,7 +295,7 @@ ui_execution_parameter_source() {
     repository-type)
       if ui_parameter_is_explicit 'repo-type'; then
         printf 'explicit\n'
-      elif ui_profile_is_operator && [[ "${E2E_REPO_TYPE:-}" == 'git' ]]; then
+      elif ui_profile_is_operator && [[ "${E2E_REPO_TYPE:-}" == "$(e2e_component_default_name_for_type 'repo-type' 'operator' 2>/dev/null || true)" ]]; then
         printf 'profile-default\n'
       else
         printf 'default\n'
@@ -307,7 +307,7 @@ ui_execution_parameter_source() {
         printf 'not-applicable\n'
       elif ui_parameter_is_explicit 'git-provider'; then
         printf 'explicit\n'
-      elif ui_profile_is_operator && [[ "${E2E_GIT_PROVIDER}" == 'gitea' ]]; then
+      elif ui_profile_is_operator && [[ "${E2E_GIT_PROVIDER}" == "$(e2e_component_default_name_for_type 'git-provider' 'operator' 2>/dev/null || true)" ]]; then
         printf 'profile-default\n'
       else
         printf 'default\n'

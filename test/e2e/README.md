@@ -25,8 +25,8 @@ This repository uses a componentized Bash e2e harness.
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 - `operator-manual`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
-  - defaults to `repo-type=git` and `git-provider=gitea` when those flags are omitted
-  - requires local component connections, `--repo-type git`, `--git-provider <gitea|gitlab>`, and `--secret-provider <file|vault>`
+  - defaults to the component-declared operator selections for `repo-type` and `git-provider` when those flags are omitted
+  - requires local component connections, operator-compatible `repo-type`/`git-provider` selections, and a selected `secret-provider`
   - copies the selected managed-server `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs
   - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed server manually
 - `operator-basic`: same operator environment as `operator-manual`, then runs compatible shared `smoke` cases plus operator-focused automated `operator-main` cases.
@@ -70,7 +70,7 @@ Selections are validated against each managed-server capability contract; unsupp
 When `--proxy-mode external`, generated CLI contexts inject explicit proxy blocks into each eligible section: `managedServer.http`, `repository.git.remote` for `http|https` remotes, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
 When `--proxy-mode local`, the runner auto-selects helper component `proxy:forward-proxy`, exposes one run-scoped proxy URL to the CLI, and wires the same eligible context sections through that local proxy. In `--platform compose`, local loopback component URLs are rewritten to a host-reachable non-loopback address when one can be resolved so host-side CLI traffic still traverses the proxy.
 Proxy prompt auth is CLI-only in v1: `--proxy-auth-type prompt` is supported for `cli-manual`, writes top-level prompt-backed credentials plus `credentialsRef` placeholders to `contexts.yaml`, sets `persistInSession: true` for local prompt-backed proxy credentials, prints the generated proxy credentials in manual handoff output for testing, and keeps proxy auth vars out of the generated setup script environment instead of pre-seeding prompt auth env vars.
-`--metadata-source bundle` uses shorthand `metadata.bundle` mappings for supported managed-server components (currently `keycloak-bundle:0.0.1` for `keycloak`), skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no shorthand mapping exists.
+`--metadata-source bundle` uses the selected managed-server component `METADATA_BUNDLE_REF` when declared, skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no bundle ref is declared.
 `--metadata-source dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:

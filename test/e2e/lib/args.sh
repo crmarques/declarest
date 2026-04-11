@@ -2,7 +2,7 @@
 
 declare -Ag E2E_EXPLICIT
 
-E2E_MANAGED_SERVER='simple-api-server'
+E2E_MANAGED_SERVER=''
 E2E_MANAGED_SERVER_CONNECTION='local'
 E2E_MANAGED_SERVER_AUTH_TYPE=''
 E2E_MANAGED_SERVER_MTLS='false'
@@ -14,10 +14,10 @@ E2E_PROXY_NO_PROXY="${DECLAREST_E2E_PROXY_NO_PROXY:-}"
 E2E_PROXY_AUTH_USERNAME="${DECLAREST_E2E_PROXY_AUTH_USERNAME:-}"
 E2E_PROXY_AUTH_PASSWORD="${DECLAREST_E2E_PROXY_AUTH_PASSWORD:-}"
 E2E_METADATA='bundle'
-E2E_REPO_TYPE='filesystem'
+E2E_REPO_TYPE=''
 E2E_GIT_PROVIDER=''
 E2E_GIT_PROVIDER_CONNECTION='local'
-E2E_SECRET_PROVIDER='file'
+E2E_SECRET_PROVIDER=''
 E2E_SECRET_PROVIDER_CONNECTION='local'
 E2E_PROFILE='cli-basic'
 E2E_PLATFORM='kubernetes'
@@ -75,6 +75,27 @@ e2e_profile_from_cli_args() {
 e2e_valid_component_name() {
   local value=$1
   [[ "${value}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+}
+
+e2e_args_ensure_component_catalog() {
+  if ! declare -F e2e_component_catalog_ensure_discovered >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/lib/components.sh"
+  fi
+
+  e2e_component_catalog_ensure_discovered
+}
+
+e2e_args_apply_base_component_defaults() {
+  [[ -n "${E2E_MANAGED_SERVER:-}" ]] || E2E_MANAGED_SERVER=$(e2e_component_default_name_for_type 'managed-server' 'base') || return 1
+  [[ -n "${E2E_REPO_TYPE:-}" ]] || E2E_REPO_TYPE=$(e2e_component_default_name_for_type 'repo-type' 'base') || return 1
+  [[ -n "${E2E_SECRET_PROVIDER:-}" ]] || E2E_SECRET_PROVIDER=$(e2e_component_default_name_for_type 'secret-provider' 'base') || return 1
+
+  if [[ "${E2E_REPO_TYPE}" == 'git' && -z "${E2E_GIT_PROVIDER}" ]]; then
+    E2E_GIT_PROVIDER=$(e2e_component_default_name_for_type 'git-provider' 'base') || return 1
+  fi
+
+  return 0
 }
 
 e2e_validate_component_arg() {
@@ -312,11 +333,8 @@ Platform selection:
     kubernetes : Start local containerized components in a run-scoped kind cluster.
 
 Component selection (choose values for each flag; see notes below):
-  --managed-server <simple-api-server|keycloak|rundeck|vault>          default: simple-api-server
-    simple-api-server : Lightweight JSON API with selectable auth modes (none/basic/oauth2) and optional mTLS.
-    keycloak          : Keycloak Admin REST API that enforces OAuth2 client-credentials tokens.
-    rundeck           : Rundeck HTTP API surface for job-centric operations.
-    vault             : HashiCorp Vault HTTP API acting as the managed server.
+  --managed-server <name>                              default: component contract default
+    Use --list-components to inspect available managed-server components and their descriptions.
     A managed-server selection is mandatory for e2e runs; `none` is not supported.
   --managed-server-connection <local|remote>            default: local
     local  : Start the chosen managed server via the provided fixtures and scripts.
@@ -339,21 +357,15 @@ Component selection (choose values for each flag; see notes below):
   --metadata-source <bundle|dir>                    default: bundle
     bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
     dir       : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
-  --repo-type <filesystem|git>                        default: filesystem
-    filesystem : Use the local filesystem repository backend.
-    git        : Use the git repository backend (requires a git provider selection).
-  --git-provider <git|github|gitlab|gitea>            default: git when --repo-type git (none otherwise)
-    git    : Built-in file:// git provider supplied with the fixtures.
-    github : Remote GitHub provider (requires --git-provider-connection remote).
-    gitlab : GitLab provider that can run locally or remote, depending on the connection flag.
-    gitea  : Gitea provider that can run locally or remote, depending on the connection flag.
-    Selecting --repo-type git without an explicit --git-provider forces --git-provider=git.
+  --repo-type <name>                                  default: component contract default
+    Use --list-components to inspect available repository backends and their descriptions.
+  --git-provider <name>                               default: git-provider component contract default when --repo-type git
+    Use --list-components to inspect available git-provider components and their descriptions.
   --git-provider-connection <local|remote>             default: local
     local  : Launch the git provider inside this workspace.
-    remote : Reach an existing provider instance (required for github; optional for gitlab/gitea).
-  --secret-provider <file|vault|none>                 default: file
-    file  : Encrypted local file-based secret provider backed by fixtures.
-    vault : HashiCorp Vault provider that can run locally or connect to a remote Vault.
+    remote : Reach an existing provider instance using the selected component contract.
+  --secret-provider <name|none>                        default: component contract default
+    Use --list-components to inspect available secret-provider components and their descriptions.
     none  : Skip secret provider integration so placeholders remain plaintext.
   --secret-provider-connection <local|remote>          default: local
     local  : Start the secret provider from the workspace fixtures.
@@ -387,18 +399,16 @@ Environment overrides:
   DECLAREST_E2E_PROXY_AUTH_PASSWORD=<v>                optional proxy auth password
 
 Examples:
-  ./run-e2e.sh --platform kubernetes --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --platform compose --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile cli-basic --repo-type filesystem --managed-server simple-api-server --secret-provider file
-  ./run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source dir
-  ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitlab --managed-server simple-api-server
-  ./run-e2e.sh --profile cli-full --repo-type git --git-provider gitea --managed-server simple-api-server
-  ./run-e2e.sh --profile operator-manual --managed-server simple-api-server --git-provider gitea --secret-provider file
-  ./run-e2e.sh --profile operator-basic --managed-server simple-api-server --git-provider gitea --secret-provider file
-  ./run-e2e.sh --profile operator-full --managed-server simple-api-server --git-provider gitea --secret-provider file
-  ./run-e2e.sh --managed-server keycloak --managed-server-auth-type oauth2
-  ./run-e2e.sh --profile cli-manual --managed-server simple-api-server --managed-server-auth-type prompt
-  ./run-e2e.sh --managed-server simple-api-server --managed-server-auth-type basic --managed-server-mtls true
+  ./run-e2e.sh --platform kubernetes --profile cli-basic
+  ./run-e2e.sh --platform compose --profile cli-basic
+  ./run-e2e.sh --profile cli-basic --metadata-source dir
+  ./run-e2e.sh --profile cli-full --repo-type git --git-provider <git-provider-name>
+  ./run-e2e.sh --profile operator-manual
+  ./run-e2e.sh --profile operator-basic
+  ./run-e2e.sh --profile operator-full
+  ./run-e2e.sh --managed-server <managed-server-name> --managed-server-auth-type oauth2
+  ./run-e2e.sh --profile cli-manual --managed-server-auth-type prompt
+  ./run-e2e.sh --managed-server-auth-type basic --managed-server-mtls true
   ./run-e2e.sh --proxy-mode local
   ./run-e2e.sh --profile cli-manual --proxy-mode local --proxy-auth-type prompt
   DECLAREST_E2E_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --proxy-mode external
@@ -667,6 +677,9 @@ e2e_parse_args() {
 
   E2E_PLATFORM=$(e2e_parse_platform_value "${E2E_PLATFORM}") || return 1
 
+  e2e_args_ensure_component_catalog || return 1
+  e2e_args_apply_base_component_defaults || return 1
+
   if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
     e2e_die '--managed-server none is not supported; select a managed-server component'
     return 1
@@ -764,10 +777,6 @@ e2e_parse_args() {
   E2E_METADATA=$(e2e_parse_metadata_source_value "${E2E_METADATA}") || return 1
 
   e2e_validate_component_arg '--repo-type' "${E2E_REPO_TYPE}" || return 1
-
-  if [[ "${E2E_REPO_TYPE}" == 'git' && -z "${E2E_GIT_PROVIDER}" ]]; then
-    E2E_GIT_PROVIDER='git'
-  fi
 
   e2e_validate_component_arg '--git-provider' "${E2E_GIT_PROVIDER}" 'false' 'true' || return 1
 

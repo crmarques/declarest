@@ -43,6 +43,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   e2e_write_state_value "${state_file}" GITLAB_BASE_URL "${base_url}"
   e2e_write_state_value "${state_file}" GITLAB_PROJECT_NAME "declarest-e2e"
   e2e_write_state_value "${state_file}" GITLAB_PROJECT_PATH "root/declarest-e2e"
+  e2e_write_state_value "${state_file}" REPO_PROVIDER_BASE_URL "${base_url}"
   e2e_write_state_value "${state_file}" GIT_REMOTE_URL "${base_url}/root/declarest-e2e.git"
   e2e_write_state_value "${state_file}" GIT_REMOTE_BRANCH "main"
   e2e_write_state_value "${state_file}" GIT_AUTH_MODE "basic"

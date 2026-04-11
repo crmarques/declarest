@@ -26,15 +26,29 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
 
   e2e_write_state_value "${state_file}" RUNDECK_HTTP_PORT "${rundeck_port}"
   e2e_write_state_value "${state_file}" RUNDECK_BASE_URL "${base_url}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "${base_url}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_API_BASE_URL "${base_url}/api/45"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_WEB_LOGIN_URL "${base_url}/user/login"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_USERNAME "${admin_user}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_PASSWORD "${admin_password}"
   e2e_write_state_value "${state_file}" RUNDECK_ADMIN_USER "${admin_user}"
   e2e_write_state_value "${state_file}" RUNDECK_ADMIN_PASSWORD "${admin_password}"
   e2e_write_state_value "${state_file}" RUNDECK_API_VERSION "45"
   if [[ "${selected_auth_type}" == 'custom-header' ]]; then
     e2e_write_state_value "${state_file}" RUNDECK_AUTH_MODE "token"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "custom-header"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_NAME "X-Rundeck-Auth-Token"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "custom-header"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_HEADER "X-Rundeck-Auth-Token"
   else
     e2e_write_state_value "${state_file}" RUNDECK_AUTH_MODE "basic"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "basic"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_USERNAME "${admin_user}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_PASSWORD "${admin_password}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "basic"
   fi
   e2e_write_state_value "${state_file}" RUNDECK_AUTH_HEADER "X-Rundeck-Auth-Token"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${base_url}/api/45"
   exit 0
 fi
 
@@ -55,3 +69,13 @@ e2e_write_state_value "${state_file}" RUNDECK_API_VERSION "${rundeck_api_version
 e2e_write_state_value "${state_file}" RUNDECK_API_TOKEN "${rundeck_token}"
 e2e_write_state_value "${state_file}" RUNDECK_AUTH_MODE "token"
 e2e_write_state_value "${state_file}" RUNDECK_AUTH_HEADER "${rundeck_auth_header}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${rundeck_base_url%/}/api/${rundeck_api_version}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "custom-header"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_NAME "${rundeck_auth_header}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_VALUE "${rundeck_token}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "${rundeck_base_url}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_API_BASE_URL "${rundeck_base_url%/}/api/${rundeck_api_version}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_WEB_LOGIN_URL "${rundeck_base_url%/}/user/login"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "custom-header"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_HEADER "${rundeck_auth_header}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_TOKEN "${rundeck_token}"

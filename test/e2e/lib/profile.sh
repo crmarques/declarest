@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+declare -Ag E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH=()
+
 e2e_profile_is_cli_basic() {
   local profile=${1:-${E2E_PROFILE:-}}
   [[ "${profile}" == 'cli-basic' ]]
@@ -92,18 +94,26 @@ e2e_apply_profile_defaults() {
   fi
 
   if ! e2e_is_explicit 'repo-type'; then
-    E2E_REPO_TYPE='git'
+    E2E_REPO_TYPE=$(e2e_component_default_name_for_type 'repo-type' 'operator') || return 1
     E2E_SELECTED_BY_PROFILE_DEFAULT=1
   fi
 
   if [[ "${E2E_REPO_TYPE}" == 'git' ]] && ! e2e_is_explicit 'git-provider'; then
-    if [[ -z "${E2E_GIT_PROVIDER}" || "${E2E_GIT_PROVIDER}" == 'git' ]]; then
-      E2E_GIT_PROVIDER='gitea'
-      E2E_SELECTED_BY_PROFILE_DEFAULT=1
-    fi
+    E2E_GIT_PROVIDER=$(e2e_component_default_name_for_type 'git-provider' 'operator') || return 1
+    E2E_SELECTED_BY_PROFILE_DEFAULT=1
   fi
 
   return 0
+}
+
+e2e_git_provider_supports_operator_profile() {
+  local provider=$1
+  local component_key
+
+  [[ -n "${provider}" ]] || return 1
+
+  component_key=$(e2e_component_key 'git-provider' "${provider}")
+  [[ -n "${E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER[${component_key}]:-}" ]]
 }
 
 e2e_validate_profile_rules() {
@@ -150,8 +160,8 @@ e2e_validate_profile_rules() {
     return 1
   fi
 
-  if [[ "${E2E_GIT_PROVIDER}" == 'git' ]]; then
-    e2e_die 'operator-* profiles do not support --git-provider git; choose gitea or gitlab'
+  if ! e2e_git_provider_supports_operator_profile "${E2E_GIT_PROVIDER}"; then
+    e2e_die "operator-* profiles require a git-provider component that declares REPOSITORY_WEBHOOK_PROVIDER; selected ${E2E_GIT_PROVIDER} does not"
     return 1
   fi
 
@@ -166,7 +176,7 @@ e2e_validate_profile_rules() {
   fi
 
   if [[ "${E2E_SECRET_PROVIDER}" == 'none' ]]; then
-    e2e_die 'operator-* profiles require a secret provider (file or vault)'
+    e2e_die 'operator-* profiles require a selected secret-provider component'
     return 1
   fi
 
@@ -571,85 +581,50 @@ e2e_profile_managed_server_state_get() {
 
 e2e_profile_managed_server_access_details() {
   local provider=${E2E_MANAGED_SERVER:-}
+  local base_url
+  local api_base_url
+  local web_login
+  local auth_mode
+  local username
+  local password
+  local header
+  local token
+  local mount
+  local path_prefix
+  local kv_version
 
   [[ -n "${provider}" && "${provider}" != 'none' ]] || return 0
 
-  case "${provider}" in
-    rundeck)
-      local base_url
-      local api_version
-      local api_base_url=''
-      local web_login=''
-      local auth_mode
-      local username
-      local password
-      local header
-      local token
+  base_url=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_BASE_URL' || true)
+  api_base_url=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_API_BASE_URL' || true)
+  web_login=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_WEB_LOGIN_URL' || true)
+  auth_mode=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_AUTH_MODE' || true)
+  username=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_USERNAME' || true)
+  password=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_PASSWORD' || true)
+  header=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_HEADER' || true)
+  token=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_TOKEN' || true)
+  mount=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_MOUNT' || true)
+  path_prefix=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_PATH_PREFIX' || true)
+  kv_version=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_KV_VERSION' || true)
 
-      base_url=$(e2e_profile_managed_server_state_get 'RUNDECK_BASE_URL' || true)
-      api_version=$(e2e_profile_managed_server_state_get 'RUNDECK_API_VERSION' || true)
-      auth_mode=$(e2e_profile_managed_server_state_get 'RUNDECK_AUTH_MODE' || true)
-      username=$(e2e_profile_managed_server_state_get 'RUNDECK_ADMIN_USER' || true)
-      password=$(e2e_profile_managed_server_state_get 'RUNDECK_ADMIN_PASSWORD' || true)
-      header=$(e2e_profile_managed_server_state_get 'RUNDECK_AUTH_HEADER' || true)
-      token=$(e2e_profile_managed_server_state_get 'RUNDECK_API_TOKEN' || true)
+  {
+    [[ -n "${base_url}" ]] && printf 'Base URL: %s\n' "${base_url}"
+    [[ -n "${api_base_url}" ]] && printf 'API Base URL: %s\n' "${api_base_url}"
+    [[ -n "${web_login}" ]] && printf 'Web Login: %s\n' "${web_login}"
+    [[ -n "${auth_mode}" ]] && printf 'Auth Mode: %s\n' "${auth_mode}"
+    [[ -n "${username}" ]] && printf 'Username: %s\n' "${username}"
+    [[ -n "${password}" ]] && printf 'Password: %s\n' "${password}"
+    [[ -n "${header}" ]] && printf 'Header: %s\n' "${header}"
+    [[ -n "${token}" ]] && printf 'Token: %s\n' "${token}"
+    [[ -n "${mount}" ]] && printf 'Mount: %s\n' "${mount}"
+    [[ -n "${path_prefix}" ]] && printf 'Path Prefix: %s\n' "${path_prefix}"
+    [[ -n "${kv_version}" ]] && printf 'KV Version: %s\n' "${kv_version}"
+  }
 
-      if [[ -n "${base_url}" ]]; then
-        api_version=${api_version:-45}
-        api_base_url="${base_url%/}/api/${api_version}"
-        web_login="${base_url%/}/user/login"
-      fi
-      case "${auth_mode}" in
-        token)
-          auth_mode='custom-header'
-          ;;
-        '')
-          if [[ -n "${token}" ]]; then
-            auth_mode='custom-header'
-          elif [[ -n "${username}" || -n "${password}" ]]; then
-            auth_mode='basic'
-          fi
-          ;;
-      esac
-
-      {
-        [[ -n "${base_url}" ]] && printf 'Base URL: %s\n' "${base_url}"
-        [[ -n "${api_base_url}" ]] && printf 'API Base URL: %s\n' "${api_base_url}"
-        [[ -n "${web_login}" ]] && printf 'Web Login: %s\n' "${web_login}"
-        [[ -n "${auth_mode}" ]] && printf 'Auth Mode: %s\n' "${auth_mode}"
-        [[ -n "${username}" ]] && printf 'Username: %s\n' "${username}"
-        [[ -n "${password}" ]] && printf 'Password: %s\n' "${password}"
-        [[ -n "${header}" ]] && printf 'Header: %s\n' "${header}"
-        [[ -n "${token}" ]] && printf 'Token: %s\n' "${token}"
-      }
-      ;;
-    vault)
-      local address
-      local vault_token
-      local mount
-      local path_prefix
-      local kv_version
-
-      address=$(e2e_profile_managed_server_state_get 'VAULT_ADDRESS' || true)
-      vault_token=$(e2e_profile_managed_server_state_get 'VAULT_TOKEN' || true)
-      mount=$(e2e_profile_managed_server_state_get 'VAULT_MOUNT' || true)
-      path_prefix=$(e2e_profile_managed_server_state_get 'VAULT_PATH_PREFIX' || true)
-      kv_version=$(e2e_profile_managed_server_state_get 'VAULT_KV_VERSION' || true)
-
-      {
-        [[ -n "${address}" ]] && printf 'Base URL: %s\n' "${address}"
-        printf 'Auth Mode: custom-header\n'
-        printf 'Header: X-Vault-Token\n'
-        [[ -n "${vault_token}" ]] && printf 'Token: %s\n' "${vault_token}"
-        [[ -n "${mount}" ]] && printf 'Mount: %s\n' "${mount}"
-        [[ -n "${path_prefix}" ]] && printf 'Path Prefix: %s\n' "${path_prefix}"
-        [[ -n "${kv_version}" ]] && printf 'KV Version: %s\n' "${kv_version}"
-      }
-      ;;
-  esac
+  return 0
 }
 
-e2e_profile_repo_provider_web_url_from_remote() {
+e2e_profile_repo_provider_repo_url_from_remote() {
   local remote_url=$1
   local host
   local path
@@ -675,6 +650,42 @@ e2e_profile_repo_provider_web_url_from_remote() {
       host=${remote_url%%/*}
       path=${remote_url#*/}
       printf 'https://%s/%s\n' "${host}" "${path%.git}"
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+e2e_profile_repo_provider_base_url_from_remote() {
+  local remote_url=$1
+  local host
+  local scheme
+
+  case "${remote_url}" in
+    http://*|https://*)
+      if [[ "${remote_url}" =~ ^([a-zA-Z][a-zA-Z0-9+.-]*://)([^/@]+@)?([^/:?#]+)(:([0-9]+))? ]]; then
+        scheme=${BASH_REMATCH[1]}
+        host=${BASH_REMATCH[3]}
+        if [[ -n "${BASH_REMATCH[5]:-}" ]]; then
+          printf '%s%s:%s\n' "${scheme}" "${host}" "${BASH_REMATCH[5]}"
+          return 0
+        fi
+        printf '%s%s\n' "${scheme}" "${host}"
+        return 0
+      fi
+      ;;
+    git@*:* )
+      host=${remote_url#git@}
+      host=${host%%:*}
+      printf 'https://%s\n' "${host}"
+      return 0
+      ;;
+    ssh://git@* )
+      remote_url=${remote_url#ssh://}
+      remote_url=${remote_url#*@}
+      host=${remote_url%%/*}
+      printf 'https://%s\n' "${host}"
       return 0
       ;;
   esac
@@ -711,59 +722,35 @@ e2e_profile_print_manual_component_access_help() {
 e2e_profile_print_repo_provider_access_help() {
   local provider=${E2E_GIT_PROVIDER:-}
   local connection=${E2E_GIT_PROVIDER_CONNECTION:-local}
+  local component_key
   local remote_url=''
+  local base_url=''
   local web_url=''
   local login_url=''
   local username=''
   local password=''
+  local login_path=''
 
   [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
   [[ -n "${provider}" ]] || return 0
 
+  component_key=$(e2e_component_key 'git-provider' "${provider}")
   remote_url=$(e2e_profile_repo_provider_state_get 'GIT_REMOTE_URL' || true)
-
-  case "${provider}" in
-    gitea)
-      web_url=$(e2e_profile_repo_provider_state_get 'GITEA_BASE_URL' || true)
-      if [[ -z "${web_url}" && -n "${remote_url}" ]]; then
-        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
-      fi
-      if [[ -n "${web_url}" ]]; then
-        login_url="${web_url%/}/user/login"
-      fi
-      username=$(e2e_profile_repo_provider_state_get 'GITEA_ADMIN_USERNAME' || true)
-      password=$(e2e_profile_repo_provider_state_get 'GITEA_ADMIN_PASSWORD' || true)
-      ;;
-    gitlab)
-      web_url=$(e2e_profile_repo_provider_state_get 'GITLAB_BASE_URL' || true)
-      if [[ -z "${web_url}" && -n "${remote_url}" ]]; then
-        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
-      fi
-      if [[ -n "${web_url}" ]]; then
-        login_url="${web_url%/}/users/sign_in"
-      fi
-      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
-      password=$(e2e_profile_repo_provider_state_get 'GITLAB_ROOT_PASSWORD' || true)
-      ;;
-    github)
-      if [[ -n "${remote_url}" ]]; then
-        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
-      fi
-      if [[ -n "${web_url}" ]]; then
-        login_url='https://github.com/login'
-      fi
-      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
-      ;;
-    git)
-      ;;
-    *)
-      if [[ -n "${remote_url}" ]]; then
-        web_url=$(e2e_profile_repo_provider_web_url_from_remote "${remote_url}" || true)
-      fi
-      login_url="${web_url}"
-      username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
-      ;;
-  esac
+  base_url=$(e2e_profile_repo_provider_state_get 'REPO_PROVIDER_BASE_URL' || true)
+  if [[ -z "${base_url}" && -n "${remote_url}" ]]; then
+    base_url=$(e2e_profile_repo_provider_base_url_from_remote "${remote_url}" || true)
+  fi
+  if [[ -n "${remote_url}" ]]; then
+    web_url=$(e2e_profile_repo_provider_repo_url_from_remote "${remote_url}" || true)
+  fi
+  login_path=${E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH[${component_key}]:-}
+  if [[ -n "${base_url}" && -n "${login_path}" ]]; then
+    login_url="${base_url%/}${login_path}"
+  elif [[ -n "${web_url}" && -z "${login_path}" ]]; then
+    login_url="${web_url}"
+  fi
+  username=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_USERNAME' || true)
+  password=$(e2e_profile_repo_provider_state_get 'GIT_AUTH_PASSWORD' || true)
 
   cat <<EOFREPO
 Repository provider access:
@@ -787,14 +774,9 @@ EOFREPOLOGIN
     printf '  password: %s\n' "${password}"
   fi
 
-  case "${provider}" in
-    github)
-      printf '  auth note: use your configured GitHub token for git operations if prompted.\n'
-      ;;
-    git)
-      printf '  auth note: built-in git provider uses local file:// repository URLs (no web login).\n'
-      ;;
-  esac
+  if [[ "${remote_url}" == file://* ]]; then
+    printf '  auth note: local file:// repository URL; no web login applies.\n'
+  fi
 }
 
 e2e_manual_handoff_print() {

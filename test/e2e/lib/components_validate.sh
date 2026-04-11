@@ -80,6 +80,113 @@ e2e_component_validate_security_feature_spec() {
   return 0
 }
 
+e2e_component_validate_service_port() {
+  local component_key=$1
+  local service_port=$2
+
+  [[ -n "${service_port}" ]] || return 0
+
+  if ! [[ "${service_port}" =~ ^[0-9]+$ ]] || ((service_port <= 0 || service_port > 65535)); then
+    e2e_die "component ${component_key} has invalid COMPONENT_SERVICE_PORT=${service_port} (allowed: integer 1-65535)"
+    return 1
+  fi
+
+  return 0
+}
+
+e2e_component_validate_default_selection_spec() {
+  local component_key=$1
+  local component_type=$2
+  local selection_spec=$3
+  local supported_connections=$4
+  local repository_webhook_provider=$5
+  local selection
+
+  for selection in ${selection_spec}; do
+    case "${selection}" in
+      base|operator) ;;
+      *)
+        e2e_die "component ${component_key} has invalid DEFAULT_SELECTIONS value: ${selection} (allowed: base, operator)"
+        return 1
+        ;;
+    esac
+
+    if [[ "${selection}" == 'operator' && "${component_type}" == 'git-provider' ]]; then
+      if [[ -z "${repository_webhook_provider}" ]]; then
+        e2e_die "git-provider component ${component_key} must declare REPOSITORY_WEBHOOK_PROVIDER when DEFAULT_SELECTIONS includes operator"
+        return 1
+      fi
+      if [[ " ${supported_connections} " != *' local '* ]]; then
+        e2e_die "git-provider component ${component_key} must support local connection when DEFAULT_SELECTIONS includes operator"
+        return 1
+      fi
+    fi
+  done
+
+  return 0
+}
+
+e2e_component_validate_type_specific_contract() {
+  local component_key=$1
+  local component_type=$2
+  local metadata_bundle_ref=$3
+  local operator_example_resource_path=$4
+  local operator_example_resource_payload=$5
+  local repository_webhook_provider=$6
+  local repo_provider_login_path=$7
+
+  case "${component_type}" in
+    managed-server)
+      if [[ -n "${operator_example_resource_path}" && -z "${operator_example_resource_payload}" ]]; then
+        e2e_die "managed-server component ${component_key} must declare OPERATOR_EXAMPLE_RESOURCE_PAYLOAD when OPERATOR_EXAMPLE_RESOURCE_PATH is set"
+        return 1
+      fi
+      if [[ -z "${operator_example_resource_path}" && -n "${operator_example_resource_payload}" ]]; then
+        e2e_die "managed-server component ${component_key} must declare OPERATOR_EXAMPLE_RESOURCE_PATH when OPERATOR_EXAMPLE_RESOURCE_PAYLOAD is set"
+        return 1
+      fi
+      if [[ -n "${repository_webhook_provider}" ]]; then
+        e2e_die "managed-server component ${component_key} must not declare REPOSITORY_WEBHOOK_PROVIDER"
+        return 1
+      fi
+      if [[ -n "${repo_provider_login_path}" ]]; then
+        e2e_die "managed-server component ${component_key} must not declare REPO_PROVIDER_LOGIN_PATH"
+        return 1
+      fi
+      ;;
+    git-provider)
+      if [[ -n "${metadata_bundle_ref}" ]]; then
+        e2e_die "git-provider component ${component_key} must not declare METADATA_BUNDLE_REF"
+        return 1
+      fi
+      if [[ -n "${operator_example_resource_path}" || -n "${operator_example_resource_payload}" ]]; then
+        e2e_die "git-provider component ${component_key} must not declare OPERATOR_EXAMPLE_RESOURCE_PATH or OPERATOR_EXAMPLE_RESOURCE_PAYLOAD"
+        return 1
+      fi
+      ;;
+    *)
+      if [[ -n "${metadata_bundle_ref}" ]]; then
+        e2e_die "component ${component_key} must not declare METADATA_BUNDLE_REF outside managed-server components"
+        return 1
+      fi
+      if [[ -n "${operator_example_resource_path}" || -n "${operator_example_resource_payload}" ]]; then
+        e2e_die "component ${component_key} must not declare OPERATOR_EXAMPLE_RESOURCE_PATH or OPERATOR_EXAMPLE_RESOURCE_PAYLOAD outside managed-server components"
+        return 1
+      fi
+      if [[ -n "${repository_webhook_provider}" ]]; then
+        e2e_die "component ${component_key} must not declare REPOSITORY_WEBHOOK_PROVIDER outside git-provider components"
+        return 1
+      fi
+      if [[ -n "${repo_provider_login_path}" ]]; then
+        e2e_die "component ${component_key} must not declare REPO_PROVIDER_LOGIN_PATH outside git-provider components"
+        return 1
+      fi
+      ;;
+  esac
+
+  return 0
+}
+
 e2e_managed_server_auth_capability_count() {
   local feature_spec=$1
   local feature
@@ -181,14 +288,21 @@ e2e_component_validate_contract() {
   local requires_docker=$3
   local contract_version=$4
   local runtime_kind=$5
-  local has_requires_docker=$6
-  local has_contract_version=$7
-  local has_runtime_kind=$8
-  local has_depends_on=$9
-  local supported_security_features=${10}
-  local required_security_features=${11}
-  local has_supported_security_features=${12}
-  local has_required_security_features=${13}
+  local default_selections=$6
+  local has_requires_docker=$7
+  local has_contract_version=$8
+  local has_runtime_kind=$9
+  local has_depends_on=${10}
+  local supported_security_features=${11}
+  local required_security_features=${12}
+  local has_supported_security_features=${13}
+  local has_required_security_features=${14}
+  local component_service_port=${15}
+  local metadata_bundle_ref=${16}
+  local operator_example_resource_path=${17}
+  local operator_example_resource_payload=${18}
+  local repository_webhook_provider=${19}
+  local repo_provider_login_path=${20}
 
   [[ -n "${COMPONENT_TYPE:-}" ]] || {
     e2e_die "component metadata missing COMPONENT_TYPE in ${component_path}/component.env"
@@ -249,6 +363,21 @@ e2e_component_validate_contract() {
 
   e2e_component_validate_connections "${component_key}" "${SUPPORTED_CONNECTIONS:-}" "${DEFAULT_CONNECTION:-}" || return 1
   e2e_component_validate_dependency_spec "${component_key}" "${COMPONENT_DEPENDS_ON:-}" || return 1
+  e2e_component_validate_default_selection_spec \
+    "${component_key}" \
+    "${COMPONENT_TYPE}" \
+    "${default_selections}" \
+    "${SUPPORTED_CONNECTIONS:-}" \
+    "${repository_webhook_provider}" || return 1
+  e2e_component_validate_service_port "${component_key}" "${component_service_port}" || return 1
+  e2e_component_validate_type_specific_contract \
+    "${component_key}" \
+    "${COMPONENT_TYPE}" \
+    "${metadata_bundle_ref}" \
+    "${operator_example_resource_path}" \
+    "${operator_example_resource_payload}" \
+    "${repository_webhook_provider}" \
+    "${repo_provider_login_path}" || return 1
 
   if [[ "${COMPONENT_TYPE}" == 'managed-server' ]]; then
     e2e_component_validate_managed_server_security_contract \
@@ -289,6 +418,27 @@ e2e_component_validate_contract() {
       return 1
     fi
   fi
+
+  return 0
+}
+
+e2e_validate_component_default_selection_catalog() {
+  local component_key
+  local component_type
+  local selection
+  local -A seen=()
+
+  for component_key in "${E2E_COMPONENT_KEYS[@]}"; do
+    component_type=$(e2e_component_type "${component_key}")
+    for selection in ${E2E_COMPONENT_DEFAULT_SELECTIONS[${component_key}]:-}; do
+      local selector_key="${component_type}:${selection}"
+      if [[ -n "${seen[${selector_key}]:-}" ]]; then
+        e2e_die "components ${seen[${selector_key}]} and ${component_key} both declare DEFAULT_SELECTIONS=${selection} for type ${component_type}"
+        return 1
+      fi
+      seen["${selector_key}"]="${component_key}"
+    done
+  done
 
   return 0
 }

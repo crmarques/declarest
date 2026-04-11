@@ -54,6 +54,22 @@ simple_api_auth_defaults_for_selected_type() {
   esac
 }
 
+simple_api_resolved_auth_kind() {
+  local enable_basic_auth=$1
+  local enable_oauth2=$2
+
+  if [[ "${enable_oauth2}" == 'true' ]]; then
+    printf 'oauth2\n'
+    return 0
+  fi
+  if [[ "${enable_basic_auth}" == 'true' ]]; then
+    printf 'basic\n'
+    return 0
+  fi
+
+  printf 'custom-header\n'
+}
+
 generate_server_certificate() {
   local cert_file=$1
   local key_file=$2
@@ -265,6 +281,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
 
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_HOST_PORT "${simple_api_port}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASE_URL "${simple_api_base_url}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "${simple_api_base_url}"
   e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${simple_api_base_url}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_BASIC_AUTH "${simple_api_enable_basic_auth}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_OAUTH2 "${simple_api_enable_oauth2}"
@@ -283,13 +300,39 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CLIENT_SECRET "${simple_api_client_secret}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASIC_AUTH_USERNAME "${simple_api_basic_auth_username}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD "${simple_api_basic_auth_password}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "$(simple_api_resolved_auth_kind "${simple_api_enable_basic_auth}" "${simple_api_enable_oauth2}")"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "${E2E_MANAGED_SERVER_AUTH_TYPE:-oauth2}"
+
+  if [[ "${simple_api_enable_oauth2}" == 'true' ]]; then
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TOKEN_URL "${simple_api_token_url}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_ID "${simple_api_client_id}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_SECRET "${simple_api_client_secret}"
+  elif [[ "${simple_api_enable_basic_auth}" == 'true' ]]; then
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_USERNAME "${simple_api_basic_auth_username}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_PASSWORD "${simple_api_basic_auth_password}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_USERNAME "${simple_api_basic_auth_username}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_PASSWORD "${simple_api_basic_auth_password}"
+  else
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_NAME "Authorization"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_PREFIX "Bearer"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_VALUE "simple-api-oauth2-disabled"
+  fi
 
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_MTLS_CLIENT_CERT_FILES "${simple_api_mtls_client_cert_files}"
   if [[ -n "${simple_api_scope}" ]]; then
     e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_SCOPE "${simple_api_scope}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_SCOPE "${simple_api_scope}"
   fi
   if [[ -n "${simple_api_audience}" ]]; then
     e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_AUDIENCE "${simple_api_audience}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_AUDIENCE "${simple_api_audience}"
+  fi
+  if [[ "${simple_api_enable_mtls}" == 'true' ]]; then
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_ENABLED "true"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CA_CERT_FILE_HOST "${simple_api_tls_ca_cert_file_host}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CLIENT_CERT_FILE_HOST "${simple_api_tls_client_cert_file_host}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CLIENT_KEY_FILE_HOST "${simple_api_tls_client_key_file_host}"
+    e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_INSECURE_SKIP_VERIFY_FOR_CLUSTER "true"
   fi
   exit 0
 fi
@@ -338,28 +381,49 @@ if [[ -z "${simple_api_token_url}" ]]; then
 fi
 
 e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASE_URL "${simple_api_base_url}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "${simple_api_base_url}"
 e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${simple_api_base_url}"
 e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_BASIC_AUTH "${simple_api_enable_basic_auth}"
 e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_OAUTH2 "${simple_api_enable_oauth2}"
 e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_ENABLE_MTLS "${simple_api_enable_mtls}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "$(simple_api_resolved_auth_kind "${simple_api_enable_basic_auth}" "${simple_api_enable_oauth2}")"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "${E2E_MANAGED_SERVER_AUTH_TYPE:-oauth2}"
 if [[ "${simple_api_enable_oauth2}" == 'true' ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TOKEN_URL "${simple_api_token_url}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CLIENT_ID "${simple_api_client_id}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_CLIENT_SECRET "${simple_api_client_secret}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TOKEN_URL "${simple_api_token_url}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_ID "${simple_api_client_id}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_SECRET "${simple_api_client_secret}"
 fi
 if [[ "${simple_api_enable_basic_auth}" == 'true' ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASIC_AUTH_USERNAME "${simple_api_basic_auth_username}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD "${simple_api_basic_auth_password}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_USERNAME "${simple_api_basic_auth_username}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_BASIC_PASSWORD "${simple_api_basic_auth_password}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_USERNAME "${simple_api_basic_auth_username}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_PASSWORD "${simple_api_basic_auth_password}"
+elif [[ "${simple_api_enable_oauth2}" != 'true' ]]; then
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_NAME "Authorization"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_PREFIX "Bearer"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_HEADER_VALUE "simple-api-oauth2-disabled"
 fi
 if [[ "${simple_api_enable_mtls}" == 'true' ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST "${simple_api_tls_ca_cert_file_host}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST "${simple_api_tls_client_cert_file_host}"
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST "${simple_api_tls_client_key_file_host}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_ENABLED "true"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CA_CERT_FILE_HOST "${simple_api_tls_ca_cert_file_host}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CLIENT_CERT_FILE_HOST "${simple_api_tls_client_cert_file_host}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_CLIENT_KEY_FILE_HOST "${simple_api_tls_client_key_file_host}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TLS_INSECURE_SKIP_VERIFY_FOR_CLUSTER "true"
 fi
 
 if [[ -n "${simple_api_scope}" ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_SCOPE "${simple_api_scope}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_SCOPE "${simple_api_scope}"
 fi
 if [[ -n "${simple_api_audience}" ]]; then
   e2e_write_state_value "${state_file}" SIMPLE_API_SERVER_AUDIENCE "${simple_api_audience}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_AUDIENCE "${simple_api_audience}"
 fi

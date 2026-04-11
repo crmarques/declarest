@@ -335,30 +335,28 @@ e2e_manual_collect_component_access_info() {
   E2E_MANUAL_COMPONENT_ACCESS_OUTPUT="${output}"
 }
 
-e2e_profile_adjust_seeded_repo() {
-  local repo_base_dir=$1
+e2e_profile_prepare_seeded_repo() {
+  local component_key=$1
+  local template_dir=$2
+  local repo_base_dir=$3
+  local hook_script
 
-  if ! e2e_profile_is_operator || [[ "${E2E_MANAGED_SERVER}" != 'keycloak' ]]; then
+  hook_script="${E2E_COMPONENT_PATH[${component_key}]:-}/scripts/prepare-repo-template.sh"
+  if [[ ! -x "${hook_script}" ]]; then
     return 0
   fi
 
-  local realm_root="${repo_base_dir}/admin/realms/acme"
-  if [[ ! -d "${realm_root}" ]]; then
-    return 0
-  fi
-
-  local pruned=0
-  local child
-  for child in authentication clients organizations user-registry; do
-    if [[ -e "${realm_root}/${child}" ]]; then
-      rm -rf "${realm_root:?}/${child}"
-      ((pruned += 1))
-    fi
-  done
-
-  if ((pruned > 0)); then
-    e2e_info "operator profile keycloak seed adjusted removed-non-idempotent-paths=${pruned} root=${realm_root}"
-  fi
+  e2e_info "${E2E_PROFILE} profile repo-template prepare hook component=${component_key} script=${hook_script}"
+  E2E_COMPONENT_KEY="${component_key}" \
+  E2E_COMPONENT_TYPE="$(e2e_component_type "${component_key}")" \
+    E2E_COMPONENT_NAME="$(e2e_component_name "${component_key}")" \
+    E2E_COMPONENT_DIR="${E2E_COMPONENT_PATH[${component_key}]}" \
+    E2E_REPO_TEMPLATE_DIR="${template_dir}" \
+    E2E_REPO_BASE_DIR="${repo_base_dir}" \
+    bash "${hook_script}" "${repo_base_dir}" || {
+      e2e_die "${E2E_PROFILE} profile repo-template prepare hook failed for ${component_key}: ${hook_script}"
+      return 1
+    }
 }
 
 e2e_profile_seed_repo_from_template() {
@@ -405,7 +403,7 @@ e2e_profile_seed_repo_from_template() {
     return 1
   }
 
-  e2e_profile_adjust_seeded_repo "${repo_base_dir}" || return 1
+  e2e_profile_prepare_seeded_repo "${resource_component_key}" "${template_dir}" "${repo_base_dir}" || return 1
 
   file_count=$(find "${repo_base_dir}" -type f | wc -l | tr -d ' ')
   e2e_info "${E2E_PROFILE} profile repo-template sync copied-files=${file_count}"

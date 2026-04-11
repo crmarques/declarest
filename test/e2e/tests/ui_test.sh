@@ -51,6 +51,8 @@ test_running_step_line_shows_elapsed_span() {
 
 test_summary_includes_required_fields() {
   load_ui_libs
+  e2e_parse_args
+  e2e_apply_profile_defaults
   E2E_START_EPOCH=$(e2e_epoch_now)
   E2E_STEPS_TOTAL=2
   E2E_STEP_TITLES[1]='Initializing'
@@ -116,10 +118,12 @@ test_summary_marks_operator_profile_defaults() {
   E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
 
   local output
+  local operator_default_git_provider
+  operator_default_git_provider=$(e2e_component_default_name_for_type 'git-provider' 'operator')
   output=$(ui_print_summary)
 
   assert_contains "${output}" "repository-type: git (profile-default)"
-  assert_contains "${output}" "git-provider: gitea (profile-default)"
+  assert_contains "${output}" "git-provider: ${operator_default_git_provider} (profile-default)"
 }
 
 test_summary_marks_explicit_proxy_prompt_auth_type() {

@@ -30,8 +30,17 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_ID "${client_id}"
   e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_SECRET "${client_secret}"
   e2e_write_state_value "${state_file}" KEYCLOAK_BASE_URL "http://127.0.0.1:${keycloak_port}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "http://127.0.0.1:${keycloak_port}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_WEB_LOGIN_URL "http://127.0.0.1:${keycloak_port}/admin/"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "oauth2"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_USERNAME "${admin_user}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_PASSWORD "${admin_password}"
   e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "http://127.0.0.1:${keycloak_port}"
   e2e_write_state_value "${state_file}" KEYCLOAK_TOKEN_URL "http://127.0.0.1:${keycloak_port}/realms/${realm}/protocol/openid-connect/token"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "oauth2"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_TOKEN_URL "http://127.0.0.1:${keycloak_port}/realms/${realm}/protocol/openid-connect/token"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_ID "${client_id}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_SECRET "${client_secret}"
   exit 0
 fi
 
@@ -43,14 +52,23 @@ keycloak_scope=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_SCOPE' || true)
 keycloak_audience=$(e2e_env_optional 'DECLAREST_E2E_KEYCLOAK_AUDIENCE' || true)
 
 e2e_write_state_value "${state_file}" KEYCLOAK_BASE_URL "${managed_server_base_url}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_BASE_URL "${managed_server_base_url}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_WEB_LOGIN_URL "${managed_server_base_url%/}/admin/"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_ACCESS_AUTH_MODE "oauth2"
 e2e_write_state_value "${state_file}" MANAGED_SERVER_BASE_URL "${managed_server_base_url}"
 e2e_write_state_value "${state_file}" KEYCLOAK_TOKEN_URL "${keycloak_token_url}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_AUTH_KIND "oauth2"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_TOKEN_URL "${keycloak_token_url}"
 e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_ID "${keycloak_client_id}"
 e2e_write_state_value "${state_file}" KEYCLOAK_CLIENT_SECRET "${keycloak_client_secret}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_ID "${keycloak_client_id}"
+e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_CLIENT_SECRET "${keycloak_client_secret}"
 
 if [[ -n "${keycloak_scope}" ]]; then
   e2e_write_state_value "${state_file}" KEYCLOAK_SCOPE "${keycloak_scope}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_SCOPE "${keycloak_scope}"
 fi
 if [[ -n "${keycloak_audience}" ]]; then
   e2e_write_state_value "${state_file}" KEYCLOAK_AUDIENCE "${keycloak_audience}"
+  e2e_write_state_value "${state_file}" MANAGED_SERVER_OAUTH_AUDIENCE "${keycloak_audience}"
 fi

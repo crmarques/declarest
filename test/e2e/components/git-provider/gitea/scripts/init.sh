@@ -44,6 +44,7 @@ if [[ "${E2E_COMPONENT_CONNECTION}" == 'local' ]]; then
   e2e_write_state_value "${state_file}" GITEA_REPO_OWNER "${repo_owner}"
   e2e_write_state_value "${state_file}" GITEA_REPO_NAME "${repo_name}"
   e2e_write_state_value "${state_file}" GITEA_REPO_PATH "${repo_path}"
+  e2e_write_state_value "${state_file}" REPO_PROVIDER_BASE_URL "${base_url}"
   e2e_write_state_value "${state_file}" GIT_REMOTE_URL "${base_url}/${repo_path}.git"
   e2e_write_state_value "${state_file}" GIT_REMOTE_BRANCH "main"
   e2e_write_state_value "${state_file}" GIT_AUTH_MODE "basic"

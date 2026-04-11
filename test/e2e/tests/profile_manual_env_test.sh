@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 load_profile_libs() {
-  source_e2e_libs common profile
+  source_e2e_libs common components profile
 }
 
 prepare_manual_env_runtime() {
@@ -321,6 +321,8 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
   export E2E_GIT_PROVIDER_CONNECTION='local'
+  E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH=()
+  E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH['git-provider:gitea']='/user/login'
   : >"${E2E_KUBECONFIG}"
 
   local SETUP_SCRIPT RESET_SCRIPT
@@ -329,9 +331,9 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   local provider_state="${E2E_STATE_DIR}/git-provider-gitea.env"
   : >"${provider_state}"
   e2e_write_state_value "${provider_state}" 'GIT_REMOTE_URL' 'http://127.0.0.1:3000/declarest-e2e/declarest-e2e.git'
-  e2e_write_state_value "${provider_state}" 'GITEA_BASE_URL' 'http://127.0.0.1:3000'
-  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_USERNAME' 'gitea-admin'
-  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_PASSWORD' 'gitea-pass'
+  e2e_write_state_value "${provider_state}" 'REPO_PROVIDER_BASE_URL' 'http://127.0.0.1:3000'
+  e2e_write_state_value "${provider_state}" 'GIT_AUTH_USERNAME' 'gitea-admin'
+  e2e_write_state_value "${provider_state}" 'GIT_AUTH_PASSWORD' 'gitea-pass'
   export E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-server:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
 
   local output
@@ -356,7 +358,7 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   fi
 }
 
-test_managed_server_access_details_formats_rundeck_state() {
+test_managed_server_access_details_formats_generic_state() {
   load_profile_libs
 
   local tmp
@@ -370,13 +372,14 @@ test_managed_server_access_details_formats_rundeck_state() {
 
   local state_file="${E2E_STATE_DIR}/managed-server-rundeck.env"
   : >"${state_file}"
-  e2e_write_state_value "${state_file}" 'RUNDECK_BASE_URL' 'http://127.0.0.1:24444'
-  e2e_write_state_value "${state_file}" 'RUNDECK_API_VERSION' '45'
-  e2e_write_state_value "${state_file}" 'RUNDECK_AUTH_MODE' 'token'
-  e2e_write_state_value "${state_file}" 'RUNDECK_ADMIN_USER' 'admin'
-  e2e_write_state_value "${state_file}" 'RUNDECK_ADMIN_PASSWORD' 'admin-pass'
-  e2e_write_state_value "${state_file}" 'RUNDECK_AUTH_HEADER' 'X-Rundeck-Auth-Token'
-  e2e_write_state_value "${state_file}" 'RUNDECK_API_TOKEN' 'rundeck-token'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_BASE_URL' 'http://127.0.0.1:24444'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_API_BASE_URL' 'http://127.0.0.1:24444/api/45'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_WEB_LOGIN_URL' 'http://127.0.0.1:24444/user/login'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_AUTH_MODE' 'custom-header'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_USERNAME' 'admin'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_PASSWORD' 'admin-pass'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_HEADER' 'X-Rundeck-Auth-Token'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_TOKEN' 'rundeck-token'
 
   local output
   output=$(e2e_profile_managed_server_access_details)
@@ -397,4 +400,4 @@ test_manual_env_scripts_skip_local_prompt_proxy_auth_exports
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig
 test_manual_handoff_prints_kubectl_and_repo_provider_access
-test_managed_server_access_details_formats_rundeck_state
+test_managed_server_access_details_formats_generic_state

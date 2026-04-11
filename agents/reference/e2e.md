@@ -20,7 +20,7 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 2. The harness MAY expose helper entrypoint `test/e2e/run-e2e-parallel.sh`; when used, it MUST accept one shell command per line from stdin or `--matrix-file`, launch those commands concurrently, write one log file per child command, and exit non-zero when any child command fails.
 2. Supported profiles MUST be `cli-basic`, `cli-full`, `cli-manual`, `operator-manual`, `operator-basic`, and `operator-full`; default is `cli-basic`.
 3. Runner platform selection MUST support `--platform <compose|kubernetes>` with default `kubernetes`.
-3. Default component selections MUST be `managed-server=simple-api-server`, `repo-type=filesystem`, and `secret-provider=file`.
+3. Default component selections MUST come from component-declared `DEFAULT_SELECTIONS=base` entries rather than hard-coded component names.
 4. `cli-basic` MUST run `smoke` cases only; `cli-full` MUST run `smoke` + `main` + `corner` cases; both run only requirement-compatible cases.
 5. `cli-manual` MUST start selected local-instantiable components, generate temporary context config, generate shell setup/reset scripts for handoff, and skip automated cases.
 6. `cli-manual` MUST seed the selected context repository directory with the selected managed-server `repo-template` tree.
@@ -33,7 +33,8 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 13. Each component under `test/e2e/components/<type>/<name>/` MUST provide `component.env`, `scripts/init.sh`, `scripts/configure-auth.sh`, and `scripts/context.sh`.
 14. Local containerized (`COMPONENT_RUNTIME_KIND=compose`) components MUST provide `compose/compose.yaml`, at least one `k8s/*.yaml` manifest, and `scripts/health.sh`.
 15. `component.env` MUST declare `COMPONENT_CONTRACT_VERSION=1`, `COMPONENT_RUNTIME_KIND`, and `COMPONENT_DEPENDS_ON` explicitly.
-16. The runner MUST expose `--validate-components` to validate all discovered component contracts and managed-server fixture metadata, then short-circuit workload execution with deterministic summary output.
+16. Components that want to participate in runner defaults MUST declare `DEFAULT_SELECTIONS` tokens in `component.env`; runner code MUST NOT infer defaults from component names.
+17. The runner MUST expose `--validate-components` to validate all discovered component contracts and managed-server fixture metadata, then short-circuit workload execution with deterministic summary output.
 17. The runner MUST reject `--managed-server none` with actionable validation output because managed-server selection is mandatory for E2E runs.
 18. The runner MUST execute component hooks through one generic hook orchestration path (`init`, `start`, `health`, `configure-auth`, `context`, `stop`) rather than per-component ad hoc branching.
 19. Hook orchestration MUST be dependency-aware using `COMPONENT_DEPENDS_ON` and MUST run ready batches in parallel when no dependency edge blocks them.
@@ -68,19 +69,19 @@ Define the contract for the Bash E2E harness: profile behavior, component onboar
 42. `simple-api-server` mTLS mode MUST allow an empty trusted-certificate set and deny all client API access until trusted certificates are added.
 43. `cli-manual` with `repo-type=git` MUST run `repository init` after context assembly so repository-dependent checks (`context check`, `repository status`) are immediately usable.
 41. Runner metadata selection flags MUST include `--metadata-source <bundle|dir>`; default mode MUST be `bundle`.
-42. In `bundle` mode, the runner MUST skip local `openapi.yaml` wiring so `managed-server.http.openapi` remains unset, and MUST use managed-server shorthand metadata bundle mappings when available (for example `keycloak-bundle:0.0.1` for `keycloak`).
+42. In `bundle` mode, the runner MUST skip local `openapi.yaml` wiring so `managed-server.http.openapi` remains unset, and MUST use the selected managed-server component `METADATA_BUNDLE_REF` when declared.
 43. In `dir` mode, managed-server components MAY ship a sibling `metadata/` directory; when present, the runner MUST set `E2E_METADATA_DIR` to that component-local directory and repository-type context fragments MUST emit `metadata.baseDir` using `E2E_METADATA_DIR` (fallbacking to the repo base dir when unset).
-44. In `bundle` mode, when the selected managed-server has no shorthand mapping, the runner MUST fall back to the component-local `metadata/` directory as `metadata.baseDir` when present; otherwise it MUST continue without setting `metadata.bundle`.
+44. In `bundle` mode, when the selected managed-server omits `METADATA_BUNDLE_REF`, the runner MUST fall back to the component-local `metadata/` directory as `metadata.baseDir` when present; otherwise it MUST continue without setting `metadata.bundle`.
 45. Kubernetes runtime MUST use run-scoped `kind` clusters when platform is `kubernetes` and at least one local containerized component is selected; it MUST persist runtime state (`platform`, `container engine`, `cluster name`, `namespace`, `kubeconfig`) for cleanup/manual handoff.
 46. Kubernetes image preload MUST deduplicate identical image references within one run and SHOULD reuse shared exported archives under `.e2e-build/k8s-image-cache/` when the local image ID is unchanged; each run MUST still load its required archives into the selected kind cluster.
 46. Kubernetes component startup MUST apply rendered `k8s/*.yaml` manifests in the run namespace and manage service port-forwards from `declarest.e2e/port-forward` service annotations, persisting forward PIDs in component state for stop/cleanup.
 47. For `DECLAREST_E2E_CONTAINER_ENGINE=podman`, kind operations MUST use provider mode `KIND_EXPERIMENTAL_PROVIDER=podman` and preflight MUST fail fast with actionable guidance when provider checks fail.
-48. `operator-manual`, `operator-basic`, and `operator-full` MUST enforce kubernetes-only local-instantiable selections (`--platform kubernetes`, `--repo-type git`, `--git-provider <gitea|gitlab>`, `--secret-provider <file|vault>`, and local connections for selected components) and MUST fail initialization with actionable validation output when unsupported combinations are selected.
+48. `operator-manual`, `operator-basic`, and `operator-full` MUST enforce kubernetes-only local-instantiable selections (`--platform kubernetes`, operator-default `repo-type`, operator-default webhook-capable `git-provider`, non-`none` secret provider, and local connections for selected components) and MUST fail initialization with actionable validation output when unsupported combinations are selected.
 49. Operator profiles MUST seed selected managed-server fixture content into the repository, initialize git, commit/push seeded content to the selected git provider, install operator CRDs, build/load a run-scoped operator image, deploy `declarest-operator-manager` in the run namespace, and generate/apply `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs.
-50. `operator-manual` handoff output MUST include run-scoped setup/reset shell scripts, operator runtime details, and concrete repository-to-managed-server verification commands using managed-server-specific logical path/payload examples.
+50. `operator-manual` handoff output MUST include run-scoped setup/reset shell scripts, operator runtime details, and concrete repository-to-managed-server verification commands using component-declared `OPERATOR_EXAMPLE_RESOURCE_PATH` and `OPERATOR_EXAMPLE_RESOURCE_PAYLOAD` values when available.
 51. `operator-basic` MUST execute `smoke` plus `operator-main` scope automated cases after operator installation; `operator-full` MUST execute compatible `smoke`, compatible `main`, `operator-main`, and `corner` scope automated cases.
 52. Operator readiness waits (`DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS`) MUST default to `120`, reject non-positive values, and cap at `600`.
-53. Operator profiles with git providers `gitea|gitlab` MUST precompute run-scoped repository webhook URL/secret values, configure provider webhooks during access setup, and emit `spec.git.webhook` configuration in generated `ResourceRepository` CRs.
+53. Operator profiles with git providers that declare `REPOSITORY_WEBHOOK_PROVIDER` MUST precompute run-scoped repository webhook URL/secret values, configure provider webhooks during access setup, and emit `spec.git.webhook` configuration in generated `ResourceRepository` CRs.
 54. Operator profile manager manifests MUST expose a dedicated in-cluster repository-webhook service endpoint and pass `--repository-webhook-bind-address` to the manager container.
 
 ## Data Contracts
@@ -100,13 +101,19 @@ Parallel helper flags:
 `component.env` fields:
 1. `COMPONENT_TYPE`, `COMPONENT_NAME`.
 2. `SUPPORTED_CONNECTIONS`, `DEFAULT_CONNECTION`.
-3. `REQUIRES_DOCKER`.
-4. `COMPONENT_CONTRACT_VERSION` (current supported value `1`).
-5. `COMPONENT_RUNTIME_KIND` (`native|compose`).
-6. `COMPONENT_DEPENDS_ON` (space-separated dependency selectors using `<type>:<name>` or `<type>:*`).
-7. `DESCRIPTION`.
-8. `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`, including at least one auth-type capability token.
-9. `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`, with at most one auth-type capability token.
+3. `DEFAULT_SELECTIONS` (optional): whitespace-separated subset of `base operator`.
+4. `REQUIRES_DOCKER`.
+5. `COMPONENT_CONTRACT_VERSION` (current supported value `1`).
+6. `COMPONENT_RUNTIME_KIND` (`native|compose`).
+7. `COMPONENT_DEPENDS_ON` (space-separated dependency selectors using `<type>:<name>` or `<type>:*`).
+8. `DESCRIPTION`.
+9. `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`, including at least one auth-type capability token.
+10. `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`, with at most one auth-type capability token.
+11. `COMPONENT_SERVICE_PORT` (optional): service port used for generic in-cluster URL rewriting.
+12. `METADATA_BUNDLE_REF` (`managed-server` only, optional): bundle ref used by `--metadata-source bundle`.
+13. `OPERATOR_EXAMPLE_RESOURCE_PATH` and `OPERATOR_EXAMPLE_RESOURCE_PAYLOAD` (`managed-server` only, optional): paired operator handoff example resource.
+14. `REPOSITORY_WEBHOOK_PROVIDER` (`git-provider` only, optional): webhook provider token used by operator webhook configuration.
+15. `REPO_PROVIDER_LOGIN_PATH` (`git-provider` only, optional): login path appended to `REPO_PROVIDER_BASE_URL` for manual handoff output.
 
 Optional component hook:
 1. `scripts/manual-info.sh` may emit plain-text access details for `cli-manual` and `operator-manual` profile output; when emitted, runner output groups details in a `Manual Component Access` handoff section before `Repository provider access`.
@@ -114,6 +121,7 @@ Optional component hook:
 3. `scripts/start.sh` and `scripts/stop.sh` may override built-in compose runtime lifecycle adapters.
 4. Built-in adapters are platform-aware: compose (`compose/compose.yaml`) or kubernetes (`k8s/*.yaml` + service annotation-driven port-forward).
 5. Successful `init` and `configure-auth` hooks MUST leave `${E2E_COMPONENT_STATE_FILE}` non-empty; successful `context` hooks for components that own persisted context sections (`managed-server`, `repo-type`, `secret-provider`) MUST leave `${E2E_COMPONENT_CONTEXT_FRAGMENT}` non-empty.
+6. `scripts/prepare-repo-template.sh` MAY adjust the copied managed-server `repo-template/` tree after the generic copy step and before git initialization.
 
 Case requirements (`CASE_REQUIRES`):
 1. Selector format: `key=value`.

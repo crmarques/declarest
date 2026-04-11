@@ -196,7 +196,9 @@ test_prepare_metadata_workspace_uses_keycloak_bundle_for_bundle_mode() {
   E2E_MANAGED_SERVER='keycloak'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_METADATA_BUNDLE_REF=()
   E2E_COMPONENT_PATH['managed-server:keycloak']="${tmp}/components/managed-server/keycloak"
+  E2E_COMPONENT_METADATA_BUNDLE_REF['managed-server:keycloak']='keycloak-bundle:0.0.1'
 
   e2e_prepare_metadata_workspace
 
@@ -214,6 +216,7 @@ test_prepare_metadata_workspace_falls_back_to_component_metadata_when_bundle_map
   E2E_MANAGED_SERVER='rundeck'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_METADATA_BUNDLE_REF=()
   local component_dir="${tmp}/components/managed-server/rundeck"
   local component_metadata="${component_dir}/metadata"
   mkdir -p "${component_metadata}"
@@ -236,6 +239,7 @@ test_prepare_metadata_workspace_allows_bundle_mode_without_mapping() {
   E2E_MANAGED_SERVER='simple-api-server'
   E2E_METADATA='bundle'
   E2E_COMPONENT_PATH=()
+  E2E_COMPONENT_METADATA_BUNDLE_REF=()
   E2E_COMPONENT_PATH['managed-server:simple-api-server']="${tmp}/components/managed-server/simple-api-server"
 
   e2e_prepare_metadata_workspace

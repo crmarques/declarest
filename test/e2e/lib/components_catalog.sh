@@ -10,8 +10,15 @@ e2e_discover_components() {
   E2E_COMPONENT_RUNTIME_KIND=()
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_DESCRIPTION=()
+  E2E_COMPONENT_DEFAULT_SELECTIONS=()
   E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
   E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_SERVICE_PORT=()
+  E2E_COMPONENT_METADATA_BUNDLE_REF=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+  E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH=()
 
   local component_file
   while IFS= read -r component_file; do
@@ -28,8 +35,15 @@ e2e_discover_components() {
         local requires_docker=${REQUIRES_DOCKER:-}
         local contract_version=${COMPONENT_CONTRACT_VERSION:-}
         local runtime_kind=${COMPONENT_RUNTIME_KIND:-}
+        local default_selections=${DEFAULT_SELECTIONS:-}
         local supported_security_features=${SUPPORTED_SECURITY_FEATURES:-}
         local required_security_features=${REQUIRED_SECURITY_FEATURES:-}
+        local component_service_port=${COMPONENT_SERVICE_PORT:-}
+        local metadata_bundle_ref=${METADATA_BUNDLE_REF:-}
+        local operator_example_resource_path=${OPERATOR_EXAMPLE_RESOURCE_PATH:-}
+        local operator_example_resource_payload=${OPERATOR_EXAMPLE_RESOURCE_PAYLOAD:-}
+        local repository_webhook_provider=${REPOSITORY_WEBHOOK_PROVIDER:-}
+        local repo_provider_login_path=${REPO_PROVIDER_LOGIN_PATH:-}
         local has_requires_docker=0
         local has_contract_version=0
         local has_runtime_kind=0
@@ -56,7 +70,7 @@ e2e_discover_components() {
           has_required_security_features=1
         fi
 
-        printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
+        printf '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n' \
           "${COMPONENT_TYPE}" \
           "${sep}" \
           "${COMPONENT_NAME}" \
@@ -70,6 +84,8 @@ e2e_discover_components() {
           "${contract_version}" \
           "${sep}" \
           "${runtime_kind}" \
+          "${sep}" \
+          "${default_selections}" \
           "${sep}" \
           "${COMPONENT_DEPENDS_ON:-}" \
           "${sep}" \
@@ -89,7 +105,19 @@ e2e_discover_components() {
           "${sep}" \
           "${has_required_security_features}" \
           "${sep}" \
-          "${DESCRIPTION:-}"
+          "${DESCRIPTION:-}" \
+          "${sep}" \
+          "${component_service_port}" \
+          "${sep}" \
+          "${metadata_bundle_ref}" \
+          "${sep}" \
+          "${operator_example_resource_path}" \
+          "${sep}" \
+          "${operator_example_resource_payload}" \
+          "${sep}" \
+          "${repository_webhook_provider}" \
+          "${sep}" \
+          "${repo_provider_login_path}"
       )
     )
 
@@ -100,6 +128,7 @@ e2e_discover_components() {
     local requires_docker
     local contract_version
     local runtime_kind
+    local default_selections
     local depends_on
     local has_requires_docker
     local has_contract_version
@@ -110,8 +139,14 @@ e2e_discover_components() {
     local has_supported_security_features
     local has_required_security_features
     local description
+    local component_service_port
+    local metadata_bundle_ref
+    local operator_example_resource_path
+    local operator_example_resource_payload
+    local repository_webhook_provider
+    local repo_provider_login_path
 
-    IFS=$'\x1f' read -r component_type component_name supported_connections default_connection requires_docker contract_version runtime_kind depends_on has_requires_docker has_contract_version has_runtime_kind has_depends_on supported_security_features required_security_features has_supported_security_features has_required_security_features description <<<"${metadata}"
+    IFS=$'\x1f' read -r component_type component_name supported_connections default_connection requires_docker contract_version runtime_kind default_selections depends_on has_requires_docker has_contract_version has_runtime_kind has_depends_on supported_security_features required_security_features has_supported_security_features has_required_security_features description component_service_port metadata_bundle_ref operator_example_resource_path operator_example_resource_payload repository_webhook_provider repo_provider_login_path <<<"${metadata}"
 
     local component_key
     local component_path
@@ -126,6 +161,7 @@ e2e_discover_components() {
     REQUIRES_DOCKER="${requires_docker}" \
     COMPONENT_CONTRACT_VERSION="${contract_version}" \
     COMPONENT_RUNTIME_KIND="${runtime_kind}" \
+    DEFAULT_SELECTIONS="${default_selections}" \
     COMPONENT_DEPENDS_ON="${depends_on}" \
       e2e_component_validate_contract \
         "${component_key}" \
@@ -133,6 +169,7 @@ e2e_discover_components() {
         "${requires_docker}" \
         "${contract_version}" \
         "${runtime_kind}" \
+        "${default_selections}" \
         "${has_requires_docker}" \
         "${has_contract_version}" \
         "${has_runtime_kind}" \
@@ -140,7 +177,13 @@ e2e_discover_components() {
         "${supported_security_features}" \
         "${required_security_features}" \
         "${has_supported_security_features}" \
-        "${has_required_security_features}" || return 1
+        "${has_required_security_features}" \
+        "${component_service_port}" \
+        "${metadata_bundle_ref}" \
+        "${operator_example_resource_path}" \
+        "${operator_example_resource_payload}" \
+        "${repository_webhook_provider}" \
+        "${repo_provider_login_path}" || return 1
 
     E2E_COMPONENT_PATH["${component_key}"]="${component_path}"
     E2E_COMPONENT_CONNECTIONS["${component_key}"]="${supported_connections}"
@@ -148,14 +191,22 @@ e2e_discover_components() {
     E2E_COMPONENT_REQUIRES_DOCKER["${component_key}"]="${requires_docker}"
     E2E_COMPONENT_CONTRACT_VERSION["${component_key}"]="${contract_version}"
     E2E_COMPONENT_RUNTIME_KIND["${component_key}"]="${runtime_kind}"
+    E2E_COMPONENT_DEFAULT_SELECTIONS["${component_key}"]="${default_selections}"
     E2E_COMPONENT_DEPENDS_ON["${component_key}"]="${depends_on}"
     E2E_COMPONENT_DESCRIPTION["${component_key}"]="${description}"
     E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
     E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
+    E2E_COMPONENT_SERVICE_PORT["${component_key}"]="${component_service_port}"
+    E2E_COMPONENT_METADATA_BUNDLE_REF["${component_key}"]="${metadata_bundle_ref}"
+    E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH["${component_key}"]="${operator_example_resource_path}"
+    E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD["${component_key}"]="${operator_example_resource_payload}"
+    E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER["${component_key}"]="${repository_webhook_provider}"
+    E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH["${component_key}"]="${repo_provider_login_path}"
     E2E_COMPONENT_KEYS+=("${component_key}")
   done < <(find "${E2E_DIR}/components" -type f -name 'component.env' | sort)
 
   e2e_validate_component_dependency_catalog || return 1
+  e2e_validate_component_default_selection_catalog || return 1
 }
 
 e2e_list_components() {

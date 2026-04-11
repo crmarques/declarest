@@ -270,13 +270,17 @@ test_usage_mentions_validate_flag_and_canonical_options() {
   assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header|prompt>"
   assert_contains "${output}" "--proxy-mode <none|local|external>"
   assert_contains "${output}" "--proxy-auth-type <none|basic|prompt>"
-  assert_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault>"
+  assert_contains "${output}" "--managed-server <name>"
+  assert_contains "${output}" "--repo-type <name>"
+  assert_contains "${output}" "--git-provider <name>"
+  assert_contains "${output}" "--secret-provider <name|none>"
+  assert_contains "${output}" "Use --list-components to inspect available managed-server components"
   assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
   assert_contains "${output}" "DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>"
   assert_not_contains "${output}" "--managed-server-basic-auth"
   assert_not_contains "${output}" "--managed-server-oauth2"
   assert_not_contains "${output}" "--metadata <bundle|local-dir>"
-  assert_not_contains "${output}" "--managed-server <simple-api-server|keycloak|rundeck|vault|none>"
+  assert_not_contains "${output}" "--managed-server <name|none>"
 }
 
 test_parses_validate_components_flag

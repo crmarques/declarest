@@ -20,9 +20,12 @@ test_operator_profile_defaults_and_validation_pass() {
   e2e_parse_args --profile operator-manual
   e2e_apply_profile_defaults
 
+  local operator_default_git_provider
+  operator_default_git_provider=$(e2e_component_default_name_for_type 'git-provider' 'operator')
+
   assert_eq "${E2E_PLATFORM}" "kubernetes"
   assert_eq "${E2E_REPO_TYPE}" "git"
-  assert_eq "${E2E_GIT_PROVIDER}" "gitea"
+  assert_eq "${E2E_GIT_PROVIDER}" "${operator_default_git_provider}"
 
   e2e_validate_profile_rules
 }
@@ -56,7 +59,7 @@ test_operator_profile_rejects_git_builtin_provider() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "operator-* profiles do not support --git-provider git; choose gitea or gitlab"
+  assert_contains "${output}" "operator-* profiles require a git-provider component that declares REPOSITORY_WEBHOOK_PROVIDER; selected git does not"
 }
 
 test_operator_profile_rejects_secret_provider_none() {
@@ -72,7 +75,7 @@ test_operator_profile_rejects_secret_provider_none() {
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "operator-* profiles require a secret provider (file or vault)"
+  assert_contains "${output}" "operator-* profiles require a selected secret-provider component"
 }
 
 test_operator_profile_automated_scopes() {

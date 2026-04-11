@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 load_operator_libs() {
-  source_e2e_libs common profile operator
+  source_e2e_libs common components profile operator
 }
 
 prepare_operator_handoff_env() {
@@ -45,14 +45,30 @@ EOF
   local provider_state="${E2E_STATE_DIR}/git-provider-gitea.env"
   : >"${provider_state}"
   e2e_write_state_value "${provider_state}" 'GIT_REMOTE_URL' 'http://127.0.0.1:3000/declarest-e2e/declarest-e2e.git'
-  e2e_write_state_value "${provider_state}" 'GITEA_BASE_URL' 'http://127.0.0.1:3000'
-  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_USERNAME' 'gitea-admin'
-  e2e_write_state_value "${provider_state}" 'GITEA_ADMIN_PASSWORD' 'gitea-pass'
+  e2e_write_state_value "${provider_state}" 'REPO_PROVIDER_BASE_URL' 'http://127.0.0.1:3000'
+  e2e_write_state_value "${provider_state}" 'GIT_AUTH_USERNAME' 'gitea-admin'
+  e2e_write_state_value "${provider_state}" 'GIT_AUTH_PASSWORD' 'gitea-pass'
+  E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH=()
+  E2E_COMPONENT_REPO_PROVIDER_LOGIN_PATH['git-provider:gitea']='/user/login'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+  E2E_COMPONENT_SERVICE_PORT=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:simple-api-server']='/api/projects/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER['git-provider:gitea']='gitea'
+  E2E_COMPONENT_SERVICE_PORT['git-provider:gitea']='3000'
 }
 
 test_operator_example_resource_mapping() {
   load_operator_libs
 
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:simple-api-server']='/api/projects/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:keycloak']='/admin/realms/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:keycloak']='{"realm":"operator-demo","enabled":true,"displayName":"Operator Demo Realm"}'
   E2E_MANAGED_SERVER='simple-api-server'
   assert_eq "$(e2e_operator_example_resource_path)" "/api/projects/operator-demo"
   assert_contains "$(e2e_operator_example_resource_payload)" "\"id\":\"operator-demo\""
@@ -144,6 +160,8 @@ test_operator_prepare_repository_webhook_builds_scoped_url() {
   export E2E_K8S_NAMESPACE='declarest-operator'
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER['git-provider:gitea']='gitea'
   mkdir -p "${E2E_STATE_DIR}"
 
   e2e_operator_prepare_repository_webhook
@@ -171,6 +189,8 @@ test_operator_prepare_repository_webhook_derives_namespace_when_unset() {
   unset E2E_K8S_NAMESPACE
   export E2E_REPO_TYPE='git'
   export E2E_GIT_PROVIDER='gitea'
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+  E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER['git-provider:gitea']='gitea'
   mkdir -p "${E2E_STATE_DIR}"
 
   e2e_operator_prepare_repository_webhook
@@ -229,6 +249,8 @@ test_operator_rewrites_local_urls_for_cluster_services() {
   E2E_K8S_NAMESPACE='declarest-test'
   E2E_GIT_PROVIDER_CONNECTION='local'
   E2E_GIT_PROVIDER='gitea'
+  E2E_COMPONENT_SERVICE_PORT=()
+  E2E_COMPONENT_SERVICE_PORT['git-provider:gitea']='3000'
 
   local rewritten
   rewritten=$(e2e_operator_rewrite_local_url_to_service 'http://127.0.0.1:3000/root/repo.git' 'git-provider-gitea' '3000')
@@ -316,10 +338,11 @@ GIT_AUTH_TOKEN=test-token
 EOF
 
   cat >"${managed_state}" <<'EOF'
-KEYCLOAK_BASE_URL=https://keycloak.example.com
-KEYCLOAK_TOKEN_URL=https://keycloak.example.com/realms/master/protocol/openid-connect/token
-KEYCLOAK_CLIENT_ID=declarest-e2e-client
-KEYCLOAK_CLIENT_SECRET=declarest-e2e-secret
+MANAGED_SERVER_BASE_URL=https://keycloak.example.com
+MANAGED_SERVER_AUTH_KIND=oauth2
+MANAGED_SERVER_TOKEN_URL=https://keycloak.example.com/realms/master/protocol/openid-connect/token
+MANAGED_SERVER_OAUTH_CLIENT_ID=declarest-e2e-client
+MANAGED_SERVER_OAUTH_CLIENT_SECRET=declarest-e2e-secret
 EOF
 
   cat >"${secret_state}" <<'EOF'
@@ -480,10 +503,10 @@ GIT_AUTH_TOKEN=test-token
 EOF
 
   cat >"${managed_state}" <<'EOF'
-RUNDECK_BASE_URL=https://rundeck.example.com
-RUNDECK_API_VERSION=45
-RUNDECK_AUTH_HEADER=X-Rundeck-Auth-Token
-RUNDECK_API_TOKEN=test-token
+MANAGED_SERVER_BASE_URL=https://rundeck.example.com
+MANAGED_SERVER_AUTH_KIND=custom-header
+MANAGED_SERVER_HEADER_NAME=X-Rundeck-Auth-Token
+MANAGED_SERVER_HEADER_VALUE=test-token
 EOF
 
   cat >"${secret_state}" <<'EOF'

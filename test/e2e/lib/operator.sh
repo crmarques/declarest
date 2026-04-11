@@ -3,6 +3,11 @@
 # Operator profile helpers for installing the manager as an in-cluster Deployment
 # and applying generated CR instances based on selected component state.
 
+declare -Ag E2E_COMPONENT_SERVICE_PORT=()
+declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
+declare -Ag E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
+declare -Ag E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
+
 e2e_operator_profile_enabled() {
   e2e_profile_is_operator
 }
@@ -374,25 +379,43 @@ e2e_operator_rewrite_local_url_to_service() {
     "${suffix}"
 }
 
+e2e_operator_component_service_name() {
+  local component_key=$1
+  printf '%s-%s\n' "$(e2e_component_type "${component_key}")" "$(e2e_component_name "${component_key}")"
+}
+
+e2e_operator_rewrite_local_url_to_component_service() {
+  local raw_url=$1
+  local component_key=$2
+  local service_port=${E2E_COMPONENT_SERVICE_PORT[${component_key}]:-}
+
+  if [[ -z "${service_port}" ]]; then
+    printf '%s\n' "${raw_url}"
+    return 0
+  fi
+
+  e2e_operator_rewrite_local_url_to_service \
+    "${raw_url}" \
+    "$(e2e_operator_component_service_name "${component_key}")" \
+    "${service_port}"
+}
+
 e2e_operator_rewrite_repo_url_for_cluster() {
   local repo_url=$1
+  local git_provider_key
 
   if [[ "${E2E_PLATFORM:-}" != 'kubernetes' || "${E2E_GIT_PROVIDER_CONNECTION:-}" != 'local' ]]; then
     printf '%s\n' "${repo_url}"
     return 0
   fi
 
-  case "${E2E_GIT_PROVIDER:-}" in
-    gitea)
-      e2e_operator_rewrite_local_url_to_service "${repo_url}" 'git-provider-gitea' '3000'
-      ;;
-    gitlab)
-      e2e_operator_rewrite_local_url_to_service "${repo_url}" 'git-provider-gitlab' '80'
-      ;;
-    *)
-      printf '%s\n' "${repo_url}"
-      ;;
-  esac
+  [[ -n "${E2E_GIT_PROVIDER:-}" && "${E2E_GIT_PROVIDER}" != 'none' ]] || {
+    printf '%s\n' "${repo_url}"
+    return 0
+  }
+
+  git_provider_key=$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}")
+  e2e_operator_rewrite_local_url_to_component_service "${repo_url}" "${git_provider_key}"
 }
 
 e2e_operator_generate_webhook_secret() {
@@ -417,13 +440,12 @@ e2e_operator_prepare_repository_webhook() {
 
   e2e_operator_profile_enabled || return 0
   [[ "${E2E_REPO_TYPE:-}" == 'git' ]] || return 0
+  [[ -n "${E2E_GIT_PROVIDER:-}" && "${E2E_GIT_PROVIDER}" != 'none' ]] || return 0
 
-  case "${E2E_GIT_PROVIDER:-}" in
-    gitea|gitlab) ;;
-    *)
-      return 0
-      ;;
-  esac
+  local git_provider_key
+  git_provider_key=$(e2e_component_key 'git-provider' "${E2E_GIT_PROVIDER}")
+  local webhook_provider=${E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER[${git_provider_key}]:-}
+  [[ -n "${webhook_provider}" ]] || return 0
 
   local namespace
   namespace=$(e2e_operator_effective_namespace)
@@ -438,7 +460,7 @@ e2e_operator_prepare_repository_webhook() {
     webhook_secret=$(e2e_operator_generate_webhook_secret)
   fi
 
-  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER="${E2E_GIT_PROVIDER}"
+  E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER="${webhook_provider}"
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SECRET="${webhook_secret}"
   E2E_OPERATOR_REPOSITORY_WEBHOOK_SERVICE_NAME="${service_name}"
   E2E_OPERATOR_REPOSITORY_NAME="${repository_name}"
@@ -849,138 +871,38 @@ e2e_operator_start_manager() {
 
 e2e_operator_collect_managed_server_config() {
   local state_file=$1
+  local managed_server_key
 
   # shellcheck disable=SC1090
   source "${state_file}"
 
-  E2E_OPERATOR_MANAGED_SERVER_BASE_URL=''
-  E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND=''
-  E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=''
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE=''
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE=''
-  E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME=''
-  E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD=''
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME=''
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX=''
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE=''
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID=''
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET=''
+  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
 
-  case "${E2E_MANAGED_SERVER}" in
-    simple-api-server)
-      E2E_OPERATOR_MANAGED_SERVER_BASE_URL=${SIMPLE_API_SERVER_BASE_URL:-${MANAGED_SERVER_BASE_URL:-}}
-      case "${E2E_MANAGED_SERVER_AUTH_TYPE}" in
-        oauth2)
-          E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='oauth2'
-          E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=${SIMPLE_API_SERVER_TOKEN_URL:-}
-          E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID=${SIMPLE_API_SERVER_CLIENT_ID:-}
-          E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET=${SIMPLE_API_SERVER_CLIENT_SECRET:-}
-          E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE=${SIMPLE_API_SERVER_SCOPE:-}
-          E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE=${SIMPLE_API_SERVER_AUDIENCE:-}
-          ;;
-        basic)
-          E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='basic'
-          E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME=${SIMPLE_API_SERVER_BASIC_AUTH_USERNAME:-}
-          E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD=${SIMPLE_API_SERVER_BASIC_AUTH_PASSWORD:-}
-          ;;
-        none)
-          E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='custom-header'
-          E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME='Authorization'
-          E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX='Bearer'
-          E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE='simple-api-oauth2-disabled'
-          ;;
-        *)
-          e2e_die "operator profile does not support managed-server auth-type ${E2E_MANAGED_SERVER_AUTH_TYPE} for simple-api-server"
-          return 1
-          ;;
-      esac
-      ;;
-    keycloak)
-      [[ "${E2E_MANAGED_SERVER_AUTH_TYPE}" == 'oauth2' ]] || {
-        e2e_die "operator profile keycloak requires --managed-server-auth-type oauth2"
-        return 1
-      }
-      E2E_OPERATOR_MANAGED_SERVER_BASE_URL=${KEYCLOAK_BASE_URL:-${MANAGED_SERVER_BASE_URL:-}}
-      E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='oauth2'
-      E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=${KEYCLOAK_TOKEN_URL:-}
-      E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-}
-      E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-}
-      E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE=${KEYCLOAK_SCOPE:-}
-      E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE=${KEYCLOAK_AUDIENCE:-}
-      ;;
-    rundeck)
-      E2E_OPERATOR_MANAGED_SERVER_BASE_URL="${RUNDECK_BASE_URL%/}/api/${RUNDECK_API_VERSION:-45}"
-      case "${E2E_MANAGED_SERVER_AUTH_TYPE}" in
-        custom-header)
-          E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='custom-header'
-          E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME=${RUNDECK_AUTH_HEADER:-X-Rundeck-Auth-Token}
-          E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE=${RUNDECK_API_TOKEN:-}
-          ;;
-        basic)
-          E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='basic'
-          E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME=${RUNDECK_ADMIN_USER:-}
-          E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD=${RUNDECK_ADMIN_PASSWORD:-}
-          ;;
-        *)
-          e2e_die "operator profile rundeck supports auth-type basic or custom-header"
-          return 1
-          ;;
-      esac
-      ;;
-    vault)
-      [[ "${E2E_MANAGED_SERVER_AUTH_TYPE}" == 'custom-header' ]] || {
-        e2e_die "operator profile vault requires --managed-server-auth-type custom-header"
-        return 1
-      }
-      E2E_OPERATOR_MANAGED_SERVER_BASE_URL=${VAULT_ADDRESS:-}
-      E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND='custom-header'
-      E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME='X-Vault-Token'
-      E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE=${VAULT_TOKEN:-}
-      ;;
-    *)
-      e2e_die "operator profile unsupported managed-server: ${E2E_MANAGED_SERVER}"
-      return 1
-      ;;
-  esac
+  E2E_OPERATOR_MANAGED_SERVER_BASE_URL=${MANAGED_SERVER_BASE_URL:-}
+  E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND=${MANAGED_SERVER_AUTH_KIND:-}
+  E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=${MANAGED_SERVER_TOKEN_URL:-}
+  E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE=${MANAGED_SERVER_OAUTH_SCOPE:-}
+  E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE=${MANAGED_SERVER_OAUTH_AUDIENCE:-}
+  E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME=${MANAGED_SERVER_BASIC_USERNAME:-}
+  E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD=${MANAGED_SERVER_BASIC_PASSWORD:-}
+  E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME=${MANAGED_SERVER_HEADER_NAME:-}
+  E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX=${MANAGED_SERVER_HEADER_PREFIX:-}
+  E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE=${MANAGED_SERVER_HEADER_VALUE:-}
+  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID=${MANAGED_SERVER_OAUTH_CLIENT_ID:-}
+  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET=${MANAGED_SERVER_OAUTH_CLIENT_SECRET:-}
 
   if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${E2E_MANAGED_SERVER_CONNECTION:-}" == 'local' ]]; then
-    local service_name=''
-    local service_port=''
-
-    case "${E2E_MANAGED_SERVER}" in
-      simple-api-server)
-        service_name='managed-server-simple-api-server'
-        service_port='8080'
-        ;;
-      keycloak)
-        service_name='managed-server-keycloak'
-        service_port='8080'
-        ;;
-      rundeck)
-        service_name='managed-server-rundeck'
-        service_port='4440'
-        ;;
-      vault)
-        service_name='managed-server-vault'
-        service_port='8200'
-        ;;
-    esac
-
-    if [[ -n "${service_name}" && -n "${service_port}" ]]; then
-      E2E_OPERATOR_MANAGED_SERVER_BASE_URL=$(
-        e2e_operator_rewrite_local_url_to_service \
-          "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" \
-          "${service_name}" \
-          "${service_port}"
+    E2E_OPERATOR_MANAGED_SERVER_BASE_URL=$(
+      e2e_operator_rewrite_local_url_to_component_service \
+        "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" \
+        "${managed_server_key}"
+    )
+    if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" ]]; then
+      E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=$(
+        e2e_operator_rewrite_local_url_to_component_service \
+          "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" \
+          "${managed_server_key}"
       )
-      if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" ]]; then
-        E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=$(
-          e2e_operator_rewrite_local_url_to_service \
-            "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" \
-            "${service_name}" \
-            "${service_port}"
-        )
-      fi
     fi
   fi
 
@@ -1191,15 +1113,14 @@ EOF_REPO_CR_FOOTER
   if [[ -z "${metadata_bundle_ref}" ]]; then
     metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
   fi
-  if [[ "${E2E_MANAGED_SERVER}" == 'simple-api-server' && "${E2E_MANAGED_SERVER_MTLS}" == 'true' ]]; then
+  if [[ "${MANAGED_SERVER_TLS_ENABLED:-false}" == 'true' ]]; then
     managed_server_tls_enabled='true'
-    if [[ "${E2E_PLATFORM:-}" == 'kubernetes' ]]; then
-      # simple-api-server test certs are issued for localhost; operator traffic uses cluster service DNS.
+    if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${MANAGED_SERVER_TLS_INSECURE_SKIP_VERIFY_FOR_CLUSTER:-false}" == 'true' ]]; then
       managed_server_tls_insecure_skip_verify='true'
     fi
-    tls_ca_file=${SIMPLE_API_SERVER_TLS_CA_CERT_FILE_HOST:-}
-    tls_client_cert_file=${SIMPLE_API_SERVER_TLS_CLIENT_CERT_FILE_HOST:-}
-    tls_client_key_file=${SIMPLE_API_SERVER_TLS_CLIENT_KEY_FILE_HOST:-}
+    tls_ca_file=${MANAGED_SERVER_TLS_CA_CERT_FILE_HOST:-}
+    tls_client_cert_file=${MANAGED_SERVER_TLS_CLIENT_CERT_FILE_HOST:-}
+    tls_client_key_file=${MANAGED_SERVER_TLS_CLIENT_KEY_FILE_HOST:-}
     [[ -f "${tls_ca_file}" ]] || {
       e2e_die "operator profile missing mTLS CA certificate file: ${tls_ca_file}"
       return 1
@@ -1583,43 +1504,25 @@ e2e_operator_install_stack() {
 }
 
 e2e_operator_example_resource_path() {
-  case "${E2E_MANAGED_SERVER:-}" in
-    simple-api-server)
-      printf '/api/projects/operator-demo\n'
-      ;;
-    keycloak)
-      printf '/admin/realms/operator-demo\n'
-      ;;
-    rundeck)
-      printf '/project/operator-demo\n'
-      ;;
-    vault)
-      printf '/v1/secret/data/declarest/operator-demo\n'
-      ;;
-    *)
-      printf '/operator-demo\n'
-      ;;
-  esac
+  local managed_server_key
+  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER:-}")
+  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_server_key}]:-}" ]]; then
+    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_server_key}]}"
+    return 0
+  fi
+
+  printf '/operator-demo\n'
 }
 
 e2e_operator_example_resource_payload() {
-  case "${E2E_MANAGED_SERVER:-}" in
-    simple-api-server)
-      printf '{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}\n'
-      ;;
-    keycloak)
-      printf '{"realm":"operator-demo","enabled":true,"displayName":"Operator Demo Realm"}\n'
-      ;;
-    rundeck)
-      printf '{"name":"operator-demo","description":"Operator Demo Project"}\n'
-      ;;
-    vault)
-      printf '{"path":"declarest/operator-demo","data":{"token":"operator-demo-token","owner":"operator-e2e"}}\n'
-      ;;
-    *)
-      printf '{"name":"operator-demo"}\n'
-      ;;
-  esac
+  local managed_server_key
+  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER:-}")
+  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_server_key}]:-}" ]]; then
+    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_server_key}]}"
+    return 0
+  fi
+
+  printf '{"name":"operator-demo"}\n'
 }
 
 e2e_profile_operator_handoff() {

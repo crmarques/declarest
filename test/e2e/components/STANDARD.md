@@ -47,10 +47,11 @@ All fields are required unless marked optional.
 
 ```bash
 COMPONENT_TYPE=managed-server
-COMPONENT_NAME=keycloak
+COMPONENT_NAME=demo-server
 COMPONENT_CONTRACT_VERSION=1
 SUPPORTED_CONNECTIONS="local remote"
 DEFAULT_CONNECTION=local
+DEFAULT_SELECTIONS="base"
 REQUIRES_DOCKER=true
 COMPONENT_RUNTIME_KIND=compose
 COMPONENT_DEPENDS_ON=""
@@ -67,6 +68,10 @@ Field rules:
 - `COMPONENT_NAME`: stable selector name used by CLI flags.
 - `SUPPORTED_CONNECTIONS`: whitespace-separated values from `local remote`.
 - `DEFAULT_CONNECTION`: one value from `SUPPORTED_CONNECTIONS`.
+- `DEFAULT_SELECTIONS` (optional): whitespace-separated subset of `base operator`.
+  - `base` marks the component selected when the corresponding flag is omitted in standard CLI flows.
+  - `operator` marks the component selected when an operator profile needs a default for that type.
+  - At most one component per type MAY declare a given selection token.
 - `REQUIRES_DOCKER`: `true|false`; MUST align with runtime kind:
   - `compose` -> `true`
   - `native` -> `false`
@@ -79,6 +84,12 @@ Field rules:
 - `DESCRIPTION`: short operator-facing description.
 - `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
 - `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because managed-server auth selection is one-of.
+- `COMPONENT_SERVICE_PORT` (optional): integer service port exposed by compose-backed components that other components or operator flows must reach.
+- `METADATA_BUNDLE_REF` (`managed-server` only, optional): bundle ref used by `--metadata-source bundle`.
+- `OPERATOR_EXAMPLE_RESOURCE_PATH` and `OPERATOR_EXAMPLE_RESOURCE_PAYLOAD` (`managed-server` only, optional): paired operator handoff example resource used by generic operator help output.
+- `REPOSITORY_WEBHOOK_PROVIDER` (`git-provider` only, optional): webhook provider token used by operator webhook setup and generated `spec.git.webhook`.
+- `REPO_PROVIDER_LOGIN_PATH` (`git-provider` only, optional): login path appended to the provider base URL for manual handoff output.
+- A `git-provider` component whose `DEFAULT_SELECTIONS` includes `operator` MUST declare `REPOSITORY_WEBHOOK_PROVIDER` and support `local` connection.
 - Runner selection uses `--managed-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-server-mtls` independently for mTLS.
 - Resource-server fixture metadata files (`*/_/metadata.yaml` or `*/_/metadata.json`) MUST include non-empty `resource.id` and `resource.alias` identity templates; YAML is preferred for new fixtures.
 
@@ -102,6 +113,14 @@ Hook behavior:
 - `context` MAY accept output path as `$1`; runner also exports `E2E_COMPONENT_CONTEXT_FRAGMENT`.
 - Hooks MUST be idempotent for repeated runs in the same run directory.
 - Hooks MUST fail with actionable stderr output when required state or inputs are missing.
+- Managed-server hooks SHOULD publish generic `MANAGED_SERVER_*` and `MANAGED_SERVER_ACCESS_*` state keys so operator manifests and manual handoff output remain component-agnostic.
+- Git-provider hooks SHOULD publish generic `REPO_PROVIDER_BASE_URL`, `GIT_AUTH_USERNAME`, and `GIT_AUTH_PASSWORD` state keys for manual handoff output.
+
+Optional repo-template hook:
+
+- `scripts/prepare-repo-template.sh` MAY adjust the copied managed-server `repo-template/` tree after the generic copy step.
+- When present, the runner invokes it with the copied repo root as `$1`.
+- The hook MUST be deterministic and MUST limit changes to the copied run-scoped repository tree.
 
 ## Dependency and Parallelism Model
 
