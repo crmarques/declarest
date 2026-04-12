@@ -354,7 +354,6 @@ func resolveScopeTarget(ctx context.Context, deps Dependencies, logicalPath stri
 		if !faults.IsCategory(resourceErr, faults.NotFoundError) {
 			return scopeTarget{}, resourceErr
 		}
-		collectionTarget = true
 	}
 
 	scopePath := pathDescriptor.Selector
@@ -556,7 +555,7 @@ func saveManagedDefaultsEntry(
 ) (bool, error) {
 	normalizedValue := normalizeEmptyDefaultsValue(content.Value)
 	objectValue, _ := normalizedValue.(map[string]any)
-	if objectValue == nil || len(objectValue) == 0 {
+	if len(objectValue) == 0 {
 		if managedStore, err := requireDefaultsArtifactStore(deps); err == nil {
 			_ = managedStore.DeleteDefaultsArtifact(ctx, metadataPath, fileName)
 		}

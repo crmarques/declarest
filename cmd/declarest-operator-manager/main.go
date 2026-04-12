@@ -110,7 +110,7 @@ func main() {
 	if err := (&controllers.ResourceRepositoryReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorderFor("resourcerepository-controller"),
+		Recorder:                manager.GetEventRecorder("resourcerepository-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository controller")
@@ -119,7 +119,7 @@ func main() {
 	if err := (&controllers.ManagedServerReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorderFor("managedserver-controller"),
+		Recorder:                manager.GetEventRecorder("managedserver-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer controller")
@@ -128,7 +128,7 @@ func main() {
 	if err := (&controllers.SecretStoreReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorderFor("secretstore-controller"),
+		Recorder:                manager.GetEventRecorder("secretstore-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SecretStore controller")
@@ -137,7 +137,7 @@ func main() {
 	if err := (&controllers.SyncPolicyReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorderFor("syncpolicy-controller"),
+		Recorder:                manager.GetEventRecorder("syncpolicy-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create SyncPolicy controller")
@@ -146,7 +146,7 @@ func main() {
 	if err := (&controllers.RepositoryWebhookReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorderFor("repositorywebhook-controller"),
+		Recorder:                manager.GetEventRecorder("repositorywebhook-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
 		ctrl.Log.WithName("setup").Error(err, "unable to create RepositoryWebhook controller")
@@ -154,7 +154,7 @@ func main() {
 	}
 	if err := manager.Add(&controllers.RepositoryWebhookServer{
 		Client:         manager.GetClient(),
-		Recorder:       manager.GetEventRecorderFor("repository-webhook"),
+		Recorder:       manager.GetEventRecorder("repository-webhook"),
 		BindAddress:    repositoryWebhookAddr,
 		WatchNamespace: watchNamespace,
 	}); err != nil {

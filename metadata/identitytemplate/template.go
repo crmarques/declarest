@@ -317,11 +317,11 @@ func tokenize(raw string) ([]token, error) {
 			continue
 		}
 
-		switch {
-		case r == '"' || r == '\'':
+		switch r {
+		case '"', '\'':
 			quote = r
 			quoted = true
-		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+		case ' ', '\t', '\n', '\r':
 			flush()
 		default:
 			current.WriteRune(r)

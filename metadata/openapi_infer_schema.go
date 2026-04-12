@@ -625,7 +625,7 @@ func selectOpenAPIContentCandidate(content map[string]any, openAPISpec any) (ope
 			continue
 		}
 
-		schemaValue, _ := mediaValue["schema"]
+		schemaValue := mediaValue["schema"]
 		payloadType, _ := inferOpenAPIContentPayloadType(mediaType, schemaValue, openAPISpec)
 		candidates = append(candidates, openAPIContentCandidate{
 			mediaType:   mediaType,

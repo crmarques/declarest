@@ -65,7 +65,7 @@ func (terminalPrompter) PromptValue(
 		Value(&value).
 		Validate(huh.ValidateNotEmpty())
 	if strings.EqualFold(strings.TrimSpace(field), "password") {
-		input.Password(true)
+		input.EchoMode(huh.EchoModePassword)
 	}
 	if err := runField(input); err != nil {
 		return "", err

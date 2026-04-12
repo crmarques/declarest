@@ -36,7 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/tools/record"
+	k8sevents "k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -87,11 +87,12 @@ func setStatusCondition(
 	)
 }
 
-func emitEventf(recorder record.EventRecorder, object runtime.Object, eventType string, reason string, messageFmt string, args ...any) {
+func emitEventf(recorder k8sevents.EventRecorder, object runtime.Object, eventType string, reason string, messageFmt string, args ...any) {
 	if recorder == nil || object == nil {
 		return
 	}
-	recorder.Eventf(object, eventType, strings.TrimSpace(reason), messageFmt, args...)
+	trimmedReason := strings.TrimSpace(reason)
+	recorder.Eventf(object, nil, eventType, trimmedReason, trimmedReason, messageFmt, args...)
 }
 
 func returnAfterSetNotReady(

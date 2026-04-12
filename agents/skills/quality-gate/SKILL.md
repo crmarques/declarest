@@ -10,7 +10,7 @@ description: Select and execute the smallest verification set that protects chan
 2. Map impact to verification scope using the matrix below.
 3. Run the fastest meaningful checks first and stop on first failure.
 4. Expand scope only when changed contracts, orchestration risk, or security risk requires it.
-5. When at least one `.go` file changed, reserve final handoff for `gofmt -w` on the changed Go files plus `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
+5. When at least one `.go` file changed, reserve final handoff for `gofmt -w` on the changed Go files, then `golangci-lint run`, fix every reported finding, and then `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
 6. Record commands run, outcomes, and intentional coverage gaps so blockers can be surfaced accurately.
 7. Keep successful standard final handoff minimal; do not expand it with verification detail unless the user explicitly asks.
 

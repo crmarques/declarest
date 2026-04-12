@@ -129,37 +129,57 @@ func resolveMetadataForDescribe(
 }
 
 func renderDescribeText(w io.Writer, desc metadata.ResourceDescription) error {
-	fmt.Fprintf(w, "%s\n", desc.Path)
+	if err := writeDescribeText(w, "%s\n", desc.Path); err != nil {
+		return err
+	}
 
 	if desc.Identity != nil {
-		fmt.Fprintf(w, "\nIdentity\n")
+		if err := writeDescribeText(w, "\nIdentity\n"); err != nil {
+			return err
+		}
 		if desc.Identity.ID != "" {
-			fmt.Fprintf(w, "  id:    %s\n", desc.Identity.ID)
+			if err := writeDescribeText(w, "  id:    %s\n", desc.Identity.ID); err != nil {
+				return err
+			}
 		}
 		if desc.Identity.Alias != "" {
-			fmt.Fprintf(w, "  alias: %s\n", desc.Identity.Alias)
+			if err := writeDescribeText(w, "  alias: %s\n", desc.Identity.Alias); err != nil {
+				return err
+			}
 		}
 	}
 
 	if desc.Format != "" || desc.CollectionPath != "" {
-		fmt.Fprintf(w, "\nMetadata\n")
+		if err := writeDescribeText(w, "\nMetadata\n"); err != nil {
+			return err
+		}
 		if desc.Format != "" {
-			fmt.Fprintf(w, "  format:       %s\n", desc.Format)
+			if err := writeDescribeText(w, "  format:       %s\n", desc.Format); err != nil {
+				return err
+			}
 		}
 		if desc.CollectionPath != "" {
-			fmt.Fprintf(w, "  collection:   %s\n", desc.CollectionPath)
+			if err := writeDescribeText(w, "  collection:   %s\n", desc.CollectionPath); err != nil {
+				return err
+			}
 		}
 	}
 
 	if len(desc.RequiredFields) > 0 {
-		fmt.Fprintf(w, "  required:     %s\n", strings.Join(desc.RequiredFields, ", "))
+		if err := writeDescribeText(w, "  required:     %s\n", strings.Join(desc.RequiredFields, ", ")); err != nil {
+			return err
+		}
 	}
 	if len(desc.SecretFields) > 0 {
-		fmt.Fprintf(w, "  secrets:      %s\n", strings.Join(desc.SecretFields, ", "))
+		if err := writeDescribeText(w, "  secrets:      %s\n", strings.Join(desc.SecretFields, ", ")); err != nil {
+			return err
+		}
 	}
 
 	if len(desc.Operations) > 0 {
-		fmt.Fprintf(w, "\nOperations\n")
+		if err := writeDescribeText(w, "\nOperations\n"); err != nil {
+			return err
+		}
 
 		maxNameLen := 0
 		maxMethodLen := 0
@@ -173,21 +193,32 @@ func renderDescribeText(w io.Writer, desc metadata.ResourceDescription) error {
 		}
 
 		for _, op := range desc.Operations {
-			fmt.Fprintf(w, "  %-*s  %-*s  %s\n", maxNameLen, op.Name, maxMethodLen, op.Method, op.Path)
+			if err := writeDescribeText(w, "  %-*s  %-*s  %s\n", maxNameLen, op.Name, maxMethodLen, op.Method, op.Path); err != nil {
+				return err
+			}
 		}
 	}
 
 	for _, schema := range desc.Schemas {
-		fmt.Fprintf(w, "\nSchema (%s %s %s)\n", schema.Operation, schema.Source, schema.Method+" "+schema.Path)
-		renderSchemaNodes(w, schema.Properties, "  ")
+		if err := writeDescribeText(w, "\nSchema (%s %s %s)\n", schema.Operation, schema.Source, schema.Method+" "+schema.Path); err != nil {
+			return err
+		}
+		if err := renderSchemaNodes(w, schema.Properties, "  "); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func renderSchemaNodes(w io.Writer, nodes []metadata.SchemaNode, indent string) {
+func writeDescribeText(w io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(w, format, args...)
+	return err
+}
+
+func renderSchemaNodes(w io.Writer, nodes []metadata.SchemaNode, indent string) error {
 	if len(nodes) == 0 {
-		return
+		return nil
 	}
 
 	maxNameLen := computeMaxNameLen(nodes)
@@ -200,18 +231,28 @@ func renderSchemaNodes(w io.Writer, nodes []metadata.SchemaNode, indent string) 
 
 		annotations := buildAnnotations(node)
 		if annotations != "" {
-			fmt.Fprintf(w, "%s%s%s\n", padded, typePadded, annotations)
+			if err := writeDescribeText(w, "%s%s%s\n", padded, typePadded, annotations); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(w, "%s%s\n", padded, strings.TrimRight(typePadded, " "))
+			if err := writeDescribeText(w, "%s%s\n", padded, strings.TrimRight(typePadded, " ")); err != nil {
+				return err
+			}
 		}
 
 		if len(node.Properties) > 0 {
-			renderSchemaNodes(w, node.Properties, indent+"  ")
+			if err := renderSchemaNodes(w, node.Properties, indent+"  "); err != nil {
+				return err
+			}
 		}
 		if node.Items != nil && len(node.Items.Properties) > 0 {
-			renderSchemaNodes(w, node.Items.Properties, indent+"  ")
+			if err := renderSchemaNodes(w, node.Items.Properties, indent+"  "); err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
 }
 
 func buildAnnotations(node metadata.SchemaNode) string {

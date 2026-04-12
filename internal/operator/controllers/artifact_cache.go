@@ -74,7 +74,9 @@ func downloadArtifact(ctx context.Context, artifactURL string, destDir string, p
 	if err != nil {
 		return "", fmt.Errorf("download artifact %s: %w", sanitizeURL(trimmedURL), err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	if response.StatusCode == http.StatusNotModified {
 		return targetPath, nil

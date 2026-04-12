@@ -71,9 +71,11 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 
 ## Go-file handoff verification
 - When the agent changes at least one `.go` file during a request, the agent MUST run `gofmt -w` on every changed Go file before handoff.
+- When the agent changes at least one `.go` file during a request, the agent MUST then run `golangci-lint run`.
+- When the agent changes at least one `.go` file during a request, the agent MUST fix every finding reported by `golangci-lint run` before handoff.
 - When the agent changes at least one `.go` file during a request, the agent MUST then run `go test -race ./...` (or the deepest feasible subset when full race tests are blocked).
-- When the agent changes no `.go` files during a request, the agent MAY skip both `gofmt` and `go test -race`.
-- If this verification gate cannot complete when required, the agent MUST treat that as a blocker and report it instead of the standard one-line final response.
+- When the agent changes no `.go` files during a request, the agent MAY skip `gofmt -w`, `golangci-lint run`, and `go test -race ./...`.
+- If this verification gate cannot complete when required, or if required `golangci-lint run` findings remain unresolved, the agent MUST treat that as a blocker and report it instead of the standard one-line final response.
 
 ## Engineering Rules
 1. Keep architecture and implementation aligned with senior engineering practices.

@@ -15,7 +15,7 @@ When the user explicitly asks for commit help after request work is complete, en
 
 ## Pre-commit verification
 - The agent MUST identify the repository’s standard verification command(s). Consult `AGENTS.md`, the `Makefile`, or other canonical docs to discover the prescribed suite.
-- In this repository, when the request changed at least one `.go` file, that suite MUST include `gofmt -w` on every changed Go file plus `go test -race ./...` (or the deepest feasible subset when full race tests are blocked) before any commit proposal; when no `.go` files changed, those Go-specific commands MAY be skipped.
+- In this repository, when the request changed at least one `.go` file, that suite MUST include `gofmt -w` on every changed Go file, then `golangci-lint run`, fix every reported finding, and then `go test -race ./...` (or the deepest feasible subset when full race tests are blocked) before any commit proposal; when no `.go` files changed, those Go-specific commands MAY be skipped.
 - Run the identified verification command(s), observe their outcomes, and if they fail the agent MUST either fix the issue or pause and ask the user how to proceed before making any commit proposals.
 - Scan every diff for apparent secrets (API keys, tokens, private keys, `.env` values, etc.) and stop to ask the user before staging or committing anything suspicious.
 - Confirm repository state is healthy (not in the middle of a rebase/merge, not on a detached HEAD). If the state is unusual, describe it to the user and request explicit permission before continuing.

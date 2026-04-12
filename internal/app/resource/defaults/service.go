@@ -166,11 +166,7 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 }
 
 func Check(ctx context.Context, deps Dependencies, logicalPath string, request CheckRequest) (CheckResult, error) {
-	inferred, err := Infer(ctx, deps, logicalPath, InferRequest{
-		Sources: request.Sources,
-		Items:   request.Items,
-		Wait:    request.Wait,
-	})
+	inferred, err := Infer(ctx, deps, logicalPath, InferRequest(request))
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -1028,13 +1024,6 @@ func resolveInferTemplateItem(ctx context.Context, deps Dependencies, logicalPat
 			Descriptor: resolvedResource.PayloadDescriptor,
 		},
 	}, nil
-}
-
-func chooseDefaultsDescriptor(candidate resource.PayloadDescriptor, fallback resource.PayloadDescriptor) resource.PayloadDescriptor {
-	if resource.IsPayloadDescriptorExplicit(candidate) {
-		return resource.NormalizePayloadDescriptor(candidate)
-	}
-	return resource.NormalizePayloadDescriptor(fallback)
 }
 
 func normalizeEmptyDefaultsValue(value resource.Value) resource.Value {

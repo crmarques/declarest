@@ -39,7 +39,7 @@ func shouldRunFullResync(cronRaw string, lastFullResyncTime *metav1.Time, curren
 		return true, nil
 	}
 
-	next, ok := schedule.Next(lastFullResyncTime.Time.UTC())
+	next, ok := schedule.Next(lastFullResyncTime.UTC())
 	if !ok {
 		return false, nil
 	}

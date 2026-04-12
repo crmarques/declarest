@@ -39,7 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	k8sevents "k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,12 +54,12 @@ import (
 type ResourceRepositoryReconciler struct {
 	client.Client
 	Scheme                  *runtime.Scheme
-	Recorder                record.EventRecorder
+	Recorder                k8sevents.EventRecorder
 	MaxConcurrentReconciles int
 }
 
 func (r *ResourceRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("resourceRepository", req.NamespacedName.String(), "reconcile_id", uuid.NewString())
+	logger := log.FromContext(ctx).WithValues("resourceRepository", req.String(), "reconcile_id", uuid.NewString())
 
 	resourceRepository := &declarestv1alpha1.ResourceRepository{}
 	if err := r.Get(ctx, req.NamespacedName, resourceRepository); err != nil {

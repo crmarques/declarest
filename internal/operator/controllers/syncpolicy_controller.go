@@ -35,7 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/tools/record"
+	k8sevents "k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -90,7 +90,7 @@ func (c *secretRefCache) policiesForSecret(namespace string, secretName string) 
 type SyncPolicyReconciler struct {
 	client.Client
 	Scheme                  *runtime.Scheme
-	Recorder                record.EventRecorder
+	Recorder                k8sevents.EventRecorder
 	MaxConcurrentReconciles int
 	secretRefs              secretRefCache
 }
@@ -120,7 +120,7 @@ func (r *SyncPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		SyncPolicyReconciler: r,
 		ctx:                  ctx,
 		req:                  req,
-		logger:               log.FromContext(ctx).WithValues("syncPolicy", req.NamespacedName.String(), "reconcile_id", uuidString()),
+		logger:               log.FromContext(ctx).WithValues("syncPolicy", req.String(), "reconcile_id", uuidString()),
 		policy:               &declarestv1alpha1.SyncPolicy{},
 		resultLabel:          "success",
 		reasonLabel:          conditionReasonReady,

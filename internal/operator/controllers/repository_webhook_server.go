@@ -34,7 +34,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/tools/record"
+	k8sevents "k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -52,7 +52,7 @@ const (
 
 type RepositoryWebhookServer struct {
 	Client          client.Client
-	Recorder        record.EventRecorder
+	Recorder        k8sevents.EventRecorder
 	BindAddress     string
 	WatchNamespace  string
 	MaxBodyBytes    int64

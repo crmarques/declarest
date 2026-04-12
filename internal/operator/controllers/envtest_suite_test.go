@@ -39,6 +39,16 @@ type envTestState struct {
 	cancel context.CancelFunc
 }
 
+func stopEnvTest(t *testing.T, testEnv *envtest.Environment) {
+	t.Helper()
+	if testEnv == nil {
+		return
+	}
+	if err := testEnv.Stop(); err != nil {
+		t.Errorf("stop envtest: %v", err)
+	}
+}
+
 // setupEnvTest starts a real API server with the DeclaREST CRDs installed and
 // returns a client for interacting with it. Call teardown() when done.
 //
@@ -72,7 +82,7 @@ func setupEnvTest(t *testing.T) *envTestState {
 
 	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("create client: %v", err)
 	}
 
@@ -81,7 +91,7 @@ func setupEnvTest(t *testing.T) *envTestState {
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
 	if err := k8sClient.Create(ctx, ns); err != nil {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("create test namespace: %v", err)
 	}
 
@@ -91,35 +101,35 @@ func setupEnvTest(t *testing.T) *envTestState {
 	})
 	if err != nil {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("create manager: %v", err)
 	}
 
 	if err := (&ManagedServerReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("managedserver-controller"),
+		Recorder: mgr.GetEventRecorder("managedserver-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("setup ManagedServer controller: %v", err)
 	}
 	if err := (&SecretStoreReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("secretstore-controller"),
+		Recorder: mgr.GetEventRecorder("secretstore-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("setup SecretStore controller: %v", err)
 	}
 	if err := (&RepositoryWebhookReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("repositorywebhook-controller"),
+		Recorder: mgr.GetEventRecorder("repositorywebhook-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatalf("setup RepositoryWebhook controller: %v", err)
 	}
 
@@ -132,13 +142,13 @@ func setupEnvTest(t *testing.T) *envTestState {
 	// Wait for the cache to sync.
 	if !mgr.GetCache().WaitForCacheSync(ctx) {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 		t.Fatal("cache sync failed")
 	}
 
 	t.Cleanup(func() {
 		cancel()
-		testEnv.Stop()
+		stopEnvTest(t, testEnv)
 	})
 
 	return &envTestState{
