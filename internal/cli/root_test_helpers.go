@@ -27,7 +27,7 @@ import (
 	"github.com/crmarques/declarest/faults"
 	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	clitestkit "github.com/crmarques/declarest/internal/cli/testkit"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -139,14 +139,14 @@ type testServiceAccessor struct {
 	sync     repository.RepositorySync
 	metadata metadatadomain.MetadataService
 	secrets  secretdomain.SecretProvider
-	server   managedserverdomain.ManagedServerClient
+	server   managedservicedomain.ManagedServiceClient
 }
 
 func (a *testServiceAccessor) RepositoryStore() repository.ResourceStore       { return a.store }
 func (a *testServiceAccessor) RepositorySync() repository.RepositorySync       { return a.sync }
 func (a *testServiceAccessor) MetadataService() metadatadomain.MetadataService { return a.metadata }
 func (a *testServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return a.secrets }
-func (a *testServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a *testServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return a.server
 }
 
@@ -154,14 +154,14 @@ func testDepsWith(orch *testOrchestrator, metadataService *testMetadata) Depende
 	secretProvider := newTestSecretProvider()
 	repositoryService := &testRepository{}
 	metadataService.defaults = &repositoryService.defaults
-	managedServerClient := &testManagedServerClient{accessToken: "test-access-token"}
+	managedServiceClient := &testManagedServiceClient{accessToken: "test-access-token"}
 
 	services := &testServiceAccessor{
 		store:    repositoryService,
 		sync:     repositoryService,
 		metadata: metadataService,
 		secrets:  secretProvider,
-		server:   managedServerClient,
+		server:   managedServiceClient,
 	}
 
 	return Dependencies{
@@ -245,17 +245,17 @@ func buildTestContext(name string) config.Context {
 	return config.Context{
 		Name:       name,
 		Repository: repositoryConfig,
-		ManagedServer: &config.ManagedServer{
+		ManagedService: &config.ManagedService{
 			HTTP: &config.HTTPServer{
-				BaseURL:     resolveManagedServerBaseURLForTestContext(name),
-				HealthCheck: resolveManagedServerHealthCheckForTestContext(name),
+				BaseURL:     resolveManagedServiceBaseURLForTestContext(name),
+				HealthCheck: resolveManagedServiceHealthCheckForTestContext(name),
 				Auth:        resourceServerAuth,
 			},
 		},
 	}
 }
 
-func resolveManagedServerBaseURLForTestContext(name string) string {
+func resolveManagedServiceBaseURLForTestContext(name string) string {
 	switch name {
 	case "health-check-base-path":
 		return "https://api.example.invalid/admin/api/45"
@@ -264,7 +264,7 @@ func resolveManagedServerBaseURLForTestContext(name string) string {
 	}
 }
 
-func resolveManagedServerHealthCheckForTestContext(name string) string {
+func resolveManagedServiceHealthCheckForTestContext(name string) string {
 	switch name {
 	case "health-check-relative":
 		return "/healthz"
@@ -362,7 +362,7 @@ func (r *testOrchestrator) GetRemote(_ context.Context, logicalPath string) (res
 	}
 	return testContent(map[string]any{"path": logicalPath, "source": "remote"}), nil
 }
-func (r *testOrchestrator) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
+func (r *testOrchestrator) Request(_ context.Context, spec managedservicedomain.RequestSpec) (resource.Content, error) {
 	r.requestCalls = append(r.requestCalls, requestCall{
 		method:      spec.Method,
 		path:        spec.Path,
@@ -832,38 +832,38 @@ type testRepository struct {
 	saveDefaultsErr error
 }
 
-type testManagedServerClient struct {
+type testManagedServiceClient struct {
 	accessToken string
 	tokenErr    error
 	requestErr  error
 	requests    []requestCall
 }
 
-func (s *testManagedServerClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClient) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClient) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClient) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
+func (s *testManagedServiceClient) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
 	return nil
 }
 
-func (s *testManagedServerClient) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (s *testManagedServiceClient) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	return nil, nil
 }
 
-func (s *testManagedServerClient) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
+func (s *testManagedServiceClient) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
 	return true, nil
 }
 
-func (s *testManagedServerClient) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
+func (s *testManagedServiceClient) Request(_ context.Context, spec managedservicedomain.RequestSpec) (resource.Content, error) {
 	s.requests = append(s.requests, requestCall{
 		method:      spec.Method,
 		path:        spec.Path,
@@ -878,16 +878,16 @@ func (s *testManagedServerClient) Request(_ context.Context, spec managedserverd
 	return testContent(map[string]any{"ok": true}), nil
 }
 
-func (s *testManagedServerClient) GetOpenAPISpec(context.Context) (resource.Content, error) {
+func (s *testManagedServiceClient) GetOpenAPISpec(context.Context) (resource.Content, error) {
 	return resource.Content{}, nil
 }
 
-func (s *testManagedServerClient) GetAccessToken(context.Context) (string, error) {
+func (s *testManagedServiceClient) GetAccessToken(context.Context) (string, error) {
 	if s.tokenErr != nil {
 		return "", s.tokenErr
 	}
 	if s.accessToken == "" {
-		return "", faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil)
+		return "", faults.NewTypedError(faults.ValidationError, "managed-service.http.auth.oauth2 is not configured", nil)
 	}
 	return s.accessToken, nil
 }

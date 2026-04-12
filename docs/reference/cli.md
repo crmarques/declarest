@@ -17,7 +17,7 @@ declarest <group> <command> --help
 - `context` - manage contexts and validation
 - `repository` - manage local repository state
 - `resource` - save/get/list/diff/explain/apply/create/update/delete/edit/copy resources, inspect and mutate metadata, manage metadata-backed defaults, plus raw requests and template rendering
-- `server` - inspect managed server connectivity and auth-derived values
+- `server` - inspect managed service connectivity and auth-derived values
 - `secret` - initialize, detect, store, get, resolve, mask, normalize secrets
 
 ### Utility commands
@@ -92,11 +92,11 @@ declarest resource defaults profile delete /corporations/acme prod
 declarest resource defaults infer /corporations/acme
 declarest resource defaults infer /corporations/acme --save
 declarest resource defaults infer /corporations/acme --check
-declarest resource defaults infer /corporations/acme --managed-server --wait 2s --yes
-declarest resource defaults infer /corporations/acme --managed-server --check --yes
+declarest resource defaults infer /corporations/acme --managed-service --wait 2s --yes
+declarest resource defaults infer /corporations/acme --managed-service --check --yes
 ```
 
-Use this command family to keep shared values in `resource.defaults`, usually backed by deterministic selector-local files such as `defaults.yaml` and `defaults-<profile>.yaml`, while the rest of the CLI still works with the merged effective resource. `get` prints resolved defaults, `config get` prints the raw persisted metadata block, and `profile` manages named defaults profiles. Use `--save` to persist inferred baseline defaults, `--check` to validate the current resolved defaults without changing them, and do not combine those two flags. `resource defaults infer --managed-server` probes server-added defaults by creating temporary remote resources, so it requires `--yes`. Add `--wait <duration|seconds>` when the managed server needs extra time before the first probe readback; bare integers are treated as seconds.
+Use this command family to keep shared values in `resource.defaults`, usually backed by deterministic selector-local files such as `defaults.yaml` and `defaults-<profile>.yaml`, while the rest of the CLI still works with the merged effective resource. `get` prints resolved defaults, `config get` prints the raw persisted metadata block, and `profile` manages named defaults profiles. Use `--save` to persist inferred baseline defaults, `--check` to validate the current resolved defaults without changing them, and do not combine those two flags. `resource defaults infer --managed-service` probes server-added defaults by creating temporary remote resources, so it requires `--yes`. Add `--wait <duration|seconds>` when the managed service needs extra time before the first probe readback; bare integers are treated as seconds.
 
 ### Mutate remote state
 
@@ -170,7 +170,7 @@ declarest context check
 Useful for environment-specific testing without editing stored config:
 
 ```bash
-declarest context resolve --set managedServer.http.url=https://staging-api.example.com
+declarest context resolve --set managedService.http.url=https://staging-api.example.com
 ```
 
 ## `repository` command family (git/filesystem backends)

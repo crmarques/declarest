@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
@@ -106,7 +106,7 @@ func (r *Orchestrator) fetchRemoteValue(ctx context.Context, resolvedResource re
 
 func (r *Orchestrator) detectRemoteIdentityAmbiguityAfterDirectGet(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) error {

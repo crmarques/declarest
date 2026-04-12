@@ -24,14 +24,14 @@ import (
 )
 
 const (
-	sourceRepository    = "repository"
-	sourceManagedServer = "managed-server"
-	sourceBoth          = "both"
+	sourceRepository     = "repository"
+	sourceManagedService = "managed-service"
+	sourceBoth           = "both"
 )
 
 var (
-	readSourceCompletionValues   = []string{sourceManagedServer, sourceRepository}
-	deleteSourceCompletionValues = []string{sourceManagedServer, sourceRepository, sourceBoth}
+	readSourceCompletionValues   = []string{sourceManagedService, sourceRepository}
+	deleteSourceCompletionValues = []string{sourceManagedService, sourceRepository, sourceBoth}
 )
 
 func normalizeReadSourceSelection(sourceFlag string) (string, error) {
@@ -45,11 +45,11 @@ func normalizeDeleteSourceSelection(sourceFlag string) (string, error) {
 func normalizeSourceSelection(sourceFlag string, allowBoth bool) (string, error) {
 	sourceValue := strings.TrimSpace(sourceFlag)
 	if sourceValue == "" {
-		return sourceManagedServer, nil
+		return sourceManagedService, nil
 	}
 
 	switch sourceValue {
-	case sourceRepository, sourceManagedServer:
+	case sourceRepository, sourceManagedService:
 		return sourceValue, nil
 	case sourceBoth:
 		if allowBoth {
@@ -58,18 +58,18 @@ func normalizeSourceSelection(sourceFlag string, allowBoth bool) (string, error)
 	}
 
 	if allowBoth {
-		return "", cliutil.ValidationError("flag --source must be one of: managed-server, repository, both", nil)
+		return "", cliutil.ValidationError("flag --source must be one of: managed-service, repository, both", nil)
 	}
-	return "", cliutil.ValidationError("flag --source must be one of: managed-server, repository", nil)
+	return "", cliutil.ValidationError("flag --source must be one of: managed-service, repository", nil)
 }
 
 func bindReadSourceFlags(command *cobra.Command, sourceFlag *string) {
-	command.Flags().StringVar(sourceFlag, "source", "", "read/list source: managed-server or repository (default: managed-server)")
+	command.Flags().StringVar(sourceFlag, "source", "", "read/list source: managed-service or repository (default: managed-service)")
 	cliutil.RegisterFlagValueCompletions(command, "source", readSourceCompletionValues)
 }
 
 func bindDeleteSourceFlags(command *cobra.Command, sourceFlag *string) {
-	command.Flags().StringVar(sourceFlag, "source", "", "delete source: managed-server, repository, or both (default: managed-server)")
+	command.Flags().StringVar(sourceFlag, "source", "", "delete source: managed-service, repository, or both (default: managed-service)")
 	cliutil.RegisterFlagValueCompletions(command, "source", deleteSourceCompletionValues)
 }
 

@@ -2,7 +2,7 @@
 
 CASE_ID='save-apply-diff'
 CASE_SCOPE='main'
-CASE_REQUIRES='has-managed-server'
+CASE_REQUIRES='has-managed-service'
 
 case_run() {
   local target_path
@@ -14,7 +14,7 @@ case_run() {
   source_file=$(case_repo_template_resource_file_for_path "${target_path}") || return 1
   payload_file="${source_file}"
 
-  if [[ "${E2E_MANAGED_SERVER:-}" == 'rundeck' ]]; then
+  if [[ "${E2E_MANAGED_SERVICE:-}" == 'rundeck' ]]; then
     local target_name="platform-save-apply-${RANDOM}${RANDOM}"
     target_path="/projects/${target_name}"
     payload_file="${E2E_CASE_TMP_DIR}/save-apply-diff-rundeck.json"

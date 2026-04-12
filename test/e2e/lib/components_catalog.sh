@@ -11,8 +11,8 @@ e2e_discover_components() {
   E2E_COMPONENT_DEPENDS_ON=()
   E2E_COMPONENT_DESCRIPTION=()
   E2E_COMPONENT_DEFAULT_SELECTIONS=()
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES=()
   E2E_COMPONENT_SERVICE_PORT=()
   E2E_COMPONENT_METADATA_BUNDLE_REF=()
   E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
@@ -194,8 +194,8 @@ e2e_discover_components() {
     E2E_COMPONENT_DEFAULT_SELECTIONS["${component_key}"]="${default_selections}"
     E2E_COMPONENT_DEPENDS_ON["${component_key}"]="${depends_on}"
     E2E_COMPONENT_DESCRIPTION["${component_key}"]="${description}"
-    E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
-    E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
+    E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES["${component_key}"]="${supported_security_features}"
+    E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES["${component_key}"]="${required_security_features}"
     E2E_COMPONENT_SERVICE_PORT["${component_key}"]="${component_service_port}"
     E2E_COMPONENT_METADATA_BUNDLE_REF["${component_key}"]="${metadata_bundle_ref}"
     E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH["${component_key}"]="${operator_example_resource_path}"
@@ -223,9 +223,9 @@ e2e_list_components() {
     component_type=$(e2e_component_type "${component_key}")
     component_name=$(e2e_component_name "${component_key}")
 
-    if [[ "${component_type}" == 'managed-server' ]]; then
-      local supported_features=${E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES[${component_key}]:-}
-      local required_features=${E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
+    if [[ "${component_type}" == 'managed-service' ]]; then
+      local supported_features=${E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES[${component_key}]:-}
+      local required_features=${E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES[${component_key}]:-}
 
       security=${supported_features:-none}
       if [[ -n "${required_features}" ]]; then

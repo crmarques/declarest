@@ -14,21 +14,21 @@ This repository uses a componentized Bash e2e harness.
 - `cli-full`: runs all compatible `smoke`, `main`, and `corner` cases.
 - `cli-manual`: starts local-instantiable components, writes a temporary context catalog, and exits after startup.
   - with no component flags, it uses the same component defaults as other profiles
-  - default stack includes `managed-server=simple-api-server`
+  - default stack includes `managed-service=simple-api-server`
   - remote component selections are rejected in Step 1
-  - when a managed-server is selected, its `repo-template` tree is copied into the context repository directory
+  - when a managed-service is selected, its `repo-template` tree is copied into the context repository directory
   - when `repo-type=git`, the runner initializes the local git repository before handoff so `context check`/`repository status` are immediately usable
-  - component manual access details are printed in manual handoff output before `Repository provider access` when available; if the selected managed-server has no `manual-info` hook output, the runner falls back to state-derived managed-server connection details
+  - component manual access details are printed in manual handoff output before `Repository provider access` when available; if the selected managed-service has no `manual-info` hook output, the runner falls back to state-derived managed-service connection details
   - creates `declarest-e2e-env.sh` and `declarest-e2e-env-reset.sh` under `test/e2e/.runs/<run-id>/`; source setup script to export runtime vars and define alias `declarest-e2e`
   - simple-api-server local oauth2 defaults: client-id `declarest-e2e-client`; client secret is generated per run unless overridden with `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
-  - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server` and mounted to `/etc/simple-api-server/certs`
+  - simple-api-server local mTLS defaults: disabled; when enabled, cert material is generated under `test/e2e/.runs/<run-id>/certs/managed-service-simple-api-server` and mounted to `/etc/simple-api-server/certs`
   - simple-api-server mTLS trusted client certs are loaded from the mounted cert directory for new connections without restart; an empty trusted-cert directory denies all client API access
   - runtime resources are kept; clean them with `./run-e2e.sh --clean <run-id>` or `./run-e2e.sh --clean-all`
 - `operator-manual`: provisions a local kubernetes-only stack, installs CRDs, starts `declarest-operator-manager`, applies generated operator CRs, and exits with runtime kept for manual reconciliation checks.
   - defaults to the component-declared operator selections for `repo-type` and `git-provider` when those flags are omitted
   - requires local component connections, operator-compatible `repo-type`/`git-provider` selections, and a selected `secret-provider`
-  - copies the selected managed-server `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy` CRs
-  - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed server manually
+  - copies the selected managed-service `repo-template`, initializes the local git repository, commits/pushes seed content to the selected git provider, then applies `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy` CRs
+  - prints shell handoff scripts and concrete `declarest-e2e` commands so you can commit/push a resource change and verify it on the managed service manually
 - `operator-basic`: same operator environment as `operator-manual`, then runs compatible shared `smoke` cases plus operator-focused automated `operator-main` cases.
 - `operator-full`: same operator environment as `operator-basic`, then runs all compatible `smoke`, operator-compatible `main`, `operator-main`, and `corner` cases.
 
@@ -44,10 +44,10 @@ This repository uses a componentized Bash e2e harness.
 
 - `--profile <cli-basic|cli-full|cli-manual|operator-manual|operator-basic|operator-full>`
 - `--platform <compose|kubernetes>`
-- `--managed-server <name>` (mandatory; `none` is not supported)
-- `--managed-server-connection <local|remote>`
-- `--managed-server-auth-type <none|basic|oauth2|custom-header|prompt>` (default: component-elected)
-- `--managed-server-mtls [<true|false>]` (default: `false`)
+- `--managed-service <name>` (mandatory; `none` is not supported)
+- `--managed-service-connection <local|remote>`
+- `--managed-service-auth-type <none|basic|oauth2|custom-header|prompt>` (default: component-elected)
+- `--managed-service-mtls [<true|false>]` (default: `false`)
 - `--proxy-mode <none|local|external>` (default: `none`)
 - `--proxy-auth-type <none|basic|prompt>` (default: `none`; `local` defaults to `basic` when omitted)
 - `--metadata-source <bundle|dir>` (default: `bundle`)
@@ -64,14 +64,14 @@ This repository uses a componentized Bash e2e harness.
 - `--clean-all`
 
 Use `--list-components` to see currently available component names and metadata.
-Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and managed-server fixture metadata rules) and exit without running test cases.
-When `--managed-server-auth-type` is omitted, the selected managed-server component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
-Selections are validated against each managed-server capability contract; unsupported auth-type or mTLS combinations fail before startup.
-When `--proxy-mode external`, generated CLI contexts inject explicit proxy blocks into each eligible section: `managedServer.http`, `repository.git.remote` for `http|https` remotes, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
+Use `--validate-components` to run plugin/component contract validation (manifest fields, hook script syntax, dependency catalog, and managed-service fixture metadata rules) and exit without running test cases.
+When `--managed-service-auth-type` is omitted, the selected managed-service component elects a default auth type (preferring `oauth2`, then `custom-header`, then `basic`, then `none`) that matches its capability contract.
+Selections are validated against each managed-service capability contract; unsupported auth-type or mTLS combinations fail before startup.
+When `--proxy-mode external`, generated CLI contexts inject explicit proxy blocks into each eligible section: `managedService.http`, `repository.git.remote` for `http|https` remotes, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
 When `--proxy-mode local`, the runner auto-selects helper component `proxy:forward-proxy`, exposes one run-scoped proxy URL to the CLI, and wires the same eligible context sections through that local proxy. In `--platform compose`, local loopback component URLs are rewritten to a host-reachable non-loopback address when one can be resolved so host-side CLI traffic still traverses the proxy.
 Proxy prompt auth is CLI-only in v1: `--proxy-auth-type prompt` is supported for `cli-manual`, writes top-level prompt-backed credentials plus `credentialsRef` placeholders to `contexts.yaml`, sets `persistInSession: true` for local prompt-backed proxy credentials, prints the generated proxy credentials in manual handoff output for testing, and keeps proxy auth vars out of the generated setup script environment instead of pre-seeding prompt auth env vars.
-`--metadata-source bundle` uses the selected managed-server component `METADATA_BUNDLE_REF` when declared, skips local `openapi.yaml` wiring so `managedServer.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no bundle ref is declared.
-`--metadata-source dir` uses the selected managed-server component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
+`--metadata-source bundle` uses the selected managed-service component `METADATA_BUNDLE_REF` when declared, skips local `openapi.yaml` wiring so `managedService.http.openapi` stays unset, and falls back to the selected component `metadata/` directory when no bundle ref is declared.
+`--metadata-source dir` uses the selected managed-service component `metadata/` directory (when present) as `metadata.baseDir` and keeps normal local `openapi.yaml` wiring.
 
 Cleanup behavior:
 
@@ -187,7 +187,7 @@ Component authoring is contract-driven. Use `test/e2e/components/STANDARD.md` as
 Each component directory under `test/e2e/components/<type>/<name>/` must include:
 
 - `component.env` with `COMPONENT_CONTRACT_VERSION=1`, explicit `COMPONENT_RUNTIME_KIND`, and explicit `COMPONENT_DEPENDS_ON`
-- `managedServer` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
+- `managedService` components must also declare `SUPPORTED_SECURITY_FEATURES` and may declare `REQUIRED_SECURITY_FEATURES`
 - `scripts/init.sh`
 - `scripts/configure-auth.sh`
 - `scripts/context.sh`
@@ -201,7 +201,7 @@ Compose-runtime components must also include:
 
 Optional hooks:
 
-- `scripts/manual-info.sh`: printed in manual handoff output before `Repository provider access` in `cli-manual` and `operator-manual` profiles; when the selected managed-server has no hook output, the runner prints state-derived managed-server details instead
+- `scripts/manual-info.sh`: printed in manual handoff output before `Repository provider access` in `cli-manual` and `operator-manual` profiles; when the selected managed-service has no hook output, the runner prints state-derived managed-service details instead
 - `scripts/start.sh` and `scripts/stop.sh`: override built-in start/stop adapters (compose or kubernetes) when needed
 
 Hook orchestration:
@@ -220,7 +220,7 @@ Resource-server components must also provide a fixture tree used by sync-oriente
 
 - `repo-template/**`
 
-For the `keycloak` managed-server, the runner connects directly to Keycloak Admin REST (`/admin/*`) and does not use an auxiliary adapter API.
+For the `keycloak` managed-service, the runner connects directly to Keycloak Admin REST (`/admin/*`) and does not use an auxiliary adapter API.
 
 Fixture tree rules:
 
@@ -240,39 +240,39 @@ Keycloak repo-template currently covers:
 
 ## Remote Environment Variables
 
-### Managed Server (`simple-api-server`, remote)
+### Managed Service (`simple-api-server`, remote)
 
-- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVICE_BASE_URL`
 - optional toggles: `DECLAREST_E2E_SIMPLE_API_ENABLE_BASIC_AUTH`, `DECLAREST_E2E_SIMPLE_API_ENABLE_OAUTH2`, `DECLAREST_E2E_SIMPLE_API_ENABLE_MTLS`
-  - defaults come from runner selection flags: `--managed-server-auth-type`, `--managed-server-mtls`
+  - defaults come from runner selection flags: `--managed-service-auth-type`, `--managed-service-mtls`
 - when basic-auth is enabled: `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_USERNAME`, `DECLAREST_E2E_SIMPLE_API_BASIC_AUTH_PASSWORD`
 - when oauth2 is enabled: `DECLAREST_E2E_SIMPLE_API_CLIENT_ID`, `DECLAREST_E2E_SIMPLE_API_CLIENT_SECRET`
 - optional oauth2: `DECLAREST_E2E_SIMPLE_API_TOKEN_URL`, `DECLAREST_E2E_SIMPLE_API_SCOPE`, `DECLAREST_E2E_SIMPLE_API_AUDIENCE`
 - when mTLS is enabled: `DECLAREST_E2E_SIMPLE_API_TLS_CA_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_CERT_FILE`, `DECLAREST_E2E_SIMPLE_API_TLS_CLIENT_KEY_FILE`
-  - local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `test/e2e/.runs/<run-id>/certs/managed-server-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
+  - local-only cert volume overrides: `DECLAREST_E2E_SIMPLE_API_CERTS_HOST_DIR` (default `test/e2e/.runs/<run-id>/certs/managed-service-simple-api-server`), `DECLAREST_E2E_SIMPLE_API_CERTS_DIR` (default `/etc/simple-api-server/certs`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_DIR` (default `/etc/simple-api-server/certs/clients/allowed`), `DECLAREST_E2E_SIMPLE_API_MTLS_CLIENT_CERT_FILES` (comma-separated container paths)
 
-### Managed Server (`keycloak`, remote)
+### Managed Service (`keycloak`, remote)
 
-- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVICE_BASE_URL`
 - `DECLAREST_E2E_KEYCLOAK_TOKEN_URL`
 - `DECLAREST_E2E_KEYCLOAK_CLIENT_ID`
 - `DECLAREST_E2E_KEYCLOAK_CLIENT_SECRET`
 - optional: `DECLAREST_E2E_KEYCLOAK_SCOPE`, `DECLAREST_E2E_KEYCLOAK_AUDIENCE`
 
-### Managed Server (`vault`, remote)
+### Managed Service (`vault`, remote)
 
-- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
-- `DECLAREST_E2E_MANAGED_SERVER_TOKEN`
-- optional: `DECLAREST_E2E_MANAGED_SERVER_VAULT_MOUNT`, `DECLAREST_E2E_MANAGED_SERVER_VAULT_PATH_PREFIX`, `DECLAREST_E2E_MANAGED_SERVER_VAULT_KV_VERSION`
-- remote vault currently supports `--managed-server-auth-type custom-header` only (`X-Vault-Token`)
+- `DECLAREST_E2E_MANAGED_SERVICE_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVICE_TOKEN`
+- optional: `DECLAREST_E2E_MANAGED_SERVICE_VAULT_MOUNT`, `DECLAREST_E2E_MANAGED_SERVICE_VAULT_PATH_PREFIX`, `DECLAREST_E2E_MANAGED_SERVICE_VAULT_KV_VERSION`
+- remote vault currently supports `--managed-service-auth-type custom-header` only (`X-Vault-Token`)
 
-### Managed Server (`rundeck`, remote)
+### Managed Service (`rundeck`, remote)
 
-- `DECLAREST_E2E_MANAGED_SERVER_BASE_URL`
-- `DECLAREST_E2E_MANAGED_SERVER_TOKEN`
-- optional: `DECLAREST_E2E_MANAGED_SERVER_RUNDECK_API_VERSION`, `DECLAREST_E2E_MANAGED_SERVER_RUNDECK_AUTH_HEADER`
-- local `rundeck` with `--managed-server-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
-- remote rundeck currently supports `--managed-server-auth-type custom-header` only
+- `DECLAREST_E2E_MANAGED_SERVICE_BASE_URL`
+- `DECLAREST_E2E_MANAGED_SERVICE_TOKEN`
+- optional: `DECLAREST_E2E_MANAGED_SERVICE_RUNDECK_API_VERSION`, `DECLAREST_E2E_MANAGED_SERVICE_RUNDECK_AUTH_HEADER`
+- local `rundeck` with `--managed-service-auth-type custom-header` bootstraps an admin API token after startup and writes it into the generated context as `custom-header` auth (`X-Rundeck-Auth-Token`)
+- remote rundeck currently supports `--managed-service-auth-type custom-header` only
 
 ### Git Provider (`gitlab`, remote)
 

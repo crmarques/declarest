@@ -56,7 +56,7 @@ Performance depends on:
 
 - Keep `SyncPolicy.source.path` scopes focused; avoid one giant policy.
 - Use reasonable `syncInterval` values for API capacity.
-- Configure `ManagedServer.http.requestThrottling` for bounded concurrency.
+- Configure `ManagedService.http.requestThrottling` for bounded concurrency.
 - Use incremental-friendly change patterns: small, scoped commits.
 
 ### Repository and policy design

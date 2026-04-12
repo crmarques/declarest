@@ -2,7 +2,7 @@
 
 CASE_ID='operator-reconcile-create-update'
 CASE_SCOPE='operator-main'
-CASE_REQUIRES='managed-server=simple-api-server repo-type=git'
+CASE_REQUIRES='managed-service=simple-api-server repo-type=git'
 
 # shellcheck disable=SC1091
 source "${E2E_DIR}/lib/common.sh"
@@ -15,7 +15,7 @@ operator_wait_remote_owner() {
   local logical_path=$1
   local expected_owner=$2
 
-  case_run_declarest resource get "${logical_path}" --source managed-server -o json
+  case_run_declarest resource get "${logical_path}" --source managed-service -o json
   ((CASE_LAST_STATUS == 0)) || return 1
 
   jq -e --arg owner "${expected_owner}" '.owner == $owner' <<<"${CASE_LAST_STDOUT}" >/dev/null

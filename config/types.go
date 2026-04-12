@@ -34,13 +34,13 @@ type ContextCatalog struct {
 }
 
 type Context struct {
-	Name          string                `json:"name" yaml:"name"`
-	Repository    Repository            `json:"repository" yaml:"repository"`
-	ManagedServer *ManagedServer        `json:"managedServer,omitempty" yaml:"managedServer,omitempty"`
-	SecretStore   *SecretStore          `json:"secretStore,omitempty" yaml:"secretStore,omitempty"`
-	Metadata      Metadata              `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Preferences   map[string]string     `json:"preferences,omitempty" yaml:"preferences,omitempty"`
-	Credentials   map[string]Credential `json:"-" yaml:"-"`
+	Name           string                `json:"name" yaml:"name"`
+	Repository     Repository            `json:"repository" yaml:"repository"`
+	ManagedService *ManagedService       `json:"managedService,omitempty" yaml:"managedService,omitempty"`
+	SecretStore    *SecretStore          `json:"secretStore,omitempty" yaml:"secretStore,omitempty"`
+	Metadata       Metadata              `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Preferences    map[string]string     `json:"preferences,omitempty" yaml:"preferences,omitempty"`
+	Credentials    map[string]Credential `json:"-" yaml:"-"`
 }
 
 type Repository struct {
@@ -92,7 +92,7 @@ type FilesystemRepository struct {
 	BaseDir string `json:"baseDir" yaml:"baseDir"`
 }
 
-type ManagedServer struct {
+type ManagedService struct {
 	HTTP *HTTPServer `json:"http,omitempty" yaml:"http,omitempty"`
 }
 

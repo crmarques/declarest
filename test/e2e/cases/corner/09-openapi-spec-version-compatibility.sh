@@ -3,7 +3,7 @@ set -euo pipefail
 
 CASE_ID='openapi-spec-version-compatibility'
 CASE_SCOPE='corner'
-CASE_REQUIRES='has-managed-server'
+CASE_REQUIRES='has-managed-service'
 
 case_run_declarest_with_context() {
   local context_file=$1

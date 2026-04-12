@@ -78,7 +78,7 @@ func TestCLIImportsFollowAllowedProjectBoundaries(t *testing.T) {
 		modulePrefix + "repository",
 		modulePrefix + "resource",
 		modulePrefix + "secrets",
-		modulePrefix + "managedserver",
+		modulePrefix + "managedservice",
 	}
 
 	allowedExactImports := map[string]struct{}{

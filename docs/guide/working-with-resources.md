@@ -79,13 +79,13 @@ declarest resource defaults edit /corporations/acme
 declarest resource defaults infer /corporations/acme --check
 ```
 
-### Managed-server probing
+### Managed-service probing
 
 Probe server-added defaults (creates/removes temporary resources):
 
 ```bash
-declarest resource defaults infer /corporations/acme --managed-server --yes
-declarest resource defaults infer /corporations/acme --managed-server --wait 2s --yes
+declarest resource defaults infer /corporations/acme --managed-service --yes
+declarest resource defaults infer /corporations/acme --managed-service --wait 2s --yes
 ```
 
 ### Print only explicit overrides

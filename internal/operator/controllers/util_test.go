@@ -88,7 +88,7 @@ func TestCollectSecretNamesIncludesRepositoryWebhookSecret(t *testing.T) {
 		},
 	}
 
-	names := collectSecretNames(repo, &declarestv1alpha1.ManagedServer{}, secretStore)
+	names := collectSecretNames(repo, &declarestv1alpha1.ManagedService{}, secretStore)
 	if len(names) != 3 {
 		t.Fatalf("expected 2 secret names, got %#v", names)
 	}
@@ -115,9 +115,9 @@ func TestExpandRuntimeSpecsResolveEnvPlaceholders(t *testing.T) {
 		t.Fatalf("expected expanded repository URL, got %q", got)
 	}
 
-	server := expandRuntimeManagedServer(&declarestv1alpha1.ManagedServer{
-		Spec: declarestv1alpha1.ManagedServerSpec{
-			HTTP: declarestv1alpha1.ManagedServerHTTP{
+	server := expandRuntimeManagedService(&declarestv1alpha1.ManagedService{
+		Spec: declarestv1alpha1.ManagedServiceSpec{
+			HTTP: declarestv1alpha1.ManagedServiceHTTP{
 				BaseURL: "${DECLAREST_SERVER_URL}",
 			},
 			OpenAPI: declarestv1alpha1.DeclaRESTExternalArtifact{
@@ -126,7 +126,7 @@ func TestExpandRuntimeSpecsResolveEnvPlaceholders(t *testing.T) {
 		},
 	})
 	if got := server.Spec.HTTP.BaseURL; got != "https://runtime.example.com/api" {
-		t.Fatalf("expected expanded managed-server baseURL, got %q", got)
+		t.Fatalf("expected expanded managed-service baseURL, got %q", got)
 	}
 	if got := server.Spec.OpenAPI.URL; got != "https://runtime.example.com/openapi.json" {
 		t.Fatalf("expected expanded openapi URL, got %q", got)

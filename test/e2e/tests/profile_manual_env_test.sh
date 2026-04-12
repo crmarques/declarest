@@ -334,7 +334,7 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   e2e_write_state_value "${provider_state}" 'REPO_PROVIDER_BASE_URL' 'http://127.0.0.1:3000'
   e2e_write_state_value "${provider_state}" 'GIT_AUTH_USERNAME' 'gitea-admin'
   e2e_write_state_value "${provider_state}" 'GIT_AUTH_PASSWORD' 'gitea-pass'
-  export E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-server:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
+  export E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-service:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
 
   local output
   output=$(e2e_manual_handoff_print 'e2e-manual')
@@ -342,7 +342,7 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
   assert_contains "${output}" "export KUBECONFIG=\"${E2E_KUBECONFIG}\""
   assert_contains "${output}" "Manual Component Access:"
-  assert_contains "${output}" "managed-server:simple-api-server"
+  assert_contains "${output}" "managed-service:simple-api-server"
   assert_contains "${output}" "Base URL: http://127.0.0.1:20890/api"
   assert_contains "${output}" "Repository provider access:"
   assert_contains "${output}" "provider: gitea (local)"
@@ -358,7 +358,7 @@ test_manual_handoff_prints_kubectl_and_repo_provider_access() {
   fi
 }
 
-test_managed_server_access_details_formats_generic_state() {
+test_managed_service_access_details_formats_generic_state() {
   load_profile_libs
 
   local tmp
@@ -366,23 +366,23 @@ test_managed_server_access_details_formats_generic_state() {
   trap 'rm -rf "${tmp}"' RETURN
 
   export E2E_STATE_DIR="${tmp}/state"
-  export E2E_MANAGED_SERVER='rundeck'
-  export E2E_MANAGED_SERVER_CONNECTION='local'
+  export E2E_MANAGED_SERVICE='rundeck'
+  export E2E_MANAGED_SERVICE_CONNECTION='local'
   mkdir -p "${E2E_STATE_DIR}"
 
-  local state_file="${E2E_STATE_DIR}/managed-server-rundeck.env"
+  local state_file="${E2E_STATE_DIR}/managed-service-rundeck.env"
   : >"${state_file}"
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_BASE_URL' 'http://127.0.0.1:24444'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_API_BASE_URL' 'http://127.0.0.1:24444/api/45'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_WEB_LOGIN_URL' 'http://127.0.0.1:24444/user/login'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_AUTH_MODE' 'custom-header'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_USERNAME' 'admin'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_PASSWORD' 'admin-pass'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_HEADER' 'X-Rundeck-Auth-Token'
-  e2e_write_state_value "${state_file}" 'MANAGED_SERVER_ACCESS_TOKEN' 'rundeck-token'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_BASE_URL' 'http://127.0.0.1:24444'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_API_BASE_URL' 'http://127.0.0.1:24444/api/45'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_WEB_LOGIN_URL' 'http://127.0.0.1:24444/user/login'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_AUTH_MODE' 'custom-header'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_USERNAME' 'admin'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_PASSWORD' 'admin-pass'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_HEADER' 'X-Rundeck-Auth-Token'
+  e2e_write_state_value "${state_file}" 'MANAGED_SERVICE_ACCESS_TOKEN' 'rundeck-token'
 
   local output
-  output=$(e2e_profile_managed_server_access_details)
+  output=$(e2e_profile_managed_service_access_details)
 
   assert_contains "${output}" "Base URL: http://127.0.0.1:24444"
   assert_contains "${output}" "API Base URL: http://127.0.0.1:24444/api/45"
@@ -400,4 +400,4 @@ test_manual_env_scripts_skip_local_prompt_proxy_auth_exports
 test_manual_env_prompt_hook_prunes_deleted_run_bin_path_and_alias
 test_manual_env_scripts_export_kubernetes_runtime_and_restore_kubeconfig
 test_manual_handoff_prints_kubectl_and_repo_provider_access
-test_managed_server_access_details_formats_generic_state
+test_managed_service_access_details_formats_generic_state

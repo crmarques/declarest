@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: managed-service-rundeck
+  labels:
+    app.kubernetes.io/name: managed-service-rundeck
+    declarest.e2e/component-key: managed-service-rundeck
+  annotations:
+    declarest.e2e/port-forward: "${RUNDECK_HTTP_PORT}:4440"
+spec:
+  selector:
+    app.kubernetes.io/name: managed-service-rundeck
+  ports:
+    - name: http
+      port: 4440
+      targetPort: 4440

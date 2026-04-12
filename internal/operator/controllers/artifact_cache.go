@@ -140,7 +140,7 @@ func newArtifactHTTPClient(proxy *config.HTTPProxy) (*http.Client, error) {
 		Proxy:               nil,
 	}
 
-	proxyConfig, disabled, err := proxyhelper.Resolve("managedServer.http.proxy", proxy)
+	proxyConfig, disabled, err := proxyhelper.Resolve("managedService.http.proxy", proxy)
 	if err != nil {
 		return nil, err
 	}

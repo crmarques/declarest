@@ -25,23 +25,23 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// TestEnvtestManagedServerReconcilesAndSetsReadyCondition verifies that
-// creating a ManagedServer with a valid spec causes the controller to
+// TestEnvtestManagedServiceReconcilesAndSetsReadyCondition verifies that
+// creating a ManagedService with a valid spec causes the controller to
 // reconcile and set a Ready condition.
-func TestEnvtestManagedServerReconcilesAndSetsReadyCondition(t *testing.T) {
+func TestEnvtestManagedServiceReconcilesAndSetsReadyCondition(t *testing.T) {
 	state := setupEnvTest(t)
 	ctx := context.Background()
 
-	ms := &declarestv1alpha1.ManagedServer{
+	ms := &declarestv1alpha1.ManagedService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-ms",
 			Namespace: "test",
 		},
-		Spec: declarestv1alpha1.ManagedServerSpec{
-			HTTP: declarestv1alpha1.ManagedServerHTTP{
+		Spec: declarestv1alpha1.ManagedServiceSpec{
+			HTTP: declarestv1alpha1.ManagedServiceHTTP{
 				BaseURL: "https://example.com/api",
-				Auth: declarestv1alpha1.ManagedServerAuth{
-					BasicAuth: &declarestv1alpha1.ManagedServerBasicAuth{
+				Auth: declarestv1alpha1.ManagedServiceAuth{
+					BasicAuth: &declarestv1alpha1.ManagedServiceBasicAuth{
 						UsernameRef: &corev1.SecretKeySelector{
 							LocalObjectReference: corev1.LocalObjectReference{Name: "ms-creds"},
 							Key:                  "username",
@@ -57,11 +57,11 @@ func TestEnvtestManagedServerReconcilesAndSetsReadyCondition(t *testing.T) {
 	}
 
 	if err := state.client.Create(ctx, ms); err != nil {
-		t.Fatalf("create ManagedServer: %v", err)
+		t.Fatalf("create ManagedService: %v", err)
 	}
 
 	key := types.NamespacedName{Namespace: "test", Name: "test-ms"}
-	fetched := &declarestv1alpha1.ManagedServer{}
+	fetched := &declarestv1alpha1.ManagedService{}
 	waitForCondition(t, ctx, state.client, key, fetched, declarestv1alpha1.ConditionTypeReady, metav1.ConditionTrue)
 
 	if fetched.Status.ObservedGeneration != fetched.Generation {
@@ -69,22 +69,22 @@ func TestEnvtestManagedServerReconcilesAndSetsReadyCondition(t *testing.T) {
 	}
 }
 
-// TestEnvtestManagedServerDeletionCleansUpFinalizer verifies that deleting a
-// ManagedServer removes the finalizer and completes deletion.
-func TestEnvtestManagedServerDeletionCleansUpFinalizer(t *testing.T) {
+// TestEnvtestManagedServiceDeletionCleansUpFinalizer verifies that deleting a
+// ManagedService removes the finalizer and completes deletion.
+func TestEnvtestManagedServiceDeletionCleansUpFinalizer(t *testing.T) {
 	state := setupEnvTest(t)
 	ctx := context.Background()
 
-	ms := &declarestv1alpha1.ManagedServer{
+	ms := &declarestv1alpha1.ManagedService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-ms-del",
 			Namespace: "test",
 		},
-		Spec: declarestv1alpha1.ManagedServerSpec{
-			HTTP: declarestv1alpha1.ManagedServerHTTP{
+		Spec: declarestv1alpha1.ManagedServiceSpec{
+			HTTP: declarestv1alpha1.ManagedServiceHTTP{
 				BaseURL: "https://example.com/api",
-				Auth: declarestv1alpha1.ManagedServerAuth{
-					BasicAuth: &declarestv1alpha1.ManagedServerBasicAuth{
+				Auth: declarestv1alpha1.ManagedServiceAuth{
+					BasicAuth: &declarestv1alpha1.ManagedServiceBasicAuth{
 						UsernameRef: &corev1.SecretKeySelector{
 							LocalObjectReference: corev1.LocalObjectReference{Name: "ms-creds"},
 							Key:                  "username",
@@ -100,15 +100,15 @@ func TestEnvtestManagedServerDeletionCleansUpFinalizer(t *testing.T) {
 	}
 
 	if err := state.client.Create(ctx, ms); err != nil {
-		t.Fatalf("create ManagedServer: %v", err)
+		t.Fatalf("create ManagedService: %v", err)
 	}
 
 	key := types.NamespacedName{Namespace: "test", Name: "test-ms-del"}
-	fetched := &declarestv1alpha1.ManagedServer{}
+	fetched := &declarestv1alpha1.ManagedService{}
 	waitForCondition(t, ctx, state.client, key, fetched, declarestv1alpha1.ConditionTypeReady, metav1.ConditionTrue)
 
 	if err := state.client.Delete(ctx, ms); err != nil {
-		t.Fatalf("delete ManagedServer: %v", err)
+		t.Fatalf("delete ManagedService: %v", err)
 	}
 }
 

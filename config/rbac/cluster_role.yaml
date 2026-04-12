@@ -4,13 +4,13 @@ metadata:
   name: declarest-operator
 rules:
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies", "repositorywebhooks"]
+    resources: ["resourcerepositories", "managedservices", "secretstores", "syncpolicies", "repositorywebhooks"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
+    resources: ["resourcerepositories/status", "managedservices/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
+    resources: ["resourcerepositories/finalizers", "managedservices/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
     verbs: ["update"]
   - apiGroups: [""]
     resources: ["events"]

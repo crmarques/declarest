@@ -6,7 +6,7 @@ source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 reload_args_lib() {
   unset E2E_EXPLICIT \
-    E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
+    E2E_MANAGED_SERVICE E2E_MANAGED_SERVICE_CONNECTION E2E_MANAGED_SERVICE_AUTH_TYPE E2E_MANAGED_SERVICE_MTLS \
     E2E_PROXY_MODE E2E_PROXY_AUTH_TYPE E2E_PROXY_HTTP_URL E2E_PROXY_HTTPS_URL E2E_PROXY_NO_PROXY \
     E2E_PROXY_AUTH_USERNAME E2E_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
@@ -69,16 +69,16 @@ test_rejects_invalid_platform_flag() {
   assert_contains "${output}" "invalid --platform value"
 }
 
-test_parses_managed_server_auth_type_flag() {
+test_parses_managed_service_auth_type_flag() {
   reload_args_lib
-  e2e_parse_args --managed-server-auth-type custom-header
-  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "custom-header" "expected auth-type to be parsed"
+  e2e_parse_args --managed-service-auth-type custom-header
+  assert_eq "${E2E_MANAGED_SERVICE_AUTH_TYPE}" "custom-header" "expected auth-type to be parsed"
 }
 
-test_parses_managed_server_auth_type_prompt_flag() {
+test_parses_managed_service_auth_type_prompt_flag() {
   reload_args_lib
-  e2e_parse_args --managed-server-auth-type prompt
-  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "prompt" "expected prompt auth-type to be parsed"
+  e2e_parse_args --managed-service-auth-type prompt
+  assert_eq "${E2E_MANAGED_SERVICE_AUTH_TYPE}" "prompt" "expected prompt auth-type to be parsed"
 }
 
 test_parses_proxy_mode_flag() {
@@ -131,16 +131,16 @@ test_rejects_unknown_argument() {
   assert_contains "${output}" "unknown argument: --unknown-flag"
 }
 
-test_rejects_managed_server_none() {
+test_rejects_managed_service_none() {
   reload_args_lib
   local output status
   set +e
-  output=$(e2e_parse_args --managed-server none 2>&1)
+  output=$(e2e_parse_args --managed-service none 2>&1)
   status=$?
   set -e
 
   assert_status "${status}" "1"
-  assert_contains "${output}" "--managed-server none is not supported"
+  assert_contains "${output}" "--managed-service none is not supported"
 }
 
 test_rejects_proxy_mode_external_without_urls() {
@@ -267,20 +267,20 @@ test_usage_mentions_validate_flag_and_canonical_options() {
   assert_contains "${output}" "--validate-components"
   assert_contains "${output}" "--platform <compose|kubernetes>"
   assert_contains "${output}" "--metadata-source <bundle|dir>"
-  assert_contains "${output}" "--managed-server-auth-type <none|basic|oauth2|custom-header|prompt>"
+  assert_contains "${output}" "--managed-service-auth-type <none|basic|oauth2|custom-header|prompt>"
   assert_contains "${output}" "--proxy-mode <none|local|external>"
   assert_contains "${output}" "--proxy-auth-type <none|basic|prompt>"
-  assert_contains "${output}" "--managed-server <name>"
+  assert_contains "${output}" "--managed-service <name>"
   assert_contains "${output}" "--repo-type <name>"
   assert_contains "${output}" "--git-provider <name>"
   assert_contains "${output}" "--secret-provider <name|none>"
-  assert_contains "${output}" "Use --list-components to inspect available managed-server components"
+  assert_contains "${output}" "Use --list-components to inspect available managed-service components"
   assert_contains "${output}" "DECLAREST_E2E_K8S_COMPONENT_READY_TIMEOUT_SECONDS=<seconds>"
   assert_contains "${output}" "DECLAREST_E2E_OPERATOR_READY_TIMEOUT_SECONDS=<seconds>"
-  assert_not_contains "${output}" "--managed-server-basic-auth"
-  assert_not_contains "${output}" "--managed-server-oauth2"
+  assert_not_contains "${output}" "--managed-service-basic-auth"
+  assert_not_contains "${output}" "--managed-service-oauth2"
   assert_not_contains "${output}" "--metadata <bundle|local-dir>"
-  assert_not_contains "${output}" "--managed-server <name|none>"
+  assert_not_contains "${output}" "--managed-service <name|none>"
 }
 
 test_parses_validate_components_flag
@@ -290,15 +290,15 @@ test_parses_platform_flag
 test_parses_operator_profile
 test_parses_operator_automated_profile
 test_rejects_invalid_platform_flag
-test_parses_managed_server_auth_type_flag
-test_parses_managed_server_auth_type_prompt_flag
+test_parses_managed_service_auth_type_flag
+test_parses_managed_service_auth_type_prompt_flag
 test_parses_proxy_mode_flag
 test_parses_proxy_auth_type_flag
 test_parses_metadata_source_flag
 test_parses_metadata_source_dir_flag
 test_rejects_invalid_metadata_source_flag
 test_rejects_unknown_argument
-test_rejects_managed_server_none
+test_rejects_managed_service_none
 test_rejects_proxy_mode_external_without_urls
 test_rejects_proxy_auth_type_without_proxy
 test_rejects_proxy_auth_type_basic_without_credentials

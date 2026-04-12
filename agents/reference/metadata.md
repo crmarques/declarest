@@ -23,7 +23,7 @@ Define deterministic metadata behavior for operation routing, transform rules, a
 6. Resource-level directives MUST override inherited directives inside the same source, and repo-local overlays MUST override shared-source directives for the same logical path.
 7. Template rendering failures MUST return typed validation errors with path context.
 8. Compare transforms MUST run before diff generation.
-9. Inference from OpenAPI SHOULD propose method/path defaults, SHOULD infer `resource.format` from managed-server payload formats (using `any` when more than one deterministic format is advertised), but MUST NOT overwrite explicit user metadata unless explicitly requested.
+9. Inference from OpenAPI SHOULD propose method/path defaults, SHOULD infer `resource.format` from managed-service payload formats (using `any` when more than one deterministic format is advertised), but MUST NOT overwrite explicit user metadata unless explicitly requested.
 10. Metadata persistence MUST omit nil directive fields from stored files instead of writing `null`.
 11. Metadata persistence MUST preserve explicit empty arrays/maps when they are provided for replacement semantics.
 12. Metadata persistence MUST preserve raw `resource.defaults` include placeholders on read/write and MUST NOT inline included defaults objects into stored `metadata.yaml|json`.
@@ -144,7 +144,7 @@ Template context contract:
 3. `operations.list.path` inferred from OpenAPI, then manually overridden with custom query defaults.
 4. Inference for `/admin/realms/_/clients/` can propose `resource.id: {{/id}}`, `resource.alias: {{/clientId}}`, and templated operation paths from OpenAPI selectors.
 5. For selector `/admin/realms/_/user-registry` with `resource.remoteCollectionPath: /admin/realms/{{/realm}}/components` and `operations.get.path: ./{{/id}}`, rendering `/admin/realms/platform/user-registry` with `id=123456` resolves to `/admin/realms/platform/components/123456`.
-6. For selector `/projects/_/jobs/_`, omitting `resource.remoteCollectionPath` would default remote collection access to `/projects/{{/project}}/jobs`; when the managed-server collection is actually `/project/{{/project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that remote value while `project` still resolves from the logical collection path.
+6. For selector `/projects/_/jobs/_`, omitting `resource.remoteCollectionPath` would default remote collection access to `/projects/{{/project}}/jobs`; when the managed-service collection is actually `/project/{{/project}}/jobs`, metadata MUST set `resource.remoteCollectionPath` to that remote value while `project` still resolves from the logical collection path.
 7. For selector `/admin/realms/_/user-registry/_/mappers/`, `operations.list.transforms: [{jqExpression:"..."}]` MAY use `resource("/admin/realms/{{/realm}}/user-registry/{{/provider}}/")` and compare mapper `parentId` with the resolved parent `.id`.
 8. `resource metadata infer /admin/realms/ --recursive` MUST fail with a validation error and MUST NOT write metadata files until recursive traversal is implemented.
 9. `resource metadata get` preserves payload-aware helper tokens in metadata string fields (for example `{{payload_media_type .}}`) while preserving unrelated templates such as `{{/id}}`; `resource get --show-metadata` renders those helper tokens against the active payload descriptor.

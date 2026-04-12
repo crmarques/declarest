@@ -35,7 +35,7 @@ This is the recommended runtime model. Most teams use both: **CLI for authoring,
 A context is a named configuration that ties everything together for one run:
 
 - **Repository** -- where desired-state files live (filesystem or Git)
-- **Managed Server** -- which API to target (URL, auth)
+- **Managed Service** -- which API to target (URL, auth)
 - **Secret Store** -- where sensitive values are kept (optional)
 - **Metadata source** -- where metadata rules come from (optional)
 
@@ -63,7 +63,7 @@ contexts:
             basic:
               credentialsRef:
                 name: shared
-    managedServer:
+    managedService:
       http:
         url: https://api.example.com
         auth:
@@ -74,7 +74,7 @@ contexts:
 
 Key rules:
 
-- `managedServer.http.auth` must be exactly one of `oauth2`, `basic`, or `customHeaders`.
+- `managedService.http.auth` must be exactly one of `oauth2`, `basic`, or `customHeaders`.
 - `metadata` may define at most one of `baseDir`, `bundle`, or `bundleFile`.
 - Runtime overrides (`--set key=value`) do not mutate the catalog file.
 
@@ -160,7 +160,7 @@ Core commands: `repository status`, `init`, `refresh`, `push`, `reset`, `clean`.
 
 See [Repository and Git Workflows](repository-and-git-workflows.md) for day-to-day operations.
 
-## Managed Server
+## Managed Service
 
 Defines how DeclaREST connects to the target API:
 
@@ -170,7 +170,7 @@ Defines how DeclaREST connects to the target API:
 
 Auth and TLS are connectivity settings, not resource content. In Operator mode, credentials come from Kubernetes Secrets.
 
-Keep one `ManagedServer` per endpoint/auth profile. Multiple `SyncPolicy` resources can reference the same server with different source paths.
+Keep one `ManagedService` per endpoint/auth profile. Multiple `SyncPolicy` resources can reference the same server with different source paths.
 
 ## Metadata at a glance
 

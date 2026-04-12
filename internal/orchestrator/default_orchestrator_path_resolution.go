@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 	"github.com/crmarques/declarest/resource/identity"
@@ -159,7 +159,7 @@ func remoteFallbackCandidates(
 
 func (r *Orchestrator) resolveRemoteCollectionCandidate(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	requested resource.Resource,
 	md metadata.ResourceMetadata,
 ) (resource.Resource, bool, error) {
@@ -181,7 +181,7 @@ func (r *Orchestrator) resolveRemoteCollectionCandidate(
 
 func (r *Orchestrator) fetchRemoteValueFromCollectionCandidate(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	requested resource.Resource,
 	md metadata.ResourceMetadata,
 ) (resource.Content, bool, error) {
@@ -198,7 +198,7 @@ func (r *Orchestrator) fetchRemoteValueFromCollectionCandidate(
 
 func (r *Orchestrator) fetchRemoteValueForCandidate(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	requested resource.Resource,
 	md metadata.ResourceMetadata,
 	candidate resource.Resource,

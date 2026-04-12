@@ -23,7 +23,7 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -223,7 +223,7 @@ func (a *fakeEditServiceAccessor) RepositoryStore() repository.ResourceStore    
 func (a *fakeEditServiceAccessor) RepositorySync() repository.RepositorySync       { return nil }
 func (a *fakeEditServiceAccessor) MetadataService() metadatadomain.MetadataService { return a.metadata }
 func (a *fakeEditServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return nil }
-func (a *fakeEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a *fakeEditServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return nil
 }
 
@@ -235,6 +235,6 @@ func editTestContext() configdomain.Context {
 				BaseDir: "/tmp",
 			},
 		},
-		ManagedServer: &configdomain.ManagedServer{},
+		ManagedService: &configdomain.ManagedService{},
 	}
 }

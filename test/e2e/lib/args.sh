@@ -2,10 +2,10 @@
 
 declare -Ag E2E_EXPLICIT
 
-E2E_MANAGED_SERVER=''
-E2E_MANAGED_SERVER_CONNECTION='local'
-E2E_MANAGED_SERVER_AUTH_TYPE=''
-E2E_MANAGED_SERVER_MTLS='false'
+E2E_MANAGED_SERVICE=''
+E2E_MANAGED_SERVICE_CONNECTION='local'
+E2E_MANAGED_SERVICE_AUTH_TYPE=''
+E2E_MANAGED_SERVICE_MTLS='false'
 E2E_PROXY_MODE='none'
 E2E_PROXY_AUTH_TYPE=''
 E2E_PROXY_HTTP_URL="${DECLAREST_E2E_PROXY_HTTP_URL:-}"
@@ -87,7 +87,7 @@ e2e_args_ensure_component_catalog() {
 }
 
 e2e_args_apply_base_component_defaults() {
-  [[ -n "${E2E_MANAGED_SERVER:-}" ]] || E2E_MANAGED_SERVER=$(e2e_component_default_name_for_type 'managed-server' 'base') || return 1
+  [[ -n "${E2E_MANAGED_SERVICE:-}" ]] || E2E_MANAGED_SERVICE=$(e2e_component_default_name_for_type 'managed-service' 'base') || return 1
   [[ -n "${E2E_REPO_TYPE:-}" ]] || E2E_REPO_TYPE=$(e2e_component_default_name_for_type 'repo-type' 'base') || return 1
   [[ -n "${E2E_SECRET_PROVIDER:-}" ]] || E2E_SECRET_PROVIDER=$(e2e_component_default_name_for_type 'secret-provider' 'base') || return 1
 
@@ -146,7 +146,7 @@ e2e_parse_bool_value() {
   esac
 }
 
-e2e_parse_managed_server_auth_type_value() {
+e2e_parse_managed_service_auth_type_value() {
   local raw_value=$1
 
   case "${raw_value,,}" in
@@ -166,7 +166,7 @@ e2e_parse_managed_server_auth_type_value() {
       printf 'prompt\n'
       ;;
     *)
-      e2e_die "invalid --managed-server-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header, prompt)"
+      e2e_die "invalid --managed-service-auth-type value: ${raw_value} (allowed: none, basic, oauth2, custom-header, prompt)"
       return 1
       ;;
   esac
@@ -323,7 +323,7 @@ Profiles (required, defaults to cli-basic when omitted):
     cli-manual     : Start only local-instantiable components, emit setup/reset shell scripts, and exit so you can run
                      Declarest commands interactively. Requires every selected connection to stay local.
     operator-manual: Provision a kubernetes-only local stack, deploy the operator manager in-cluster, apply generated
-                     ResourceRepository/ManagedServer/SecretStore/SyncPolicy resources, then keep runtime for manual checks.
+                     ResourceRepository/ManagedService/SecretStore/SyncPolicy resources, then keep runtime for manual checks.
     operator-basic : Same operator environment as operator-manual, then run operator-focused "main" automated cases.
     operator-full  : Same operator environment as operator-basic, plus corner validations.
 
@@ -333,17 +333,17 @@ Platform selection:
     kubernetes : Start local containerized components in a run-scoped kind cluster.
 
 Component selection (choose values for each flag; see notes below):
-  --managed-server <name>                              default: component contract default
-    Use --list-components to inspect available managed-server components and their descriptions.
-    A managed-server selection is mandatory for e2e runs; `none` is not supported.
-  --managed-server-connection <local|remote>            default: local
-    local  : Start the chosen managed server via the provided fixtures and scripts.
+  --managed-service <name>                              default: component contract default
+    Use --list-components to inspect available managed-service components and their descriptions.
+    A managed-service selection is mandatory for e2e runs; `none` is not supported.
+  --managed-service-connection <local|remote>            default: local
+    local  : Start the chosen managed service via the provided fixtures and scripts.
     remote : Assume the server already exists and reach it via the configured connection details.
-  --managed-server-auth-type <none|basic|oauth2|custom-header|prompt>
-    Select the managed-server auth mode. When omitted, the selected component elects a default auth type
+  --managed-service-auth-type <none|basic|oauth2|custom-header|prompt>
+    Select the managed-service auth mode. When omitted, the selected component elects a default auth type
     (preference order: oauth2, custom-header, basic, none) subject to its capability contract.
-    prompt    : Emit managedServer.http.auth.prompt for basic-auth-capable managed-server components.
-  --managed-server-mtls [<true|false>]                  default: false
+    prompt    : Emit managedService.http.auth.prompt for basic-auth-capable managed-service components.
+  --managed-service-mtls [<true|false>]                  default: false
     true  : Require client certificates when the component advertises mTLS.
     false : Run without mTLS client validation even if the server can enforce it.
   --proxy-mode <none|local|external>                default: none
@@ -355,7 +355,7 @@ Component selection (choose values for each flag; see notes below):
     basic  : Inject proxy auth username/password; local mode defaults here and auto-generates creds when none are supplied.
     prompt : Inject *.proxy.auth.prompt and defer proxy credentials to runtime prompts (cli-manual only).
   --metadata-source <bundle|dir>                    default: bundle
-    bundle    : Use metadata.bundle shorthand from the selected managed-server contract and ignore component openapi.yaml.
+    bundle    : Use metadata.bundle shorthand from the selected managed-service contract and ignore component openapi.yaml.
     dir       : Use component-local metadata directory when provided and keep normal local OpenAPI wiring.
   --repo-type <name>                                  default: component contract default
     Use --list-components to inspect available repository backends and their descriptions.
@@ -406,9 +406,9 @@ Examples:
   ./run-e2e.sh --profile operator-manual
   ./run-e2e.sh --profile operator-basic
   ./run-e2e.sh --profile operator-full
-  ./run-e2e.sh --managed-server <managed-server-name> --managed-server-auth-type oauth2
-  ./run-e2e.sh --profile cli-manual --managed-server-auth-type prompt
-  ./run-e2e.sh --managed-server-auth-type basic --managed-server-mtls true
+  ./run-e2e.sh --managed-service <managed-service-name> --managed-service-auth-type oauth2
+  ./run-e2e.sh --profile cli-manual --managed-service-auth-type prompt
+  ./run-e2e.sh --managed-service-auth-type basic --managed-service-mtls true
   ./run-e2e.sh --proxy-mode local
   ./run-e2e.sh --profile cli-manual --proxy-mode local --proxy-auth-type prompt
   DECLAREST_E2E_PROXY_HTTP_URL=http://127.0.0.1:3128 ./run-e2e.sh --proxy-mode external
@@ -461,12 +461,12 @@ e2e_parse_cleanup_args() {
         E2E_VERBOSE=1
         shift
         ;;
-      --profile|--platform|--managed-server|--managed-server-connection|--managed-server-auth-type|--proxy-mode|--proxy-auth-type|--metadata-source|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
+      --profile|--platform|--managed-service|--managed-service-connection|--managed-service-auth-type|--proxy-mode|--proxy-auth-type|--metadata-source|--repo-type|--git-provider|--git-provider-connection|--secret-provider|--secret-provider-connection)
         has_workload_flag=1
         shift
         [[ $# -gt 0 ]] && shift || true
         ;;
-      --managed-server-mtls)
+      --managed-service-mtls)
         has_workload_flag=1
         shift
         if [[ $# -gt 0 && "${1}" != -* ]]; then
@@ -531,31 +531,31 @@ e2e_parse_args() {
         e2e_mark_explicit 'platform'
         shift 2
         ;;
-      --managed-server)
+      --managed-service)
         [[ $# -ge 2 ]] || {
-          e2e_die '--managed-server requires a value'
+          e2e_die '--managed-service requires a value'
           return 1
         }
-        E2E_MANAGED_SERVER=$2
-        e2e_mark_explicit 'managed-server'
+        E2E_MANAGED_SERVICE=$2
+        e2e_mark_explicit 'managed-service'
         shift 2
         ;;
-      --managed-server-connection)
+      --managed-service-connection)
         [[ $# -ge 2 ]] || {
-          e2e_die '--managed-server-connection requires a value'
+          e2e_die '--managed-service-connection requires a value'
           return 1
         }
-        E2E_MANAGED_SERVER_CONNECTION=$2
-        e2e_mark_explicit 'managed-server-connection'
+        E2E_MANAGED_SERVICE_CONNECTION=$2
+        e2e_mark_explicit 'managed-service-connection'
         shift 2
         ;;
-      --managed-server-auth-type)
+      --managed-service-auth-type)
         [[ $# -ge 2 ]] || {
-          e2e_die '--managed-server-auth-type requires a value'
+          e2e_die '--managed-service-auth-type requires a value'
           return 1
         }
-        E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_parse_managed_server_auth_type_value "$2") || return 1
-        e2e_mark_explicit 'managed-server-auth-type'
+        E2E_MANAGED_SERVICE_AUTH_TYPE=$(e2e_parse_managed_service_auth_type_value "$2") || return 1
+        e2e_mark_explicit 'managed-service-auth-type'
         shift 2
         ;;
       --proxy-mode)
@@ -574,7 +574,7 @@ e2e_parse_args() {
         e2e_set_proxy_auth_type "$(e2e_parse_proxy_auth_type_value "$2")" || return 1
         shift 2
         ;;
-      --managed-server-mtls)
+      --managed-service-mtls)
         local mtls_value='true'
         if [[ $# -ge 2 && "${2}" != -* ]]; then
           mtls_value=$2
@@ -582,8 +582,8 @@ e2e_parse_args() {
         else
           shift
         fi
-        E2E_MANAGED_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${mtls_value}") || return 1
-        e2e_mark_explicit 'managed-server-mtls'
+        E2E_MANAGED_SERVICE_MTLS=$(e2e_parse_bool_value '--managed-service-mtls' "${mtls_value}") || return 1
+        e2e_mark_explicit 'managed-service-mtls'
         ;;
       --metadata-source)
         [[ $# -ge 2 ]] || {
@@ -680,27 +680,27 @@ e2e_parse_args() {
   e2e_args_ensure_component_catalog || return 1
   e2e_args_apply_base_component_defaults || return 1
 
-  if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
-    e2e_die '--managed-server none is not supported; select a managed-server component'
+  if [[ "${E2E_MANAGED_SERVICE}" == 'none' ]]; then
+    e2e_die '--managed-service none is not supported; select a managed-service component'
     return 1
   fi
-  e2e_validate_component_arg '--managed-server' "${E2E_MANAGED_SERVER}" || return 1
+  e2e_validate_component_arg '--managed-service' "${E2E_MANAGED_SERVICE}" || return 1
 
-  case "${E2E_MANAGED_SERVER_CONNECTION}" in
+  case "${E2E_MANAGED_SERVICE_CONNECTION}" in
     local|remote) ;;
     *)
-      e2e_die "invalid managed-server connection: ${E2E_MANAGED_SERVER_CONNECTION}"
+      e2e_die "invalid managed-service connection: ${E2E_MANAGED_SERVICE_CONNECTION}"
       return 1
       ;;
   esac
 
-  if [[ -n "${E2E_MANAGED_SERVER_AUTH_TYPE}" ]]; then
-    E2E_MANAGED_SERVER_AUTH_TYPE=$(e2e_parse_managed_server_auth_type_value "${E2E_MANAGED_SERVER_AUTH_TYPE}") || return 1
+  if [[ -n "${E2E_MANAGED_SERVICE_AUTH_TYPE}" ]]; then
+    E2E_MANAGED_SERVICE_AUTH_TYPE=$(e2e_parse_managed_service_auth_type_value "${E2E_MANAGED_SERVICE_AUTH_TYPE}") || return 1
   fi
   if [[ -n "${E2E_PROXY_AUTH_TYPE}" ]]; then
     E2E_PROXY_AUTH_TYPE=$(e2e_parse_proxy_auth_type_value "${E2E_PROXY_AUTH_TYPE}") || return 1
   fi
-  E2E_MANAGED_SERVER_MTLS=$(e2e_parse_bool_value '--managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS}") || return 1
+  E2E_MANAGED_SERVICE_MTLS=$(e2e_parse_bool_value '--managed-service-mtls' "${E2E_MANAGED_SERVICE_MTLS}") || return 1
   E2E_PROXY_MODE=$(e2e_parse_proxy_mode_value "${E2E_PROXY_MODE}") || return 1
   case "${E2E_PROXY_MODE}" in
     none)

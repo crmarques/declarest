@@ -75,8 +75,8 @@ contexts:
       # filesystem:
       #   baseDir: /path/to/repository
 
-    # Required managedServer.
-    managedServer:
+    # Required managedService.
+    managedService:
       http:
         url: https://example.com/api
         # healthCheck: /health
@@ -87,7 +87,7 @@ contexts:
         # defaultHeaders:
         #   X-Example: value
 
-        # Optional managedServer proxy.
+        # Optional managedService proxy.
         # proxy:
         #   # Configure one or both proxy URLs.
         #   http: http://proxy.example.com:3128

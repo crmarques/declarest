@@ -14,9 +14,9 @@ reload_context_libs() {
     E2E_PROXY_NO_PROXY \
     E2E_PROXY_AUTH_USERNAME \
     E2E_PROXY_AUTH_PASSWORD \
-    E2E_MANAGED_SERVER_AUTH_TYPE \
-    E2E_MANAGED_SERVER \
-    E2E_MANAGED_SERVER_CONNECTION \
+    E2E_MANAGED_SERVICE_AUTH_TYPE \
+    E2E_MANAGED_SERVICE \
+    E2E_MANAGED_SERVICE_CONNECTION \
     E2E_REPO_TYPE \
     E2E_GIT_PROVIDER \
     E2E_GIT_PROVIDER_CONNECTION \
@@ -38,7 +38,7 @@ write_context_fixture() {
   cat >"${path}" <<'EOF'
 contexts:
   - name: e2e-basic
-    managedServer:
+    managedService:
       http:
         url: http://127.0.0.1:8080
         auth:
@@ -78,7 +78,7 @@ write_git_ssh_context_fixture() {
   cat >"${path}" <<'EOF'
 contexts:
   - name: e2e-basic
-    managedServer:
+    managedService:
       http:
         url: http://127.0.0.1:8080
         auth:
@@ -151,7 +151,7 @@ test_inserts_proxy_blocks_across_proxiable_sections() {
 
   local proxy_count
   proxy_count=$(grep -c '^[[:space:]]*proxy:$' "${context_file}" || true)
-  assert_eq "${proxy_count}" "4" "expected proxy blocks for managedServer, repository, secretStore, and metadata"
+  assert_eq "${proxy_count}" "4" "expected proxy blocks for managedService, repository, secretStore, and metadata"
 
   local shared_ref_count
   shared_ref_count=$(grep -c "name: 'shared-proxy-auth'" "${context_file}" || true)
@@ -203,7 +203,7 @@ test_skips_git_proxy_block_for_non_http_remote_url() {
 
   local proxy_count
   proxy_count=$(grep -c '^[[:space:]]*proxy:$' "${context_file}" || true)
-  assert_eq "${proxy_count}" "2" "expected proxy blocks only for managedServer and metadata"
+  assert_eq "${proxy_count}" "2" "expected proxy blocks only for managedService and metadata"
 }
 
 test_rewrites_local_kubernetes_targets_for_local_proxy() {
@@ -212,12 +212,12 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
   tmp=$(new_temp_dir)
   local context_file="${tmp}/contexts.yaml"
   local state_dir="${tmp}/state"
-  local managed_rendered="${tmp}/rendered/managed-server"
+  local managed_rendered="${tmp}/rendered/managed-service"
   local repo_rendered="${tmp}/rendered/git-provider"
   local secret_rendered="${tmp}/rendered/secret-provider"
   mkdir -p "${state_dir}" "${tmp}/rendered"
   write_context_fixture "${context_file}"
-  write_service_manifest "${managed_rendered}" "managed-server-simple-api-server" "18080:8080"
+  write_service_manifest "${managed_rendered}" "managed-service-simple-api-server" "18080:8080"
   write_service_manifest "${repo_rendered}" "git-provider-gitea" "13000:3000"
   write_service_manifest "${secret_rendered}" "secret-provider-vault" "18200:8200"
 
@@ -225,8 +225,8 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
   E2E_PLATFORM='kubernetes'
   E2E_K8S_NAMESPACE='declarest-test'
   E2E_PROXY_MODE='local'
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_MANAGED_SERVICE='simple-api-server'
+  E2E_MANAGED_SERVICE_CONNECTION='local'
   E2E_REPO_TYPE='git'
   E2E_GIT_PROVIDER='gitea'
   E2E_GIT_PROVIDER_CONNECTION='local'
@@ -239,7 +239,7 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
     PROXY_AUTH_TYPE "basic" \
     PROXY_AUTH_USERNAME "proxy-user" \
     PROXY_AUTH_PASSWORD "proxy-pass"
-  write_state_fixture "$(e2e_component_state_file 'managed-server:simple-api-server')" \
+  write_state_fixture "$(e2e_component_state_file 'managed-service:simple-api-server')" \
     K8S_RENDERED_DIR "${managed_rendered}"
   write_state_fixture "$(e2e_component_state_file 'git-provider:gitea')" \
     K8S_RENDERED_DIR "${repo_rendered}"
@@ -248,8 +248,8 @@ test_rewrites_local_kubernetes_targets_for_local_proxy() {
 
   e2e_context_insert_proxy_config "${context_file}"
 
-  assert_file_contains "${context_file}" "url: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080"
-  assert_file_contains "${context_file}" "tokenURL: http://managed-server-simple-api-server.declarest-test.svc.cluster.local:8080/oauth/token"
+  assert_file_contains "${context_file}" "url: http://managed-service-simple-api-server.declarest-test.svc.cluster.local:8080"
+  assert_file_contains "${context_file}" "tokenURL: http://managed-service-simple-api-server.declarest-test.svc.cluster.local:8080/oauth/token"
   assert_file_contains "${context_file}" "url: http://git-provider-gitea.declarest-test.svc.cluster.local:3000/acme/repo.git"
   assert_file_contains "${context_file}" "address: http://secret-provider-vault.declarest-test.svc.cluster.local:8200"
 }
@@ -266,8 +266,8 @@ test_rewrites_local_compose_targets_for_local_proxy() {
   E2E_STATE_DIR="${state_dir}"
   E2E_PLATFORM='compose'
   E2E_PROXY_MODE='local'
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_MANAGED_SERVICE='simple-api-server'
+  E2E_MANAGED_SERVICE_CONNECTION='local'
   E2E_REPO_TYPE='git'
   E2E_GIT_PROVIDER='gitea'
   E2E_GIT_PROVIDER_CONNECTION='local'
@@ -281,8 +281,8 @@ test_rewrites_local_compose_targets_for_local_proxy() {
     PROXY_AUTH_TYPE "basic" \
     PROXY_AUTH_USERNAME "proxy-user" \
     PROXY_AUTH_PASSWORD "proxy-pass"
-  write_state_fixture "$(e2e_component_state_file 'managed-server:simple-api-server')" \
-    MANAGED_SERVER_BASE_URL "http://127.0.0.1:18080"
+  write_state_fixture "$(e2e_component_state_file 'managed-service:simple-api-server')" \
+    MANAGED_SERVICE_BASE_URL "http://127.0.0.1:18080"
   write_state_fixture "$(e2e_component_state_file 'git-provider:gitea')" \
     GIT_REMOTE_URL "http://127.0.0.1:13000/acme/repo.git"
   write_state_fixture "$(e2e_component_state_file 'secret-provider:vault')" \
@@ -333,8 +333,8 @@ EOF
 
   E2E_COMPONENT_STATE_FILE="${state_file}" \
     E2E_COMPONENT_CONTEXT_FRAGMENT="${fragment_file}" \
-    E2E_MANAGED_SERVER_AUTH_TYPE='prompt' \
-    bash "${E2E_SCRIPT_DIR}/components/managed-server/simple-api-server/scripts/context.sh" "${fragment_file}"
+    E2E_MANAGED_SERVICE_AUTH_TYPE='prompt' \
+    bash "${E2E_SCRIPT_DIR}/components/managed-service/simple-api-server/scripts/context.sh" "${fragment_file}"
 
   {
     printf 'contexts:\n'
@@ -346,7 +346,7 @@ EOF
   e2e_context_normalize_credentials "${context_file}"
 
   assert_file_contains "${context_file}" "credentials:"
-  assert_file_contains "${context_file}" "name: 'managed-server-auth'"
+  assert_file_contains "${context_file}" "name: 'managed-service-auth'"
   assert_file_contains "${context_file}" "prompt: true"
   assert_file_contains "${context_file}" "credentialsRef:"
   assert_not_contains "$(cat "${context_file}")" "prompt: {}"

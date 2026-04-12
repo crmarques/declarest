@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: managed-service-vault
+  labels:
+    app.kubernetes.io/name: managed-service-vault
+    declarest.e2e/component-key: managed-service-vault
+  annotations:
+    declarest.e2e/port-forward: "${VAULT_PORT}:8200"
+spec:
+  selector:
+    app.kubernetes.io/name: managed-service-vault
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200

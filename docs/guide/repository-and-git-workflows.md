@@ -106,7 +106,7 @@ declarest context resolve       # resolved runtime config
 
 ```bash
 declarest context resolve \
-  --set managedServer.http.url=https://staging-api.example.com \
+  --set managedService.http.url=https://staging-api.example.com \
   --set metadata.baseDir=/srv/declarest/staging-metadata
 ```
 

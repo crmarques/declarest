@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 test_rundeck_health_script_uses_configurable_defaults() {
-  local script="${E2E_SCRIPT_DIR}/components/managed-server/rundeck/scripts/health.sh"
+  local script="${E2E_SCRIPT_DIR}/components/managed-service/rundeck/scripts/health.sh"
   local content
   content=$(cat "${script}")
 

@@ -29,7 +29,7 @@ Define implementation patterns that keep behavior predictable, testable, and mai
 
 ## Data Contracts
 Implementation structure:
-1. Keep boundary types in owner packages (`config`, `repository`, `metadata`, `managedserver`, `secrets`, `orchestrator`).
+1. Keep boundary types in owner packages (`config`, `repository`, `metadata`, `managedservice`, `secrets`, `orchestrator`).
 2. Keep provider-specific payloads inside provider boundaries (`internal/providers/*`).
 3. Normalize resource payloads before persistence and comparison.
 4. Use typed error wrappers aligned with `agents/reference/interfaces.md`.

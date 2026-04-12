@@ -88,13 +88,13 @@ func TestOperatorRBACSourcesStayAlignedWithManagerRuntime(t *testing.T) {
 	if clusterRole.Metadata.Namespace != "" {
 		t.Fatalf("expected cluster role namespace to be empty, got %q", clusterRole.Metadata.Namespace)
 	}
-	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories", "managedservers", "secretstores", "syncpolicies", "repositorywebhooks"}, []string{"get", "list", "watch", "create", "update", "patch", "delete"}) {
+	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories", "managedservices", "secretstores", "syncpolicies", "repositorywebhooks"}, []string{"get", "list", "watch", "create", "update", "patch", "delete"}) {
 		t.Fatalf("expected cluster role to grant cluster-scope Declarest resource access, got %#v", clusterRole.Rules)
 	}
-	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"}, []string{"get", "update", "patch"}) {
+	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories/status", "managedservices/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"}, []string{"get", "update", "patch"}) {
 		t.Fatalf("expected cluster role to grant status updates, got %#v", clusterRole.Rules)
 	}
-	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"}, []string{"update"}) {
+	if !hasPolicyRule(clusterRole.Rules, []string{"declarest.io"}, []string{"resourcerepositories/finalizers", "managedservices/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"}, []string{"update"}) {
 		t.Fatalf("expected cluster role to grant finalizer updates, got %#v", clusterRole.Rules)
 	}
 	if !hasPolicyRule(clusterRole.Rules, []string{""}, []string{"events"}, []string{"create", "patch"}) {

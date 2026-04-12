@@ -20,7 +20,7 @@ import (
 
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -201,7 +201,7 @@ func (n *noopOrchestrator) GetOpenAPISpec(context.Context) (resource.Content, er
 	return resource.Content{}, nil
 }
 
-func (n *noopOrchestrator) Request(context.Context, managedserverdomain.RequestSpec) (resource.Content, error) {
+func (n *noopOrchestrator) Request(context.Context, managedservicedomain.RequestSpec) (resource.Content, error) {
 	return resource.Content{}, nil
 }
 
@@ -281,7 +281,7 @@ func (n *noopServiceAccessor) MetadataService() metadatadomain.MetadataService {
 	return n.metadata
 }
 func (n *noopServiceAccessor) SecretProvider() secretdomain.SecretProvider { return n.secrets }
-func (n *noopServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (n *noopServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return nil
 }
 

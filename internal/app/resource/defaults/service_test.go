@@ -25,7 +25,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -33,12 +33,12 @@ import (
 	secretdomain "github.com/crmarques/declarest/secrets"
 )
 
-func managedServerInferRequest() InferRequest {
-	return InferRequest{Sources: []InferSource{InferSourceManagedServer}}
+func managedServiceInferRequest() InferRequest {
+	return InferRequest{Sources: []InferSource{InferSourceManagedService}}
 }
 
-func managedServerCheckRequest() CheckRequest {
-	return CheckRequest{Sources: []InferSource{InferSourceManagedServer}}
+func managedServiceCheckRequest() CheckRequest {
+	return CheckRequest{Sources: []InferSource{InferSourceManagedService}}
 }
 
 func TestGetReturnsEmptyObjectWhenDefaultsSidecarIsMissing(t *testing.T) {
@@ -80,7 +80,7 @@ func TestInferFromRepositoryUsesCommonSiblingValues(t *testing.T) {
 	}
 }
 
-func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T) {
+func TestInferFromManagedServiceCreatesAndDeletesTemporaryResources(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDeps()
@@ -94,14 +94,14 @@ func TestInferFromManagedServerCreatesAndDeletesTemporaryResources(t *testing.T)
 		},
 	}
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 
 	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 
 	if len(orch.createCalls) != 4 {
@@ -174,7 +174,7 @@ func TestInferAcceptsCollectionAndResourcePathsForSameCollection(t *testing.T) {
 	}
 }
 
-func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
+func TestInferManagedServiceAcceptsCollectionPathWithOrWithoutTrailingSlash(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -220,7 +220,7 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := Infer(context.Background(), deps, tc.requestedPath, managedServerInferRequest())
+			result, err := Infer(context.Background(), deps, tc.requestedPath, managedServiceInferRequest())
 			if err != nil {
 				t.Fatalf("Infer returned error: %v", err)
 			}
@@ -228,7 +228,7 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 				t.Fatalf("expected resolved path %q, got %q", tc.wantResolvedPath, result.ResolvedPath)
 			}
 			if !reflect.DeepEqual(result.Content.Value, want) {
-				t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+				t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 			}
 		})
 	}
@@ -248,7 +248,7 @@ func TestInferManagedServerAcceptsCollectionPathWithOrWithoutTrailingSlash(t *te
 	}
 }
 
-func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t *testing.T) {
+func TestInferManagedServiceRewritesCollectionIdentityFieldWhenMetadataMissing(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -272,7 +272,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
-	result, err := Infer(context.Background(), deps, "/admin/realms/acme", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/admin/realms/acme", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 
 	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 
 	if len(orch.createCalls) != 4 {
@@ -306,7 +306,7 @@ func TestInferManagedServerRewritesCollectionIdentityFieldWhenMetadataMissing(t 
 	}
 }
 
-func TestInferManagedServerUsesCreateValidateRequiredAttributesOnlyForProbePayload(t *testing.T) {
+func TestInferManagedServiceUsesCreateValidateRequiredAttributesOnlyForProbePayload(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -345,12 +345,12 @@ func TestInferManagedServerUsesCreateValidateRequiredAttributesOnlyForProbePaylo
 		},
 	}
 
-	result, err := Infer(context.Background(), deps, "/admin/realms", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/admin/realms", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 	if !reflect.DeepEqual(result.Content.Value, map[string]any{"status": "active"}) {
-		t.Fatalf("unexpected managed-server defaults: got %#v", result.Content.Value)
+		t.Fatalf("unexpected managed-service defaults: got %#v", result.Content.Value)
 	}
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
@@ -376,7 +376,7 @@ func TestInferManagedServerUsesCreateValidateRequiredAttributesOnlyForProbePaylo
 	}
 }
 
-func TestInferManagedServerFallsBackToResourceRequiredAttributesForProbePayload(t *testing.T) {
+func TestInferManagedServiceFallsBackToResourceRequiredAttributesForProbePayload(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -408,12 +408,12 @@ func TestInferManagedServerFallsBackToResourceRequiredAttributesForProbePayload(
 		},
 	}
 
-	result, err := Infer(context.Background(), deps, "/admin/realms", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/admin/realms", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 	if !reflect.DeepEqual(result.Content.Value, map[string]any{"status": "active"}) {
-		t.Fatalf("unexpected managed-server defaults: got %#v", result.Content.Value)
+		t.Fatalf("unexpected managed-service defaults: got %#v", result.Content.Value)
 	}
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
@@ -439,7 +439,7 @@ func TestInferManagedServerFallsBackToResourceRequiredAttributesForProbePayload(
 	}
 }
 
-func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
+func TestInferFromManagedServiceIgnoresStoredDefaultsValues(t *testing.T) {
 	t.Parallel()
 
 	rawContent := map[string]resource.Content{
@@ -481,7 +481,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 		"status": "active",
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 	for _, call := range orch.createCalls {
 		payload, ok := call.content.Value.(map[string]any)
@@ -503,7 +503,7 @@ func TestInferFromManagedServerIgnoresStoredDefaultsValues(t *testing.T) {
 	}
 }
 
-func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
+func TestInferManagedServiceRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDeps()
@@ -519,28 +519,28 @@ func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 	orch.deleteErr = faults.NewTypedError(faults.AuthError, "remote request failed with status 403: forbidden", nil)
 
-	managedServerClient := &fakeDefaultsManagedServerClient{}
+	managedServiceClient := &fakeDefaultsManagedServiceClient{}
 	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
-	serviceAccessor.managedServer = managedServerClient
+	serviceAccessor.managedService = managedServiceClient
 
-	result, err := Infer(context.Background(), deps, "/customers/acme", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/customers/acme", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
 	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 	if len(orch.deleteCalls) != 4 {
 		t.Fatalf("expected four orchestrator delete attempts, got %#v", orch.deleteCalls)
 	}
-	if managedServerClient.invalidateCalls != 5 {
-		t.Fatalf("expected one probe-read invalidation plus four delete-retry invalidations, got %d", managedServerClient.invalidateCalls)
+	if managedServiceClient.invalidateCalls != 5 {
+		t.Fatalf("expected one probe-read invalidation plus four delete-retry invalidations, got %d", managedServiceClient.invalidateCalls)
 	}
-	if len(managedServerClient.requestCalls) != 4 {
-		t.Fatalf("expected four direct managed-server delete retries, got %#v", managedServerClient.requestCalls)
+	if len(managedServiceClient.requestCalls) != 4 {
+		t.Fatalf("expected four direct managed-service delete retries, got %#v", managedServiceClient.requestCalls)
 	}
-	for _, call := range managedServerClient.requestCalls {
+	for _, call := range managedServiceClient.requestCalls {
 		if call.Method != "DELETE" {
 			t.Fatalf("expected DELETE retry request, got %#v", call)
 		}
@@ -550,7 +550,7 @@ func TestInferManagedServerRetriesCleanupDeleteAfterAuthError(t *testing.T) {
 	}
 }
 
-func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
+func TestInferFromManagedServiceWaitsForStableProbeRead(t *testing.T) {
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
 		"/projects/platform": {
 			Value: map[string]any{
@@ -582,7 +582,7 @@ func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -592,11 +592,11 @@ func TestInferFromManagedServerWaitsForStableProbeRead(t *testing.T) {
 		"tier":   "standard",
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 }
 
-func TestInferFromManagedServerWaitsBeforeFirstProbeRead(t *testing.T) {
+func TestInferFromManagedServiceWaitsBeforeFirstProbeRead(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -620,7 +620,7 @@ func TestInferFromManagedServerWaitsBeforeFirstProbeRead(t *testing.T) {
 	wait := 25 * time.Millisecond
 
 	result, err := Infer(context.Background(), deps, "/projects/platform", InferRequest{
-		Sources: []InferSource{InferSourceManagedServer},
+		Sources: []InferSource{InferSourceManagedService},
 		Wait:    wait,
 	})
 	if err != nil {
@@ -638,11 +638,11 @@ func TestInferFromManagedServerWaitsBeforeFirstProbeRead(t *testing.T) {
 
 	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 }
 
-func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
+func TestInferFromManagedServiceIncludesSharedEmptyObjectDefaults(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -674,7 +674,7 @@ func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -684,11 +684,11 @@ func TestInferFromManagedServerIncludesSharedEmptyObjectDefaults(t *testing.T) {
 		"status":     "active",
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
 }
 
-func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T) {
+func TestInferFromManagedServiceInvalidatesAuthCacheBeforeProbeRead(t *testing.T) {
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
 		"/projects/platform": {
 			Value: map[string]any{
@@ -706,15 +706,15 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 		},
 	})
 
-	managedServerClient := &fakeDefaultsManagedServerClient{}
+	managedServiceClient := &fakeDefaultsManagedServiceClient{}
 	serviceAccessor := deps.Services.(*fakeDefaultsServiceAccessor)
-	serviceAccessor.managedServer = managedServerClient
+	serviceAccessor.managedService = managedServiceClient
 
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 	orch.getRemoteFn = func(item savedResource, _ int) (resource.Content, error) {
 		payload := resource.DeepCopyValue(item.content.Value).(map[string]any)
 		payload["status"] = "active"
-		if managedServerClient.invalidateCalls > 0 {
+		if managedServiceClient.invalidateCalls > 0 {
 			payload["tier"] = "standard"
 		}
 		payload["id"] = path.Base(item.logicalPath)
@@ -724,7 +724,7 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 		}, nil
 	}
 
-	result, err := Infer(context.Background(), deps, "/projects/platform", managedServerInferRequest())
+	result, err := Infer(context.Background(), deps, "/projects/platform", managedServiceInferRequest())
 	if err != nil {
 		t.Fatalf("Infer returned error: %v", err)
 	}
@@ -734,10 +734,10 @@ func TestInferFromManagedServerInvalidatesAuthCacheBeforeProbeRead(t *testing.T)
 		"tier":   "standard",
 	}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults: got %#v want %#v", result.Content.Value, want)
 	}
-	if managedServerClient.invalidateCalls != 1 {
-		t.Fatalf("expected one auth cache invalidation before probe reads, got %d", managedServerClient.invalidateCalls)
+	if managedServiceClient.invalidateCalls != 1 {
+		t.Fatalf("expected one auth cache invalidation before probe reads, got %d", managedServiceClient.invalidateCalls)
 	}
 }
 
@@ -804,7 +804,7 @@ func TestInferItemsRestrictsRepositorySamplesByAlias(t *testing.T) {
 	}
 }
 
-func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
+func TestInferManagedServiceUsesSelectedAliasesOnly(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDepsWithLocalContent(map[string]resource.Content{
@@ -844,7 +844,7 @@ func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
 	orch := deps.Orchestrator.(*fakeDefaultsOrchestrator)
 
 	result, err := Infer(context.Background(), deps, "/admin/realms", InferRequest{
-		Sources: []InferSource{InferSourceManagedServer},
+		Sources: []InferSource{InferSourceManagedService},
 		Items:   []string{"acme", "master"},
 	})
 	if err != nil {
@@ -853,7 +853,7 @@ func TestInferManagedServerUsesSelectedAliasesOnly(t *testing.T) {
 
 	want := map[string]any{"status": "active"}
 	if !reflect.DeepEqual(result.Content.Value, want) {
-		t.Fatalf("unexpected managed-server defaults for selected aliases: got %#v want %#v", result.Content.Value, want)
+		t.Fatalf("unexpected managed-service defaults for selected aliases: got %#v want %#v", result.Content.Value, want)
 	}
 	if len(orch.createCalls) != 4 {
 		t.Fatalf("expected four temporary creates for two selected aliases, got %#v", orch.createCalls)
@@ -969,7 +969,7 @@ func TestCheckMatchesStoredDefaultsWhenInferredDefaultsAreEqual(t *testing.T) {
 	}
 }
 
-func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
+func TestCheckDetectsMismatchAgainstManagedServiceInference(t *testing.T) {
 	t.Parallel()
 
 	deps := testDefaultsDeps()
@@ -989,7 +989,7 @@ func TestCheckDetectsMismatchAgainstManagedServerInference(t *testing.T) {
 		},
 	}
 
-	result, err := Check(context.Background(), deps, "/customers/acme", managedServerCheckRequest())
+	result, err := Check(context.Background(), deps, "/customers/acme", managedServiceCheckRequest())
 	if err != nil {
 		t.Fatalf("Check returned error: %v", err)
 	}
@@ -1093,20 +1093,20 @@ func (f *fakeDefaultsOrchestrator) Delete(_ context.Context, logicalPath string,
 	return nil
 }
 
-type fakeDefaultsManagedServerClient struct {
-	managedserver.ManagedServerClient
+type fakeDefaultsManagedServiceClient struct {
+	managedservice.ManagedServiceClient
 	invalidateCalls int
-	requestCalls    []managedserver.RequestSpec
+	requestCalls    []managedservice.RequestSpec
 	requestErr      error
 }
 
-func (f *fakeDefaultsManagedServerClient) InvalidateAuthCache() {
+func (f *fakeDefaultsManagedServiceClient) InvalidateAuthCache() {
 	f.invalidateCalls++
 }
 
-func (f *fakeDefaultsManagedServerClient) Request(
+func (f *fakeDefaultsManagedServiceClient) Request(
 	_ context.Context,
-	spec managedserver.RequestSpec,
+	spec managedservice.RequestSpec,
 ) (resource.Content, error) {
 	f.requestCalls = append(f.requestCalls, spec)
 	if f.requestErr != nil {
@@ -1211,18 +1211,18 @@ func fakeCollectionMetadataPath(logicalPath string) (string, bool) {
 }
 
 type fakeDefaultsServiceAccessor struct {
-	store         repository.ResourceStore
-	metadata      metadata.MetadataService
-	secrets       secretdomain.SecretProvider
-	managedServer managedserver.ManagedServerClient
+	store          repository.ResourceStore
+	metadata       metadata.MetadataService
+	secrets        secretdomain.SecretProvider
+	managedService managedservice.ManagedServiceClient
 }
 
 func (f *fakeDefaultsServiceAccessor) RepositoryStore() repository.ResourceStore   { return f.store }
 func (f *fakeDefaultsServiceAccessor) RepositorySync() repository.RepositorySync   { return nil }
 func (f *fakeDefaultsServiceAccessor) MetadataService() metadata.MetadataService   { return f.metadata }
 func (f *fakeDefaultsServiceAccessor) SecretProvider() secretdomain.SecretProvider { return f.secrets }
-func (f *fakeDefaultsServiceAccessor) ManagedServerClient() managedserver.ManagedServerClient {
-	return f.managedServer
+func (f *fakeDefaultsServiceAccessor) ManagedServiceClient() managedservice.ManagedServiceClient {
+	return f.managedService
 }
 
 func testDefaultsDeps() appdeps.Dependencies {

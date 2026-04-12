@@ -109,7 +109,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case "managed-server":
+			case "managed-service":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -117,7 +117,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
 			}
-			if commandFlagEnabled(command, "managed-server") {
+			if commandFlagEnabled(command, "managed-service") {
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -126,7 +126,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case "managed-server":
+			case "managed-service":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -134,7 +134,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
 			}
-			if commandFlagEnabled(command, "managed-server") {
+			if commandFlagEnabled(command, "managed-service") {
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			}
@@ -148,7 +148,7 @@ func resolveCompletionSourceStrategy(command *cobra.Command) completionSourceStr
 			case commandFlagString(command, "source") == "repository":
 				strategy.primary = completionSourceLocal
 				strategy.secondary = completionSourceRemote
-			case commandFlagString(command, "source") == "managed-server":
+			case commandFlagString(command, "source") == "managed-service":
 				strategy.primary = completionSourceRemote
 				strategy.secondary = completionSourceLocal
 			case commandFlagEnabled(command, "both"):

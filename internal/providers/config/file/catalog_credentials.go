@@ -42,17 +42,17 @@ func injectContextCredentials(
 		}
 	}
 
-	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
-		if cfg.ManagedServer.HTTP.Auth != nil && cfg.ManagedServer.HTTP.Auth.Basic != nil {
+	if cfg.ManagedService != nil && cfg.ManagedService.HTTP != nil {
+		if cfg.ManagedService.HTTP.Auth != nil && cfg.ManagedService.HTTP.Auth.Basic != nil {
 			if err := injectBasicCredentials(
-				"managedServer.http.auth.basic.credentialsRef",
-				cfg.ManagedServer.HTTP.Auth.Basic,
+				"managedService.http.auth.basic.credentialsRef",
+				cfg.ManagedService.HTTP.Auth.Basic,
 				credentials,
 			); err != nil {
 				return config.Context{}, err
 			}
 		}
-		if err := injectProxyCredentials(cfg.ManagedServer.HTTP.Proxy, "managedServer.http.proxy.auth.basic.credentialsRef", credentials); err != nil {
+		if err := injectProxyCredentials(cfg.ManagedService.HTTP.Proxy, "managedService.http.proxy.auth.basic.credentialsRef", credentials); err != nil {
 			return config.Context{}, err
 		}
 	}

@@ -100,7 +100,7 @@ contexts:
     repository:
       filesystem:
         baseDir: ` + devRepo + `
-    managedServer:
+    managedService:
       http:
         url: https://example.com/api
         auth:
@@ -112,7 +112,7 @@ contexts:
     repository:
       filesystem:
         baseDir: ` + prodRepo + `
-    managedServer:
+    managedService:
       http:
         url: https://example.com/api
         auth:
@@ -160,7 +160,7 @@ func TestNewSessionAllowsRemoteOnlyContextWithoutRepository(t *testing.T) {
 	contextCatalog := []byte(`
 contexts:
   - name: remote-only
-    managedServer:
+    managedService:
       http:
         url: https://example.com/api
         auth:
@@ -189,15 +189,15 @@ currentContext: remote-only
 	if session.Services.RepositoryStore() != nil {
 		t.Fatalf("expected nil repository store, got %T", session.Services.RepositoryStore())
 	}
-	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server to be configured")
+	if session.Services.ManagedServiceClient() == nil {
+		t.Fatal("expected managed service to be configured")
 	}
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.baseDir is configured")
 	}
 }
 
-func TestNewSessionAllowsRepositoryOnlyContextWithoutManagedServer(t *testing.T) {
+func TestNewSessionAllowsRepositoryOnlyContextWithoutManagedService(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
@@ -228,8 +228,8 @@ currentContext: local-only
 	if session.Services.RepositoryStore() == nil {
 		t.Fatal("expected repository store to be configured")
 	}
-	if session.Services.ManagedServerClient() != nil {
-		t.Fatalf("expected nil managed server client, got %T", session.Services.ManagedServerClient())
+	if session.Services.ManagedServiceClient() != nil {
+		t.Fatalf("expected nil managed service client, got %T", session.Services.ManagedServiceClient())
 	}
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service to default from repository baseDir")
@@ -268,7 +268,7 @@ contexts:
     repository:
       filesystem:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
-    managedServer:
+    managedService:
       http:
         url: https://example.com/api
         auth:
@@ -294,10 +294,10 @@ currentContext: bundled
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.bundle is configured")
 	}
-	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server when managedServer is configured")
+	if session.Services.ManagedServiceClient() == nil {
+		t.Fatal("expected managed service when managedService is configured")
 	}
-	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
+	openAPISpec, openAPIErr := session.Services.ManagedServiceClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundle, got error: %v", openAPIErr)
 	}
@@ -342,7 +342,7 @@ contexts:
     repository:
       filesystem:
         baseDir: ` + filepath.Join(tempDir, "repo") + `
-    managedServer:
+    managedService:
       http:
         url: https://example.com/api
         auth:
@@ -368,10 +368,10 @@ currentContext: bundled-file
 	if session.Services.MetadataService() == nil {
 		t.Fatal("expected metadata service when metadata.bundleFile is configured")
 	}
-	if session.Services.ManagedServerClient() == nil {
-		t.Fatal("expected managed server when managedServer is configured")
+	if session.Services.ManagedServiceClient() == nil {
+		t.Fatal("expected managed service when managedService is configured")
 	}
-	openAPISpec, openAPIErr := session.Services.ManagedServerClient().GetOpenAPISpec(context.Background())
+	openAPISpec, openAPIErr := session.Services.ManagedServiceClient().GetOpenAPISpec(context.Background())
 	if openAPIErr != nil {
 		t.Fatalf("expected OpenAPI to fallback from bundleFile, got error: %v", openAPIErr)
 	}
@@ -396,7 +396,7 @@ func TestNewSessionFromResolvedContext(t *testing.T) {
 				BaseDir: repoDir,
 			},
 		},
-		ManagedServer: &config.ManagedServer{
+		ManagedService: &config.ManagedService{
 			HTTP: &config.HTTPServer{
 				BaseURL: "https://example.com/api",
 				Auth: &config.HTTPAuth{

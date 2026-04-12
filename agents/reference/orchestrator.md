@@ -46,7 +46,7 @@ Policy contract:
 Resolution contract:
 1. Input path -> metadata resolution -> `resource.Resource` identity resolution -> operation spec -> execution.
 2. Optional secret masking/resolution performed at boundaries.
-3. Direct request workflows MUST preserve the full rendered request contract, including metadata-derived query parameters, headers, `Accept`, and `Content-Type`, through managed-server execution.
+3. Direct request workflows MUST preserve the full rendered request contract, including metadata-derived query parameters, headers, `Accept`, and `Content-Type`, through managed-service execution.
 4. Repository-backed resource resolution MUST treat resolved metadata `resource.defaults` content as part of the local desired payload for that same logical path rather than as a separate resource target.
 
 ## Failure Modes

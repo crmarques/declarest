@@ -11,7 +11,7 @@ e2e_context_has_proxy_basic_auth_values() {
   [[ -n "${E2E_PROXY_AUTH_USERNAME:-}" || -n "${E2E_PROXY_AUTH_PASSWORD:-}" ]]
 }
 
-e2e_context_has_managed_server_proxy_basic_auth_values() {
+e2e_context_has_managed_service_proxy_basic_auth_values() {
   e2e_context_has_proxy_basic_auth_values
 }
 
@@ -44,7 +44,7 @@ e2e_context_effective_proxy_auth_type() {
   printf 'none\n'
 }
 
-e2e_context_effective_managed_server_proxy_auth_type() {
+e2e_context_effective_managed_service_proxy_auth_type() {
   e2e_context_effective_proxy_auth_type
 }
 
@@ -64,20 +64,20 @@ e2e_context_build() {
   done < <(find "${E2E_CONTEXT_DIR}" -type f -name '*.yaml' | sort)
 
   printf 'currentContext: %s\n' "${E2E_CONTEXT_NAME}" >>"${context_file}"
-  e2e_context_insert_managed_server_openapi "${context_file}"
+  e2e_context_insert_managed_service_openapi "${context_file}"
   e2e_context_insert_proxy_config "${context_file}"
   e2e_context_normalize_credentials "${context_file}"
 }
 
-e2e_context_insert_managed_server_openapi() {
+e2e_context_insert_managed_service_openapi() {
   local context_file=$1
 
-  if [[ "${E2E_MANAGED_SERVER:-none}" == 'none' ]]; then
+  if [[ "${E2E_MANAGED_SERVICE:-none}" == 'none' ]]; then
     return 0
   fi
 
   local component_key
-  component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  component_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")
   local openapi_spec="${E2E_COMPONENT_OPENAPI_SPEC[${component_key}]:-}"
   if [[ -z "${openapi_spec}" || ! -f "${openapi_spec}" ]]; then
     return 0
@@ -89,7 +89,7 @@ e2e_context_insert_managed_server_openapi() {
   elif command -v python >/dev/null 2>&1; then
     python_cmd='python'
   else
-    e2e_info 'skipping managedServer openapi patch: python interpreter unavailable'
+    e2e_info 'skipping managedService openapi patch: python interpreter unavailable'
     return 0
   fi
 
@@ -117,7 +117,7 @@ has_openapi = False
 for idx, line in enumerate(lines):
     stripped = line.lstrip()
     if resource_indent is None:
-        if stripped.startswith('managedServer:'):
+        if stripped.startswith('managedService:'):
             resource_indent = len(line) - len(stripped)
             in_resource_block = True
         continue
@@ -148,7 +148,7 @@ PY
   )
 
   if [[ "${patch_output}" == 'PATCHED' ]]; then
-    e2e_info "managedServer http.openapi injected into ${context_file}"
+    e2e_info "managedService http.openapi injected into ${context_file}"
   fi
 
   return 0
@@ -309,17 +309,17 @@ e2e_context_state_url_binding() {
   printf '%s\t%s\n' "${access_host}" "${port}"
 }
 
-e2e_context_managed_server_service_binding() {
-  if [[ "${E2E_MANAGED_SERVER_CONNECTION:-local}" != 'local' || "${E2E_MANAGED_SERVER:-none}" == 'none' ]]; then
+e2e_context_managed_service_service_binding() {
+  if [[ "${E2E_MANAGED_SERVICE_CONNECTION:-local}" != 'local' || "${E2E_MANAGED_SERVICE:-none}" == 'none' ]]; then
     return 1
   fi
 
   if [[ "${E2E_PLATFORM:-}" == 'compose' ]]; then
-    e2e_context_state_url_binding "$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")" 'MANAGED_SERVER_BASE_URL'
+    e2e_context_state_url_binding "$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")" 'MANAGED_SERVICE_BASE_URL'
     return
   fi
 
-  e2e_context_component_service_binding "$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")"
+  e2e_context_component_service_binding "$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")"
 }
 
 e2e_context_git_remote_service_binding() {
@@ -435,8 +435,8 @@ e2e_context_insert_proxy_config() {
       ;;
   esac
 
-  local managed_server_host=''
-  local managed_server_port=''
+  local managed_service_host=''
+  local managed_service_port=''
   local repo_host=''
   local repo_port=''
   local secret_host=''
@@ -444,8 +444,8 @@ e2e_context_insert_proxy_config() {
   local binding=''
 
   if [[ "${E2E_PROXY_MODE:-none}" == 'local' ]]; then
-    if binding=$(e2e_context_managed_server_service_binding 2>/dev/null); then
-      IFS=$'\t' read -r managed_server_host managed_server_port <<<"${binding}"
+    if binding=$(e2e_context_managed_service_service_binding 2>/dev/null); then
+      IFS=$'\t' read -r managed_service_host managed_service_port <<<"${binding}"
     fi
     if binding=$(e2e_context_git_remote_service_binding 2>/dev/null); then
       IFS=$'\t' read -r repo_host repo_port <<<"${binding}"
@@ -475,8 +475,8 @@ e2e_context_insert_proxy_config() {
     E2E_PROXY_AUTH_USERNAME="${proxy_auth_username}" \
     E2E_PROXY_AUTH_PASSWORD="${proxy_auth_password}" \
     E2E_PROXY_MODE="${E2E_PROXY_MODE:-none}" \
-    E2E_CONTEXT_REWRITE_MANAGED_SERVER_HOST="${managed_server_host}" \
-    E2E_CONTEXT_REWRITE_MANAGED_SERVER_PORT="${managed_server_port}" \
+    E2E_CONTEXT_REWRITE_MANAGED_SERVICE_HOST="${managed_service_host}" \
+    E2E_CONTEXT_REWRITE_MANAGED_SERVICE_PORT="${managed_service_port}" \
     E2E_CONTEXT_REWRITE_REPO_HOST="${repo_host}" \
     E2E_CONTEXT_REWRITE_REPO_PORT="${repo_port}" \
     E2E_CONTEXT_REWRITE_SECRET_HOST="${secret_host}" \
@@ -502,9 +502,9 @@ proxy = {
 }
 proxy_mode = os.environ.get("E2E_PROXY_MODE", "none").strip() or "none"
 rewrite_bindings = {
-    "managed_server": (
-        os.environ.get("E2E_CONTEXT_REWRITE_MANAGED_SERVER_HOST", ""),
-        os.environ.get("E2E_CONTEXT_REWRITE_MANAGED_SERVER_PORT", ""),
+    "managed_service": (
+        os.environ.get("E2E_CONTEXT_REWRITE_MANAGED_SERVICE_HOST", ""),
+        os.environ.get("E2E_CONTEXT_REWRITE_MANAGED_SERVICE_PORT", ""),
     ),
     "repository_remote": (
         os.environ.get("E2E_CONTEXT_REWRITE_REPO_HOST", ""),
@@ -710,24 +710,24 @@ context_indent = indent_of(lines[context_start])
 sections = []
 
 
-managed_server = find_child(lines, context_start, context_end, context_indent, "managedServer")
-if managed_server is not None:
-    http_section = find_child(lines, managed_server[0], managed_server[1], managed_server[2], "http")
+managed_service = find_child(lines, context_start, context_end, context_indent, "managedService")
+if managed_service is not None:
+    http_section = find_child(lines, managed_service[0], managed_service[1], managed_service[2], "http")
     if http_section is not None:
-        if replace_mapping_scalar(lines, http_section, "url", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
-            sections.append("managedServer.url")
+        if replace_mapping_scalar(lines, http_section, "url", lambda value: rewrite_local_url(value, rewrite_bindings["managed_service"])):
+            sections.append("managedService.url")
             http_section = (http_section[0], block_end(lines, http_section[0], http_section[2]), http_section[2])
-        if replace_mapping_scalar(lines, http_section, "healthCheck", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
-            sections.append("managedServer.healthCheck")
+        if replace_mapping_scalar(lines, http_section, "healthCheck", lambda value: rewrite_local_url(value, rewrite_bindings["managed_service"])):
+            sections.append("managedService.healthCheck")
             http_section = (http_section[0], block_end(lines, http_section[0], http_section[2]), http_section[2])
         auth_section = find_child(lines, http_section[0], http_section[1], http_section[2], "auth")
         if auth_section is not None:
             oauth2_section = find_child(lines, auth_section[0], auth_section[1], auth_section[2], "oauth2")
-            if oauth2_section is not None and replace_mapping_scalar(lines, oauth2_section, "tokenURL", lambda value: rewrite_local_url(value, rewrite_bindings["managed_server"])):
-                sections.append("managedServer.tokenURL")
+            if oauth2_section is not None and replace_mapping_scalar(lines, oauth2_section, "tokenURL", lambda value: rewrite_local_url(value, rewrite_bindings["managed_service"])):
+                sections.append("managedService.tokenURL")
                 http_section = (http_section[0], block_end(lines, http_section[0], http_section[2]), http_section[2])
         replace_or_insert_proxy(lines, http_section, ["auth", "tls"])
-        sections.append("managedServer.proxy")
+        sections.append("managedService.proxy")
         context_start, context_end = find_context_range(lines)
         context_indent = indent_of(lines[context_start])
 
@@ -809,7 +809,7 @@ PY
   return 0
 }
 
-e2e_context_insert_managed_server_proxy() {
+e2e_context_insert_managed_service_proxy() {
   local context_file=$1
   e2e_context_insert_proxy_config "${context_file}"
 }
@@ -1040,10 +1040,10 @@ context_indent = indent_of(lines[context_start])
 
 targets = [
     (["repository", "git", "remote", "auth"], "git-remote-auth", "basic_or_prompt"),
-    (["managedServer", "http", "auth"], "managed-server-auth", "basic_or_prompt"),
+    (["managedService", "http", "auth"], "managed-service-auth", "basic_or_prompt"),
     (["secretStore", "vault", "auth"], "vault-password-auth", "vault_password"),
     (["repository", "git", "remote", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
-    (["managedServer", "http", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
+    (["managedService", "http", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
     (["secretStore", "vault", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
     (["metadata", "proxy", "auth"], "shared-proxy-auth", "basic_or_prompt"),
 ]

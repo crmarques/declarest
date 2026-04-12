@@ -5,7 +5,7 @@ This page summarizes the four DeclaREST CRDs and how they connect.
 ## Relationship graph
 
 ```text
-ResourceRepository + ManagedServer + SecretStore -> SyncPolicy -> reconcile
+ResourceRepository + ManagedService + SecretStore -> SyncPolicy -> reconcile
 ```
 
 `SyncPolicy` is the execution unit. It references the other three resources.
@@ -24,7 +24,7 @@ Key fields:
 - `spec.storage` (`existingPVC` or `pvc`)
 - `spec.storage.pvc.accessModes` is required when `pvc` is used and intentionally has no default
 
-Repository payload files preserve the managed-server response media type or the explicit payload input media type. The CRD no longer exposes a repository payload-format default.
+Repository payload files preserve the managed-service response media type or the explicit payload input media type. The CRD no longer exposes a repository payload-format default.
 
 Minimal example:
 
@@ -49,7 +49,7 @@ spec:
         storage: 1Gi
 ```
 
-## `ManagedServer`
+## `ManagedService`
 
 Purpose: define target API connection/auth for reconciliation.
 
@@ -65,9 +65,9 @@ Minimal example:
 
 ```yaml
 apiVersion: declarest.io/v1alpha1
-kind: ManagedServer
+kind: ManagedService
 metadata:
-  name: example-managed-server
+  name: example-managed-service
 spec:
   http:
     baseURL: https://api.example.com
@@ -76,7 +76,7 @@ spec:
         - header: Authorization
           prefix: Bearer
           valueRef:
-            name: managed-server-auth
+            name: managed-service-auth
             key: token
 ```
 
@@ -119,7 +119,7 @@ Purpose: bind source + target + secret store and define sync behavior.
 Key fields:
 
 - `spec.resourceRepositoryRef.name`
-- `spec.managedServerRef.name`
+- `spec.managedServiceRef.name`
 - `spec.secretStoreRef.name`
 - `spec.source.path`
 - `spec.source.recursive` (defaults to `true`)
@@ -138,8 +138,8 @@ metadata:
 spec:
   resourceRepositoryRef:
     name: example-repository
-  managedServerRef:
-    name: example-managed-server
+  managedServiceRef:
+    name: example-managed-service
   secretStoreRef:
     name: example-secret-store
   source:
@@ -154,7 +154,7 @@ spec:
 ## How they relate in practice
 
 1. `ResourceRepository` fetches desired state from Git.
-2. `ManagedServer` provides API connectivity.
+2. `ManagedService` provides API connectivity.
 3. `SecretStore` provides secret resolution/storage.
 4. `SyncPolicy` reconciles one source scope from desired state to real state.
 

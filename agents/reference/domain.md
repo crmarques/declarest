@@ -47,7 +47,7 @@ Key terms:
 7. Structured body-bearing resource mutations MUST require metadata `resource.requiredAttributes`; every JSON Pointer referenced by configured `resource.alias` MUST count as required even when `resource.requiredAttributes` omits it; and every JSON Pointer referenced by configured `resource.id` MUST count as required for non-create mutations while create MAY omit metadata-derived `resource.id` pointers unless they are explicitly declared elsewhere.
 8. Local desired state for one logical resource MAY be composed from resolved metadata `resource.defaults` plus raw `resource.<ext>` overrides; object fields deep-merge, arrays replace, and explicit override values win deterministically.
 9. Collection metadata `resource.format: any` MUST allow child resources in the same collection to preserve or supply different payload descriptors during save workflows instead of coercing the whole collection to one repository format.
-10. `resource.defaults` baseline values and profiles MUST represent stable desired-state defaults that are safe to resend to the managed server and MUST NOT be used for volatile observed-only fields such as timestamps, versions, generated IDs, or status blocks.
+10. `resource.defaults` baseline values and profiles MUST represent stable desired-state defaults that are safe to resend to the managed service and MUST NOT be used for volatile observed-only fields such as timestamps, versions, generated IDs, or status blocks.
 11. `resource.id` and `resource.alias` remain logical-segment identities; nested descendant branches MUST use template scope helpers such as `descendantPath` instead of slashful rendered IDs.
 
 ## Failure Modes

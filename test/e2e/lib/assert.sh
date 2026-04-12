@@ -192,15 +192,15 @@ case_repo_commit_setup_changes_if_git() {
 }
 
 case_repo_template_root() {
-  local component_name=${1:-${E2E_MANAGED_SERVER:-}}
+  local component_name=${1:-${E2E_MANAGED_SERVICE:-}}
   if [[ -z "${component_name}" || "${component_name}" == 'none' ]]; then
-    printf 'repo-template requested but no managed-server component is selected\n' >&2
+    printf 'repo-template requested but no managed-service component is selected\n' >&2
     return 1
   fi
 
-  local template_root="${E2E_DIR}/components/managed-server/${component_name}/repo-template"
+  local template_root="${E2E_DIR}/components/managed-service/${component_name}/repo-template"
   if [[ ! -d "${template_root}" ]]; then
-    printf 'managed-server repo-template not found: %s\n' "${template_root}" >&2
+    printf 'managed-service repo-template not found: %s\n' "${template_root}" >&2
     return 1
   fi
 
@@ -208,13 +208,13 @@ case_repo_template_root() {
 }
 
 case_component_metadata_root() {
-  local component_name=${1:-${E2E_MANAGED_SERVER:-}}
+  local component_name=${1:-${E2E_MANAGED_SERVICE:-}}
   if [[ -z "${component_name}" || "${component_name}" == 'none' ]]; then
-    printf 'metadata requested but no managed-server component is selected\n' >&2
+    printf 'metadata requested but no managed-service component is selected\n' >&2
     return 1
   fi
 
-  local metadata_root="${E2E_DIR}/components/managed-server/${component_name}/metadata"
+  local metadata_root="${E2E_DIR}/components/managed-service/${component_name}/metadata"
   if [[ -d "${metadata_root}" ]]; then
     printf '%s\n' "${metadata_root}"
     return 0
@@ -563,7 +563,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource create "${logical_path}" -f "${resource_file}" -i json
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source managed-server -o json
+    case_run_declarest resource list "${collection_path}" --source managed-service -o json
     case_expect_success
     if ! case_expect_sorted_resource_list_payloads "${CASE_LAST_STDOUT}"; then
       printf '%s expected deterministic sorted remote list for %s\n' "${case_label}" "${collection_path}" >&2
@@ -594,7 +594,7 @@ case_repo_template_sync_tree() {
     case_run_declarest resource delete "${logical_path}" -y
     case_expect_success
 
-    case_run_declarest resource list "${collection_path}" --source managed-server -o json
+    case_run_declarest resource list "${collection_path}" --source managed-service -o json
     if ((CASE_LAST_STATUS != 0)); then
       if grep -qi 'status 404' <<<"${CASE_LAST_OUTPUT}"; then
         continue

@@ -29,10 +29,10 @@ func TestWritePromptWarningWithArgs(t *testing.T) {
 		writePromptWarningWithArgs(
 			&buf,
 			nil,
-			"credentials for managed-server proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.",
+			"credentials for managed-service proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.",
 		)
 
-		want := "[WARNING] credentials for managed-server proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.\n"
+		want := "[WARNING] credentials for managed-service proxy auth will be reused by later declarest commands in this shell session until the shell exits or you run declarest context clean --credentials-in-session.\n"
 		if got := buf.String(); got != want {
 			t.Fatalf("writePromptWarningWithArgs() = %q, want %q", got, want)
 		}
@@ -42,7 +42,7 @@ func TestWritePromptWarningWithArgs(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
-		writePromptWarningWithArgs(&buf, []string{"--ignore-warnings"}, "credentials for managed-server proxy auth will be stored")
+		writePromptWarningWithArgs(&buf, []string{"--ignore-warnings"}, "credentials for managed-service proxy auth will be stored")
 		if got := buf.String(); got != "" {
 			t.Fatalf("expected warning suppression, got %q", got)
 		}

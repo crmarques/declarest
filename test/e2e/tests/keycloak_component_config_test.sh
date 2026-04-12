@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/testkit.sh"
 
 test_keycloak_k8s_config_defers_readiness_to_component_healthcheck() {
-  local deployment_file="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/k8s/deployment.yaml"
+  local deployment_file="${E2E_SCRIPT_DIR}/components/managed-service/keycloak/k8s/deployment.yaml"
   local content
   content=$(cat "${deployment_file}")
 

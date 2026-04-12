@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: managed-service-rundeck
+  labels:
+    app.kubernetes.io/name: managed-service-rundeck
+    declarest.e2e/component-key: managed-service-rundeck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: managed-service-rundeck
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: managed-service-rundeck
+        declarest.e2e/component-key: managed-service-rundeck
+    spec:
+      containers:
+        - name: rundeck
+          image: docker.io/rundeck/rundeck:5.19.0
+          env:
+            - name: RUNDECK_GRAILS_URL
+              value: "${RUNDECK_BASE_URL}"
+            - name: RUNDECK_SERVER_ADDRESS
+              value: 0.0.0.0
+            - name: RUNDECK_ADMIN_PASSWORD
+              value: "${RUNDECK_ADMIN_PASSWORD}"
+          ports:
+            - name: http
+              containerPort: 4440
+          readinessProbe:
+            httpGet:
+              path: /user/login
+              port: 4440
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 60

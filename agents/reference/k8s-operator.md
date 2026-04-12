@@ -5,7 +5,7 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 
 ## In Scope
 1. CRD spec/default/validation and status-condition contracts.
-2. Controller reconcile responsibilities for `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`.
+2. Controller reconcile responsibilities for `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy`.
 3. Sync planning and scheduling behavior (full vs incremental sync, prune, cron).
 4. Repository webhook receiver contract and authentication rules.
 5. Operator runtime context mapping into canonical DeclaREST interfaces.
@@ -16,13 +16,13 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Kubernetes platform sizing/capacity tuning beyond operator behavior contracts.
 
 ## Normative Rules
-1. The operator MUST register and reconcile `declarest.io/v1alpha1` resources: `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`.
+1. The operator MUST register and reconcile `declarest.io/v1alpha1` resources: `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy`.
 2. Admission validation MUST apply resource defaults before `ValidateSpec()` checks on create/update, and MUST block deletes of dependency resources that are referenced by non-deleting `SyncPolicy` objects in the same namespace.
 3. Exact-match CR string values in the form `${ENV_VAR}` MUST resolve from the operator process environment before webhook validation, dependency-reference checks, overlap checks, and controller runtime use; the persisted CR spec MUST remain unchanged.
 4. `SyncPolicy` admission and reconcile validation MUST reject overlapping logical source scopes regardless of dependency-reference equality.
 5. Controllers MUST add finalizer `declarest.io/cleanup` and MUST remove it only after controller-owned cleanup is complete.
 6. `ResourceRepository` reconcile MUST ensure configured storage availability, perform authenticated git sync against the configured branch, update `status.lastFetchedRevision` and `status.lastFetchedTime`, and set `Ready`/`Stalled` conditions deterministically.
-7. `ManagedServer` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
+7. `ManagedService` reconcile MUST validate auth/proxy/throttling constraints, cache remote OpenAPI/metadata artifacts when configured, merge process proxy environment with any configured proxy fields before artifact downloads, and persist cache paths in status without leaking secret values.
 8. `SecretStore` reconcile MUST enforce provider one-of constraints (`vault` or `file`), ensure file-backed storage dependencies when required, and set `status.resolvedPath` only for file-backed stores.
 9. `SyncPolicy` reconcile MUST validate referenced dependency resources, compute a secret-version hash from referenced Secret `resourceVersion` values, and trigger full sync when generation, secret hash, or full-resync schedule requires it.
 10. Incremental sync planning MUST be deterministic, repository-diff based, and safety-biased; unknown/unsupported repository path changes MUST fall back to full sync, metadata-owned defaults artifacts such as `/_/defaults.<ext>`, `/_/defaults-<profile>.<ext>`, `<resource>/defaults.<ext>`, and `<resource>/defaults-<profile>.<ext>` MUST resolve to the owning metadata scope instead of a synthetic payload child path, and unsupported unknown files under the reserved `defaults` prefix MUST remain in the unknown/unsupported bucket rather than receiving incremental resource targeting.
@@ -37,10 +37,10 @@ Define the Kubernetes operator contract for CRD validation, controller reconcili
 3. Repository webhook endpoint path: `/webhooks/repository/<namespace>/<repository>`; when `watch-namespace` is set, single-segment `<repository>` form MAY be accepted and resolves to that namespace.
 4. Repository webhook annotation `declarest.io/webhook-last-received-at` stores the last accepted provider event timestamp (`RFC3339Nano`).
 5. Repository webhook annotation `declarest.io/webhook-last-event-id` stores provider event identifiers when present.
-6. `ResourceRepository` defaults: `spec.git.branch=main` when omitted; repository payload file extensions are determined at runtime from managed-server responses or explicit payload input, and `ResourceRepository` MUST NOT expose a payload-format default field.
-7. `ManagedServer` defaults: `spec.http.auth.oauth2.grantType=client_credentials` when omitted; `spec.pollInterval=10m` when omitted.
+6. `ResourceRepository` defaults: `spec.git.branch=main` when omitted; repository payload file extensions are determined at runtime from managed-service responses or explicit payload input, and `ResourceRepository` MUST NOT expose a payload-format default field.
+7. `ManagedService` defaults: `spec.http.auth.oauth2.grantType=client_credentials` when omitted; `spec.pollInterval=10m` when omitted.
 8. `SyncPolicy` defaults: `spec.source.recursive=true` and `spec.syncInterval=5m` when omitted.
-9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows; managed-server and vault proxy blocks MAY override only selected fields from process proxy environment.
+9. `SyncPolicy` reconcile runtime MUST assemble a `config.Context` and bootstrap a session using `bootstrap.NewSessionFromResolvedContext`, yielding canonical interface implementations (`orchestrator.Orchestrator`, `repository.ResourceStore`, `metadata.MetadataService`, `secrets.SecretProvider`) for mutation workflows; managed-service and vault proxy blocks MAY override only selected fields from process proxy environment.
 10. Sync execution plan modes: `full` or `incremental`; plan targets MUST be normalized and deduplicated.
 
 ## Failure Modes

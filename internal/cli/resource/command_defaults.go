@@ -197,9 +197,9 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 			"  declarest resource defaults infer /customers/acme",
 			"  declarest resource defaults infer /customers/acme --check",
 			"  declarest resource defaults infer /customers/acme --save",
-			"  declarest resource defaults infer /customers/acme --from managed-server --yes",
-			"  declarest resource defaults infer /customers/acme --from managed-server --wait 2s --yes",
-			"  declarest resource defaults infer /customers/acme --from repository,managed-server --items acme,beta",
+			"  declarest resource defaults infer /customers/acme --from managed-service --yes",
+			"  declarest resource defaults infer /customers/acme --from managed-service --wait 2s --yes",
+			"  declarest resource defaults infer /customers/acme --from repository,managed-service --items acme,beta",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -215,34 +215,34 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 			if err != nil {
 				return err
 			}
-			wait, waitSet, err := parseManagedServerDefaultsWait(waitValue)
+			wait, waitSet, err := parseManagedServiceDefaultsWait(waitValue)
 			if err != nil {
 				return err
 			}
 			if save && check {
 				return cliutil.ValidationError("flags --save and --check cannot be combined", nil)
 			}
-			usesManagedServer := defaultsInferUsesSource(sources, defaultsapp.InferSourceManagedServer)
-			if waitSet && !usesManagedServer {
-				return cliutil.ValidationError("flag --wait requires --from to include managed-server", nil)
+			usesManagedService := defaultsInferUsesSource(sources, defaultsapp.InferSourceManagedService)
+			if waitSet && !usesManagedService {
+				return cliutil.ValidationError("flag --wait requires --from to include managed-service", nil)
 			}
-			if usesManagedServer && !yes {
+			if usesManagedService && !yes {
 				if !cliutil.IsInteractiveTerminal(command) {
 					return cliutil.ValidationError(
-						"flag --yes is required when --from includes managed-server because temporary remote resources will be created",
+						"flag --yes is required when --from includes managed-service because temporary remote resources will be created",
 						nil,
 					)
 				}
 				confirmed, confirmErr := defaultsInferPromptConfirm(
 					command,
-					"Proceed with managed-server defaults inference? Temporary remote resources will be created and deleted.",
+					"Proceed with managed-service defaults inference? Temporary remote resources will be created and deleted.",
 					false,
 				)
 				if confirmErr != nil {
 					return confirmErr
 				}
 				if !confirmed {
-					return cliutil.ValidationError("managed-server defaults inference aborted", nil)
+					return cliutil.ValidationError("managed-service defaults inference aborted", nil)
 				}
 			}
 
@@ -336,10 +336,10 @@ func newDefaultsInferCommand(deps cliutil.CommandDependencies, globalFlags *cliu
 	command.ValidArgsFunction = cliutil.SinglePathArgCompletionFunc(deps)
 	command.Flags().BoolVar(&save, "save", false, "save inferred defaults into the local baseline defaults file")
 	command.Flags().BoolVar(&check, "check", false, "infer defaults and fail if they do not match the current resolved defaults")
-	command.Flags().StringVar(&fromValue, "from", string(defaultsapp.InferSourceRepository), "comma-separated inference sources: repository and/or managed-server")
+	command.Flags().StringVar(&fromValue, "from", string(defaultsapp.InferSourceRepository), "comma-separated inference sources: repository and/or managed-service")
 	command.Flags().StringVar(&itemsValue, "items", "", "comma-separated item aliases to use when inferring defaults")
-	command.Flags().StringVar(&waitValue, "wait", "", "with --from managed-server, wait this long before reading temporary probe resources (for example 2s or 500ms; bare integers mean seconds)")
-	command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm managed-server temporary resource creation")
+	command.Flags().StringVar(&waitValue, "wait", "", "with --from managed-service, wait this long before reading temporary probe resources (for example 2s or 500ms; bare integers mean seconds)")
+	command.Flags().BoolVarP(&yes, "yes", "y", false, "confirm managed-service temporary resource creation")
 	return command
 }
 
@@ -668,7 +668,7 @@ func resolveDefaultsProfileArgs(pathFlag string, args []string) (string, string,
 	return resolvedPath, profile, nil
 }
 
-func parseManagedServerDefaultsWait(value string) (time.Duration, bool, error) {
+func parseManagedServiceDefaultsWait(value string) (time.Duration, bool, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return 0, false, nil
@@ -703,15 +703,15 @@ func parseDefaultsInferSources(value string) ([]defaultsapp.InferSource, error) 
 		item := defaultsapp.InferSource(strings.TrimSpace(rawItem))
 		if item == "" {
 			return nil, cliutil.ValidationError(
-				"flag --from must be a comma-separated list of: repository, managed-server",
+				"flag --from must be a comma-separated list of: repository, managed-service",
 				nil,
 			)
 		}
 		switch item {
-		case defaultsapp.InferSourceRepository, defaultsapp.InferSourceManagedServer:
+		case defaultsapp.InferSourceRepository, defaultsapp.InferSourceManagedService:
 		default:
 			return nil, cliutil.ValidationError(
-				"flag --from must be a comma-separated list of: repository, managed-server",
+				"flag --from must be a comma-separated list of: repository, managed-service",
 				nil,
 			)
 		}
@@ -723,7 +723,7 @@ func parseDefaultsInferSources(value string) ([]defaultsapp.InferSource, error) 
 	}
 	if len(sources) == 0 {
 		return nil, cliutil.ValidationError(
-			"flag --from must be a comma-separated list of: repository, managed-server",
+			"flag --from must be a comma-separated list of: repository, managed-service",
 			nil,
 		)
 	}

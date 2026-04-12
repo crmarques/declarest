@@ -31,7 +31,7 @@
                     └───────────────┘
 ```
 
-The orchestrator is the coordination boundary. It composes repository, metadata, managed-server, and secret operations into deterministic workflows. CLI commands and operator controllers both delegate to the orchestrator -- they never call providers directly.
+The orchestrator is the coordination boundary. It composes repository, metadata, managed-service, and secret operations into deterministic workflows. CLI commands and operator controllers both delegate to the orchestrator -- they never call providers directly.
 
 ## Layer model
 
@@ -45,7 +45,7 @@ The orchestrator is the coordination boundary. It composes repository, metadata,
 ├─────────────────────────────────────────────────┤
 │  Domain packages   Public contracts and types    │
 │  (orchestrator/, resource/, metadata/,           │
-│   repository/, secrets/, managedserver/,          │
+│   repository/, secrets/, managedservice/,          │
 │   config/, faults/)                              │
 ├─────────────────────────────────────────────────┤
 │  internal/providers/   Concrete implementations  │
@@ -70,10 +70,10 @@ These rules are enforced by boundary tests that parse Go imports and fail on vio
 
 | Component | Package | Responsibility |
 |-----------|---------|----------------|
-| Context/config | `config/` | Selects repository, managed server, metadata, and secret store from a named context |
+| Context/config | `config/` | Selects repository, managed service, metadata, and secret store from a named context |
 | Repository | `repository/` | Persists desired-state files and metadata overrides (filesystem or git backend) |
 | Metadata | `metadata/` | Resolves logical-path-to-API mapping, layered overrides, template rendering |
-| Managed server | `managedserver/` | Executes remote HTTP operations (CRUD/list with auth, TLS, throttling) |
+| Managed service | `managedservice/` | Executes remote HTTP operations (CRUD/list with auth, TLS, throttling) |
 | Secret provider | `secrets/` | Stores, masks, and resolves secret placeholders (file or Vault backend) |
 | Orchestrator | `orchestrator/` | Coordinates multi-step workflows (save, diff, apply, list) with deterministic fallbacks |
 
@@ -84,7 +84,7 @@ A typical `resource apply` flow:
 1. **Load local** -- read desired-state payload from the repository.
 2. **Resolve metadata** -- merge metadata layers to determine operation specs.
 3. **Resolve secrets** -- expand {% raw %}`{{secret .}}`{% endraw %} placeholders in the payload.
-4. **Read remote** -- fetch current state from the managed server.
+4. **Read remote** -- fetch current state from the managed service.
 5. **Compare** -- diff desired vs actual using metadata compare transforms.
 6. **Decide** -- skip if no drift (unless `--force`), create if remote returns `NotFound`, update otherwise.
 7. **Mutate** -- send the create/update request with metadata-rendered headers, path, and body transforms.

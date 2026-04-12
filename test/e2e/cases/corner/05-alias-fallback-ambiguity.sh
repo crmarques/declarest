@@ -2,7 +2,7 @@
 
 CASE_ID='alias-fallback-ambiguity'
 CASE_SCOPE='corner'
-CASE_REQUIRES='managed-server=keycloak'
+CASE_REQUIRES='managed-service=keycloak'
 
 case_run() {
   local metadata_file="${E2E_CASE_TMP_DIR}/metadata.json"
@@ -34,7 +34,7 @@ case_run() {
   case_run_declarest resource create "/admin/realms/master/clients/${client_two}" -f "${item_two}" -i json
   case_expect_success
 
-  case_run_declarest resource get "/admin/realms/master/clients/${client_two}" --source managed-server -o json
+  case_run_declarest resource get "/admin/realms/master/clients/${client_two}" --source managed-service -o json
   case_expect_success
   remote_id_two=$(jq -r '.id // empty' <<<"${CASE_LAST_STDOUT}")
   if [[ -z "${remote_id_two}" || "${remote_id_two}" == 'null' ]]; then

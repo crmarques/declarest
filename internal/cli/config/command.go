@@ -28,7 +28,7 @@ import (
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/commandmeta"
 	"github.com/crmarques/declarest/internal/promptauth"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -721,7 +721,7 @@ func newResolveCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Gl
 			"  declarest context resolve",
 			"  declarest context resolve prod",
 			"  declarest context resolve --context prod",
-			"  declarest context resolve --set managedServer.http.url=https://api.example.com",
+			"  declarest context resolve --set managedService.http.url=https://api.example.com",
 		}, "\n"),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -868,7 +868,7 @@ func runConfigCheck(command *cobra.Command, deps cliutil.CommandDependencies, cf
 		},
 		checkRepository(command, deps, cfg),
 		checkMetadata(command, deps, cfg),
-		checkManagedServer(command, deps, cfg),
+		checkManagedService(command, deps, cfg),
 		checkSecretStore(command, deps, cfg),
 	}
 
@@ -986,38 +986,38 @@ func checkMetadata(command *cobra.Command, deps cliutil.CommandDependencies, cfg
 	return result
 }
 
-func checkManagedServer(command *cobra.Command, deps cliutil.CommandDependencies, cfg configdomain.Context) configCheckResult {
+func checkManagedService(command *cobra.Command, deps cliutil.CommandDependencies, cfg configdomain.Context) configCheckResult {
 	result := configCheckResult{
-		Component: "managedServer",
+		Component: "managedService",
 	}
 
-	if cfg.ManagedServer == nil {
+	if cfg.ManagedService == nil {
 		result.Status = configCheckSkip
 		result.Details = "not configured"
 		return result
 	}
 
-	managedServerClient, err := cliutil.RequireManagedServerClient(deps)
+	managedServiceClient, err := cliutil.RequireManagedServiceClient(deps)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
 		return result
 	}
 
-	probePath, err := resolveManagedServerHealthCheckProbePath(cfg)
+	probePath, err := resolveManagedServiceHealthCheckProbePath(cfg)
 	if err != nil {
 		result.Status = configCheckFail
 		result.Error = err.Error()
 		return result
 	}
 
-	_, err = managedServerClient.Request(command.Context(), managedserverdomain.RequestSpec{
+	_, err = managedServiceClient.Request(command.Context(), managedservicedomain.RequestSpec{
 		Method: http.MethodGet,
 		Path:   probePath,
 	})
 	if err == nil {
 		result.Status = configCheckOK
-		result.Details = fmt.Sprintf("managed server probe succeeded (GET %s)", renderManagedServerHealthCheckTarget(cfg))
+		result.Details = fmt.Sprintf("managed service probe succeeded (GET %s)", renderManagedServiceHealthCheckTarget(cfg))
 		return result
 	}
 
@@ -1034,31 +1034,31 @@ func checkManagedServer(command *cobra.Command, deps cliutil.CommandDependencies
 	}
 }
 
-func renderManagedServerHealthCheckTarget(cfg configdomain.Context) string {
-	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+func renderManagedServiceHealthCheckTarget(cfg configdomain.Context) string {
+	if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
 		return "/"
 	}
-	healthCheck := strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+	healthCheck := strings.TrimSpace(cfg.ManagedService.HTTP.HealthCheck)
 	if healthCheck != "" {
 		return healthCheck
 	}
-	return strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL)
+	return strings.TrimSpace(cfg.ManagedService.HTTP.BaseURL)
 }
 
-func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string, error) {
-	if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
+func resolveManagedServiceHealthCheckProbePath(cfg configdomain.Context) (string, error) {
+	if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
 		return "/", nil
 	}
 
-	healthCheck := strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
+	healthCheck := strings.TrimSpace(cfg.ManagedService.HTTP.HealthCheck)
 	if healthCheck == "" {
-		baseURL := strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL)
+		baseURL := strings.TrimSpace(cfg.ManagedService.HTTP.BaseURL)
 		if baseURL == "" {
 			return "/", nil
 		}
 		parsed, err := url.Parse(baseURL)
 		if err != nil {
-			return "", cliutil.ValidationError("managedServer.http.url is invalid", err)
+			return "", cliutil.ValidationError("managedService.http.url is invalid", err)
 		}
 		basePath := strings.TrimSpace(parsed.Path)
 		if basePath == "" {
@@ -1072,15 +1072,15 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 
 	parsed, err := url.Parse(healthCheck)
 	if err != nil {
-		return "", cliutil.ValidationError("managedServer.http.healthCheck is invalid", err)
+		return "", cliutil.ValidationError("managedService.http.healthCheck is invalid", err)
 	}
 	if strings.TrimSpace(parsed.RawQuery) != "" {
-		return "", cliutil.ValidationError("managedServer.http.healthCheck must not include query parameters", nil)
+		return "", cliutil.ValidationError("managedService.http.healthCheck must not include query parameters", nil)
 	}
 	if parsed.Scheme == "" && parsed.Host == "" {
 		parsedPath := strings.TrimSpace(parsed.Path)
 		if parsedPath == "" {
-			return "", cliutil.ValidationError("managedServer.http.healthCheck is invalid", nil)
+			return "", cliutil.ValidationError("managedService.http.healthCheck is invalid", nil)
 		}
 		if !strings.HasPrefix(parsedPath, "/") {
 			parsedPath = "/" + parsedPath
@@ -1088,18 +1088,18 @@ func resolveManagedServerHealthCheckProbePath(cfg configdomain.Context) (string,
 		return parsedPath, nil
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", cliutil.ValidationError("managedServer.http.healthCheck URL must use http or https", nil)
+		return "", cliutil.ValidationError("managedService.http.healthCheck URL must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return "", cliutil.ValidationError("managedServer.http.healthCheck URL host is required", nil)
+		return "", cliutil.ValidationError("managedService.http.healthCheck URL host is required", nil)
 	}
-	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedServer.HTTP.BaseURL))
+	baseParsed, err := url.Parse(strings.TrimSpace(cfg.ManagedService.HTTP.BaseURL))
 	if err != nil {
-		return "", cliutil.ValidationError("managedServer.http.url is invalid", err)
+		return "", cliutil.ValidationError("managedService.http.url is invalid", err)
 	}
 	if !strings.EqualFold(parsed.Scheme, baseParsed.Scheme) || !strings.EqualFold(parsed.Host, baseParsed.Host) {
 		return "", cliutil.ValidationError(
-			"managedServer.http.healthCheck URL must share scheme and host with managedServer.http.url",
+			"managedService.http.healthCheck URL must share scheme and host with managedService.http.url",
 			nil,
 		)
 	}

@@ -2,7 +2,7 @@
 
 CASE_ID='metadata-expansion-multi-wildcard'
 CASE_SCOPE='corner'
-CASE_REQUIRES='has-managed-server'
+CASE_REQUIRES='has-managed-service'
 
 metadata_path_has_intermediary_placeholder() {
   local logical_path=$1
@@ -67,12 +67,12 @@ case_run() {
   done < <(case_repo_template_metadata_files)
 
   if ((matched == 0)); then
-    printf 'no metadata paths with intermediary placeholders found for managed-server=%s\n' "${E2E_MANAGED_SERVER}" >&2
+    printf 'no metadata paths with intermediary placeholders found for managed-service=%s\n' "${E2E_MANAGED_SERVICE}" >&2
     return 1
   fi
 
   if ((expanded == 0)); then
-    printf 'no metadata paths with intermediary placeholders expanded to concrete targets for managed-server=%s\n' "${E2E_MANAGED_SERVER}" >&2
+    printf 'no metadata paths with intermediary placeholders expanded to concrete targets for managed-service=%s\n' "${E2E_MANAGED_SERVICE}" >&2
     return 1
   fi
 }

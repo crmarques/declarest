@@ -9,7 +9,7 @@ load_ui_libs() {
     DECLAREST_E2E_PROXY_HTTP_URL DECLAREST_E2E_PROXY_HTTPS_URL DECLAREST_E2E_PROXY_NO_PROXY \
     DECLAREST_E2E_PROXY_AUTH_USERNAME DECLAREST_E2E_PROXY_AUTH_PASSWORD || true
   unset E2E_EXPLICIT \
-    E2E_MANAGED_SERVER E2E_MANAGED_SERVER_CONNECTION E2E_MANAGED_SERVER_AUTH_TYPE E2E_MANAGED_SERVER_MTLS \
+    E2E_MANAGED_SERVICE E2E_MANAGED_SERVICE_CONNECTION E2E_MANAGED_SERVICE_AUTH_TYPE E2E_MANAGED_SERVICE_MTLS \
     E2E_PROXY_MODE E2E_PROXY_AUTH_TYPE E2E_PROXY_HTTP_URL E2E_PROXY_HTTPS_URL E2E_PROXY_NO_PROXY \
     E2E_PROXY_AUTH_USERNAME E2E_PROXY_AUTH_PASSWORD \
     E2E_METADATA \
@@ -93,16 +93,16 @@ test_summary_marks_explicit_and_component_default_parameters() {
   E2E_STEP_STATUSES[1]='OK'
   E2E_STEP_DURATIONS[1]=0
 
-  e2e_parse_args --managed-server rundeck --repo-type git --git-provider gitlab
-  E2E_MANAGED_SERVER_AUTH_TYPE='custom-header'
+  e2e_parse_args --managed-service rundeck --repo-type git --git-provider gitlab
+  E2E_MANAGED_SERVICE_AUTH_TYPE='custom-header'
 
   local output
   output=$(ui_print_summary)
 
-  assert_contains "${output}" "managed-server: rundeck (explicit)"
+  assert_contains "${output}" "managed-service: rundeck (explicit)"
   assert_contains "${output}" "repository-type: git (explicit)"
   assert_contains "${output}" "git-provider: gitlab (explicit)"
-  assert_contains "${output}" "managed-server-auth-type: custom-header (component-default)"
+  assert_contains "${output}" "managed-service-auth-type: custom-header (component-default)"
 }
 
 test_summary_marks_operator_profile_defaults() {
@@ -115,7 +115,7 @@ test_summary_marks_operator_profile_defaults() {
 
   e2e_parse_args --profile operator-manual
   e2e_apply_profile_defaults
-  E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
+  E2E_MANAGED_SERVICE_AUTH_TYPE='oauth2'
 
   local output
   local operator_default_git_provider

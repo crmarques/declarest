@@ -27,7 +27,7 @@ import (
 func TestBuildTLSConfigNilSettingsReturnsNil(t *testing.T) {
 	t.Parallel()
 
-	tlsConfig, err := BuildTLSConfig(nil, "managed-server.http")
+	tlsConfig, err := BuildTLSConfig(nil, "managed-service.http")
 	if err != nil {
 		t.Fatalf("BuildTLSConfig returned error: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestBuildTLSConfigNilSettingsReturnsNil(t *testing.T) {
 func TestBuildTLSConfigRejectsMissingCAFile(t *testing.T) {
 	t.Parallel()
 
-	_, err := BuildTLSConfig(&config.TLS{CACertFile: "/tmp/does-not-exist.pem"}, "managed-server.http")
+	_, err := BuildTLSConfig(&config.TLS{CACertFile: "/tmp/does-not-exist.pem"}, "managed-service.http")
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
@@ -54,7 +54,7 @@ func TestBuildTLSConfigRejectsInvalidCAPEM(t *testing.T) {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	_, err := BuildTLSConfig(&config.TLS{CACertFile: caFile}, "managed-server.http")
+	_, err := BuildTLSConfig(&config.TLS{CACertFile: caFile}, "managed-service.http")
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
@@ -63,7 +63,7 @@ func TestBuildTLSConfigRejectsInvalidCAPEM(t *testing.T) {
 func TestBuildTLSConfigRequiresClientCertAndKeyTogether(t *testing.T) {
 	t.Parallel()
 
-	_, err := BuildTLSConfig(&config.TLS{ClientCertFile: "/tmp/client.pem"}, "managed-server.http")
+	_, err := BuildTLSConfig(&config.TLS{ClientCertFile: "/tmp/client.pem"}, "managed-service.http")
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
@@ -85,7 +85,7 @@ func TestBuildTLSConfigRejectsInvalidClientCertificatePair(t *testing.T) {
 	_, err := BuildTLSConfig(&config.TLS{
 		ClientCertFile: certFile,
 		ClientKeyFile:  keyFile,
-	}, "managed-server.http")
+	}, "managed-service.http")
 	if !faults.IsCategory(err, faults.ValidationError) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
@@ -94,7 +94,7 @@ func TestBuildTLSConfigRejectsInvalidClientCertificatePair(t *testing.T) {
 func TestBuildTLSConfigAppliesBaseTLSSettings(t *testing.T) {
 	t.Parallel()
 
-	tlsConfig, err := BuildTLSConfig(&config.TLS{InsecureSkipVerify: true}, "managed-server.http")
+	tlsConfig, err := BuildTLSConfig(&config.TLS{InsecureSkipVerify: true}, "managed-service.http")
 	if err != nil {
 		t.Fatalf("BuildTLSConfig returned error: %v", err)
 	}

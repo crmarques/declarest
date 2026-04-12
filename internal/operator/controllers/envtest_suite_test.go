@@ -105,14 +105,14 @@ func setupEnvTest(t *testing.T) *envTestState {
 		t.Fatalf("create manager: %v", err)
 	}
 
-	if err := (&ManagedServerReconciler{
+	if err := (&ManagedServiceReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("managedserver-controller"),
+		Recorder: mgr.GetEventRecorder("managedservice-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		cancel()
 		stopEnvTest(t, testEnv)
-		t.Fatalf("setup ManagedServer controller: %v", err)
+		t.Fatalf("setup ManagedService controller: %v", err)
 	}
 	if err := (&SecretStoreReconciler{
 		Client:   mgr.GetClient(),
@@ -196,7 +196,7 @@ func waitForCondition(
 // extractConditions returns the conditions from a DeclaREST resource.
 func extractConditions(obj client.Object) []metav1.Condition {
 	switch v := obj.(type) {
-	case *declarestv1alpha1.ManagedServer:
+	case *declarestv1alpha1.ManagedService:
 		return v.Status.Conditions
 	case *declarestv1alpha1.SecretStore:
 		return v.Status.Conditions

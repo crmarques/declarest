@@ -101,7 +101,7 @@ detect  store  mask  resolve          # plus safe-save guards on every write
 **Kubernetes Operator** — continuous GitOps reconciliation with four CRDs:
 
 ```
-ResourceRepository    ManagedServer    SecretStore    SyncPolicy
+ResourceRepository    ManagedService    SecretStore    SyncPolicy
 ```
 
 ## Kubernetes Operator

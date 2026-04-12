@@ -97,7 +97,7 @@ type SyncPolicyReconciler struct {
 
 const (
 	syncPolicyIndexResourceRepositoryRef = "spec.resourceRepositoryRef.name"
-	syncPolicyIndexManagedServerRef      = "spec.managedServerRef.name"
+	syncPolicyIndexManagedServiceRef     = "spec.managedServiceRef.name"
 	syncPolicyIndexSecretStoreRef        = "spec.secretStoreRef.name"
 )
 
@@ -109,7 +109,7 @@ type syncPolicyReconciliation struct {
 	logger      logr.Logger
 	policy      *declarestv1alpha1.SyncPolicy
 	repo        *declarestv1alpha1.ResourceRepository
-	server      *declarestv1alpha1.ManagedServer
+	server      *declarestv1alpha1.ManagedService
 	secret      *declarestv1alpha1.SecretStore
 	resultLabel string
 	reasonLabel string
@@ -245,18 +245,18 @@ func (r *syncPolicyReconciliation) loadDependencies() (*ctrl.Result, error) {
 		return &res, err
 	}
 
-	r.server, err = r.loadManagedServer()
+	r.server, err = r.loadManagedService()
 	if err != nil {
 		r.resultLabel = "error"
 		r.reasonLabel = conditionReasonDependencyInvalid
-		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve managed server: %v", err), 0, "DependencyInvalid")
+		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyInvalid, fmt.Sprintf("resolve managed service: %v", err), 0, "DependencyInvalid")
 		return &res, err
 	}
 	if !isDependencyReady(r.server.Status.Conditions) {
 		r.resultLabel = "error"
 		r.reasonLabel = conditionReasonDependencyNotReady
 		res, err := r.failWithStatus(r.ctx, r.policy, conditionReasonDependencyNotReady,
-			fmt.Sprintf("ManagedServer %q is not ready", r.server.Name), defaultTransientRequeueInterval, "DependencyNotReady")
+			fmt.Sprintf("ManagedService %q is not ready", r.server.Name), defaultTransientRequeueInterval, "DependencyNotReady")
 		return &res, err
 	}
 
@@ -421,15 +421,15 @@ func (r *syncPolicyReconciliation) loadResourceRepository() (*declarestv1alpha1.
 	return repo, nil
 }
 
-func (r *syncPolicyReconciliation) loadManagedServer() (*declarestv1alpha1.ManagedServer, error) {
-	server := &declarestv1alpha1.ManagedServer{}
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ManagedServerRef.Name}, server); err != nil {
+func (r *syncPolicyReconciliation) loadManagedService() (*declarestv1alpha1.ManagedService, error) {
+	server := &declarestv1alpha1.ManagedService{}
+	if err := r.Get(r.ctx, types.NamespacedName{Namespace: r.policy.Namespace, Name: r.policy.Spec.ManagedServiceRef.Name}, server); err != nil {
 		return nil, err
 	}
-	server = expandRuntimeManagedServer(server)
+	server = expandRuntimeManagedService(server)
 	server.Default()
 	if err := server.ValidateSpec(); err != nil {
-		return nil, fmt.Errorf("invalid referenced managed server: %w", err)
+		return nil, fmt.Errorf("invalid referenced managed service: %w", err)
 	}
 	return server, nil
 }
@@ -677,13 +677,13 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(
 		context.Background(),
 		&declarestv1alpha1.SyncPolicy{},
-		syncPolicyIndexManagedServerRef,
+		syncPolicyIndexManagedServiceRef,
 		func(obj client.Object) []string {
 			syncPolicy, ok := obj.(*declarestv1alpha1.SyncPolicy)
 			if !ok {
 				return nil
 			}
-			name := strings.TrimSpace(syncPolicy.Spec.ManagedServerRef.Name)
+			name := strings.TrimSpace(syncPolicy.Spec.ManagedServiceRef.Name)
 			if name == "" {
 				return nil
 			}
@@ -718,8 +718,8 @@ func (r *SyncPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForResourceRepository),
 		).
 		Watches(
-			&declarestv1alpha1.ManagedServer{},
-			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForManagedServer),
+			&declarestv1alpha1.ManagedService{},
+			handler.EnqueueRequestsFromMapFunc(r.syncPoliciesForManagedService),
 		).
 		Watches(
 			&declarestv1alpha1.SecretStore{},
@@ -753,8 +753,8 @@ func (r *SyncPolicyReconciler) syncPoliciesForResourceRepository(ctx context.Con
 	return reconcileRequestsForSyncPolicies(policies.Items)
 }
 
-func (r *SyncPolicyReconciler) syncPoliciesForManagedServer(ctx context.Context, obj client.Object) []reconcile.Request {
-	managedServer, ok := obj.(*declarestv1alpha1.ManagedServer)
+func (r *SyncPolicyReconciler) syncPoliciesForManagedService(ctx context.Context, obj client.Object) []reconcile.Request {
+	managedService, ok := obj.(*declarestv1alpha1.ManagedService)
 	if !ok {
 		return nil
 	}
@@ -762,10 +762,10 @@ func (r *SyncPolicyReconciler) syncPoliciesForManagedServer(ctx context.Context,
 	if err := r.List(
 		ctx,
 		policies,
-		client.InNamespace(managedServer.Namespace),
-		client.MatchingFields{syncPolicyIndexManagedServerRef: managedServer.Name},
+		client.InNamespace(managedService.Namespace),
+		client.MatchingFields{syncPolicyIndexManagedServiceRef: managedService.Name},
 	); err != nil {
-		log.FromContext(ctx).Error(err, "failed to list SyncPolicies for watch mapper", "trigger_kind", "ManagedServer", "trigger_name", managedServer.Name)
+		log.FromContext(ctx).Error(err, "failed to list SyncPolicies for watch mapper", "trigger_kind", "ManagedService", "trigger_name", managedService.Name)
 		return nil
 	}
 	return reconcileRequestsForSyncPolicies(policies.Items)

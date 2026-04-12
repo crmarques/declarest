@@ -164,7 +164,7 @@ step_prepare_runtime() {
     "${E2E_ROOT_DIR}/debugctx" \
     "${E2E_ROOT_DIR}/faults" \
     "${E2E_ROOT_DIR}/internal" \
-    "${E2E_ROOT_DIR}/managedserver" \
+    "${E2E_ROOT_DIR}/managedservice" \
     "${E2E_ROOT_DIR}/metadata" \
     "${E2E_ROOT_DIR}/orchestrator" \
     "${E2E_ROOT_DIR}/repository" \
@@ -195,7 +195,7 @@ step_prepare_runtime() {
       "${E2E_ROOT_DIR}/debugctx" \
       "${E2E_ROOT_DIR}/faults" \
       "${E2E_ROOT_DIR}/internal" \
-      "${E2E_ROOT_DIR}/managedserver" \
+      "${E2E_ROOT_DIR}/managedservice" \
       "${E2E_ROOT_DIR}/metadata" \
       "${E2E_ROOT_DIR}/orchestrator" \
       "${E2E_ROOT_DIR}/repository" \
@@ -307,18 +307,18 @@ step_operator_install() {
 
 e2e_manual_collect_component_access_info() {
   local component_key
-  local managed_server_key=''
+  local managed_service_key=''
   local details
   local output=''
 
-  if [[ -n "${E2E_MANAGED_SERVER:-}" && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
-    managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  if [[ -n "${E2E_MANAGED_SERVICE:-}" && "${E2E_MANAGED_SERVICE}" != 'none' ]]; then
+    managed_service_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")
   fi
 
   for component_key in "${E2E_SELECTED_COMPONENT_KEYS[@]}"; do
     details=$(e2e_component_collect_manual_info "${component_key}" || true)
-    if [[ -z "${details//[$'\t\r\n ']}" && -n "${managed_server_key}" && "${component_key}" == "${managed_server_key}" ]]; then
-      details=$(e2e_profile_managed_server_access_details || true)
+    if [[ -z "${details//[$'\t\r\n ']}" && -n "${managed_service_key}" && "${component_key}" == "${managed_service_key}" ]]; then
+      details=$(e2e_profile_managed_service_access_details || true)
     fi
     if [[ -z "${details//[$'\t\r\n ']}" ]]; then
       continue
@@ -364,8 +364,8 @@ e2e_profile_seed_repo_from_template() {
     return 0
   fi
 
-  if [[ "${E2E_MANAGED_SERVER}" == 'none' ]]; then
-    e2e_info "${E2E_PROFILE} profile repo-template sync skipped: managed-server=none"
+  if [[ "${E2E_MANAGED_SERVICE}" == 'none' ]]; then
+    e2e_info "${E2E_PROFILE} profile repo-template sync skipped: managed-service=none"
     return 0
   fi
 
@@ -377,7 +377,7 @@ e2e_profile_seed_repo_from_template() {
   local file_count
 
   repo_component_key=$(e2e_component_key 'repo-type' "${E2E_REPO_TYPE}")
-  resource_component_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  resource_component_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")
   repo_state_file=$(e2e_component_state_file "${repo_component_key}")
 
   repo_base_dir=$(e2e_state_get "${repo_state_file}" 'REPO_BASE_DIR' || true)

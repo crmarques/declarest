@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/metadata/templatescope"
 	"github.com/crmarques/declarest/resource"
@@ -29,7 +29,7 @@ import (
 
 func (r *Orchestrator) fetchRemoteCollectionValue(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 	md metadata.ResourceMetadata,
 ) (resource.Content, bool, error) {
@@ -66,12 +66,12 @@ func (r *Orchestrator) fetchRemoteCollectionValue(
 }
 
 func (r *Orchestrator) withListJQResourceResolver(ctx context.Context) context.Context {
-	return managedserver.WithListJQResourceResolver(ctx, r.resolveListJQResource)
+	return managedservice.WithListJQResourceResolver(ctx, r.resolveListJQResource)
 }
 
 func (r *Orchestrator) listRemoteResources(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	collectionPath string,
 	md metadata.ResourceMetadata,
 ) ([]resource.Resource, error) {
@@ -91,7 +91,7 @@ func (r *Orchestrator) resolveListJQResource(
 
 func (r *Orchestrator) shouldTreatRemotePathAsCollection(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 ) bool {
 	if r.collectionHintFromRepository(ctx, resolvedResource.LogicalPath) {
@@ -136,7 +136,7 @@ func (r *Orchestrator) collectionHintFromRepository(
 
 func (r *Orchestrator) collectionHintFromOpenAPI(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 ) bool {
 	openAPISpec, err := serverManager.GetOpenAPISpec(ctx)
@@ -329,7 +329,7 @@ func matchesOpenAPIPathSegments(candidate []string, target []string) bool {
 
 func (r *Orchestrator) isMissingParentForCollectionNotFound(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 ) bool {
 	parentPath := path.Dir(strings.TrimSuffix(resolvedResource.LogicalPath, "/"))
@@ -365,7 +365,7 @@ func listPayloadFromResources(items []resource.Resource) resource.Value {
 }
 
 func isFallbackListPayloadShapeError(err error) bool {
-	return managedserver.IsListPayloadShapeError(err)
+	return managedservice.IsListPayloadShapeError(err)
 }
 
 func (r *Orchestrator) renderOperationSpec(

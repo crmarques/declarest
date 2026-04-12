@@ -30,7 +30,7 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	httpmanagedserver "github.com/crmarques/declarest/internal/providers/managedserver/http"
+	httpmanagedservice "github.com/crmarques/declarest/internal/providers/managedservice/http"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
@@ -69,8 +69,8 @@ func TestBuildOrchestratorWiring(t *testing.T) {
 		if _, ok := orch.MetadataService().(*fsmetadata.FSMetadataService); !ok {
 			t.Fatalf("expected FSMetadataService, got %T", orch.MetadataService())
 		}
-		if orch.ManagedServerClient() != nil {
-			t.Fatalf("expected nil server manager, got %T", orch.ManagedServerClient())
+		if orch.ManagedServiceClient() != nil {
+			t.Fatalf("expected nil server manager, got %T", orch.ManagedServiceClient())
 		}
 		if orch.SecretProvider() != nil {
 			t.Fatalf("expected nil secrets provider, got %T", orch.SecretProvider())
@@ -108,7 +108,7 @@ paths: {}
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -129,10 +129,10 @@ paths: {}
 		if _, ok := orch.MetadataService().(*fsmetadata.LayeredMetadataService); !ok {
 			t.Fatalf("expected LayeredMetadataService for bundle metadata source, got %T", orch.MetadataService())
 		}
-		if orch.ManagedServerClient() == nil {
+		if orch.ManagedServiceClient() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServiceClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -236,7 +236,7 @@ paths: {}
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -257,10 +257,10 @@ paths: {}
 		if _, ok := orch.MetadataService().(*fsmetadata.LayeredMetadataService); !ok {
 			t.Fatalf("expected LayeredMetadataService for bundle-file metadata source, got %T", orch.MetadataService())
 		}
-		if orch.ManagedServerClient() == nil {
+		if orch.ManagedServiceClient() == nil {
 			t.Fatal("expected server manager")
 		}
-		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServiceClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundled openapi.yaml, got error: %v", openAPIErr)
 		}
@@ -371,7 +371,7 @@ distribution:
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -390,11 +390,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if orch.ManagedServerClient() == nil {
+		if orch.ManagedServiceClient() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServiceClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected OpenAPI from bundle manifest URL, got error: %v", openAPIErr)
 		}
@@ -440,7 +440,7 @@ distribution:
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: filepath.Join(tempDir, "repo")},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						OpenAPI: contextOpenAPIPath,
@@ -459,11 +459,11 @@ distribution:
 		if err != nil {
 			t.Fatalf("buildOrchestrator returned error: %v", err)
 		}
-		if orch.ManagedServerClient() == nil {
+		if orch.ManagedServiceClient() == nil {
 			t.Fatal("expected server manager")
 		}
 
-		openAPISpec, openAPIErr := orch.ManagedServerClient().GetOpenAPISpec(context.Background())
+		openAPISpec, openAPIErr := orch.ManagedServiceClient().GetOpenAPISpec(context.Background())
 		if openAPIErr != nil {
 			t.Fatalf("expected context openapi source to remain valid, got error: %v", openAPIErr)
 		}
@@ -487,7 +487,7 @@ distribution:
 						Local: config.GitLocal{BaseDir: "/tmp/repo"},
 					},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com",
 						Auth: &config.HTTPAuth{
@@ -512,8 +512,8 @@ distribution:
 		if _, ok := orch.RepositoryStore().(*gitrepository.GitResourceRepository); !ok {
 			t.Fatalf("expected GitResourceRepository, got %T", orch.RepositoryStore())
 		}
-		if _, ok := orch.ManagedServerClient().(*httpmanagedserver.Client); !ok {
-			t.Fatalf("expected Client, got %T", orch.ManagedServerClient())
+		if _, ok := orch.ManagedServiceClient().(*httpmanagedservice.Client); !ok {
+			t.Fatalf("expected Client, got %T", orch.ManagedServiceClient())
 		}
 		if _, ok := orch.SecretProvider().(*filesecrets.FileSecretService); !ok {
 			t.Fatalf("expected FileSecretService, got %T", orch.SecretProvider())
@@ -603,7 +603,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 
 		var buf bytes.Buffer
 		emitSecurityWarnings(&buf, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
 				},
@@ -619,35 +619,35 @@ func TestEmitSecurityWarnings(t *testing.T) {
 		}
 	})
 
-	t.Run("warns_on_plain_http_managed_server_base_url", func(t *testing.T) {
+	t.Run("warns_on_plain_http_managed_service_base_url", func(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
 		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com/api",
 				},
 			},
 		})
-		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.base-url uses plain HTTP")) {
+		if !bytes.Contains(buf.Bytes(), []byte("managed-service.http.base-url uses plain HTTP")) {
 			t.Fatalf("expected HTTP warning, got %q", buf.String())
 		}
 	})
 
-	t.Run("warns_on_managed_server_insecure_skip_verify", func(t *testing.T) {
+	t.Run("warns_on_managed_service_insecure_skip_verify", func(t *testing.T) {
 		t.Parallel()
 
 		var buf bytes.Buffer
 		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
 					TLS:     &config.TLS{InsecureSkipVerify: true},
 				},
 			},
 		})
-		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.tls.insecure-skip-verify")) {
+		if !bytes.Contains(buf.Bytes(), []byte("managed-service.http.tls.insecure-skip-verify")) {
 			t.Fatalf("expected TLS skip-verify warning, got %q", buf.String())
 		}
 	})
@@ -657,7 +657,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 
 		var buf bytes.Buffer
 		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "https://example.com",
 					Auth: &config.HTTPAuth{
@@ -668,7 +668,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 				},
 			},
 		})
-		if !bytes.Contains(buf.Bytes(), []byte("managed-server.http.auth.oauth2.token-url uses plain HTTP")) {
+		if !bytes.Contains(buf.Bytes(), []byte("managed-service.http.auth.oauth2.token-url uses plain HTTP")) {
 			t.Fatalf("expected oauth2 token URL warning, got %q", buf.String())
 		}
 	})
@@ -749,7 +749,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 
 		var buf bytes.Buffer
 		emitSecurityWarningsWithArgs(&buf, nil, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{
 					BaseURL: "http://example.com",
 					TLS:     &config.TLS{InsecureSkipVerify: true},
@@ -780,9 +780,9 @@ func TestEmitSecurityWarnings(t *testing.T) {
 
 		output := buf.String()
 		expectedSubstrings := []string{
-			"managed-server.http.base-url uses plain HTTP",
-			"managed-server.http.auth.oauth2.token-url uses plain HTTP",
-			"managed-server.http.tls.insecure-skip-verify",
+			"managed-service.http.base-url uses plain HTTP",
+			"managed-service.http.auth.oauth2.token-url uses plain HTTP",
+			"managed-service.http.tls.insecure-skip-verify",
 			"secret-store.vault.address uses plain HTTP",
 			"secret-store.vault.tls.insecure-skip-verify",
 			"repository.git.remote.tls.insecure-skip-verify",
@@ -803,7 +803,7 @@ func TestEmitSecurityWarnings(t *testing.T) {
 
 		var buf bytes.Buffer
 		emitSecurityWarningsWithArgs(&buf, []string{"--ignore-warnings"}, config.Context{
-			ManagedServer: &config.ManagedServer{
+			ManagedService: &config.ManagedService{
 				HTTP: &config.HTTPServer{BaseURL: "http://example.com"},
 			},
 		})
@@ -868,16 +868,16 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid_managed_server_provider_configuration", func(t *testing.T) {
+	t.Run("invalid_managed_service_provider_configuration", func(t *testing.T) {
 		t.Parallel()
 
 		contextService := &fakeContextService{
 			resolvedContext: config.Context{
-				Name: "invalid-managed-server",
+				Name: "invalid-managed-service",
 				Repository: config.Repository{
 					Filesystem: &config.FilesystemRepository{BaseDir: "/tmp/repo"},
 				},
-				ManagedServer: &config.ManagedServer{
+				ManagedService: &config.ManagedService{
 					HTTP: &config.HTTPServer{
 						BaseURL: "https://example.com/api",
 						Auth: &config.HTTPAuth{
@@ -893,7 +893,7 @@ func TestBuildOrchestratorValidationAndErrors(t *testing.T) {
 			},
 		}
 
-		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-server"})
+		_, err := buildOrchestrator(context.Background(), contextService, config.ContextSelection{Name: "invalid-managed-service"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

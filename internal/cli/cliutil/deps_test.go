@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -54,7 +54,7 @@ type testServiceAccessor struct {
 	sync     repository.RepositorySync
 	metadata metadatadomain.MetadataService
 	secrets  secretsdomain.SecretProvider
-	server   managedserverdomain.ManagedServerClient
+	server   managedservicedomain.ManagedServiceClient
 }
 
 func (a *testServiceAccessor) RepositoryStore() repository.ResourceStore {
@@ -73,7 +73,7 @@ func (a *testServiceAccessor) SecretProvider() secretsdomain.SecretProvider {
 	return a.secrets
 }
 
-func (a *testServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a *testServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return a.server
 }
 

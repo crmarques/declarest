@@ -40,7 +40,7 @@ Represents client-facing application state assembled at startup.
 Required fields:
 1. `Contexts`: `config.ContextService` instance.
 2. `Orchestrator`: `orchestrator.Orchestrator` instance.
-3. `Services`: `orchestrator.ServiceAccessor` instance — provides access to individual domain services (`RepositoryStore()`, `RepositorySync()`, `MetadataService()`, `SecretProvider()`, `ManagedServerClient()`).
+3. `Services`: `orchestrator.ServiceAccessor` instance — provides access to individual domain services (`RepositoryStore()`, `RepositorySync()`, `MetadataService()`, `SecretProvider()`, `ManagedServiceClient()`).
 
 Invariants:
 1. fields MUST reference interfaces, not provider concrete types.
@@ -51,7 +51,7 @@ Factory contract:
 1. `bootstrap.NewSession` MUST assemble default provider implementations.
 2. `bootstrap.NewSession` MUST resolve the selected or current context during startup and return an error when resolution or provider wiring fails.
 3. clients MUST NOT instantiate provider implementations directly.
-4. when `metadata.bundle` or `metadata.bundleFile` is configured and `managedServer.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
+4. when `metadata.bundle` or `metadata.bundleFile` is configured and `managedService.http.openapi` is empty, startup wiring MUST use bundle-provided OpenAPI source hints when available.
 
 Corner case example:
 1. when a repository provider satisfies `repository.ResourceStore` but does not satisfy `repository.RepositorySync`, `bootstrap.NewSession` MUST return an `InternalError`.
@@ -68,7 +68,7 @@ Represents the default concrete orchestrator assembled by the composition root.
 Required fields:
 1. `Repository`: `repository.ResourceStore` instance.
 2. `Metadata`: `metadata.MetadataService` instance.
-3. `Server`: optional `managedserver.ManagedServerClient` instance.
+3. `Server`: optional `managedservice.ManagedServiceClient` instance.
 4. `Secrets`: optional `secrets.SecretProvider` instance.
 
 ### Type: `config.Context`
@@ -79,11 +79,11 @@ Required fields:
 
 Optional fields:
 1. `Repository` typed configuration object.
-2. `ManagedServer` typed server configuration object.
+2. `ManagedService` typed server configuration object.
 3. `SecretStore` typed secret store configuration object.
 4. `Preferences` settings map.
 5. `Metadata` typed metadata configuration object.
-6. `managedServer.http.healthCheck` optional probe target used by `server check`.
+6. `managedService.http.healthCheck` optional probe target used by `server check`.
 7. Metadata JSON Pointer references (`requiredAttributes[*]`, `secretAttributes[*]`, `externalizedAttributes[*].path`, transform `selectAttributes`/`excludeAttributes`, compare exclude/select fields, and `validate.requiredAttributes[*]`) MUST use RFC 6901 JSON Pointer strings; `resource.id` and `resource.alias` are identity template strings that MAY embed one or more JSON Pointer expressions, MUST accept raw JSON Pointer shorthand such as `/id`, and metadata string-template fields that render payload/context attributes MUST accept canonical RFC 6901 placeholder form such as `{{/id}}` plus one-level shorthand such as `{{id}}`.
 
 User-config key contract:
@@ -92,19 +92,19 @@ User-config key contract:
 3. unknown keys MUST fail strict decoding.
 
 One-of invariants:
-1. `config.Context` MUST define at least one of `repository` or `managedServer`.
+1. `config.Context` MUST define at least one of `repository` or `managedService`.
 2. `repository` MUST define exactly one of `git` or `filesystem` when configured.
-3. `managedServer.http.auth` MUST define exactly one of `oauth2`, `basic`, or `customHeaders` when `managedServer.http` is configured.
+3. `managedService.http.auth` MUST define exactly one of `oauth2`, `basic`, or `customHeaders` when `managedService.http` is configured.
 4. `secretStore` MUST define exactly one of `file` or `vault`.
 5. `secretStore.file` MUST define exactly one of `key`, `keyFile`, `passphrase`, `passphraseFile`.
 6. `metadata` MUST define at most one of `baseDir`, `bundle`, or `bundleFile`.
-7. `managedServer.http.proxy` MAY define any subset of `http`, `https`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
-8. `managedServer.http.proxy.auth` MUST define `basic.credentialsRef` when configured.
+7. `managedService.http.proxy` MAY define any subset of `http`, `https`, `noProxy`, and `auth`; an empty block explicitly disables inherited or environment proxy resolution, and effective runtime proxying requires at least one resolved proxy URL after environment merge.
+8. `managedService.http.proxy.auth` MUST define `basic.credentialsRef` when configured.
 9. `repository.git.remote.auth` MUST define exactly one of `basic`, `ssh`, or `accessKey`.
 10. `secretStore.vault.auth` MUST define exactly one of `token`, `password`, or `appRole`.
-11. `managedServer.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
-12. `managedServer.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
-13. `managedServer.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
+11. `managedService.http.requestThrottling` MUST define at least one of `maxConcurrentRequests` or `requestsPerSecond` when configured.
+12. `managedService.http.requestThrottling.queueSize` MUST NOT be set unless `maxConcurrentRequests` is set.
+13. `managedService.http.requestThrottling.burst` MUST NOT be set unless `requestsPerSecond` is set.
 
 ### Type: `config.Credential`
 Represents one reusable username/password definition stored at catalog scope.
@@ -213,8 +213,8 @@ Required fields:
 Optional fields:
 1. `Validate` (`metadata.OperationValidationSpec`).
 
-### Type: `managedserver.RequestSpec`
-Represents one concrete managed-server HTTP request.
+### Type: `managedservice.RequestSpec`
+Represents one concrete managed-service HTTP request.
 
 Required fields:
 1. `Method`.
@@ -410,7 +410,7 @@ Field semantics:
 Corner case example:
 1. When the entire payload for `/customers/acme` differs (for example remote resource missing), the diff entry MUST use `ResourcePath="/customers/acme"` and `Path=""`.
 
-### Type: `managedserver.ListJQResourceResolver`
+### Type: `managedservice.ListJQResourceResolver`
 Represents logical-path resource resolution callback used by list-operation `jq` `resource("<logical-path>")` calls.
 
 Signature:
@@ -590,10 +590,10 @@ Responsibilities:
 Method families:
 1. `RenderOperationSpecForResource`.
 
-### Interface: `managedserver.ManagedServerClient`
+### Interface: `managedservice.ManagedServiceClient`
 Responsibilities:
 1. Execute remote CRUD/list operations.
-2. Execute request HTTP operations against managed server endpoints.
+2. Execute request HTTP operations against managed service endpoints.
 3. Resolve OpenAPI hints for operations.
 4. Expose typed transport failures.
 5. Honor list-operation `jq` resolver context when list transforms call `resource("<logical-path>")`.
@@ -604,21 +604,21 @@ Method families:
 3. `GetOpenAPISpec`.
 
 Optional capability:
-1. providers MAY additionally implement `managedserver.AccessTokenProvider` for token inspection workflows.
+1. providers MAY additionally implement `managedservice.AccessTokenProvider` for token inspection workflows.
 
-### Interface: `managedserver.AccessTokenProvider`
+### Interface: `managedservice.AccessTokenProvider`
 Responsibilities:
-1. Fetch a managed server access token using configured auth settings.
+1. Fetch a managed service access token using configured auth settings.
 
 Method families:
 1. `GetAccessToken`.
 
 Corner case example:
-1. Callers MUST treat missing `managedserver.AccessTokenProvider` capability as a validation/configuration error, not a transport error.
+1. Callers MUST treat missing `managedservice.AccessTokenProvider` capability as a validation/configuration error, not a transport error.
 
 Context helper contract:
-1. `managedserver.WithListJQResourceResolver` MUST attach one resolver per request context and preserve deterministic cache/cycle-guard state for nested resolution calls.
-2. `managedserver.ResolveListJQResource` MUST return `(value, resolved=true, err=nil)` on success, `(nil, resolved=false, err=nil)` when no resolver is attached, and `(nil, resolved=true, err!=nil)` when resolution fails.
+1. `managedservice.WithListJQResourceResolver` MUST attach one resolver per request context and preserve deterministic cache/cycle-guard state for nested resolution calls.
+2. `managedservice.ResolveListJQResource` MUST return `(value, resolved=true, err=nil)` on success, `(nil, resolved=false, err=nil)` when no resolver is attached, and `(nil, resolved=true, err!=nil)` when resolution fails.
 
 ### Interface: `secrets.SecretProvider`
 Responsibilities:
@@ -661,7 +661,7 @@ Method families:
 
 ### Interface: `orchestrator.Orchestrator`
 Responsibilities:
-1. Orchestrate repository-store, metadata, managed-server, and secret-provider workflows.
+1. Orchestrate repository-store, metadata, managed-service, and secret-provider workflows.
 2. Apply desired state to remote systems.
 3. Refresh local state from remote systems.
 4. Compute explain/diff/list outputs.
@@ -695,7 +695,7 @@ Error categories:
 1. `ValidationError`: invalid input, shape, path, or config.
 2. `NotFoundError`: missing local or remote resource.
 3. `ConflictError`: divergence, non-unique identity, or write collision.
-4. `AuthError`: authn/authz failure for repository, managed server, or secret store.
+4. `AuthError`: authn/authz failure for repository, managed service, or secret store.
 5. `TransportError`: network, TLS, timeout, and protocol issues.
 6. `InternalError`: unexpected invariant violations.
 

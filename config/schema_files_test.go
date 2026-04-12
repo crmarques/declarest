@@ -32,8 +32,8 @@ func TestMachineReadableSchemasRemainParseableAndWired(t *testing.T) {
 	if _, ok := contextProperties["repository"]; !ok {
 		t.Fatal("expected context schema to define repository")
 	}
-	if _, ok := contextProperties["managedServer"]; !ok {
-		t.Fatal("expected context schema to define managedServer")
+	if _, ok := contextProperties["managedService"]; !ok {
+		t.Fatal("expected context schema to define managedService")
 	}
 	if !stringSliceContains(t, contextSchema, "required", "name") {
 		t.Fatal("expected context schema to require name")

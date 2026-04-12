@@ -26,14 +26,14 @@ import (
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	internalorchestrator "github.com/crmarques/declarest/internal/orchestrator"
 	"github.com/crmarques/declarest/internal/promptauth"
-	httpmanagedserver "github.com/crmarques/declarest/internal/providers/managedserver/http"
+	httpmanagedservice "github.com/crmarques/declarest/internal/providers/managedservice/http"
 	bundlemetadata "github.com/crmarques/declarest/internal/providers/metadata/bundle"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
 	gitrepository "github.com/crmarques/declarest/internal/providers/repository/git"
 	filesecrets "github.com/crmarques/declarest/internal/providers/secrets/file"
 	vaultsecrets "github.com/crmarques/declarest/internal/providers/secrets/vault"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/secrets"
@@ -102,21 +102,21 @@ func buildOrchestratorFromResolvedContext(
 		)
 	}
 
-	var srv managedserver.ManagedServerClient
-	if resolvedContext.ManagedServer != nil {
-		if resolvedContext.ManagedServer.HTTP == nil {
-			return nil, faults.NewTypedError(faults.InternalError, "managed server provider is invalid", nil)
+	var srv managedservice.ManagedServiceClient
+	if resolvedContext.ManagedService != nil {
+		if resolvedContext.ManagedService.HTTP == nil {
+			return nil, faults.NewTypedError(faults.InternalError, "managed service provider is invalid", nil)
 		}
 
-		serverConfig := *resolvedContext.ManagedServer.HTTP
+		serverConfig := *resolvedContext.ManagedService.HTTP
 		serverConfig.OpenAPI = effectiveOpenAPISource(serverConfig.OpenAPI, metadataSource.OpenAPI)
 
-		serverOptions := []httpmanagedserver.ClientOption{}
+		serverOptions := []httpmanagedservice.ClientOption{}
 		if renderer, ok := metadataService.(metadata.ResourceOperationSpecRenderer); ok {
-			serverOptions = append(serverOptions, httpmanagedserver.WithMetadataRenderer(renderer))
+			serverOptions = append(serverOptions, httpmanagedservice.WithMetadataRenderer(renderer))
 		}
-		serverOptions = append(serverOptions, httpmanagedserver.WithPromptRuntime(authRuntime))
-		serverManager, err := httpmanagedserver.NewClient(
+		serverOptions = append(serverOptions, httpmanagedservice.WithPromptRuntime(authRuntime))
+		serverManager, err := httpmanagedservice.NewClient(
 			serverConfig,
 			serverOptions...,
 		)
@@ -191,17 +191,17 @@ func emitSecurityWarningsWithArgs(w io.Writer, args []string, resolvedContext co
 		return
 	}
 
-	if resolvedContext.ManagedServer != nil && resolvedContext.ManagedServer.HTTP != nil {
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.BaseURL)), "http://") {
-			cliutil.WriteWarningLine(w, "managed-server.http.base-url uses plain HTTP, credentials will be transmitted in cleartext")
+	if resolvedContext.ManagedService != nil && resolvedContext.ManagedService.HTTP != nil {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedService.HTTP.BaseURL)), "http://") {
+			cliutil.WriteWarningLine(w, "managed-service.http.base-url uses plain HTTP, credentials will be transmitted in cleartext")
 		}
-		if resolvedContext.ManagedServer.HTTP.Auth != nil &&
-			resolvedContext.ManagedServer.HTTP.Auth.OAuth2 != nil &&
-			strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedServer.HTTP.Auth.OAuth2.TokenURL)), "http://") {
-			cliutil.WriteWarningLine(w, "managed-server.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext")
+		if resolvedContext.ManagedService.HTTP.Auth != nil &&
+			resolvedContext.ManagedService.HTTP.Auth.OAuth2 != nil &&
+			strings.HasPrefix(strings.ToLower(strings.TrimSpace(resolvedContext.ManagedService.HTTP.Auth.OAuth2.TokenURL)), "http://") {
+			cliutil.WriteWarningLine(w, "managed-service.http.auth.oauth2.token-url uses plain HTTP, client credentials will be transmitted in cleartext")
 		}
-		if resolvedContext.ManagedServer.HTTP.TLS != nil && resolvedContext.ManagedServer.HTTP.TLS.InsecureSkipVerify {
-			cliutil.WriteWarningLine(w, "managed-server.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
+		if resolvedContext.ManagedService.HTTP.TLS != nil && resolvedContext.ManagedService.HTTP.TLS.InsecureSkipVerify {
+			cliutil.WriteWarningLine(w, "managed-service.http.tls.insecure-skip-verify is enabled, TLS certificate verification is disabled")
 		}
 	}
 

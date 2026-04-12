@@ -19,7 +19,7 @@ case_run() {
     return 1
   }
 
-  case_assert_context_contains 'managedServer:'
+  case_assert_context_contains 'managedService:'
   case_assert_context_contains 'proxy:'
 
   if [[ -n "${E2E_PROXY_HTTP_URL:-}" ]]; then

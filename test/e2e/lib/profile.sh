@@ -123,8 +123,8 @@ e2e_validate_profile_rules() {
   fi
 
   if e2e_profile_is_cli_manual; then
-    if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVER}" != 'none' ]]; then
-      e2e_die 'cli-manual profile is local-instantiable only; managed-server connection must be local'
+    if [[ "${E2E_MANAGED_SERVICE_CONNECTION}" != 'local' && "${E2E_MANAGED_SERVICE}" != 'none' ]]; then
+      e2e_die 'cli-manual profile is local-instantiable only; managed-service connection must be local'
       return 1
     fi
 
@@ -165,8 +165,8 @@ e2e_validate_profile_rules() {
     return 1
   fi
 
-  if [[ "${E2E_MANAGED_SERVER_CONNECTION}" != 'local' ]]; then
-    e2e_die 'operator-* profiles are local-instantiable only; managed-server connection must be local'
+  if [[ "${E2E_MANAGED_SERVICE_CONNECTION}" != 'local' ]]; then
+    e2e_die 'operator-* profiles are local-instantiable only; managed-service connection must be local'
     return 1
   fi
 
@@ -564,23 +564,23 @@ e2e_profile_repo_provider_state_get() {
   e2e_state_get "${state_file}" "${key}"
 }
 
-e2e_profile_managed_server_state_file() {
+e2e_profile_managed_service_state_file() {
   [[ -n "${E2E_STATE_DIR:-}" ]] || return 1
-  [[ -n "${E2E_MANAGED_SERVER:-}" && "${E2E_MANAGED_SERVER}" != 'none' ]] || return 1
+  [[ -n "${E2E_MANAGED_SERVICE:-}" && "${E2E_MANAGED_SERVICE}" != 'none' ]] || return 1
 
-  printf '%s/managed-server-%s.env\n' "${E2E_STATE_DIR}" "${E2E_MANAGED_SERVER}"
+  printf '%s/managed-service-%s.env\n' "${E2E_STATE_DIR}" "${E2E_MANAGED_SERVICE}"
 }
 
-e2e_profile_managed_server_state_get() {
+e2e_profile_managed_service_state_get() {
   local key=$1
   local state_file
 
-  state_file=$(e2e_profile_managed_server_state_file) || return 1
+  state_file=$(e2e_profile_managed_service_state_file) || return 1
   e2e_state_get "${state_file}" "${key}"
 }
 
-e2e_profile_managed_server_access_details() {
-  local provider=${E2E_MANAGED_SERVER:-}
+e2e_profile_managed_service_access_details() {
+  local provider=${E2E_MANAGED_SERVICE:-}
   local base_url
   local api_base_url
   local web_login
@@ -595,17 +595,17 @@ e2e_profile_managed_server_access_details() {
 
   [[ -n "${provider}" && "${provider}" != 'none' ]] || return 0
 
-  base_url=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_BASE_URL' || true)
-  api_base_url=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_API_BASE_URL' || true)
-  web_login=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_WEB_LOGIN_URL' || true)
-  auth_mode=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_AUTH_MODE' || true)
-  username=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_USERNAME' || true)
-  password=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_PASSWORD' || true)
-  header=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_HEADER' || true)
-  token=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_TOKEN' || true)
-  mount=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_MOUNT' || true)
-  path_prefix=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_PATH_PREFIX' || true)
-  kv_version=$(e2e_profile_managed_server_state_get 'MANAGED_SERVER_ACCESS_KV_VERSION' || true)
+  base_url=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_BASE_URL' || true)
+  api_base_url=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_API_BASE_URL' || true)
+  web_login=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_WEB_LOGIN_URL' || true)
+  auth_mode=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_AUTH_MODE' || true)
+  username=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_USERNAME' || true)
+  password=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_PASSWORD' || true)
+  header=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_HEADER' || true)
+  token=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_TOKEN' || true)
+  mount=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_MOUNT' || true)
+  path_prefix=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_PATH_PREFIX' || true)
+  kv_version=$(e2e_profile_managed_service_state_get 'MANAGED_SERVICE_ACCESS_KV_VERSION' || true)
 
   {
     [[ -n "${base_url}" ]] && printf 'Base URL: %s\n' "${base_url}"

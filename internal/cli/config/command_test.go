@@ -29,7 +29,7 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -109,7 +109,7 @@ func TestPrintTemplateOutputsCommentedFullTemplateWithoutContextService(t *testi
 		"repository:",
 		"git:",
 		"filesystem:",
-		"managedServer:",
+		"managedService:",
 		"healthCheck:",
 		"auth:",
 		"proxy:",
@@ -300,11 +300,11 @@ func TestSessionHookCommandRejectsUnsupportedShell(t *testing.T) {
 	}
 }
 
-func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testing.T) {
+func TestResolveManagedServiceHealthCheckProbePathDefaultsToBaseURLPath(t *testing.T) {
 	t.Parallel()
 
-	probePath, err := resolveManagedServerHealthCheckProbePath(configdomain.Context{
-		ManagedServer: &configdomain.ManagedServer{
+	probePath, err := resolveManagedServiceHealthCheckProbePath(configdomain.Context{
+		ManagedService: &configdomain.ManagedService{
 			HTTP: &configdomain.HTTPServer{
 				BaseURL: "https://api.example.invalid/admin/api/45",
 			},
@@ -316,8 +316,8 @@ func TestResolveManagedServerHealthCheckProbePathDefaultsToBaseURLPath(t *testin
 	if probePath != "/admin/api/45" {
 		t.Fatalf("expected probe path /admin/api/45, got %q", probePath)
 	}
-	if got := renderManagedServerHealthCheckTarget(configdomain.Context{
-		ManagedServer: &configdomain.ManagedServer{
+	if got := renderManagedServiceHealthCheckTarget(configdomain.Context{
+		ManagedService: &configdomain.ManagedService{
 			HTTP: &configdomain.HTTPServer{
 				BaseURL: "https://api.example.invalid/admin/api/45",
 			},
@@ -874,7 +874,7 @@ func TestCheckReportsConfiguredComponents(t *testing.T) {
 		"[OK] context",
 		"[OK] repository",
 		"[OK] metadata",
-		"[SKIP] managedServer",
+		"[SKIP] managedService",
 		"[SKIP] secretStore",
 		"Result: PASS",
 	}
@@ -965,7 +965,7 @@ func TestCheckReportsMetadataBundleFileAsAccessible(t *testing.T) {
 	}
 }
 
-func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
+func TestCheckWarnsForReachableManagedServiceProbeErrors(t *testing.T) {
 	t.Parallel()
 
 	repoDir := t.TempDir()
@@ -981,7 +981,7 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ManagedServer: &configdomain.ManagedServer{
+			ManagedService: &configdomain.ManagedService{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -998,7 +998,7 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 			store:    &testRepositoryService{},
 			sync:     &testRepositoryService{},
 			metadata: &testMetadataService{},
-			server:   &testManagedServerClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
+			server:   &testManagedServiceClientService{requestErr: faults.NewTypedError(faults.NotFoundError, "probe not found", nil)},
 		},
 	}
 	globalFlags := &cliutil.GlobalFlags{Output: cliutil.OutputText}
@@ -1007,8 +1007,8 @@ func TestCheckWarnsForReachableManagedServerProbeErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check returned error: %v", err)
 	}
-	if !strings.Contains(output, "[WARN] managedServer") {
-		t.Fatalf("expected warn status for managed server probe, got %q", output)
+	if !strings.Contains(output, "[WARN] managedService") {
+		t.Fatalf("expected warn status for managed service probe, got %q", output)
 	}
 	if !strings.Contains(output, "Result: PASS") {
 		t.Fatalf("expected pass result when only warnings are present, got %q", output)
@@ -1031,7 +1031,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 				Filesystem: &configdomain.FilesystemRepository{BaseDir: repoDir},
 			},
 			Metadata: configdomain.Metadata{BaseDir: metadataDir},
-			ManagedServer: &configdomain.ManagedServer{
+			ManagedService: &configdomain.ManagedService{
 				HTTP: &configdomain.HTTPServer{
 					BaseURL: "http://127.0.0.1:8080",
 					Auth: &configdomain.HTTPAuth{
@@ -1047,7 +1047,7 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 
 	deps := cliutil.CommandDependencies{
 		Contexts:     contextService,
-		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed server auth failed", nil)},
+		Orchestrator: &testOrchestratorService{listRemoteErr: faults.NewTypedError(faults.AuthError, "managed service auth failed", nil)},
 		Services: &testConfigServiceAccessor{
 			store:    &testRepositoryService{},
 			sync:     &testRepositoryService{},
@@ -1060,8 +1060,8 @@ func TestCheckFailsWhenConfiguredComponentsAreUnavailable(t *testing.T) {
 	output, err := executeConfigCommandWithDeps(t, deps, globalFlags, "", "check")
 	assertTypedCategory(t, err, faults.ValidationError)
 
-	if !strings.Contains(output, "[FAIL] managedServer") {
-		t.Fatalf("expected managedServer failure in output, got %q", output)
+	if !strings.Contains(output, "[FAIL] managedService") {
+		t.Fatalf("expected managedService failure in output, got %q", output)
 	}
 	if !strings.Contains(output, "[FAIL] secretStore") {
 		t.Fatalf("expected secretStore failure in output, got %q", output)
@@ -1230,8 +1230,8 @@ func TestCreateInteractivePromptFlow(t *testing.T) {
 	if service.createdContext.Metadata.BaseDir != "/tmp/meta" {
 		t.Fatalf("expected metadata baseDir /tmp/meta, got %q", service.createdContext.Metadata.BaseDir)
 	}
-	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managedServer configuration")
+	if service.createdContext.ManagedService == nil || service.createdContext.ManagedService.HTTP == nil {
+		t.Fatal("expected managedService configuration")
 	}
 	if len(prompter.selectPrompts) == 0 || prompter.selectPrompts[0] != "Select repository type" {
 		t.Fatalf("expected repository type prompt first, got %#v", prompter.selectPrompts)
@@ -1272,7 +1272,7 @@ func TestCreateInteractivePromptFlowDefaultsMetadataBaseDirToRepoBaseDir(t *test
 	}
 }
 
-func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
+func TestCreateInteractivePromptFlowSupportsManagedServiceProxy(t *testing.T) {
 	t.Parallel()
 
 	service := &testContextService{}
@@ -1323,14 +1323,14 @@ func TestCreateInteractivePromptFlowSupportsManagedServerProxy(t *testing.T) {
 		t.Fatalf("create returned error: %v", err)
 	}
 
-	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managedServer configuration")
+	if service.createdContext.ManagedService == nil || service.createdContext.ManagedService.HTTP == nil {
+		t.Fatal("expected managedService configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Proxy == nil {
-		t.Fatal("expected managedServer proxy configuration")
+	if service.createdContext.ManagedService.HTTP.Proxy == nil {
+		t.Fatal("expected managedService proxy configuration")
 	}
 
-	proxy := service.createdContext.ManagedServer.HTTP.Proxy
+	proxy := service.createdContext.ManagedService.HTTP.Proxy
 	if proxy.HTTPURL != "http://proxy.example.com:3128" {
 		t.Fatalf("expected proxy http, got %q", proxy.HTTPURL)
 	}
@@ -1584,26 +1584,26 @@ func TestCreateInteractivePromptFlowSupportsOptionalSectionsAndOneOfBranches(t *
 	if service.createdContext.Name != "full-context" {
 		t.Fatalf("expected context name full-context, got %q", service.createdContext.Name)
 	}
-	if service.createdContext.ManagedServer == nil || service.createdContext.ManagedServer.HTTP == nil {
-		t.Fatal("expected managedServer http configuration")
+	if service.createdContext.ManagedService == nil || service.createdContext.ManagedService.HTTP == nil {
+		t.Fatal("expected managedService http configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth == nil {
-		t.Fatal("expected managedServer auth configuration")
+	if service.createdContext.ManagedService.HTTP.Auth == nil {
+		t.Fatal("expected managedService auth configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2 == nil {
-		t.Fatal("expected managedServer oauth2 configuration")
+	if service.createdContext.ManagedService.HTTP.Auth.OAuth2 == nil {
+		t.Fatal("expected managedService oauth2 configuration")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.Basic != nil {
+	if service.createdContext.ManagedService.HTTP.Auth.Basic != nil {
 		t.Fatal("basic auth should not be configured when oauth2 is selected")
 	}
-	if len(service.createdContext.ManagedServer.HTTP.Auth.CustomHeaders) != 0 {
+	if len(service.createdContext.ManagedService.HTTP.Auth.CustomHeaders) != 0 {
 		t.Fatal("customHeaders auth should not be configured when oauth2 is selected")
 	}
-	if service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
+	if service.createdContext.ManagedService.HTTP.Auth.OAuth2.GrantType != configdomain.OAuthClientCreds {
 		t.Fatalf(
 			"expected oauth2 grantType default %q, got %q",
 			configdomain.OAuthClientCreds,
-			service.createdContext.ManagedServer.HTTP.Auth.OAuth2.GrantType,
+			service.createdContext.ManagedService.HTTP.Auth.OAuth2.GrantType,
 		)
 	}
 
@@ -1844,7 +1844,7 @@ func TestShowPreservesCatalogAttributesAndExplicitMetadataBaseDir(t *testing.T) 
 					Repository: configdomain.Repository{
 						Filesystem: &configdomain.FilesystemRepository{BaseDir: "/tmp/repo"},
 					},
-					ManagedServer: &configdomain.ManagedServer{
+					ManagedService: &configdomain.ManagedService{
 						HTTP: &configdomain.HTTPServer{
 							BaseURL: "https://example.com/api",
 							Proxy: &configdomain.HTTPProxy{
@@ -2277,7 +2277,7 @@ func (s *testOrchestratorService) GetLocal(context.Context, string) (resource.Co
 func (s *testOrchestratorService) GetRemote(context.Context, string) (resource.Content, error) {
 	return resource.Content{}, nil
 }
-func (s *testOrchestratorService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Content, error) {
+func (s *testOrchestratorService) Request(context.Context, managedservicedomain.RequestSpec) (resource.Content, error) {
 	return resource.Content{}, nil
 }
 func (s *testOrchestratorService) GetOpenAPISpec(context.Context) (resource.Content, error) {
@@ -2314,32 +2314,32 @@ func (s *testOrchestratorService) Template(context.Context, string, resource.Con
 	return resource.Content{}, nil
 }
 
-type testManagedServerClientService struct {
+type testManagedServiceClientService struct {
 	requestErr error
 }
 
-func (s *testManagedServerClientService) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClientService) Get(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return resource.Content{}, nil
 }
-func (s *testManagedServerClientService) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClientService) Create(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return resource.Content{}, nil
 }
-func (s *testManagedServerClientService) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
+func (s *testManagedServiceClientService) Update(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (resource.Content, error) {
 	return resource.Content{}, nil
 }
-func (s *testManagedServerClientService) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
+func (s *testManagedServiceClientService) Delete(context.Context, resource.Resource, metadatadomain.ResourceMetadata) error {
 	return nil
 }
-func (s *testManagedServerClientService) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
+func (s *testManagedServiceClientService) List(context.Context, string, metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 	return nil, nil
 }
-func (s *testManagedServerClientService) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
+func (s *testManagedServiceClientService) Exists(context.Context, resource.Resource, metadatadomain.ResourceMetadata) (bool, error) {
 	return false, nil
 }
-func (s *testManagedServerClientService) Request(context.Context, managedserverdomain.RequestSpec) (resource.Content, error) {
+func (s *testManagedServiceClientService) Request(context.Context, managedservicedomain.RequestSpec) (resource.Content, error) {
 	return resource.Content{}, s.requestErr
 }
-func (s *testManagedServerClientService) GetOpenAPISpec(context.Context) (resource.Content, error) {
+func (s *testManagedServiceClientService) GetOpenAPISpec(context.Context) (resource.Content, error) {
 	return resource.Content{}, nil
 }
 
@@ -2390,7 +2390,7 @@ type testConfigServiceAccessor struct {
 	sync     repository.RepositorySync
 	metadata metadatadomain.MetadataService
 	secrets  secretsdomain.SecretProvider
-	server   managedserverdomain.ManagedServerClient
+	server   managedservicedomain.ManagedServiceClient
 }
 
 func (a *testConfigServiceAccessor) RepositoryStore() repository.ResourceStore {
@@ -2405,7 +2405,7 @@ func (a *testConfigServiceAccessor) MetadataService() metadatadomain.MetadataSer
 func (a *testConfigServiceAccessor) SecretProvider() secretsdomain.SecretProvider {
 	return a.secrets
 }
-func (a *testConfigServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a *testConfigServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return a.server
 }
 

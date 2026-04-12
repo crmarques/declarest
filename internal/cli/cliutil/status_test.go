@@ -31,8 +31,8 @@ func TestWriteStatusLineUsesUppercaseBracketedLabels(t *testing.T) {
 		{
 			name:    "warning",
 			status:  "warning",
-			message: "managed-server.http.base-url uses plain HTTP",
-			want:    "[WARNING] managed-server.http.base-url uses plain HTTP\n",
+			message: "managed-service.http.base-url uses plain HTTP",
+			want:    "[WARNING] managed-service.http.base-url uses plain HTTP\n",
 		},
 		{
 			name:    "ok",

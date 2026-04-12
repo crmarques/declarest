@@ -77,15 +77,15 @@ func validateConfig(cfg config.Context, credentials map[string]config.Credential
 	if cfg.Name == "" {
 		return faults.NewValidationError("context name must not be empty", nil)
 	}
-	if cfg.Repository.Git == nil && cfg.Repository.Filesystem == nil && cfg.ManagedServer == nil {
-		return faults.NewValidationError("context must define at least one of repository or managedServer", nil)
+	if cfg.Repository.Git == nil && cfg.Repository.Filesystem == nil && cfg.ManagedService == nil {
+		return faults.NewValidationError("context must define at least one of repository or managedService", nil)
 	}
 
 	if err := validateRepository(cfg.Repository, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 
-	if err := validateManagedServer(cfg.ManagedServer, credentials, strictCredentialRefs); err != nil {
+	if err := validateManagedService(cfg.ManagedService, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
 
@@ -110,12 +110,12 @@ func normalizeConfig(cfg config.Context) config.Context {
 		}
 		cfg.Repository.Git.Remote.Proxy = normalizeProxy(cfg.Repository.Git.Remote.Proxy)
 	}
-	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
-		cfg.ManagedServer.HTTP.HealthCheck = strings.TrimSpace(cfg.ManagedServer.HTTP.HealthCheck)
-		if cfg.ManagedServer.HTTP.Auth != nil && cfg.ManagedServer.HTTP.Auth.Basic != nil {
-			cfg.ManagedServer.HTTP.Auth.Basic.CredentialsRef = normalizeCredentialsRef(cfg.ManagedServer.HTTP.Auth.Basic.CredentialsRef)
+	if cfg.ManagedService != nil && cfg.ManagedService.HTTP != nil {
+		cfg.ManagedService.HTTP.HealthCheck = strings.TrimSpace(cfg.ManagedService.HTTP.HealthCheck)
+		if cfg.ManagedService.HTTP.Auth != nil && cfg.ManagedService.HTTP.Auth.Basic != nil {
+			cfg.ManagedService.HTTP.Auth.Basic.CredentialsRef = normalizeCredentialsRef(cfg.ManagedService.HTTP.Auth.Basic.CredentialsRef)
 		}
-		cfg.ManagedServer.HTTP.Proxy = normalizeProxy(cfg.ManagedServer.HTTP.Proxy)
+		cfg.ManagedService.HTTP.Proxy = normalizeProxy(cfg.ManagedService.HTTP.Proxy)
 	}
 	if cfg.SecretStore != nil && cfg.SecretStore.Vault != nil {
 		if cfg.SecretStore.Vault.Auth != nil && cfg.SecretStore.Vault.Auth.Password != nil {
@@ -224,10 +224,10 @@ type proxyTarget struct {
 
 func buildProxyTargets(cfg *config.Context) []proxyTarget {
 	targets := make([]proxyTarget, 0, 4)
-	if cfg.ManagedServer != nil && cfg.ManagedServer.HTTP != nil {
+	if cfg.ManagedService != nil && cfg.ManagedService.HTTP != nil {
 		targets = append(targets, proxyTarget{
-			name:  "managedServer.http.proxy",
-			proxy: &cfg.ManagedServer.HTTP.Proxy,
+			name:  "managedService.http.proxy",
+			proxy: &cfg.ManagedService.HTTP.Proxy,
 		})
 	}
 	if cfg.Repository.Git != nil && cfg.Repository.Git.Remote != nil {
@@ -336,8 +336,8 @@ func validateRepository(
 	return nil
 }
 
-func validateManagedServer(
-	resourceServer *config.ManagedServer,
+func validateManagedService(
+	resourceServer *config.ManagedService,
 	credentials map[string]config.Credential,
 	strictCredentialRefs bool,
 ) error {
@@ -345,13 +345,13 @@ func validateManagedServer(
 		return nil
 	}
 	if resourceServer.HTTP == nil {
-		return faults.NewValidationError("managedServer must define http", nil)
+		return faults.NewValidationError("managedService must define http", nil)
 	}
 	if resourceServer.HTTP.BaseURL == "" {
-		return faults.NewValidationError("managedServer.http.url is required", nil)
+		return faults.NewValidationError("managedService.http.url is required", nil)
 	}
 	if resourceServer.HTTP.Auth == nil {
-		return faults.NewValidationError("managedServer.http.auth is required", nil)
+		return faults.NewValidationError("managedService.http.auth is required", nil)
 	}
 
 	if countSet(
@@ -359,20 +359,20 @@ func validateManagedServer(
 		resourceServer.HTTP.Auth.Basic != nil,
 		len(resourceServer.HTTP.Auth.CustomHeaders) > 0,
 	) != 1 {
-		return faults.NewValidationError("managedServer.http.auth must define exactly one of oauth2, basic, customHeaders", nil)
+		return faults.NewValidationError("managedService.http.auth must define exactly one of oauth2, basic, customHeaders", nil)
 	}
 
 	if resourceServer.HTTP.Auth.OAuth2 != nil {
 		oauth := resourceServer.HTTP.Auth.OAuth2
 		if oauth.TokenURL == "" || oauth.GrantType == "" || oauth.ClientID == "" || oauth.ClientSecret == "" {
-			return faults.NewValidationError("managedServer.http.auth.oauth2 requires tokenURL, grantType, clientID, clientSecret", nil)
+			return faults.NewValidationError("managedService.http.auth.oauth2 requires tokenURL, grantType, clientID, clientSecret", nil)
 		}
 	}
 
 	if resourceServer.HTTP.Auth.Basic != nil {
 		basic := resourceServer.HTTP.Auth.Basic
 		if err := validateCredentialRef(
-			"managedServer.http.auth.basic.credentialsRef",
+			"managedService.http.auth.basic.credentialsRef",
 			basic.CredentialsRef,
 			credentials,
 			strictCredentialRefs,
@@ -384,62 +384,62 @@ func validateManagedServer(
 	for idx, head := range resourceServer.HTTP.Auth.CustomHeaders {
 		if head.Header == "" || head.Value == "" {
 			return faults.NewValidationError(
-				fmt.Sprintf("managedServer.http.auth.customHeaders[%d] requires header and value", idx),
+				fmt.Sprintf("managedService.http.auth.customHeaders[%d] requires header and value", idx),
 				nil,
 			)
 		}
 	}
 
-	if err := validateManagedServerProxy(resourceServer.HTTP.Proxy, credentials, strictCredentialRefs); err != nil {
+	if err := validateManagedServiceProxy(resourceServer.HTTP.Proxy, credentials, strictCredentialRefs); err != nil {
 		return err
 	}
-	if err := validateManagedServerRequestThrottling(resourceServer.HTTP.RequestThrottling); err != nil {
+	if err := validateManagedServiceRequestThrottling(resourceServer.HTTP.RequestThrottling); err != nil {
 		return err
 	}
-	if err := validateManagedServerHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
+	if err := validateManagedServiceHealthCheck(resourceServer.HTTP.HealthCheck); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func validateManagedServerProxy(
+func validateManagedServiceProxy(
 	proxy *config.HTTPProxy,
 	credentials map[string]config.Credential,
 	strictCredentialRefs bool,
 ) error {
-	return validateProxy("managedServer.http.proxy", proxy, credentials, strictCredentialRefs)
+	return validateProxy("managedService.http.proxy", proxy, credentials, strictCredentialRefs)
 }
 
-func validateManagedServerRequestThrottling(throttling *config.HTTPRequestThrottling) error {
+func validateManagedServiceRequestThrottling(throttling *config.HTTPRequestThrottling) error {
 	if throttling == nil {
 		return nil
 	}
 	if throttling.MaxConcurrentRequests <= 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling must define at least one of maxConcurrentRequests or requestsPerSecond", nil)
 	}
 	if throttling.MaxConcurrentRequests < 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.maxConcurrentRequests must be greater than zero when set", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.maxConcurrentRequests must be greater than zero when set", nil)
 	}
 	if throttling.QueueSize < 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.queueSize must be greater than or equal to zero", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.queueSize must be greater than or equal to zero", nil)
 	}
 	if throttling.QueueSize > 0 && throttling.MaxConcurrentRequests <= 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.queueSize requires maxConcurrentRequests", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.queueSize requires maxConcurrentRequests", nil)
 	}
 	if throttling.RequestsPerSecond < 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.requestsPerSecond must be greater than zero when set", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.requestsPerSecond must be greater than zero when set", nil)
 	}
 	if throttling.Burst < 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.burst must be greater than zero when set", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.burst must be greater than zero when set", nil)
 	}
 	if throttling.Burst > 0 && throttling.RequestsPerSecond <= 0 {
-		return faults.NewValidationError("managedServer.http.requestThrottling.burst requires requestsPerSecond", nil)
+		return faults.NewValidationError("managedService.http.requestThrottling.burst requires requestsPerSecond", nil)
 	}
 	return nil
 }
 
-func validateManagedServerHealthCheck(value string) error {
+func validateManagedServiceHealthCheck(value string) error {
 	healthCheck := strings.TrimSpace(value)
 	if healthCheck == "" {
 		return nil
@@ -447,30 +447,30 @@ func validateManagedServerHealthCheck(value string) error {
 
 	parsed, err := url.Parse(healthCheck)
 	if err != nil {
-		return faults.NewValidationError("managedServer.http.healthCheck is invalid", err)
+		return faults.NewValidationError("managedService.http.healthCheck is invalid", err)
 	}
 	if strings.TrimSpace(parsed.RawQuery) != "" {
-		return faults.NewValidationError("managedServer.http.healthCheck must not include query parameters", nil)
+		return faults.NewValidationError("managedService.http.healthCheck must not include query parameters", nil)
 	}
 
-	// Relative paths are interpreted against managedServer.http.url.
+	// Relative paths are interpreted against managedService.http.url.
 	if parsed.Scheme == "" && parsed.Host == "" {
 		if strings.TrimSpace(parsed.Path) == "" {
-			return faults.NewValidationError("managedServer.http.healthCheck is invalid", nil)
+			return faults.NewValidationError("managedService.http.healthCheck is invalid", nil)
 		}
 		return nil
 	}
 
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return faults.NewValidationError("managedServer.http.healthCheck URL must use http or https", nil)
+		return faults.NewValidationError("managedService.http.healthCheck URL must use http or https", nil)
 	}
 	if parsed.Host == "" {
-		return faults.NewValidationError("managedServer.http.healthCheck URL host is required", nil)
+		return faults.NewValidationError("managedService.http.healthCheck URL host is required", nil)
 	}
 
 	_, err = filepath.Rel("/", parsed.Path)
 	if err != nil {
-		return faults.NewValidationError("managedServer.http.healthCheck URL path is invalid", err)
+		return faults.NewValidationError("managedService.http.healthCheck URL path is invalid", err)
 	}
 
 	return nil
@@ -653,40 +653,40 @@ func applyOverrides(cfg config.Context, overrides map[string]string) (config.Con
 				return config.Context{}, faults.NewValidationError("override repository.filesystem.baseDir requires repository.filesystem to be configured", nil)
 			}
 			cfg.Repository.Filesystem.BaseDir = value
-		case "managedServer.http.url":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.url requires managedServer.http to be configured", nil)
+		case "managedService.http.url":
+			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managedService.http.url requires managedService.http to be configured", nil)
 			}
-			cfg.ManagedServer.HTTP.BaseURL = value
-		case "managedServer.http.healthCheck":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.healthCheck requires managedServer.http to be configured", nil)
+			cfg.ManagedService.HTTP.BaseURL = value
+		case "managedService.http.healthCheck":
+			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managedService.http.healthCheck requires managedService.http to be configured", nil)
 			}
-			cfg.ManagedServer.HTTP.HealthCheck = value
-		case "managedServer.http.proxy.http":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.http requires managedServer.http to be configured", nil)
+			cfg.ManagedService.HTTP.HealthCheck = value
+		case "managedService.http.proxy.http":
+			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.http requires managedService.http to be configured", nil)
 			}
-			if cfg.ManagedServer.HTTP.Proxy == nil {
-				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedService.HTTP.Proxy == nil {
+				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ManagedServer.HTTP.Proxy.HTTPURL = value
-		case "managedServer.http.proxy.https":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.https requires managedServer.http to be configured", nil)
+			cfg.ManagedService.HTTP.Proxy.HTTPURL = value
+		case "managedService.http.proxy.https":
+			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.https requires managedService.http to be configured", nil)
 			}
-			if cfg.ManagedServer.HTTP.Proxy == nil {
-				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedService.HTTP.Proxy == nil {
+				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ManagedServer.HTTP.Proxy.HTTPSURL = value
-		case "managedServer.http.proxy.noProxy":
-			if cfg.ManagedServer == nil || cfg.ManagedServer.HTTP == nil {
-				return config.Context{}, faults.NewValidationError("override managedServer.http.proxy.noProxy requires managedServer.http to be configured", nil)
+			cfg.ManagedService.HTTP.Proxy.HTTPSURL = value
+		case "managedService.http.proxy.noProxy":
+			if cfg.ManagedService == nil || cfg.ManagedService.HTTP == nil {
+				return config.Context{}, faults.NewValidationError("override managedService.http.proxy.noProxy requires managedService.http to be configured", nil)
 			}
-			if cfg.ManagedServer.HTTP.Proxy == nil {
-				cfg.ManagedServer.HTTP.Proxy = &config.HTTPProxy{}
+			if cfg.ManagedService.HTTP.Proxy == nil {
+				cfg.ManagedService.HTTP.Proxy = &config.HTTPProxy{}
 			}
-			cfg.ManagedServer.HTTP.Proxy.NoProxy = value
+			cfg.ManagedService.HTTP.Proxy.NoProxy = value
 		case "metadata.baseDir":
 			cfg.Metadata.BaseDir = value
 			if strings.TrimSpace(value) != "" {

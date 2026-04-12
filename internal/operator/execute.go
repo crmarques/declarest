@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	SourceRepository    = readapp.SourceRepository
-	SourceManagedServer = readapp.SourceManagedServer
+	SourceRepository     = readapp.SourceRepository
+	SourceManagedService = readapp.SourceManagedService
 )
 
 // Dependencies matches readapp.Dependencies; use a type alias to avoid
@@ -64,7 +64,7 @@ func ReconcileOnce(ctx context.Context, deps Dependencies, req ReconcileRequest)
 
 	source := strings.TrimSpace(req.Source)
 	if source == "" {
-		source = SourceManagedServer
+		source = SourceManagedService
 	}
 
 	explicitCollectionTarget := parsedPath.ExplicitCollectionTarget

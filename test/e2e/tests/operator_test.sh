@@ -54,8 +54,8 @@ EOF
   E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
   E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER=()
   E2E_COMPONENT_SERVICE_PORT=()
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:simple-api-server']='/api/projects/operator-demo'
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-service:simple-api-server']='/api/projects/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-service:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
   E2E_COMPONENT_REPOSITORY_WEBHOOK_PROVIDER['git-provider:gitea']='gitea'
   E2E_COMPONENT_SERVICE_PORT['git-provider:gitea']='3000'
 }
@@ -65,15 +65,15 @@ test_operator_example_resource_mapping() {
 
   E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH=()
   E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD=()
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:simple-api-server']='/api/projects/operator-demo'
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-server:keycloak']='/admin/realms/operator-demo'
-  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-server:keycloak']='{"realm":"operator-demo","enabled":true,"displayName":"Operator Demo Realm"}'
-  E2E_MANAGED_SERVER='simple-api-server'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-service:simple-api-server']='/api/projects/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-service:simple-api-server']='{"id":"operator-demo","name":"operator-demo","displayName":"Operator Demo","owner":"operator-e2e"}'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH['managed-service:keycloak']='/admin/realms/operator-demo'
+  E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD['managed-service:keycloak']='{"realm":"operator-demo","enabled":true,"displayName":"Operator Demo Realm"}'
+  E2E_MANAGED_SERVICE='simple-api-server'
   assert_eq "$(e2e_operator_example_resource_path)" "/api/projects/operator-demo"
   assert_contains "$(e2e_operator_example_resource_payload)" "\"id\":\"operator-demo\""
 
-  E2E_MANAGED_SERVER='keycloak'
+  E2E_MANAGED_SERVICE='keycloak'
   assert_eq "$(e2e_operator_example_resource_path)" "/admin/realms/operator-demo"
   assert_contains "$(e2e_operator_example_resource_payload)" "\"realm\":\"operator-demo\""
 }
@@ -100,13 +100,13 @@ test_operator_scoped_names_are_run_specific() {
 
   E2E_RUN_ID='operator-run-with-very-very-very-very-very-very-long-identifier'
   local long_name
-  long_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server-auth')
+  long_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-service-auth')
   if ((${#long_name} > 63)); then
     fail "expected truncated run-scoped name <= 63 chars, got ${#long_name}: ${long_name}"
   fi
 }
 
-test_operator_handoff_prints_managed_server_specific_commands() {
+test_operator_handoff_prints_managed_service_specific_commands() {
   load_operator_libs
 
   local tmp
@@ -114,20 +114,20 @@ test_operator_handoff_prints_managed_server_specific_commands() {
   trap 'rm -rf "${tmp}"' RETURN
 
   prepare_operator_handoff_env "${tmp}"
-  E2E_MANAGED_SERVER='simple-api-server'
-  E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-server:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
+  E2E_MANAGED_SERVICE='simple-api-server'
+  E2E_MANUAL_COMPONENT_ACCESS_OUTPUT=$'managed-service:simple-api-server\n  Base URL: http://127.0.0.1:20890/api\n  Auth Mode: oauth2'
 
   local output
   output=$(e2e_profile_operator_handoff 'e2e-operator')
 
   assert_contains "${output}" "resource save '/api/projects/operator-demo' --payload"
-  assert_contains "${output}" "resource get '/api/projects/operator-demo' --source managed-server"
+  assert_contains "${output}" "resource get '/api/projects/operator-demo' --source managed-service"
   assert_contains "${output}" "manager-deployment: declarest-operator"
   assert_contains "${output}" "repository-webhook-url: ${E2E_OPERATOR_REPOSITORY_WEBHOOK_URL}"
   assert_contains "${output}" "kubectl --kubeconfig \"${E2E_KUBECONFIG}\" -n \"${E2E_OPERATOR_NAMESPACE}\" logs deployment/\"${E2E_OPERATOR_MANAGER_DEPLOYMENT}\" --tail=80"
   assert_contains "${output}" "How to connect kubectl to this kind cluster:"
   assert_contains "${output}" "Manual Component Access:"
-  assert_contains "${output}" "managed-server:simple-api-server"
+  assert_contains "${output}" "managed-service:simple-api-server"
   assert_contains "${output}" "Base URL: http://127.0.0.1:20890/api"
   assert_contains "${output}" "Repository provider access:"
   assert_contains "${output}" "web login: http://127.0.0.1:3000/user/login"
@@ -259,7 +259,7 @@ test_operator_rewrites_local_urls_for_cluster_services() {
   rewritten=$(e2e_operator_rewrite_repo_url_for_cluster 'http://localhost:3000/root/repo.git')
   assert_eq "${rewritten}" "http://git-provider-gitea.declarest-test.svc.cluster.local:3000/root/repo.git"
 
-  rewritten=$(e2e_operator_rewrite_local_url_to_service 'https://example.com/api' 'managed-server-keycloak' '8080')
+  rewritten=$(e2e_operator_rewrite_local_url_to_service 'https://example.com/api' 'managed-service-keycloak' '8080')
   assert_eq "${rewritten}" "https://example.com/api"
 }
 
@@ -299,10 +299,10 @@ test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_pa
   export E2E_GIT_PROVIDER_CONNECTION='remote'
   export E2E_SECRET_PROVIDER='file'
   export E2E_SECRET_PROVIDER_CONNECTION='local'
-  export E2E_MANAGED_SERVER='keycloak'
-  export E2E_MANAGED_SERVER_CONNECTION='remote'
-  export E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
-  export E2E_MANAGED_SERVER_MTLS='false'
+  export E2E_MANAGED_SERVICE='keycloak'
+  export E2E_MANAGED_SERVICE_CONNECTION='remote'
+  export E2E_MANAGED_SERVICE_AUTH_TYPE='oauth2'
+  export E2E_MANAGED_SERVICE_MTLS='false'
   export E2E_METADATA_BUNDLE='keycloak-bundle:0.0.1'
   export HOME="${tmp}/home"
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
@@ -327,7 +327,7 @@ EOF
 
   local repo_state managed_state secret_state
   repo_state=$(e2e_component_state_file "$(e2e_component_key 'repo-type' 'git')")
-  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-server' 'keycloak')")
+  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-service' 'keycloak')")
   secret_state=$(e2e_component_state_file "$(e2e_component_key 'secret-provider' 'file')")
 
   cat >"${repo_state}" <<'EOF'
@@ -338,11 +338,11 @@ GIT_AUTH_TOKEN=test-token
 EOF
 
   cat >"${managed_state}" <<'EOF'
-MANAGED_SERVER_BASE_URL=https://keycloak.example.com
-MANAGED_SERVER_AUTH_KIND=oauth2
-MANAGED_SERVER_TOKEN_URL=https://keycloak.example.com/realms/master/protocol/openid-connect/token
-MANAGED_SERVER_OAUTH_CLIENT_ID=declarest-e2e-client
-MANAGED_SERVER_OAUTH_CLIENT_SECRET=declarest-e2e-secret
+MANAGED_SERVICE_BASE_URL=https://keycloak.example.com
+MANAGED_SERVICE_AUTH_KIND=oauth2
+MANAGED_SERVICE_TOKEN_URL=https://keycloak.example.com/realms/master/protocol/openid-connect/token
+MANAGED_SERVICE_OAUTH_CLIENT_ID=declarest-e2e-client
+MANAGED_SERVICE_OAUTH_CLIENT_SECRET=declarest-e2e-secret
 EOF
 
   cat >"${secret_state}" <<'EOF'
@@ -350,18 +350,18 @@ SECRET_FILE_PATH=/tmp/declarest-e2e-secrets.enc.json
 SECRET_FILE_PASSPHRASE=test-passphrase
 EOF
 
-  e2e_operator_prepare_managed_server_metadata_bundle
+  e2e_operator_prepare_managed_service_metadata_bundle
   e2e_operator_write_manifests
 
-  local managed_server_manifest
-  managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
-  assert_file_contains "${managed_server_manifest}" "metadata:"
+  local managed_service_manifest
+  managed_service_manifest="$(e2e_operator_manifest_dir)/managed-service.yaml"
+  assert_file_contains "${managed_service_manifest}" "metadata:"
   assert_file_contains \
-    "${managed_server_manifest}" \
-    "bundle: '$(e2e_operator_managed_server_metadata_bundle_mount_path)'"
+    "${managed_service_manifest}" \
+    "bundle: '$(e2e_operator_managed_service_metadata_bundle_mount_path)'"
 }
 
-test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
+test_operator_prepare_managed_service_metadata_bundle_from_metadata_dir() {
   load_operator_libs
 
   local tmp
@@ -369,7 +369,7 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
   trap 'rm -rf "${tmp}"' RETURN
 
   export E2E_RUN_DIR="${tmp}/run"
-  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_MANAGED_SERVICE='rundeck'
   export E2E_METADATA_DIR="${tmp}/metadata"
   unset E2E_METADATA_BUNDLE
 
@@ -378,16 +378,16 @@ test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir() {
 {"resource":{"id":"{{/name}}","alias":"{{/name}}"}}
 EOF
 
-  e2e_operator_prepare_managed_server_metadata_bundle
+  e2e_operator_prepare_managed_service_metadata_bundle
 
-  assert_path_exists "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}"
+  assert_path_exists "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}"
   assert_eq \
-    "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}" \
-    "$(e2e_operator_managed_server_metadata_bundle_mount_path)"
+    "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH}" \
+    "$(e2e_operator_managed_service_metadata_bundle_mount_path)"
 
   local bundle_manifest archive_listing
-  bundle_manifest=$(tar -xOf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}" bundle.yaml)
-  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}")
+  bundle_manifest=$(tar -xOf "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}" bundle.yaml)
+  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}")
 
   assert_contains "${bundle_manifest}" "name: e2e-rundeck-bundle"
   assert_contains "${bundle_manifest}" "metadataRoot: metadata"
@@ -403,16 +403,16 @@ test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
   trap 'rm -rf "${tmp}"' RETURN
 
   export E2E_RUN_DIR="${tmp}/run"
-  export E2E_MANAGED_SERVER='rundeck'
-  export E2E_METADATA_DIR="${REPO_ROOT}/test/e2e/components/managed-server/rundeck/metadata"
+  export E2E_MANAGED_SERVICE='rundeck'
+  export E2E_METADATA_DIR="${REPO_ROOT}/test/e2e/components/managed-service/rundeck/metadata"
   unset E2E_METADATA_BUNDLE
 
   mkdir -p "${E2E_RUN_DIR}"
 
-  e2e_operator_prepare_managed_server_metadata_bundle
+  e2e_operator_prepare_managed_service_metadata_bundle
 
   local archive_listing
-  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}")
+  archive_listing=$(tar -tzf "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}")
 
   assert_contains "${archive_listing}" "metadata/projects/_/jobs/_/metadata.yaml"
   assert_not_contains "${archive_listing}" "metadata/projects/platform/jobs/_/metadata.yaml"
@@ -434,7 +434,7 @@ test_operator_write_manager_manifest_mounts_prepared_metadata_bundle() {
   export E2E_KIND_CLUSTER_NAME='declarest-e2e-operator'
   export E2E_K8S_NAMESPACE='declarest-operator'
   export E2E_OPERATOR_IMAGE='localhost/declarest/e2e-operator-manager:test'
-  export E2E_MANAGED_SERVER='rundeck'
+  export E2E_MANAGED_SERVICE='rundeck'
   export E2E_METADATA_DIR="${tmp}/metadata"
   unset E2E_METADATA_BUNDLE
 
@@ -453,10 +453,10 @@ EOF
   manager_manifest=$(e2e_operator_manager_manifest_path)
   assert_path_exists "${manager_manifest}"
   assert_file_contains "${manager_manifest}" "kind: Secret"
-  assert_file_contains "${manager_manifest}" "name: $(e2e_operator_managed_server_metadata_bundle_secret_name)"
+  assert_file_contains "${manager_manifest}" "name: $(e2e_operator_managed_service_metadata_bundle_secret_name)"
   assert_file_contains "${manager_manifest}" "metadata-bundle.tar.gz:"
-  assert_file_contains "${manager_manifest}" "mountPath: $(e2e_operator_managed_server_metadata_bundle_mount_dir)"
-  assert_file_contains "${manager_manifest}" "secretName: $(e2e_operator_managed_server_metadata_bundle_secret_name)"
+  assert_file_contains "${manager_manifest}" "mountPath: $(e2e_operator_managed_service_metadata_bundle_mount_dir)"
+  assert_file_contains "${manager_manifest}" "secretName: $(e2e_operator_managed_service_metadata_bundle_secret_name)"
 }
 
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
@@ -475,10 +475,10 @@ test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path() {
   export E2E_GIT_PROVIDER_CONNECTION='remote'
   export E2E_SECRET_PROVIDER='file'
   export E2E_SECRET_PROVIDER_CONNECTION='local'
-  export E2E_MANAGED_SERVER='rundeck'
-  export E2E_MANAGED_SERVER_CONNECTION='remote'
-  export E2E_MANAGED_SERVER_AUTH_TYPE='custom-header'
-  export E2E_MANAGED_SERVER_MTLS='false'
+  export E2E_MANAGED_SERVICE='rundeck'
+  export E2E_MANAGED_SERVICE_CONNECTION='remote'
+  export E2E_MANAGED_SERVICE_AUTH_TYPE='custom-header'
+  export E2E_MANAGED_SERVICE_MTLS='false'
   export E2E_METADATA_DIR="${tmp}/metadata"
   unset E2E_METADATA_BUNDLE
   export E2E_OPERATOR_REPOSITORY_WEBHOOK_PROVIDER=''
@@ -492,7 +492,7 @@ EOF
 
   local repo_state managed_state secret_state
   repo_state=$(e2e_component_state_file "$(e2e_component_key 'repo-type' 'git')")
-  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-server' 'rundeck')")
+  managed_state=$(e2e_component_state_file "$(e2e_component_key 'managed-service' 'rundeck')")
   secret_state=$(e2e_component_state_file "$(e2e_component_key 'secret-provider' 'file')")
 
   cat >"${repo_state}" <<'EOF'
@@ -503,10 +503,10 @@ GIT_AUTH_TOKEN=test-token
 EOF
 
   cat >"${managed_state}" <<'EOF'
-MANAGED_SERVER_BASE_URL=https://rundeck.example.com
-MANAGED_SERVER_AUTH_KIND=custom-header
-MANAGED_SERVER_HEADER_NAME=X-Rundeck-Auth-Token
-MANAGED_SERVER_HEADER_VALUE=test-token
+MANAGED_SERVICE_BASE_URL=https://rundeck.example.com
+MANAGED_SERVICE_AUTH_KIND=custom-header
+MANAGED_SERVICE_HEADER_NAME=X-Rundeck-Auth-Token
+MANAGED_SERVICE_HEADER_VALUE=test-token
 EOF
 
   cat >"${secret_state}" <<'EOF'
@@ -514,15 +514,15 @@ SECRET_FILE_PATH=/tmp/declarest-e2e-secrets.enc.json
 SECRET_FILE_PASSPHRASE=test-passphrase
 EOF
 
-  e2e_operator_prepare_managed_server_metadata_bundle
+  e2e_operator_prepare_managed_service_metadata_bundle
   e2e_operator_write_manifests
 
-  local managed_server_manifest
-  managed_server_manifest="$(e2e_operator_manifest_dir)/managed-server.yaml"
-  assert_file_contains "${managed_server_manifest}" "metadata:"
+  local managed_service_manifest
+  managed_service_manifest="$(e2e_operator_manifest_dir)/managed-service.yaml"
+  assert_file_contains "${managed_service_manifest}" "metadata:"
   assert_file_contains \
-    "${managed_server_manifest}" \
-    "bundle: '$(e2e_operator_managed_server_metadata_bundle_mount_path)'"
+    "${managed_service_manifest}" \
+    "bundle: '$(e2e_operator_managed_service_metadata_bundle_mount_path)'"
 }
 
 test_secretstore_crd_does_not_require_legacy_provider_field() {
@@ -535,7 +535,7 @@ test_secretstore_crd_does_not_require_legacy_provider_field() {
 
 test_operator_example_resource_mapping
 test_operator_scoped_names_are_run_specific
-test_operator_handoff_prints_managed_server_specific_commands
+test_operator_handoff_prints_managed_service_specific_commands
 test_operator_prepare_repository_webhook_builds_scoped_url
 test_operator_prepare_repository_webhook_derives_namespace_when_unset
 test_operator_repository_webhook_registration_deferred_only_for_operator_profiles
@@ -543,7 +543,7 @@ test_operator_configure_repository_webhook_if_needed_runs_git_provider_hook
 test_operator_rewrites_local_urls_for_cluster_services
 test_operator_ready_timeout_validation_and_cap
 test_operator_write_manifests_prefers_prepared_keycloak_metadata_bundle_mount_path
-test_operator_prepare_managed_server_metadata_bundle_from_metadata_dir
+test_operator_prepare_managed_service_metadata_bundle_from_metadata_dir
 test_operator_prepare_rundeck_component_metadata_bundle_omits_case_only_fixtures
 test_operator_write_manager_manifest_mounts_prepared_metadata_bundle
 test_operator_write_manifests_uses_prepared_metadata_bundle_mount_path

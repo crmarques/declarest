@@ -18,8 +18,8 @@ Input:
 
 Example:
   ./test/e2e/run-e2e-parallel.sh <<'EOF'
-  ./test/e2e/run-e2e.sh --profile cli-basic --managed-server keycloak --platform compose
-  ./test/e2e/run-e2e.sh --profile cli-basic --managed-server rundeck --platform compose
+  ./test/e2e/run-e2e.sh --profile cli-basic --managed-service keycloak --platform compose
+  ./test/e2e/run-e2e.sh --profile cli-basic --managed-service rundeck --platform compose
   EOF
 USAGE
 }

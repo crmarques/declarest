@@ -29,7 +29,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	metadatavalidation "github.com/crmarques/declarest/metadata/validation"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
@@ -42,8 +42,8 @@ type Dependencies = appdeps.Dependencies
 type InferSource string
 
 const (
-	InferSourceRepository    InferSource = "repository"
-	InferSourceManagedServer InferSource = "managed-server"
+	InferSourceRepository     InferSource = "repository"
+	InferSourceManagedService InferSource = "managed-service"
 )
 
 type InferRequest struct {
@@ -90,14 +90,14 @@ type localResourceResolver interface {
 	ResolveLocalResource(ctx context.Context, logicalPath string) (resource.Resource, error)
 }
 
-type managedServerAuthCacheInvalidator interface {
+type managedServiceAuthCacheInvalidator interface {
 	InvalidateAuthCache()
 }
 
 const (
-	managedServerProbeReadAttempts    = 8
-	managedServerProbeReadMinAttempts = 4
-	managedServerProbeReadDelay       = 250 * time.Millisecond
+	managedServiceProbeReadAttempts    = 8
+	managedServiceProbeReadMinAttempts = 4
+	managedServiceProbeReadDelay       = 250 * time.Millisecond
 )
 
 func Get(ctx context.Context, deps Dependencies, logicalPath string) (Result, error) {
@@ -143,12 +143,12 @@ func Infer(ctx context.Context, deps Dependencies, logicalPath string, request I
 		}
 		samples = append(samples, repositorySamples...)
 	}
-	if inferSourcesInclude(sources, InferSourceManagedServer) {
-		managedServerSamples, sampleErr := inferFromManagedServer(ctx, deps, resolvedTarget, request)
+	if inferSourcesInclude(sources, InferSourceManagedService) {
+		managedServiceSamples, sampleErr := inferFromManagedService(ctx, deps, resolvedTarget, request)
 		if sampleErr != nil {
 			return Result{}, sampleErr
 		}
-		samples = append(samples, managedServerSamples...)
+		samples = append(samples, managedServiceSamples...)
 	}
 
 	inferred, err := resource.InferDefaultsFromValues(samples...)
@@ -364,10 +364,10 @@ func normalizeInferSources(sources []InferSource) ([]InferSource, error) {
 	for _, source := range sources {
 		trimmed := InferSource(strings.TrimSpace(string(source)))
 		switch trimmed {
-		case InferSourceRepository, InferSourceManagedServer:
+		case InferSourceRepository, InferSourceManagedService:
 		default:
 			return nil, faults.NewValidationError(
-				"defaults inference sources must be repository and/or managed-server",
+				"defaults inference sources must be repository and/or managed-service",
 				nil,
 			)
 		}
@@ -379,7 +379,7 @@ func normalizeInferSources(sources []InferSource) ([]InferSource, error) {
 	}
 	if len(normalized) == 0 {
 		return nil, faults.NewValidationError(
-			"defaults inference sources must be repository and/or managed-server",
+			"defaults inference sources must be repository and/or managed-service",
 			nil,
 		)
 	}
@@ -417,7 +417,7 @@ func inferFromRepository(
 	return samples, nil
 }
 
-func inferFromManagedServer(
+func inferFromManagedService(
 	ctx context.Context,
 	deps Dependencies,
 	resolvedTarget target,
@@ -438,17 +438,17 @@ func inferFromManagedServer(
 		return nil, err
 	}
 
-	probes := make([]managedServerProbe, 0, len(selectedItems)*2)
+	probes := make([]managedServiceProbe, 0, len(selectedItems)*2)
 	tempPaths := make([]string, 0, len(selectedItems)*2)
 	defer func() {
 		var cleanupErr error
 		for idx := len(tempPaths) - 1; idx >= 0; idx-- {
-			deleteErr := cleanupManagedServerProbe(ctx, deps, orchestratorService, tempPaths[idx])
+			deleteErr := cleanupManagedServiceProbe(ctx, deps, orchestratorService, tempPaths[idx])
 			if deleteErr != nil {
 				cleanupErr = errors.Join(
 					cleanupErr,
 					faults.NewValidationError(
-						fmt.Sprintf("failed to delete managed-server defaults probe %q", tempPaths[idx]),
+						fmt.Sprintf("failed to delete managed-service defaults probe %q", tempPaths[idx]),
 						deleteErr,
 					),
 				)
@@ -465,7 +465,7 @@ func inferFromManagedServer(
 			return nil, metadataErr
 		}
 
-		rawContent, rawErr := resolveManagedServerProbeContent(ctx, deps, item.logicalPath)
+		rawContent, rawErr := resolveManagedServiceProbeContent(ctx, deps, item.logicalPath)
 		if rawErr != nil {
 			return nil, rawErr
 		}
@@ -473,11 +473,11 @@ func inferFromManagedServer(
 			rawContent.Descriptor = item.localContent.Descriptor
 		}
 
-		firstPayload, firstPath, buildErr := buildManagedServerProbePayload(item.logicalPath, md, rawContent, "probe-1")
+		firstPayload, firstPath, buildErr := buildManagedServiceProbePayload(item.logicalPath, md, rawContent, "probe-1")
 		if buildErr != nil {
 			return nil, buildErr
 		}
-		secondPayload, secondPath, buildErr := buildManagedServerProbePayload(item.logicalPath, md, rawContent, "probe-2")
+		secondPayload, secondPath, buildErr := buildManagedServiceProbePayload(item.logicalPath, md, rawContent, "probe-2")
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -486,26 +486,26 @@ func inferFromManagedServer(
 			return nil, createErr
 		}
 		tempPaths = append(tempPaths, firstPath)
-		probes = append(probes, managedServerProbe{path: firstPath})
+		probes = append(probes, managedServiceProbe{path: firstPath})
 
 		if _, createErr := orchestratorService.Create(ctx, secondPath, secondPayload); createErr != nil {
 			return nil, createErr
 		}
 		tempPaths = append(tempPaths, secondPath)
-		probes = append(probes, managedServerProbe{path: secondPath})
+		probes = append(probes, managedServiceProbe{path: secondPath})
 	}
 
 	if request.Wait > 0 {
-		if err := waitForManagedServerDelay(ctx, request.Wait); err != nil {
+		if err := waitForManagedServiceDelay(ctx, request.Wait); err != nil {
 			return nil, err
 		}
 	}
 
-	invalidateManagedServerAuthCache(deps)
+	invalidateManagedServiceAuthCache(deps)
 
 	outputs := make([]resource.Value, 0, len(probes))
 	for _, probe := range probes {
-		remoteContent, readErr := readManagedServerProbeContent(ctx, orchestratorService, probe.path)
+		remoteContent, readErr := readManagedServiceProbeContent(ctx, orchestratorService, probe.path)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -514,11 +514,11 @@ func inferFromManagedServer(
 	return outputs, nil
 }
 
-type managedServerProbe struct {
+type managedServiceProbe struct {
 	path string
 }
 
-func resolveManagedServerProbeContent(ctx context.Context, deps Dependencies, logicalPath string) (resource.Content, error) {
+func resolveManagedServiceProbeContent(ctx context.Context, deps Dependencies, logicalPath string) (resource.Content, error) {
 	store, err := appdeps.RequireResourceStore(deps)
 	if err != nil {
 		return resource.Content{}, err
@@ -527,22 +527,22 @@ func resolveManagedServerProbeContent(ctx context.Context, deps Dependencies, lo
 	return store.Get(ctx, logicalPath)
 }
 
-func invalidateManagedServerAuthCache(deps Dependencies) {
+func invalidateManagedServiceAuthCache(deps Dependencies) {
 	if deps.Services == nil {
 		return
 	}
-	managedServerClient := deps.Services.ManagedServerClient()
-	if managedServerClient == nil {
+	managedServiceClient := deps.Services.ManagedServiceClient()
+	if managedServiceClient == nil {
 		return
 	}
-	invalidator, ok := managedServerClient.(managedServerAuthCacheInvalidator)
+	invalidator, ok := managedServiceClient.(managedServiceAuthCacheInvalidator)
 	if !ok {
 		return
 	}
 	invalidator.InvalidateAuthCache()
 }
 
-func readManagedServerProbeContent(
+func readManagedServiceProbeContent(
 	ctx context.Context,
 	orchestratorService orchestratordomain.Orchestrator,
 	logicalPath string,
@@ -553,7 +553,7 @@ func readManagedServerProbeContent(
 		stableReads    int
 	)
 
-	for attempt := 0; attempt < managedServerProbeReadAttempts; attempt++ {
+	for attempt := 0; attempt < managedServiceProbeReadAttempts; attempt++ {
 		content, err := orchestratorService.GetRemote(ctx, logicalPath)
 		if err != nil {
 			return resource.Content{}, err
@@ -574,13 +574,13 @@ func readManagedServerProbeContent(
 		lastContent = content
 		lastNormalized = normalized
 
-		if attempt+1 >= managedServerProbeReadMinAttempts && stableReads >= 2 {
+		if attempt+1 >= managedServiceProbeReadMinAttempts && stableReads >= 2 {
 			return lastContent, nil
 		}
-		if attempt+1 == managedServerProbeReadAttempts {
+		if attempt+1 == managedServiceProbeReadAttempts {
 			break
 		}
-		if waitErr := waitForManagedServerDelay(ctx, managedServerProbeReadDelay); waitErr != nil {
+		if waitErr := waitForManagedServiceDelay(ctx, managedServiceProbeReadDelay); waitErr != nil {
 			return resource.Content{}, waitErr
 		}
 	}
@@ -588,7 +588,7 @@ func readManagedServerProbeContent(
 	return lastContent, nil
 }
 
-func cleanupManagedServerProbe(
+func cleanupManagedServiceProbe(
 	ctx context.Context,
 	deps Dependencies,
 	orchestratorService orchestratordomain.Orchestrator,
@@ -602,28 +602,28 @@ func cleanupManagedServerProbe(
 		return deleteErr
 	}
 
-	retryErr := retryManagedServerProbeDelete(ctx, deps, logicalPath)
+	retryErr := retryManagedServiceProbeDelete(ctx, deps, logicalPath)
 	if retryErr == nil || faults.IsCategory(retryErr, faults.NotFoundError) {
 		return nil
 	}
 	return errors.Join(deleteErr, retryErr)
 }
 
-func retryManagedServerProbeDelete(ctx context.Context, deps Dependencies, logicalPath string) error {
+func retryManagedServiceProbeDelete(ctx context.Context, deps Dependencies, logicalPath string) error {
 	if deps.Services == nil {
-		return faults.NewValidationError("managed-server cleanup retry requires service accessor", nil)
+		return faults.NewValidationError("managed-service cleanup retry requires service accessor", nil)
 	}
-	managedServerClient := deps.Services.ManagedServerClient()
-	if managedServerClient == nil {
-		return faults.NewValidationError("managed-server cleanup retry requires managed-server client", nil)
+	managedServiceClient := deps.Services.ManagedServiceClient()
+	if managedServiceClient == nil {
+		return faults.NewValidationError("managed-service cleanup retry requires managed-service client", nil)
 	}
 
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
-		if invalidator, ok := managedServerClient.(managedServerAuthCacheInvalidator); ok {
+		if invalidator, ok := managedServiceClient.(managedServiceAuthCacheInvalidator); ok {
 			invalidator.InvalidateAuthCache()
 		}
-		_, err := managedServerClient.Request(ctx, managedserverdomain.RequestSpec{
+		_, err := managedServiceClient.Request(ctx, managedservicedomain.RequestSpec{
 			Method: http.MethodDelete,
 			Path:   logicalPath,
 		})
@@ -634,14 +634,14 @@ func retryManagedServerProbeDelete(ctx context.Context, deps Dependencies, logic
 		if !faults.IsCategory(err, faults.AuthError) || attempt == 1 {
 			break
 		}
-		if waitErr := waitForManagedServerDelay(ctx, 250*time.Millisecond); waitErr != nil {
+		if waitErr := waitForManagedServiceDelay(ctx, 250*time.Millisecond); waitErr != nil {
 			return errors.Join(lastErr, waitErr)
 		}
 	}
 	return lastErr
 }
 
-func waitForManagedServerDelay(ctx context.Context, delay time.Duration) error {
+func waitForManagedServiceDelay(ctx context.Context, delay time.Duration) error {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 
@@ -653,7 +653,7 @@ func waitForManagedServerDelay(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func buildManagedServerProbePayload(
+func buildManagedServiceProbePayload(
 	logicalPath string,
 	md metadata.ResourceMetadata,
 	content resource.Content,
@@ -666,14 +666,14 @@ func buildManagedServerProbePayload(
 
 	payload, ok := normalizedValue.(map[string]any)
 	if !ok {
-		return resource.Content{}, "", faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+		return resource.Content{}, "", faults.NewValidationError("managed-service defaults inference requires an object payload", nil)
 	}
 
 	requiredAttributes, err := metadatavalidation.EffectiveCreatePayloadRequiredAttributes(md)
 	if err != nil {
 		return resource.Content{}, "", err
 	}
-	nextPayload, selectedPointers, err := selectManagedServerProbePayload(payload, requiredAttributes)
+	nextPayload, selectedPointers, err := selectManagedServiceProbePayload(payload, requiredAttributes)
 	if err != nil {
 		return resource.Content{}, "", err
 	}
@@ -698,7 +698,7 @@ func buildManagedServerProbePayload(
 
 	if !aliasOK && !idOK {
 		return resource.Content{}, "", faults.NewValidationError(
-			"managed-server defaults inference requires simple resource.alias or resource.id metadata",
+			"managed-service defaults inference requires simple resource.alias or resource.id metadata",
 			nil,
 		)
 	}
@@ -730,10 +730,10 @@ func buildManagedServerProbePayload(
 
 	rewrittenPayload, ok := next.(map[string]any)
 	if !ok {
-		return resource.Content{}, "", faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+		return resource.Content{}, "", faults.NewValidationError("managed-service defaults inference requires an object payload", nil)
 	}
 	if len(selectedPointers) == 0 {
-		rewrittenPayload, err = applyManagedServerProbeIdentityFallback(logicalPath, payload, rewrittenPayload, tempName, replacedPointers, aliasPointer, idPointer)
+		rewrittenPayload, err = applyManagedServiceProbeIdentityFallback(logicalPath, payload, rewrittenPayload, tempName, replacedPointers, aliasPointer, idPointer)
 		if err != nil {
 			return resource.Content{}, "", err
 		}
@@ -745,7 +745,7 @@ func buildManagedServerProbePayload(
 	}, joinLogicalPath(collectionPathFor(logicalPath), tempName), nil
 }
 
-func selectManagedServerProbePayload(
+func selectManagedServiceProbePayload(
 	payload map[string]any,
 	requiredAttributes []string,
 ) (map[string]any, map[string]struct{}, error) {
@@ -753,7 +753,7 @@ func selectManagedServerProbePayload(
 	selectedPointers := map[string]struct{}{}
 
 	pointers, err := metadatavalidation.NormalizeAttributePointers(
-		"managed-server defaults inference create required attributes",
+		"managed-service defaults inference create required attributes",
 		requiredAttributes,
 	)
 	if err != nil {
@@ -778,7 +778,7 @@ func selectManagedServerProbePayload(
 
 		typed, ok := next.(map[string]any)
 		if !ok {
-			return nil, nil, faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+			return nil, nil, faults.NewValidationError("managed-service defaults inference requires an object payload", nil)
 		}
 		selectedPayload = typed
 	}
@@ -786,7 +786,7 @@ func selectManagedServerProbePayload(
 	return selectedPayload, selectedPointers, nil
 }
 
-func applyManagedServerProbeIdentityFallback(
+func applyManagedServiceProbeIdentityFallback(
 	logicalPath string,
 	originalPayload map[string]any,
 	nextPayload map[string]any,
@@ -794,7 +794,7 @@ func applyManagedServerProbeIdentityFallback(
 	replacedPointers map[string]struct{},
 	identityPointers ...string,
 ) (map[string]any, error) {
-	identityValues, err := managedServerProbeIdentityValues(logicalPath, originalPayload, identityPointers...)
+	identityValues, err := managedServiceProbeIdentityValues(logicalPath, originalPayload, identityPointers...)
 	if err != nil {
 		return nil, err
 	}
@@ -802,11 +802,11 @@ func applyManagedServerProbeIdentityFallback(
 		return nextPayload, nil
 	}
 
-	allowedKeys := managedServerProbeIdentityFieldKeys(logicalPath)
+	allowedKeys := managedServiceProbeIdentityFieldKeys(logicalPath)
 	current := nextPayload
 	for key, rawValue := range originalPayload {
 		value, ok := rawValue.(string)
-		if !ok || !matchesManagedServerProbeIdentityValue(identityValues, value) {
+		if !ok || !matchesManagedServiceProbeIdentityValue(identityValues, value) {
 			continue
 		}
 
@@ -814,7 +814,7 @@ func applyManagedServerProbeIdentityFallback(
 		if _, alreadyReplaced := replacedPointers[pointer]; alreadyReplaced {
 			continue
 		}
-		if _, allowed := allowedKeys[canonicalManagedServerProbeFieldKey(key)]; !allowed {
+		if _, allowed := allowedKeys[canonicalManagedServiceProbeFieldKey(key)]; !allowed {
 			continue
 		}
 
@@ -824,7 +824,7 @@ func applyManagedServerProbeIdentityFallback(
 		}
 		objectValue, ok := updated.(map[string]any)
 		if !ok {
-			return nil, faults.NewValidationError("managed-server defaults inference requires an object payload", nil)
+			return nil, faults.NewValidationError("managed-service defaults inference requires an object payload", nil)
 		}
 		current = objectValue
 	}
@@ -832,13 +832,13 @@ func applyManagedServerProbeIdentityFallback(
 	return current, nil
 }
 
-func managedServerProbeIdentityValues(
+func managedServiceProbeIdentityValues(
 	logicalPath string,
 	payload map[string]any,
 	identityPointers ...string,
 ) (map[string]struct{}, error) {
 	values := map[string]struct{}{}
-	addManagedServerProbeIdentityValue(values, path.Base(strings.TrimSpace(logicalPath)))
+	addManagedServiceProbeIdentityValue(values, path.Base(strings.TrimSpace(logicalPath)))
 
 	for _, pointer := range identityPointers {
 		value, found, err := resource.LookupJSONPointerString(payload, pointer)
@@ -846,14 +846,14 @@ func managedServerProbeIdentityValues(
 			return nil, err
 		}
 		if found {
-			addManagedServerProbeIdentityValue(values, value)
+			addManagedServiceProbeIdentityValue(values, value)
 		}
 	}
 
 	return values, nil
 }
 
-func addManagedServerProbeIdentityValue(values map[string]struct{}, value string) {
+func addManagedServiceProbeIdentityValue(values map[string]struct{}, value string) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" || trimmed == "/" || trimmed == "." {
 		return
@@ -861,15 +861,15 @@ func addManagedServerProbeIdentityValue(values map[string]struct{}, value string
 	values[trimmed] = struct{}{}
 }
 
-func matchesManagedServerProbeIdentityValue(values map[string]struct{}, value string) bool {
+func matchesManagedServiceProbeIdentityValue(values map[string]struct{}, value string) bool {
 	_, ok := values[strings.TrimSpace(value)]
 	return ok
 }
 
-func managedServerProbeIdentityFieldKeys(logicalPath string) map[string]struct{} {
+func managedServiceProbeIdentityFieldKeys(logicalPath string) map[string]struct{} {
 	keys := map[string]struct{}{}
 	for _, candidate := range []string{"id", "name", "slug", "key", "code", "alias", "identifier", "uid"} {
-		addManagedServerProbeIdentityFieldKey(keys, candidate)
+		addManagedServiceProbeIdentityFieldKey(keys, candidate)
 	}
 
 	collectionSegments := resource.SplitLogicalPathSegments(collectionPathFor(logicalPath))
@@ -878,33 +878,33 @@ func managedServerProbeIdentityFieldKeys(logicalPath string) map[string]struct{}
 	}
 
 	collectionName := collectionSegments[len(collectionSegments)-1]
-	singularName := singularManagedServerProbeIdentityField(collectionName)
+	singularName := singularManagedServiceProbeIdentityField(collectionName)
 	for _, candidate := range []string{
 		collectionName,
 		singularName,
 		singularName + "id",
 		singularName + "name",
 	} {
-		addManagedServerProbeIdentityFieldKey(keys, candidate)
+		addManagedServiceProbeIdentityFieldKey(keys, candidate)
 	}
 	return keys
 }
 
-func addManagedServerProbeIdentityFieldKey(keys map[string]struct{}, value string) {
-	canonical := canonicalManagedServerProbeFieldKey(value)
+func addManagedServiceProbeIdentityFieldKey(keys map[string]struct{}, value string) {
+	canonical := canonicalManagedServiceProbeFieldKey(value)
 	if canonical == "" {
 		return
 	}
 	keys[canonical] = struct{}{}
 }
 
-func canonicalManagedServerProbeFieldKey(value string) string {
+func canonicalManagedServiceProbeFieldKey(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	replacer := strings.NewReplacer("-", "", "_", "", " ", "")
 	return replacer.Replace(normalized)
 }
 
-func singularManagedServerProbeIdentityField(value string) string {
+func singularManagedServiceProbeIdentityField(value string) string {
 	trimmed := strings.TrimSpace(value)
 	switch {
 	case strings.HasSuffix(trimmed, "ies") && len(trimmed) > len("ies"):

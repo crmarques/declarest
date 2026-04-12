@@ -17,7 +17,7 @@ package orchestrator
 import (
 	"context"
 
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -34,7 +34,7 @@ type ServiceAccessor interface {
 	RepositorySync() repository.RepositorySync
 	MetadataService() metadata.MetadataService
 	SecretProvider() secrets.SecretProvider
-	ManagedServerClient() managedserver.ManagedServerClient
+	ManagedServiceClient() managedservice.ManagedServiceClient
 }
 
 type LocalReader interface {
@@ -58,7 +58,7 @@ type CompletionService interface {
 }
 
 type RequestExecutor interface {
-	Request(ctx context.Context, spec managedserver.RequestSpec) (resource.Content, error)
+	Request(ctx context.Context, spec managedservice.RequestSpec) (resource.Content, error)
 }
 
 type RepositoryWriter interface {

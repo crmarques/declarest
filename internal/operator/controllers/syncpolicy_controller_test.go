@@ -38,7 +38,7 @@ func TestSyncPolicyValidateNoOverlap(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/customers"},
 		},
@@ -47,7 +47,7 @@ func TestSyncPolicyValidateNoOverlap(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/customers/acme"},
 		},
@@ -75,7 +75,7 @@ func TestSyncPolicyValidateNoOverlapRejectsOverlapAcrossDifferentReferences(t *t
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-a"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server-a"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server-a"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets-a"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/acme"},
 		},
@@ -84,7 +84,7 @@ func TestSyncPolicyValidateNoOverlapRejectsOverlapAcrossDifferentReferences(t *t
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-b"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server-b"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server-b"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets-b"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/acme/clients"},
 		},
@@ -112,7 +112,7 @@ func TestSyncPolicyValidateNoOverlapAllowsDistinctPathsWithSharedReferences(t *t
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/a"},
 		},
@@ -121,7 +121,7 @@ func TestSyncPolicyValidateNoOverlapAllowsDistinctPathsWithSharedReferences(t *t
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/admin/realms/b"},
 		},
@@ -149,7 +149,7 @@ func TestSyncPolicyMapperByResourceRepositoryUsesIndex(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-a"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/"},
 		},
@@ -158,7 +158,7 @@ func TestSyncPolicyMapperByResourceRepositoryUsesIndex(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: "default"},
 		Spec: declarestv1alpha1.SyncPolicySpec{
 			ResourceRepositoryRef: declarestv1alpha1.NamespacedObjectReference{Name: "repo-b"},
-			ManagedServerRef:      declarestv1alpha1.NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     declarestv1alpha1.NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        declarestv1alpha1.NamespacedObjectReference{Name: "secrets"},
 			Source:                declarestv1alpha1.SyncPolicySource{Path: "/"},
 		},

@@ -309,7 +309,7 @@ func writePromptAuthContextFile(t *testing.T, path string, serverURL string) {
 		"      persistInSession: true",
 		"contexts:",
 		"  - name: shell",
-		"    managedServer:",
+		"    managedService:",
 		"      http:",
 		"        url: " + serverURL,
 		"        auth:",

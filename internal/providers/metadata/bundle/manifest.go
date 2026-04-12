@@ -58,15 +58,15 @@ type BundleMaintainer struct {
 }
 
 type BundleDeclarest struct {
-	Shorthand               string                        `yaml:"shorthand"`
-	MetadataRoot            string                        `yaml:"metadataRoot"`
-	OpenAPI                 string                        `yaml:"openapi,omitempty"`
-	MetadataFileName        string                        `yaml:"metadataFileName,omitempty"`
-	CompatibleDeclarest     string                        `yaml:"compatibleDeclarest,omitempty"`
-	CompatibleManagedServer BundleCompatibleManagedServer `yaml:"compatibleManagedServer,omitempty"`
+	Shorthand                string                         `yaml:"shorthand"`
+	MetadataRoot             string                         `yaml:"metadataRoot"`
+	OpenAPI                  string                         `yaml:"openapi,omitempty"`
+	MetadataFileName         string                         `yaml:"metadataFileName,omitempty"`
+	CompatibleDeclarest      string                         `yaml:"compatibleDeclarest,omitempty"`
+	CompatibleManagedService BundleCompatibleManagedService `yaml:"compatibleManagedService,omitempty"`
 }
 
-type BundleCompatibleManagedServer struct {
+type BundleCompatibleManagedService struct {
 	Product  string `yaml:"product,omitempty"`
 	Versions string `yaml:"versions,omitempty"`
 }

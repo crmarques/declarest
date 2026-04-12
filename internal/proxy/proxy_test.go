@@ -28,7 +28,7 @@ func TestResolveMergesEnvironmentAndConfiguredFields(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", "https://proxy-https.example.com:8443")
 	t.Setenv("NO_PROXY", "svc.cluster.local")
 
-	cfg, disabled, err := Resolve("managedServer.http.proxy", &config.HTTPProxy{
+	cfg, disabled, err := Resolve("managedService.http.proxy", &config.HTTPProxy{
 		NoProxy: "localhost,127.0.0.1",
 	})
 	if err != nil {
@@ -53,7 +53,7 @@ func TestResolveExplicitDisableSuppressesEnvironment(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", "https://proxy-https.example.com:8443")
 	t.Setenv("NO_PROXY", "svc.cluster.local")
 
-	cfg, disabled, err := Resolve("managedServer.http.proxy", &config.HTTPProxy{})
+	cfg, disabled, err := Resolve("managedService.http.proxy", &config.HTTPProxy{})
 	if err != nil {
 		t.Fatalf("Resolve() unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestResolveExplicitDisableSuppressesEnvironment(t *testing.T) {
 func TestResolveConfiguredAuthOverridesEnvironmentCredentials(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://env-user:env-pass@proxy.example.com:3128")
 
-	cfg, disabled, err := Resolve("managedServer.http.proxy", &config.HTTPProxy{
+	cfg, disabled, err := Resolve("managedService.http.proxy", &config.HTTPProxy{
 		Auth: &config.ProxyAuth{
 			Basic: &config.BasicAuth{
 				Username: config.LiteralCredential("ctx-user"),
@@ -104,7 +104,7 @@ func TestResolveWithRuntimePromptAuthInjectsPromptedCredentials(t *testing.T) {
 		t.Fatalf("New() returned error: %v", err)
 	}
 
-	cfg, disabled, err := ResolveWithRuntime("managed-server.http.proxy", &config.HTTPProxy{
+	cfg, disabled, err := ResolveWithRuntime("managed-service.http.proxy", &config.HTTPProxy{
 		HTTPURL: "http://proxy.example.com:3128",
 		Auth: &config.ProxyAuth{
 			Basic: &config.BasicAuth{

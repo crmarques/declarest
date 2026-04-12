@@ -92,11 +92,11 @@ func promptCreateContext(command *cobra.Command, prompter configPrompter, contex
 	}
 	contextCfg.Metadata.BaseDir = metadataBaseDir
 
-	resourceServer, err := promptManagedServer(command, prompter, contextCfg.Credentials)
+	resourceServer, err := promptManagedService(command, prompter, contextCfg.Credentials)
 	if err != nil {
 		return configdomain.Context{}, err
 	}
-	contextCfg.ManagedServer = resourceServer
+	contextCfg.ManagedService = resourceServer
 
 	includeSecretStore, err := prompter.Confirm(command, "Configure secretStore?", false)
 	if err != nil {
@@ -303,16 +303,16 @@ func promptGitAuth(
 	return auth, nil
 }
 
-func promptManagedServer(
+func promptManagedService(
 	command *cobra.Command,
 	prompter configPrompter,
 	credentials map[string]configdomain.Credential,
-) (*configdomain.ManagedServer, error) {
-	baseURL, err := promptRequiredInput(command, prompter, "Managed-server url: ", "managedServer url")
+) (*configdomain.ManagedService, error) {
+	baseURL, err := promptRequiredInput(command, prompter, "Managed-service url: ", "managedService url")
 	if err != nil {
 		return nil, err
 	}
-	openAPI, err := promptOptionalInput(command, prompter, "Managed-server OpenAPI/Swagger path/url (optional): ")
+	openAPI, err := promptOptionalInput(command, prompter, "Managed-service OpenAPI/Swagger path/url (optional): ")
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func promptManagedServer(
 		OpenAPI: openAPI,
 	}
 
-	includeHeaders, err := prompter.Confirm(command, "Configure managedServer default headers?", false)
+	includeHeaders, err := prompter.Confirm(command, "Configure managedService default headers?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +334,7 @@ func promptManagedServer(
 		server.DefaultHeaders = headers
 	}
 
-	includeProxy, err := prompter.Confirm(command, "Configure managedServer proxy?", false)
+	includeProxy, err := prompter.Confirm(command, "Configure managedService proxy?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func promptManagedServer(
 	}
 	server.Auth = auth
 
-	includeTLS, err := prompter.Confirm(command, "Configure managedServer TLS?", false)
+	includeTLS, err := prompter.Confirm(command, "Configure managedService TLS?", false)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func promptManagedServer(
 		server.TLS = tls
 	}
 
-	return &configdomain.ManagedServer{HTTP: server}, nil
+	return &configdomain.ManagedService{HTTP: server}, nil
 }
 
 func promptHTTPProxy(
@@ -383,7 +383,7 @@ func promptHTTPProxy(
 	}
 
 	if strings.TrimSpace(httpURL) == "" && strings.TrimSpace(httpsURL) == "" {
-		return nil, cliutil.ValidationError("managedServer proxy requires at least one of http or https", nil)
+		return nil, cliutil.ValidationError("managedService proxy requires at least one of http or https", nil)
 	}
 
 	noProxy, err := promptOptionalInput(command, prompter, "Proxy noProxy list (optional): ")
@@ -419,7 +419,7 @@ func promptHTTPAuth(
 ) (*configdomain.HTTPAuth, error) {
 	method, err := prompter.Select(
 		command,
-		"Select managedServer auth method",
+		"Select managedService auth method",
 		[]string{"oauth2", "basic", "customHeaders"},
 	)
 	if err != nil {
@@ -484,7 +484,7 @@ func promptHTTPAuth(
 			Audience:     audience,
 		}
 	case "basic":
-		basic, inputErr := promptCredentialRef(command, prompter, credentials, "Managed-server basic auth")
+		basic, inputErr := promptCredentialRef(command, prompter, credentials, "Managed-service basic auth")
 		if inputErr != nil {
 			return nil, inputErr
 		}
@@ -496,7 +496,7 @@ func promptHTTPAuth(
 		}
 		auth.CustomHeaders = customHeaders
 	default:
-		return nil, cliutil.ValidationError("invalid managedServer auth method selected", nil)
+		return nil, cliutil.ValidationError("invalid managedService auth method selected", nil)
 	}
 
 	return auth, nil

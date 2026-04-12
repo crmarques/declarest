@@ -48,14 +48,14 @@ create_repo_type_component() {
   } >"${component_dir}/component.env"
 }
 
-create_managed_server_component() {
+create_managed_service_component() {
   local root=$1
   local include_identity_fields=${2:-true}
   local include_compose_artifacts=${3:-true}
   local include_k8s_artifacts=${4:-true}
   local metadata_extension=${5:-json}
   local payload_extension=${6:-json}
-  local component_dir="${root}/components/managed-server/demo"
+  local component_dir="${root}/components/managed-service/demo"
   local metadata_file="${component_dir}/repo-template/api/items/_/metadata.${metadata_extension}"
   create_component_common "${component_dir}"
   write_hook_script "${component_dir}/scripts/health.sh"
@@ -102,7 +102,7 @@ EOF
 EOF
   fi
   {
-    printf 'COMPONENT_TYPE=managed-server\n'
+    printf 'COMPONENT_TYPE=managed-service\n'
     printf 'COMPONENT_NAME=demo\n'
     printf 'COMPONENT_CONTRACT_VERSION=1\n'
     printf 'SUPPORTED_CONNECTIONS="local"\n'
@@ -112,7 +112,7 @@ EOF
     printf 'COMPONENT_DEPENDS_ON=""\n'
     printf 'SUPPORTED_SECURITY_FEATURES="oauth2"\n'
     printf 'REQUIRED_SECURITY_FEATURES=""\n'
-    printf 'DESCRIPTION="Demo managed server"\n'
+    printf 'DESCRIPTION="Demo managed service"\n'
   } >"${component_dir}/component.env"
 }
 
@@ -166,7 +166,7 @@ test_validate_all_discovered_components_accepts_valid_fixture_identity() {
 
 _test_validate_all_discovered_components_accepts_valid_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true
+  create_managed_service_component "${E2E_DIR}" true
   e2e_discover_components
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
@@ -178,7 +178,7 @@ test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity() {
 
 _test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true true true yaml
+  create_managed_service_component "${E2E_DIR}" true true true yaml
   e2e_discover_components
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
@@ -190,21 +190,21 @@ test_validate_all_discovered_components_accepts_valid_yaml_resource_payload() {
 
 _test_validate_all_discovered_components_accepts_valid_yaml_resource_payload_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true true true json yaml
+  create_managed_service_component "${E2E_DIR}" true true true json yaml
   e2e_discover_components
   e2e_validate_all_discovered_component_contracts >/dev/null
 }
 
-test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir() {
+test_validate_all_discovered_components_allows_empty_managed_service_metadata_dir() {
   load_components_libs
-  with_temp_e2e_dir _test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir_impl
+  with_temp_e2e_dir _test_validate_all_discovered_components_allows_empty_managed_service_metadata_dir_impl
 }
 
-_test_validate_all_discovered_components_allows_empty_managed_server_metadata_dir_impl() {
+_test_validate_all_discovered_components_allows_empty_managed_service_metadata_dir_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true
+  create_managed_service_component "${E2E_DIR}" true
 
-  local component_dir="${E2E_DIR}/components/managed-server/demo"
+  local component_dir="${E2E_DIR}/components/managed-service/demo"
   rm -f "${component_dir}/repo-template/api/items/_/metadata.json" "${component_dir}/repo-template/api/items/_/metadata.yaml"
   mkdir -p "${component_dir}/metadata"
 
@@ -219,7 +219,7 @@ test_validate_all_discovered_components_rejects_missing_fixture_identity() {
 
 _test_validate_all_discovered_components_rejects_missing_fixture_identity_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" false
+  create_managed_service_component "${E2E_DIR}" false
   e2e_discover_components
 
   local output status
@@ -266,10 +266,10 @@ exit 1
 EOF
   chmod +x "${fake_bin}/kind"
 
-  E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
+  E2E_SELECTED_COMPONENT_KEYS=('managed-service:demo')
   E2E_COMPONENT_RUNTIME_KIND=()
-  E2E_COMPONENT_RUNTIME_KIND['managed-server:demo']='compose'
-  E2E_MANAGED_SERVER_CONNECTION='local'
+  E2E_COMPONENT_RUNTIME_KIND['managed-service:demo']='compose'
+  E2E_MANAGED_SERVICE_CONNECTION='local'
   E2E_PLATFORM='kubernetes'
   E2E_CONTAINER_ENGINE='podman'
 
@@ -281,46 +281,46 @@ EOF
 }
 
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template() {
-  local metadata_file="${E2E_SCRIPT_DIR}/components/managed-server/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
+  local metadata_file="${E2E_SCRIPT_DIR}/components/managed-service/keycloak/metadata/admin/realms/_/clients/_/metadata.yaml"
   local content
   content=$(<"${metadata_file}")
 
   assert_contains "${content}" 'alias: "{{/clientId}}"'
 }
 
-test_managed_server_auth_type_defaults_prefer_oauth2() {
+test_managed_service_auth_type_defaults_prefer_oauth2() {
   load_components_libs
 
   E2E_EXPLICIT=()
-  E2E_MANAGED_SERVER='demo'
-  E2E_MANAGED_SERVER_AUTH_TYPE=''
-  E2E_MANAGED_SERVER_MTLS='false'
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='none basic-auth oauth2 mtls'
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
+  E2E_MANAGED_SERVICE='demo'
+  E2E_MANAGED_SERVICE_AUTH_TYPE=''
+  E2E_MANAGED_SERVICE_MTLS='false'
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES['managed-service:demo']='none basic-auth oauth2 mtls'
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES['managed-service:demo']=''
 
-  e2e_validate_managed_server_security_selection >/dev/null
+  e2e_validate_managed_service_security_selection >/dev/null
 
-  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "oauth2" "expected default auth-type election to prefer oauth2"
+  assert_eq "${E2E_MANAGED_SERVICE_AUTH_TYPE}" "oauth2" "expected default auth-type election to prefer oauth2"
 }
 
-test_managed_server_auth_type_rejects_unsupported_selection() {
+test_managed_service_auth_type_rejects_unsupported_selection() {
   load_components_libs
 
   E2E_EXPLICIT=()
-  E2E_MANAGED_SERVER='demo'
-  E2E_MANAGED_SERVER_AUTH_TYPE='custom-header'
-  E2E_MANAGED_SERVER_MTLS='false'
-  e2e_mark_explicit 'managed-server-auth-type'
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='none oauth2'
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
+  E2E_MANAGED_SERVICE='demo'
+  E2E_MANAGED_SERVICE_AUTH_TYPE='custom-header'
+  E2E_MANAGED_SERVICE_MTLS='false'
+  e2e_mark_explicit 'managed-service-auth-type'
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES['managed-service:demo']='none oauth2'
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES['managed-service:demo']=''
 
   local output status
   set +e
-  output=$(e2e_validate_managed_server_security_selection 2>&1)
+  output=$(e2e_validate_managed_service_security_selection 2>&1)
   status=$?
   set -e
 
@@ -328,22 +328,22 @@ test_managed_server_auth_type_rejects_unsupported_selection() {
   assert_contains "${output}" "does not support selected auth-type: custom-header"
 }
 
-test_managed_server_prompt_auth_type_maps_to_basic_auth_capability() {
+test_managed_service_prompt_auth_type_maps_to_basic_auth_capability() {
   load_components_libs
 
   E2E_EXPLICIT=()
-  E2E_MANAGED_SERVER='demo'
-  E2E_MANAGED_SERVER_AUTH_TYPE='prompt'
-  E2E_MANAGED_SERVER_MTLS='false'
-  e2e_mark_explicit 'managed-server-auth-type'
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES=()
-  E2E_COMPONENT_MANAGED_SERVER_SECURITY_FEATURES['managed-server:demo']='basic-auth oauth2'
-  E2E_COMPONENT_MANAGED_SERVER_REQUIRED_SECURITY_FEATURES['managed-server:demo']=''
+  E2E_MANAGED_SERVICE='demo'
+  E2E_MANAGED_SERVICE_AUTH_TYPE='prompt'
+  E2E_MANAGED_SERVICE_MTLS='false'
+  e2e_mark_explicit 'managed-service-auth-type'
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES=()
+  E2E_COMPONENT_MANAGED_SERVICE_SECURITY_FEATURES['managed-service:demo']='basic-auth oauth2'
+  E2E_COMPONENT_MANAGED_SERVICE_REQUIRED_SECURITY_FEATURES['managed-service:demo']=''
 
-  e2e_validate_managed_server_security_selection >/dev/null
+  e2e_validate_managed_service_security_selection >/dev/null
 
-  assert_eq "${E2E_MANAGED_SERVER_AUTH_TYPE}" "prompt" "expected prompt selection to remain intact after validation"
+  assert_eq "${E2E_MANAGED_SERVICE_AUTH_TYPE}" "prompt" "expected prompt selection to remain intact after validation"
 }
 
 test_validate_all_discovered_components_rejects_missing_compose_artifacts() {
@@ -353,7 +353,7 @@ test_validate_all_discovered_components_rejects_missing_compose_artifacts() {
 
 _test_validate_all_discovered_components_rejects_missing_compose_artifacts_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true false true
+  create_managed_service_component "${E2E_DIR}" true false true
 
   local output status
   set +e
@@ -372,7 +372,7 @@ test_validate_all_discovered_components_rejects_missing_k8s_artifacts() {
 
 _test_validate_all_discovered_components_rejects_missing_k8s_artifacts_impl() {
   create_repo_type_component "${E2E_DIR}" true
-  create_managed_server_component "${E2E_DIR}" true true false
+  create_managed_service_component "${E2E_DIR}" true true false
 
   local output status
   set +e
@@ -411,9 +411,9 @@ test_validate_all_discovered_components_accepts_valid_fixture_identity
 test_validate_all_discovered_components_rejects_missing_fixture_identity
 test_preflight_accepts_podman_kind_without_existing_clusters
 test_checked_in_keycloak_client_metadata_uses_client_id_alias_template
-test_managed_server_auth_type_defaults_prefer_oauth2
-test_managed_server_auth_type_rejects_unsupported_selection
-test_managed_server_prompt_auth_type_maps_to_basic_auth_capability
+test_managed_service_auth_type_defaults_prefer_oauth2
+test_managed_service_auth_type_rejects_unsupported_selection
+test_managed_service_prompt_auth_type_maps_to_basic_auth_capability
 test_validate_all_discovered_components_rejects_missing_compose_artifacts
 test_validate_all_discovered_components_accepts_valid_yaml_fixture_identity
 test_validate_all_discovered_components_accepts_valid_yaml_resource_payload

@@ -21,7 +21,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
 )
@@ -57,7 +57,7 @@ func TestExecuteWithoutResolveTargetsIssuesSingleRequest(t *testing.T) {
 	if len(orch.requestCalls) != 1 {
 		t.Fatalf("expected one request call, got %d", len(orch.requestCalls))
 	}
-	wantSpec := managedserverdomain.RequestSpec{
+	wantSpec := managedservicedomain.RequestSpec{
 		Method:      "PATCH",
 		Path:        "/items/a",
 		Headers:     map[string]string{"X-Test": "one"},
@@ -135,7 +135,7 @@ type fakeRequestOrchestrator struct {
 	listLocalErr   error
 	requestValue   resource.Content
 	requestByPath  map[string]resource.Content
-	requestCalls   []managedserverdomain.RequestSpec
+	requestCalls   []managedservicedomain.RequestSpec
 }
 
 func (f *fakeRequestOrchestrator) GetLocal(context.Context, string) (resource.Content, error) {
@@ -158,7 +158,7 @@ func (f *fakeRequestOrchestrator) GetOpenAPISpec(context.Context) (resource.Cont
 	return resource.Content{}, nil
 }
 
-func (f *fakeRequestOrchestrator) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
+func (f *fakeRequestOrchestrator) Request(_ context.Context, spec managedservicedomain.RequestSpec) (resource.Content, error) {
 	f.requestCalls = append(f.requestCalls, spec)
 	if f.requestByPath != nil {
 		if value, ok := f.requestByPath[spec.Path]; ok {

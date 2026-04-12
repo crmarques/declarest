@@ -52,7 +52,7 @@ Common issues for both CLI and Operator mode.
 ## 10. Operator cannot authenticate to managed API
 
 - Symptom: reconcile errors from auth failures.
-- Fix: validate `ManagedServer.spec.http.auth` mode and referenced Kubernetes Secret keys; check token URL/credentials for OAuth2 mode.
+- Fix: validate `ManagedService.spec.http.auth` mode and referenced Kubernetes Secret keys; check token URL/credentials for OAuth2 mode.
 
 ## Quick debug checklist
 
@@ -63,6 +63,6 @@ declarest context check
 declarest server check
 
 # Operator side
-kubectl -n declarest-system get resourcerepositories,managedservers,secretstores,syncpolicies
+kubectl -n declarest-system get resourcerepositories,managedservices,secretstores,syncpolicies
 kubectl -n declarest-system logs deploy/declarest-operator -c manager --tail=200
 ```

@@ -2,10 +2,10 @@
 
 > Completed the [Operator Quickstart](../getting-started/quickstart-operator.md)? This page covers the full operational model.
 
-The Operator is the recommended runtime for production. It continuously reconciles Managed Servers from Git desired state.
+The Operator is the recommended runtime for production. It continuously reconciles Managed Services from Git desired state.
 
 ```text
-Git (desired state) -> Operator reconcile loop -> Managed Server (real state)
+Git (desired state) -> Operator reconcile loop -> Managed Service (real state)
 ```
 
 Direct server edits are drift. Reconciliation corrects drift back to what is declared in Git.
@@ -17,7 +17,7 @@ The controller manager reconciles four namespaced CRDs:
 | CRD | Responsibility |
 |-----|---------------|
 | **ResourceRepository** | Polls Git and maintains the current revision |
-| **ManagedServer** | Defines endpoint, auth, optional OpenAPI and metadata artifacts |
+| **ManagedService** | Defines endpoint, auth, optional OpenAPI and metadata artifacts |
 | **SecretStore** | Resolves secrets from `file` or `vault` provider |
 | **SyncPolicy** | References the other three; plans and executes apply/prune for a source path |
 
@@ -38,7 +38,7 @@ Reconcile is driven by:
 
 - **Sync interval**: `spec.syncInterval` (default `5m`)
 - **Full-resync cron**: optional `fullResyncCron` for periodic full syncs
-- **Dependency changes**: ResourceRepository, ManagedServer, or SecretStore generation updates
+- **Dependency changes**: ResourceRepository, ManagedService, or SecretStore generation updates
 - **Secret changes**: referenced Kubernetes Secret version hash changes
 - **Repository refresh**: poll or webhook-driven
 
@@ -71,7 +71,7 @@ Key status fields:
 5. Confirm repository branch/revision movement.
 
 ```bash
-kubectl get resourcerepositories,managedservers,secretstores,syncpolicies
+kubectl get resourcerepositories,managedservices,secretstores,syncpolicies
 kubectl logs -n declarest-system deploy/declarest-operator-controller-manager
 ```
 

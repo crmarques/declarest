@@ -27,10 +27,10 @@ import (
 
 	"github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
-	managedserverhttp "github.com/crmarques/declarest/internal/providers/managedserver/http"
+	managedservicehttp "github.com/crmarques/declarest/internal/providers/managedservice/http"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
 	fsstore "github.com/crmarques/declarest/internal/providers/repository/fsstore"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orch "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -596,7 +596,7 @@ func TestOrchestratorGetRemoteResolvesComplexAliasViaListCandidatePayload(t *tes
 	}))
 	t.Cleanup(server.Close)
 
-	client, err := managedserverhttp.NewClient(
+	client, err := managedservicehttp.NewClient(
 		config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
@@ -607,7 +607,7 @@ func TestOrchestratorGetRemoteResolvesComplexAliasViaListCandidatePayload(t *tes
 				}},
 			},
 		},
-		managedserverhttp.WithMetadataRenderer(metadataService),
+		managedservicehttp.WithMetadataRenderer(metadataService),
 	)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %v", err)
@@ -671,7 +671,7 @@ func TestOrchestratorRequestGetResolvesComplexAliasViaListCandidatePayload(t *te
 	}))
 	t.Cleanup(server.Close)
 
-	client, err := managedserverhttp.NewClient(
+	client, err := managedservicehttp.NewClient(
 		config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
@@ -682,7 +682,7 @@ func TestOrchestratorRequestGetResolvesComplexAliasViaListCandidatePayload(t *te
 				}},
 			},
 		},
-		managedserverhttp.WithMetadataRenderer(metadataService),
+		managedservicehttp.WithMetadataRenderer(metadataService),
 	)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %v", err)
@@ -693,7 +693,7 @@ func TestOrchestratorRequestGetResolvesComplexAliasViaListCandidatePayload(t *te
 		server:   client,
 	}
 
-	value, err := orchestrator.Request(ctx, managedserverdomain.RequestSpec{
+	value, err := orchestrator.Request(ctx, managedservicedomain.RequestSpec{
 		Method: "GET",
 		Path:   "/apis/orders - v1",
 	})
@@ -752,7 +752,7 @@ func TestOrchestratorDeleteResolvesComplexAliasViaListCandidatePayload(t *testin
 	}))
 	t.Cleanup(server.Close)
 
-	client, err := managedserverhttp.NewClient(
+	client, err := managedservicehttp.NewClient(
 		config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
@@ -763,7 +763,7 @@ func TestOrchestratorDeleteResolvesComplexAliasViaListCandidatePayload(t *testin
 				}},
 			},
 		},
-		managedserverhttp.WithMetadataRenderer(metadataService),
+		managedservicehttp.WithMetadataRenderer(metadataService),
 	)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %v", err)
@@ -821,7 +821,7 @@ func TestOrchestratorRequestDeleteResolvesComplexAliasViaListCandidatePayload(t 
 	}))
 	t.Cleanup(server.Close)
 
-	client, err := managedserverhttp.NewClient(
+	client, err := managedservicehttp.NewClient(
 		config.HTTPServer{
 			BaseURL: server.URL,
 			Auth: &config.HTTPAuth{
@@ -832,7 +832,7 @@ func TestOrchestratorRequestDeleteResolvesComplexAliasViaListCandidatePayload(t 
 				}},
 			},
 		},
-		managedserverhttp.WithMetadataRenderer(metadataService),
+		managedservicehttp.WithMetadataRenderer(metadataService),
 	)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %v", err)
@@ -843,7 +843,7 @@ func TestOrchestratorRequestDeleteResolvesComplexAliasViaListCandidatePayload(t 
 		server:   client,
 	}
 
-	value, err := orchestrator.Request(ctx, managedserverdomain.RequestSpec{
+	value, err := orchestrator.Request(ctx, managedservicedomain.RequestSpec{
 		Method: "DELETE",
 		Path:   "/apis/orders - v1",
 	})
@@ -1470,7 +1470,7 @@ func TestOrchestratorGetRemoteKeepsNotFoundWhenParentFallbackListPayloadIsInvali
 
 	serverManager := &fakeServer{
 		getErr: faults.NewTypedError(faults.NotFoundError, "resource not found", nil),
-		listErr: managedserverdomain.NewListPayloadShapeError(
+		listErr: managedservicedomain.NewListPayloadShapeError(
 			`list response object is ambiguous: expected an "items" array or a single array field`,
 			nil,
 		),
@@ -1736,7 +1736,7 @@ func TestOrchestratorRequestDelegatesToServer(t *testing.T) {
 	}
 
 	body := testContent(map[string]any{"id": "a"})
-	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	value, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "POST",
 		Path:   "/test",
 		Body:   body,
@@ -1784,7 +1784,7 @@ func TestOrchestratorRequestPostResolvesPathFromMetadata(t *testing.T) {
 		"providerId": "ldap",
 		"name":       "AD Production",
 	})
-	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	_, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "POST",
 		Path:   "/admin/realms/acme/user-registry/",
 		Body:   body,
@@ -1827,7 +1827,7 @@ func TestOrchestratorRequestGetSelectorDepthResolvesListPathFromMetadata(t *test
 		metadata: metadataService,
 	}
 
-	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	_, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "GET",
 		Path:   "/admin/realms/master/user-registry",
 	})
@@ -1871,7 +1871,7 @@ func TestOrchestratorRequestGetFallsBackToMetadataAwareRemoteReadAfterNotFound(t
 		},
 	}
 
-	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	value, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "GET",
 		Path:   "/admin/realms/master/clients/account",
 	})
@@ -1923,7 +1923,7 @@ func TestOrchestratorRequestDeleteRetriesWithResolvedRemoteIdentityAfterNotFound
 		},
 	}
 
-	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	_, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "DELETE",
 		Path:   "/admin/realms/acme/organizations/alpha",
 	})
@@ -1967,7 +1967,7 @@ func TestOrchestratorRequestPutCollectionPathRetriesLiteralAfterResolvedNotFound
 		"requirement": "ALTERNATIVE",
 	})
 
-	value, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	value, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "PUT",
 		Path:   "/admin/realms/acme/authentication/flows/test/executions",
 		Body:   body,
@@ -1994,7 +1994,7 @@ func TestOrchestratorRequestRequiresServer(t *testing.T) {
 	t.Parallel()
 
 	orchestrator := &Orchestrator{}
-	_, err := orchestrator.Request(context.Background(), managedserverdomain.RequestSpec{
+	_, err := orchestrator.Request(context.Background(), managedservicedomain.RequestSpec{
 		Method: "GET",
 		Path:   "/test",
 	})
@@ -2313,7 +2313,7 @@ func (f *fakeServer) Exists(context.Context, resource.Resource, metadatadomain.R
 	return f.existsValue, nil
 }
 
-func (f *fakeServer) Request(_ context.Context, spec managedserverdomain.RequestSpec) (resource.Content, error) {
+func (f *fakeServer) Request(_ context.Context, spec managedservicedomain.RequestSpec) (resource.Content, error) {
 	f.requestCalled = true
 	f.requestMethod = spec.Method
 	f.requestPath = spec.Path
@@ -3048,7 +3048,7 @@ func TestOrchestratorListRemoteProvidesListJQResourceResolver(t *testing.T) {
 		listFunc: func(ctx context.Context, logicalPath string, _ metadatadomain.ResourceMetadata) ([]resource.Resource, error) {
 			switch logicalPath {
 			case "/admin/realms/publico-br/user-registry/ldap-test/mappers":
-				parentValue, resolved, resolveErr := managedserverdomain.ResolveListJQResource(
+				parentValue, resolved, resolveErr := managedservicedomain.ResolveListJQResource(
 					ctx,
 					"/admin/realms/publico-br/user-registry/ldap-test",
 				)

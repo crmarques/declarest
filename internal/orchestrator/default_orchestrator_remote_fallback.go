@@ -20,14 +20,14 @@ import (
 	"strings"
 
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
 func (r *Orchestrator) fetchRemoteMetadataPathFallbackValue(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	resolvedResource resource.Resource,
 ) (resource.Content, bool, error) {
 	visited := map[string]struct{}{
@@ -77,7 +77,7 @@ func (r *Orchestrator) fetchRemoteMetadataPathFallbackValue(
 
 func (r *Orchestrator) resolveNextRemoteMetadataFallbackPaths(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
+	serverManager managedservice.ManagedServiceClient,
 	logicalPath string,
 ) ([]string, error) {
 	segments := resource.SplitRawPathSegments(logicalPath)

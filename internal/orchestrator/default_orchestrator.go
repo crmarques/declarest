@@ -15,7 +15,7 @@
 package orchestrator
 
 import (
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -28,7 +28,7 @@ var _ orchestrator.Orchestrator = (*Orchestrator)(nil)
 type Orchestrator struct {
 	repository repository.ResourceStore
 	metadata   metadata.MetadataService
-	server     managedserver.ManagedServerClient
+	server     managedservice.ManagedServiceClient
 	secrets    secrets.SecretProvider
 }
 
@@ -43,7 +43,7 @@ func WithDefaultFormat(format string) Option {
 func New(
 	repo repository.ResourceStore,
 	meta metadata.MetadataService,
-	srv managedserver.ManagedServerClient,
+	srv managedservice.ManagedServiceClient,
 	sec secrets.SecretProvider,
 	opts ...Option,
 ) *Orchestrator {
@@ -83,7 +83,7 @@ func (r *Orchestrator) MetadataService() metadata.MetadataService {
 	return r.metadata
 }
 
-func (r *Orchestrator) ManagedServerClient() managedserver.ManagedServerClient {
+func (r *Orchestrator) ManagedServiceClient() managedservice.ManagedServiceClient {
 	if r == nil {
 		return nil
 	}

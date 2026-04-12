@@ -270,10 +270,10 @@ ui_execution_parameter_source() {
   local key=$1
 
   case "${key}" in
-    managed-server-auth-type)
-      if ui_parameter_is_explicit 'managed-server-auth-type'; then
+    managed-service-auth-type)
+      if ui_parameter_is_explicit 'managed-service-auth-type'; then
         printf 'explicit\n'
-      elif [[ -n "${E2E_MANAGED_SERVER_AUTH_TYPE:-}" ]]; then
+      elif [[ -n "${E2E_MANAGED_SERVICE_AUTH_TYPE:-}" ]]; then
         printf 'component-default\n'
       else
         printf 'default\n'
@@ -369,10 +369,10 @@ ui_execution_parameter_lines() {
   ui_execution_parameter_line 'profile' "${E2E_PROFILE:-n/a}" "$(ui_execution_parameter_source 'profile')"
   ui_execution_parameter_line 'platform' "${E2E_PLATFORM:-n/a}" "$(ui_execution_parameter_source 'platform')"
   ui_execution_parameter_line 'metadata-source' "${E2E_METADATA:-n/a}" "$(ui_execution_parameter_source 'metadata')"
-  ui_execution_parameter_line 'managed-server' "${E2E_MANAGED_SERVER:-n/a}" "$(ui_execution_parameter_source 'managed-server')"
-  ui_execution_parameter_line 'managed-server-connection' "${E2E_MANAGED_SERVER_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'managed-server-connection')"
-  ui_execution_parameter_line 'managed-server-auth-type' "${E2E_MANAGED_SERVER_AUTH_TYPE:-auto}" "$(ui_execution_parameter_source 'managed-server-auth-type')"
-  ui_execution_parameter_line 'managed-server-mtls' "${E2E_MANAGED_SERVER_MTLS:-false}" "$(ui_execution_parameter_source 'managed-server-mtls')"
+  ui_execution_parameter_line 'managed-service' "${E2E_MANAGED_SERVICE:-n/a}" "$(ui_execution_parameter_source 'managed-service')"
+  ui_execution_parameter_line 'managed-service-connection' "${E2E_MANAGED_SERVICE_CONNECTION:-n/a}" "$(ui_execution_parameter_source 'managed-service-connection')"
+  ui_execution_parameter_line 'managed-service-auth-type' "${E2E_MANAGED_SERVICE_AUTH_TYPE:-auto}" "$(ui_execution_parameter_source 'managed-service-auth-type')"
+  ui_execution_parameter_line 'managed-service-mtls' "${E2E_MANAGED_SERVICE_MTLS:-false}" "$(ui_execution_parameter_source 'managed-service-mtls')"
   ui_execution_parameter_line 'proxy-mode' "${E2E_PROXY_MODE:-none}" "$(ui_execution_parameter_source 'proxy-mode')"
   ui_execution_parameter_line 'proxy-auth-type' "${proxy_auth_type}" "$(ui_execution_parameter_source 'proxy-auth-type')"
   ui_execution_parameter_line 'repository-type' "${E2E_REPO_TYPE:-n/a}" "$(ui_execution_parameter_source 'repository-type')"

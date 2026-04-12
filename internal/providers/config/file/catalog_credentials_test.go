@@ -38,7 +38,7 @@ func TestInjectContextCredentialsReusesNamedCredentialAcrossReferences(t *testin
 				},
 			},
 		},
-		ManagedServer: &config.ManagedServer{
+		ManagedService: &config.ManagedService{
 			HTTP: &config.HTTPServer{
 				BaseURL: "https://api.example.com",
 				Auth: &config.HTTPAuth{
@@ -62,9 +62,9 @@ func TestInjectContextCredentialsReusesNamedCredentialAcrossReferences(t *testin
 	}
 
 	repoAuth := resolved.Repository.Git.Remote.Auth.Basic
-	serverAuth := resolved.ManagedServer.HTTP.Auth.Basic
+	serverAuth := resolved.ManagedService.HTTP.Auth.Basic
 	if repoAuth == nil || serverAuth == nil {
-		t.Fatalf("expected repository and managed-server basic auth to be configured, got %#v %#v", repoAuth, serverAuth)
+		t.Fatalf("expected repository and managed-service basic auth to be configured, got %#v %#v", repoAuth, serverAuth)
 	}
 	if repoAuth.CredentialName() != "shared" || serverAuth.CredentialName() != "shared" {
 		t.Fatalf("expected both auth blocks to retain credentialsRef name shared, got %q and %q", repoAuth.CredentialName(), serverAuth.CredentialName())
@@ -73,6 +73,6 @@ func TestInjectContextCredentialsReusesNamedCredentialAcrossReferences(t *testin
 		t.Fatalf("expected repository auth to receive injected credential values, got %#v", repoAuth)
 	}
 	if serverAuth.Username.Literal() != "demo-user" || serverAuth.Password.Literal() != "demo-pass" {
-		t.Fatalf("expected managed-server auth to receive injected credential values, got %#v", serverAuth)
+		t.Fatalf("expected managed-service auth to receive injected credential values, got %#v", serverAuth)
 	}
 }

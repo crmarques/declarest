@@ -17,7 +17,7 @@ package cliutil
 import (
 	"github.com/crmarques/declarest/config"
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -85,13 +85,13 @@ func RequireSecretProvider(deps CommandDependencies) (secretdomain.SecretProvide
 	return appdeps.RequireSecretProvider(deps)
 }
 
-func RequireManagedServerClient(deps CommandDependencies) (managedserver.ManagedServerClient, error) {
+func RequireManagedServiceClient(deps CommandDependencies) (managedservice.ManagedServiceClient, error) {
 	if deps.Services == nil {
-		return nil, ValidationError("managed server client is not configured", nil)
+		return nil, ValidationError("managed service client is not configured", nil)
 	}
-	client := deps.Services.ManagedServerClient()
+	client := deps.Services.ManagedServiceClient()
 	if client == nil {
-		return nil, ValidationError("managed server client is not configured", nil)
+		return nil, ValidationError("managed service client is not configured", nil)
 	}
 	return client, nil
 }

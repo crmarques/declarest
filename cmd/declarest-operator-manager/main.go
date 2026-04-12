@@ -116,13 +116,13 @@ func main() {
 		ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository controller")
 		os.Exit(1)
 	}
-	if err := (&controllers.ManagedServerReconciler{
+	if err := (&controllers.ManagedServiceReconciler{
 		Client:                  manager.GetClient(),
 		Scheme:                  manager.GetScheme(),
-		Recorder:                manager.GetEventRecorder("managedserver-controller"),
+		Recorder:                manager.GetEventRecorder("managedservice-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
 	}).SetupWithManager(manager); err != nil {
-		ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer controller")
+		ctrl.Log.WithName("setup").Error(err, "unable to create ManagedService controller")
 		os.Exit(1)
 	}
 	if err := (&controllers.SecretStoreReconciler{
@@ -166,8 +166,8 @@ func main() {
 			ctrl.Log.WithName("setup").Error(err, "unable to create ResourceRepository webhook")
 			os.Exit(1)
 		}
-		if err := (&declarestv1alpha1.ManagedServer{}).SetupWebhookWithManager(manager); err != nil {
-			ctrl.Log.WithName("setup").Error(err, "unable to create ManagedServer webhook")
+		if err := (&declarestv1alpha1.ManagedService{}).SetupWebhookWithManager(manager); err != nil {
+			ctrl.Log.WithName("setup").Error(err, "unable to create ManagedService webhook")
 			os.Exit(1)
 		}
 		if err := (&declarestv1alpha1.SecretStore{}).SetupWebhookWithManager(manager); err != nil {

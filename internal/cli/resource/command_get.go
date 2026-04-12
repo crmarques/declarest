@@ -69,11 +69,11 @@ func newGetCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Global
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return cliutil.ValidationError("flag --http-method requires managed-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires managed-service source", nil)
 			}
 
 			runCtx := command.Context()
-			if source == sourceManagedServer {
+			if source == sourceManagedService {
 				runCtx, _, err = applyHTTPMethodOverride(runCtx, httpMethod, metadata.OperationGet)
 				if err != nil {
 					return err

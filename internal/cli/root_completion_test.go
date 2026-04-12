@@ -769,7 +769,7 @@ func TestResourceSourceFlagCompletionShowsSupportedValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected completion error: %v", err)
 	}
-	if !strings.Contains(output, "repository") || !strings.Contains(output, "managed-server") {
+	if !strings.Contains(output, "repository") || !strings.Contains(output, "managed-service") {
 		t.Fatalf("expected source values in completion output, got %q", output)
 	}
 }
@@ -931,8 +931,8 @@ func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
 			expectedSnippet: "/customers/",
 		},
 		{
-			name:            "get_managed_server_prefers_remote",
-			args:            []string{"resource", "get", "--source", "managed-server", "/customers"},
+			name:            "get_managed_service_prefers_remote",
+			args:            []string{"resource", "get", "--source", "managed-service", "/customers"},
 			expectLocal:     false,
 			expectRemote:    true,
 			expectedSnippet: "/customers/",
@@ -952,8 +952,8 @@ func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
 			expectedSnippet: "/customers/",
 		},
 		{
-			name:            "list_managed_server_prefers_remote",
-			args:            []string{"resource", "list", "--source", "managed-server", "/customers"},
+			name:            "list_managed_service_prefers_remote",
+			args:            []string{"resource", "list", "--source", "managed-service", "/customers"},
 			expectLocal:     false,
 			expectRemote:    true,
 			expectedSnippet: "/customers/",
@@ -966,8 +966,8 @@ func TestPathCompletionResourceSourceFlagsSwitchCompletionTarget(t *testing.T) {
 			expectedSnippet: "/customers/",
 		},
 		{
-			name:            "delete_managed_server_prefers_remote",
-			args:            []string{"resource", "delete", "--yes", "--source", "managed-server", "/customers"},
+			name:            "delete_managed_service_prefers_remote",
+			args:            []string{"resource", "delete", "--yes", "--source", "managed-service", "/customers"},
 			expectLocal:     false,
 			expectRemote:    true,
 			expectedSnippet: "/customers/",

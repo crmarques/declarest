@@ -37,7 +37,7 @@ type SyncPolicySyncOptions struct {
 
 type SyncPolicySpec struct {
 	ResourceRepositoryRef NamespacedObjectReference `json:"resourceRepositoryRef"`
-	ManagedServerRef      NamespacedObjectReference `json:"managedServerRef"`
+	ManagedServiceRef     NamespacedObjectReference `json:"managedServiceRef"`
 	SecretStoreRef        NamespacedObjectReference `json:"secretStoreRef"`
 	Source                SyncPolicySource          `json:"source"`
 	Sync                  SyncPolicySyncOptions     `json:"sync,omitempty"`
@@ -70,7 +70,7 @@ type SyncPolicyStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=sp,categories=declarest
 // +kubebuilder:printcolumn:name="Repo",type="string",JSONPath=".spec.resourceRepositoryRef.name"
-// +kubebuilder:printcolumn:name="Server",type="string",JSONPath=".spec.managedServerRef.name"
+// +kubebuilder:printcolumn:name="Server",type="string",JSONPath=".spec.managedServiceRef.name"
 // +kubebuilder:printcolumn:name="Revision",type="string",JSONPath=".status.lastAppliedRepoRevision"
 // +kubebuilder:printcolumn:name="Last Sync",type="date",JSONPath=".status.lastSuccessfulSyncTime"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
@@ -108,8 +108,8 @@ func (s *SyncPolicy) ValidateSpec() error {
 	if strings.TrimSpace(s.Spec.ResourceRepositoryRef.Name) == "" {
 		return fmt.Errorf("spec.resourceRepositoryRef.name is required")
 	}
-	if strings.TrimSpace(s.Spec.ManagedServerRef.Name) == "" {
-		return fmt.Errorf("spec.managedServerRef.name is required")
+	if strings.TrimSpace(s.Spec.ManagedServiceRef.Name) == "" {
+		return fmt.Errorf("spec.managedServiceRef.name is required")
 	}
 	if strings.TrimSpace(s.Spec.SecretStoreRef.Name) == "" {
 		return fmt.Errorf("spec.secretStoreRef.name is required")

@@ -28,18 +28,18 @@ test_requirement_requested_explicitly_tracks_capability_selection() {
   fi
 }
 
-test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector() {
+test_requirement_requested_explicitly_tracks_managed_service_auth_type_selector() {
   load_case_libs
 
   E2E_EXPLICIT=()
-  E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
+  E2E_MANAGED_SERVICE_AUTH_TYPE='oauth2'
 
-  if case_requirement_requested_explicitly 'managed-server-auth-type=oauth2'; then
+  if case_requirement_requested_explicitly 'managed-service-auth-type=oauth2'; then
     fail "expected implicit auth-type selection not to be marked explicit"
   fi
 
-  e2e_mark_explicit 'managed-server-auth-type'
-  if ! case_requirement_requested_explicitly 'managed-server-auth-type=oauth2'; then
+  e2e_mark_explicit 'managed-service-auth-type'
+  if ! case_requirement_requested_explicitly 'managed-service-auth-type=oauth2'; then
     fail "expected explicit auth-type selection to be marked explicit"
   fi
 }
@@ -109,7 +109,7 @@ test_collect_case_files_is_deterministic_global_then_component() {
 
   E2E_DIR="${tmp}"
   mkdir -p "${E2E_DIR}/cases/smoke"
-  mkdir -p "${E2E_DIR}/components/managed-server/demo/cases/smoke"
+  mkdir -p "${E2E_DIR}/components/managed-service/demo/cases/smoke"
 
   cat >"${E2E_DIR}/cases/smoke/02-global-b.sh" <<'EOF'
 CASE_ID='g2'
@@ -123,23 +123,23 @@ CASE_SCOPE='smoke'
 CASE_PROFILES='cli operator'
 case_run(){ :; }
 EOF
-  cat >"${E2E_DIR}/components/managed-server/demo/cases/smoke/03-component-c.sh" <<'EOF'
+  cat >"${E2E_DIR}/components/managed-service/demo/cases/smoke/03-component-c.sh" <<'EOF'
 CASE_ID='c3'
 CASE_SCOPE='smoke'
 case_run(){ :; }
 EOF
 
   E2E_PROFILE='cli-basic'
-  E2E_SELECTED_COMPONENT_KEYS=('managed-server:demo')
+  E2E_SELECTED_COMPONENT_KEYS=('managed-service:demo')
   E2E_COMPONENT_PATH=()
-  E2E_COMPONENT_PATH['managed-server:demo']="${E2E_DIR}/components/managed-server/demo"
+  E2E_COMPONENT_PATH['managed-service:demo']="${E2E_DIR}/components/managed-service/demo"
 
   e2e_collect_case_files
 
   assert_eq "${#E2E_CASE_FILES[@]}" "3"
   assert_eq "${E2E_CASE_FILES[0]}" "${E2E_DIR}/cases/smoke/01-global-a.sh"
   assert_eq "${E2E_CASE_FILES[1]}" "${E2E_DIR}/cases/smoke/02-global-b.sh"
-  assert_eq "${E2E_CASE_FILES[2]}" "${E2E_DIR}/components/managed-server/demo/cases/smoke/03-component-c.sh"
+  assert_eq "${E2E_CASE_FILES[2]}" "${E2E_DIR}/components/managed-service/demo/cases/smoke/03-component-c.sh"
 }
 
 test_collect_case_files_filters_by_profile_family() {
@@ -219,7 +219,7 @@ EOF
 }
 
 test_requirement_requested_explicitly_tracks_capability_selection
-test_requirement_requested_explicitly_tracks_managed_server_auth_type_selector
+test_requirement_requested_explicitly_tracks_managed_service_auth_type_selector
 test_requirement_requested_explicitly_tracks_proxy_capability
 test_requirement_requested_explicitly_tracks_proxy_auth_type_selector
 test_requirement_requested_explicitly_tracks_generic_proxy_capability_and_selector

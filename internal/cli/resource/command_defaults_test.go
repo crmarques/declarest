@@ -85,9 +85,9 @@ func TestDefaultsEditCommandClearsDefaultsWhenEditorIsEmpty(t *testing.T) {
 	}
 }
 
-func TestDefaultsInferCommandRequiresYesForManagedServerSource(t *testing.T) {
+func TestDefaultsInferCommandRequiresYesForManagedServiceSource(t *testing.T) {
 	command := newDefaultsInferCommand(cliutil.CommandDependencies{}, &cliutil.GlobalFlags{})
-	command.SetArgs([]string{"/customers/acme", "--from", "managed-server"})
+	command.SetArgs([]string{"/customers/acme", "--from", "managed-service"})
 	command.SetIn(bytes.NewBuffer(nil))
 	command.SetOut(&bytes.Buffer{})
 	command.SetErr(&bytes.Buffer{})
@@ -98,7 +98,7 @@ func TestDefaultsInferCommandRequiresYesForManagedServerSource(t *testing.T) {
 	}
 }
 
-func TestDefaultsInferCommandRejectsWaitWithoutManagedServerSource(t *testing.T) {
+func TestDefaultsInferCommandRejectsWaitWithoutManagedServiceSource(t *testing.T) {
 	command := newDefaultsInferCommand(cliutil.CommandDependencies{}, &cliutil.GlobalFlags{})
 	command.SetArgs([]string{"/customers/acme", "--wait", "1s"})
 	command.SetIn(bytes.NewBuffer(nil))
@@ -339,7 +339,7 @@ func TestDefaultsInferCommandSaveWritesBundleBackedDefaultsToRepoOverlay(t *test
 	}
 }
 
-func TestParseManagedServerDefaultsWait(t *testing.T) {
+func TestParseManagedServiceDefaultsWait(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -361,7 +361,7 @@ func TestParseManagedServerDefaultsWait(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, gotSet, err := parseManagedServerDefaultsWait(tc.input)
+			got, gotSet, err := parseManagedServiceDefaultsWait(tc.input)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error for input %q", tc.input)
@@ -541,7 +541,7 @@ func defaultsTestContext(repoDir string, metadataDir string, bundle string) conf
 				BaseDir: repoDir,
 			},
 		},
-		ManagedServer: &configdomain.ManagedServer{},
+		ManagedService: &configdomain.ManagedService{},
 	}
 	if metadataDir != "" || bundle != "" {
 		context.Metadata = configdomain.Metadata{

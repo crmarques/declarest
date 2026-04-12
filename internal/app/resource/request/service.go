@@ -21,7 +21,7 @@ import (
 
 	appdeps "github.com/crmarques/declarest/internal/app/deps"
 	mutateapp "github.com/crmarques/declarest/internal/app/resource/mutate"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/resource"
 )
 
@@ -49,7 +49,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	}
 
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
-	baseSpec := managedserver.RequestSpec{
+	baseSpec := managedservice.RequestSpec{
 		Method:      method,
 		Path:        req.LogicalPath,
 		Headers:     maps.Clone(req.Headers),

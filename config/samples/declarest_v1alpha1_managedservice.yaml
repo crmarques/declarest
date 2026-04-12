@@ -1,0 +1,29 @@
+apiVersion: declarest.io/v1alpha1
+kind: ManagedService
+metadata:
+  name: example-managed-service
+spec:
+  # Context parity:
+  # - managed-service.http.*     -> spec.http.*
+  # - metadata.bundle           -> spec.metadata.bundle
+  http:
+    baseURL: https://managed-service.example.com/api
+    requestThrottling:
+      maxConcurrentRequests: 4
+      queueSize: 16
+      requestsPerSecond: 20
+      burst: 40
+    auth:
+      oauth2:
+        tokenURL: https://managed-service.example.com/oauth/token
+        grantType: client_credentials
+        clientIDRef:
+          name: managed-service-oauth2
+          key: client-id
+        clientSecretRef:
+          name: managed-service-oauth2
+          key: client-secret
+  openapi:
+    url: https://managed-service.example.com/openapi.yaml
+  metadata:
+    bundle: managed-service-bundle:0.0.1

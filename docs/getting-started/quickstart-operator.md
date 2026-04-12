@@ -7,7 +7,7 @@ This is the shortest path to first reconcile success with the Kubernetes Operato
 - A Kubernetes cluster with `kubectl` access
 - A namespace for the Operator (examples use `declarest-system`)
 - A Git repository that stores DeclaREST resource files (desired state)
-- Managed Server API endpoint + auth credentials
+- Managed Service API endpoint + auth credentials
 - Dynamic PVC provisioning, or existing PVCs
 
 ## 1. Install CRDs and Operator
@@ -44,7 +44,7 @@ kubectl -n declarest-system create secret generic repository-credentials \
   --from-literal=token='<git-token>' \
   --from-literal=webhook-secret='<webhook-secret>'
 
-kubectl -n declarest-system create secret generic managed-server-auth \
+kubectl -n declarest-system create secret generic managed-service-auth \
   --from-literal=token='<api-token>'
 
 kubectl -n declarest-system create secret generic secret-store-file \
@@ -78,9 +78,9 @@ spec:
         storage: 1Gi
 ---
 apiVersion: declarest.io/v1alpha1
-kind: ManagedServer
+kind: ManagedService
 metadata:
-  name: demo-managed-server
+  name: demo-managed-service
   namespace: declarest-system
 spec:
   http:
@@ -90,7 +90,7 @@ spec:
         - header: Authorization
           prefix: Bearer
           valueRef:
-            name: managed-server-auth
+            name: managed-service-auth
             key: token
 ---
 apiVersion: declarest.io/v1alpha1
@@ -119,8 +119,8 @@ metadata:
 spec:
   resourceRepositoryRef:
     name: demo-repository
-  managedServerRef:
-    name: demo-managed-server
+  managedServiceRef:
+    name: demo-managed-service
   secretStoreRef:
     name: demo-secret-store
   source:
@@ -143,7 +143,7 @@ kubectl apply -f quickstart-operator.yaml
 ## 4. Confirm health and reconcile
 
 ```bash
-kubectl -n declarest-system get resourcerepositories,managedservers,secretstores,syncpolicies
+kubectl -n declarest-system get resourcerepositories,managedservices,secretstores,syncpolicies
 kubectl -n declarest-system describe syncpolicy demo-sync
 kubectl -n declarest-system logs deploy/declarest-operator -c manager --tail=200
 ```

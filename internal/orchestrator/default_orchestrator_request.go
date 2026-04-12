@@ -21,14 +21,14 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/resource"
 )
 
 func (r *Orchestrator) Request(
 	ctx context.Context,
-	requestSpec managedserver.RequestSpec,
+	requestSpec managedservice.RequestSpec,
 ) (resource.Content, error) {
 	serverManager, err := r.requireServer()
 	if err != nil {
@@ -133,9 +133,9 @@ func (r *Orchestrator) Request(
 
 func (r *Orchestrator) retryRequestResolvedMutationWithLiteralPath(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
-	original managedserver.RequestSpec,
-	resolved managedserver.RequestSpec,
+	serverManager managedservice.ManagedServiceClient,
+	original managedservice.RequestSpec,
+	resolved managedservice.RequestSpec,
 	requestErr error,
 ) (resource.Content, bool, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(original.Method))
@@ -157,8 +157,8 @@ func (r *Orchestrator) retryRequestResolvedMutationWithLiteralPath(
 
 func (r *Orchestrator) retryRequestNotFoundWithMetadata(
 	ctx context.Context,
-	serverManager managedserver.ManagedServerClient,
-	requestSpec managedserver.RequestSpec,
+	serverManager managedservice.ManagedServiceClient,
+	requestSpec managedservice.RequestSpec,
 ) (resource.Content, bool, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 
@@ -210,21 +210,21 @@ func (r *Orchestrator) retryRequestNotFoundWithMetadata(
 
 func (r *Orchestrator) resolveRequestSpec(
 	ctx context.Context,
-	requestSpec managedserver.RequestSpec,
-) (managedserver.RequestSpec, context.Context, error) {
+	requestSpec managedservice.RequestSpec,
+) (managedservice.RequestSpec, context.Context, error) {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(requestSpec.Method))
 
 	operation, ok := requestMetadataOperation(normalizedMethod)
 	if !ok {
 		resolved := cloneRequestSpec(requestSpec)
 		resolved.Method = normalizedMethod
-		resolved.Path = managedserver.NormalizeRequestPath(resolved.Path)
+		resolved.Path = managedservice.NormalizeRequestPath(resolved.Path)
 		return resolved, ctx, nil
 	}
 
 	resolvedResource, resourceMd, err := r.buildResourceInfoForRemoteRead(ctx, requestSpec.Path)
 	if err != nil {
-		return managedserver.RequestSpec{}, ctx, err
+		return managedservice.RequestSpec{}, ctx, err
 	}
 
 	if normalizedMethod == "GET" && shouldResolveRequestGetAsList(resolvedResource, resourceMd) {
@@ -240,7 +240,7 @@ func (r *Orchestrator) resolveRequestSpec(
 	if requestBodyPresent(requestSpec.Body) {
 		normalizedBody, normalizeErr := resource.Normalize(requestSpec.Body.Value)
 		if normalizeErr != nil {
-			return managedserver.RequestSpec{}, ctx, normalizeErr
+			return managedservice.RequestSpec{}, ctx, normalizeErr
 		}
 		resolvedResource.Payload = normalizedBody
 		resolvedResource.PayloadDescriptor = requestSpec.Body.Descriptor
@@ -250,7 +250,7 @@ func (r *Orchestrator) resolveRequestSpec(
 	if err != nil && faults.IsCategory(err, faults.ValidationError) && requestOperationAllowsCollectionCandidateFallback(operation) {
 		serverManager, serverErr := r.requireServer()
 		if serverErr != nil {
-			return managedserver.RequestSpec{}, ctx, serverErr
+			return managedservice.RequestSpec{}, ctx, serverErr
 		}
 
 		candidate, handled, candidateErr := r.resolveRemoteCollectionCandidate(
@@ -260,7 +260,7 @@ func (r *Orchestrator) resolveRequestSpec(
 			resourceMd,
 		)
 		if candidateErr != nil {
-			return managedserver.RequestSpec{}, ctx, candidateErr
+			return managedservice.RequestSpec{}, ctx, candidateErr
 		}
 		if handled {
 			resolvedResource = remoteReadResourceFromFallbackCandidate(resolvedResource, candidate)
@@ -268,7 +268,7 @@ func (r *Orchestrator) resolveRequestSpec(
 		}
 	}
 	if err != nil {
-		return managedserver.RequestSpec{}, ctx, err
+		return managedservice.RequestSpec{}, ctx, err
 	}
 
 	resolved := requestSpecFromOperationSpec(requestSpec, spec)
@@ -344,11 +344,11 @@ func sameNormalizedRequestPath(first string, second string) bool {
 		return normalizedFirst == normalizedSecond
 	}
 
-	return managedserver.NormalizeRequestPath(first) == managedserver.NormalizeRequestPath(second)
+	return managedservice.NormalizeRequestPath(first) == managedservice.NormalizeRequestPath(second)
 }
 
-func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.OperationSpec) managedserver.RequestSpec {
-	resolved := managedserver.RequestSpec{
+func requestSpecFromOperationSpec(base managedservice.RequestSpec, spec metadata.OperationSpec) managedservice.RequestSpec {
+	resolved := managedservice.RequestSpec{
 		Method:      strings.ToUpper(strings.TrimSpace(spec.Method)),
 		Path:        spec.Path,
 		Query:       maps.Clone(spec.Query),
@@ -388,8 +388,8 @@ func requestSpecFromOperationSpec(base managedserver.RequestSpec, spec metadata.
 	return resolved
 }
 
-func cloneRequestSpec(value managedserver.RequestSpec) managedserver.RequestSpec {
-	return managedserver.RequestSpec{
+func cloneRequestSpec(value managedservice.RequestSpec) managedservice.RequestSpec {
+	return managedservice.RequestSpec{
 		Method:      value.Method,
 		Path:        value.Path,
 		Query:       maps.Clone(value.Query),

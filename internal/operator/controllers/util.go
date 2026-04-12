@@ -268,11 +268,11 @@ func expandRuntimeResourceRepository(
 	return expanded
 }
 
-func expandRuntimeManagedServer(managedServer *declarestv1alpha1.ManagedServer) *declarestv1alpha1.ManagedServer {
-	if managedServer == nil {
+func expandRuntimeManagedService(managedService *declarestv1alpha1.ManagedService) *declarestv1alpha1.ManagedService {
+	if managedService == nil {
 		return nil
 	}
-	expanded := managedServer.DeepCopy()
+	expanded := managedService.DeepCopy()
 	envref.ExpandExactEnvPlaceholdersInPlace(&expanded.Spec)
 	return expanded
 }
@@ -299,7 +299,7 @@ func expandRuntimeSyncPolicy(syncPolicy *declarestv1alpha1.SyncPolicy) *declares
 // names referenced by the three dependency CRDs of a SyncPolicy.
 func collectSecretNames(
 	repo *declarestv1alpha1.ResourceRepository,
-	managedServer *declarestv1alpha1.ManagedServer,
+	managedService *declarestv1alpha1.ManagedService,
 	secretStore *declarestv1alpha1.SecretStore,
 ) []string {
 	names := sets.New[string]()
@@ -320,28 +320,28 @@ func collectSecretNames(
 			addRef(repo.Spec.Git.Webhook.SecretRef)
 		}
 	}
-	// ManagedServer secret refs
-	if managedServer.Spec.HTTP.Auth.OAuth2 != nil {
-		addRef(managedServer.Spec.HTTP.Auth.OAuth2.ClientIDRef)
-		addRef(managedServer.Spec.HTTP.Auth.OAuth2.ClientSecretRef)
-		addRef(managedServer.Spec.HTTP.Auth.OAuth2.UsernameRef)
-		addRef(managedServer.Spec.HTTP.Auth.OAuth2.PasswordRef)
+	// ManagedService secret refs
+	if managedService.Spec.HTTP.Auth.OAuth2 != nil {
+		addRef(managedService.Spec.HTTP.Auth.OAuth2.ClientIDRef)
+		addRef(managedService.Spec.HTTP.Auth.OAuth2.ClientSecretRef)
+		addRef(managedService.Spec.HTTP.Auth.OAuth2.UsernameRef)
+		addRef(managedService.Spec.HTTP.Auth.OAuth2.PasswordRef)
 	}
-	if managedServer.Spec.HTTP.Auth.BasicAuth != nil {
-		addRef(managedServer.Spec.HTTP.Auth.BasicAuth.UsernameRef)
-		addRef(managedServer.Spec.HTTP.Auth.BasicAuth.PasswordRef)
+	if managedService.Spec.HTTP.Auth.BasicAuth != nil {
+		addRef(managedService.Spec.HTTP.Auth.BasicAuth.UsernameRef)
+		addRef(managedService.Spec.HTTP.Auth.BasicAuth.PasswordRef)
 	}
-	for _, h := range managedServer.Spec.HTTP.Auth.CustomHeaders {
+	for _, h := range managedService.Spec.HTTP.Auth.CustomHeaders {
 		addRef(h.ValueRef)
 	}
-	if managedServer.Spec.HTTP.TLS != nil {
-		addRef(managedServer.Spec.HTTP.TLS.CACertRef)
-		addRef(managedServer.Spec.HTTP.TLS.ClientCertRef)
-		addRef(managedServer.Spec.HTTP.TLS.ClientKeyRef)
+	if managedService.Spec.HTTP.TLS != nil {
+		addRef(managedService.Spec.HTTP.TLS.CACertRef)
+		addRef(managedService.Spec.HTTP.TLS.ClientCertRef)
+		addRef(managedService.Spec.HTTP.TLS.ClientKeyRef)
 	}
-	if managedServer.Spec.HTTP.Proxy != nil && managedServer.Spec.HTTP.Proxy.Auth != nil {
-		addRef(managedServer.Spec.HTTP.Proxy.Auth.UsernameRef)
-		addRef(managedServer.Spec.HTTP.Proxy.Auth.PasswordRef)
+	if managedService.Spec.HTTP.Proxy != nil && managedService.Spec.HTTP.Proxy.Auth != nil {
+		addRef(managedService.Spec.HTTP.Proxy.Auth.UsernameRef)
+		addRef(managedService.Spec.HTTP.Proxy.Auth.PasswordRef)
 	}
 	// SecretStore secret refs
 	if secretStore.Spec.Vault != nil {
@@ -383,10 +383,10 @@ func computeSecretVersionHash(
 	reader client.Reader,
 	namespace string,
 	repo *declarestv1alpha1.ResourceRepository,
-	managedServer *declarestv1alpha1.ManagedServer,
+	managedService *declarestv1alpha1.ManagedService,
 	secretStore *declarestv1alpha1.SecretStore,
 ) string {
-	secretNames := collectSecretNames(repo, managedServer, secretStore)
+	secretNames := collectSecretNames(repo, managedService, secretStore)
 	if len(secretNames) == 0 {
 		return ""
 	}

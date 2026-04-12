@@ -54,7 +54,7 @@ Inputs:
 Execution:
 1. `orchestrator.Orchestrator` loads resource and resolved metadata.
 2. `secrets.SecretProvider` resolves placeholders.
-3. `managedserver.ManagedServerClient` executes update.
+3. `managedservice.ManagedServiceClient` executes update.
 4. Orchestrator returns normalized remote mutation output without implicit local persistence.
 
 Expected outputs:
@@ -147,12 +147,12 @@ Execution:
 1. Runner validates selected stack is local-instantiable.
 2. Runner starts components and emits temporary context catalog.
 3. Runner executes optional component `manual-info` hooks and prints access details.
-4. Runner copies selected managed-server `repo-template` into the context repository directory.
+4. Runner copies selected managed-service `repo-template` into the context repository directory.
 5. Runner generates setup/reset shell scripts and prints follow-up `declarest-e2e` commands, exits, and keeps runtime resources.
 
 Expected outputs:
 1. Temporary context config is usable after sourcing the generated setup script.
-2. Access output includes component-specific or state-derived managed-server details (for example, local keycloak admin console URL and credentials, or local rundeck API URL and auth token).
+2. Access output includes component-specific or state-derived managed-service details (for example, local keycloak admin console URL and credentials, or local rundeck API URL and auth token).
 3. Context repository directory contains seeded template resources and collection metadata.
 4. Setup script exports runtime env vars, defines alias `declarest-e2e`, and initializes prompt-auth shell-session reuse for prompt-backed credentials; reset script unsets these vars, removes the alias, and restores the prior prompt-auth shell state.
 5. Output includes cleanup commands (`--clean`, `--clean-all`) for explicit teardown.
@@ -162,7 +162,7 @@ Expected outputs:
 Goal: validate fixture-tree sync against API-facing identifiers and nested metadata placeholders.
 
 Inputs:
-1. Selected managed-server fixture tree under `repo-template/`.
+1. Selected managed-service fixture tree under `repo-template/`.
 2. Metadata using `resource.id`/`resource.alias` identity templates and intermediary placeholder paths (for example `/x/_/y/_/_`).
 
 Execution:
@@ -181,7 +181,7 @@ Goal: read either remote observed state or local desired state deterministically
 
 Inputs:
 1. Path `/customers/acme`.
-2. CLI source flag `--source` with values `repository` or `managed-server`.
+2. CLI source flag `--source` with values `repository` or `managed-service`.
 
 Execution:
 1. `declarest resource get /customers/acme` runs without source flags.
@@ -243,9 +243,9 @@ Goal: reuse one named prompt-backed credential across multiple components withou
 
 Inputs:
 1. Catalog credential `shared-login` with prompt-backed `username` and `password`, both using `persistInSession: true`.
-2. Context with `managedServer.http.auth.basic.credentialsRef.name=shared-login`, `repository.git.remote.auth.basic.credentialsRef.name=shared-login`, and `managedServer.http.proxy.auth.basic.credentialsRef.name=shared-login`.
+2. Context with `managedService.http.auth.basic.credentialsRef.name=shared-login`, `repository.git.remote.auth.basic.credentialsRef.name=shared-login`, and `managedService.http.proxy.auth.basic.credentialsRef.name=shared-login`.
 3. The user evaluated `declarest context session-hook bash` or `declarest context session-hook zsh` in the current shell before running runtime commands.
-4. One runtime command that uses the managed server and git repository.
+4. One runtime command that uses the managed service and git repository.
 
 Execution:
 1. Startup resolves the context without prompting because prompt-backed credential attributes are deferred.
@@ -264,13 +264,13 @@ Failure expectation:
 1. A non-interactive command with uncached prompt-backed credential attributes fails with `ValidationError`.
 2. When `XDG_RUNTIME_DIR` is unavailable, `persistInSession: true` does not create a cross-command cache file and later `declarest` commands prompt again.
 
-### Example 12: Resource Defaults Managed-Server Probe Safety
+### Example 12: Resource Defaults Managed-Service Probe Safety
 Goal: infer server-added defaults by probing create behavior without leaving orphan temporary resources behind.
 
 Inputs:
 1. Target resource path `/customers/acme`.
-2. `resource defaults infer /customers/acme --managed-server --yes`.
-3. Optional `--wait 2s` when the managed server needs extra time before probe readback stabilizes.
+2. `resource defaults infer /customers/acme --managed-service --yes`.
+3. Optional `--wait 2s` when the managed service needs extra time before probe readback stabilizes.
 
 Execution:
 1. CLI validates `--yes` before any remote mutation.
@@ -295,7 +295,7 @@ Inputs:
 
 Execution:
 1. `resource get --prune-defaults` reads the effective payload from the selected source and compacts it against resolved metadata defaults before output.
-2. Repository and managed-server sources both use the same resolved metadata defaults object for pruning.
+2. Repository and managed-service sources both use the same resolved metadata defaults object for pruning.
 3. `resource save --prune-defaults` compacts the fetched or explicit payload before repository persistence; list saves prune per resolved item path.
 
 Expected outputs:
@@ -308,7 +308,7 @@ Goal: generate a manual E2E context that defers proxy credentials to runtime pro
 
 Inputs:
 1. `run-e2e.sh --profile cli-manual --platform compose --proxy-mode local --proxy-auth-type prompt`.
-2. Default local managed-server selection (`simple-api-server`) and auto-selected helper component `proxy:forward-proxy`.
+2. Default local managed-service selection (`simple-api-server`) and auto-selected helper component `proxy:forward-proxy`.
 
 Execution:
 1. Runner validates that proxy prompt auth is being used only with `cli-manual`.
@@ -328,11 +328,11 @@ Failure expectation:
 Goal: keep metadata-mutating E2E coverage without mutating checked-in component fixtures.
 
 Inputs:
-1. Managed-server component with checked-in `metadata/` fixtures.
+1. Managed-service component with checked-in `metadata/` fixtures.
 2. E2E case that calls `resource metadata set` or `secret detect --fix`.
 
 Execution:
-1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
+1. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-service-metadata`.
 2. Generated context points `metadata.baseDir` at that run-scoped copy.
 3. Case mutates metadata through CLI commands.
 
@@ -342,12 +342,12 @@ Expected outputs:
 Goal: run component hooks in parallel when possible without violating dependency constraints.
 
 Inputs:
-1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `managed-server=simple-api-server`, `secret-provider=file`.
+1. Selected stack with `repo-type=git`, `git-provider=gitlab`, `managed-service=simple-api-server`, `secret-provider=file`.
 2. Component metadata where `repo-type:git` declares `COMPONENT_DEPENDS_ON="git-provider:*"`.
 
 Execution:
 1. `run-e2e.sh` executes `init` hooks using dependency-aware batching.
-2. `git-provider:gitlab` and `managed-server:simple-api-server` initialize in parallel.
+2. `git-provider:gitlab` and `managed-service:simple-api-server` initialize in parallel.
 3. `repo-type:git` initializes only after `git-provider:*` completion.
 4. Runner executes `configure-auth` and `context` hooks through the same dependency graph.
 
@@ -361,17 +361,17 @@ Failure expectation:
 2. Cyclic dependencies fail fast with an explicit cycle message before workload execution.
 
 ### Example 33: E2E Metadata Source Directory Mode
-Goal: select run-scoped managed-server metadata from the component metadata directory.
+Goal: select run-scoped managed-service metadata from the component metadata directory.
 
 Inputs:
-1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source dir`.
-2. Selected managed-server component with checked-in `metadata/` fixtures.
+1. `run-e2e.sh --profile cli-basic --managed-service simple-api-server --metadata-source dir`.
+2. Selected managed-service component with checked-in `metadata/` fixtures.
 
 Execution:
 1. Runner parses `--metadata-source dir`.
-2. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-server-metadata`.
+2. Runner copies the component metadata tree into `test/e2e/.runs/<run-id>/managed-service-metadata`.
 3. Generated context points `metadata.baseDir` at that run-scoped copy.
-4. Runner keeps local `managedServer.http.openapi` wiring enabled for the selected component.
+4. Runner keeps local `managedService.http.openapi` wiring enabled for the selected component.
 
 Expected outputs:
 1. Generated context uses the run-scoped metadata copy rather than the checked-in fixture directory.
@@ -382,8 +382,8 @@ Expected outputs:
 Goal: reject invalid metadata-source selections before runtime preparation.
 
 Inputs:
-1. `run-e2e.sh --profile cli-basic --managed-server simple-api-server --metadata-source nope`.
-2. Selected managed-server component with checked-in `metadata/` fixtures.
+1. `run-e2e.sh --profile cli-basic --managed-service simple-api-server --metadata-source nope`.
+2. Selected managed-service component with checked-in `metadata/` fixtures.
 
 Execution:
 1. Runner parses the metadata-source flag before runtime preparation.
@@ -476,7 +476,7 @@ Failure expectation:
 Goal: ensure `simple-api-server` denies resource operations without a valid bearer token.
 
 Inputs:
-1. Local stack with `managed-server=simple-api-server`.
+1. Local stack with `managed-service=simple-api-server`.
 2. Client credentials configured in component state.
 
 Execution:
@@ -496,7 +496,7 @@ Failure expectation:
 Goal: allow multiple SyncPolicies to share dependency references while preventing path/subpath scope collisions.
 
 Inputs:
-1. `SyncPolicy A` references repository `repo-main`, managed server `server-main`, secret store `secrets-main`, source path `/admin/realms/A`.
+1. `SyncPolicy A` references repository `repo-main`, managed service `server-main`, secret store `secrets-main`, source path `/admin/realms/A`.
 2. `SyncPolicy B` references the same dependency objects with source path `/admin/realms/B`.
 3. `SyncPolicy C` references any dependency combination with source path `/admin/realms/A/clients`.
 
@@ -553,16 +553,16 @@ Expected outputs:
 Failure expectation:
 1. Invalid signature/token returns authentication failure and no repository annotation mutation.
 
-### Example 20: Managed-Server Swagger 2 Compatibility (Corner)
-Goal: keep managed-server OpenAPI-assisted behavior equivalent when `managed-server.http.openapi` points to Swagger 2.0.
+### Example 20: Managed-Service Swagger 2 Compatibility (Corner)
+Goal: keep managed-service OpenAPI-assisted behavior equivalent when `managed-service.http.openapi` points to Swagger 2.0.
 
 Inputs:
-1. Context `managed-server.http.openapi` path pointing to a `swagger: "2.0"` document.
+1. Context `managed-service.http.openapi` path pointing to a `swagger: "2.0"` document.
 2. Swagger operation with `consumes`, `produces`, and `parameters[in=body].schema`.
 3. Metadata operation using `validate.schemaRef: openapi:request-body`.
 
 Execution:
-1. Startup loads and normalizes the Swagger 2.0 document through `managedserver.ManagedServerClient`.
+1. Startup loads and normalizes the Swagger 2.0 document through `managedservice.ManagedServiceClient`.
 2. Request construction resolves missing `Accept`/`ContentType` from normalized operation media definitions.
 3. Payload validation resolves `openapi:request-body` against the normalized Swagger body schema.
 
@@ -578,7 +578,7 @@ Failure expectation:
 Goal: run containerized components with compose artifacts explicitly.
 
 Inputs:
-1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --managed-server simple-api-server --secret-provider file`.
+1. `run-e2e.sh --profile basic --platform compose --repo-type filesystem --managed-service simple-api-server --secret-provider file`.
 
 Execution:
 1. Runner parses platform selection (`compose`).
@@ -596,7 +596,7 @@ Failure expectation:
 Goal: verify kind runtime lifecycle, manual handoff details, and cleanup.
 
 Inputs:
-1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --managed-server keycloak --secret-provider file`.
+1. `run-e2e.sh --profile manual --platform kubernetes --repo-type filesystem --managed-service keycloak --secret-provider file`.
 2. Follow-up cleanup command `run-e2e.sh --clean <run-id>`.
 
 Execution:
@@ -616,7 +616,7 @@ Failure expectation:
 Goal: ensure `simple-api-server` accepts only configured client certificates during TLS handshake when mTLS is enabled.
 
 Inputs:
-1. `managed-server=simple-api-server`.
+1. `managed-service=simple-api-server`.
 2. `ENABLE_MTLS=true`.
 3. One or more allowed client public certificates mounted into the configured cert directory.
 
@@ -640,8 +640,8 @@ Failure expectation:
 Goal: ensure `simple-api-server` rejects unauthenticated requests and accepts configured basic-auth credentials when basic-auth mode is selected.
 
 Inputs:
-1. `managed-server=simple-api-server`.
-2. `--managed-server-auth-type basic`.
+1. `managed-service=simple-api-server`.
+2. `--managed-service-auth-type basic`.
 3. Basic auth username/password configured in component state.
 
 Execution:
@@ -655,7 +655,7 @@ Expected outputs:
 3. Step 3 succeeds with HTTP `200`.
 
 Failure expectation:
-1. Selecting `--managed-server-auth-type` unsupported by the selected managed-server component fails run selection before startup.
+1. Selecting `--managed-service-auth-type` unsupported by the selected managed-service component fails run selection before startup.
 
 ### Example 15: Secret Detect Metadata Autofix
 Goal: detect secret-like attributes from repository resources or input payload and persist them into metadata.
@@ -693,11 +693,11 @@ Inputs:
 
 Execution:
 1. The runner copies each selected component's `openapi.yaml` to the run directory before context hooks execute.
-2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed servers, `managed-server.http.openapi`) pointing at the run-scoped spec file.
+2. The corresponding `context` hook reads the exported `E2E_COMPONENT_OPENAPI_SPEC` value and emits the appropriate key (for managed services, `managed-service.http.openapi`) pointing at the run-scoped spec file.
 3. `e2e_context_build` aggregates fragments, producing a context YAML that references the copied spec.
 
 Expected outputs:
-1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-server.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
+1. `test/e2e/.runs/<run-id>/contexts.yaml` contains `managed-service.http.openapi` pointing to `<run-id>/<component-name>-openapi.yaml`.
 2. `declarest context show --context e2e-<profile>` succeeds and can use the spec for metadata inference or `resource metadata infer --openapi`.
 
 Failure expectation:
@@ -758,7 +758,7 @@ Execution:
 3. Repeat with `--proxy-mode external` and no proxy URL env vars.
 
 Expected outputs:
-1. Step 2 context contains explicit proxy blocks for `managedServer.http`, `repository.git.remote` when the remote URL uses `http|https`, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
+1. Step 2 context contains explicit proxy blocks for `managedService.http`, `repository.git.remote` when the remote URL uses `http|https`, `secretStore.vault`, and `metadata` when bundle-backed metadata is downloaded remotely.
 2. Each injected proxy block contains configured `http`/`https`, optional `noProxy`, and optional `auth` fields.
 3. Unrelated auth and TLS blocks remain unchanged.
 
@@ -766,20 +766,20 @@ Failure expectation:
 1. Step 3 fails argument validation before runtime startup with actionable guidance about missing proxy URL env vars.
 
 ### Example 30: Operator Profile Manual Reconciliation
-Goal: run operator profile end-to-end and manually verify repository-to-managed-server reconciliation.
+Goal: run operator profile end-to-end and manually verify repository-to-managed-service reconciliation.
 
 Inputs:
-1. `run-e2e.sh --profile operator --managed-server simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
+1. `run-e2e.sh --profile operator --managed-service simple-api-server --repo-type git --git-provider gitea --secret-provider file`.
 2. Local toolchain supports `kind`, `kubectl`, and selected container engine.
 
 Execution:
 1. Runner initializes selected local components and config context.
 2. Runner seeds fixture repository content, initializes git, commits/pushes seed content to the selected git provider, installs CRDs, starts `declarest-operator-manager`, and applies generated operator CRs.
-3. User sources the generated setup script and runs the printed commands to save one new resource, commit/push it, and read the same logical path from the managed server.
+3. User sources the generated setup script and runs the printed commands to save one new resource, commit/push it, and read the same logical path from the managed service.
 
 Expected outputs:
-1. Operator resources (`resourcerepository`, `managedserver`, `secretstore`, `syncpolicy`) become `Ready`.
-2. Manual verification command returns the created resource from the managed server at the same logical path.
+1. Operator resources (`resourcerepository`, `managedservice`, `secretstore`, `syncpolicy`) become `Ready`.
+2. Manual verification command returns the created resource from the managed service at the same logical path.
 3. Runtime artifacts and shell reset script remain available until explicit cleanup.
 
 Failure expectation:
@@ -890,7 +890,7 @@ Inputs:
 Execution:
 1. Metadata resolution matches the `/projects/_/secrets/_` selector at concrete root `/projects/platform/secrets`.
 2. Render scope derives `project=platform`, `descendantPath`, and `descendantCollectionPath` from that matched root instead of from the full nested logical suffix.
-3. Managed-server request building renders relative operation paths against the descendant-aware remote collection path.
+3. Managed-service request building renders relative operation paths against the descendant-aware remote collection path.
 
 Expected outputs:
 1. `/projects/platform/secrets/db-password` renders `/storage/keys/project/platform/db-password`.
@@ -907,7 +907,7 @@ Goal: review drift for one collection subtree without noise from unchanged resou
 Inputs:
 1. Requested path `/customers`.
 2. Local repository resources `/customers/acme`, `/customers/beta`, and `/customers/nested/gamma`.
-3. Compare results where `/customers/acme` is changed, `/customers/beta` is unchanged, and `/customers/nested/gamma` is missing on the managed server.
+3. Compare results where `/customers/acme` is changed, `/customers/beta` is unchanged, and `/customers/nested/gamma` is missing on the managed service.
 
 Execution:
 1. User runs `declarest resource diff /customers --recursive`.

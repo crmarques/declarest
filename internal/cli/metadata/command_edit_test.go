@@ -22,7 +22,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -129,6 +129,6 @@ func (f fakeEditServiceAccessor) MetadataService() metadatadomain.MetadataServic
 	return f.metadata
 }
 func (f fakeEditServiceAccessor) SecretProvider() secretdomain.SecretProvider { return nil }
-func (f fakeEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (f fakeEditServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return nil
 }

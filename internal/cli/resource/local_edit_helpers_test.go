@@ -24,7 +24,7 @@ import (
 	configdomain "github.com/crmarques/declarest/config"
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	secretdomain "github.com/crmarques/declarest/secrets"
@@ -230,7 +230,7 @@ func (a *stubLocalEditServiceAccessor) RepositoryStore() repository.ResourceStor
 func (a *stubLocalEditServiceAccessor) RepositorySync() repository.RepositorySync       { return a.sync }
 func (a *stubLocalEditServiceAccessor) MetadataService() metadatadomain.MetadataService { return nil }
 func (a *stubLocalEditServiceAccessor) SecretProvider() secretdomain.SecretProvider     { return nil }
-func (a *stubLocalEditServiceAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a *stubLocalEditServiceAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return nil
 }
 

@@ -116,9 +116,9 @@ func buildDiffSection(document diffDocument, status diffStatus) (diffSection, er
 	if strings.TrimSpace(unifiedDiff) == "" {
 		switch status {
 		case diffStatusAdded:
-			section.Note = "Resource exists on managed server only."
+			section.Note = "Resource exists on managed service only."
 		case diffStatusRemoved:
-			section.Note = "Resource is missing on the managed server."
+			section.Note = "Resource is missing on the managed service."
 		case diffStatusChanged:
 			section.Note = "Resource differs after normalization."
 		}
@@ -144,7 +144,7 @@ func buildUnifiedDiffText(document diffDocument) (string, error) {
 		A:        difflib.SplitLines(localText),
 		B:        difflib.SplitLines(remoteText),
 		FromFile: "repository",
-		ToFile:   "managed-server",
+		ToFile:   "managed-service",
 		Context:  3,
 		Eol:      "\n",
 	})

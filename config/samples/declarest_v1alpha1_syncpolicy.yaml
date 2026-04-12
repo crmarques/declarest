@@ -5,8 +5,8 @@ metadata:
 spec:
   resourceRepositoryRef:
     name: example-repository
-  managedServerRef:
-    name: example-managed-server
+  managedServiceRef:
+    name: example-managed-service
   secretStoreRef:
     name: example-secret-store
   source:

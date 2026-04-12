@@ -22,7 +22,7 @@ spec:
     - jsonPath: .spec.resourceRepositoryRef.name
       name: Repo
       type: string
-    - jsonPath: .spec.managedServerRef.name
+    - jsonPath: .spec.managedServiceRef.name
       name: Server
       type: string
     - jsonPath: .status.lastAppliedRepoRevision
@@ -59,7 +59,7 @@ spec:
             properties:
               fullResyncCron:
                 type: string
-              managedServerRef:
+              managedServiceRef:
                 properties:
                   name:
                     minLength: 1
@@ -106,7 +106,7 @@ spec:
               syncInterval:
                 type: string
             required:
-            - managedServerRef
+            - managedServiceRef
             - resourceRepositoryRef
             - secretStoreRef
             - source

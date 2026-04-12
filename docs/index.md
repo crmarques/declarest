@@ -32,15 +32,15 @@ That's it. Your configuration lives in Git, with full history, pull requests, an
 ## Interacting with APIs through DeclaREST CLI
 
 ```bash
-declarest resource save /corporations/acme # get a resource from managed server
+declarest resource save /corporations/acme # get a resource from managed service
 declarest resource edit /corporations/acme # get a resource definition in the git repository
-declarest resource diff /corporations/acme # see state difference from git repository and remote managed server
-declarest resource apply /corporations/acme # apply new desired state to managed server
+declarest resource diff /corporations/acme # see state difference from git repository and remote managed service
+declarest resource apply /corporations/acme # apply new desired state to managed service
 ```
 
 ## Using Kubernetes Operator
 
-Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`, `SecretStore`, and `SyncPolicy`, then verify reconciliation:
+Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedService`, `SecretStore`, and `SyncPolicy`, then verify reconciliation:
 
 - [Quickstart (Operator)](getting-started/quickstart-operator.md)
 
@@ -50,7 +50,7 @@ Use the quickstart to install CRDs, create `ResourceRepository`, `ManagedServer`
 - **Metadata workflows:** infer/render/set/resolve overrides for custom API shapes
 - **Secret workflows:** detect/store/mask/resolve with save-time safeguards
 - **Repository workflows:** status/tree/history/commit/refresh/push/reset/clean
-- **Kubernetes operator workflows:** multi-CRD reconciliation (`ResourceRepository`, `ManagedServer`, `SecretStore`, `SyncPolicy`)
+- **Kubernetes operator workflows:** multi-CRD reconciliation (`ResourceRepository`, `ManagedService`, `SecretStore`, `SyncPolicy`)
 
 ## When it fits
 

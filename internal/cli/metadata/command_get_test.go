@@ -21,7 +21,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/repository"
@@ -116,6 +116,6 @@ func (a resolvedMetadataForGetAccessor) MetadataService() metadatadomain.Metadat
 	return a.metadata
 }
 func (a resolvedMetadataForGetAccessor) SecretProvider() secretdomain.SecretProvider { return nil }
-func (a resolvedMetadataForGetAccessor) ManagedServerClient() managedserverdomain.ManagedServerClient {
+func (a resolvedMetadataForGetAccessor) ManagedServiceClient() managedservicedomain.ManagedServiceClient {
 	return nil
 }

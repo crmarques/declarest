@@ -120,15 +120,15 @@ func TestWebhookValidationResourceRepositoryCreateRejectsMissingPVCAccessModes(t
 	}
 }
 
-func TestWebhookValidationManagedServerCreateRejectsInvalidSpec(t *testing.T) {
+func TestWebhookValidationManagedServiceCreateRejectsInvalidSpec(t *testing.T) {
 	t.Parallel()
 
-	server := &ManagedServer{
-		Spec: ManagedServerSpec{
-			HTTP: ManagedServerHTTP{
+	server := &ManagedService{
+		Spec: ManagedServiceSpec{
+			HTTP: ManagedServiceHTTP{
 				BaseURL: "not-a-url",
-				Auth: ManagedServerAuth{
-					BasicAuth: &ManagedServerBasicAuth{
+				Auth: ManagedServiceAuth{
+					BasicAuth: &ManagedServiceBasicAuth{
 						UsernameRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "auth"}, Key: "username"},
 						PasswordRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "auth"}, Key: "password"},
 					},
@@ -137,7 +137,7 @@ func TestWebhookValidationManagedServerCreateRejectsInvalidSpec(t *testing.T) {
 		},
 	}
 
-	v := &managedServerValidator{}
+	v := &managedServiceValidator{}
 	if _, err := v.ValidateCreate(context.Background(), server.DeepCopy()); err == nil {
 		t.Fatal("ValidateCreate() expected validation error, got nil")
 	}
@@ -173,13 +173,13 @@ func TestWebhookValidationAcceptsEnvPlaceholders(t *testing.T) {
 		t.Fatalf("resource repository ValidateCreate() unexpected error: %v", err)
 	}
 
-	serverValidator := &managedServerValidator{}
-	if _, err := serverValidator.ValidateCreate(context.Background(), &ManagedServer{
-		Spec: ManagedServerSpec{
-			HTTP: ManagedServerHTTP{
+	serverValidator := &managedServiceValidator{}
+	if _, err := serverValidator.ValidateCreate(context.Background(), &ManagedService{
+		Spec: ManagedServiceSpec{
+			HTTP: ManagedServiceHTTP{
 				BaseURL: "${DECLAREST_WEBHOOK_SERVER_URL}",
-				Auth: ManagedServerAuth{
-					OAuth2: &ManagedServerOAuth2Auth{
+				Auth: ManagedServiceAuth{
+					OAuth2: &ManagedServiceOAuth2Auth{
 						TokenURL:  "${DECLAREST_WEBHOOK_OPENAPI_URL}",
 						GrantType: "client_credentials",
 						ClientIDRef: &corev1.SecretKeySelector{
@@ -196,7 +196,7 @@ func TestWebhookValidationAcceptsEnvPlaceholders(t *testing.T) {
 			OpenAPI: DeclaRESTExternalArtifact{URL: "${DECLAREST_WEBHOOK_OPENAPI_URL}"},
 		},
 	}); err != nil {
-		t.Fatalf("managed server ValidateCreate() unexpected error: %v", err)
+		t.Fatalf("managed service ValidateCreate() unexpected error: %v", err)
 	}
 
 	secretStoreValidator := &secretStoreValidator{}
@@ -222,7 +222,7 @@ func TestWebhookValidationAcceptsEnvPlaceholders(t *testing.T) {
 	if _, err := syncPolicyValidator.ValidateCreate(context.Background(), &SyncPolicy{
 		Spec: SyncPolicySpec{
 			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        NamespacedObjectReference{Name: "secret-store"},
 			Source:                SyncPolicySource{Path: "${DECLAREST_WEBHOOK_SYNC_PATH}"},
 		},

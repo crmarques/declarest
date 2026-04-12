@@ -20,10 +20,10 @@ prepare_contract_runtime() {
   E2E_PLATFORM='compose'
   E2E_PROFILE='cli-basic'
   E2E_METADATA='bundle'
-  E2E_MANAGED_SERVER='demo'
-  E2E_MANAGED_SERVER_CONNECTION='local'
-  E2E_MANAGED_SERVER_AUTH_TYPE='oauth2'
-  E2E_MANAGED_SERVER_MTLS='false'
+  E2E_MANAGED_SERVICE='demo'
+  E2E_MANAGED_SERVICE_CONNECTION='local'
+  E2E_MANAGED_SERVICE_AUTH_TYPE='oauth2'
+  E2E_MANAGED_SERVICE_MTLS='false'
   E2E_REPO_TYPE='filesystem'
   E2E_GIT_PROVIDER=''
   E2E_GIT_PROVIDER_CONNECTION='local'
@@ -82,14 +82,14 @@ test_hook_contract_keeps_state_and_context_deterministic_on_reentry() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_contract_runtime "${tmp}"
 
-  local key='managed-server:demo'
+  local key='managed-service:demo'
   local component_dir
   component_dir=$(create_contract_component \
     "${tmp}/components" \
     "${key}" \
     'printf "TOKEN=alpha\n" >"${E2E_COMPONENT_STATE_FILE}"' \
     'printf "TOKEN=alpha\nAUTH_MODE=oauth2\n" >"${E2E_COMPONENT_STATE_FILE}"' \
-    'printf "managedServer:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
+    'printf "managedService:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
   register_contract_component "${key}" "${component_dir}"
 
   e2e_component_run_hook "${key}" init
@@ -120,14 +120,14 @@ test_hook_contract_rejects_missing_state_after_init() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_contract_runtime "${tmp}"
 
-  local key='managed-server:demo'
+  local key='managed-service:demo'
   local component_dir
   component_dir=$(create_contract_component \
     "${tmp}/components" \
     "${key}" \
     ':' \
     'printf "TOKEN=alpha\n" >"${E2E_COMPONENT_STATE_FILE}"' \
-    'printf "managedServer:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
+    'printf "managedService:\n  http:\n    url: http://127.0.0.1:18080\n" >"${E2E_COMPONENT_CONTEXT_FRAGMENT}"')
   register_contract_component "${key}" "${component_dir}"
 
   local output status
@@ -147,7 +147,7 @@ test_hook_contract_rejects_missing_context_fragment() {
   trap 'rm -rf "${tmp}"' RETURN
   prepare_contract_runtime "${tmp}"
 
-  local key='managed-server:demo'
+  local key='managed-service:demo'
   local component_dir
   component_dir=$(create_contract_component \
     "${tmp}/components" \

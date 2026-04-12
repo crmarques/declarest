@@ -22,7 +22,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 | `agents/reference/domain.md` | Vocabulary and invariants | Modeling behavior and data |
 | `agents/reference/context-config.md` | Context and config semantics | Context loading, overrides, validation |
 | `agents/reference/resource-repo.md` | Resource repository and Git/FS semantics | Storage, sync, path handling |
-| `agents/reference/managed-server.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
+| `agents/reference/managed-service.md` | HTTP/OpenAPI integration | Remote operations and API contracts |
 | `agents/reference/secrets.md` | Secret handling lifecycle | Secret masking, resolution, storage |
 | `agents/reference/metadata.md` | Metadata layering and templates | Metadata merge/render/infer behavior |
 | `agents/reference/orchestrator.md` | Orchestration flows | Apply/refresh/diff/list workflows |
@@ -36,9 +36,9 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 ## Request-to-File Load Matrix
 | Request Type | Required Files |
 |---|---|
-| New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/managed-server.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
+| New feature touching orchestration | `agents/reference/interfaces.md`, `agents/reference/domain.md`, `agents/reference/orchestrator.md`, `agents/reference/resource-repo.md`, `agents/reference/managed-service.md`, `agents/reference/metadata.md`, `agents/reference/quality.md` |
 | CLI command or output change | `agents/reference/interfaces.md`, `agents/reference/cli.md`, `agents/reference/orchestrator.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
-| Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-server.md`, `agents/reference/quality.md` |
+| Metadata behavior change | `agents/reference/interfaces.md`, `agents/reference/metadata.md`, `agents/reference/domain.md`, `agents/reference/managed-service.md`, `agents/reference/quality.md` |
 | Secret behavior change | `agents/reference/interfaces.md`, `agents/reference/secrets.md`, `agents/reference/orchestrator.md`, `agents/reference/quality.md` |
 | Context/config change | `agents/reference/interfaces.md`, `agents/reference/context-config.md`, `agents/reference/domain.md`, `agents/reference/quality.md` |
 | Kubernetes operator controller/CRD/webhook change | `agents/reference/interfaces.md`, `agents/reference/k8s-operator.md`, `agents/reference/architecture.md`, `agents/reference/quality.md` |
@@ -95,7 +95,7 @@ Define how coding agents operate in this repository rebuild. Canonical reference
 15. Inline or explanatory comments that only restate what the code already expresses MUST NOT be added; updates SHOULD remove such non-functional comments and rely on clear naming, structure, and tests instead, while only keeping compile-time directives or exported-API documentation that cannot be conveyed otherwise.
 
 ## Bundle Repository Synchronization
-1. When editing metadata under `test/e2e/components/managed-server/<component>/metadata`, identify the matching sibling repository named `../declarest-bundle-<component>` by using the same `<component>` segment.
+1. When editing metadata under `test/e2e/components/managed-service/<component>/metadata`, identify the matching sibling repository named `../declarest-bundle-<component>` by using the same `<component>` segment.
 2. If the identified bundle repository exists and is writable, the agent MUST mirror each metadata file change into `declarest-bundle-<component>/metadata/` so that both trees contain the same filenames and contents (no extra or missing files) before handing off. Use deterministic copy or sync steps rather than ad-hoc edits to keep diffs minimal.
 3. When the bundle repository hosts a manifest such as `bundle.yaml` that references metadata content, update the manifest simultaneously to keep it consistent with the mirrored metadata tree (for example adjust file lists, version hints, or metadata-specific fields that mention `metadata/`).
 4. If the bundle repository is absent or cannot be edited (for example because it is outside writable roots), treat the missing sync as a blocking handoff condition and report it instead of the standard one-line final response.

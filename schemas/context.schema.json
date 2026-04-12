@@ -12,8 +12,8 @@
     "repository": {
       "$ref": "#/$defs/repository"
     },
-    "managedServer": {
-      "$ref": "#/$defs/managedServer"
+    "managedService": {
+      "$ref": "#/$defs/managedService"
     },
     "secretStore": {
       "$ref": "#/$defs/secretStore"
@@ -38,7 +38,7 @@
         },
         {
           "required": [
-            "managedServer"
+            "managedService"
           ]
         }
       ]
@@ -466,7 +466,7 @@
         "auth"
       ]
     },
-    "managedServer": {
+    "managedService": {
       "type": "object",
       "additionalProperties": false,
       "properties": {

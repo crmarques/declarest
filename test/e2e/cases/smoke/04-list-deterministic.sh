@@ -3,7 +3,7 @@
 CASE_ID='list-deterministic'
 CASE_SCOPE='smoke'
 CASE_PROFILES='cli operator'
-CASE_REQUIRES='has-managed-server'
+CASE_REQUIRES='has-managed-service'
 
 case_run() {
   local first_resource_path
@@ -16,7 +16,7 @@ case_run() {
   first_resource_path=$(case_repo_template_first_resource_path) || return 1
   target_collection_path=$(case_repo_template_collection_path_for_resource "${first_resource_path}") || return 1
 
-  if [[ "${E2E_MANAGED_SERVER:-}" == 'rundeck' && "${target_collection_path}" == '/projects' ]]; then
+  if [[ "${E2E_MANAGED_SERVICE:-}" == 'rundeck' && "${target_collection_path}" == '/projects' ]]; then
     local source_file payload_file temp_name temp_path
     source_file=$(case_repo_template_resource_file_for_path "${first_resource_path}") || return 1
     temp_name="list-deterministic-${RANDOM}${RANDOM}"
@@ -42,7 +42,7 @@ case_run() {
     done < <(case_repo_template_collection_resource_paths "${target_collection_path}")
   fi
 
-  case_run_declarest resource list "${target_collection_path}" --source managed-server -o json
+  case_run_declarest resource list "${target_collection_path}" --source managed-service -o json
   case_expect_success
 
   if ! jq -e 'map(.LogicalPath) as $paths | $paths == ($paths | sort)' <<<"${CASE_LAST_STDOUT}" >/dev/null; then

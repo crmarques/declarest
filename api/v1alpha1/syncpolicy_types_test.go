@@ -22,7 +22,7 @@ func TestSyncPolicyValidateSpecNormalizesPathAndDefaultsRecursive(t *testing.T) 
 	policy := &SyncPolicy{
 		Spec: SyncPolicySpec{
 			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
 			Source:                SyncPolicySource{Path: "customers/acme"},
 		},
@@ -48,7 +48,7 @@ func TestSyncPolicyValidateSpecAcceptsValidFullResyncCron(t *testing.T) {
 	policy := &SyncPolicy{
 		Spec: SyncPolicySpec{
 			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
 			Source:                SyncPolicySource{Path: "/customers"},
 			FullResyncCron:        "*/30 * * * *",
@@ -66,7 +66,7 @@ func TestSyncPolicyValidateSpecRejectsInvalidFullResyncCron(t *testing.T) {
 	policy := &SyncPolicy{
 		Spec: SyncPolicySpec{
 			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
 			Source:                SyncPolicySource{Path: "/customers"},
 			FullResyncCron:        "invalid-cron",
@@ -84,7 +84,7 @@ func TestSyncPolicyValidateSpecRejectsTraversalPath(t *testing.T) {
 	policy := &SyncPolicy{
 		Spec: SyncPolicySpec{
 			ResourceRepositoryRef: NamespacedObjectReference{Name: "repo"},
-			ManagedServerRef:      NamespacedObjectReference{Name: "server"},
+			ManagedServiceRef:     NamespacedObjectReference{Name: "server"},
 			SecretStoreRef:        NamespacedObjectReference{Name: "secrets"},
 			Source:                SyncPolicySource{Path: "/customers/../acme"},
 		},

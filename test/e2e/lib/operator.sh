@@ -43,23 +43,23 @@ e2e_operator_b64() {
   printf '%s' "$1" | base64 | tr -d '\n'
 }
 
-e2e_operator_managed_server_metadata_bundle_secret_name() {
-  e2e_operator_scoped_name 'declarest-operator-managed-server-metadata'
+e2e_operator_managed_service_metadata_bundle_secret_name() {
+  e2e_operator_scoped_name 'declarest-operator-managed-service-metadata'
 }
 
-e2e_operator_managed_server_metadata_bundle_mount_dir() {
-  printf '/var/run/declarest-managed-server-metadata\n'
+e2e_operator_managed_service_metadata_bundle_mount_dir() {
+  printf '/var/run/declarest-managed-service-metadata\n'
 }
 
-e2e_operator_managed_server_metadata_bundle_mount_path() {
-  printf '%s/metadata-bundle.tar.gz\n' "$(e2e_operator_managed_server_metadata_bundle_mount_dir)"
+e2e_operator_managed_service_metadata_bundle_mount_path() {
+  printf '%s/metadata-bundle.tar.gz\n' "$(e2e_operator_managed_service_metadata_bundle_mount_dir)"
 }
 
-e2e_operator_prepare_managed_server_metadata_bundle() {
-  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE=''
-  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=''
+e2e_operator_prepare_managed_service_metadata_bundle() {
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE=''
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=''
 
-  local archive_path="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle.tar.gz"
+  local archive_path="${E2E_RUN_DIR}/operator/managed-service-metadata-bundle.tar.gz"
   mkdir -p "${E2E_RUN_DIR}/operator" || return 1
 
   if [[ -n "${E2E_METADATA_BUNDLE:-}" ]]; then
@@ -84,22 +84,22 @@ e2e_operator_prepare_managed_server_metadata_bundle() {
         return 1
       fi
 
-      E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE="${archive_path}"
-      E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_server_metadata_bundle_mount_path)
-      export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
-      export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+      E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE="${archive_path}"
+      E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_service_metadata_bundle_mount_path)
+      export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
+      export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
       return 0
     fi
 
     e2e_info "operator metadata bundle cache unavailable for bundle=${bundle_ref}; using bundle ref without local archive"
-    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
-    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
     return 0
   fi
 
   if [[ -z "${E2E_METADATA_DIR:-}" ]]; then
-    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
-    export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
+    export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
     return 0
   fi
 
@@ -109,9 +109,9 @@ e2e_operator_prepare_managed_server_metadata_bundle() {
   fi
 
   local bundle_name
-  bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVER:-managed-server}-bundle")
+  bundle_name=$(e2e_operator_sanitize_name "e2e-${E2E_MANAGED_SERVICE:-managed-service}-bundle")
 
-  local bundle_root="${E2E_RUN_DIR}/operator/managed-server-metadata-bundle"
+  local bundle_root="${E2E_RUN_DIR}/operator/managed-service-metadata-bundle"
   local metadata_file_name
 
   rm -rf -- "${bundle_root}"
@@ -130,7 +130,7 @@ apiVersion: declarest.io/v1alpha1
 kind: MetadataBundle
 name: ${bundle_name}
 version: 0.0.1
-description: E2E metadata bundle for ${E2E_MANAGED_SERVER:-managed-server}.
+description: E2E metadata bundle for ${E2E_MANAGED_SERVICE:-managed-service}.
 declarest:
   shorthand: ${bundle_name}
   metadataRoot: metadata
@@ -142,10 +142,10 @@ EOF_BUNDLE_MANIFEST
     return 1
   fi
 
-  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE="${archive_path}"
-  E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_server_metadata_bundle_mount_path)
-  export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE
-  export E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE="${archive_path}"
+  E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH=$(e2e_operator_managed_service_metadata_bundle_mount_path)
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE
+  export E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH
   return 0
 }
 
@@ -566,7 +566,7 @@ e2e_operator_install_crds() {
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${crd_dir}" || return 1
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" wait --for=condition=Established --timeout="${ready_timeout_seconds}s" \
     crd/resourcerepositories.declarest.io \
-    crd/managedservers.declarest.io \
+    crd/managedservices.declarest.io \
     crd/secretstores.declarest.io \
     crd/syncpolicies.declarest.io || return 1
   return 0
@@ -603,14 +603,14 @@ e2e_operator_write_manager_manifest() {
   local api_service_host=''
   local api_service_port=''
   read -r api_service_host api_service_port < <(e2e_operator_api_server_endpoint) || return 1
-  e2e_operator_prepare_managed_server_metadata_bundle || return 1
+  e2e_operator_prepare_managed_service_metadata_bundle || return 1
   local manifest_dir
   manifest_dir=$(e2e_operator_manifest_dir)
   mkdir -p "${manifest_dir}" || return 1
 
   local manager_manifest
   manager_manifest=$(e2e_operator_manager_manifest_path)
-  local metadata_bundle_archive="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE:-}"
+  local metadata_bundle_archive="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE:-}"
   local manager_metadata_secret_yaml=''
   local manager_metadata_volume_mount_yaml=''
   local manager_metadata_volume_yaml=''
@@ -621,9 +621,9 @@ e2e_operator_write_manager_manifest() {
     fi
 
     local metadata_bundle_secret_name
-    metadata_bundle_secret_name=$(e2e_operator_managed_server_metadata_bundle_secret_name)
+    metadata_bundle_secret_name=$(e2e_operator_managed_service_metadata_bundle_secret_name)
     local metadata_bundle_mount_dir
-    metadata_bundle_mount_dir=$(e2e_operator_managed_server_metadata_bundle_mount_dir)
+    metadata_bundle_mount_dir=$(e2e_operator_managed_service_metadata_bundle_mount_dir)
 
     manager_metadata_secret_yaml=$(cat <<EOF_MANAGER_METADATA_SECRET
 ---
@@ -639,14 +639,14 @@ EOF_MANAGER_METADATA_SECRET
 )
 
     manager_metadata_volume_mount_yaml=$(cat <<EOF_MANAGER_METADATA_MOUNT
-            - name: managed-server-metadata
+            - name: managed-service-metadata
               mountPath: ${metadata_bundle_mount_dir}
               readOnly: true
 EOF_MANAGER_METADATA_MOUNT
 )
 
     manager_metadata_volume_yaml=$(cat <<EOF_MANAGER_METADATA_VOLUME
-        - name: managed-server-metadata
+        - name: managed-service-metadata
           secret:
             secretName: ${metadata_bundle_secret_name}
 EOF_MANAGER_METADATA_VOLUME
@@ -667,13 +667,13 @@ metadata:
   namespace: ${namespace}
 rules:
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories", "managedservers", "secretstores", "syncpolicies", "repositorywebhooks"]
+    resources: ["resourcerepositories", "managedservices", "secretstores", "syncpolicies", "repositorywebhooks"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/status", "managedservers/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
+    resources: ["resourcerepositories/status", "managedservices/status", "secretstores/status", "syncpolicies/status", "repositorywebhooks/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["declarest.io"]
-    resources: ["resourcerepositories/finalizers", "managedservers/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
+    resources: ["resourcerepositories/finalizers", "managedservices/finalizers", "secretstores/finalizers", "syncpolicies/finalizers", "repositorywebhooks/finalizers"]
     verbs: ["update"]
   - apiGroups: [""]
     resources: ["events"]
@@ -858,96 +858,96 @@ e2e_operator_start_manager() {
   if [[ -n "${E2E_OPERATOR_MANAGER_POD}" ]]; then
     e2e_runtime_state_set 'OPERATOR_MANAGER_POD' "${E2E_OPERATOR_MANAGER_POD}" || return 1
   fi
-  if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE:-}" ]]; then
-    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE' "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_ARCHIVE}" || return 1
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE:-}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE' "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_ARCHIVE}" || return 1
   fi
-  if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}" ]]; then
-    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH' "${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH}" || return 1
+  if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH:-}" ]]; then
+    e2e_runtime_state_set 'OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH' "${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH}" || return 1
   fi
   e2e_runtime_state_set 'OPERATOR_REPO_BASE_DIR' "${repo_root}" || return 1
   e2e_runtime_state_set 'OPERATOR_CACHE_BASE_DIR' "${cache_root}" || return 1
   return 0
 }
 
-e2e_operator_collect_managed_server_config() {
+e2e_operator_collect_managed_service_config() {
   local state_file=$1
-  local managed_server_key
+  local managed_service_key
 
   # shellcheck disable=SC1090
   source "${state_file}"
 
-  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
+  managed_service_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")
 
-  E2E_OPERATOR_MANAGED_SERVER_BASE_URL=${MANAGED_SERVER_BASE_URL:-}
-  E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND=${MANAGED_SERVER_AUTH_KIND:-}
-  E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=${MANAGED_SERVER_TOKEN_URL:-}
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE=${MANAGED_SERVER_OAUTH_SCOPE:-}
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE=${MANAGED_SERVER_OAUTH_AUDIENCE:-}
-  E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME=${MANAGED_SERVER_BASIC_USERNAME:-}
-  E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD=${MANAGED_SERVER_BASIC_PASSWORD:-}
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME=${MANAGED_SERVER_HEADER_NAME:-}
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX=${MANAGED_SERVER_HEADER_PREFIX:-}
-  E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE=${MANAGED_SERVER_HEADER_VALUE:-}
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID=${MANAGED_SERVER_OAUTH_CLIENT_ID:-}
-  E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET=${MANAGED_SERVER_OAUTH_CLIENT_SECRET:-}
+  E2E_OPERATOR_MANAGED_SERVICE_BASE_URL=${MANAGED_SERVICE_BASE_URL:-}
+  E2E_OPERATOR_MANAGED_SERVICE_AUTH_KIND=${MANAGED_SERVICE_AUTH_KIND:-}
+  E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL=${MANAGED_SERVICE_TOKEN_URL:-}
+  E2E_OPERATOR_MANAGED_SERVICE_OAUTH_SCOPE=${MANAGED_SERVICE_OAUTH_SCOPE:-}
+  E2E_OPERATOR_MANAGED_SERVICE_OAUTH_AUDIENCE=${MANAGED_SERVICE_OAUTH_AUDIENCE:-}
+  E2E_OPERATOR_MANAGED_SERVICE_BASIC_USERNAME=${MANAGED_SERVICE_BASIC_USERNAME:-}
+  E2E_OPERATOR_MANAGED_SERVICE_BASIC_PASSWORD=${MANAGED_SERVICE_BASIC_PASSWORD:-}
+  E2E_OPERATOR_MANAGED_SERVICE_HEADER_NAME=${MANAGED_SERVICE_HEADER_NAME:-}
+  E2E_OPERATOR_MANAGED_SERVICE_HEADER_PREFIX=${MANAGED_SERVICE_HEADER_PREFIX:-}
+  E2E_OPERATOR_MANAGED_SERVICE_HEADER_VALUE=${MANAGED_SERVICE_HEADER_VALUE:-}
+  E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_ID=${MANAGED_SERVICE_OAUTH_CLIENT_ID:-}
+  E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_SECRET=${MANAGED_SERVICE_OAUTH_CLIENT_SECRET:-}
 
-  if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${E2E_MANAGED_SERVER_CONNECTION:-}" == 'local' ]]; then
-    E2E_OPERATOR_MANAGED_SERVER_BASE_URL=$(
+  if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${E2E_MANAGED_SERVICE_CONNECTION:-}" == 'local' ]]; then
+    E2E_OPERATOR_MANAGED_SERVICE_BASE_URL=$(
       e2e_operator_rewrite_local_url_to_component_service \
-        "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" \
-        "${managed_server_key}"
+        "${E2E_OPERATOR_MANAGED_SERVICE_BASE_URL}" \
+        "${managed_service_key}"
     )
-    if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" ]]; then
-      E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL=$(
+    if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL}" ]]; then
+      E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL=$(
         e2e_operator_rewrite_local_url_to_component_service \
-          "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" \
-          "${managed_server_key}"
+          "${E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL}" \
+          "${managed_service_key}"
       )
     fi
   fi
 
-  if [[ -z "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}" ]]; then
-    e2e_die 'operator profile managed-server base URL is empty after component setup'
+  if [[ -z "${E2E_OPERATOR_MANAGED_SERVICE_BASE_URL}" ]]; then
+    e2e_die 'operator profile managed-service base URL is empty after component setup'
     return 1
   fi
 
-  case "${E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND}" in
+  case "${E2E_OPERATOR_MANAGED_SERVICE_AUTH_KIND}" in
     oauth2)
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}" ]] || {
-        e2e_die 'operator profile managed-server oauth2 token URL is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL}" ]] || {
+        e2e_die 'operator profile managed-service oauth2 token URL is empty'
         return 1
       }
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID}" ]] || {
-        e2e_die 'operator profile managed-server oauth2 client id is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_ID}" ]] || {
+        e2e_die 'operator profile managed-service oauth2 client id is empty'
         return 1
       }
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET}" ]] || {
-        e2e_die 'operator profile managed-server oauth2 client secret is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_SECRET}" ]] || {
+        e2e_die 'operator profile managed-service oauth2 client secret is empty'
         return 1
       }
       ;;
     basic)
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME}" ]] || {
-        e2e_die 'operator profile managed-server basic username is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_BASIC_USERNAME}" ]] || {
+        e2e_die 'operator profile managed-service basic username is empty'
         return 1
       }
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD}" ]] || {
-        e2e_die 'operator profile managed-server basic password is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_BASIC_PASSWORD}" ]] || {
+        e2e_die 'operator profile managed-service basic password is empty'
         return 1
       }
       ;;
     custom-header)
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME}" ]] || {
-        e2e_die 'operator profile managed-server custom header name is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_NAME}" ]] || {
+        e2e_die 'operator profile managed-service custom header name is empty'
         return 1
       }
-      [[ -n "${E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE}" ]] || {
-        e2e_die 'operator profile managed-server custom header value is empty'
+      [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_VALUE}" ]] || {
+        e2e_die 'operator profile managed-service custom header value is empty'
         return 1
       }
       ;;
     *)
-      e2e_die 'operator profile managed-server auth mode is unresolved'
+      e2e_die 'operator profile managed-service auth mode is unresolved'
       return 1
       ;;
   esac
@@ -968,10 +968,10 @@ e2e_operator_write_manifests() {
   local repo_state_file
   repo_state_file=$(e2e_component_state_file "${repo_key}")
 
-  local managed_server_key
-  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER}")
-  local managed_server_state_file
-  managed_server_state_file=$(e2e_component_state_file "${managed_server_key}")
+  local managed_service_key
+  managed_service_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE}")
+  local managed_service_state_file
+  managed_service_state_file=$(e2e_component_state_file "${managed_service_key}")
 
   local secret_store_key
   secret_store_key=$(e2e_component_key 'secret-provider' "${E2E_SECRET_PROVIDER}")
@@ -982,8 +982,8 @@ e2e_operator_write_manifests() {
     e2e_die "operator profile missing repository state: ${repo_state_file}"
     return 1
   }
-  [[ -f "${managed_server_state_file}" ]] || {
-    e2e_die "operator profile missing managed-server state: ${managed_server_state_file}"
+  [[ -f "${managed_service_state_file}" ]] || {
+    e2e_die "operator profile missing managed-service state: ${managed_service_state_file}"
     return 1
   }
   [[ -f "${secret_store_state_file}" ]] || {
@@ -996,8 +996,8 @@ e2e_operator_write_manifests() {
 
   local repository_name
   repository_name=${E2E_OPERATOR_REPOSITORY_NAME:-$(e2e_operator_scoped_name 'declarest-e2e-repository')}
-  local managed_server_name
-  managed_server_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server')
+  local managed_service_name
+  managed_service_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-service')
   local secret_store_name
   secret_store_name=$(e2e_operator_scoped_name 'declarest-e2e-secret-store')
   local sync_policy_name
@@ -1005,8 +1005,8 @@ e2e_operator_write_manifests() {
 
   local repo_secret_name
   repo_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-repo-auth')
-  local managed_server_secret_name
-  managed_server_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-server-auth')
+  local managed_service_secret_name
+  managed_service_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-managed-service-auth')
   local secret_store_secret_name
   secret_store_secret_name=$(e2e_operator_scoped_name 'declarest-e2e-secret-store-auth')
 
@@ -1102,25 +1102,25 @@ EOF_REPO_WEBHOOK
         storage: 1Gi
 EOF_REPO_CR_FOOTER
 
-  e2e_operator_collect_managed_server_config "${managed_server_state_file}" || return 1
+  e2e_operator_collect_managed_service_config "${managed_service_state_file}" || return 1
 
-  local managed_server_tls_enabled='false'
-  local managed_server_tls_insecure_skip_verify='false'
+  local managed_service_tls_enabled='false'
+  local managed_service_tls_insecure_skip_verify='false'
   local tls_ca_file=''
   local tls_client_cert_file=''
   local tls_client_key_file=''
-  local metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVER_METADATA_BUNDLE_MOUNT_PATH:-}"
+  local metadata_bundle_ref="${E2E_OPERATOR_MANAGED_SERVICE_METADATA_BUNDLE_MOUNT_PATH:-}"
   if [[ -z "${metadata_bundle_ref}" ]]; then
     metadata_bundle_ref="${E2E_METADATA_BUNDLE:-}"
   fi
-  if [[ "${MANAGED_SERVER_TLS_ENABLED:-false}" == 'true' ]]; then
-    managed_server_tls_enabled='true'
-    if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${MANAGED_SERVER_TLS_INSECURE_SKIP_VERIFY_FOR_CLUSTER:-false}" == 'true' ]]; then
-      managed_server_tls_insecure_skip_verify='true'
+  if [[ "${MANAGED_SERVICE_TLS_ENABLED:-false}" == 'true' ]]; then
+    managed_service_tls_enabled='true'
+    if [[ "${E2E_PLATFORM:-}" == 'kubernetes' && "${MANAGED_SERVICE_TLS_INSECURE_SKIP_VERIFY_FOR_CLUSTER:-false}" == 'true' ]]; then
+      managed_service_tls_insecure_skip_verify='true'
     fi
-    tls_ca_file=${MANAGED_SERVER_TLS_CA_CERT_FILE_HOST:-}
-    tls_client_cert_file=${MANAGED_SERVER_TLS_CLIENT_CERT_FILE_HOST:-}
-    tls_client_key_file=${MANAGED_SERVER_TLS_CLIENT_KEY_FILE_HOST:-}
+    tls_ca_file=${MANAGED_SERVICE_TLS_CA_CERT_FILE_HOST:-}
+    tls_client_cert_file=${MANAGED_SERVICE_TLS_CLIENT_CERT_FILE_HOST:-}
+    tls_client_key_file=${MANAGED_SERVICE_TLS_CLIENT_KEY_FILE_HOST:-}
     [[ -f "${tls_ca_file}" ]] || {
       e2e_die "operator profile missing mTLS CA certificate file: ${tls_ca_file}"
       return 1
@@ -1139,90 +1139,90 @@ EOF_REPO_CR_FOOTER
     printf 'apiVersion: v1\n'
     printf 'kind: Secret\n'
     printf 'metadata:\n'
-    printf '  name: %s\n' "${managed_server_secret_name}"
+    printf '  name: %s\n' "${managed_service_secret_name}"
     printf '  namespace: %s\n' "${namespace}"
     printf 'type: Opaque\n'
     printf 'data:\n'
-    case "${E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND}" in
+    case "${E2E_OPERATOR_MANAGED_SERVICE_AUTH_KIND}" in
       oauth2)
-        printf '  client-id: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_ID}")"
-        printf '  client-secret: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_CLIENT_SECRET}")"
+        printf '  client-id: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_ID}")"
+        printf '  client-secret: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_CLIENT_SECRET}")"
         ;;
       basic)
-        printf '  username: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVER_BASIC_USERNAME}")"
-        printf '  password: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVER_BASIC_PASSWORD}")"
+        printf '  username: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVICE_BASIC_USERNAME}")"
+        printf '  password: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVICE_BASIC_PASSWORD}")"
         ;;
       custom-header)
-        printf '  header-value: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVER_HEADER_VALUE}")"
+        printf '  header-value: %s\n' "$(e2e_operator_b64 "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_VALUE}")"
         ;;
     esac
-    if [[ "${managed_server_tls_enabled}" == 'true' ]]; then
+    if [[ "${managed_service_tls_enabled}" == 'true' ]]; then
       printf '  ca-cert: %s\n' "$(e2e_operator_b64 "$(cat "${tls_ca_file}")")"
       printf '  client-cert: %s\n' "$(e2e_operator_b64 "$(cat "${tls_client_cert_file}")")"
       printf '  client-key: %s\n' "$(e2e_operator_b64 "$(cat "${tls_client_key_file}")")"
     fi
-  } >"${manifest_dir}/secret-managed-server-auth.yaml"
+  } >"${manifest_dir}/secret-managed-service-auth.yaml"
 
   {
     printf 'apiVersion: declarest.io/v1alpha1\n'
-    printf 'kind: ManagedServer\n'
+    printf 'kind: ManagedService\n'
     printf 'metadata:\n'
-    printf '  name: %s\n' "${managed_server_name}"
+    printf '  name: %s\n' "${managed_service_name}"
     printf '  namespace: %s\n' "${namespace}"
     printf 'spec:\n'
     printf '  http:\n'
-    printf '    baseURL: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_BASE_URL}")"
+    printf '    baseURL: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_BASE_URL}")"
     printf '    auth:\n'
-    case "${E2E_OPERATOR_MANAGED_SERVER_AUTH_KIND}" in
+    case "${E2E_OPERATOR_MANAGED_SERVICE_AUTH_KIND}" in
       oauth2)
         printf '      oauth2:\n'
-        printf '        tokenURL: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_TOKEN_URL}")"
+        printf '        tokenURL: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_TOKEN_URL}")"
         printf '        grantType: client_credentials\n'
         printf '        clientIDRef:\n'
-        printf '          name: %s\n' "${managed_server_secret_name}"
+        printf '          name: %s\n' "${managed_service_secret_name}"
         printf '          key: client-id\n'
         printf '        clientSecretRef:\n'
-        printf '          name: %s\n' "${managed_server_secret_name}"
+        printf '          name: %s\n' "${managed_service_secret_name}"
         printf '          key: client-secret\n'
-        if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE}" ]]; then
-          printf '        scope: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_SCOPE}")"
+        if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_SCOPE}" ]]; then
+          printf '        scope: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_SCOPE}")"
         fi
-        if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE}" ]]; then
-          printf '        audience: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_OAUTH_AUDIENCE}")"
+        if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_AUDIENCE}" ]]; then
+          printf '        audience: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_OAUTH_AUDIENCE}")"
         fi
         ;;
       basic)
         printf '      basicAuth:\n'
         printf '        usernameRef:\n'
-        printf '          name: %s\n' "${managed_server_secret_name}"
+        printf '          name: %s\n' "${managed_service_secret_name}"
         printf '          key: username\n'
         printf '        passwordRef:\n'
-        printf '          name: %s\n' "${managed_server_secret_name}"
+        printf '          name: %s\n' "${managed_service_secret_name}"
         printf '          key: password\n'
         ;;
       custom-header)
         printf '      customHeaders:\n'
-        printf '        - header: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_HEADER_NAME}")"
-        if [[ -n "${E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX}" ]]; then
-          printf '          prefix: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVER_HEADER_PREFIX}")"
+        printf '        - header: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_NAME}")"
+        if [[ -n "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_PREFIX}" ]]; then
+          printf '          prefix: %s\n' "$(e2e_operator_yaml_quote "${E2E_OPERATOR_MANAGED_SERVICE_HEADER_PREFIX}")"
         fi
         printf '          valueRef:\n'
-        printf '            name: %s\n' "${managed_server_secret_name}"
+        printf '            name: %s\n' "${managed_service_secret_name}"
         printf '            key: header-value\n'
         ;;
     esac
-    if [[ "${managed_server_tls_enabled}" == 'true' ]]; then
+    if [[ "${managed_service_tls_enabled}" == 'true' ]]; then
       printf '    tls:\n'
       printf '      caCertRef:\n'
-      printf '        name: %s\n' "${managed_server_secret_name}"
+      printf '        name: %s\n' "${managed_service_secret_name}"
       printf '        key: ca-cert\n'
       printf '      clientCertRef:\n'
-      printf '        name: %s\n' "${managed_server_secret_name}"
+      printf '        name: %s\n' "${managed_service_secret_name}"
       printf '        key: client-cert\n'
       printf '      clientKeyRef:\n'
-      printf '        name: %s\n' "${managed_server_secret_name}"
+      printf '        name: %s\n' "${managed_service_secret_name}"
       printf '        key: client-key\n'
-      if [[ "${managed_server_tls_insecure_skip_verify}" == 'true' ]]; then
+      if [[ "${managed_service_tls_insecure_skip_verify}" == 'true' ]]; then
         printf '      insecureSkipVerify: true\n'
       fi
     fi
@@ -1230,7 +1230,7 @@ EOF_REPO_CR_FOOTER
       printf '  metadata:\n'
       printf '    bundle: %s\n' "$(e2e_operator_yaml_quote "${metadata_bundle_ref}")"
     fi
-  } >"${manifest_dir}/managed-server.yaml"
+  } >"${manifest_dir}/managed-service.yaml"
 
   # shellcheck disable=SC1090
   source "${secret_store_state_file}"
@@ -1388,8 +1388,8 @@ metadata:
 spec:
   resourceRepositoryRef:
     name: ${repository_name}
-  managedServerRef:
-    name: ${managed_server_name}
+  managedServiceRef:
+    name: ${managed_service_name}
   secretStoreRef:
     name: ${secret_store_name}
   source:
@@ -1402,18 +1402,18 @@ EOF_SYNC_POLICY
 
   E2E_OPERATOR_NAMESPACE="${namespace}"
   E2E_OPERATOR_RESOURCE_REPOSITORY_NAME="${repository_name}"
-  E2E_OPERATOR_MANAGED_SERVER_NAME="${managed_server_name}"
+  E2E_OPERATOR_MANAGED_SERVICE_NAME="${managed_service_name}"
   E2E_OPERATOR_SECRET_STORE_NAME="${secret_store_name}"
   E2E_OPERATOR_SYNC_POLICY_NAME="${sync_policy_name}"
   export E2E_OPERATOR_NAMESPACE
   export E2E_OPERATOR_RESOURCE_REPOSITORY_NAME
-  export E2E_OPERATOR_MANAGED_SERVER_NAME
+  export E2E_OPERATOR_MANAGED_SERVICE_NAME
   export E2E_OPERATOR_SECRET_STORE_NAME
   export E2E_OPERATOR_SYNC_POLICY_NAME
 
   e2e_runtime_state_set 'OPERATOR_NAMESPACE' "${namespace}" || return 1
   e2e_runtime_state_set 'OPERATOR_RESOURCE_REPOSITORY_NAME' "${repository_name}" || return 1
-  e2e_runtime_state_set 'OPERATOR_MANAGED_SERVER_NAME' "${managed_server_name}" || return 1
+  e2e_runtime_state_set 'OPERATOR_MANAGED_SERVICE_NAME' "${managed_service_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_SECRET_STORE_NAME' "${secret_store_name}" || return 1
   e2e_runtime_state_set 'OPERATOR_SYNC_POLICY_NAME' "${sync_policy_name}" || return 1
   return 0
@@ -1477,16 +1477,16 @@ e2e_operator_apply_manifests() {
   manifest_dir=$(e2e_operator_manifest_dir)
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-repository-auth.yaml" || return 1
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-managed-server-auth.yaml" || return 1
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-managed-service-auth.yaml" || return 1
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-secret-store-auth.yaml" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/resource-repository.yaml" || return 1
-  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/managed-server.yaml" || return 1
+  e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/managed-service.yaml" || return 1
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/secret-store.yaml" || return 1
 
   e2e_operator_wait_resources_ready_parallel \
     "resourcerepository.declarest.io:${E2E_OPERATOR_RESOURCE_REPOSITORY_NAME}" \
-    "managedserver.declarest.io:${E2E_OPERATOR_MANAGED_SERVER_NAME}" \
+    "managedservice.declarest.io:${E2E_OPERATOR_MANAGED_SERVICE_NAME}" \
     "secretstore.declarest.io:${E2E_OPERATOR_SECRET_STORE_NAME}" || return 1
 
   e2e_kubectl_cmd --kubeconfig "${E2E_KUBECONFIG}" apply -f "${manifest_dir}/sync-policy.yaml" || return 1
@@ -1504,10 +1504,10 @@ e2e_operator_install_stack() {
 }
 
 e2e_operator_example_resource_path() {
-  local managed_server_key
-  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER:-}")
-  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_server_key}]:-}" ]]; then
-    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_server_key}]}"
+  local managed_service_key
+  managed_service_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE:-}")
+  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_service_key}]:-}" ]]; then
+    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PATH[${managed_service_key}]}"
     return 0
   fi
 
@@ -1515,10 +1515,10 @@ e2e_operator_example_resource_path() {
 }
 
 e2e_operator_example_resource_payload() {
-  local managed_server_key
-  managed_server_key=$(e2e_component_key 'managed-server' "${E2E_MANAGED_SERVER:-}")
-  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_server_key}]:-}" ]]; then
-    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_server_key}]}"
+  local managed_service_key
+  managed_service_key=$(e2e_component_key 'managed-service' "${E2E_MANAGED_SERVICE:-}")
+  if [[ -n "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_service_key}]:-}" ]]; then
+    printf '%s\n' "${E2E_COMPONENT_OPERATOR_EXAMPLE_RESOURCE_PAYLOAD[${managed_service_key}]}"
     return 0
   fi
 
@@ -1575,13 +1575,13 @@ To use it in your current shell:
   source ${setup_script@Q}
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get deploy "${E2E_OPERATOR_MANAGER_DEPLOYMENT:-${manager_deployment}}"
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" logs deployment/"${E2E_OPERATOR_MANAGER_DEPLOYMENT:-${manager_deployment}}" --tail=80
-  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository,managedserver,secretstore,syncpolicy
+  kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository,managedservice,secretstore,syncpolicy
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get syncpolicy "${E2E_OPERATOR_SYNC_POLICY_NAME:-${sync_policy_name}}" -o yaml
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository status
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource save ${resource_path@Q} --payload ${resource_payload@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository commit -m ${commit_message@Q}
   declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" repository push
-  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource get ${resource_path@Q} --source managed-server
+  declarest-e2e --context "\${DECLAREST_E2E_CONTEXT}" resource get ${resource_path@Q} --source managed-service
   kubectl --kubeconfig "${E2E_KUBECONFIG:-<kubeconfig>}" -n "${E2E_OPERATOR_NAMESPACE:-${E2E_K8S_NAMESPACE:-default}}" get resourcerepository "${repository_name}" -o jsonpath='{.metadata.annotations.declarest\\.io/webhook-last-received-at}'
 EOF_HANDOFF
 

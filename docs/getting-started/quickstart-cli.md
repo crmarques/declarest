@@ -100,7 +100,7 @@ declarest completion powershell | Out-File -Encoding utf8 $PROFILE.CurrentUserAl
 
 ## 2. Create a context
 
-A context tells DeclaREST where your repository lives and how to reach the managed server.
+A context tells DeclaREST where your repository lives and how to reach the managed service.
 
 Interactive (recommended for first use):
 
@@ -134,7 +134,7 @@ declarest resource save /corporations/acme
 This writes the payload to the repository base dir configured in your context, for example:
 
 - `<repo-base-dir>/corporations/acme/resource.json`
-- or another `resource.<ext>` when the managed server responds with a different media type
+- or another `resource.<ext>` when the managed service responds with a different media type
 
 ## 4. Inspect and edit locally
 

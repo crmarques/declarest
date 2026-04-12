@@ -21,7 +21,7 @@ webhooks:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["resourcerepositories"]
-  - name: vmanagedserver-v1alpha1.declarest.io
+  - name: vmanagedservice-v1alpha1.declarest.io
     admissionReviewVersions:
       - v1
     sideEffects: None
@@ -31,12 +31,12 @@ webhooks:
       service:
         name: declarest-operator-webhook-service
         namespace: declarest-system
-        path: /validate-declarest-io-v1alpha1-managedserver
+        path: /validate-declarest-io-v1alpha1-managedservice
     rules:
       - apiGroups: ["declarest.io"]
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
-        resources: ["managedservers"]
+        resources: ["managedservices"]
   - name: vsecretstore-v1alpha1.declarest.io
     admissionReviewVersions:
       - v1

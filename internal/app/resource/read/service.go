@@ -26,7 +26,7 @@ import (
 	defaultsapp "github.com/crmarques/declarest/internal/app/resource/defaults"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
 	secretworkflow "github.com/crmarques/declarest/internal/app/secret/workflow"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	metadataRender "github.com/crmarques/declarest/metadata/render"
 	"github.com/crmarques/declarest/orchestrator"
@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	SourceRepository    = "repository"
-	SourceManagedServer = "managed-server"
+	SourceRepository     = "repository"
+	SourceManagedService = "managed-service"
 )
 
 type Dependencies = appdeps.Dependencies
@@ -79,13 +79,13 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 
 	debugctx.Printf(ctx, "resource read requested path=%q source=%q", req.LogicalPath, req.Source)
 
-	if req.Source == SourceManagedServer && req.ExplicitCollectionTarget {
+	if req.Source == SourceManagedService && req.ExplicitCollectionTarget {
 		debugctx.Printf(ctx, "resource read treating %q as remote collection listing", req.LogicalPath)
 		result, err := renderRemoteCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems, req.PruneDefaults)
 		if err == nil {
 			return result, nil
 		}
-		if !managedserverdomain.IsListPayloadShapeError(err) {
+		if !managedservicedomain.IsListPayloadShapeError(err) {
 			return Result{}, err
 		}
 		debugctx.Printf(
@@ -100,10 +100,10 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 	switch req.Source {
 	case SourceRepository:
 		content, err = orchestratorService.GetLocal(ctx, req.LogicalPath)
-	case SourceManagedServer:
+	case SourceManagedService:
 		content, err = orchestratorService.GetRemote(ctx, req.LogicalPath)
 	default:
-		return Result{}, faults.NewValidationError("invalid source: use --source repository|managed-server", nil)
+		return Result{}, faults.NewValidationError("invalid source: use --source repository|managed-service", nil)
 	}
 	if err != nil {
 		debugctx.Printf(ctx, "resource read failed path=%q source=%q error=%v", req.LogicalPath, req.Source, err)
@@ -112,7 +112,7 @@ func Execute(ctx context.Context, deps Dependencies, req Request) (Result, error
 			debugctx.Printf(ctx, "resource read treating %q as repository collection listing", req.LogicalPath)
 			return renderRepositoryCollection(ctx, deps, orchestratorService, req.LogicalPath, req.ShowSecrets, req.SkipItems, req.PruneDefaults)
 		}
-		if req.Source == SourceManagedServer && !req.ExplicitCollectionTarget && isNotFoundError(err) {
+		if req.Source == SourceManagedService && !req.ExplicitCollectionTarget && isNotFoundError(err) {
 			debugctx.Printf(ctx, "resource read attempting empty-collection fallback for %q after remote not found", req.LogicalPath)
 			handled, fallbackResult, fallbackErr := renderRemoteCollectionFallback(
 				ctx,

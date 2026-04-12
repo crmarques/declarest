@@ -32,10 +32,10 @@ func (r *ResourceRepository) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-managedserver,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=managedservers,verbs=create;update;delete,versions=v1alpha1,name=vmanagedserver-v1alpha1.declarest.io,admissionReviewVersions=v1
-func (m *ManagedServer) SetupWebhookWithManager(mgr ctrl.Manager) error {
+// +kubebuilder:webhook:path=/validate-declarest-io-v1alpha1-managedservice,mutating=false,failurePolicy=Fail,sideEffects=None,groups=declarest.io,resources=managedservices,verbs=create;update;delete,versions=v1alpha1,name=vmanagedservice-v1alpha1.declarest.io,admissionReviewVersions=v1
+func (m *ManagedService) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, m).
-		WithValidator(&managedServerValidator{Client: mgr.GetClient()}).
+		WithValidator(&managedServiceValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
@@ -77,27 +77,27 @@ func (v *resourceRepositoryValidator) ValidateDelete(ctx context.Context, obj *R
 	})
 }
 
-// --- ManagedServer Validator ---
+// --- ManagedService Validator ---
 
-type managedServerValidator struct {
+type managedServiceValidator struct {
 	Client client.Reader
 }
 
-func (v *managedServerValidator) ValidateCreate(_ context.Context, obj *ManagedServer) (admission.Warnings, error) {
+func (v *managedServiceValidator) ValidateCreate(_ context.Context, obj *ManagedService) (admission.Warnings, error) {
 	candidate := obj.DeepCopy()
 	envref.ExpandExactEnvPlaceholdersInPlace(&candidate.Spec)
 	candidate.Default()
 	return nil, candidate.ValidateSpec()
 }
 
-func (v *managedServerValidator) ValidateUpdate(ctx context.Context, _ *ManagedServer, newObj *ManagedServer) (admission.Warnings, error) {
+func (v *managedServiceValidator) ValidateUpdate(ctx context.Context, _ *ManagedService, newObj *ManagedService) (admission.Warnings, error) {
 	return v.ValidateCreate(ctx, newObj)
 }
 
-func (v *managedServerValidator) ValidateDelete(ctx context.Context, obj *ManagedServer) (admission.Warnings, error) {
+func (v *managedServiceValidator) ValidateDelete(ctx context.Context, obj *ManagedService) (admission.Warnings, error) {
 	ms := obj
-	return checkDependencyRef(ctx, v.Client, ms.Namespace, "ManagedServer", ms.Name, func(sp *SyncPolicy) string {
-		return sp.Spec.ManagedServerRef.Name
+	return checkDependencyRef(ctx, v.Client, ms.Namespace, "ManagedService", ms.Name, func(sp *SyncPolicy) string {
+		return sp.Spec.ManagedServiceRef.Name
 	})
 }
 

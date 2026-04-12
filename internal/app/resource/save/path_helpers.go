@@ -22,7 +22,7 @@ import (
 
 	"github.com/crmarques/declarest/faults"
 	"github.com/crmarques/declarest/internal/app/resource/pathfallback"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	orchestratordomain "github.com/crmarques/declarest/orchestrator"
 	"github.com/crmarques/declarest/resource"
@@ -124,7 +124,7 @@ func saveListPayloadFromResources(items []resource.Resource) resource.Content {
 }
 
 func isCollectionListShapeError(err error) bool {
-	return managedserverdomain.IsListPayloadShapeError(err)
+	return managedservicedomain.IsListPayloadShapeError(err)
 }
 
 func expandSaveWildcardPaths(

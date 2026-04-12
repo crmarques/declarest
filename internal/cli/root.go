@@ -25,7 +25,7 @@ import (
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	"github.com/crmarques/declarest/internal/cli/completion"
 	"github.com/crmarques/declarest/internal/cli/config"
-	managedservercmd "github.com/crmarques/declarest/internal/cli/managedserver"
+	managedservicecmd "github.com/crmarques/declarest/internal/cli/managedservice"
 	"github.com/crmarques/declarest/internal/cli/repo"
 	resourcecmd "github.com/crmarques/declarest/internal/cli/resource"
 	"github.com/crmarques/declarest/internal/cli/secret"
@@ -172,7 +172,7 @@ func NewRootCommand(deps Dependencies) *cobra.Command {
 		config.NewCommand(commandDeps, &globalFlags),
 		repo.NewCommand(commandDeps, &globalFlags),
 		resourcecmd.NewCommand(commandDeps, &globalFlags),
-		managedservercmd.NewCommand(commandDeps),
+		managedservicecmd.NewCommand(commandDeps),
 		secret.NewCommand(commandDeps, &globalFlags),
 	}
 	for _, command := range basicCommands {

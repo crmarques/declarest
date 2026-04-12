@@ -99,7 +99,7 @@ The `test/e2e` directory contains a component-based E2E harness.
 
 Components live under `test/e2e/components/` and are grouped by concern:
 
-- `managed-server/`
+- `managed-service/`
 - `repo-type/`
 - `git-provider/`
 - `secret-provider/`

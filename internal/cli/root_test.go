@@ -28,7 +28,7 @@ import (
 	resourcediffapp "github.com/crmarques/declarest/internal/app/resource/diff"
 	"github.com/crmarques/declarest/internal/cli/cliutil"
 	fsmetadata "github.com/crmarques/declarest/internal/providers/metadata/fs"
-	managedserverdomain "github.com/crmarques/declarest/managedserver"
+	managedservicedomain "github.com/crmarques/declarest/managedservice"
 	metadatadomain "github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 	"github.com/crmarques/declarest/resource"
@@ -192,10 +192,10 @@ func TestVerboseInsecureWarningsUseWarningLabel(t *testing.T) {
 	})
 }
 
-func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
+func TestResourceDefaultsInferManagedServiceWaitFlag(t *testing.T) {
 	t.Parallel()
 
-	t.Run("requires_managed_server", func(t *testing.T) {
+	t.Run("requires_managed_service", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--wait", "1s")
@@ -208,14 +208,14 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 	t.Run("rejects_invalid_duration", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--from", "managed-server", "--yes", "--wait", "later")
+		_, err := executeForTest(testDeps(), "", "resource", "defaults", "infer", "/customers/acme", "--from", "managed-service", "--yes", "--wait", "later")
 		assertTypedCategory(t, err, faults.ValidationError)
 		if err == nil || !strings.Contains(err.Error(), "--wait") {
 			t.Fatalf("expected --wait validation message, got %v", err)
 		}
 	})
 
-	t.Run("accepts_wait_with_managed_server", func(t *testing.T) {
+	t.Run("accepts_wait_with_managed_service", func(t *testing.T) {
 		t.Parallel()
 
 		metadataService := newTestMetadata()
@@ -231,26 +231,26 @@ func TestResourceDefaultsInferManagedServerWaitFlag(t *testing.T) {
 			"",
 			"resource", "defaults", "infer",
 			"/customers/acme",
-			"--from", "managed-server",
+			"--from", "managed-service",
 			"--yes",
 			"--wait", "1ms",
 		)
 		if err != nil {
-			t.Fatalf("unexpected managed-server defaults infer error: %v", err)
+			t.Fatalf("unexpected managed-service defaults infer error: %v", err)
 		}
 		if !strings.Contains(output, "\"status\": \"active\"") {
-			t.Fatalf("expected managed-server defaults output, got %q", output)
+			t.Fatalf("expected managed-service defaults output, got %q", output)
 		}
 		if len(orchestrator.createCalls) != 2 {
 			t.Fatalf("expected two temporary creates, got %#v", orchestrator.createCalls)
 		}
 		if len(orchestrator.getRemoteCalls) == 0 {
-			t.Fatal("expected managed-server probe reads to be executed")
+			t.Fatal("expected managed-service probe reads to be executed")
 		}
 	})
 }
 
-func TestResourceDefaultsInferManagedServerIgnoresResolvedDefaultsInProbeInput(t *testing.T) {
+func TestResourceDefaultsInferManagedServiceIgnoresResolvedDefaultsInProbeInput(t *testing.T) {
 	t.Parallel()
 
 	metadataService := newTestMetadata()
@@ -276,14 +276,14 @@ func TestResourceDefaultsInferManagedServerIgnoresResolvedDefaultsInProbeInput(t
 		"",
 		"resource", "defaults", "infer",
 		"/customers/acme",
-		"--from", "managed-server",
+		"--from", "managed-service",
 		"--yes",
 	)
 	if err != nil {
-		t.Fatalf("unexpected managed-server defaults infer error: %v", err)
+		t.Fatalf("unexpected managed-service defaults infer error: %v", err)
 	}
 	if !strings.Contains(output, "\"status\": \"active\"") {
-		t.Fatalf("expected managed-server defaults output to include the server-added status, got %q", output)
+		t.Fatalf("expected managed-service defaults output to include the server-added status, got %q", output)
 	}
 }
 
@@ -317,7 +317,7 @@ func TestMissingPositionalParameterValidationPrintsUsage(t *testing.T) {
 	})
 }
 
-func TestManagedServerGet(t *testing.T) {
+func TestManagedServiceGet(t *testing.T) {
 	t.Parallel()
 
 	t.Run("prints_base_url", func(t *testing.T) {
@@ -358,7 +358,7 @@ func TestManagedServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Services.(*testServiceAccessor).server = &testManagedServerClient{accessToken: "oauth-access-token"}
+		deps.Services.(*testServiceAccessor).server = &testManagedServiceClient{accessToken: "oauth-access-token"}
 
 		output, err := executeForTest(deps, "", "server", "get", "access-token")
 		if err != nil {
@@ -373,8 +373,8 @@ func TestManagedServerGet(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Services.(*testServiceAccessor).server = &testManagedServerClient{
-			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-server.http.auth.oauth2 is not configured", nil),
+		deps.Services.(*testServiceAccessor).server = &testManagedServiceClient{
+			tokenErr: faults.NewTypedError(faults.ValidationError, "managed-service.http.auth.oauth2 is not configured", nil),
 		}
 
 		_, err := executeForTest(deps, "", "server", "get", "access-token")
@@ -385,14 +385,14 @@ func TestManagedServerGet(t *testing.T) {
 	})
 }
 
-func TestManagedServerCheck(t *testing.T) {
+func TestManagedServiceCheck(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success_probe", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
+		managedServiceClient := deps.Services.ManagedServiceClient().(*testManagedServiceClient)
 
 		output, err := executeForTest(deps, "", "server", "check")
 		if err != nil {
@@ -401,11 +401,11 @@ func TestManagedServerCheck(t *testing.T) {
 		if !strings.Contains(output, "server check: OK") {
 			t.Fatalf("expected success output, got %q", output)
 		}
-		if len(managedServerClient.requests) != 1 {
-			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		if len(managedServiceClient.requests) != 1 {
+			t.Fatalf("expected one managed-service probe request, got %#v", managedServiceClient.requests)
 		}
-		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/" {
-			t.Fatalf("expected GET / probe request, got %#v", managedServerClient.requests[0])
+		if managedServiceClient.requests[0].method != "GET" || managedServiceClient.requests[0].path != "/" {
+			t.Fatalf("expected GET / probe request, got %#v", managedServiceClient.requests[0])
 		}
 	})
 
@@ -413,7 +413,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
+		managedServiceClient := deps.Services.ManagedServiceClient().(*testManagedServiceClient)
 
 		output, err := executeForTest(deps, "", "--context", "health-check-absolute", "server", "check")
 		if err != nil {
@@ -422,11 +422,11 @@ func TestManagedServerCheck(t *testing.T) {
 		if !strings.Contains(output, "https://api.example.invalid/realms/master/account") {
 			t.Fatalf("expected output to include configured health-check target, got %q", output)
 		}
-		if len(managedServerClient.requests) != 1 {
-			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		if len(managedServiceClient.requests) != 1 {
+			t.Fatalf("expected one managed-service probe request, got %#v", managedServiceClient.requests)
 		}
-		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/realms/master/account" {
-			t.Fatalf("expected GET /realms/master/account probe request, got %#v", managedServerClient.requests[0])
+		if managedServiceClient.requests[0].method != "GET" || managedServiceClient.requests[0].path != "/realms/master/account" {
+			t.Fatalf("expected GET /realms/master/account probe request, got %#v", managedServiceClient.requests[0])
 		}
 	})
 
@@ -434,38 +434,38 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
+		managedServiceClient := deps.Services.ManagedServiceClient().(*testManagedServiceClient)
 
 		_, err := executeForTest(deps, "", "--context", "health-check-relative", "server", "check")
 		if err != nil {
 			t.Fatalf("expected configured health-check probe to succeed, got %v", err)
 		}
-		if len(managedServerClient.requests) != 1 {
-			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		if len(managedServiceClient.requests) != 1 {
+			t.Fatalf("expected one managed-service probe request, got %#v", managedServiceClient.requests)
 		}
-		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/healthz" {
-			t.Fatalf("expected GET /healthz probe request, got %#v", managedServerClient.requests[0])
+		if managedServiceClient.requests[0].method != "GET" || managedServiceClient.requests[0].path != "/healthz" {
+			t.Fatalf("expected GET /healthz probe request, got %#v", managedServiceClient.requests[0])
 		}
 	})
 
-	t.Run("defaults_probe_to_managed_server_base_url_path", func(t *testing.T) {
+	t.Run("defaults_probe_to_managed_service_base_url_path", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		managedServerClient := deps.Services.ManagedServerClient().(*testManagedServerClient)
+		managedServiceClient := deps.Services.ManagedServiceClient().(*testManagedServiceClient)
 
 		output, err := executeForTest(deps, "", "--context", "health-check-base-path", "server", "check")
 		if err != nil {
 			t.Fatalf("expected base-url fallback probe to succeed, got %v", err)
 		}
 		if !strings.Contains(output, "https://api.example.invalid/admin/api/45") {
-			t.Fatalf("expected output to include managed-server base-url fallback target, got %q", output)
+			t.Fatalf("expected output to include managed-service base-url fallback target, got %q", output)
 		}
-		if len(managedServerClient.requests) != 1 {
-			t.Fatalf("expected one managed-server probe request, got %#v", managedServerClient.requests)
+		if len(managedServiceClient.requests) != 1 {
+			t.Fatalf("expected one managed-service probe request, got %#v", managedServiceClient.requests)
 		}
-		if managedServerClient.requests[0].method != "GET" || managedServerClient.requests[0].path != "/admin/api/45" {
-			t.Fatalf("expected GET /admin/api/45 probe request, got %#v", managedServerClient.requests[0])
+		if managedServiceClient.requests[0].method != "GET" || managedServiceClient.requests[0].path != "/admin/api/45" {
+			t.Fatalf("expected GET /admin/api/45 probe request, got %#v", managedServiceClient.requests[0])
 		}
 	})
 
@@ -473,7 +473,7 @@ func TestManagedServerCheck(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
-		deps.Services.ManagedServerClient().(*testManagedServerClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
+		deps.Services.ManagedServiceClient().(*testManagedServiceClient).requestErr = faults.NewTypedError(faults.NotFoundError, "probe not found", nil)
 
 		_, err := executeForTest(deps, "", "server", "check")
 		assertTypedCategory(t, err, faults.NotFoundError)
@@ -483,7 +483,7 @@ func TestManagedServerCheck(t *testing.T) {
 func TestOutputPolicyValidation(t *testing.T) {
 	t.Parallel()
 
-	t.Run("managed_server_plain_text_commands_reject_structured_output", func(t *testing.T) {
+	t.Run("managed_service_plain_text_commands_reject_structured_output", func(t *testing.T) {
 		t.Parallel()
 		_, err := executeForTest(testDeps(), "", "--output", "json", "server", "get", "base-url")
 		assertTypedCategory(t, err, faults.ValidationError)
@@ -507,7 +507,7 @@ func TestOutputPolicyValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(output, "managedServer:") {
+		if !strings.Contains(output, "managedService:") {
 			t.Fatalf("expected yaml context output, got %q", output)
 		}
 	})
@@ -746,10 +746,10 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("source_managed_server_uses_remote", func(t *testing.T) {
+	t.Run("source_managed_service_uses_remote", func(t *testing.T) {
 		t.Parallel()
 
-		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--source", "managed-server")
+		output, err := executeForTest(testDeps(), "", "resource", "get", "/customers/acme", "--source", "managed-service")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -758,7 +758,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("prune_defaults_compacts_managed_server_output", func(t *testing.T) {
+	t.Run("prune_defaults_compacts_managed_service_output", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -776,7 +776,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			}),
 		}
 
-		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-server", "--prune-defaults")
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-service", "--prune-defaults")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -784,7 +784,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			t.Fatalf("expected id in pruned output, got %q", output)
 		}
 		if strings.Contains(output, `"enabled": true`) || strings.Contains(output, `"tier": "gold"`) {
-			t.Fatalf("expected defaults to be pruned from managed-server output, got %q", output)
+			t.Fatalf("expected defaults to be pruned from managed-service output, got %q", output)
 		}
 	})
 
@@ -834,7 +834,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("skip_items_filters_managed_server_collection", func(t *testing.T) {
+	t.Run("skip_items_filters_managed_service_collection", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -928,7 +928,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 
 		deps := testDeps()
 		orchestrator := deps.Orchestrator.(*testOrchestrator)
-		orchestrator.listRemoteErr = managedserverdomain.NewListPayloadShapeError(
+		orchestrator.listRemoteErr = managedservicedomain.NewListPayloadShapeError(
 			`list response object is ambiguous: expected an "items" array or a single array field, found array fields [enabledEventTypes, eventsListeners]`,
 			nil,
 		)
@@ -1119,7 +1119,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("managed_server_masks_metadata_declared_secret_by_default", func(t *testing.T) {
+	t.Run("managed_service_masks_metadata_declared_secret_by_default", func(t *testing.T) {
 		t.Parallel()
 
 		deps := testDeps()
@@ -1133,7 +1133,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			SecretAttributes: []string{"/password"},
 		}
 
-		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-server")
+		output, err := executeForTest(deps, "", "resource", "get", "/customers/acme", "--source", "managed-service")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1266,7 +1266,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "managed-server",
+			"--source", "managed-service",
 			"--show-secrets",
 		)
 		if err != nil {
@@ -1305,7 +1305,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "managed-server",
+			"--source", "managed-service",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -1392,7 +1392,7 @@ func TestResourceGetSourceSelection(t *testing.T) {
 			"resource",
 			"get",
 			"/customers/acme",
-			"--source", "managed-server",
+			"--source", "managed-service",
 			"--show-metadata",
 		)
 		if err != nil {
@@ -3642,7 +3642,7 @@ func TestResourceDeleteGitCommitMessages(t *testing.T) {
 			"resource", "delete",
 			"/customers/acme",
 			"--yes",
-			"--source", "managed-server",
+			"--source", "managed-service",
 		)
 		if err != nil {
 			t.Fatalf("unexpected delete error: %v", err)
@@ -5451,7 +5451,7 @@ func TestResourceListTextOutputAlignsAliasColumn(t *testing.T) {
 func TestResourceListSourceFlags(t *testing.T) {
 	t.Parallel()
 
-	t.Run("default_lists_from_managed_server", func(t *testing.T) {
+	t.Run("default_lists_from_managed_service", func(t *testing.T) {
 		t.Parallel()
 
 		orchestrator := &testOrchestrator{
@@ -5464,7 +5464,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 			t.Fatalf("unexpected list error: %v", err)
 		}
 		if !strings.Contains(output, "\"id\": \"remote-only\"") {
-			t.Fatalf("expected managed-server json output by default, got %q", output)
+			t.Fatalf("expected managed-service json output by default, got %q", output)
 		}
 		if strings.Contains(output, "\"id\": \"repo-only\"") {
 			t.Fatalf("expected repository output to be absent by default, got %q", output)
@@ -5488,7 +5488,7 @@ func TestResourceListSourceFlags(t *testing.T) {
 		}
 	})
 
-	t.Run("source_managed_server_lists_from_managed_server", func(t *testing.T) {
+	t.Run("source_managed_service_lists_from_managed_service", func(t *testing.T) {
 		t.Parallel()
 
 		orchestrator := &testOrchestrator{
@@ -5496,15 +5496,15 @@ func TestResourceListSourceFlags(t *testing.T) {
 			localList:       []resource.Resource{{LogicalPath: "/repo-only", LocalAlias: "repo-only", RemoteID: "repo-only", Payload: map[string]any{"id": "repo-only"}}},
 			remoteList:      []resource.Resource{{LogicalPath: "/remote-only", LocalAlias: "remote-only", RemoteID: "remote-only", Payload: map[string]any{"id": "remote-only"}}},
 		}
-		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "managed-server")
+		output, err := executeForTest(testDepsWith(orchestrator, orchestrator.metadataService), "", "resource", "list", "/", "--source", "managed-service")
 		if err != nil {
 			t.Fatalf("unexpected list error: %v", err)
 		}
 		if !strings.Contains(output, "\"id\": \"remote-only\"") {
-			t.Fatalf("expected managed-server json output with --source managed-server, got %q", output)
+			t.Fatalf("expected managed-service json output with --source managed-service, got %q", output)
 		}
 		if strings.Contains(output, "\"id\": \"repo-only\"") {
-			t.Fatalf("expected repository output to be absent with --source managed-server, got %q", output)
+			t.Fatalf("expected repository output to be absent with --source managed-service, got %q", output)
 		}
 	})
 
@@ -6151,7 +6151,7 @@ func TestResourceDiffCollectionPath(t *testing.T) {
 		expectedFragments := []string{
 			targetPath + " [CHANGED]",
 			"--- repository",
-			"+++ managed-server",
+			"+++ managed-service",
 			"@@",
 			`-    "clientOfflineSessionIdleTimeout": null`,
 			`+    "clientOfflineSessionIdleTimeout": "0"`,

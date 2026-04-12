@@ -30,9 +30,9 @@ func TestNormalizeReadSourceSelection(t *testing.T) {
 		want           string
 		wantValidation bool
 	}{
-		{name: "default_managed_server", want: sourceManagedServer},
+		{name: "default_managed_service", want: sourceManagedService},
 		{name: "new_flag_repository", sourceFlag: sourceRepository, want: sourceRepository},
-		{name: "new_flag_managed_server", sourceFlag: sourceManagedServer, want: sourceManagedServer},
+		{name: "new_flag_managed_service", sourceFlag: sourceManagedService, want: sourceManagedService},
 		{name: "rejects_both_value", sourceFlag: sourceBoth, wantValidation: true},
 		{name: "rejects_invalid_value", sourceFlag: "invalid", wantValidation: true},
 	}
@@ -70,7 +70,7 @@ func TestNormalizeDeleteSourceSelection(t *testing.T) {
 		want           string
 		wantValidation bool
 	}{
-		{name: "default_managed_server", want: sourceManagedServer},
+		{name: "default_managed_service", want: sourceManagedService},
 		{name: "new_flag_both", sourceFlag: sourceBoth, want: sourceBoth},
 		{name: "rejects_invalid", sourceFlag: "invalid", wantValidation: true},
 	}

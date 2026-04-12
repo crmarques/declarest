@@ -6,7 +6,7 @@ This document defines the component contract used by `test/e2e/run-e2e.sh`.
 
 Use this standard for all component groups:
 
-- `managed-server`
+- `managed-service`
 - `git-provider`
 - `secret-provider`
 - `repo-type`
@@ -29,7 +29,7 @@ scripts/configure-auth.sh
 scripts/context.sh
 ```
 
-Components MAY also ship `openapi.yaml`. When provided, the runner copies it into the run directory, exposes the run-scoped path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets each component (for example managed servers) surface it inside their generated context so context-aware commands can infer the API surface.
+Components MAY also ship `openapi.yaml`. When provided, the runner copies it into the run directory, exposes the run-scoped path via `E2E_COMPONENT_OPENAPI_SPEC`, and lets each component (for example managed services) surface it inside their generated context so context-aware commands can infer the API surface.
 
 Additional runtime files:
 
@@ -46,7 +46,7 @@ Additional runtime files:
 All fields are required unless marked optional.
 
 ```bash
-COMPONENT_TYPE=managed-server
+COMPONENT_TYPE=managed-service
 COMPONENT_NAME=demo-server
 COMPONENT_CONTRACT_VERSION=1
 SUPPORTED_CONNECTIONS="local remote"
@@ -56,15 +56,15 @@ REQUIRES_DOCKER=true
 COMPONENT_RUNTIME_KIND=compose
 COMPONENT_DEPENDS_ON=""
 DESCRIPTION="Human-readable summary"
-# Required only for COMPONENT_TYPE=managed-server:
+# Required only for COMPONENT_TYPE=managed-service:
 SUPPORTED_SECURITY_FEATURES="oauth2 mtls"
-# Optional only for COMPONENT_TYPE=managed-server:
+# Optional only for COMPONENT_TYPE=managed-service:
 REQUIRED_SECURITY_FEATURES="oauth2"
 ```
 
 Field rules:
 
-- `COMPONENT_TYPE`: group key (`managed-server`, `git-provider`, `secret-provider`, `repo-type`, `proxy`).
+- `COMPONENT_TYPE`: group key (`managed-service`, `git-provider`, `secret-provider`, `repo-type`, `proxy`).
 - `COMPONENT_NAME`: stable selector name used by CLI flags.
 - `SUPPORTED_CONNECTIONS`: whitespace-separated values from `local remote`.
 - `DEFAULT_CONNECTION`: one value from `SUPPORTED_CONNECTIONS`.
@@ -82,15 +82,15 @@ Field rules:
   - wildcard by type: `<type>:*` (for example `git-provider:*`)
   - use empty string when no dependencies (`COMPONENT_DEPENDS_ON=""`).
 - `DESCRIPTION`: short operator-facing description.
-- `SUPPORTED_SECURITY_FEATURES` (`managed-server` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
-- `REQUIRED_SECURITY_FEATURES` (`managed-server` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because managed-server auth selection is one-of.
+- `SUPPORTED_SECURITY_FEATURES` (`managed-service` only): whitespace-separated subset of `none basic-auth oauth2 custom-header mtls`; MUST include at least one auth-type capability (`none|basic-auth|oauth2|custom-header`).
+- `REQUIRED_SECURITY_FEATURES` (`managed-service` optional): whitespace-separated subset of `SUPPORTED_SECURITY_FEATURES`; MAY include at most one auth-type capability because managed-service auth selection is one-of.
 - `COMPONENT_SERVICE_PORT` (optional): integer service port exposed by compose-backed components that other components or operator flows must reach.
-- `METADATA_BUNDLE_REF` (`managed-server` only, optional): bundle ref used by `--metadata-source bundle`.
-- `OPERATOR_EXAMPLE_RESOURCE_PATH` and `OPERATOR_EXAMPLE_RESOURCE_PAYLOAD` (`managed-server` only, optional): paired operator handoff example resource used by generic operator help output.
+- `METADATA_BUNDLE_REF` (`managed-service` only, optional): bundle ref used by `--metadata-source bundle`.
+- `OPERATOR_EXAMPLE_RESOURCE_PATH` and `OPERATOR_EXAMPLE_RESOURCE_PAYLOAD` (`managed-service` only, optional): paired operator handoff example resource used by generic operator help output.
 - `REPOSITORY_WEBHOOK_PROVIDER` (`git-provider` only, optional): webhook provider token used by operator webhook setup and generated `spec.git.webhook`.
 - `REPO_PROVIDER_LOGIN_PATH` (`git-provider` only, optional): login path appended to the provider base URL for manual handoff output.
 - A `git-provider` component whose `DEFAULT_SELECTIONS` includes `operator` MUST declare `REPOSITORY_WEBHOOK_PROVIDER` and support `local` connection.
-- Runner selection uses `--managed-server-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-server-mtls` independently for mTLS.
+- Runner selection uses `--managed-service-auth-type <none|basic|oauth2|custom-header>` for auth-mode selection and `--managed-service-mtls` independently for mTLS.
 - Resource-server fixture metadata files (`*/_/metadata.yaml` or `*/_/metadata.json`) MUST include non-empty `resource.id` and `resource.alias` identity templates; YAML is preferred for new fixtures.
 
 ## Hook Contract
@@ -109,16 +109,16 @@ Hook behavior:
 - Hooks MUST be executable by `bash` and ShellCheck-friendly.
 - `init` and `configure-auth` MUST leave `${E2E_COMPONENT_STATE_FILE}` present and non-empty on success.
 - Hooks that update state MUST do so deterministically for repeated runs in the same run directory.
-- `context` MUST write a deterministic fragment to `${E2E_COMPONENT_CONTEXT_FRAGMENT}`; components that own persisted context sections (`managed-server`, `repo-type`, `secret-provider`) MUST leave that fragment non-empty on success.
+- `context` MUST write a deterministic fragment to `${E2E_COMPONENT_CONTEXT_FRAGMENT}`; components that own persisted context sections (`managed-service`, `repo-type`, `secret-provider`) MUST leave that fragment non-empty on success.
 - `context` MAY accept output path as `$1`; runner also exports `E2E_COMPONENT_CONTEXT_FRAGMENT`.
 - Hooks MUST be idempotent for repeated runs in the same run directory.
 - Hooks MUST fail with actionable stderr output when required state or inputs are missing.
-- Managed-server hooks SHOULD publish generic `MANAGED_SERVER_*` and `MANAGED_SERVER_ACCESS_*` state keys so operator manifests and manual handoff output remain component-agnostic.
+- Managed-service hooks SHOULD publish generic `MANAGED_SERVICE_*` and `MANAGED_SERVICE_ACCESS_*` state keys so operator manifests and manual handoff output remain component-agnostic.
 - Git-provider hooks SHOULD publish generic `REPO_PROVIDER_BASE_URL`, `GIT_AUTH_USERNAME`, and `GIT_AUTH_PASSWORD` state keys for manual handoff output.
 
 Optional repo-template hook:
 
-- `scripts/prepare-repo-template.sh` MAY adjust the copied managed-server `repo-template/` tree after the generic copy step.
+- `scripts/prepare-repo-template.sh` MAY adjust the copied managed-service `repo-template/` tree after the generic copy step.
 - When present, the runner invokes it with the copied repo root as `$1`.
 - The hook MUST be deterministic and MUST limit changes to the copied run-scoped repository tree.
 
@@ -137,7 +137,7 @@ Common exported variables:
 - `E2E_COMPONENT_DIR`, `E2E_COMPONENT_HOOK`
 - `E2E_COMPONENT_CONNECTION`
 - `E2E_COMPONENT_RUNTIME_KIND`, `E2E_COMPONENT_DEPENDS_ON`
-- `E2E_MANAGED_SERVER_AUTH_TYPE`, `E2E_MANAGED_SERVER_MTLS`
+- `E2E_MANAGED_SERVICE_AUTH_TYPE`, `E2E_MANAGED_SERVICE_MTLS`
 - `E2E_PROXY_MODE`, `E2E_PROXY_AUTH_TYPE`
 - `E2E_PROXY_HTTP_URL`, `E2E_PROXY_HTTPS_URL`, `E2E_PROXY_NO_PROXY`
 - `E2E_PROXY_AUTH_USERNAME`, `E2E_PROXY_AUTH_PASSWORD`

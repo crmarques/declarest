@@ -18,7 +18,7 @@ contexts:
     repository:
       filesystem:
         baseDir: /work/repo
-    managedServer:
+    managedService:
       http:
         url: https://api.example.com
         auth:
@@ -126,14 +126,14 @@ repository:
 - `ssh`
 - `accessKey`
 
-## Managed server
+## Managed service
 
-`managedServer.http.url` is required when `managedServer` is present.
+`managedService.http.url` is required when `managedService` is present.
 
 Basic auth:
 
 ```yaml
-managedServer:
+managedService:
   http:
     url: https://api.example.com
     healthCheck: /health
@@ -146,7 +146,7 @@ managedServer:
 OAuth2:
 
 ```yaml
-managedServer:
+managedService:
   http:
     url: https://api.example.com
     auth:
@@ -160,7 +160,7 @@ managedServer:
 Custom headers:
 
 ```yaml
-managedServer:
+managedService:
   http:
     url: https://api.example.com
     auth:
@@ -172,7 +172,7 @@ managedServer:
 Proxy:
 
 ```yaml
-managedServer:
+managedService:
   http:
     url: https://api.example.com
     auth:
@@ -191,10 +191,10 @@ managedServer:
 
 Notes:
 
-- `managedServer.http.auth` accepts exactly one of `oauth2`, `basic`, or `customHeaders`.
-- `managedServer.http.healthCheck` is optional.
-- When omitted, `server check` probes the normalized path from `managedServer.http.url`.
-- Relative health checks are resolved against `managedServer.http.url`.
+- `managedService.http.auth` accepts exactly one of `oauth2`, `basic`, or `customHeaders`.
+- `managedService.http.healthCheck` is optional.
+- When omitted, `server check` probes the normalized path from `managedService.http.url`.
+- Relative health checks are resolved against `managedService.http.url`.
 
 ## Secret store
 
@@ -251,11 +251,11 @@ Supported override keys:
 
 - `repository.git.local.baseDir`
 - `repository.filesystem.baseDir`
-- `managedServer.http.url`
-- `managedServer.http.healthCheck`
-- `managedServer.http.proxy.http`
-- `managedServer.http.proxy.https`
-- `managedServer.http.proxy.noProxy`
+- `managedService.http.url`
+- `managedService.http.healthCheck`
+- `managedService.http.proxy.http`
+- `managedService.http.proxy.https`
+- `managedService.http.proxy.noProxy`
 - `metadata.baseDir`
 - `metadata.bundle`
 - `metadata.bundleFile`
@@ -264,6 +264,6 @@ Example:
 
 ```bash
 declarest context resolve \
-  --set managedServer.http.url=https://staging-api.example.com \
+  --set managedService.http.url=https://staging-api.example.com \
   --set metadata.bundle=keycloak-bundle:0.0.2
 ```

@@ -53,7 +53,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			if _, hasOverride, err := validateHTTPMethodOverride(httpMethod); err != nil {
 				return err
 			} else if hasOverride && source == sourceRepository {
-				return cliutil.ValidationError("flag --http-method requires managed-server source", nil)
+				return cliutil.ValidationError("flag --http-method requires managed-service source", nil)
 			}
 
 			outputFormat, err := cliutil.ResolveContextOutputFormat(command.Context(), deps, globalFlags)
@@ -70,7 +70,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			}
 
 			runCtx := command.Context()
-			if source == sourceManagedServer {
+			if source == sourceManagedService {
 				runCtx, _, err = applyHTTPMethodOverride(runCtx, httpMethod, metadata.OperationList)
 				if err != nil {
 					return err
@@ -81,7 +81,7 @@ func newListCommand(deps cliutil.CommandDependencies, globalFlags *cliutil.Globa
 			switch source {
 			case sourceRepository:
 				items, err = orchestratorService.ListLocal(runCtx, resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})
-			case sourceManagedServer:
+			case sourceManagedService:
 				fallthrough
 			default:
 				items, err = orchestratorService.ListRemote(runCtx, resolvedPath, orchestratordomain.ListPolicy{Recursive: recursive})

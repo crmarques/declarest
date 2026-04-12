@@ -20,7 +20,7 @@ import (
 
 	debugctx "github.com/crmarques/declarest/debugctx"
 	"github.com/crmarques/declarest/faults"
-	"github.com/crmarques/declarest/managedserver"
+	"github.com/crmarques/declarest/managedservice"
 	"github.com/crmarques/declarest/metadata"
 	"github.com/crmarques/declarest/repository"
 )
@@ -32,9 +32,9 @@ func (r *Orchestrator) requireRepository() (repository.ResourceStore, error) {
 	return r.repository, nil
 }
 
-func (r *Orchestrator) requireServer() (managedserver.ManagedServerClient, error) {
+func (r *Orchestrator) requireServer() (managedservice.ManagedServiceClient, error) {
 	if r == nil || r.server == nil {
-		return nil, faults.NewTypedError(faults.ValidationError, "managed server is not configured", nil)
+		return nil, faults.NewTypedError(faults.ValidationError, "managed service is not configured", nil)
 	}
 	return r.server, nil
 }

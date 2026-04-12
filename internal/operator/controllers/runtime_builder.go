@@ -28,11 +28,11 @@ import (
 )
 
 type runtimeContextBuildResult struct {
-	ResolvedContext       config.Context
-	RepositoryLocalPath   string
-	ManagedServerOpenAPI  string
-	ManagedServerMetadata string
-	Cleanup               func()
+	ResolvedContext        config.Context
+	RepositoryLocalPath    string
+	ManagedServiceOpenAPI  string
+	ManagedServiceMetadata string
+	Cleanup                func()
 }
 
 func buildRuntimeContext(
@@ -40,10 +40,10 @@ func buildRuntimeContext(
 	reader client.Reader,
 	policy *declarestv1alpha1.SyncPolicy,
 	repo *declarestv1alpha1.ResourceRepository,
-	managedServer *declarestv1alpha1.ManagedServer,
+	managedService *declarestv1alpha1.ManagedService,
 	secretStore *declarestv1alpha1.SecretStore,
 ) (runtimeContextBuildResult, error) {
-	if policy == nil || repo == nil || managedServer == nil || secretStore == nil {
+	if policy == nil || repo == nil || managedService == nil || secretStore == nil {
 		return runtimeContextBuildResult{}, fmt.Errorf("build runtime context requires non-nil resources")
 	}
 	cleanup := &cleanupRegistry{}
@@ -56,23 +56,23 @@ func buildRuntimeContext(
 	}
 
 	cacheDir := resolveCacheRootPath(policy.Namespace, policy.Name)
-	proxyConfig, err := resolveManagedServerProxyConfig(ctx, reader, policy.Namespace, managedServer.Spec.HTTP.Proxy)
+	proxyConfig, err := resolveManagedServiceProxyConfig(ctx, reader, policy.Namespace, managedService.Spec.HTTP.Proxy)
 	if err != nil {
 		return runtimeContextBuildResult{}, err
 	}
-	openAPIPath := strings.TrimSpace(managedServer.Status.OpenAPICachePath)
-	if openAPIPath == "" && strings.TrimSpace(managedServer.Spec.OpenAPI.URL) != "" {
-		downloaded, err := downloadArtifact(ctx, managedServer.Spec.OpenAPI.URL, filepath.Join(cacheDir, "openapi"), proxyConfig)
+	openAPIPath := strings.TrimSpace(managedService.Status.OpenAPICachePath)
+	if openAPIPath == "" && strings.TrimSpace(managedService.Spec.OpenAPI.URL) != "" {
+		downloaded, err := downloadArtifact(ctx, managedService.Spec.OpenAPI.URL, filepath.Join(cacheDir, "openapi"), proxyConfig)
 		if err != nil {
 			return runtimeContextBuildResult{}, err
 		}
 		openAPIPath = downloaded
 	}
 
-	metadataPath := strings.TrimSpace(managedServer.Status.MetadataCachePath)
-	metadataBundle := strings.TrimSpace(managedServer.Spec.Metadata.Bundle)
-	if metadataBundle == "" && metadataPath == "" && strings.TrimSpace(managedServer.Spec.Metadata.URL) != "" {
-		downloaded, err := downloadArtifact(ctx, managedServer.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"), proxyConfig)
+	metadataPath := strings.TrimSpace(managedService.Status.MetadataCachePath)
+	metadataBundle := strings.TrimSpace(managedService.Spec.Metadata.Bundle)
+	if metadataBundle == "" && metadataPath == "" && strings.TrimSpace(managedService.Spec.Metadata.URL) != "" {
+		downloaded, err := downloadArtifact(ctx, managedService.Spec.Metadata.URL, filepath.Join(cacheDir, "metadata"), proxyConfig)
 		if err != nil {
 			return runtimeContextBuildResult{}, err
 		}
@@ -86,10 +86,10 @@ func buildRuntimeContext(
 				BaseDir: repositoryPath,
 			},
 		},
-		ManagedServer: &config.ManagedServer{HTTP: &config.HTTPServer{}},
+		ManagedService: &config.ManagedService{HTTP: &config.HTTPServer{}},
 	}
 
-	if err := populateManagedServerConfig(ctx, reader, policy.Namespace, managedServer, resolvedContext.ManagedServer.HTTP, openAPIPath, cacheDir, cleanup); err != nil {
+	if err := populateManagedServiceConfig(ctx, reader, policy.Namespace, managedService, resolvedContext.ManagedService.HTTP, openAPIPath, cacheDir, cleanup); err != nil {
 		cleanup.run()
 		return runtimeContextBuildResult{}, err
 	}
@@ -108,11 +108,11 @@ func buildRuntimeContext(
 	}
 
 	return runtimeContextBuildResult{
-		ResolvedContext:       resolvedContext,
-		RepositoryLocalPath:   repositoryPath,
-		ManagedServerOpenAPI:  openAPIPath,
-		ManagedServerMetadata: metadataSource,
-		Cleanup:               cleanup.run,
+		ResolvedContext:        resolvedContext,
+		RepositoryLocalPath:    repositoryPath,
+		ManagedServiceOpenAPI:  openAPIPath,
+		ManagedServiceMetadata: metadataSource,
+		Cleanup:                cleanup.run,
 	}, nil
 }
 
