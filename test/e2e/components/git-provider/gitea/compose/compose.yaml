@@ -1,6 +1,6 @@
 services:
   gitea:
-    image: docker.io/gitea/gitea:1.25.4
+    image: docker.io/gitea/gitea:1.26.0
     hostname: gitea.local
     environment:
       USER_UID: '1000'
